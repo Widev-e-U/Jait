@@ -1,0 +1,25 @@
+# FastAPI & Server
+fastapi==0.115.0
+uvicorn[standard]==0.32.0
+python-multipart==0.0.9
+itsdangerous==2.2.0
+
+# Database
+sqlalchemy==2.0.35
+asyncpg==0.29.0
+aiosqlite==0.22.1
+alembic==1.13.2
+
+# Auth
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
+authlib==1.3.2
+httpx==0.27.2
+
+# Utilities
+pydantic[email]==2.9.2
+pydantic-settings==2.5.2
+python-dotenv==1.0.1
+
+# SSE
+sse-starlette==2.1.3
