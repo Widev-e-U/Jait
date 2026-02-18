@@ -1,13 +1,16 @@
 import { useState, useEffect } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
-import { Sun, Moon, LogOut } from 'lucide-react'
+import { Sun, Moon, LogOut, MessageSquare, Calendar } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, Suggestions } from '@/components/chat'
+import { JobsPage } from '@/components/jobs'
 import { useAuth } from '@/hooks/useAuth'
 import { useChat } from '@/hooks/useChat'
+
+type AppView = 'chat' | 'jobs'
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -34,6 +37,7 @@ const suggestions = [
 function App() {
   const [inputValue, setInputValue] = useState('')
   const [showLoginDialog, setShowLoginDialog] = useState(false)
+  const [currentView, setCurrentView] = useState<AppView>('chat')
   const { dark, toggle: toggleTheme } = useTheme()
 
   const { user, token, isAuthenticated, loginWithGoogle, logout, bindSession } = useAuth()
@@ -77,7 +81,30 @@ function App() {
       <div className="fixed inset-0 flex flex-col overflow-hidden">
         {/* Header */}
         <header className="flex items-center justify-between h-14 px-5 border-b shrink-0">
-          <span className="text-base font-medium tracking-tight">Jait</span>
+          <div className="flex items-center gap-6">
+            <span className="text-base font-medium tracking-tight">Jait</span>
+            {/* Navigation */}
+            <nav className="flex items-center gap-1">
+              <Button
+                variant={currentView === 'chat' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setCurrentView('chat')}
+              >
+                <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
+                Chat
+              </Button>
+              <Button
+                variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setCurrentView('jobs')}
+              >
+                <Calendar className="h-3.5 w-3.5 mr-1.5" />
+                Jobs
+              </Button>
+            </nav>
+          </div>
           <div className="flex items-center gap-1.5">
             {remainingPrompts !== null && remainingPrompts <= 5 && (
               <span className="text-xs text-muted-foreground mr-2">{remainingPrompts} remaining</span>
@@ -113,8 +140,14 @@ function App() {
           </div>
         </header>
 
-        {/* Chat area */}
-        {!hasMessages ? (
+        {/* Jobs View */}
+        {currentView === 'jobs' ? (
+          <div className="flex-1 overflow-y-auto">
+            <JobsPage />
+          </div>
+        ) : (
+        /* Chat area */
+        !hasMessages ? (
           <div className="flex-1 flex flex-col items-center justify-center px-4">
             <div className="w-full max-w-3xl space-y-8">
               <div className="text-center">
@@ -184,6 +217,7 @@ function App() {
               </div>
             </div>
           </>
+        )
         )}
 
         {/* Login */}

@@ -1,6 +1,6 @@
 """
 Tool definitions and executor for the agent
-Inspired by erc3-agents tool execution patterns
+Supports both Ollama native format and LangChain format
 """
 import json
 import math
@@ -9,8 +9,106 @@ from typing import Any, Callable
 import httpx
 
 
-# Tool Definitions (Ollama format)
+# Tool Definitions (Ollama format - kept for compatibility)
 TOOLS = [
+    {
+        "type": "function",
+        "function": {
+            "name": "get_datetime",
+            "description": "Get the current date and time. Use this for any questions about what day/time it is.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "timezone": {
+                        "type": "string",
+                        "description": "Optional timezone (e.g., 'UTC', 'America/New_York'). Defaults to UTC."
+                    }
+                },
+                "required": []
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "calculator",
+            "description": "Perform mathematical calculations. Supports basic arithmetic, powers, roots, trigonometry, etc.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "expression": {
+                        "type": "string",
+                        "description": "Mathematical expression to evaluate (e.g., '2 + 2', 'sqrt(16)', 'sin(3.14159/2)')"
+                    }
+                },
+                "required": ["expression"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "python_eval",
+            "description": "Execute a simple Python expression and return the result. Use for data manipulation, string operations, or list processing.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "description": "Python expression to evaluate (single expression, not statements)"
+                    }
+                },
+                "required": ["code"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "web_search",
+            "description": "Search the web for information. Use for current events, facts, or anything requiring up-to-date information.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {
+                        "type": "string",
+                        "description": "Search query"
+                    },
+                    "num_results": {
+                        "type": "integer",
+                        "description": "Number of results to return (default: 3)"
+                    }
+                },
+                "required": ["query"]
+            }
+        }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "generate_text",
+            "description": "Generate or transform text based on instructions. Use for summarization, rewriting, translation hints, etc.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "instruction": {
+                        "type": "string",
+                        "description": "What to do with the text"
+                    },
+                    "text": {
+                        "type": "string",
+                        "description": "The text to process"
+                    }
+                },
+                "required": ["instruction", "text"]
+            }
+        }
+    }
+]
+
+
+# LangChain-compatible tool definitions (OpenAI format)
+LANGCHAIN_TOOLS = [
     {
         "type": "function",
         "function": {
@@ -110,10 +208,11 @@ TOOLS = [
 class ToolExecutor:
     """
     Execute tools and return results.
-    Adapted from erc3-agents ToolExecutor pattern.
+    Provides both direct execution and handler dict for LangChain integration.
     """
     
     def __init__(self):
+        # Public handlers dict - used by LangChain agent
         self.tool_handlers: dict[str, Callable] = {
             "get_datetime": self._get_datetime,
             "calculator": self._calculator,
@@ -122,8 +221,12 @@ class ToolExecutor:
             "generate_text": self._generate_text,
         }
     
+    def register_tool(self, name: str, handler: Callable):
+        """Register a new tool handler."""
+        self.tool_handlers[name] = handler
+    
     def execute(self, tool_name: str, arguments: dict[str, Any]) -> str:
-        """Execute a tool and return the result as a string."""
+        """Execute a tool and return the result as a JSON string."""
         handler = self.tool_handlers.get(tool_name)
         if not handler:
             return json.dumps({"error": f"Unknown tool: {tool_name}"})
@@ -246,3 +349,15 @@ def get_tool_descriptions() -> str:
         descriptions.append(f"**{name}**: {desc}\nParameters:\n{param_section}")
     
     return "\n\n".join(descriptions)
+
+
+def get_all_tools() -> list:
+    """Get all tools including cron tools."""
+    from app.agent.cron_tools import CRON_TOOLS
+    return LANGCHAIN_TOOLS + CRON_TOOLS
+
+
+def get_all_langchain_tools() -> list:
+    """Get all LangChain-compatible tool definitions."""
+    from app.agent.cron_tools import CRON_TOOLS
+    return LANGCHAIN_TOOLS + CRON_TOOLS

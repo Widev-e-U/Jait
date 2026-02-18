@@ -197,3 +197,52 @@ async def get_me(
         )
     
     return UserResponse.model_validate(user)
+
+
+# Test-only endpoints (only available when DEBUG=true)
+if settings.debug:
+    class TestUserRequest(BaseModel):
+        """Request body for creating test user"""
+        id: str
+        email: str
+        name: str
+        picture: Optional[str] = None
+    
+    @router.post("/test/token", response_model=TokenResponse)
+    async def get_test_token(
+        request: TestUserRequest,
+        db: AsyncSession = Depends(get_db)
+    ):
+        """
+        Create or get a test user and return a valid JWT token.
+        Only available in debug mode for E2E testing.
+        """
+        # Find or create test user
+        result = await db.execute(
+            select(User).where(User.id == request.id)
+        )
+        user = result.scalar_one_or_none()
+        
+        if not user:
+            user = User(
+                id=request.id,
+                email=request.email,
+                google_id=f"test-{request.id}",
+                name=request.name,
+                picture=request.picture,
+            )
+            db.add(user)
+            await db.commit()
+            await db.refresh(user)
+        
+        # Create JWT
+        access_token = create_access_token({
+            "sub": user.id,
+            "email": user.email,
+            "name": user.name,
+        })
+        
+        return TokenResponse(
+            access_token=access_token,
+            user=UserResponse.model_validate(user)
+        )

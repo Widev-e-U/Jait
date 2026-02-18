@@ -10,15 +10,36 @@ services:
     environment:
       - DATABASE_URL=postgresql+asyncpg://agent:agent@db:5432/agent_db
       - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - TEMPORAL_HOST=temporal:7233
       - DEBUG=true
     env_file:
       - ./src/backend/.env
     depends_on:
       db:
         condition: service_healthy
+      temporal:
+        condition: service_started
     volumes:
       - ./src/backend/app:/app/app:ro  # Hot reload for development
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  worker:
+    build:
+      context: ./src/backend
+      dockerfile: Dockerfile.worker
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://agent:agent@db:5432/agent_db
+      - OLLAMA_BASE_URL=http://host.docker.internal:11434
+      - TEMPORAL_HOST=temporal:7233
+    env_file:
+      - ./src/backend/.env
+    depends_on:
+      db:
+        condition: service_healthy
+      temporal:
+        condition: service_started
+    volumes:
+      - ./src/backend/app:/app/app:ro
 
   frontend:
     build:
@@ -47,6 +68,33 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+
+  temporal:
+    image: temporalio/auto-setup:1.25.2
+    ports:
+      - "7233:7233"
+    environment:
+      - DB=postgres12
+      - DB_PORT=5432
+      - POSTGRES_USER=agent
+      - POSTGRES_PWD=agent
+      - POSTGRES_SEEDS=db
+      - DYNAMIC_CONFIG_FILE_PATH=config/dynamicconfig/development-sql.yaml
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./temporal-config:/etc/temporal/config/dynamicconfig
+
+  temporal-ui:
+    image: temporalio/ui:2.31.2
+    ports:
+      - "8080:8080"
+    environment:
+      - TEMPORAL_ADDRESS=temporal:7233
+      - TEMPORAL_CORS_ORIGINS=http://localhost:3000
+    depends_on:
+      - temporal
 
 volumes:
   postgres_data:

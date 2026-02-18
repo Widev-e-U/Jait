@@ -54,6 +54,10 @@ app.add_middleware(
 app.include_router(auth_router)
 app.include_router(chat_router)
 
+# Import jobs router
+from app.routers.jobs import router as jobs_router
+app.include_router(jobs_router)
+
 
 @app.get("/")
 async def root():

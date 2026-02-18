@@ -3,6 +3,7 @@ Application configuration using pydantic-settings
 """
 from pydantic_settings import BaseSettings
 from functools import lru_cache
+from typing import Optional
 
 
 class Settings(BaseSettings):
@@ -23,9 +24,30 @@ class Settings(BaseSettings):
     google_client_secret: str = ""
     google_redirect_uri: str = "http://localhost:8000/auth/google/callback"
     
+    # LLM Provider Selection
+    llm_provider: str = "ollama"  # openai, anthropic, ollama, local
+    
     # Ollama
     ollama_base_url: str = "http://192.168.178.60:11434"
     ollama_model: str = "qwen3:14b"
+    
+    # OpenAI
+    openai_api_key: Optional[str] = None
+    openai_base_url: Optional[str] = None  # For OpenAI-compatible APIs
+    openai_model: str = "gpt-4o"
+    
+    # Anthropic
+    anthropic_api_key: Optional[str] = None
+    anthropic_model: str = "claude-sonnet-4-20250514"
+    
+    # Local Model (via local Ollama or llama-cpp)
+    local_model_url: Optional[str] = None
+    local_model_name: Optional[str] = None
+    
+    # Temporal
+    temporal_host: str = "temporal:7233"
+    temporal_namespace: str = "default"
+    temporal_task_queue: str = "jait-tasks"
     
     # Limits
     max_anonymous_prompts: int = 5
