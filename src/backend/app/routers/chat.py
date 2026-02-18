@@ -3,6 +3,7 @@ Chat routes with SSE streaming
 """
 import json
 import uuid
+from datetime import date
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -11,7 +12,7 @@ from pydantic import BaseModel
 from typing import Optional, AsyncGenerator
 
 from app.models.database import get_db
-from app.models.schemas import Session, Message, ChatRequest, ChatResponse, SessionResponse
+from app.models.schemas import User, Session, Message, ChatRequest, ChatResponse, SessionResponse
 from app.auth import get_current_user_optional
 from app.agent import get_agent
 from app.config import get_settings
@@ -51,17 +52,53 @@ async def get_or_create_session(
     return session
 
 
-async def check_prompt_limit(session: Session, user_id: Optional[str]) -> bool:
+async def check_prompt_limit(
+    session: Session,
+    user_id: Optional[str],
+    db: AsyncSession
+) -> tuple[bool, Optional[int]]:
     """
     Check if user has exceeded prompt limit.
-    Returns True if allowed, False if limit exceeded.
+    Returns (allowed, remaining_prompts).
     """
-    # Authenticated users have no limit
     if user_id:
-        return True
-    
-    # Anonymous users limited to max_anonymous_prompts
-    return session.prompt_count < settings.max_anonymous_prompts
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if not user:
+            return False, 0
+        today = date.today()
+        if user.last_prompt_date != today:
+            user.daily_prompt_count = 0
+            user.last_prompt_date = today
+            await db.commit()
+        remaining = max(0, settings.max_daily_prompts - user.daily_prompt_count)
+        return remaining > 0, remaining
+
+    remaining = max(0, settings.max_anonymous_prompts - session.prompt_count)
+    return remaining > 0, remaining
+
+
+async def increment_prompt_count(
+    session: Session,
+    user_id: Optional[str],
+    db: AsyncSession
+) -> Optional[int]:
+    """Increment prompt count and return remaining prompts."""
+    session.prompt_count += 1
+    if user_id:
+        result = await db.execute(select(User).where(User.id == user_id))
+        user = result.scalar_one_or_none()
+        if user:
+            today = date.today()
+            if user.last_prompt_date != today:
+                user.daily_prompt_count = 1
+                user.last_prompt_date = today
+            else:
+                user.daily_prompt_count += 1
+            await db.commit()
+            return max(0, settings.max_daily_prompts - user.daily_prompt_count)
+    await db.commit()
+    return max(0, settings.max_anonymous_prompts - session.prompt_count)
 
 
 async def get_chat_history(session_id: str, db: AsyncSession) -> list[dict]:
@@ -94,10 +131,11 @@ async def chat(
     session = await get_or_create_session(request.session_id, user_id, db)
     
     # Check prompt limit
-    if not await check_prompt_limit(session, user_id):
+    allowed, remaining = await check_prompt_limit(session, user_id, db)
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="login_required",
+            detail="limit_reached" if user_id else "login_required",
             headers={"X-Prompt-Limit-Reached": "true"}
         )
     
@@ -109,27 +147,12 @@ async def chat(
     response_text, tool_calls = await agent.chat(request.message, history)
     
     # Save messages
-    user_msg = Message(
-        session_id=session.id,
-        role="user",
-        content=request.message
-    )
-    assistant_msg = Message(
-        session_id=session.id,
-        role="assistant",
-        content=response_text
-    )
+    user_msg = Message(session_id=session.id, role="user", content=request.message)
+    assistant_msg = Message(session_id=session.id, role="assistant", content=response_text)
     db.add(user_msg)
     db.add(assistant_msg)
     
-    # Update prompt count
-    session.prompt_count += 1
-    await db.commit()
-    
-    # Calculate remaining prompts
-    remaining = None
-    if not user_id:
-        remaining = max(0, settings.max_anonymous_prompts - session.prompt_count)
+    remaining = await increment_prompt_count(session, user_id, db)
     
     return ChatResponse(
         message=response_text,
@@ -155,10 +178,11 @@ async def chat_stream(
     session = await get_or_create_session(request.session_id, user_id, db)
     
     # Check prompt limit
-    if not await check_prompt_limit(session, user_id):
+    allowed, remaining = await check_prompt_limit(session, user_id, db)
+    if not allowed:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="login_required",
+            detail="limit_reached" if user_id else "login_required",
             headers={"X-Prompt-Limit-Reached": "true"}
         )
     
@@ -190,26 +214,11 @@ async def chat_stream(
                     yield f"data: {json.dumps(chunk)}\n\n"
                 
                 elif chunk["type"] == "done":
-                    # Save messages to database
-                    user_msg = Message(
-                        session_id=session.id,
-                        role="user",
-                        content=request.message
-                    )
-                    assistant_msg = Message(
-                        session_id=session.id,
-                        role="assistant",
-                        content="".join(full_response)
-                    )
+                    user_msg = Message(session_id=session.id, role="user", content=request.message)
+                    assistant_msg = Message(session_id=session.id, role="assistant", content="".join(full_response))
                     db.add(user_msg)
                     db.add(assistant_msg)
-                    session.prompt_count += 1
-                    await db.commit()
-                    
-                    # Calculate remaining prompts
-                    remaining = None
-                    if not user_id:
-                        remaining = max(0, settings.max_anonymous_prompts - session.prompt_count)
+                    remaining = await increment_prompt_count(session, user_id, db)
                     
                     done_data = {
                         "type": "done",
@@ -252,8 +261,14 @@ async def get_session(
             detail="Session not found"
         )
     
-    remaining = None
-    if not session.user_id:
+    if session.user_id:
+        result2 = await db.execute(select(User).where(User.id == session.user_id))
+        user = result2.scalar_one_or_none()
+        if user and user.last_prompt_date == date.today():
+            remaining = max(0, settings.max_daily_prompts - user.daily_prompt_count)
+        else:
+            remaining = settings.max_daily_prompts
+    else:
         remaining = max(0, settings.max_anonymous_prompts - session.prompt_count)
     
     return SessionResponse(

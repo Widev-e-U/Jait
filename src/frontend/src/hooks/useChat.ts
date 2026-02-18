@@ -31,13 +31,17 @@ interface SendMessageOptions {
 }
 
 export function useChat() {
-  const [state, setState] = useState<ChatState>({
-    messages: [],
-    isLoading: false,
-    sessionId: null,
-    promptCount: 0,
-    remainingPrompts: 5,
-    error: null,
+  const [state, setState] = useState<ChatState>(() => {
+    const savedSessionId = localStorage.getItem('jait_session_id')
+    const savedRemaining = localStorage.getItem('jait_remaining_prompts')
+    return {
+      messages: [],
+      isLoading: false,
+      sessionId: savedSessionId,
+      promptCount: 0,
+      remainingPrompts: savedRemaining !== null ? parseInt(savedRemaining, 10) : 5,
+      error: null,
+    }
   })
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -76,9 +80,9 @@ export function useChat() {
 
       if (response.status === 401) {
         const data = await response.json()
-        if (data.detail === 'login_required') {
-          setState(prev => ({ ...prev, isLoading: false, error: 'login_required' }))
-          onLoginRequired?.()
+        if (data.detail === 'login_required' || data.detail === 'limit_reached') {
+          setState(prev => ({ ...prev, isLoading: false, error: data.detail }))
+          if (data.detail === 'login_required') onLoginRequired?.()
           return
         }
       }
@@ -148,6 +152,10 @@ export function useChat() {
               if (thinkingStart && !thinkingDuration) {
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
               }
+              if (data.session_id) localStorage.setItem('jait_session_id', data.session_id)
+              if (data.remaining_prompts !== null && data.remaining_prompts !== undefined) {
+                localStorage.setItem('jait_remaining_prompts', String(data.remaining_prompts))
+              }
               setState(prev => ({
                 ...prev,
                 sessionId: data.session_id,
@@ -190,6 +198,8 @@ export function useChat() {
   }, [])
 
   const clearMessages = useCallback(() => {
+    localStorage.removeItem('jait_session_id')
+    localStorage.removeItem('jait_remaining_prompts')
     setState({ messages: [], isLoading: false, sessionId: null, promptCount: 0, remainingPrompts: 5, error: null })
   }, [])
 

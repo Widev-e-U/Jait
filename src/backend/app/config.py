@@ -27,8 +27,9 @@ class Settings(BaseSettings):
     ollama_base_url: str = "http://192.168.178.60:11434"
     ollama_model: str = "qwen3:14b"
     
-    # Session
+    # Limits
     max_anonymous_prompts: int = 5
+    max_daily_prompts: int = 30
     
     # CORS
     cors_origins: list[str] = ["http://localhost:3000", "http://localhost:5173"]

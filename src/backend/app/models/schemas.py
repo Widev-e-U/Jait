@@ -1,9 +1,9 @@
 """
 SQLAlchemy models and Pydantic schemas
 """
-from datetime import datetime
+from datetime import datetime, date
 from typing import Optional
-from sqlalchemy import String, Integer, DateTime, ForeignKey, Text
+from sqlalchemy import String, Integer, DateTime, Date, ForeignKey, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from pydantic import BaseModel, EmailStr
 from app.models.database import Base
@@ -19,6 +19,8 @@ class User(Base):
     google_id: Mapped[str] = mapped_column(String(255), unique=True, nullable=True)
     name: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     picture: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    daily_prompt_count: Mapped[int] = mapped_column(Integer, default=0)
+    last_prompt_date: Mapped[Optional[date]] = mapped_column(Date, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
     
     sessions: Mapped[list["Session"]] = relationship(back_populates="user")

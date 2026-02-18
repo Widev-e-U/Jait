@@ -47,6 +47,8 @@ function App() {
     if (error === 'login_required') setShowLoginDialog(true)
   }, [error])
 
+  const limitReached = error === 'limit_reached'
+
   const handleSubmit = () => {
     if (!inputValue.trim() || isLoading) return
     sendMessage(inputValue.trim(), { token, onLoginRequired: () => setShowLoginDialog(true) })
@@ -77,8 +79,8 @@ function App() {
         <header className="flex items-center justify-between h-14 px-5 border-b shrink-0">
           <span className="text-base font-medium tracking-tight">Jait</span>
           <div className="flex items-center gap-1.5">
-            {!isAuthenticated && remainingPrompts !== null && (
-              <span className="text-xs text-muted-foreground mr-2">{remainingPrompts} free</span>
+            {remainingPrompts !== null && remainingPrompts <= 5 && (
+              <span className="text-xs text-muted-foreground mr-2">{remainingPrompts} remaining</span>
             )}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -126,14 +128,18 @@ function App() {
                 onSubmit={handleSubmit}
                 isLoading={isLoading}
               />
-              {!isAuthenticated && (
+              {!isAuthenticated ? (
                 <p className="text-center text-xs text-muted-foreground">
                   {remainingPrompts} free prompts.{' '}
                   <button onClick={() => setShowLoginDialog(true)} className="underline underline-offset-2 hover:text-foreground">
                     Sign in
-                  </button>{' '}for unlimited.
+                  </button>{' '}for more.
                 </p>
-              )}
+              ) : remainingPrompts !== null ? (
+                <p className="text-center text-xs text-muted-foreground">
+                  {remainingPrompts} prompts remaining today
+                </p>
+              ) : null}
             </div>
           </div>
         ) : (
@@ -154,19 +160,25 @@ function App() {
 
             <div className="shrink-0 px-4 py-3">
               <div className="max-w-3xl mx-auto space-y-1.5">
+                {limitReached && (
+                  <p className="text-center text-sm text-destructive">
+                    Daily limit reached. Come back tomorrow.
+                  </p>
+                )}
                 <PromptInput
                   value={inputValue}
                   onChange={setInputValue}
                   onSubmit={handleSubmit}
                   onStop={cancelRequest}
                   isLoading={isLoading}
+                  disabled={limitReached}
                 />
                 <div className="flex justify-between px-1">
                   <button onClick={clearMessages} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
                     Clear
                   </button>
-                  {!isAuthenticated && remainingPrompts !== null && (
-                    <span className="text-[11px] text-muted-foreground">{remainingPrompts} remaining</span>
+                  {remainingPrompts !== null && (
+                    <span className="text-[11px] text-muted-foreground">{remainingPrompts} remaining{isAuthenticated ? ' today' : ''}</span>
                   )}
                 </div>
               </div>
