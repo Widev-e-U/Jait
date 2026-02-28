@@ -5,7 +5,16 @@ export { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tool
 export { createFileReadTool, createFileWriteTool, createFilePatchTool, createFileListTool, createFileStatTool } from "./file-tools.js";
 export { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 export { createSurfacesListTool, createSurfacesStartTool, createSurfacesStopTool } from "./surface-tools.js";
-export { createMemorySaveTool, createMemorySearchTool, createMemoryForgetTool } from "./memory-tools.js";
+export {
+  createMemorySaveTool, 
+  createMemorySearchTool, 
+  createMemoryForgetTool
+  createBrowserNavigateTool,
+  createBrowserSnapshotTool,
+  createBrowserInteractionTools,
+  createWebFetchTool,
+  createWebSearchTool,
+} from "./browser-tools.js";
 
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { ToolRegistry } from "./registry.js";
@@ -13,8 +22,17 @@ import { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tool
 import { createFileReadTool, createFileWriteTool, createFilePatchTool, createFileListTool, createFileStatTool } from "./file-tools.js";
 import { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 import { createSurfacesListTool, createSurfacesStartTool, createSurfacesStopTool } from "./surface-tools.js";
-import { createMemorySaveTool, createMemorySearchTool, createMemoryForgetTool } from "./memory-tools.js";
 import type { MemoryService } from "../memory/contracts.js";
+import {
+  createBrowserNavigateTool,
+  createBrowserSnapshotTool,
+  createBrowserInteractionTools,
+  createWebFetchTool,
+  createWebSearchTool,
+  createMemorySaveTool, 
+  createMemorySearchTool, 
+  createMemoryForgetTool
+} from "./browser-tools.js";
 
 /** Create a ToolRegistry with all Sprint 3 tools pre-registered */
 export function createToolRegistry(surfaceRegistry: SurfaceRegistry, options: { memoryService?: MemoryService } = {}): ToolRegistry {
@@ -45,6 +63,14 @@ export function createToolRegistry(surfaceRegistry: SurfaceRegistry, options: { 
     tools.register(createMemorySearchTool(options.memoryService));
     tools.register(createMemoryForgetTool(options.memoryService));
   }
+  // Browser & web tools (Sprint 5)
+  tools.register(createBrowserNavigateTool(surfaceRegistry));
+  tools.register(createBrowserSnapshotTool(surfaceRegistry));
+  for (const tool of createBrowserInteractionTools(surfaceRegistry)) {
+    tools.register(tool);
+  }
+  tools.register(createWebFetchTool());
+  tools.register(createWebSearchTool());
 
   return tools;
 }

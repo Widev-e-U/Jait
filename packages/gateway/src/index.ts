@@ -4,7 +4,7 @@ import { WsControlPlane } from "./ws.js";
 import { openDatabase, migrateDatabase } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
 import { AuditWriter } from "./services/audit.js";
-import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory } from "./surfaces/index.js";
+import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, BrowserSurfaceFactory } from "./surfaces/index.js";
 import { createToolRegistry } from "./tools/index.js";
 import { MemoryEngine } from "./memory/service.js";
 import { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
@@ -36,6 +36,7 @@ async function main() {
   const surfaceRegistry = new SurfaceRegistry();
   surfaceRegistry.register(new TerminalSurfaceFactory({ broker }));
   surfaceRegistry.register(new FileSystemSurfaceFactory());
+  surfaceRegistry.register(new BrowserSurfaceFactory());
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
 
   // Wire broker output/exit events → correct TerminalSurface
