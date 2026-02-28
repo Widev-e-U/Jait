@@ -8,6 +8,7 @@ import type { FastifyInstance } from "fastify";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { AuditWriter } from "../services/audit.js";
+import type { WsControlPlane } from "../ws.js";
 import { TerminalSurface } from "../surfaces/terminal.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 
@@ -16,6 +17,7 @@ export function registerTerminalRoutes(
   surfaceRegistry: SurfaceRegistry,
   toolRegistry: ToolRegistry,
   audit: AuditWriter,
+  ws?: WsControlPlane,
 ) {
   // POST /api/terminals — create a new terminal
   app.post("/api/terminals", async (request, reply) => {
@@ -32,6 +34,11 @@ export function registerTerminalRoutes(
         sessionId,
         workspaceRoot,
       }) as TerminalSurface;
+
+      // Wire PTY output → WebSocket broadcast
+      if (ws) {
+        surface.onOutput = (data) => ws.broadcastTerminalOutput(termId, data);
+      }
 
       if (cols && rows) surface.resize(cols, rows);
 

@@ -1,18 +1,257 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
+import type { JaitDB } from "../db/index.js";
+import type { SessionService } from "../services/sessions.js";
+import type { ToolRegistry } from "../tools/registry.js";
+import type { AuditWriter } from "../services/audit.js";
+import type { ToolResult } from "../tools/contracts.js";
+import { messages as messagesTable } from "../db/schema.js";
+import { eq } from "drizzle-orm";
+import { uuidv7 } from "../lib/uuidv7.js";
 
-interface OllamaChatMessage {
-  role: "user" | "assistant" | "system";
+// ── Types ────────────────────────────────────────────────────────────
+
+interface ChatMessage {
+  role: "user" | "assistant" | "system" | "tool";
   content: string;
+  tool_calls?: OpenAIToolCall[];
+  tool_call_id?: string;
+  name?: string;
 }
 
-// In-memory conversation history per session (swap for DB later)
-const sessionHistory = new Map<string, OllamaChatMessage[]>();
+interface OpenAIToolCall {
+  id: string;
+  type: "function";
+  function: { name: string; arguments: string };
+}
 
-const SYSTEM_PROMPT = `You are Jait — Just Another Intelligent Tool. You are a helpful, concise assistant. Answer clearly and directly.`;
+/** Serialized tool call info for DB persistence */
+interface PersistedToolCall {
+  callId: string;
+  tool: string;
+  args: unknown;
+  ok: boolean;
+  message: string;
+  output?: string;
+}
 
-export function registerChatRoutes(app: FastifyInstance, config: AppConfig) {
-  // Send a message and stream the LLM response via SSE
+// ── In-memory state ──────────────────────────────────────────────────
+
+const sessionHistory = new Map<string, ChatMessage[]>();
+const activeStreams = new Set<string>();
+const sessionAbortControllers = new Map<string, AbortController>();
+
+type StreamEvent =
+  | { type: "token"; content: string }
+  | { type: "tool_start"; tool: string; args: unknown; call_id: string }
+  | { type: "tool_output"; call_id: string; content: string }
+  | { type: "tool_result"; call_id: string; ok: boolean; message: string; data?: unknown }
+  | { type: "done"; session_id: string; prompt_count: number; remaining_prompts: null }
+  | { type: "error"; message: string };
+type StreamSubscriber = (event: StreamEvent) => void;
+const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
+
+function emitToSubscribers(sessionId: string, event: StreamEvent) {
+  const subs = sessionSubscribers.get(sessionId);
+  if (subs) for (const fn of subs) fn(event);
+}
+
+function subscribe(sessionId: string, fn: StreamSubscriber) {
+  if (!sessionSubscribers.has(sessionId)) sessionSubscribers.set(sessionId, new Set());
+  sessionSubscribers.get(sessionId)!.add(fn);
+  return () => {
+    const subs = sessionSubscribers.get(sessionId);
+    if (subs) {
+      subs.delete(fn);
+      if (subs.size === 0) sessionSubscribers.delete(sessionId);
+    }
+  };
+}
+
+// ── System prompt ────────────────────────────────────────────────────
+
+const SYSTEM_PROMPT = `You are Jait — Just Another Intelligent Tool. You are a capable AI assistant that can run shell commands, read/write files, and manage system surfaces.
+
+When the user asks you to do something that requires action (run a command, edit a file, check system info, etc.), use your tools. Don't just describe what you would do — actually do it.
+
+Key capabilities:
+- terminal.run: Execute shell commands (PowerShell on Windows). Always use this to run commands.
+- file.read / file.write / file.patch: Read, create, and edit files.
+- file.list / file.stat: Browse the filesystem.
+- os.query: Get system info, running processes, disk usage.
+- surfaces.list / surfaces.start / surfaces.stop: Manage terminal and filesystem surfaces.
+
+Guidelines:
+- Be direct and concise.
+- When running commands, use the actual tools — don't just suggest commands.
+- For multi-step tasks, execute them step by step, checking each result.
+- If a command fails, analyze the error and try to fix it.
+- When editing files, read them first to understand the context before patching.`;
+
+/** Max agentic loop iterations to prevent infinite loops */
+const MAX_TOOL_ROUNDS = 15;
+
+/** OpenAI requires function names to match ^[a-zA-Z0-9_-]+$ — no dots */
+function toOpenAIName(name: string): string { return name.replace(/\./g, "_"); }
+function fromOpenAIName(name: string): string {
+  // Our tools use "namespace.action" format — only the first underscore is the dot
+  const idx = name.indexOf("_");
+  if (idx === -1) return name;
+  return name.slice(0, idx) + "." + name.slice(idx + 1);
+}
+
+/** Build OpenAI-format tool schemas from ToolRegistry */
+function buildToolSchemas(registry: ToolRegistry) {
+  return registry.list().map((t) => ({
+    type: "function" as const,
+    function: {
+      name: toOpenAIName(t.name),
+      description: t.description,
+      parameters: t.parameters,
+    },
+  }));
+}
+
+/** Serialize messages for OpenAI API (drop undefined fields) */
+function serializeMessages(messages: ChatMessage[]) {
+  return messages.map((m) => {
+    const msg: Record<string, unknown> = { role: m.role, content: m.content };
+    if (m.tool_calls) msg.tool_calls = m.tool_calls;
+    if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
+    if (m.name) msg.name = m.name;
+    return msg;
+  });
+}
+
+// ── Module-level DB ref for persistence from extracted functions ──────
+let _dbRef: JaitDB | undefined;
+let _appRef: FastifyInstance | undefined;
+
+function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string): void {
+  if (!_dbRef) return;
+  try {
+    _dbRef.insert(messagesTable)
+      .values({
+        id: crypto.randomUUID(),
+        sessionId,
+        role,
+        content,
+        toolCalls: toolCalls ?? null,
+        createdAt: new Date().toISOString(),
+      })
+      .run();
+  } catch (err) {
+    _appRef?.log.error(err, "Failed to persist message");
+  }
+}
+
+// ── Route registration ───────────────────────────────────────────────
+
+export interface ChatRouteDeps {
+  db?: JaitDB;
+  sessionService?: SessionService;
+  toolRegistry?: ToolRegistry;
+  audit?: AuditWriter;
+}
+
+export function registerChatRoutes(
+  app: FastifyInstance,
+  config: AppConfig,
+  depsOrDb?: JaitDB | ChatRouteDeps,
+  sessionServiceArg?: SessionService,
+) {
+  // Support both old signature (db, sessionService) and new deps object
+  let db: JaitDB | undefined;
+  let sessionService: SessionService | undefined;
+  let toolRegistry: ToolRegistry | undefined;
+  let audit: AuditWriter | undefined;
+
+  if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
+    const deps = depsOrDb as ChatRouteDeps;
+    db = deps.db;
+    sessionService = deps.sessionService;
+    toolRegistry = deps.toolRegistry;
+    audit = deps.audit;
+  } else {
+    db = depsOrDb as JaitDB | undefined;
+    sessionService = sessionServiceArg;
+  }
+
+  // Store refs for persistence from extracted functions
+  _dbRef = db;
+  _appRef = app;
+
+  const toolSchemas = toolRegistry ? buildToolSchemas(toolRegistry) : [];
+  const hasTools = toolSchemas.length > 0;
+
+  app.log.info(`Chat route: ${hasTools ? toolSchemas.length + " tools available for agent" : "no tools (text-only mode)"}`);
+
+  // Hydrate in-memory cache from DB if session not yet loaded
+  function hydrateSession(sessionId: string): void {
+    if (sessionHistory.has(sessionId)) return;
+    if (!db) return;
+    const rows = db
+      .select()
+      .from(messagesTable)
+      .where(eq(messagesTable.sessionId, sessionId))
+      .orderBy(messagesTable.createdAt)
+      .all();
+    if (rows.length > 0) {
+      sessionHistory.set(sessionId, [
+        { role: "system", content: SYSTEM_PROMPT },
+        ...rows.map((r) => ({
+          role: r.role as ChatMessage["role"],
+          content: r.content,
+        })),
+      ]);
+    }
+  }
+
+  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string): void {
+    if (!db) return;
+    try {
+      db.insert(messagesTable)
+        .values({
+          id: crypto.randomUUID(),
+          sessionId,
+          role,
+          content,
+          toolCalls: toolCalls ?? null,
+          createdAt: new Date().toISOString(),
+        })
+        .run();
+    } catch (err) {
+      app.log.error(err, "Failed to persist message");
+    }
+  }
+
+  // ── Tool execution helper ──────────────────────────────────────────
+
+  async function executeTool(
+    toolName: string,
+    args: unknown,
+    sessionId: string,
+    onOutputChunk?: (chunk: string) => void,
+  ): Promise<ToolResult> {
+    if (!toolRegistry) {
+      return { ok: false, message: "Tool registry not available" };
+    }
+    const context = {
+      sessionId,
+      actionId: uuidv7(),
+      workspaceRoot: process.cwd(),
+      requestedBy: "agent",
+      onOutputChunk,
+    };
+    try {
+      return await toolRegistry.execute(toolName, args, context, audit);
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  // ══ POST /api/chat — Main chat endpoint with agentic tool loop ═════
+
   app.post("/api/chat", async (request, reply) => {
     const body = request.body as Record<string, unknown>;
     const content =
@@ -41,7 +280,8 @@ export function registerChatRoutes(app: FastifyInstance, config: AppConfig) {
       Connection: "keep-alive",
     });
 
-    // Build conversation history
+    // Build conversation history (hydrate from DB if needed)
+    hydrateSession(sessionId);
     if (!sessionHistory.has(sessionId)) {
       sessionHistory.set(sessionId, [
         { role: "system", content: SYSTEM_PROMPT },
@@ -49,108 +289,98 @@ export function registerChatRoutes(app: FastifyInstance, config: AppConfig) {
     }
     const history = sessionHistory.get(sessionId)!;
     history.push({ role: "user", content });
+    persistMessage(sessionId, "user", content);
+    try { sessionService?.touch(sessionId); } catch { /* session may not exist */ }
+
+    const streamAbort = new AbortController();
+    sessionAbortControllers.set(sessionId, streamAbort);
+
+    let fullContent = "";
+    activeStreams.add(sessionId);
+
+    let clientDisconnected = false;
+    reply.raw.on("close", () => { clientDisconnected = true; });
+
+    const safeWrite = (data: string) => {
+      if (!clientDisconnected) {
+        try { reply.raw.write(data); } catch { clientDisconnected = true; }
+      }
+    };
+
+    const providerLabel = config.llmProvider === "openai" ? "OpenAI" : "Ollama";
 
     try {
-      // Call Ollama streaming API
-      const ollamaResponse = await fetch(
-        `${config.ollamaUrl}/api/chat`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: config.ollamaModel,
-            messages: history,
-            stream: true,
-          }),
-        },
-      );
-
-      if (!ollamaResponse.ok) {
-        const errText = await ollamaResponse.text();
-        app.log.error(
-          `Ollama error ${ollamaResponse.status}: ${errText}`,
+      if (config.llmProvider === "openai") {
+        // ══ OpenAI agentic loop ════════════════════════════════════
+        const result = await runOpenAIAgentLoop(
+          config, history, toolSchemas, hasTools, sessionId,
+          streamAbort, safeWrite, app, executeTool,
         );
-        reply.raw.write(
-          `data: ${JSON.stringify({ type: "error", message: `Ollama error: ${ollamaResponse.status}` })}\n\n`,
+        fullContent = result.content;
+      } else {
+        // ══ Ollama (text only — no tool support) ═══════════════════
+        fullContent = await runOllamaStream(
+          config, history, sessionId, streamAbort, safeWrite, app,
         );
-        reply.raw.end();
-        return;
-      }
-
-      const reader = ollamaResponse.body?.getReader();
-      if (!reader) {
-        reply.raw.write(
-          `data: ${JSON.stringify({ type: "error", message: "No response body from Ollama" })}\n\n`,
-        );
-        reply.raw.end();
-        return;
-      }
-
-      const decoder = new TextDecoder();
-      let fullContent = "";
-      let buffer = "";
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() || "";
-
-        for (const line of lines) {
-          if (!line.trim()) continue;
-          try {
-            const chunk = JSON.parse(line);
-            if (chunk.message?.content) {
-              const token = chunk.message.content;
-              fullContent += token;
-              reply.raw.write(
-                `data: ${JSON.stringify({ type: "token", content: token })}\n\n`,
-              );
-            }
-            if (chunk.done) {
-              // Save assistant's reply to history
-              history.push({ role: "assistant", content: fullContent });
-
-              reply.raw.write(
-                `data: ${JSON.stringify({
-                  type: "done",
-                  session_id: sessionId,
-                  prompt_count: history.filter((m) => m.role === "user").length,
-                  remaining_prompts: null,
-                })}\n\n`,
-              );
-            }
-          } catch {
-            // partial JSON line, will be completed next iteration
-          }
-        }
       }
     } catch (err) {
-      app.log.error(err, "Ollama streaming error");
-      reply.raw.write(
-        `data: ${JSON.stringify({
-          type: "error",
-          message:
-            err instanceof Error
-              ? err.message
-              : "Failed to reach Ollama",
-        })}\n\n`,
-      );
+      const wasCancelled = err instanceof Error && err.name === "AbortError";
+      if (!wasCancelled) app.log.error(err, `${providerLabel} streaming error`);
+
+      // Save partial content
+      if (fullContent) {
+        persistMessage(sessionId, "assistant", fullContent);
+      }
+
+      const errMsg = wasCancelled
+        ? "cancelled"
+        : err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
+      emitToSubscribers(sessionId, wasCancelled
+        ? { type: "done" as const, session_id: sessionId, prompt_count: history.filter(m => m.role === "user").length, remaining_prompts: null }
+        : { type: "error", message: errMsg });
+      try {
+        safeWrite(`data: ${JSON.stringify({ type: "error", message: errMsg })}\n\n`);
+      } catch { /* client gone */ }
     }
 
-    reply.raw.end();
+    activeStreams.delete(sessionId);
+    sessionAbortControllers.delete(sessionId);
+
+    // Final done event
+    const doneEvent = {
+      type: "done" as const,
+      session_id: sessionId,
+      prompt_count: history.filter(m => m.role === "user").length,
+      remaining_prompts: null,
+    };
+    emitToSubscribers(sessionId, doneEvent);
+    safeWrite(`data: ${JSON.stringify(doneEvent)}\n\n`);
+
+    try { reply.raw.end(); } catch { /* already closed */ }
   });
 
-  // List messages in a session (from in-memory history)
+  // Cancel an active stream for a session
+  app.post("/api/sessions/:sessionId/cancel", async (request) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const controller = sessionAbortControllers.get(sessionId);
+    if (controller) {
+      controller.abort();
+      return { ok: true, cancelled: true };
+    }
+    return { ok: true, cancelled: false };
+  });
+
+  // List messages in a session
   app.get("/api/sessions/:sessionId/messages", async (request) => {
     const { sessionId } = request.params as { sessionId: string };
+    hydrateSession(sessionId);
     const history = sessionHistory.get(sessionId) ?? [];
     return {
       sessionId,
+      streaming: activeStreams.has(sessionId),
       messages: history
-        .filter((m) => m.role !== "system")
+        .filter((m) => m.role !== "system" && m.role !== "tool")
+        .filter((m) => !(m.role === "assistant" && m.tool_calls && !m.content))
         .map((m, i) => ({
           id: `${sessionId}-${i}`,
           role: m.role,
@@ -158,4 +388,399 @@ export function registerChatRoutes(app: FastifyInstance, config: AppConfig) {
         })),
     };
   });
+
+  // SSE stream-resume: join an in-progress session's token stream
+  // Client receives a snapshot of current content, then live tokens until done.
+  app.get("/api/sessions/:sessionId/stream", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    hydrateSession(sessionId);
+    const history = sessionHistory.get(sessionId) ?? [];
+    const isStreaming = activeStreams.has(sessionId);
+
+    // Build snapshot from DB so we can include persisted tool_calls
+    let snapshotMessages: { id: string; role: string; content: string; toolCalls?: unknown }[];
+    if (db) {
+      const rows = db
+        .select()
+        .from(messagesTable)
+        .where(eq(messagesTable.sessionId, sessionId))
+        .orderBy(messagesTable.createdAt)
+        .all();
+      snapshotMessages = rows
+        .filter((r) => r.role === "user" || r.role === "assistant")
+        .map((r, i) => {
+          const msg: { id: string; role: string; content: string; toolCalls?: unknown } = {
+            id: `${sessionId}-${i}`,
+            role: r.role,
+            content: r.content,
+          };
+          if (r.toolCalls) {
+            try { msg.toolCalls = JSON.parse(r.toolCalls); } catch { /* ignore */ }
+          }
+          return msg;
+        });
+    } else {
+      snapshotMessages = history
+        .filter((m) => m.role !== "system" && m.role !== "tool")
+        .filter((m) => !(m.role === "assistant" && m.tool_calls && !m.content))
+        .map((m, i) => ({ id: `${sessionId}-${i}`, role: m.role, content: m.content }));
+    }
+
+    reply.raw.write(
+      `data: ${JSON.stringify({ type: "snapshot", messages: snapshotMessages, streaming: isStreaming })}\n\n`,
+    );
+
+    if (!isStreaming) {
+      // Not streaming — send done immediately
+      reply.raw.write(
+        `data: ${JSON.stringify({ type: "done", session_id: sessionId, prompt_count: history.filter(m => m.role === "user").length, remaining_prompts: null })}\n\n`,
+      );
+      reply.raw.end();
+      return;
+    }
+
+    // Subscribe to live events
+    let closed = false;
+    reply.raw.on("close", () => { closed = true; });
+
+    const unsubscribe = subscribe(sessionId, (event) => {
+      if (closed) return;
+      try {
+        reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
+        if (event.type === "done" || event.type === "error") {
+          try { reply.raw.end(); } catch { /* */ }
+        }
+      } catch {
+        closed = true;
+      }
+    });
+
+    // Clean up subscription if client disconnects before stream finishes
+    request.raw.on("close", () => {
+      unsubscribe();
+    });
+  });
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// OpenAI Agentic Loop — tool calling + streaming
+// ══════════════════════════════════════════════════════════════════════
+
+interface OpenAIToolSchema {
+  type: "function";
+  function: { name: string; description: string; parameters: unknown };
+}
+
+async function runOpenAIAgentLoop(
+  config: AppConfig,
+  history: ChatMessage[],
+  toolSchemas: OpenAIToolSchema[],
+  hasTools: boolean,
+  sessionId: string,
+  streamAbort: AbortController,
+  safeWrite: (data: string) => void,
+  app: FastifyInstance,
+  executeTool: (name: string, args: unknown, sid: string, onChunk?: (chunk: string) => void) => Promise<ToolResult>,
+): Promise<{ content: string; executedToolCalls: PersistedToolCall[] }> {
+  let fullContent = "";
+  const executedToolCalls: PersistedToolCall[] = [];
+
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const reqBody: Record<string, unknown> = {
+      model: config.openaiModel,
+      messages: serializeMessages(history),
+      stream: true,
+    };
+    if (hasTools) {
+      reqBody.tools = toolSchemas;
+      reqBody.tool_choice = "auto";
+    }
+
+    const openaiResponse = await fetch(
+      `${config.openaiBaseUrl}/chat/completions`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${config.openaiApiKey}`,
+        },
+        body: JSON.stringify(reqBody),
+        signal: streamAbort.signal,
+      },
+    );
+
+    if (!openaiResponse.ok) {
+      const errText = await openaiResponse.text();
+      app.log.error(`OpenAI error ${openaiResponse.status}: ${errText}`);
+      safeWrite(`data: ${JSON.stringify({ type: "error", message: `OpenAI error: ${openaiResponse.status}` })}\n\n`);
+      return { content: fullContent, executedToolCalls };
+    }
+
+    const reader = openaiResponse.body?.getReader();
+    if (!reader) {
+      safeWrite(`data: ${JSON.stringify({ type: "error", message: "No response body from OpenAI" })}\n\n`);
+      return { content: fullContent, executedToolCalls };
+    }
+
+    // Parse the stream, accumulating text content and tool calls
+    const { contentText, toolCalls, finishReason } = await parseOpenAIStream(
+      reader as any, sessionId, safeWrite,
+    );
+
+    fullContent += contentText;
+
+    // ── Model returned tool calls → execute them ──
+    if (finishReason === "tool_calls" && toolCalls.length > 0) {
+      // Push assistant message with tool_calls to history
+      history.push({
+        role: "assistant",
+        content: contentText || "",
+        tool_calls: toolCalls,
+      });
+
+      // Execute each tool call
+      for (const tc of toolCalls) {
+        let args: unknown;
+        try { args = JSON.parse(tc.function.arguments); } catch { args = {}; }
+
+        const internalName = fromOpenAIName(tc.function.name);
+
+        // Notify frontend (use internal dotted name for display)
+        const toolStartEvent: StreamEvent = {
+          type: "tool_start",
+          tool: internalName,
+          args,
+          call_id: tc.id,
+        };
+        emitToSubscribers(sessionId, toolStartEvent);
+        safeWrite(`data: ${JSON.stringify(toolStartEvent)}\n\n`);
+
+        app.log.info(`Executing tool: ${internalName}(${tc.function.arguments})`);
+
+        const result = await executeTool(internalName, args, sessionId, (chunk) => {
+          const ev: StreamEvent = { type: "tool_output", call_id: tc.id, content: chunk };
+          emitToSubscribers(sessionId, ev);
+          safeWrite(`data: ${JSON.stringify(ev)}\n\n`);
+        });
+
+        // Notify frontend of result
+        const toolResultEvent: StreamEvent = {
+          type: "tool_result",
+          call_id: tc.id,
+          ok: result.ok,
+          message: result.message,
+          data: result.data,
+        };
+        emitToSubscribers(sessionId, toolResultEvent);
+        safeWrite(`data: ${JSON.stringify(toolResultEvent)}\n\n`);
+
+        // Push tool result to history for next LLM call
+        history.push({
+          role: "tool",
+          content: JSON.stringify({ ok: result.ok, message: result.message, data: result.data }),
+          tool_call_id: tc.id,
+          name: tc.function.name,  // keep OpenAI name for serialization
+        });
+
+        // Accumulate for DB persistence
+        const outputStr = (result.data as Record<string, unknown>)?.output as string | undefined;
+        executedToolCalls.push({
+          callId: tc.id,
+          tool: internalName,
+          args,
+          ok: result.ok,
+          message: result.message,
+          output: outputStr ?? (result.data ? JSON.stringify(result.data) : undefined),
+        });
+      }
+
+      // Loop continues — LLM sees results and responds or calls more tools
+      continue;
+    }
+
+    // ── Normal text response — done ──
+    if (contentText) {
+      history.push({ role: "assistant", content: contentText });
+      const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
+      persistMessageGlobal(sessionId, "assistant", contentText, tcJson);
+    }
+    return { content: fullContent, executedToolCalls };
+  }
+
+  // Hit max rounds
+  app.log.warn(`Agentic loop hit max rounds (${MAX_TOOL_ROUNDS}) for session ${sessionId}`);
+  const msg = "\n\n[Reached maximum tool execution rounds. Stopping.]";
+  safeWrite(`data: ${JSON.stringify({ type: "token", content: msg })}\n\n`);
+  fullContent += msg;
+  return { content: fullContent, executedToolCalls };
+}
+
+// ── OpenAI SSE stream parser ─────────────────────────────────────────
+
+interface ParsedStream {
+  contentText: string;
+  toolCalls: OpenAIToolCall[];
+  finishReason: string | null;
+}
+
+async function parseOpenAIStream(
+  reader: ReadableStreamDefaultReader,
+  sessionId: string,
+  safeWrite: (data: string) => void,
+): Promise<ParsedStream> {
+  const decoder = new TextDecoder();
+  let buffer = "";
+  let contentText = "";
+  let finishReason: string | null = null;
+
+  // Accumulate tool_calls incrementally
+  const toolCallMap = new Map<number, { id: string; type: "function"; function: { name: string; arguments: string } }>();
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed || !trimmed.startsWith("data: ")) continue;
+      const payload = trimmed.slice(6);
+      if (payload === "[DONE]") continue;
+
+      try {
+        const chunk = JSON.parse(payload);
+        const choice = chunk.choices?.[0];
+        if (!choice) continue;
+
+        const delta = choice.delta;
+        if (!delta) continue;
+
+        // Text content
+        if (delta.content) {
+          contentText += delta.content;
+          const tokenEvent = { type: "token" as const, content: delta.content };
+          emitToSubscribers(sessionId, tokenEvent);
+          safeWrite(`data: ${JSON.stringify(tokenEvent)}\n\n`);
+        }
+
+        // Tool calls (streamed incrementally)
+        if (delta.tool_calls) {
+          for (const tc of delta.tool_calls) {
+            const idx: number = tc.index ?? 0;
+            if (!toolCallMap.has(idx)) {
+              toolCallMap.set(idx, {
+                id: tc.id ?? "",
+                type: "function",
+                function: { name: tc.function?.name ?? "", arguments: "" },
+              });
+            }
+            const existing = toolCallMap.get(idx)!;
+            if (tc.id) existing.id = tc.id;
+            if (tc.function?.name) existing.function.name = tc.function.name;
+            if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+          }
+        }
+
+        if (choice.finish_reason) {
+          finishReason = choice.finish_reason;
+        }
+      } catch {
+        // partial JSON chunk
+      }
+    }
+  }
+
+  const toolCalls = [...toolCallMap.entries()]
+    .sort(([a], [b]) => a - b)
+    .map(([, tc]) => tc);
+
+  return { contentText, toolCalls, finishReason };
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// Ollama streaming (text-only — no tool support)
+// ══════════════════════════════════════════════════════════════════════
+
+async function runOllamaStream(
+  config: AppConfig,
+  history: ChatMessage[],
+  sessionId: string,
+  streamAbort: AbortController,
+  safeWrite: (data: string) => void,
+  app: FastifyInstance,
+): Promise<string> {
+  let fullContent = "";
+
+  const ollamaResponse = await fetch(
+    `${config.ollamaUrl}/api/chat`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: config.ollamaModel,
+        messages: history
+          .filter(m => m.role !== "tool")
+          .map(m => ({ role: m.role, content: m.content })),
+        stream: true,
+      }),
+      signal: streamAbort.signal,
+    },
+  );
+
+  if (!ollamaResponse.ok) {
+    const errText = await ollamaResponse.text();
+    app.log.error(`Ollama error ${ollamaResponse.status}: ${errText}`);
+    safeWrite(`data: ${JSON.stringify({ type: "error", message: `Ollama error: ${ollamaResponse.status}` })}\n\n`);
+    return fullContent;
+  }
+
+  const reader = ollamaResponse.body?.getReader();
+  if (!reader) {
+    safeWrite(`data: ${JSON.stringify({ type: "error", message: "No response body from Ollama" })}\n\n`);
+    return fullContent;
+  }
+
+  const decoder = new TextDecoder();
+  let buffer = "";
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split("\n");
+    buffer = lines.pop() || "";
+
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      try {
+        const chunk = JSON.parse(line);
+        if (chunk.message?.content) {
+          const token = chunk.message.content;
+          fullContent += token;
+          emitToSubscribers(sessionId, { type: "token", content: token });
+          safeWrite(`data: ${JSON.stringify({ type: "token", content: token })}\n\n`);
+        }
+      } catch {
+        // partial JSON
+      }
+    }
+  }
+
+  if (fullContent) {
+    history.push({ role: "assistant", content: fullContent });
+    persistMessageGlobal(sessionId, "assistant", fullContent);
+  }
+
+  return fullContent;
 }

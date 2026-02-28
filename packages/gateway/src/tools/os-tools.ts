@@ -25,6 +25,13 @@ export function createOsQueryTool(): ToolDefinition<OsQueryInput> {
   return {
     name: "os.query",
     description: "Query system information: info, processes, disk usage, or environment",
+    parameters: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "What to query", enum: ["info", "processes", "disk", "env"] },
+      },
+      required: ["query"],
+    },
     async execute(input: OsQueryInput, _context: ToolContext): Promise<ToolResult> {
       switch (input.query) {
         case "info": {
@@ -95,6 +102,14 @@ export function createOsInstallTool(): ToolDefinition<OsInstallInput> {
   return {
     name: "os.install",
     description: "Install a system package via winget (Windows), apt (Linux), or brew (macOS)",
+    parameters: {
+      type: "object",
+      properties: {
+        "package": { type: "string", description: "Package name to install" },
+        manager: { type: "string", description: "Package manager to use", enum: ["winget", "apt", "brew", "auto"] },
+      },
+      required: ["package"],
+    },
     async execute(input: OsInstallInput, _context: ToolContext): Promise<ToolResult> {
       const mgr = input.manager === "auto" || !input.manager
         ? detectPackageManager()

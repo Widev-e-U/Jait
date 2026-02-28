@@ -108,4 +108,23 @@ export function migrateDatabase(sqlite: Database) {
       decided_via TEXT
     )
   `);
+
+  sqlite.run(`
+    CREATE TABLE IF NOT EXISTS messages (
+      id TEXT PRIMARY KEY,
+      session_id TEXT NOT NULL,
+      role TEXT NOT NULL,
+      content TEXT NOT NULL,
+      tool_calls TEXT,
+      created_at TEXT NOT NULL
+    )
+  `);
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`);
+
+  // Migration: add tool_calls column if table already existed without it
+  try {
+    sqlite.run(`ALTER TABLE messages ADD COLUMN tool_calls TEXT`);
+  } catch {
+    // column already exists — ignore
+  }
 }

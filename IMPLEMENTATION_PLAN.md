@@ -128,11 +128,11 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** `terminal.run` prompts for approval. Safe actions auto-execute at Trust Level 2+.
 
 **Exit criteria:**
-- [ ] Shell commands show Action Card with Approve/Reject
-- [ ] Approved actions execute; rejected actions abort
-- [ ] `file.read` executes without consent; `terminal.run` always requires it
-- [ ] Trust level increments after successful approved actions
-- [ ] Consent requests timeout after configurable period
+- [x] Shell commands show Action Card with Approve/Reject
+- [x] Approved actions execute; rejected actions abort
+- [x] `file.read` executes without consent; `terminal.run` always requires it
+- [x] Trust level increments after successful approved actions
+- [x] Consent requests timeout after configurable period
 
 ---
 

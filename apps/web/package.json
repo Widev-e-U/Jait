@@ -12,7 +12,7 @@
   "dependencies": {
     "@jait/api-client": "workspace:*",
     "@jait/shared": "workspace:*",
-    "@lobehub/icons": "^1.35.0",
+    "@lobehub/icons": "^4.9.0",
     "@radix-ui/react-avatar": "^1.1.11",
     "@radix-ui/react-collapsible": "^1.1.12",
     "@radix-ui/react-dialog": "^1.1.15",
@@ -31,6 +31,7 @@
     "@xterm/xterm": "^6.0.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "es-toolkit": "^1.44.0",
     "lucide-react": "^0.456.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",

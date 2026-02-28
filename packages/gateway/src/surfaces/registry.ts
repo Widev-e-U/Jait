@@ -20,7 +20,6 @@ export class SurfaceRegistry {
     }
 
     const instance = factory.create(id);
-    await instance.start(input);
     this.surfaces.set(id, instance);
     await instance.start(input);
     return instance;

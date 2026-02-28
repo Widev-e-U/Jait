@@ -27,7 +27,16 @@ interface TerminalStreamInput {
 export function createTerminalRunTool(registry: SurfaceRegistry): ToolDefinition<TerminalRunInput> {
   return {
     name: "terminal.run",
-    description: "Execute a shell command in a terminal and return the output",
+    description: "Execute a shell command in a terminal and return the output. Use this to run any CLI command (git, npm, powershell, etc).",
+    parameters: {
+      type: "object",
+      properties: {
+        command: { type: "string", description: "The shell command to execute" },
+        terminalId: { type: "string", description: "Optional terminal ID to reuse; omit to auto-select" },
+        timeout: { type: "number", description: "Execution timeout in ms (default 30000)" },
+      },
+      required: ["command"],
+    },
     async execute(input: TerminalRunInput, context: ToolContext): Promise<ToolResult> {
       const { command, timeout = 30000 } = input;
       const termId = input.terminalId ?? `term-${context.sessionId}-default`;
@@ -42,11 +51,12 @@ export function createTerminalRunTool(registry: SurfaceRegistry): ToolDefinition
       }
 
       try {
-        const output = await surface.execute(command, timeout);
+        const output = await surface.execute(command, timeout, context.onOutputChunk);
+        console.log(`[terminal.run] output (${output.length} chars): ${JSON.stringify(output.slice(0, 500))}`);
         return {
           ok: true,
           message: `Command executed successfully`,
-          data: { output, terminalId: termId },
+          data: { output: output || "(no output)", terminalId: termId },
         };
       } catch (err) {
         return {
@@ -62,7 +72,17 @@ export function createTerminalRunTool(registry: SurfaceRegistry): ToolDefinition
 export function createTerminalStreamTool(registry: SurfaceRegistry): ToolDefinition<TerminalStreamInput> {
   return {
     name: "terminal.stream",
-    description: "Start a new streaming terminal session (output sent via WebSocket)",
+    description: "Start a new streaming terminal session (output sent via WebSocket). Use when you need an interactive terminal.",
+    parameters: {
+      type: "object",
+      properties: {
+        sessionId: { type: "string", description: "Session to attach the terminal to" },
+        workspaceRoot: { type: "string", description: "Working directory for the terminal" },
+        cols: { type: "number", description: "Terminal width in columns" },
+        rows: { type: "number", description: "Terminal height in rows" },
+      },
+      required: ["sessionId"],
+    },
     async execute(input: TerminalStreamInput, context: ToolContext): Promise<ToolResult> {
       const termId = `term-${uuidv7()}`;
       const workspaceRoot = input.workspaceRoot ?? context.workspaceRoot;

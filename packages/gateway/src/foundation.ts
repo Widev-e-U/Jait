@@ -5,6 +5,18 @@ export { FileSystemSurface, FileSystemSurfaceFactory } from "./surfaces/filesyst
 
 export { PathGuard, PathTraversalError } from "./security/path-guard.js";
 
+// Sprint 4 — Consent & Trust
+export { ConsentManager } from "./security/consent-manager.js";
+export type { ConsentRequest as ConsentReq, ConsentDecision as ConsentDec, ConsentStatus, ConsentManagerOptions } from "./security/consent-manager.js";
+export { TrustEngine } from "./security/trust-engine.js";
+export type { TrustState } from "./security/trust-engine.js";
+export { ConsentAwareExecutor } from "./security/consent-executor.js";
+export type { ConsentAwareExecutorOptions, ExecuteOptions } from "./security/consent-executor.js";
+export { requiresConsent, isCommandAllowed, isPathAllowedByPermission, matchGlob } from "./security/tool-permissions.js";
+export type { ToolPermission, ConsentLevel, ToolPermissionConfig } from "./security/tool-permissions.js";
+export { getProfile, listProfiles, extendProfile } from "./security/tool-profiles.js";
+export type { ProfileName } from "./security/tool-profiles.js";
+
 export type {
   ConsentDecision,
   ConsentRequest,

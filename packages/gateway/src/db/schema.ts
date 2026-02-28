@@ -72,3 +72,19 @@ export const consentLog = sqliteTable("consent_log", {
   decidedAt: text("decided_at").notNull(),
   decidedVia: text("decided_via"), // 'click','voice','auto'
 });
+
+// ─── Chat Messages ───────────────────────────────────────────────────
+export const messages = sqliteTable(
+  "messages",
+  {
+    id: text("id").primaryKey(),
+    sessionId: text("session_id").notNull(),
+    role: text("role").notNull(), // 'user' | 'assistant'
+    content: text("content").notNull(),
+    toolCalls: text("tool_calls"), // JSON array of executed tool calls (nullable)
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_messages_session").on(table.sessionId, table.createdAt),
+  ],
+);

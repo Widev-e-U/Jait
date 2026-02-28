@@ -1,4 +1,4 @@
-export type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
+export type { ToolContext, ToolDefinition, ToolResult, ToolParametersSchema } from "./contracts.js";
 export { ToolRegistry } from "./registry.js";
 
 export { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tools.js";

@@ -1,0 +1,8 @@
+E:\Jait\apps\web\src\components\consent\action-card.tsx:5:const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:18789'
+E:\Jait\apps\web\src\components\consent\action-card.tsx:49:    const ws = new WebSocket(WS_URL)
+E:\Jait\apps\web\src\components\terminal\terminal-view.tsx:8:const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:18789'
+E:\Jait\apps\web\src\components\terminal\terminal-view.tsx:69:  const wsRef = useRef<WebSocket | null>(null)
+E:\Jait\apps\web\src\components\terminal\terminal-view.tsx:102:    // Connect WebSocket for terminal streaming
+E:\Jait\apps\web\src\components\terminal\terminal-view.tsx:103:    const ws = new WebSocket(`${WS_URL}?token=dev`)
+E:\Jait\apps\web\src\components\terminal\terminal-view.tsx:124:      if (ws.readyState === WebSocket.OPEN) {
+E:\Jait\apps\web\src\components\terminal\terminal-view.tsx:131:      if (ws.readyState === WebSocket.OPEN) {

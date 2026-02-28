@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
 import { Sun, Moon, LogOut, MessageSquare, Calendar, PanelLeft, Terminal as TerminalIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -7,10 +7,13 @@ import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, Suggestions } from '@/components/chat'
 import { TerminalView, TerminalTabs, useTerminals } from '@/components/terminal'
+import { ConsentQueue } from '@/components/consent'
 import { JobsPage } from '@/components/jobs'
 import { useAuth } from '@/hooks/useAuth'
 import { useChat } from '@/hooks/useChat'
 import { useSessions } from '@/hooks/useSessions'
+import { useModelInfo } from '@/hooks/useModelInfo'
+import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 
 type AppView = 'chat' | 'jobs'
 
@@ -42,16 +45,43 @@ function App() {
   const [currentView, setCurrentView] = useState<AppView>('chat')
   const [showSidebar, setShowSidebar] = useState(false)
   const [showTerminal, setShowTerminal] = useState(false)
+  const [terminalHeight, setTerminalHeight] = useState(280)
+  const isDragging = useRef(false)
   const { dark, toggle: toggleTheme } = useTheme()
 
+  const handleDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    isDragging.current = true
+    const startY = e.clientY
+    const startH = terminalHeight
+    const maxH = window.innerHeight * 0.5
+    const onMove = (ev: MouseEvent) => {
+      if (!isDragging.current) return
+      const delta = startY - ev.clientY
+      setTerminalHeight(Math.min(maxH, Math.max(280, startH + delta)))
+    }
+    const onUp = () => {
+      isDragging.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'row-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [terminalHeight])
+
   const { user, token, isAuthenticated, loginWithGoogle, logout, bindSession } = useAuth()
-  const { messages, isLoading, sessionId, remainingPrompts, error, sendMessage, cancelRequest, clearMessages } = useChat()
   const { sessions, activeSessionId, createSession, switchSession, archiveSession } = useSessions()
+  const { messages, isLoading, remainingPrompts, error, sendMessage, cancelRequest, clearMessages } = useChat(activeSessionId)
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal } = useTerminals()
+  const { provider, model } = useModelInfo()
 
   useEffect(() => {
-    if (isAuthenticated && sessionId) bindSession(sessionId)
-  }, [isAuthenticated, sessionId, bindSession])
+    if (isAuthenticated && activeSessionId) bindSession(activeSessionId)
+  }, [isAuthenticated, activeSessionId, bindSession])
 
   useEffect(() => {
     if (error === 'login_required') setShowLoginDialog(true)
@@ -59,14 +89,26 @@ function App() {
 
   const limitReached = error === 'limit_reached'
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if (!inputValue.trim() || isLoading) return
-    sendMessage(inputValue.trim(), { token, onLoginRequired: () => setShowLoginDialog(true) })
+    let sid = activeSessionId
+    if (!sid) {
+      const session = await createSession()
+      sid = session?.id ?? null
+    }
+    if (!sid) return
+    sendMessage(inputValue.trim(), { token, sessionId: sid, onLoginRequired: () => setShowLoginDialog(true) })
     setInputValue('')
   }
 
-  const handleSuggestion = (suggestion: string) => {
-    sendMessage(suggestion, { token, onLoginRequired: () => setShowLoginDialog(true) })
+  const handleSuggestion = async (suggestion: string) => {
+    let sid = activeSessionId
+    if (!sid) {
+      const session = await createSession()
+      sid = session?.id ?? null
+    }
+    if (!sid) return
+    sendMessage(suggestion, { token, sessionId: sid, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
@@ -135,6 +177,17 @@ function App() {
             </nav>
           </div>
           <div className="flex items-center gap-1.5">
+            {model && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <div className="flex items-center gap-1.5 mr-2 px-2 py-1 rounded-md bg-muted/50 cursor-default">
+                    <ModelIcon provider={provider ?? 'ollama'} model={model} size={16} />
+                    <span className="text-xs text-muted-foreground">{getModelDisplayName(model)}</span>
+                  </div>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{model}</TooltipContent>
+              </Tooltip>
+            )}
             {remainingPrompts !== null && remainingPrompts <= 5 && (
               <span className="text-xs text-muted-foreground mr-2">{remainingPrompts} remaining</span>
             )}
@@ -175,7 +228,7 @@ function App() {
             <JobsPage />
           </div>
         ) : (
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-1 min-h-0 overflow-hidden">
           {/* Session Sidebar */}
           {showSidebar && (
             <aside className="w-56 border-r shrink-0">
@@ -219,7 +272,7 @@ function App() {
             </div>
           </div>
         ) : (
-          <>
+          <div className="flex flex-col flex-1 min-h-0">
             <Conversation className="min-h-0 flex-1 border-b">
               {messages.map((msg) => (
                 <Message
@@ -236,6 +289,8 @@ function App() {
 
             <div className="shrink-0 px-4 py-3">
               <div className="max-w-3xl mx-auto space-y-1.5">
+                {/* Consent queue — shows pending approval requests */}
+                <ConsentQueue compact />
                 {limitReached && (
                   <p className="text-center text-sm text-destructive">
                     Daily limit reached. Come back tomorrow.
@@ -250,8 +305,8 @@ function App() {
                   disabled={limitReached}
                 />
                 <div className="flex justify-between px-1">
-                  <button onClick={clearMessages} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
-                    Clear
+                  <button onClick={() => { clearMessages(); createSession() }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
+                    New chat
                   </button>
                   {remainingPrompts !== null && (
                     <span className="text-[11px] text-muted-foreground">{remainingPrompts} remaining{isAuthenticated ? ' today' : ''}</span>
@@ -259,7 +314,7 @@ function App() {
                 </div>
               </div>
             </div>
-          </>
+          </div>
         )
         }
         </div>
@@ -267,7 +322,12 @@ function App() {
 
         {/* Terminal Panel */}
         {showTerminal && currentView === 'chat' && (
-          <div className="shrink-0 border-t" style={{ height: 280 }}>
+          <div className="shrink-0 border-t overflow-hidden" style={{ height: terminalHeight }}>
+            {/* Drag handle */}
+            <div
+              onMouseDown={handleDragStart}
+              className="h-1 cursor-row-resize hover:bg-primary/30 transition-colors"
+            />
             <TerminalTabs
               terminals={terminals}
               activeTerminalId={activeTerminalId}

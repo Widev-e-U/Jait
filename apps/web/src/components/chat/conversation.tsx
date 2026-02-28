@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from 'react'
 import { useStickToBottom } from 'use-stick-to-bottom'
 import { ArrowDown } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -9,7 +10,26 @@ interface ConversationProps {
 }
 
 export function Conversation({ children, className }: ConversationProps) {
-  const { scrollRef, contentRef, isAtBottom, scrollToBottom } = useStickToBottom()
+  const { scrollRef, contentRef, isAtBottom, scrollToBottom } = useStickToBottom({
+    initial: 'instant',
+  })
+
+  // Track previous child count to detect bulk history loads
+  const prevChildCount = useRef(0)
+
+  // useLayoutEffect runs before paint — instantly jump to bottom
+  // when messages go from 0→N (history snapshot loaded)
+  useLayoutEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    const count = Array.isArray(children) ? children.length : children ? 1 : 0
+    const wasEmpty = prevChildCount.current === 0
+    prevChildCount.current = count
+
+    if (wasEmpty && count > 0) {
+      el.scrollTop = el.scrollHeight
+    }
+  }, [children, scrollRef])
 
   return (
     <div className={cn('relative flex-1 overflow-hidden', className)}>

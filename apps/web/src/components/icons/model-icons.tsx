@@ -1,19 +1,18 @@
 /**
  * Model icons using @lobehub/icons
  * Maps LLM providers and models to their icons
+ * Uses deep imports to avoid pulling in @lobehub/ui features
  */
-import {
-  OpenAI,
-  Anthropic,
-  Ollama,
-  Claude,
-  Qwen,
-  Meta,
-  Mistral,
-  DeepSeek,
-  Gemini,
-  Grok,
-} from '@lobehub/icons'
+import OpenAI from '@lobehub/icons/es/OpenAI'
+import Anthropic from '@lobehub/icons/es/Anthropic'
+import Ollama from '@lobehub/icons/es/Ollama'
+import Claude from '@lobehub/icons/es/Claude'
+import Qwen from '@lobehub/icons/es/Qwen'
+import Meta from '@lobehub/icons/es/Meta'
+import Mistral from '@lobehub/icons/es/Mistral'
+import DeepSeek from '@lobehub/icons/es/DeepSeek'
+import Gemini from '@lobehub/icons/es/Gemini'
+import Grok from '@lobehub/icons/es/Grok'
 
 // Alias Meta as Llama for clarity
 const Llama = Meta
@@ -59,9 +58,12 @@ const MODEL_ICONS: Record<string, React.ComponentType<{ size?: number; className
   'llama3.1': Llama,
   'llama3.2': Llama,
   
-  // Mistral
+  // Mistral / Dolphin (dolphin fine-tunes of Mistral)
   'mistral': Mistral,
   'mixtral': Mistral,
+  'dolphin': Mistral,
+  'dolphin-mistral': Mistral,
+  'dolphin-mistral-nemo': Mistral,
   
   // DeepSeek
   'deepseek': DeepSeek,
@@ -95,8 +97,10 @@ export function getModelIcon(provider: string, model?: string): React.ComponentT
     
     // Try prefix match (e.g., "qwen3:14b" matches "qwen3")
     const modelBase = model.split(':')[0].toLowerCase()
+    // Strip org prefix like "CognitiveComputations/"
+    const modelName = modelBase.includes('/') ? modelBase.split('/').pop()! : modelBase
     for (const [key, icon] of Object.entries(MODEL_ICONS)) {
-      if (modelBase.startsWith(key.toLowerCase()) || key.toLowerCase().startsWith(modelBase)) {
+      if (modelName.startsWith(key.toLowerCase()) || key.toLowerCase().startsWith(modelName)) {
         return icon
       }
     }
@@ -131,8 +135,10 @@ export function getProviderDisplayName(provider: ProviderType): string {
  * Get model display name (without version tags)
  */
 export function getModelDisplayName(model: string): string {
+  // Strip org prefix like "CognitiveComputations/"
+  const withoutOrg = model.includes('/') ? model.split('/').pop()! : model
   // Remove version suffixes like ":14b", ":latest"
-  const parts = model.split(':')
+  const parts = withoutOrg.split(':')
   const baseName = parts[0]
   const version = parts[1]
   

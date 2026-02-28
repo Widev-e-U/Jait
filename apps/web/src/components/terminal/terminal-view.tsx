@@ -5,7 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 
 const GATEWAY = import.meta.env.VITE_GATEWAY_URL ?? 'http://localhost:8000'
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:18789'
+const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000'
 
 export interface TerminalInfo {
   id: string
@@ -91,47 +91,65 @@ export function TerminalView({ terminalId, className }: TerminalViewProps) {
     term.loadAddon(linksAddon)
     term.open(containerRef.current)
 
-    // Initial fit
+    // Initial fit + focus so the terminal can receive keyboard input
     requestAnimationFrame(() => {
       fitAddon.fit()
+      term.focus()
     })
 
     termRef.current = term
     fitRef.current = fitAddon
 
-    // Connect WebSocket for terminal streaming
-    const ws = new WebSocket(`${WS_URL}?token=dev`)
-    wsRef.current = ws
+    // --- WebSocket with auto-reconnect ---
+    let ws: WebSocket | null = null
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let disposed = false
 
-    ws.onopen = () => {
-      // Subscribe to terminal output
-      ws.send(JSON.stringify({ type: 'terminal.subscribe', terminalId }))
-    }
+    function connect() {
+      if (disposed) return
+      ws = new WebSocket(`${WS_URL}?token=dev`)
+      wsRef.current = ws
 
-    ws.onmessage = (e) => {
-      try {
-        const msg = JSON.parse(e.data as string) as { payload?: { type?: string; data?: string; terminalId?: string } }
-        if (msg.payload?.type === 'terminal.output' && msg.payload.terminalId === terminalId) {
-          term.write(msg.payload.data ?? '')
+      ws.onopen = () => {
+        ws!.send(JSON.stringify({ type: 'terminal.subscribe', terminalId }))
+      }
+
+      ws.onmessage = (e) => {
+        try {
+          const msg = JSON.parse(e.data as string) as { payload?: { type?: string; data?: string; terminalId?: string } }
+          if (msg.payload?.type === 'terminal.output' && msg.payload.terminalId === terminalId) {
+            term.write(msg.payload.data ?? '')
+          }
+        } catch {
+          // ignore
         }
-      } catch {
-        // ignore
+      }
+
+      ws.onclose = () => {
+        if (!disposed) {
+          reconnectTimer = setTimeout(connect, 1000)
+        }
+      }
+
+      ws.onerror = () => {
+        // onclose will fire after onerror, which triggers reconnect
       }
     }
 
+    connect()
+
     // Forward user input to the terminal via WS
     term.onData((data) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data }))
       }
     })
 
     // Forward resize events
     term.onResize(({ cols, rows }) => {
-      if (ws.readyState === WebSocket.OPEN) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(JSON.stringify({ type: 'terminal.resize', terminalId, cols, rows }))
       }
-      // Also notify the server via REST
       void fetch(`${GATEWAY}/api/terminals/${terminalId}/resize`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -146,8 +164,10 @@ export function TerminalView({ terminalId, className }: TerminalViewProps) {
     resizeObserver.observe(containerRef.current)
 
     return () => {
+      disposed = true
+      if (reconnectTimer) clearTimeout(reconnectTimer)
       resizeObserver.disconnect()
-      ws.close()
+      if (ws) ws.close()
       term.dispose()
       termRef.current = null
       fitRef.current = null
@@ -155,7 +175,11 @@ export function TerminalView({ terminalId, className }: TerminalViewProps) {
     }
   }, [terminalId])
 
-  return <div ref={containerRef} className={`h-full w-full ${className ?? ''}`} />
+  return (
+    <div className={`w-full overflow-hidden ${className ?? ''}`} onClick={() => termRef.current?.focus()}>
+      <div ref={containerRef} className="h-full w-full" />
+    </div>
+  )
 }
 
 interface TerminalTabsProps {
@@ -170,10 +194,13 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
   return (
     <div className="flex items-center gap-1 px-2 h-8 border-b bg-muted/50 shrink-0 overflow-x-auto">
       {terminals.map((t) => (
-        <button
+        <div
           key={t.id}
+          role="tab"
+          tabIndex={0}
           onClick={() => onSelect(t.id)}
-          className={`group flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors ${
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(t.id) }}
+          className={`group flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors cursor-pointer ${
             activeTerminalId === t.id
               ? 'bg-background text-foreground shadow-sm'
               : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
@@ -190,7 +217,7 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
           >
             ×
           </button>
-        </button>
+        </div>
       ))}
       <button
         onClick={onCreate}

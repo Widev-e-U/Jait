@@ -45,6 +45,13 @@ export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<Fi
   return {
     name: "file.read",
     description: "Read the contents of a file within the workspace",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Relative or absolute path to the file" },
+      },
+      required: ["path"],
+    },
     async execute(input: FileReadInput, context: ToolContext): Promise<ToolResult> {
       try {
         const fs = getFs(registry, context);
@@ -68,6 +75,14 @@ export function createFileWriteTool(registry: SurfaceRegistry): ToolDefinition<F
   return {
     name: "file.write",
     description: "Write content to a file within the workspace (creates parent directories)",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Relative or absolute path to the file" },
+        content: { type: "string", description: "File content to write" },
+      },
+      required: ["path", "content"],
+    },
     async execute(input: FileWriteInput, context: ToolContext): Promise<ToolResult> {
       try {
         const fs = getFs(registry, context);
@@ -91,6 +106,15 @@ export function createFilePatchTool(registry: SurfaceRegistry): ToolDefinition<F
   return {
     name: "file.patch",
     description: "Search-and-replace within a file (first occurrence)",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Path to the file" },
+        search: { type: "string", description: "Exact text to find" },
+        replace: { type: "string", description: "Replacement text" },
+      },
+      required: ["path", "search", "replace"],
+    },
     async execute(input: FilePatchInput, context: ToolContext): Promise<ToolResult> {
       try {
         const fs = getFs(registry, context);
@@ -117,6 +141,13 @@ export function createFileListTool(registry: SurfaceRegistry): ToolDefinition<Fi
   return {
     name: "file.list",
     description: "List files and directories at a path within the workspace",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Directory path to list" },
+      },
+      required: ["path"],
+    },
     async execute(input: FileListInput, context: ToolContext): Promise<ToolResult> {
       try {
         const fs = getFs(registry, context);
@@ -140,6 +171,13 @@ export function createFileStatTool(registry: SurfaceRegistry): ToolDefinition<Fi
   return {
     name: "file.stat",
     description: "Get file metadata (size, type, modified date)",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Path to the file" },
+      },
+      required: ["path"],
+    },
     async execute(input: FileStatInput, context: ToolContext): Promise<ToolResult> {
       try {
         const fs = getFs(registry, context);

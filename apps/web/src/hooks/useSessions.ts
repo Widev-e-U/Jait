@@ -14,18 +14,25 @@ export interface Session {
 
 export function useSessions() {
   const [sessions, setSessions] = useState<Session[]>([])
-  const [activeSessionId, setActiveSessionId] = useState<string | null>(() =>
-    localStorage.getItem('jait_active_session_id'),
-  )
-  const [loading, setLoading] = useState(false)
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
 
   const fetchSessions = useCallback(async () => {
     setLoading(true)
     try {
-      const res = await fetch(`${API_URL}/api/sessions?status=active`)
-      if (res.ok) {
-        const data = (await res.json()) as { sessions: Session[] }
+      const [sessionsRes, lastActiveRes] = await Promise.all([
+        fetch(`${API_URL}/api/sessions?status=active`),
+        fetch(`${API_URL}/api/sessions/last-active`),
+      ])
+      if (sessionsRes.ok) {
+        const data = (await sessionsRes.json()) as { sessions: Session[] }
         setSessions(data.sessions)
+      }
+      if (lastActiveRes.ok) {
+        const data = (await lastActiveRes.json()) as { session: Session | null }
+        if (data.session) {
+          setActiveSessionId((prev) => prev ?? data.session!.id)
+        }
       }
     } catch (err) {
       console.error('Failed to fetch sessions:', err)
@@ -45,7 +52,6 @@ export function useSessions() {
         const session = (await res.json()) as Session
         setSessions((prev) => [session, ...prev])
         setActiveSessionId(session.id)
-        localStorage.setItem('jait_active_session_id', session.id)
         return session
       }
     } catch (err) {
@@ -56,7 +62,6 @@ export function useSessions() {
 
   const switchSession = useCallback((sessionId: string) => {
     setActiveSessionId(sessionId)
-    localStorage.setItem('jait_active_session_id', sessionId)
   }, [])
 
   const archiveSession = useCallback(async (sessionId: string) => {
@@ -65,7 +70,6 @@ export function useSessions() {
       setSessions((prev) => prev.filter((s) => s.id !== sessionId))
       if (activeSessionId === sessionId) {
         setActiveSessionId(null)
-        localStorage.removeItem('jait_active_session_id')
       }
     } catch (err) {
       console.error('Failed to archive session:', err)

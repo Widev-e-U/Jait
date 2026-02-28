@@ -3,6 +3,7 @@ import type { WsEvent } from "@jait/shared";
 import type { AppConfig } from "./config.js";
 import { nanoid } from "nanoid";
 import * as jose from "jose";
+import type { Server as HttpServer } from "node:http";
 
 interface ConnectedClient {
   id: string;
@@ -27,9 +28,18 @@ export class WsControlPlane {
     this.jwtSecret = new TextEncoder().encode(secret);
   }
 
-  start() {
-    this.wss = new WebSocketServer({ port: this.config.wsPort });
-    console.log(`WebSocket control plane listening on port ${this.config.wsPort}`);
+  /**
+   * Attach the WebSocket server to an existing HTTP server (shares port).
+   * Falls back to standalone port if no httpServer is provided.
+   */
+  start(httpServer?: HttpServer) {
+    if (httpServer) {
+      this.wss = new WebSocketServer({ server: httpServer });
+      console.log("WebSocket control plane attached to HTTP server (shared port)");
+    } else {
+      this.wss = new WebSocketServer({ port: this.config.wsPort });
+      console.log(`WebSocket control plane listening on port ${this.config.wsPort}`);
+    }
 
     this.wss.on("connection", (ws, req) => {
       const clientId = nanoid();
@@ -182,6 +192,18 @@ export class WsControlPlane {
             timestamp: new Date().toISOString(),
             payload: { terminalId: termId, subscribed: true },
           });
+          // Replay buffered output so the client sees the shell banner/prompt
+          if (this.onTerminalReplay) {
+            const buffered = this.onTerminalReplay(termId);
+            if (buffered) {
+              this.send(client.ws, {
+                type: "surface.connected",
+                sessionId: client.sessionId ?? "",
+                timestamp: new Date().toISOString(),
+                payload: { type: "terminal.output", terminalId: termId, data: buffered },
+              });
+            }
+          }
         }
         break;
       }
@@ -205,6 +227,21 @@ export class WsControlPlane {
         const rows = (msg as { rows?: number }).rows;
         if (resizeTermId && cols && rows && this.onTerminalResize) {
           this.onTerminalResize(resizeTermId, cols, rows);
+        }
+        break;
+      }
+      case "consent.approve": {
+        const consentId = (msg as { requestId?: string }).requestId;
+        if (consentId && this.onConsentApprove) {
+          this.onConsentApprove(consentId);
+        }
+        break;
+      }
+      case "consent.reject": {
+        const rejectId = (msg as { requestId?: string }).requestId;
+        const reason = (msg as { reason?: string }).reason;
+        if (rejectId && this.onConsentReject) {
+          this.onConsentReject(rejectId, reason);
         }
         break;
       }
@@ -255,6 +292,12 @@ export class WsControlPlane {
   onTerminalInput?: (terminalId: string, data: string) => void;
   /** Callback for terminal resize from WS clients */
   onTerminalResize?: (terminalId: string, cols: number, rows: number) => void;
+  /** Callback to replay buffered output when a client subscribes to a terminal */
+  onTerminalReplay?: (terminalId: string) => string | null;
+  /** Callback for consent approval from WS clients */
+  onConsentApprove?: (requestId: string) => void;
+  /** Callback for consent rejection from WS clients */
+  onConsentReject?: (requestId: string, reason?: string) => void;
 
   get clientCount() {
     return this.clients.size;

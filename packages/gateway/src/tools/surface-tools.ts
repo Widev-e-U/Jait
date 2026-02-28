@@ -13,6 +13,10 @@ export function createSurfacesListTool(registry: SurfaceRegistry): ToolDefinitio
   return {
     name: "surfaces.list",
     description: "List all active surfaces and their current state",
+    parameters: {
+      type: "object",
+      properties: {},
+    },
     async execute(_input: Record<string, never>, _context: ToolContext): Promise<ToolResult> {
       const snapshots = registry.listSnapshots();
       return {
@@ -36,7 +40,16 @@ interface SurfaceStartInput {
 export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefinition<SurfaceStartInput> {
   return {
     name: "surfaces.start",
-    description: "Start a new surface of the given type",
+    description: "Start a new surface of the given type (terminal, filesystem)",
+    parameters: {
+      type: "object",
+      properties: {
+        type: { type: "string", description: "Surface type to start", enum: ["terminal", "filesystem"] },
+        sessionId: { type: "string", description: "Session to attach the surface to" },
+        workspaceRoot: { type: "string", description: "Working directory for the surface" },
+      },
+      required: ["type"],
+    },
     async execute(input: SurfaceStartInput, context: ToolContext): Promise<ToolResult> {
       try {
         const { uuidv7 } = await import("../lib/uuidv7.js");
@@ -70,6 +83,14 @@ export function createSurfacesStopTool(registry: SurfaceRegistry): ToolDefinitio
   return {
     name: "surfaces.stop",
     description: "Stop a running surface by its ID",
+    parameters: {
+      type: "object",
+      properties: {
+        surfaceId: { type: "string", description: "ID of the surface to stop" },
+        reason: { type: "string", description: "Reason for stopping" },
+      },
+      required: ["surfaceId"],
+    },
     async execute(input: SurfaceStopInput, _context: ToolContext): Promise<ToolResult> {
       const stopped = await registry.stopSurface(input.surfaceId, input.reason);
       if (!stopped) {

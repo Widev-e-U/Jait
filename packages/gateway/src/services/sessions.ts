@@ -77,6 +77,17 @@ export class SessionService {
       .run();
   }
 
+  /** Get the most recently active session. */
+  lastActive() {
+    return this.db
+      .select()
+      .from(sessions)
+      .where(eq(sessions.status, "active"))
+      .orderBy(desc(sessions.lastActiveAt))
+      .limit(1)
+      .get() ?? null;
+  }
+
   /** Delete (soft) a session. */
   delete(id: string) {
     this.db

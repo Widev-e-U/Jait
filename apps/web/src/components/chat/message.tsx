@@ -1,21 +1,15 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Wrench } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Reasoning } from './reasoning'
-
-interface ToolCall {
-  tool: string
-  arguments?: Record<string, unknown>
-  result?: unknown
-}
+import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 
 interface MessageProps {
   role: 'user' | 'assistant'
   content: string
   thinking?: string
   thinkingDuration?: number
-  toolCalls?: ToolCall[]
+  toolCalls?: ToolCallInfo[]
   isStreaming?: boolean
 }
 
@@ -31,6 +25,10 @@ export function Message({ role, content, thinking, thinkingDuration, toolCalls, 
             isStreaming={!!isStreaming && !content}
             duration={thinkingDuration}
           />
+        )}
+
+        {toolCalls && toolCalls.length > 0 && (
+          <ToolCallGroup calls={toolCalls} />
         )}
 
         {content ? (
@@ -50,17 +48,6 @@ export function Message({ role, content, thinking, thinkingDuration, toolCalls, 
             <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:300ms]" />
           </div>
         ) : null}
-
-        {toolCalls && toolCalls.length > 0 && (
-          <div className="space-y-1">
-            {toolCalls.map((tc, idx) => (
-              <div key={idx} className="flex items-start gap-2 text-sm text-muted-foreground">
-                <Wrench className="h-4 w-4 mt-0.5 shrink-0" />
-                <span className="font-medium">{tc.tool}</span>
-              </div>
-            ))}
-          </div>
-        )}
       </div>
     </div>
   )

@@ -48,6 +48,12 @@ export function registerSessionRoutes(
     return { sessions: sessionService.list(status) };
   });
 
+  // Get the most recently active session
+  app.get("/api/sessions/last-active", async () => {
+    const session = sessionService.lastActive();
+    return { session };
+  });
+
   // Get session by ID
   app.get("/api/sessions/:id", async (request, reply) => {
     const { id } = request.params as { id: string };

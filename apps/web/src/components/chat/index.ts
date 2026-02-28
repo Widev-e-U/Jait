@@ -1,6 +1,7 @@
 export { Conversation } from './conversation'
 export { Message } from './message'
 export { Reasoning } from './reasoning'
+export { ToolCallCard, ToolCallGroup } from './tool-call-card'
 export { PromptInput } from './prompt-input'
 export { SessionSelector } from './session-selector'
 export { Suggestions } from './suggestions'
