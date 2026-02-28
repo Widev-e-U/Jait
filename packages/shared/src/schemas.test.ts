@@ -71,28 +71,20 @@ describe("@jait/shared schemas", () => {
     it("accepts valid session creation", () => {
       const result = sessionCreateSchema.parse({
         name: "My session",
-        workspaceId: "550e8400-e29b-41d4-a716-446655440000",
-        deviceId: "device-1",
+        workspacePath: "/home/user/project",
       });
       expect(result.name).toBe("My session");
     });
 
-    it("rejects empty name", () => {
-      expect(() =>
-        sessionCreateSchema.parse({
-          name: "",
-          workspaceId: "550e8400-e29b-41d4-a716-446655440000",
-          deviceId: "device-1",
-        }),
-      ).toThrow();
+    it("accepts empty params (all optional)", () => {
+      const result = sessionCreateSchema.parse({});
+      expect(result.name).toBeUndefined();
     });
 
-    it("rejects invalid UUID for workspaceId", () => {
+    it("rejects name over 200 chars", () => {
       expect(() =>
         sessionCreateSchema.parse({
-          name: "test",
-          workspaceId: "not-a-uuid",
-          deviceId: "device-1",
+          name: "x".repeat(201),
         }),
       ).toThrow();
     });
@@ -101,15 +93,30 @@ describe("@jait/shared schemas", () => {
   describe("sessionInfoSchema", () => {
     it("accepts valid session info", () => {
       const result = sessionInfoSchema.parse({
-        id: "550e8400-e29b-41d4-a716-446655440000",
+        id: "01912345-6789-7abc-8def-0123456789ab",
         name: "Test session",
-        workspaceId: "550e8400-e29b-41d4-a716-446655440001",
-        deviceId: "dev-1",
+        workspacePath: "/home/user/project",
         status: "active",
-        createdAt: "2026-01-01T00:00:00Z",
-        lastActivityAt: "2026-01-01T00:05:00Z",
+        createdAt: "2026-01-01T00:00:00.000Z",
+        lastActiveAt: "2026-01-01T00:05:00.000Z",
+        metadata: null,
       });
       expect(result.status).toBe("active");
+    });
+
+    it("accepts archived/deleted statuses", () => {
+      for (const status of ["archived", "deleted"] as const) {
+        const result = sessionInfoSchema.parse({
+          id: "test-id",
+          name: null,
+          workspacePath: null,
+          status,
+          createdAt: "2026-01-01T00:00:00.000Z",
+          lastActiveAt: "2026-01-01T00:00:00.000Z",
+          metadata: null,
+        });
+        expect(result.status).toBe(status);
+      }
     });
   });
 
@@ -126,7 +133,7 @@ describe("@jait/shared schemas", () => {
     it("accepts full action response with preview", () => {
       const result = actionResponseSchema.parse({
         action_id: "act-456",
-        status: "awaiting_consent",
+        status: "pending",
         surface: "file_system",
         device_id: "dev-1",
         preview: {

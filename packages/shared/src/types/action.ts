@@ -1,7 +1,9 @@
 // @jait/shared — Action types
 export type ActionStatus =
-  | "awaiting_consent"
+  | "pending"
+  | "approved"
   | "executing"
+  | "executed"
   | "completed"
   | "failed"
   | "reverted";
@@ -23,19 +25,17 @@ export interface ActionResponse {
 export interface AuditEntry {
   id: string;
   timestamp: string;
-  userId: string;
-  sessionId: string;
-  workspaceId: string;
-  surfaceType: string;
-  deviceId: string;
+  sessionId?: string | null;
+  surfaceType?: string | null;
+  deviceId?: string | null;
   actionId: string;
   actionType: string;
-  toolName: string;
-  inputs: Record<string, unknown>;
-  outputs: Record<string, unknown>;
-  sideEffects: Record<string, unknown>;
-  status: ActionStatus;
-  consentMethod: "auto" | "confirm" | "2fa" | "passkey";
-  signature?: string;
-  parentActionId?: string;
+  toolName?: string | null;
+  inputs?: string | null;   // JSON string
+  outputs?: string | null;  // JSON string
+  sideEffects?: string | null; // JSON string
+  status: string;
+  consentMethod?: string | null;
+  signature?: string | null;
+  parentActionId?: string | null;
 }

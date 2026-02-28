@@ -71,11 +71,11 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** Multiple sessions, each isolated. All actions audited in SQLite.
 
 **Exit criteria:**
-- [ ] Creating a new session gives it a unique ID
-- [ ] Tool calls in session A don't appear in session B
-- [ ] `audit_log` table has entries for every tool call
-- [ ] `sessions.list` tool returns active sessions when called by the agent
-- [ ] `~/.jait/data/jait.db` is the sole persistence layer — no external services
+- [x] Creating a new session gives it a unique ID
+- [x] Tool calls in session A don't appear in session B
+- [x] `audit_log` table has entries for every tool call
+- [x] `sessions.list` tool returns active sessions when called by the agent
+- [x] `~/.jait/data/jait.db` is the sole persistence layer — no external services
 
 ---
 

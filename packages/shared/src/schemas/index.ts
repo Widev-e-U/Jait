@@ -26,26 +26,27 @@ export const surfaceInfoSchema = z.object({
 // --- Session schemas ---
 
 export const sessionCreateSchema = z.object({
-  name: z.string().min(1).max(200),
-  workspaceId: z.string().uuid(),
-  deviceId: z.string().min(1),
+  name: z.string().max(200).optional(),
+  workspacePath: z.string().optional(),
 });
 
 export const sessionInfoSchema = z.object({
-  id: z.string().uuid(),
-  name: z.string(),
-  workspaceId: z.string().uuid(),
-  deviceId: z.string(),
-  status: z.enum(["active", "idle", "closed"]),
-  createdAt: z.string().datetime(),
-  lastActivityAt: z.string().datetime(),
+  id: z.string(),
+  name: z.string().nullable(),
+  workspacePath: z.string().nullable(),
+  status: z.enum(["active", "archived", "deleted"]),
+  createdAt: z.string(),
+  lastActiveAt: z.string(),
+  metadata: z.string().nullable(),
 });
 
 // --- Action schemas ---
 
 export const actionStatusSchema = z.enum([
-  "awaiting_consent",
+  "pending",
+  "approved",
   "executing",
+  "executed",
   "completed",
   "failed",
   "reverted",
