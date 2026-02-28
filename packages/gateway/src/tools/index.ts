@@ -6,6 +6,9 @@ export { createFileReadTool, createFileWriteTool, createFilePatchTool, createFil
 export { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 export { createSurfacesListTool, createSurfacesStartTool, createSurfacesStopTool } from "./surface-tools.js";
 export {
+  createMemorySaveTool, 
+  createMemorySearchTool, 
+  createMemoryForgetTool
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
   createBrowserInteractionTools,
@@ -19,16 +22,20 @@ import { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tool
 import { createFileReadTool, createFileWriteTool, createFilePatchTool, createFileListTool, createFileStatTool } from "./file-tools.js";
 import { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 import { createSurfacesListTool, createSurfacesStartTool, createSurfacesStopTool } from "./surface-tools.js";
+import type { MemoryService } from "../memory/contracts.js";
 import {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
+  createMemorySaveTool, 
+  createMemorySearchTool, 
+  createMemoryForgetTool
 } from "./browser-tools.js";
 
 /** Create a ToolRegistry with all Sprint 3 tools pre-registered */
-export function createToolRegistry(surfaceRegistry: SurfaceRegistry): ToolRegistry {
+export function createToolRegistry(surfaceRegistry: SurfaceRegistry, options: { memoryService?: MemoryService } = {}): ToolRegistry {
   const tools = new ToolRegistry();
 
   // Terminal tools
@@ -51,6 +58,11 @@ export function createToolRegistry(surfaceRegistry: SurfaceRegistry): ToolRegist
   tools.register(createSurfacesStartTool(surfaceRegistry));
   tools.register(createSurfacesStopTool(surfaceRegistry));
 
+  if (options.memoryService) {
+    tools.register(createMemorySaveTool(options.memoryService));
+    tools.register(createMemorySearchTool(options.memoryService));
+    tools.register(createMemoryForgetTool(options.memoryService));
+  }
   // Browser & web tools (Sprint 5)
   tools.register(createBrowserNavigateTool(surfaceRegistry));
   tools.register(createBrowserSnapshotTool(surfaceRegistry));
