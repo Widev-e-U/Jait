@@ -9,3 +9,10 @@ export type {
 export { SurfaceRegistry } from "./registry.js";
 export { TerminalSurface, TerminalSurfaceFactory } from "./terminal.js";
 export { FileSystemSurface, FileSystemSurfaceFactory } from "./filesystem.js";
+export {
+  BrowserSurface,
+  BrowserSurfaceFactory,
+  type BrowserDriver,
+  type BrowserPageSnapshot,
+  type BrowserInteractiveElement,
+} from "./browser.js";
