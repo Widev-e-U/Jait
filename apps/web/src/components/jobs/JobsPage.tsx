@@ -136,7 +136,7 @@ export function JobsPage() {
 
       {/* Error */}
       {error && (
-        <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-md mb-4">
+        <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-md mb-4">
           <AlertCircle className="h-4 w-4" />
           {error}
           <Button 

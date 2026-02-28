@@ -5,6 +5,7 @@
  * TrustEngine, ConsentAwareExecutor, consent routes, trust routes.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
+import { openDatabase, migrateDatabase } from "./db/index.js";
 
 // ── Consent Manager ──────────────────────────────────────────────────
 
@@ -135,6 +136,34 @@ describe("ConsentManager", () => {
     const cm = new ConsentManager();
     expect(cm.approve("nonexistent")).toBe(false);
     expect(cm.reject("nonexistent")).toBe(false);
+  });
+
+  it("enables and disables approve-all mode per session", () => {
+    const cm = new ConsentManager();
+    expect(cm.isApproveAllEnabledForSession("s1")).toBe(false);
+    cm.enableApproveAllForSession("s1");
+    expect(cm.isApproveAllEnabledForSession("s1")).toBe(true);
+    cm.disableApproveAllForSession("s1");
+    expect(cm.isApproveAllEnabledForSession("s1")).toBe(false);
+  });
+
+  it("persists approve-all mode in DB across manager instances", () => {
+    const { db, sqlite } = openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const cm1 = new ConsentManager({ db });
+    cm1.enableApproveAllForSession("s-db");
+    expect(cm1.isApproveAllEnabledForSession("s-db")).toBe(true);
+
+    // New manager instance should hydrate persisted state
+    const cm2 = new ConsentManager({ db });
+    expect(cm2.isApproveAllEnabledForSession("s-db")).toBe(true);
+
+    cm2.disableApproveAllForSession("s-db");
+    const cm3 = new ConsentManager({ db });
+    expect(cm3.isApproveAllEnabledForSession("s-db")).toBe(false);
+
+    sqlite.close();
   });
 });
 
@@ -581,6 +610,32 @@ describe("ConsentAwareExecutor", () => {
     // Trust should have increased
     expect(te.getLevel("file.read")).toBe(1);
   });
+
+  it("bypasses consent when approve-all mode is enabled for the session", async () => {
+    const toolRegistry = makeMockToolRegistry();
+    const cm = new ConsentManager({ defaultTimeoutMs: 5000 });
+    const te = new TrustEngine();
+    const perms = getProfile("coding"); // terminal.run would normally require consent
+    cm.enableApproveAllForSession("s-approve-all");
+
+    const executor = new ConsentAwareExecutor({
+      toolRegistry,
+      consentManager: cm,
+      trustEngine: te,
+      permissions: perms,
+      sessionApprovals: new Set(),
+    });
+
+    const result = await executor.execute("terminal.run", { command: "echo hi" }, {
+      sessionId: "s-approve-all",
+      actionId: "a-approve-all",
+      workspaceRoot: "/tmp",
+      requestedBy: "test",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(cm.pendingCount).toBe(0);
+  });
 });
 
 // ── Consent Routes ───────────────────────────────────────────────────
@@ -709,6 +764,86 @@ describe("Consent & Trust Routes", () => {
     expect(res.json()).toEqual({ count: 1 });
 
     consentManager.cancelAll();
+  });
+
+  it("POST /api/consent/pending/:sessionId/approve-all approves only that session and enables mode", async () => {
+    const p1 = consentManager.requestConsent({
+      actionId: "act-a1",
+      toolName: "terminal.run",
+      summary: "Run a1",
+      preview: { command: "echo a1" },
+      risk: "medium",
+      sessionId: "s1",
+    });
+    const p2 = consentManager.requestConsent({
+      actionId: "act-a2",
+      toolName: "terminal.run",
+      summary: "Run a2",
+      preview: { command: "echo a2" },
+      risk: "medium",
+      sessionId: "s1",
+    });
+    const p3 = consentManager.requestConsent({
+      actionId: "act-b1",
+      toolName: "terminal.run",
+      summary: "Run b1",
+      preview: { command: "echo b1" },
+      risk: "medium",
+      sessionId: "s2",
+    });
+
+    const res = await app.inject({
+      method: "POST",
+      url: "/api/consent/pending/s1/approve-all",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { approvedCount: number; approveAllEnabled: boolean; requestIds: string[] };
+    expect(body.approvedCount).toBe(2);
+    expect(body.approveAllEnabled).toBe(true);
+    expect(body.requestIds).toHaveLength(2);
+    expect(consentManager.isApproveAllEnabledForSession("s1")).toBe(true);
+
+    const [d1, d2] = await Promise.all([p1, p2]);
+    expect(d1.approved).toBe(true);
+    expect(d2.approved).toBe(true);
+
+    // s2 request should remain pending
+    expect(consentManager.listPending("s2")).toHaveLength(1);
+    consentManager.cancelAll();
+    await p3;
+  });
+
+  it("GET/DELETE /api/consent/pending/:sessionId/approve-all reflects and clears mode", async () => {
+    const before = await app.inject({
+      method: "GET",
+      url: "/api/consent/pending/s3/approve-all",
+    });
+    expect(before.statusCode).toBe(200);
+    expect((before.json() as { approveAllEnabled: boolean }).approveAllEnabled).toBe(false);
+
+    await app.inject({
+      method: "POST",
+      url: "/api/consent/pending/s3/approve-all",
+    });
+
+    const afterEnable = await app.inject({
+      method: "GET",
+      url: "/api/consent/pending/s3/approve-all",
+    });
+    expect((afterEnable.json() as { approveAllEnabled: boolean }).approveAllEnabled).toBe(true);
+
+    const cleared = await app.inject({
+      method: "DELETE",
+      url: "/api/consent/pending/s3/approve-all",
+    });
+    expect(cleared.statusCode).toBe(200);
+    expect((cleared.json() as { approveAllEnabled: boolean }).approveAllEnabled).toBe(false);
+
+    const afterClear = await app.inject({
+      method: "GET",
+      url: "/api/consent/pending/s3/approve-all",
+    });
+    expect((afterClear.json() as { approveAllEnabled: boolean }).approveAllEnabled).toBe(false);
   });
 
   it("GET /api/trust/levels returns empty initially", async () => {

@@ -77,7 +77,7 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div className="bg-background text-foreground border border-border rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div>
@@ -97,7 +97,7 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
         {/* Content */}
         <div className="flex-1 overflow-y-auto p-4">
           {error && (
-            <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-md mb-4">
+            <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-md mb-4">
               <AlertCircle className="h-4 w-4" />
               {error}
             </div>
@@ -116,7 +116,7 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
               {runs.map((run) => (
                 <div
                   key={run.id}
-                  className="border rounded-lg p-4 hover:bg-gray-50 transition-colors"
+                  className="border border-border rounded-lg p-4 hover:bg-muted/40 transition-colors"
                 >
                   <div className="flex items-start justify-between mb-2">
                     <div className="flex items-center gap-2">
@@ -148,10 +148,10 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
                   {/* Result/Error */}
                   {run.status === 'completed' && run.result && (
                     <details className="mt-2">
-                      <summary className="text-sm text-green-600 cursor-pointer hover:underline">
+                      <summary className="text-sm text-green-600 dark:text-green-400 cursor-pointer hover:underline">
                         View result
                       </summary>
-                      <pre className="mt-2 p-2 bg-gray-100 rounded text-xs overflow-x-auto">
+                      <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-x-auto">
                         {typeof run.result === 'string' 
                           ? run.result 
                           : JSON.stringify(run.result, null, 2)}
@@ -160,7 +160,7 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
                   )}
 
                   {run.status === 'failed' && run.error && (
-                    <div className="mt-2 p-2 bg-red-50 rounded text-sm text-red-700">
+                    <div className="mt-2 p-2 bg-destructive/10 rounded text-sm text-destructive">
                       <strong>Error:</strong> {run.error}
                     </div>
                   )}

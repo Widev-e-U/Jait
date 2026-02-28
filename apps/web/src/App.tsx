@@ -16,6 +16,7 @@ import { useModelInfo } from '@/hooks/useModelInfo'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 
 type AppView = 'chat' | 'jobs'
+const API_URL = import.meta.env.VITE_API_URL || ''
 
 function useTheme() {
   const [dark, setDark] = useState(() => {
@@ -46,6 +47,7 @@ function App() {
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(280)
+  const [approveAllInSession, setApproveAllInSession] = useState(false)
   const isDragging = useRef(false)
   const { dark, toggle: toggleTheme } = useTheme()
 
@@ -91,6 +93,23 @@ function App() {
     if (error === 'login_required') setShowLoginDialog(true)
   }, [error])
 
+  useEffect(() => {
+    const loadApproveAllState = async () => {
+      if (!activeSessionId) {
+        setApproveAllInSession(false)
+        return
+      }
+      try {
+        const res = await fetch(`${API_URL}/api/consent/pending/${activeSessionId}/approve-all`)
+        const data = (await res.json()) as { approveAllEnabled?: boolean }
+        setApproveAllInSession(data.approveAllEnabled === true)
+      } catch {
+        setApproveAllInSession(false)
+      }
+    }
+    void loadApproveAllState()
+  }, [activeSessionId])
+
   const limitReached = error === 'limit_reached'
 
   const handleSubmit = async () => {
@@ -126,29 +145,68 @@ function App() {
     }
   }
 
-  const handleOpenTerminalFromToolCall = useCallback(async (terminalId: string | null) => {
-    setCurrentView('chat')
-    setShowTerminal(true)
-
+  const ensureActiveTerminal = useCallback(async (preferredTerminalId: string | null = null) => {
     const refreshed = await refresh()
 
-    if (terminalId) {
-      setActiveTerminalId(terminalId)
-      return
+    if (preferredTerminalId) {
+      const preferredExists = refreshed.some((t) => t.id === preferredTerminalId)
+      if (preferredExists) {
+        setActiveTerminalId(preferredTerminalId)
+        return preferredTerminalId
+      }
     }
 
-    if (activeTerminalId) return
+    if (activeTerminalId && refreshed.some((t) => t.id === activeTerminalId)) {
+      return activeTerminalId
+    }
 
     if (refreshed.length > 0) {
-      setActiveTerminalId(refreshed[refreshed.length - 1]!.id)
-      return
+      const fallbackId = refreshed[refreshed.length - 1]!.id
+      setActiveTerminalId(fallbackId)
+      return fallbackId
     }
 
     const created = await createTerminal(activeSessionId ?? 'default')
-    setActiveTerminalId(created.id)
+    return created.id
   }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId])
 
+  const handleOpenTerminalFromToolCall = useCallback(async (terminalId: string | null) => {
+    setCurrentView('chat')
+    setShowTerminal(true)
+    await ensureActiveTerminal(terminalId)
+  }, [ensureActiveTerminal])
+
+  const handleToggleTerminal = useCallback(async () => {
+    if (showTerminal) {
+      setShowTerminal(false)
+      return
+    }
+    setCurrentView('chat')
+    setShowTerminal(true)
+    await ensureActiveTerminal()
+  }, [showTerminal, ensureActiveTerminal])
+
+  const handleKillTerminal = useCallback(async (id: string) => {
+    const isLastTerminal = terminals.length === 1 && terminals[0]?.id === id
+    await killTerminal(id)
+    if (isLastTerminal) {
+      setShowTerminal(false)
+    }
+  }, [terminals, killTerminal])
+
   const hasMessages = messages.length > 0
+
+  const handleClearApproveAll = useCallback(async () => {
+    if (!activeSessionId) return
+    try {
+      await fetch(`${API_URL}/api/consent/pending/${activeSessionId}/approve-all`, {
+        method: 'DELETE',
+      })
+      setApproveAllInSession(false)
+    } catch {
+      // keep current state on failure
+    }
+  }, [activeSessionId])
 
   return (
     <TooltipProvider>
@@ -196,7 +254,7 @@ function App() {
                     variant={showTerminal ? 'secondary' : 'ghost'}
                     size="sm"
                     className="h-8 text-xs"
-                    onClick={() => setShowTerminal(s => !s)}
+                    onClick={() => { void handleToggleTerminal() }}
                   >
                     <TerminalIcon className="h-3.5 w-3.5 mr-1.5" />
                     Terminal
@@ -321,7 +379,11 @@ function App() {
             <div className="shrink-0 px-4 py-3">
               <div className="max-w-3xl mx-auto space-y-1.5">
                 {/* Consent queue — shows pending approval requests */}
-                <ConsentQueue compact />
+                <ConsentQueue
+                  compact
+                  sessionId={activeSessionId}
+                  onApproveAllEnabled={() => setApproveAllInSession(true)}
+                />
                 {limitReached && (
                   <p className="text-center text-sm text-destructive">
                     Daily limit reached. Come back tomorrow.
@@ -335,12 +397,27 @@ function App() {
                   isLoading={isLoading}
                   disabled={limitReached}
                 />
-                <div className="flex justify-between px-1">
-                  <button onClick={() => { clearMessages(); createSession() }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors">
-                    New chat
-                  </button>
+                <div className="flex items-center justify-between gap-2 px-1">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <button onClick={() => { clearMessages(); createSession() }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                      New chat
+                    </button>
+                    {approveAllInSession && (
+                      <>
+                        <span className="text-[11px] text-green-600 dark:text-green-400 truncate">
+                          Approved all commands for this session
+                        </span>
+                        <button
+                          onClick={handleClearApproveAll}
+                          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        >
+                          Clear approve all
+                        </button>
+                      </>
+                    )}
+                  </div>
                   {remainingPrompts !== null && (
-                    <span className="text-[11px] text-muted-foreground">{remainingPrompts} remaining{isAuthenticated ? ' today' : ''}</span>
+                    <span className="text-[11px] text-muted-foreground shrink-0">{remainingPrompts} remaining{isAuthenticated ? ' today' : ''}</span>
                   )}
                 </div>
               </div>
@@ -364,7 +441,7 @@ function App() {
               activeTerminalId={activeTerminalId}
               onSelect={setActiveTerminalId}
               onCreate={() => createTerminal(activeSessionId ?? 'default')}
-              onKill={killTerminal}
+              onKill={handleKillTerminal}
             />
             {activeTerminalId ? (
               <TerminalView terminalId={activeTerminalId} className="h-[calc(100%-2rem)]" />

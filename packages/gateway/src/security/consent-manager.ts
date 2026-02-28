@@ -7,8 +7,9 @@
  */
 
 import type { JaitDB } from "../db/connection.js";
-import { consentLog } from "../db/schema.js";
+import { consentLog, consentSessionApprovals } from "../db/schema.js";
 import { uuidv7 } from "../lib/uuidv7.js";
+import { eq } from "drizzle-orm";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ interface PendingEntry {
 
 export class ConsentManager {
   private readonly pending = new Map<string, PendingEntry>();
+  private readonly approveAllSessions = new Set<string>();
   private readonly defaultTimeoutMs: number;
   private readonly db?: JaitDB;
   private readonly onRequest?: (request: ConsentRequest) => void;
@@ -70,6 +72,7 @@ export class ConsentManager {
     this.db = opts.db;
     this.onRequest = opts.onRequest;
     this.onDecision = opts.onDecision;
+    this.hydrateSessionApproveAll();
   }
 
   /**
@@ -149,6 +152,30 @@ export class ConsentManager {
    */
   get pendingCount(): number {
     return this.pending.size;
+  }
+
+  /**
+   * Enable "approve all" mode for a session.
+   * While enabled, consent prompts for this session should be bypassed by the executor.
+   */
+  enableApproveAllForSession(sessionId: string): void {
+    this.approveAllSessions.add(sessionId);
+    this.persistSessionApproveAll(sessionId, true);
+  }
+
+  /**
+   * Disable "approve all" mode for a session.
+   */
+  disableApproveAllForSession(sessionId: string): void {
+    this.approveAllSessions.delete(sessionId);
+    this.persistSessionApproveAll(sessionId, false);
+  }
+
+  /**
+   * Check whether "approve all" mode is enabled for a session.
+   */
+  isApproveAllEnabledForSession(sessionId: string): boolean {
+    return this.approveAllSessions.has(sessionId);
   }
 
   /**
@@ -234,6 +261,52 @@ export class ConsentManager {
       }).run();
     } catch {
       // Non-fatal: consent log is for audit, not control flow
+    }
+  }
+
+  private hydrateSessionApproveAll(): void {
+    if (!this.db) return;
+    try {
+      const rows = this.db
+        .select()
+        .from(consentSessionApprovals)
+        .where(eq(consentSessionApprovals.approveAll, 1))
+        .all();
+      for (const row of rows) {
+        this.approveAllSessions.add(row.sessionId);
+      }
+    } catch {
+      // Non-fatal: default to no persisted overrides
+    }
+  }
+
+  private persistSessionApproveAll(sessionId: string, enabled: boolean): void {
+    if (!this.db) return;
+    try {
+      if (enabled) {
+        this.db
+          .insert(consentSessionApprovals)
+          .values({
+            sessionId,
+            approveAll: 1,
+            updatedAt: new Date().toISOString(),
+          })
+          .onConflictDoUpdate({
+            target: consentSessionApprovals.sessionId,
+            set: {
+              approveAll: 1,
+              updatedAt: new Date().toISOString(),
+            },
+          })
+          .run();
+      } else {
+        this.db
+          .delete(consentSessionApprovals)
+          .where(eq(consentSessionApprovals.sessionId, sessionId))
+          .run();
+      }
+    } catch {
+      // Non-fatal: in-memory state is source of truth for this process
     }
   }
 }

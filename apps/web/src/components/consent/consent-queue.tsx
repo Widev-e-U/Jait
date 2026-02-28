@@ -1,5 +1,6 @@
 import { ActionCard, useConsentQueue, type ConsentRequestInfo } from './action-card'
 import { ShieldAlert, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
+import { useMemo, useState } from 'react'
 
 // ── StatusBadge ──────────────────────────────────────────────────────
 
@@ -50,12 +51,30 @@ export interface ConsentQueueProps {
   className?: string
   /** If true, shows compact action cards instead of full cards */
   compact?: boolean
+  /** If provided, only show consent requests for this session */
+  sessionId?: string | null
+  /** Called when approve-all mode is successfully enabled */
+  onApproveAllEnabled?: () => void
 }
 
-export function ConsentQueue({ className = '', compact = false }: ConsentQueueProps) {
-  const { queue, approve, reject } = useConsentQueue()
+export function ConsentQueue({ className = '', compact = false, sessionId, onApproveAllEnabled }: ConsentQueueProps) {
+  const { queue, approve, reject, approveAllForSession } = useConsentQueue(sessionId)
+  const [approvingAll, setApprovingAll] = useState(false)
 
-  if (queue.length === 0) {
+  const visibleQueue = useMemo(
+    () => (sessionId ? queue.filter((r) => r.sessionId === sessionId) : queue),
+    [queue, sessionId],
+  )
+
+  const handleApproveAllInSession = async () => {
+    if (!sessionId || approvingAll) return
+    setApprovingAll(true)
+    const ok = await approveAllForSession(sessionId)
+    if (ok) onApproveAllEnabled?.()
+    setApprovingAll(false)
+  }
+
+  if (visibleQueue.length === 0) {
     return null
   }
 
@@ -66,14 +85,23 @@ export function ConsentQueue({ className = '', compact = false }: ConsentQueuePr
         <div className="flex items-center gap-2">
           <StatusBadge status="awaiting-approval" />
           <span className="text-xs text-muted-foreground">
-            {queue.length} pending {queue.length === 1 ? 'request' : 'requests'}
+            {visibleQueue.length} pending {visibleQueue.length === 1 ? 'request' : 'requests'}
           </span>
         </div>
+        {sessionId && visibleQueue.length > 0 && (
+          <button
+            onClick={handleApproveAllInSession}
+            disabled={approvingAll}
+            className="text-[11px] text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {approvingAll ? 'Approving...' : 'Approve all in this session'}
+          </button>
+        )}
       </div>
 
       {/* Consent requests */}
       <div className="space-y-2">
-        {queue.map((request: ConsentRequestInfo) => (
+        {visibleQueue.map((request: ConsentRequestInfo) => (
           <ActionCard
             key={request.id}
             request={request}

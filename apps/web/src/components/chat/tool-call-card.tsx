@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
@@ -127,6 +127,7 @@ interface ToolCallCardProps {
 
 export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   const [open, setOpen] = useState(call.status === 'running')
+  const prevStatusRef = useRef(call.status)
   const meta = getToolMeta(call.tool)
   const Icon = meta.icon
   const summary = getCallSummary(call.tool, call.args)
@@ -147,6 +148,14 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
     : call.status === 'success'
       ? 'text-green-500'
       : 'text-red-500'
+
+  useEffect(() => {
+    const prevStatus = prevStatusRef.current
+    if (prevStatus === 'running' && call.status !== 'running') {
+      setOpen(false)
+    }
+    prevStatusRef.current = call.status
+  }, [call.status])
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>

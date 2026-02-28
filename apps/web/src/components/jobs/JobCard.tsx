@@ -114,19 +114,19 @@ export function JobCard({
             {recentRun.status === 'completed' && (
               <>
                 <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <span className="text-green-600">Last run succeeded</span>
+                <span className="text-green-600 dark:text-green-400">Last run succeeded</span>
               </>
             )}
             {recentRun.status === 'failed' && (
               <>
                 <AlertCircle className="h-4 w-4 text-red-500" />
-                <span className="text-red-600">Last run failed</span>
+                <span className="text-red-600 dark:text-red-400">Last run failed</span>
               </>
             )}
             {recentRun.status === 'running' && (
               <>
                 <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
-                <span className="text-blue-600">Running now...</span>
+                <span className="text-blue-600 dark:text-blue-400">Running now...</span>
               </>
             )}
             {recentRun.started_at && (
@@ -171,7 +171,7 @@ export function JobCard({
             variant="ghost"
             size="sm"
             onClick={() => onDelete(job.id)}
-            className="text-red-600 hover:text-red-700 hover:bg-red-50"
+            className="text-destructive hover:text-destructive hover:bg-destructive/10"
           >
             <Trash2 className="h-4 w-4" />
           </Button>

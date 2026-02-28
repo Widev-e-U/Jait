@@ -162,7 +162,7 @@ export function CreateJobDialog({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div className="bg-background text-foreground border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h2 className="text-xl font-semibold">
             {editJob ? 'Edit Job' : 'Create New Job'}
@@ -341,7 +341,7 @@ export function CreateJobDialog({
 
           {/* Error */}
           {error && (
-            <div className="flex items-center gap-2 text-red-600 text-sm bg-red-50 p-3 rounded-md">
+            <div className="flex items-center gap-2 text-destructive text-sm bg-destructive/10 p-3 rounded-md">
               <AlertCircle className="h-4 w-4" />
               {error}
             </div>

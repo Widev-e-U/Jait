@@ -30,19 +30,22 @@ export interface ConsentDecisionInfo {
 
 // ── useConsentQueue hook ─────────────────────────────────────────────
 
-export function useConsentQueue() {
+export function useConsentQueue(sessionId?: string | null) {
   const [queue, setQueue] = useState<ConsentRequestInfo[]>([])
 
   // Fetch pending consent requests
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${GATEWAY}/api/consent/pending`)
+      const url = sessionId
+        ? `${GATEWAY}/api/consent/pending/${sessionId}`
+        : `${GATEWAY}/api/consent/pending`
+      const res = await fetch(url)
       const data = (await res.json()) as { requests: ConsentRequestInfo[] }
       setQueue(data.requests)
     } catch {
       // gateway down
     }
-  }, [])
+  }, [sessionId])
 
   // Listen for WS events
   useEffect(() => {
@@ -54,7 +57,9 @@ export function useConsentQueue() {
 
         if (msg.type === 'consent.required') {
           const request = msg.payload as ConsentRequestInfo
-          setQueue((prev) => [...prev, request])
+          if (!sessionId || request.sessionId === sessionId) {
+            setQueue((prev) => [...prev, request])
+          }
         }
 
         if (msg.type === 'consent.resolved') {
@@ -69,7 +74,7 @@ export function useConsentQueue() {
     ws.onopen = () => refresh()
 
     return () => ws.close()
-  }, [refresh])
+  }, [refresh, sessionId])
 
   const approve = useCallback(async (requestId: string) => {
     try {
@@ -93,7 +98,28 @@ export function useConsentQueue() {
     }
   }, [])
 
-  return { queue, approve, reject, refresh }
+  const approveAllForSession = useCallback(async (targetSessionId: string, reason?: string) => {
+    try {
+      const res = await fetch(`${GATEWAY}/api/consent/pending/${targetSessionId}/approve-all`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ reason }),
+      })
+      const data = (await res.json()) as { requestIds?: string[] }
+      const approvedIds = new Set(data.requestIds ?? [])
+      if (approvedIds.size > 0) {
+        setQueue((prev) => prev.filter((r) => !approvedIds.has(r.id)))
+      } else {
+        setQueue((prev) => prev.filter((r) => r.sessionId !== targetSessionId))
+      }
+      return true
+    } catch {
+      // retry or show error
+      return false
+    }
+  }, [])
+
+  return { queue, approve, reject, approveAllForSession, refresh }
 }
 
 // ── RiskBadge ────────────────────────────────────────────────────────

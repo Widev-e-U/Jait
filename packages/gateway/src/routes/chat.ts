@@ -34,6 +34,8 @@ interface PersistedToolCall {
   ok: boolean;
   message: string;
   output?: string;
+  startedAt?: number;
+  completedAt?: number;
 }
 
 // ── In-memory state ──────────────────────────────────────────────────
@@ -52,6 +54,11 @@ type StreamEvent =
 type StreamSubscriber = (event: StreamEvent) => void;
 const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
 
+const DEFAULT_UI_MESSAGE_LIMIT = 120;
+const MAX_UI_MESSAGE_LIMIT = 500;
+
+type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown };
+
 function emitToSubscribers(sessionId: string, event: StreamEvent) {
   const subs = sessionSubscribers.get(sessionId);
   if (subs) for (const fn of subs) fn(event);
@@ -67,6 +74,41 @@ function subscribe(sessionId: string, fn: StreamSubscriber) {
       if (subs.size === 0) sessionSubscribers.delete(sessionId);
     }
   };
+}
+
+function parseMessageLimit(raw: unknown): number {
+  const parsed = typeof raw === "number"
+    ? raw
+    : typeof raw === "string"
+      ? Number.parseInt(raw, 10)
+      : Number.NaN;
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_UI_MESSAGE_LIMIT;
+  return Math.min(Math.floor(parsed), MAX_UI_MESSAGE_LIMIT);
+}
+
+function windowMessages<T>(messages: T[], limit: number): {
+  messages: T[];
+  total: number;
+  hasMore: boolean;
+} {
+  const total = messages.length;
+  const start = Math.max(total - limit, 0);
+  return {
+    messages: messages.slice(start),
+    total,
+    hasMore: start > 0,
+  };
+}
+
+function buildVisibleHistoryMessages(sessionId: string, history: ChatMessage[]): UIMsg[] {
+  return history
+    .filter((m) => m.role !== "system" && m.role !== "tool")
+    .filter((m) => !(m.role === "assistant" && m.tool_calls && !m.content))
+    .map((m, i) => ({
+      id: `${sessionId}-${i}`,
+      role: m.role as "user" | "assistant",
+      content: m.content,
+    }));
 }
 
 // ── System prompt ────────────────────────────────────────────────────
@@ -385,19 +427,19 @@ export function registerChatRoutes(
   // List messages in a session
   app.get("/api/sessions/:sessionId/messages", async (request) => {
     const { sessionId } = request.params as { sessionId: string };
+    const query = request.query as { limit?: number | string };
+    const limit = parseMessageLimit(query?.limit);
     hydrateSession(sessionId);
     const history = sessionHistory.get(sessionId) ?? [];
+    const visible = buildVisibleHistoryMessages(sessionId, history);
+    const windowed = windowMessages(visible, limit);
     return {
       sessionId,
       streaming: activeStreams.has(sessionId),
-      messages: history
-        .filter((m) => m.role !== "system" && m.role !== "tool")
-        .filter((m) => !(m.role === "assistant" && m.tool_calls && !m.content))
-        .map((m, i) => ({
-          id: `${sessionId}-${i}`,
-          role: m.role,
-          content: m.content,
-        })),
+      total: windowed.total,
+      hasMore: windowed.hasMore,
+      limit,
+      messages: windowed.messages,
     };
   });
 
@@ -405,6 +447,8 @@ export function registerChatRoutes(
   // Client receives a snapshot of current content, then live tokens until done.
   app.get("/api/sessions/:sessionId/stream", async (request, reply) => {
     const { sessionId } = request.params as { sessionId: string };
+    const query = request.query as { limit?: number | string };
+    const limit = parseMessageLimit(query?.limit);
 
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
@@ -418,7 +462,9 @@ export function registerChatRoutes(
 
     // Build snapshot. While streaming, prefer in-memory history so partial assistant
     // content is visible immediately (DB persistence may lag until stream completion).
-    let snapshotMessages: { id: string; role: string; content: string; toolCalls?: unknown }[];
+    let snapshotMessages: UIMsg[];
+    let total = 0;
+    let hasMore = false;
     if (db && !isStreaming) {
       const rows = db
         .select()
@@ -426,12 +472,12 @@ export function registerChatRoutes(
         .where(eq(messagesTable.sessionId, sessionId))
         .orderBy(messagesTable.createdAt)
         .all();
-      snapshotMessages = rows
+      const allMessages: UIMsg[] = rows
         .filter((r) => r.role === "user" || r.role === "assistant")
         .map((r, i) => {
-          const msg: { id: string; role: string; content: string; toolCalls?: unknown } = {
+          const msg: UIMsg = {
             id: `${sessionId}-${i}`,
-            role: r.role,
+            role: r.role as "user" | "assistant",
             content: r.content,
           };
           if (r.toolCalls) {
@@ -439,15 +485,27 @@ export function registerChatRoutes(
           }
           return msg;
         });
+      const windowed = windowMessages(allMessages, limit);
+      snapshotMessages = windowed.messages;
+      total = windowed.total;
+      hasMore = windowed.hasMore;
     } else {
-      snapshotMessages = history
-        .filter((m) => m.role !== "system" && m.role !== "tool")
-        .filter((m) => !(m.role === "assistant" && m.tool_calls && !m.content))
-        .map((m, i) => ({ id: `${sessionId}-${i}`, role: m.role, content: m.content }));
+      const allMessages = buildVisibleHistoryMessages(sessionId, history);
+      const windowed = windowMessages(allMessages, limit);
+      snapshotMessages = windowed.messages;
+      total = windowed.total;
+      hasMore = windowed.hasMore;
     }
 
     reply.raw.write(
-      `data: ${JSON.stringify({ type: "snapshot", messages: snapshotMessages, streaming: isStreaming })}\n\n`,
+      `data: ${JSON.stringify({
+        type: "snapshot",
+        messages: snapshotMessages,
+        streaming: isStreaming,
+        total,
+        hasMore,
+        limit,
+      })}\n\n`,
     );
 
     if (!isStreaming) {
@@ -560,6 +618,7 @@ async function runOpenAIAgentLoop(
 
       // Execute each tool call
       for (const tc of toolCalls) {
+        const startedAt = Date.now();
         let args: unknown;
         try { args = JSON.parse(tc.function.arguments); } catch { args = {}; }
 
@@ -582,6 +641,7 @@ async function runOpenAIAgentLoop(
           emitToSubscribers(sessionId, ev);
           safeWrite(`data: ${JSON.stringify(ev)}\n\n`);
         });
+        const completedAt = Date.now();
 
         // Notify frontend of result
         const toolResultEvent: StreamEvent = {
@@ -611,6 +671,8 @@ async function runOpenAIAgentLoop(
           ok: result.ok,
           message: result.message,
           output: outputStr ?? (result.data ? JSON.stringify(result.data) : undefined),
+          startedAt,
+          completedAt,
         });
       }
 

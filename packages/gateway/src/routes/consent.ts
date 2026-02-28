@@ -79,6 +79,68 @@ export function registerConsentRoutes(
     return { ok: true, decision: "rejected" };
   });
 
+  // POST /api/consent/pending/:sessionId/approve-all — approve all pending for a session
+  app.post("/api/consent/pending/:sessionId/approve-all", async (request) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const reason = typeof body["reason"] === "string" ? body["reason"] : undefined;
+
+    // Enable session-wide bypass for future requests in this session.
+    consentManager.enableApproveAllForSession(sessionId);
+
+    const pending = consentManager.listPending(sessionId);
+    const approvedRequestIds: string[] = [];
+
+    for (const req of pending) {
+      const ok = consentManager.approve(req.id, "click", reason);
+      if (ok) {
+        approvedRequestIds.push(req.id);
+        audit.write({
+          sessionId,
+          actionId: uuidv7(),
+          actionType: "consent.approve",
+          status: "executed",
+          inputs: { requestId: req.id, reason, bulk: true },
+        });
+      }
+    }
+
+    return {
+      ok: true,
+      sessionId,
+      approveAllEnabled: true,
+      approvedCount: approvedRequestIds.length,
+      requestIds: approvedRequestIds,
+    };
+  });
+
+  // GET /api/consent/pending/:sessionId/approve-all — check approve-all status
+  app.get("/api/consent/pending/:sessionId/approve-all", async (request) => {
+    const { sessionId } = request.params as { sessionId: string };
+    return {
+      sessionId,
+      approveAllEnabled: consentManager.isApproveAllEnabledForSession(sessionId),
+    };
+  });
+
+  // DELETE /api/consent/pending/:sessionId/approve-all — clear approve-all status
+  app.delete("/api/consent/pending/:sessionId/approve-all", async (request) => {
+    const { sessionId } = request.params as { sessionId: string };
+    consentManager.disableApproveAllForSession(sessionId);
+    audit.write({
+      sessionId,
+      actionId: uuidv7(),
+      actionType: "consent.approve_all.clear",
+      status: "executed",
+      inputs: { sessionId },
+    });
+    return {
+      ok: true,
+      sessionId,
+      approveAllEnabled: false,
+    };
+  });
+
   // GET /api/consent/count — pending count
   app.get("/api/consent/count", async () => {
     return { count: consentManager.pendingCount };

@@ -3,6 +3,7 @@ import { flushSync } from 'react-dom'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
+const STREAM_SNAPSHOT_LIMIT = 120
 
 export interface ChatMessage {
   id: string
@@ -74,9 +75,12 @@ export function useChat(sessionId: string | null) {
 
     ;(async () => {
       try {
-        const res = await fetch(`${API_URL}/api/sessions/${sessionId}/stream`, {
+        const res = await fetch(
+          `${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`,
+          {
           signal: streamController.signal,
-        })
+          },
+        )
         if (!res.ok || cancelled) return
         const reader = res.body?.getReader()
         if (!reader) return
@@ -111,6 +115,8 @@ export function useChat(sessionId: string | null) {
                     ok: boolean;
                     message: string;
                     output?: string;
+                    startedAt?: number;
+                    completedAt?: number;
                   }>;
                 }>
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
@@ -122,8 +128,8 @@ export function useChat(sessionId: string | null) {
                       args: tc.args ?? {},
                       status: tc.ok ? 'success' as const : 'error' as const,
                       result: { ok: tc.ok, message: tc.message, data: tc.output != null ? { output: tc.output } : undefined },
-                      startedAt: 0,
-                      completedAt: 0,
+                      startedAt: tc.startedAt ?? 0,
+                      completedAt: tc.completedAt ?? 0,
                     }))
                   }
                   return msg

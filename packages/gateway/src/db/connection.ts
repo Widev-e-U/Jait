@@ -110,6 +110,14 @@ export function migrateDatabase(sqlite: Database) {
   `);
 
   sqlite.run(`
+    CREATE TABLE IF NOT EXISTS consent_session_approvals (
+      session_id TEXT PRIMARY KEY,
+      approve_all INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  sqlite.run(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,
       session_id TEXT NOT NULL,

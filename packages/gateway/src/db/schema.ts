@@ -1,7 +1,7 @@
 /**
  * Drizzle ORM schema for ~/.jait/data/jait.db
  *
- * Tables: sessions, audit_log, trust_levels, consent_log
+ * Tables: sessions, audit_log, trust_levels, consent_log, consent_session_approvals
  * All IDs are UUIDv7 (sortable by time). Single-operator — no users table.
  */
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
@@ -71,6 +71,13 @@ export const consentLog = sqliteTable("consent_log", {
   decision: text("decision").notNull(), // 'approved','rejected','timeout'
   decidedAt: text("decided_at").notNull(),
   decidedVia: text("decided_via"), // 'click','voice','auto'
+});
+
+// ─── Session-Level Consent Overrides ────────────────────────────────
+export const consentSessionApprovals = sqliteTable("consent_session_approvals", {
+  sessionId: text("session_id").primaryKey(),
+  approveAll: integer("approve_all").notNull().default(1), // 1 = enabled
+  updatedAt: text("updated_at").notNull(),
 });
 
 // ─── Chat Messages ───────────────────────────────────────────────────
