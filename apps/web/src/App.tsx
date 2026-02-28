@@ -1,14 +1,15 @@
 import { useState, useEffect } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
-import { Sun, Moon, LogOut, MessageSquare, Calendar } from 'lucide-react'
+import { Sun, Moon, LogOut, MessageSquare, Calendar, PanelLeft } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Conversation, Message, PromptInput, Suggestions } from '@/components/chat'
+import { Conversation, Message, PromptInput, SessionSelector, Suggestions } from '@/components/chat'
 import { JobsPage } from '@/components/jobs'
 import { useAuth } from '@/hooks/useAuth'
 import { useChat } from '@/hooks/useChat'
+import { useSessions } from '@/hooks/useSessions'
 
 type AppView = 'chat' | 'jobs'
 
@@ -38,10 +39,12 @@ function App() {
   const [inputValue, setInputValue] = useState('')
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [currentView, setCurrentView] = useState<AppView>('chat')
+  const [showSidebar, setShowSidebar] = useState(false)
   const { dark, toggle: toggleTheme } = useTheme()
 
   const { user, token, isAuthenticated, loginWithGoogle, logout, bindSession } = useAuth()
   const { messages, isLoading, sessionId, remainingPrompts, error, sendMessage, cancelRequest, clearMessages } = useChat()
+  const { sessions, activeSessionId, createSession, switchSession, archiveSession } = useSessions()
 
   useEffect(() => {
     if (isAuthenticated && sessionId) bindSession(sessionId)
@@ -83,6 +86,15 @@ function App() {
         <header className="flex items-center justify-between h-14 px-5 border-b shrink-0">
           <div className="flex items-center gap-6">
             <span className="text-base font-medium tracking-tight">Jait</span>
+            {/* Sidebar toggle */}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSidebar(s => !s)}>
+                  <PanelLeft className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Sessions</TooltipContent>
+            </Tooltip>
             {/* Navigation */}
             <nav className="flex items-center gap-1">
               <Button
@@ -146,8 +158,22 @@ function App() {
             <JobsPage />
           </div>
         ) : (
-        /* Chat area */
-        !hasMessages ? (
+        <div className="flex flex-1 min-h-0">
+          {/* Session Sidebar */}
+          {showSidebar && (
+            <aside className="w-56 border-r shrink-0">
+              <SessionSelector
+                sessions={sessions}
+                activeSessionId={activeSessionId}
+                onSelect={switchSession}
+                onCreate={() => createSession()}
+                onArchive={archiveSession}
+              />
+            </aside>
+          )}
+
+          {/* Chat area */}
+          {!hasMessages ? (
           <div className="flex-1 flex flex-col items-center justify-center px-4">
             <div className="w-full max-w-3xl space-y-8">
               <div className="text-center">
@@ -218,6 +244,8 @@ function App() {
             </div>
           </>
         )
+        }
+        </div>
         )}
 
         {/* Login */}
