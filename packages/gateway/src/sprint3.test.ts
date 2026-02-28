@@ -42,8 +42,13 @@ describe("PathGuard", () => {
   });
 
   it("blocks paths in global denied list", () => {
-    const guard = new PathGuard({ workspaceRoot: "C:\\Users\\test\\project" });
-    expect(() => guard.validate("C:\\Windows\\System32\\cmd.exe")).toThrow(PathTraversalError);
+    const guard = process.platform === "win32"
+      ? new PathGuard({ workspaceRoot: "C:\\Users\\test\\project" })
+      : new PathGuard({ workspaceRoot: "/tmp/project" });
+    const deniedTarget = process.platform === "win32"
+      ? "C:\\Windows\\System32\\cmd.exe"
+      : "/etc/passwd";
+    expect(() => guard.validate(deniedTarget)).toThrow(PathTraversalError);
   });
 
   it("blocks custom denied paths", () => {
@@ -352,9 +357,6 @@ describe("os.query tool", () => {
 
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
-import { openDatabase, migrateDatabase } from "./db/index.js";
-import { SessionService } from "./services/sessions.js";
-import { AuditWriter } from "./services/audit.js";
 import { TerminalSurfaceFactory } from "./surfaces/terminal.js";
 
 describe("Terminal & Tool routes", () => {
@@ -363,17 +365,23 @@ describe("Terminal & Tool routes", () => {
   let toolRegistry: ReturnType<typeof createToolRegistry>;
 
   beforeEach(async () => {
-    const { db, sqlite } = openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    const sessionService = new SessionService(db);
-    const audit = new AuditWriter(db);
+    const audit = {
+      write: () => "audit-test-id",
+      hasAction: () => false,
+      getBySession: () => [],
+      getAll: () => [],
+    };
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new TerminalSurfaceFactory());
     surfaceRegistry.register(new FileSystemSurfaceFactory());
     toolRegistry = createToolRegistry(surfaceRegistry);
 
     const config = { ...loadConfig(), logLevel: "silent" };
-    app = await createServer(config, { sessionService, audit, surfaceRegistry, toolRegistry });
+    app = await createServer(config, {
+      audit: audit as unknown as import("./services/audit.js").AuditWriter,
+      surfaceRegistry,
+      toolRegistry,
+    });
   });
 
   it("GET /api/terminals returns empty list", async () => {
