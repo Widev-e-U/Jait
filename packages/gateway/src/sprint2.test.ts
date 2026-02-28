@@ -1,21 +1,36 @@
 /**
  * Tests for Sprint 2: Database, Sessions, Audit, UUIDv7.
  */
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { Database } from "bun:sqlite";
-import { drizzle } from "drizzle-orm/bun-sqlite";
-import * as schema from "./db/schema.js";
-import { migrateDatabase } from "./db/connection.js";
+import { describe, it, expect, beforeEach, afterEach, beforeAll } from "vitest";
 import { SessionService } from "./services/sessions.js";
 import { AuditWriter } from "./services/audit.js";
 import { uuidv7 } from "./lib/uuidv7.js";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 
+const isBunRuntime = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
+const describeDb = isBunRuntime ? describe : describe.skip;
+
+let DatabaseCtor: { new (path: string): { close: () => void; run: (sql: string) => void; query: (sql: string) => { all: () => unknown[] } } } | undefined;
+let drizzleFn: ((sqlite: unknown, opts: { schema: unknown }) => unknown) | undefined;
+let dbSchema: unknown;
+let migrateDatabaseFn: ((sqlite: unknown) => void) | undefined;
+
+beforeAll(async () => {
+  if (!isBunRuntime) return;
+  ({ Database: DatabaseCtor } = await import("bun:sqlite"));
+  ({ drizzle: drizzleFn } = await import("drizzle-orm/bun-sqlite"));
+  dbSchema = await import("./db/schema.js");
+  ({ migrateDatabase: migrateDatabaseFn } = await import("./db/connection.js"));
+});
+
 function makeTestDb() {
-  const sqlite = new Database(":memory:");
-  migrateDatabase(sqlite);
-  const db = drizzle(sqlite, { schema });
+  if (!DatabaseCtor || !drizzleFn || !migrateDatabaseFn || !dbSchema) {
+    throw new Error("Bun DB test dependencies are not loaded");
+  }
+  const sqlite = new DatabaseCtor(":memory:");
+  migrateDatabaseFn(sqlite);
+  const db = drizzleFn(sqlite, { schema: dbSchema });
   return { db, sqlite };
 }
 
@@ -52,7 +67,7 @@ describe("UUIDv7", () => {
   });
 });
 
-describe("Database migration", () => {
+describeDb("Database migration", () => {
   it("creates all tables", () => {
     const { sqlite } = makeTestDb();
     const tables = sqlite
@@ -65,20 +80,21 @@ describe("Database migration", () => {
     expect(names).toContain("audit_log");
     expect(names).toContain("trust_levels");
     expect(names).toContain("consent_log");
-    sqlite.close();
+    sqlite?.close();
   });
 
   it("migration is idempotent (can run twice)", () => {
-    const sqlite = new Database(":memory:");
-    migrateDatabase(sqlite);
-    migrateDatabase(sqlite); // should not throw
+    if (!DatabaseCtor || !migrateDatabaseFn) throw new Error("Bun DB test dependencies are not loaded");
+    const sqlite = new DatabaseCtor(":memory:");
+    migrateDatabaseFn(sqlite);
+    migrateDatabaseFn(sqlite); // should not throw
     sqlite.close();
   });
 });
 
-describe("SessionService", () => {
+describeDb("SessionService", () => {
   let db: ReturnType<typeof makeTestDb>["db"];
-  let sqlite: Database;
+  let sqlite: { close: () => void } | undefined;
   let svc: SessionService;
 
   beforeEach(() => {
@@ -87,7 +103,7 @@ describe("SessionService", () => {
   });
 
   afterEach(() => {
-    sqlite.close();
+    sqlite?.close();
   });
 
   it("creates a session with a unique ID", () => {
@@ -156,9 +172,9 @@ describe("SessionService", () => {
   });
 });
 
-describe("AuditWriter", () => {
+describeDb("AuditWriter", () => {
   let db: ReturnType<typeof makeTestDb>["db"];
-  let sqlite: Database;
+  let sqlite: { close: () => void } | undefined;
   let audit: AuditWriter;
 
   beforeEach(() => {
@@ -167,7 +183,7 @@ describe("AuditWriter", () => {
   });
 
   afterEach(() => {
-    sqlite.close();
+    sqlite?.close();
   });
 
   it("writes an audit entry and returns its ID", () => {
@@ -254,11 +270,11 @@ describe("AuditWriter", () => {
   });
 });
 
-describe("Session REST routes (with DB)", () => {
+describeDb("Session REST routes (with DB)", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
   let svc: SessionService;
   let audit: AuditWriter;
-  let sqlite: Database;
+  let sqlite: { close: () => void } | undefined;
 
   beforeEach(async () => {
     const testDb = makeTestDb();
@@ -273,7 +289,7 @@ describe("Session REST routes (with DB)", () => {
 
   afterEach(async () => {
     await app.close();
-    sqlite.close();
+    sqlite?.close();
   });
 
   it("POST /api/sessions creates a new session", async () => {
@@ -468,7 +484,7 @@ describe("Session REST routes (with DB)", () => {
   });
 });
 
-describe("Session isolation — audit entries per session", () => {
+describeDb("Session isolation — audit entries per session", () => {
   it("tool calls in session A don't appear in session B", () => {
     const { db, sqlite } = makeTestDb();
     const sessionSvc = new SessionService(db);
@@ -517,6 +533,6 @@ describe("Session isolation — audit entries per session", () => {
     expect(entriesB.every((e) => e.sessionId === sessB.id)).toBe(true);
     expect(entriesB[0]!.toolName).toBe("browser.navigate");
 
-    sqlite.close();
+    sqlite?.close();
   });
 });

@@ -587,10 +587,6 @@ describe("ConsentAwareExecutor", () => {
 
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
-import { openDatabase, migrateDatabase } from "./db/index.js";
-import { AuditWriter } from "./services/audit.js";
-import { SurfaceRegistry } from "./surfaces/registry.js";
-import { createToolRegistry } from "./tools/index.js";
 
 describe("Consent & Trust Routes", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
@@ -598,19 +594,18 @@ describe("Consent & Trust Routes", () => {
   let trustEngine: TrustEngine;
 
   beforeEach(async () => {
-    const { db, sqlite } = openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    const audit = new AuditWriter(db);
-    const surfaceRegistry = new SurfaceRegistry();
-    const toolRegistry = createToolRegistry(surfaceRegistry);
+    const audit = {
+      write: vi.fn(),
+      hasAction: vi.fn(() => false),
+      getBySession: vi.fn(() => []),
+      getAll: vi.fn(() => []),
+    };
 
-    consentManager = new ConsentManager({ defaultTimeoutMs: 5000, db });
-    trustEngine = new TrustEngine(db);
+    consentManager = new ConsentManager({ defaultTimeoutMs: 5000 });
+    trustEngine = new TrustEngine();
 
     app = await createServer(loadConfig(), {
-      audit,
-      surfaceRegistry,
-      toolRegistry,
+      audit: audit as unknown as import("./services/audit.js").AuditWriter,
       consentManager,
       trustEngine,
     });

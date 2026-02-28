@@ -404,9 +404,10 @@ export function registerChatRoutes(
     const history = sessionHistory.get(sessionId) ?? [];
     const isStreaming = activeStreams.has(sessionId);
 
-    // Build snapshot from DB so we can include persisted tool_calls
+    // Build snapshot. While streaming, prefer in-memory history so partial assistant
+    // content is visible immediately (DB persistence may lag until stream completion).
     let snapshotMessages: { id: string; role: string; content: string; toolCalls?: unknown }[];
-    if (db) {
+    if (db && !isStreaming) {
       const rows = db
         .select()
         .from(messagesTable)
@@ -753,6 +754,8 @@ async function runOllamaStream(
   const decoder = new TextDecoder();
   let buffer = "";
 
+  let streamingAssistantIndex: number | null = null;
+
   while (true) {
     const { done, value } = await reader.read();
     if (done) break;
@@ -768,6 +771,15 @@ async function runOllamaStream(
         if (chunk.message?.content) {
           const token = chunk.message.content;
           fullContent += token;
+
+          // Keep in-memory history updated during streaming so endpoints can
+          // return a partial assistant response mid-stream.
+          if (streamingAssistantIndex === null) {
+            history.push({ role: "assistant", content: "" });
+            streamingAssistantIndex = history.length - 1;
+          }
+          history[streamingAssistantIndex]!.content += token;
+
           emitToSubscribers(sessionId, { type: "token", content: token });
           safeWrite(`data: ${JSON.stringify({ type: "token", content: token })}\n\n`);
         }
@@ -778,7 +790,6 @@ async function runOllamaStream(
   }
 
   if (fullContent) {
-    history.push({ role: "assistant", content: fullContent });
     persistMessageGlobal(sessionId, "assistant", fullContent);
   }
 

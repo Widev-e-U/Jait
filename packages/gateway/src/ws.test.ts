@@ -330,6 +330,41 @@ describe("WsControlPlane", () => {
     });
   });
 
+
+  describe("consent messages", () => {
+    it("routes consent.approve to onConsentApprove callback", async () => {
+      const token = await createToken("user-consent-approve");
+      const onApprove = new Promise<string>((resolve) => {
+        plane.onConsentApprove = (requestId) => resolve(requestId);
+      });
+
+      const { ws, collector } = openWs(port, { token });
+      await waitForOpen(ws);
+      await collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      ws.send(JSON.stringify({ type: "consent.approve", requestId: "req-1" }));
+      await expect(onApprove).resolves.toBe("req-1");
+      ws.close();
+    });
+
+    it("routes consent.reject to onConsentReject callback with reason", async () => {
+      const token = await createToken("user-consent-reject");
+      const onReject = new Promise<{ requestId: string; reason?: string }>((resolve) => {
+        plane.onConsentReject = (requestId, reason) => resolve({ requestId, reason });
+      });
+
+      const { ws, collector } = openWs(port, { token });
+      await waitForOpen(ws);
+      await collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      ws.send(JSON.stringify({ type: "consent.reject", requestId: "req-2", reason: "No" }));
+      await expect(onReject).resolves.toEqual({ requestId: "req-2", reason: "No" });
+      ws.close();
+    });
+  });
+
   describe("error handling", () => {
     it("returns error for invalid JSON", async () => {
       const token = await createToken("user-err");
