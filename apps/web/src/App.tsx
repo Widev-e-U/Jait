@@ -1,11 +1,12 @@
 import { useState, useEffect } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
-import { Sun, Moon, LogOut, MessageSquare, Calendar, PanelLeft } from 'lucide-react'
+import { Sun, Moon, LogOut, MessageSquare, Calendar, PanelLeft, Terminal as TerminalIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, Suggestions } from '@/components/chat'
+import { TerminalView, TerminalTabs, useTerminals } from '@/components/terminal'
 import { JobsPage } from '@/components/jobs'
 import { useAuth } from '@/hooks/useAuth'
 import { useChat } from '@/hooks/useChat'
@@ -40,11 +41,13 @@ function App() {
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [currentView, setCurrentView] = useState<AppView>('chat')
   const [showSidebar, setShowSidebar] = useState(false)
+  const [showTerminal, setShowTerminal] = useState(false)
   const { dark, toggle: toggleTheme } = useTheme()
 
   const { user, token, isAuthenticated, loginWithGoogle, logout, bindSession } = useAuth()
   const { messages, isLoading, sessionId, remainingPrompts, error, sendMessage, cancelRequest, clearMessages } = useChat()
   const { sessions, activeSessionId, createSession, switchSession, archiveSession } = useSessions()
+  const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal } = useTerminals()
 
   useEffect(() => {
     if (isAuthenticated && sessionId) bindSession(sessionId)
@@ -115,6 +118,20 @@ function App() {
                 <Calendar className="h-3.5 w-3.5 mr-1.5" />
                 Jobs
               </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showTerminal ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => setShowTerminal(s => !s)}
+                  >
+                    <TerminalIcon className="h-3.5 w-3.5 mr-1.5" />
+                    Terminal
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
+              </Tooltip>
             </nav>
           </div>
           <div className="flex items-center gap-1.5">
@@ -246,6 +263,31 @@ function App() {
         )
         }
         </div>
+        )}
+
+        {/* Terminal Panel */}
+        {showTerminal && currentView === 'chat' && (
+          <div className="shrink-0 border-t" style={{ height: 280 }}>
+            <TerminalTabs
+              terminals={terminals}
+              activeTerminalId={activeTerminalId}
+              onSelect={setActiveTerminalId}
+              onCreate={() => createTerminal(activeSessionId ?? 'default')}
+              onKill={killTerminal}
+            />
+            {activeTerminalId ? (
+              <TerminalView terminalId={activeTerminalId} className="h-[calc(100%-2rem)]" />
+            ) : (
+              <div className="flex items-center justify-center h-[calc(100%-2rem)] text-sm text-muted-foreground">
+                <button
+                  onClick={() => createTerminal(activeSessionId ?? 'default')}
+                  className="hover:text-foreground transition-colors"
+                >
+                  + New Terminal
+                </button>
+              </div>
+            )}
+          </div>
         )}
 
         {/* Login */}

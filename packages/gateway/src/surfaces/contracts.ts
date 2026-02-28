@@ -1,4 +1,4 @@
-export type SurfaceState = "idle" | "starting" | "running" | "stopping" | "error";
+export type SurfaceState = "idle" | "starting" | "running" | "stopping" | "stopped" | "error";
 
 export interface SurfaceStartInput {
   sessionId: string;
@@ -21,10 +21,17 @@ export interface SurfaceSnapshot {
 export interface Surface {
   readonly id: string;
   readonly type: string;
+  readonly state: SurfaceState;
+  readonly sessionId: string | null;
 
   start(input: SurfaceStartInput): Promise<void>;
   stop(input?: SurfaceStopInput): Promise<void>;
   snapshot(): SurfaceSnapshot;
+
+  /** Event callback — fired when output arrives (terminal stdout, etc.) */
+  onOutput?: (data: string) => void;
+  /** Event callback — fired on state change */
+  onStateChange?: (state: SurfaceState) => void;
 }
 
 export interface SurfaceFactory {

@@ -100,11 +100,11 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** Agent runs shell commands, edits files. Terminal output streams to browser in real-time.
 
 **Exit criteria:**
-- [ ] Agent can run `git status` and user sees output live
-- [ ] Agent can create/edit files within workspace boundary
-- [ ] Path traversal outside workspace is blocked
-- [ ] Multiple terminal sessions can run concurrently
-- [ ] `surfaces.list` returns active terminal + file system surfaces
+- [x] Agent can run `git status` and user sees output live
+- [x] Agent can create/edit files within workspace boundary
+- [x] Path traversal outside workspace is blocked
+- [x] Multiple terminal sessions can run concurrently
+- [x] `surfaces.list` returns active terminal + file system surfaces
 
 ---
 

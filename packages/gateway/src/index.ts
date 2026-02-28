@@ -4,6 +4,8 @@ import { WsControlPlane } from "./ws.js";
 import { openDatabase, migrateDatabase } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
 import { AuditWriter } from "./services/audit.js";
+import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory } from "./surfaces/index.js";
+import { createToolRegistry } from "./tools/index.js";
 
 async function main() {
   const config = loadConfig();
@@ -17,8 +19,37 @@ async function main() {
   const sessionService = new SessionService(db);
   const audit = new AuditWriter(db);
 
-  const server = await createServer(config, { sessionService, audit });
+  // Surface registry — register all surface factories
+  const surfaceRegistry = new SurfaceRegistry();
+  surfaceRegistry.register(new TerminalSurfaceFactory());
+  surfaceRegistry.register(new FileSystemSurfaceFactory());
+  console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
+
+  // Tool registry — all Sprint 3 tools
+  const toolRegistry = createToolRegistry(surfaceRegistry);
+  console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
+
+  const server = await createServer(config, {
+    sessionService,
+    audit,
+    surfaceRegistry,
+    toolRegistry,
+  });
   const ws = new WsControlPlane(config);
+
+  // Wire terminal WS ↔ PTY
+  ws.onTerminalInput = (terminalId, data) => {
+    const surface = surfaceRegistry.getSurface(terminalId);
+    if (surface && surface.type === "terminal" && "write" in surface) {
+      (surface as import("./surfaces/terminal.js").TerminalSurface).write(data);
+    }
+  };
+  ws.onTerminalResize = (terminalId, cols, rows) => {
+    const surface = surfaceRegistry.getSurface(terminalId);
+    if (surface && surface.type === "terminal" && "resize" in surface) {
+      (surface as import("./surfaces/terminal.js").TerminalSurface).resize(cols, rows);
+    }
+  };
 
   ws.start();
 
@@ -27,6 +58,7 @@ async function main() {
 
   const shutdown = async () => {
     console.log("Shutting down...");
+    await surfaceRegistry.stopAll("shutdown");
     ws.stop();
     await server.close();
     sqlite.close();

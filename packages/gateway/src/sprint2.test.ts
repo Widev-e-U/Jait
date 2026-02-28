@@ -105,8 +105,10 @@ describe("SessionService", () => {
     expect(s1.id).not.toBe(s2.id);
   });
 
-  it("lists sessions (newest first)", () => {
+  it("lists sessions (newest first)", async () => {
     svc.create({ name: "First" });
+    // Ensure distinct timestamps — wait 5ms
+    await new Promise((r) => setTimeout(r, 5));
     svc.create({ name: "Second" });
     const list = svc.list();
     expect(list.length).toBe(2);

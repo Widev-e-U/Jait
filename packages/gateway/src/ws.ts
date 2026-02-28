@@ -12,6 +12,8 @@ interface ConnectedClient {
   userId: string | null;
   authenticated: boolean;
   connectedAt: Date;
+  /** Terminal IDs this client is subscribed to for output streaming */
+  terminalSubscriptions: Set<string>;
 }
 
 export class WsControlPlane {
@@ -39,6 +41,7 @@ export class WsControlPlane {
         userId: null,
         authenticated: false,
         connectedAt: new Date(),
+        terminalSubscriptions: new Set(),
       };
       this.clients.set(clientId, client);
 
@@ -160,6 +163,51 @@ export class WsControlPlane {
         });
         break;
       }
+      case "terminal.subscribe": {
+        if (!client.authenticated) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Must authenticate before subscribing", code: "UNAUTHORIZED" },
+          });
+          return;
+        }
+        const termId = (msg as { terminalId?: string }).terminalId;
+        if (termId) {
+          client.terminalSubscriptions.add(termId);
+          this.send(client.ws, {
+            type: "surface.connected",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { terminalId: termId, subscribed: true },
+          });
+        }
+        break;
+      }
+      case "terminal.unsubscribe": {
+        const tId = (msg as { terminalId?: string }).terminalId;
+        if (tId) client.terminalSubscriptions.delete(tId);
+        break;
+      }
+      case "terminal.input": {
+        // Forward input to the terminal — handled by the caller who sets onTerminalInput
+        const inputTermId = (msg as { terminalId?: string }).terminalId;
+        const inputData = (msg as { data?: string }).data;
+        if (inputTermId && inputData && this.onTerminalInput) {
+          this.onTerminalInput(inputTermId, inputData);
+        }
+        break;
+      }
+      case "terminal.resize": {
+        const resizeTermId = (msg as { terminalId?: string }).terminalId;
+        const cols = (msg as { cols?: number }).cols;
+        const rows = (msg as { rows?: number }).rows;
+        if (resizeTermId && cols && rows && this.onTerminalResize) {
+          this.onTerminalResize(resizeTermId, cols, rows);
+        }
+        break;
+      }
       default: {
         this.send(client.ws, {
           type: "error",
@@ -188,6 +236,25 @@ export class WsControlPlane {
       }
     }
   }
+
+  /** Send terminal output data to all clients subscribed to this terminal */
+  broadcastTerminalOutput(terminalId: string, data: string) {
+    for (const client of this.clients.values()) {
+      if (client.terminalSubscriptions.has(terminalId) && client.ws.readyState === 1) {
+        this.send(client.ws, {
+          type: "surface.connected", // reuse event type
+          sessionId: client.sessionId ?? "",
+          timestamp: new Date().toISOString(),
+          payload: { type: "terminal.output", terminalId, data },
+        });
+      }
+    }
+  }
+
+  /** Callback for terminal input from WS clients */
+  onTerminalInput?: (terminalId: string, data: string) => void;
+  /** Callback for terminal resize from WS clients */
+  onTerminalResize?: (terminalId: string, cols: number, rows: number) => void;
 
   get clientCount() {
     return this.clients.size;
