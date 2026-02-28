@@ -9,6 +9,7 @@ import { createToolRegistry } from "./tools/index.js";
 import { ConsentManager } from "./security/consent-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
+import { ConsentAwareExecutor } from "./security/consent-executor.js";
 import { PtyBrokerClient } from "./pty-broker-client.js";
 
 async function main() {
@@ -81,8 +82,32 @@ async function main() {
       console.log(`Consent ${decision.approved ? "approved" : "rejected"}: ${decision.requestId}`);
     },
   });
-  const _permissions = getProfile("coding"); // eslint-disable-line @typescript-eslint/no-unused-vars
-  console.log(`Consent manager initialized (profile: coding, timeout: 120s, ${_permissions.size} tool permissions)`);
+  const permissions = getProfile("coding");
+  const sessionApprovalsBySession = new Map<string, Set<string>>();
+  const getSessionApprovals = (sessionId: string): Set<string> => {
+    const existing = sessionApprovalsBySession.get(sessionId);
+    if (existing) return existing;
+    const created = new Set<string>();
+    sessionApprovalsBySession.set(sessionId, created);
+    return created;
+  };
+  const toolExecutor = async (
+    toolName: string,
+    input: unknown,
+    context: import("./tools/contracts.js").ToolContext,
+    options?: { dryRun?: boolean; consentTimeoutMs?: number },
+  ) => {
+    const executor = new ConsentAwareExecutor({
+      toolRegistry,
+      consentManager,
+      trustEngine,
+      audit,
+      permissions,
+      sessionApprovals: getSessionApprovals(context.sessionId),
+    });
+    return executor.execute(toolName, input, context, options);
+  };
+  console.log(`Consent manager initialized (profile: coding, timeout: 120s, ${permissions.size} tool permissions)`);
 
   const server = await createServer(config, {
     db,
@@ -93,6 +118,7 @@ async function main() {
     consentManager,
     trustEngine,
     ws,
+    toolExecutor,
   });
 
   // Wire terminal WS ↔ PTY

@@ -11,9 +11,10 @@ interface MessageProps {
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
   isStreaming?: boolean
+  onOpenTerminal?: (terminalId: string | null) => void
 }
 
-export function Message({ role, content, thinking, thinkingDuration, toolCalls, isStreaming }: MessageProps) {
+export function Message({ role, content, thinking, thinkingDuration, toolCalls, isStreaming, onOpenTerminal }: MessageProps) {
   const isUser = role === 'user'
 
   return (
@@ -28,7 +29,7 @@ export function Message({ role, content, thinking, thinkingDuration, toolCalls, 
         )}
 
         {toolCalls && toolCalls.length > 0 && (
-          <ToolCallGroup calls={toolCalls} />
+          <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} />
         )}
 
         {content ? (

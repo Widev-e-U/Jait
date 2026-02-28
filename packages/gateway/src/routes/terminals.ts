@@ -7,6 +7,7 @@
 import type { FastifyInstance } from "fastify";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
+import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { WsControlPlane } from "../ws.js";
 import { TerminalSurface } from "../surfaces/terminal.js";
@@ -18,6 +19,12 @@ export function registerTerminalRoutes(
   toolRegistry: ToolRegistry,
   audit: AuditWriter,
   ws?: WsControlPlane,
+  toolExecutor?: (
+    toolName: string,
+    input: unknown,
+    context: ToolContext,
+    options?: { dryRun?: boolean; consentTimeoutMs?: number },
+  ) => Promise<ToolResult>,
 ) {
   // POST /api/terminals — create a new terminal
   app.post("/api/terminals", async (request, reply) => {
@@ -181,17 +188,22 @@ export function registerTerminalRoutes(
     const input = body["input"] ?? {};
     const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : "default";
     const workspaceRoot = typeof body["workspaceRoot"] === "string" ? body["workspaceRoot"] : process.cwd();
+    const dryRun = body["dryRun"] === true;
+    const consentTimeoutMs = typeof body["consentTimeoutMs"] === "number" ? body["consentTimeoutMs"] : undefined;
 
     if (!toolName) {
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "tool name is required" });
     }
 
-    const result = await toolRegistry.execute(toolName, input, {
+    const context = {
       sessionId,
       actionId: uuidv7(),
       workspaceRoot,
       requestedBy: "api",
-    }, audit);
+    } as const;
+    const result = toolExecutor
+      ? await toolExecutor(toolName, input, context, { dryRun, consentTimeoutMs })
+      : await toolRegistry.execute(toolName, input, context, audit);
 
     return result;
   });

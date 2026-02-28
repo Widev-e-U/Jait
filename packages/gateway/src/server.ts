@@ -12,6 +12,7 @@ import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
 import type { ToolRegistry } from "./tools/registry.js";
+import type { ToolContext, ToolResult } from "./tools/contracts.js";
 import type { ConsentManager } from "./security/consent-manager.js";
 import type { TrustEngine } from "./security/trust-engine.js";
 import type { JaitDB } from "./db/index.js";
@@ -26,6 +27,12 @@ export interface ServerDeps {
   consentManager?: ConsentManager;
   trustEngine?: TrustEngine;
   ws?: WsControlPlane;
+  toolExecutor?: (
+    toolName: string,
+    input: unknown,
+    context: ToolContext,
+    options?: { dryRun?: boolean; consentTimeoutMs?: number },
+  ) => Promise<ToolResult>;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -47,6 +54,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     sessionService: deps.sessionService,
     toolRegistry: deps.toolRegistry,
     audit: deps.audit,
+    toolExecutor: deps.toolExecutor,
   });
 
   // Session + audit routes (only if DB is wired up)
@@ -56,7 +64,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   // Terminal, file, tool, surface routes
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {
-    registerTerminalRoutes(app, deps.surfaceRegistry, deps.toolRegistry, deps.audit, deps.ws);
+    registerTerminalRoutes(app, deps.surfaceRegistry, deps.toolRegistry, deps.audit, deps.ws, deps.toolExecutor);
   }
 
   // Consent + Trust routes

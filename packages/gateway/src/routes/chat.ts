@@ -3,6 +3,7 @@ import type { AppConfig } from "../config.js";
 import type { JaitDB } from "../db/index.js";
 import type { SessionService } from "../services/sessions.js";
 import type { ToolRegistry } from "../tools/registry.js";
+import type { ToolContext } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { ToolResult } from "../tools/contracts.js";
 import { messages as messagesTable } from "../db/schema.js";
@@ -152,6 +153,12 @@ export interface ChatRouteDeps {
   sessionService?: SessionService;
   toolRegistry?: ToolRegistry;
   audit?: AuditWriter;
+  toolExecutor?: (
+    toolName: string,
+    input: unknown,
+    context: ToolContext,
+    options?: { dryRun?: boolean; consentTimeoutMs?: number },
+  ) => Promise<ToolResult>;
 }
 
 export function registerChatRoutes(
@@ -165,6 +172,7 @@ export function registerChatRoutes(
   let sessionService: SessionService | undefined;
   let toolRegistry: ToolRegistry | undefined;
   let audit: AuditWriter | undefined;
+  let toolExecutor: ChatRouteDeps["toolExecutor"] | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -172,6 +180,7 @@ export function registerChatRoutes(
     sessionService = deps.sessionService;
     toolRegistry = deps.toolRegistry;
     audit = deps.audit;
+    toolExecutor = deps.toolExecutor;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
@@ -244,6 +253,9 @@ export function registerChatRoutes(
       onOutputChunk,
     };
     try {
+      if (toolExecutor) {
+        return await toolExecutor(toolName, args, context);
+      }
       return await toolRegistry.execute(toolName, args, context, audit);
     } catch (err) {
       return { ok: false, message: err instanceof Error ? err.message : String(err) };

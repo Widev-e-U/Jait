@@ -187,9 +187,9 @@ export class TerminalSurface implements Surface {
     let text: string;
     // UTF-16 LE BOM: FF FE (produced by PowerShell 5.1 Tee-Object)
     if (buf.length >= 2 && buf[0] === 0xFF && buf[1] === 0xFE) {
-      text = new TextDecoder('utf-16le').decode(buf);
+      text = buf.toString("utf16le");
     } else {
-      text = new TextDecoder('utf-8').decode(buf);
+      text = buf.toString("utf8");
     }
     return text.replace(/^\uFEFF/, '').trim();
   }

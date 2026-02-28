@@ -1,6 +1,7 @@
 import { useState } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
 export interface ToolCallInfo {
@@ -70,11 +71,61 @@ function ElapsedLabel({ startedAt, completedAt }: { startedAt: number; completed
   return <span>{(ms / 1000).toFixed(1)}s</span>
 }
 
-interface ToolCallCardProps {
-  call: ToolCallInfo
+function isTerminalCreationCall(call: ToolCallInfo): boolean {
+  if (call.tool.startsWith('terminal.')) return true
+  if (call.tool !== 'surfaces.start') return false
+
+  if (call.args.type === 'terminal') return true
+
+  const data = call.result?.data
+  if (data && typeof data === 'object') {
+    const record = data as Record<string, unknown>
+    if (record.type === 'terminal') return true
+  }
+
+  return false
 }
 
-export function ToolCallCard({ call }: ToolCallCardProps) {
+function getTerminalId(call: ToolCallInfo): string | null {
+  const argTerminalId = typeof call.args.terminalId === 'string' ? call.args.terminalId : null
+  if (argTerminalId) return argTerminalId
+
+  const data = call.result?.data
+  if (data && typeof data === 'object') {
+    const record = data as Record<string, unknown>
+    const dataTerminalId = typeof record.terminalId === 'string' ? record.terminalId : null
+    if (dataTerminalId) return dataTerminalId
+    const dataId = typeof record.id === 'string' ? record.id : null
+    if (dataId) return dataId
+    const dataSurfaceId = typeof record.surfaceId === 'string' ? record.surfaceId : null
+    if (dataSurfaceId) return dataSurfaceId
+
+    const output = record.output
+    if (typeof output === 'string') {
+      try {
+        const parsed = JSON.parse(output) as Record<string, unknown>
+        if (typeof parsed.terminalId === 'string') return parsed.terminalId
+        if (typeof parsed.id === 'string') return parsed.id
+        if (typeof parsed.surfaceId === 'string') return parsed.surfaceId
+      } catch {
+        // output is plain text, not JSON
+      }
+
+      const outputMatch = output.match(/\b(?:term|terminal)-[A-Za-z0-9-]+\b/)
+      if (outputMatch) return outputMatch[0]
+    }
+  }
+
+  const messageMatch = call.result?.message?.match(/\b(?:term|terminal)-[A-Za-z0-9-]+\b/)
+  return messageMatch ? messageMatch[0] : null
+}
+
+interface ToolCallCardProps {
+  call: ToolCallInfo
+  onOpenTerminal?: (terminalId: string | null) => void
+}
+
+export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   const [open, setOpen] = useState(call.status === 'running')
   const meta = getToolMeta(call.tool)
   const Icon = meta.icon
@@ -82,6 +133,8 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
   const finalOutput = formatOutput(call.result)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const isTerminal = call.tool.startsWith('terminal.')
+  const canOpenTerminal = isTerminalCreationCall(call)
+  const terminalId = canOpenTerminal ? getTerminalId(call) : null
 
   const StatusIcon = call.status === 'running'
     ? Loader2
@@ -97,33 +150,67 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="group flex items-center gap-2 w-full text-left rounded-md px-3 py-2 hover:bg-muted/50 transition-colors">
-        <ChevronRight className={cn(
-          'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
-          open && 'rotate-90'
-        )} />
-        <StatusIcon className={cn(
-          'h-4 w-4 shrink-0',
-          statusColor,
-          call.status === 'running' && 'animate-spin'
-        )} />
-        <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
-        <span className="text-sm font-medium text-muted-foreground truncate flex-1">
-          {isTerminal ? (
-            <code className="text-xs font-mono">{summary}</code>
-          ) : (
-            <span>{meta.label}: <code className="text-xs font-mono">{summary}</code></span>
-          )}
-        </span>
-        <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
-          <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} />
-        </span>
-      </CollapsibleTrigger>
+      <div className="group flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted/50 transition-colors">
+        <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
+          <ChevronRight className={cn(
+            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
+            open && 'rotate-90'
+          )} />
+          <StatusIcon className={cn(
+            'h-4 w-4 shrink-0',
+            statusColor,
+            call.status === 'running' && 'animate-spin'
+          )} />
+          <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
+          <span className="text-sm font-medium text-muted-foreground truncate flex-1">
+            {isTerminal ? (
+              <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-zinc-700/60 bg-[#0b0f14] px-2 py-0.5 text-[#c9d1d9]">
+                <span className="shrink-0 text-[10px] text-emerald-400">$</span>
+                <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
+              </span>
+            ) : (
+              <span>{meta.label}: <code className="text-xs font-mono">{summary}</code></span>
+            )}
+          </span>
+          <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
+            <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} />
+          </span>
+        </CollapsibleTrigger>
+        {canOpenTerminal && onOpenTerminal && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 px-2 text-[11px]"
+            onClick={(e) => {
+              e.preventDefault()
+              e.stopPropagation()
+              onOpenTerminal(terminalId)
+            }}
+          >
+            <ExternalLink className="mr-1 h-3.5 w-3.5" />
+            Open Terminal
+          </Button>
+        )}
+      </div>
 
       <CollapsibleContent>
         <div className="ml-[3.25rem] mr-3 mb-2">
-          {/* Output area — dark terminal-style block */}
-          {displayOutput ? (
+          {isTerminal ? (
+            <pre className={cn(
+              'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
+              'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+              call.result && !call.result.ok && 'text-red-400 dark:text-red-400'
+            )}>
+              <span className="text-emerald-400">$ </span>
+              {summary}
+              {(displayOutput || call.status === 'running') && '\n'}
+              {displayOutput}
+              {call.status === 'running' && (
+                <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
+              )}
+            </pre>
+          ) : displayOutput ? (
             <pre className={cn(
               'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
               'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
@@ -149,15 +236,16 @@ export function ToolCallCard({ call }: ToolCallCardProps) {
 /** Group of tool call cards rendered between message content */
 interface ToolCallGroupProps {
   calls: ToolCallInfo[]
+  onOpenTerminal?: (terminalId: string | null) => void
 }
 
-export function ToolCallGroup({ calls }: ToolCallGroupProps) {
+export function ToolCallGroup({ calls, onOpenTerminal }: ToolCallGroupProps) {
   if (calls.length === 0) return null
 
   return (
     <div className="rounded-lg border bg-card my-2 divide-y">
       {calls.map((call) => (
-        <ToolCallCard key={call.callId} call={call} />
+        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} />
       ))}
     </div>
   )

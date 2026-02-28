@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
-import { Sun, Moon, LogOut, MessageSquare, Calendar, PanelLeft, Terminal as TerminalIcon } from 'lucide-react'
+import { Sun, Moon, LogOut, MessageSquare, Calendar, PanelLeftOpen, PanelLeftClose, Terminal as TerminalIcon } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -43,11 +43,15 @@ function App() {
   const [inputValue, setInputValue] = useState('')
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [currentView, setCurrentView] = useState<AppView>('chat')
-  const [showSidebar, setShowSidebar] = useState(false)
+  const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(280)
   const isDragging = useRef(false)
   const { dark, toggle: toggleTheme } = useTheme()
+
+  useEffect(() => {
+    localStorage.setItem('showSessionsSidebar', showSidebar ? 'true' : 'false')
+  }, [showSidebar])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -76,7 +80,7 @@ function App() {
   const { user, token, isAuthenticated, loginWithGoogle, logout, bindSession } = useAuth()
   const { sessions, activeSessionId, createSession, switchSession, archiveSession } = useSessions()
   const { messages, isLoading, remainingPrompts, error, sendMessage, cancelRequest, clearMessages } = useChat(activeSessionId)
-  const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal } = useTerminals()
+  const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals()
   const { provider, model } = useModelInfo()
 
   useEffect(() => {
@@ -122,6 +126,28 @@ function App() {
     }
   }
 
+  const handleOpenTerminalFromToolCall = useCallback(async (terminalId: string | null) => {
+    setCurrentView('chat')
+    setShowTerminal(true)
+
+    const refreshed = await refresh()
+
+    if (terminalId) {
+      setActiveTerminalId(terminalId)
+      return
+    }
+
+    if (activeTerminalId) return
+
+    if (refreshed.length > 0) {
+      setActiveTerminalId(refreshed[refreshed.length - 1]!.id)
+      return
+    }
+
+    const created = await createTerminal(activeSessionId ?? 'default')
+    setActiveTerminalId(created.id)
+  }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId])
+
   const hasMessages = messages.length > 0
 
   return (
@@ -135,7 +161,11 @@ function App() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSidebar(s => !s)}>
-                  <PanelLeft className="h-3.5 w-3.5" />
+                  {showSidebar ? (
+                    <PanelLeftClose className="h-3.5 w-3.5" />
+                  ) : (
+                    <PanelLeftOpen className="h-3.5 w-3.5" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Sessions</TooltipContent>
@@ -283,6 +313,7 @@ function App() {
                   thinkingDuration={msg.thinkingDuration}
                   toolCalls={msg.toolCalls}
                   isStreaming={isLoading && msg === messages[messages.length - 1]}
+                  onOpenTerminal={handleOpenTerminalFromToolCall}
                 />
               ))}
             </Conversation>

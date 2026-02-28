@@ -24,8 +24,10 @@ export function useTerminals() {
       const res = await fetch(`${GATEWAY}/api/terminals`)
       const data = (await res.json()) as { terminals: TerminalInfo[] }
       setTerminals(data.terminals)
+      return data.terminals
     } catch {
       // gateway down
+      return []
     }
   }, [])
 
