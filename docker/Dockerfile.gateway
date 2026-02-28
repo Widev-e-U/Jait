@@ -1,0 +1,28 @@
+FROM oven/bun:1 AS base
+WORKDIR /app
+
+FROM base AS deps
+COPY package.json bun.lock ./
+COPY packages/shared/package.json packages/shared/
+COPY packages/gateway/package.json packages/gateway/
+RUN bun install --frozen-lockfile
+
+FROM base AS build
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
+COPY --from=deps /app/packages/gateway/node_modules ./packages/gateway/node_modules
+COPY . .
+RUN bun run --filter '@jait/shared' build && bun run --filter '@jait/gateway' build
+
+FROM base AS runtime
+ENV NODE_ENV=production
+COPY --from=build /app/packages/shared/dist ./packages/shared/dist
+COPY --from=build /app/packages/shared/package.json ./packages/shared/
+COPY --from=build /app/packages/gateway/dist ./packages/gateway/dist
+COPY --from=build /app/packages/gateway/package.json ./packages/gateway/
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=deps /app/packages/gateway/node_modules ./packages/gateway/node_modules
+COPY package.json ./
+
+EXPOSE 8000 18789
+CMD ["bun", "packages/gateway/dist/index.js"]

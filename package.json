@@ -1,0 +1,26 @@
+{
+  "name": "jait",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Just Another Intelligent Tool — for Developers",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "extensions/*",
+    "skills/*"
+  ],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "dev": "bun run --filter '*' dev",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "oxlint .",
+    "typecheck": "bun run --filter '*' typecheck",
+    "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3",
+    "vitest": "^3.0.0"
+  }
+}
