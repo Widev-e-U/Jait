@@ -4,4 +4,5 @@ export { type ToolPermission, type ConsentLevel, type ToolPermissionConfig, requ
 export { type ProfileName, getProfile, listProfiles, extendProfile } from "./tool-profiles.js";
 export { TrustEngine, type TrustState } from "./trust-engine.js";
 export { ConsentAwareExecutor, type ConsentAwareExecutorOptions, type ExecuteOptions } from "./consent-executor.js";
+export { SSRFGuard, type SSRFGuardOptions } from "./ssrf-guard.js";
 export type { TrustLevel, SecurityService, AuditRecord } from "./contracts.js";
