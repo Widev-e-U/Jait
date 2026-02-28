@@ -6,6 +6,10 @@ import { SessionService } from "./services/sessions.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory } from "./surfaces/index.js";
 import { createToolRegistry } from "./tools/index.js";
+import { MemoryEngine } from "./memory/service.js";
+import { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { ConsentManager } from "./security/consent-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
@@ -51,8 +55,14 @@ async function main() {
       (surface as import("./surfaces/terminal.js").TerminalSurface).handleBrokerExit(exitCode, signal);
     }
   };
-  // Tool registry — all Sprint 3 tools
-  const toolRegistry = createToolRegistry(surfaceRegistry);
+  // Memory engine — Sprint 6
+  const memory = new MemoryEngine({
+    backend: new SqliteMemoryBackend(db),
+    memoryDir: join(homedir(), ".jait", "memory"),
+  });
+
+  // Tool registry — Sprint 3 + Sprint 6 memory tools
+  const toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   // WebSocket control plane (created early so consent callbacks can reference it)

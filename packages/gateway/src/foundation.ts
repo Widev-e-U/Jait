@@ -29,7 +29,9 @@ export type { ToolContext, ToolDefinition, ToolResult } from "./tools/contracts.
 export { ToolRegistry } from "./tools/registry.js";
 export { createToolRegistry } from "./tools/index.js";
 
-export type { MemoryEntry, MemoryService } from "./memory/contracts.js";
+export type { MemoryEntry, MemoryService, SaveMemoryInput, MemorySource, MemoryScope, MemoryBackend } from "./memory/contracts.js";
+export { MemoryEngine } from "./memory/service.js";
+export { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
 
 export type { ScheduledJob, SchedulerService } from "./scheduler/contracts.js";
 
