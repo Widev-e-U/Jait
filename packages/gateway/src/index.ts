@@ -6,6 +6,8 @@ import { SessionService } from "./services/sessions.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory } from "./surfaces/index.js";
 import { createToolRegistry } from "./tools/index.js";
+import { SchedulerService } from "./scheduler/service.js";
+import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
 import { ConsentManager } from "./security/consent-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
@@ -34,6 +36,13 @@ async function main() {
   surfaceRegistry.register(new FileSystemSurfaceFactory());
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
 
+  // WebSocket control plane (created early so consent callbacks can reference it)
+  const ws = new WsControlPlane(config);
+
+  // Hook bus + built-ins
+  const hooks = new HookBus();
+  registerBuiltInHooks(hooks);
+
   // Wire broker output/exit events → correct TerminalSurface
   broker.onOutput = (ptyId, data) => {
     const surface = surfaceRegistry
@@ -41,6 +50,7 @@ async function main() {
       .find((s) => s.type === "terminal" && (s as import("./surfaces/terminal.js").TerminalSurface).ptyId === ptyId);
     if (surface) {
       (surface as import("./surfaces/terminal.js").TerminalSurface).handleBrokerOutput(data);
+      hooks.emit("surface.output", { ptyId, dataSize: data.length });
     }
   };
   broker.onExit = (ptyId, exitCode, signal) => {
@@ -49,14 +59,9 @@ async function main() {
       .find((s) => s.type === "terminal" && (s as import("./surfaces/terminal.js").TerminalSurface).ptyId === ptyId);
     if (surface) {
       (surface as import("./surfaces/terminal.js").TerminalSurface).handleBrokerExit(exitCode, signal);
+      hooks.emit("surface.exit", { ptyId, exitCode, signal });
     }
   };
-  // Tool registry — all Sprint 3 tools
-  const toolRegistry = createToolRegistry(surfaceRegistry);
-  console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
-
-  // WebSocket control plane (created early so consent callbacks can reference it)
-  const ws = new WsControlPlane(config);
 
   // Consent & Trust — Sprint 4
   const trustEngine = new TrustEngine(db);
@@ -91,6 +96,8 @@ async function main() {
     sessionApprovalsBySession.set(sessionId, created);
     return created;
   };
+  let toolRegistry = createToolRegistry(surfaceRegistry);
+
   const toolExecutor = async (
     toolName: string,
     input: unknown,
@@ -107,6 +114,49 @@ async function main() {
     });
     return executor.execute(toolName, input, context, options);
   };
+
+  const scheduler = new SchedulerService({
+    db,
+    executeTool: async (execution) => {
+      const context = {
+        sessionId: execution.sessionId,
+        actionId: `sched-${Date.now()}`,
+        workspaceRoot: execution.workspaceRoot,
+        requestedBy: "scheduler",
+      } as const;
+      return toolExecutor(execution.toolName, execution.input, context);
+    },
+    onExecuted: (result) => {
+      hooks.emit("scheduler.executed", result);
+      ws.broadcastAll({
+        type: "session.created",
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { type: "scheduler.executed", ...result },
+      });
+    },
+  });
+
+  // Rebuild tool registry with Sprint 7 scheduler + gateway status tools.
+  toolRegistry = createToolRegistry(surfaceRegistry, {
+    scheduler,
+    sessionService,
+    ws,
+    startedAt: Date.now(),
+  });
+  console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
+
+  scheduler.start(30_000);
+  scheduler.create({
+    name: "gateway-heartbeat",
+    cron: config.heartbeatCron,
+    toolName: "gateway.status",
+    input: {},
+    sessionId: "system",
+    workspaceRoot: process.cwd(),
+    enabled: true,
+  });
+
   console.log(`Consent manager initialized (profile: coding, timeout: 120s, ${permissions.size} tool permissions)`);
 
   const server = await createServer(config, {
@@ -118,6 +168,13 @@ async function main() {
     consentManager,
     trustEngine,
     ws,
+    hooks,
+    hookSecret: config.hookSecret,
+    onWakeHook: async () => scheduler.tick(),
+    onAgentHook: async (payload) => {
+      hooks.emit("agent.webhook", payload);
+      return { accepted: true };
+    },
     toolExecutor,
   });
 
@@ -171,6 +228,7 @@ async function main() {
     console.log("Shutting down...");
     consentManager.cancelAll("shutdown");
     await surfaceRegistry.stopAll("shutdown");
+    scheduler.stop();
     await broker.stop();
     ws.stop();
     await server.close();

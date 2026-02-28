@@ -95,3 +95,25 @@ export const messages = sqliteTable(
     index("idx_messages_session").on(table.sessionId, table.createdAt),
   ],
 );
+
+// ─── Scheduled Jobs ──────────────────────────────────────────────────
+export const scheduledJobs = sqliteTable(
+  "scheduled_jobs",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    cron: text("cron").notNull(),
+    toolName: text("tool_name").notNull(),
+    input: text("input"), // JSON object
+    sessionId: text("session_id"),
+    workspaceRoot: text("workspace_root"),
+    enabled: integer("enabled").notNull().default(1),
+    lastRunAt: text("last_run_at"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_scheduled_jobs_enabled").on(table.enabled),
+    index("idx_scheduled_jobs_updated").on(table.updatedAt),
+  ],
+);
