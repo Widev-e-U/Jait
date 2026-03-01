@@ -313,7 +313,9 @@ interface SurfaceCapabilities {
 
 ### Screen Sharing Surface (RustDesk-Style)
 
-The screen sharing surface is a **first-class control surface** — not a bolted-on afterthought. It streams the agent device's actual screen to any connected client via WebRTC:
+The screen sharing surface is a **first-class control surface** - not a bolted-on afterthought. It streams the agent device's actual screen to any connected client via WebRTC:
+
+All screen-share lifecycle and routing is managed by an explicit `os_tool` control plane. `os_tool` owns full state and control for any trusted device on the network that is running the Jait Electron app or the React Native mobile app.
 
 ```typescript
 // @jait/shared — screen sharing configuration
@@ -343,6 +345,20 @@ interface ScreenShareViewer {
   role: 'observer' | 'controller';         // watch-only or full takeover
   connectedAt: string;
   latencyMs: number;
+}
+
+interface OsToolScreenShareState {
+  sessionId: string;
+  hostDeviceId: string;
+  viewerDeviceIds: string[];
+  controllerDeviceId?: string;
+  route: 'p2p' | 'turn-relay';
+  capabilities: {
+    canView: boolean;
+    canControl: boolean;
+    canTransferControl: boolean;
+  };
+  updatedAt: string;
 }
 ```
 
@@ -403,7 +419,7 @@ Clipboard ───┘
 | **Browser** | Playwright CDP | P0 | Dedicated Chrome instance, snapshots + interaction |
 | **Screen Share** | WebRTC + OS capture API | P0 | RustDesk-style live streaming to any client |
 | **Voice** | Whisper / Deepgram + ElevenLabs | P0 | STT + TTS, wake word, talk mode |
-| **OS Control** | PowerShell commands | P0 | Install, configure, query system state |
+| **OS Control** | PowerShell commands + `os_tool` coordinator | P0 | Install, configure, query system state, and orchestrate network screen-share control |
 | **Screen Capture** | OS API + OCR/A11y | P1 | Screenshot → textual description for agent |
 | **Clipboard** | Electron / OS native | P1 | Read/write, sync across devices via screen share |
 | **Notification** | Electron / expo-notifications | P1 | Consent requests, alerts, job completions |
@@ -741,6 +757,7 @@ The agent controls **everything** through tools — including its own platform f
 | **os.install** | Install software via package manager | Always |
 | **os.service** | Start/stop/restart system services | Always |
 | **os.query** | Query system state (processes, disk, network) | No |
+| **os_tool** | Full screen-share state/control across trusted Electron and React Native devices | Trust Level 1+ |
 | **web.search** | Brave/Perplexity/Gemini web search | No |
 | **web.fetch** | Fetch URL content (SSRF-guarded) | No |
 | **clipboard.read** | Read system clipboard | Trust Level 1+ |
@@ -767,6 +784,7 @@ The agent manages its own scheduling, sessions, surfaces, memory, and sub-agents
 | **surfaces.list** | List active control surfaces and status | No |
 | **surfaces.start** | Activate a control surface | Trust Level 1+ |
 | **surfaces.stop** | Deactivate a control surface | Trust Level 1+ |
+| **os_tool** | Manage networked screen-share state, controller role, and takeover routing | Trust Level 1+ |
 | **gateway.status** | Check gateway health and connected devices | No |
 | **memory.search** | Semantic search over memory index | No |
 | **memory.save** | Persist a memory entry | No |
@@ -817,6 +835,7 @@ These tools let the agent manage its own features:
 | **surfaces.list** | List active control surfaces | "What's connected right now?" |
 | **surfaces.start** | Activate a control surface | "Open a new terminal session" |
 | **surfaces.stop** | Deactivate a control surface | "Close the browser" |
+| **os_tool** | Manage network screen-share state and control handoff | "Transfer screen control to my phone" |
 | **screen.share** | Start/stop screen sharing | "Start streaming my screen to my phone" |
 | **gateway.status** | Check gateway health | "Are all services healthy?" |
 | **memory.search** | Search the memory index | "What do I know about the auth system?" |
@@ -1007,7 +1026,7 @@ permissions:
 # Tool Profiles (presets)
 profiles:
   minimal: [file.read, web.search, memory.search, screen.capture]
-  coding: [file.*, terminal.run, web.*, memory.*, browser.*, screen.share]
+  coding: [file.*, terminal.run, web.*, memory.*, browser.*, screen.share, os_tool]
   full: ["*"]
 ```
 
@@ -1079,6 +1098,7 @@ Each action type has its own trust progression:
 - Files: Level 2 for write, Level 3 for delete
 - Browser: Level 1 for navigation, Level 2 for form submissions
 - Screen share: Level 0 for viewing, Level 1 for remote takeover
+- os_tool: Level 1 for state inspection, explicit consent for takeover/transfer control
 - Voice commands: Level 1 for safe actions, Level 2 for destructive
 
 ---
@@ -1309,7 +1329,7 @@ POST /hooks/gmail    — Gmail Pub/Sub push notification
 2. Docker sandboxing for tool execution
 3. Memory engine with semantic search (SQLite-vec)
 4. In-process cron scheduler (croner) + hooks system
-5. Screen sharing surface (WebRTC) — P2P + TURN relay
+5. Screen sharing surface (WebRTC) + `os_tool` network control plane (P2P + TURN relay, Electron + React Native device control)
 
 ---
 

@@ -6,9 +6,10 @@ Use this guide when implementing any sprint so work is not duplicated and existi
 
 1. Read `IMPLEMENTATION_PLAN.md` for sprint goals, tasks, and exit criteria.
 2. Read `SPRINT_BASELINES.md` for prepared scaffolding and sprint mapping.
-3. Scan the sprint-specific package paths listed below for already-existing code, types, tests, and docs.
-4. Reuse existing contracts/schemas/interfaces before adding new ones.
-5. Add only the minimum new files needed for the sprint deliverable.
+3. If implementing Sprint 10 or Sprint 12, review `E:\deskreen` before coding as the required working screen-sharing reference baseline.
+4. Scan the sprint-specific package paths listed below for already-existing code, types, tests, and docs.
+5. Reuse existing contracts/schemas/interfaces before adding new ones.
+6. Add only the minimum new files needed for the sprint deliverable.
 
 ## Global content locations to check every sprint
 
@@ -118,6 +119,42 @@ Look for reusable items:
 - Event/notification flow patterns
 - Existing jobs UI components and API usage
 
+### Sprint 10 — Screen Sharing (WebRTC)
+
+Check first:
+
+- `packages/screen-share/` (or planned target module locations)
+- `packages/gateway/src/routes/` and `packages/gateway/src/tools/`
+- `packages/shared/src/types/` and `packages/shared/src/schemas/`
+- `E:\deskreen\src\features\DesktopCapturerSourcesService\index.ts`
+- `E:\deskreen\src\features\SharingSessionService\index.ts`
+- `E:\deskreen\src\server\index.ts`
+- `E:\deskreen\src\server\darkwireSocket.ts`
+- `E:\deskreen\src\renderer\src\features\PeerConnection\*`
+- `E:\deskreen\src\client-viewer\src\features\PeerConnection\*`
+
+Look for reusable ideas:
+
+- Capture source lifecycle and refresh strategy
+- Signaling channel event flow and connection ownership rules
+- Peer connection setup/teardown and quality adaptation patterns
+- Session and connected-device state handling
+
+### Sprint 12 — React Native Mobile App
+
+Check first:
+
+- `apps/mobile/` and shared mobile-facing API contracts
+- `packages/gateway/src/routes/`, `packages/gateway/src/tools/`, and `packages/shared/src/types/`
+- `E:\deskreen\src\client-viewer\src\features\PeerConnection\*`
+- `E:\deskreen\src\renderer\src\features\PeerConnection\*`
+
+Look for reusable ideas:
+
+- Viewer/control flow between host and remote device
+- Mobile-friendly quality adaptation and reconnect behavior
+- Input forwarding patterns that preserve control safety
+
 ### Sprint 8+ — CLI/Extensibility/Desktop/Mobile
 
 Check first:
@@ -140,11 +177,13 @@ Look for reusable items:
 - If a needed contract exists, import it; do not redefine it.
 - If you create a new module, include at least one focused test where practical.
 - Keep changes sprint-scoped; avoid unrelated refactors.
+- Deskreen is a reference implementation only; do not copy code verbatim.
 
 ## Suggested pre-flight checklist to copy into PRs
 
 - [ ] I reviewed `IMPLEMENTATION_PLAN.md` for the target sprint.
 - [ ] I reviewed `SPRINT_BASELINES.md` and reused applicable scaffolding.
 - [ ] I checked sprint-specific paths for existing code before adding new files.
+- [ ] For Sprint 10/12, I reviewed required `E:\deskreen` reference paths and documented Deskreen-to-Jait mapping decisions.
 - [ ] I avoided duplicate contracts/types.
 - [ ] I ran relevant tests/checks for changed areas.

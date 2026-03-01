@@ -5,6 +5,7 @@
 **Start Date:** March 2026
 **Cadence:** 2-week sprints
 **One developer** — all estimates assume solo work.
+**Canonical planning file:** `IMPLEMENTATION_PLAN.md` (also referenced as `ImplementationPlan.md` in conversation).
 
 ---
 
@@ -277,14 +278,25 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 
 ---
 
-## Sprint 10 — Screen Sharing (WebRTC)
+## External Reference Baseline (Screen Sharing)
 
-**Goal:** RustDesk-style live screen streaming from desktop to any viewer.
+For Sprint 10 and Sprint 12, `E:\deskreen` is a required implementation reference for a working optimized baseline.
+
+- Use it for architecture and performance patterns only.
+- Re-implement in Jait style for this repository.
+- Do not copy AGPL code verbatim.
+
+---
+
+## Sprint 10 - Screen Sharing (WebRTC)
+
+**Goal:** RustDesk-style live screen streaming with an `os_tool` control plane that has full state and control over sharing across networked Jait devices (Electron + React Native).
 
 ### Tasks
 
 | # | Task | Package | Est |
 |---|------|---------|-----|
+| 10.0 | Deskreen baseline mapping (required) — map `E:\deskreen\src\features\DesktopCapturerSourcesService\index.ts`, `E:\deskreen\src\features\SharingSessionService\index.ts`, `E:\deskreen\src\server\index.ts`, `E:\deskreen\src\server\darkwireSocket.ts`, `E:\deskreen\src\renderer\src\features\PeerConnection\*`, and `E:\deskreen\src\client-viewer\src\features\PeerConnection\*` to Jait modules before implementation | planning | 2h |
 | 10.1 | `@jait/screen-share` package scaffold — capture, encoder, transport, input modules | `packages/screen-share` | 2h |
 | 10.2 | Screen capture — Electron `desktopCapturer` API, monitor selection | `packages/screen-share/capture` | 4h |
 | 10.3 | WebRTC transport — peer connection, offer/answer, ICE candidates | `packages/screen-share/transport` | 8h |
@@ -292,11 +304,14 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 | 10.5 | TURN relay integration — coturn config, fallback when P2P fails | `packages/screen-share/transport` | 4h |
 | 10.6 | Adaptive streaming — auto-adjust resolution, FPS, codec based on network | `packages/screen-share/encoder` | 4h |
 | 10.7 | Remote input forwarding — mouse, keyboard events from viewer to host | `packages/screen-share/input` | 4h |
-| 10.8 | Screen share viewer component — video element, touch overlay, controls | `packages/ui-shared/screen` | 6h |
+| 10.8 | Screen share viewer component - video element, touch overlay, controls | `packages/ui-shared/screen` | 6h |
 | 10.9 | Tools: `screen.share`, `screen.capture`, `screen.record` | `packages/gateway/tools` | 3h |
-| 10.10 | Session recording — save WebRTC stream to file for audit/playback | `packages/screen-share/recording` | 4h |
+| 10.10 | Session recording - save WebRTC stream to file for audit/playback | `packages/screen-share/recording` | 4h |
+| 10.11 | `os_tool` screen-share state model - host, viewers, controller, routes, health, capabilities | `packages/shared` + `packages/gateway` | 5h |
+| 10.12 | `os_tool` distributed control endpoints - start/stop/pause/resume/transfer-control across trusted LAN devices | `packages/gateway/tools` + `packages/gateway/routes` | 6h |
+| 10.13 | Consent + policy enforcement for remote takeover through `os_tool` (device allowlist, role checks) | `packages/gateway/security` | 4h |
 
-**Deliverable:** Start screen share from Electron, view live desktop in browser or another Electron instance.
+**Deliverable:** Start screen share from Electron, view/control it from browser/Electron/mobile, and manage all share sessions via `os_tool` with complete runtime state visibility.
 
 **Exit criteria:**
 - [ ] Desktop streams screen to web viewer in real-time
@@ -304,6 +319,9 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 - [ ] Fallback to TURN relay when P2P fails
 - [ ] Remote input (mouse/keyboard) works from viewer
 - [ ] Agent can call `screen.share` to start/stop sharing
+- [ ] `os_tool` returns full network share state (host/viewers/controller/capabilities) for every connected Jait device
+- [ ] `os_tool` can transfer control between authorized Electron and React Native clients without restarting stream
+- [ ] Sprint notes include a short Deskreen-to-Jait module mapping before Sprint 10 implementation is considered complete
 
 ---
 
@@ -335,14 +353,15 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 
 ---
 
-## Sprint 12 — React Native Mobile App
+## Sprint 12 - React Native Mobile App
 
-**Goal:** Phone app as supervisor — voice control, screen share viewer, consent approvals, push notifications.
+**Goal:** Phone app as supervisor - voice control, screen share viewer, consent approvals, push notifications, and `os_tool`-driven remote control.
 
 ### Tasks
 
 | # | Task | Package | Est |
 |---|------|---------|-----|
+| 12.0 | Deskreen viewer/control flow comparison (required) — validate mobile viewer behavior parity and quality adaptation approach against `E:\deskreen\src\client-viewer\src\features\PeerConnection\*` and related flow in `E:\deskreen\src\renderer\src\features\PeerConnection\*` | planning | 2h |
 | 12.1 | Expo project scaffold, navigation, auth flow | `apps/mobile` | 4h |
 | 12.2 | API client integration — connect to gateway via `@jait/api-client` | `apps/mobile` | 3h |
 | 12.3 | Chat view — React Native equivalent of web chat, using shared types | `apps/mobile` | 4h |
@@ -350,9 +369,10 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 | 12.5 | Remote takeover — touch input forwarded to desktop host | `apps/mobile` | 4h |
 | 12.6 | Voice control — microphone, STT, TTS on device | `apps/mobile` | 4h |
 | 12.7 | Consent approval view — push notification → tap to approve/reject | `apps/mobile` | 3h |
-| 12.8 | Push notifications — expo-notifications, consent requests + job completions | `apps/mobile` | 3h |
-| 12.9 | Gateway auto-discovery — mDNS/Bonjour on LAN, QR code fallback | `apps/mobile` | 3h |
-| 12.10 | Activity feed — same unified view as desktop, adapted for mobile layout | `apps/mobile` | 3h |
+| 12.8 | Push notifications - expo-notifications, consent requests + job completions | `apps/mobile` | 3h |
+| 12.9 | Gateway auto-discovery - mDNS/Bonjour on LAN, QR code fallback | `apps/mobile` | 3h |
+| 12.10 | Activity feed - same unified view as desktop, adapted for mobile layout | `apps/mobile` | 3h |
+| 12.11 | Mobile device node registration + capability heartbeat consumed by `os_tool` | `apps/mobile` + `packages/gateway` | 3h |
 
 **Deliverable:** Phone app connects to gateway. Watch screen share, approve actions, talk to agent.
 
@@ -362,6 +382,8 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 - [ ] Touch on phone screen moves mouse on desktop
 - [ ] Push notification for consent → tap to approve
 - [ ] Voice command from phone triggers agent action
+- [ ] Mobile can request/view/control sessions through `os_tool` using role-based consent rules
+- [ ] Mobile viewer/control design is validated against Deskreen flow patterns and captured in Sprint 12 notes
 
 ---
 
@@ -558,6 +580,7 @@ With two tracks: **~16 weeks** instead of ~32 weeks.
 | Risk | Impact | Mitigation |
 |------|--------|------------|
 | WebRTC complexity (NAT traversal, codec negotiation) | Screen sharing delayed | Start with same-LAN P2P only, add TURN later |
+| AGPL contamination from Deskreen reference code | Legal/compliance risk | Reference architecture only, no direct code reuse |
 | node-pty cross-platform issues | Terminal breaks on Linux/macOS | Test on all platforms in CI early |
 | Electron app size | Slow download, high memory | Tree-shake, lazy-load, consider Tauri later |
 | React Native WebRTC maturity | Mobile screen share viewer buggy | Use `react-native-webrtc` (well-maintained), fallback to server-rendered frames |
