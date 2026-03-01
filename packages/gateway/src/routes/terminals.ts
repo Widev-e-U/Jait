@@ -11,9 +11,9 @@ import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import { TerminalSurface } from "../surfaces/terminal.js";
 import { uuidv7 } from "../lib/uuidv7.js";
-import { tmpdir } from "node:os";
+import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 
 /** Strip ANSI escape sequences */
 function stripAnsi(s: string): string {
@@ -21,10 +21,9 @@ function stripAnsi(s: string): string {
   return s.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
 }
 
-/** Escape a string for use in a RegExp */
-function escRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
+// OSC 633 sequence patterns (same as terminal-tools.ts)
+const OSC_DONE_RE = /\x1b\]633;D;(-?\d*)(?:\x07|\x1b\\)/;
+const OSC_PROMPT_END_RE = /\x1b\]633;B(?:\x07|\x1b\\)/;
 
 export function registerTerminalRoutes(
   app: FastifyInstance,
@@ -168,24 +167,49 @@ export function registerTerminalRoutes(
     }
 
     try {
-      // Execute command inside the persistent terminal using sentinel markers
-      const ts = Date.now();
-      const rnd = Math.random().toString(36).slice(2, 8);
-      const startMark = `__JS${ts}${rnd}`;
-      const doneMark = `__JD${ts}${rnd}`;
-      const doneRe = new RegExp(`${escRegex(doneMark)}:(\\d+)`);
-      const { platform } = await import("node:os");
+      // Ensure shell integration is ready before executing
+      await surface.waitForPrompt();
 
+      // Execute command using OSC 633 shell integration
       const result = await new Promise<{ output: string; exitCode: number | null; timedOut: boolean }>((resolve) => {
         let raw = "";
         let settled = false;
 
+        // Cached D-marker result so we only scan for it once
+        let dMatch: { exitCode: number; end: number } | null = null;
+
+        // Settle timer: after D+B is detected, wait briefly for any late
+        // output from PowerShell's deferred formatting pipeline.
+        let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
         const listener = (data: string) => {
           raw += data;
-          const clean = stripAnsi(raw);
-          const m = clean.match(doneRe);
-          if (m && m[1] !== undefined) {
-            finish(false, parseInt(m[1], 10));
+
+          if (settled) return;
+
+          // If settling (D+B already found), reset timer on new data.
+          if (settleTimer) {
+            clearTimeout(settleTimer);
+            settleTimer = setTimeout(() => finish(false, dMatch!.exitCode), 50);
+            return;
+          }
+
+          // Step 1: Find D marker (command done — provides exit code)
+          if (!dMatch) {
+            const m = raw.match(OSC_DONE_RE);
+            if (m) {
+              dMatch = {
+                exitCode: m[1] ? parseInt(m[1], 10) : 0,
+                end: m.index! + m[0].length,
+              };
+            }
+          }
+
+          // Step 2: After D, wait for B (prompt-end).  Start a settle
+          // timer instead of finishing immediately — PowerShell can
+          // flush output after the prompt markers.
+          if (dMatch && OSC_PROMPT_END_RE.test(raw.slice(dMatch.end))) {
+            settleTimer = setTimeout(() => finish(false, dMatch!.exitCode), 50);
           }
         };
 
@@ -193,58 +217,81 @@ export function registerTerminalRoutes(
           if (settled) return;
           settled = true;
           clearTimeout(timer);
+          if (settleTimer) clearTimeout(settleTimer);
           surface.removeOutputListener(listener);
 
-          let clean = stripAnsi(raw).replace(/\r/g, "");
-          const si = clean.indexOf(startMark);
-          const di = clean.search(doneRe);
-          if (si !== -1 && di !== -1) {
-            const afterStart = clean.indexOf("\n", si);
-            clean = clean.slice(afterStart !== -1 ? afterStart + 1 : si + startMark.length, di);
-          } else if (si !== -1) {
-            const afterStart = clean.indexOf("\n", si);
-            clean = clean.slice(afterStart !== -1 ? afterStart + 1 : si + startMark.length);
+          // Clean up temp script file
+          if (tmpFile) {
+            try { unlinkSync(tmpFile); } catch { /* already gone */ }
           }
-          clean = clean.trim();
-          if (clean.length > 200_000) clean = "…(truncated)\n" + clean.slice(-200_000);
-          resolve({ output: clean || "(no output)", exitCode, timedOut });
+
+          // Strip all OSC 633 sequences — they are invisible control codes,
+          // so removing them leaves visible text in order:
+          //   echoed command → command output → prompt text
+          let output = raw.replace(/\x1b\]633;[A-Z][^\x07]*(?:\x07|\x1b\\)/g, "");
+          output = stripAnsi(output).replace(/\r/g, "");
+
+          // Split into lines for targeted cleanup
+          const lines = output.split("\n");
+
+          // Remove echoed command line(s)
+          if (tmpFile) {
+            // For dot-sourced multi-line: remove the ". 'path'" echo
+            if (lines.length > 0 && (lines[0]!.trim().startsWith(". '") || lines[0]!.trim().startsWith("."))) {
+              lines.shift();
+            }
+          } else {
+            const cmdLines = command.trim().split("\n").map((l) => l.trim());
+            while (lines.length > 0 && cmdLines.length > 0) {
+              const head = lines[0]!.trim();
+              const cmdHead = cmdLines[0]!;
+              if (head === cmdHead || head.endsWith(cmdHead) || cmdHead.startsWith(head)) {
+                lines.shift();
+                cmdLines.shift();
+              } else {
+                break;
+              }
+            }
+          }
+
+          // Remove trailing empty lines
+          while (lines.length > 0 && lines[lines.length - 1]!.trim() === "") {
+            lines.pop();
+          }
+
+          // Remove the prompt line at the end (e.g. "PS E:\path> ")
+          if (lines.length > 0) {
+            const lastLine = lines[lines.length - 1]!.trim();
+            if (/^PS .+?>/.test(lastLine)) {
+              lines.pop();
+            }
+          }
+
+          output = lines.join("\n").trim();
+          if (output.length > 200_000) output = "…(truncated)\n" + output.slice(-200_000);
+          resolve({ output: output || "(no output)", exitCode, timedOut });
         };
 
         surface.addOutputListener(listener);
 
         const timer = setTimeout(() => {
-          surface.write("\x03");
+          surface.write("\x03\r");
           setTimeout(() => finish(true), 500);
         }, timeout);
 
-        const isWin = platform() === "win32";
-        const isMultiLine = command.includes("\n");
-        let wrappedCmd: string;
-
-        if (isWin && isMultiLine) {
-          // Multi-line PowerShell: write to a temp .ps1 and invoke it
-          const tmpScript = join(tmpdir(), `jait-cmd-${ts}-${rnd}.ps1`);
-          writeFileSync(tmpScript, command, "utf-8");
-          const escaped = tmpScript.replace(/'/g, "''");
-          wrappedCmd = [
-            `Write-Host '${startMark}'`,
-            `& '${escaped}'`,
-            `$__jec = if ($LASTEXITCODE) { [int]$LASTEXITCODE } elseif (-not $?) { 1 } else { 0 }`,
-            `Remove-Item -LiteralPath '${escaped}' -Force -ErrorAction SilentlyContinue`,
-            `Write-Host "${doneMark}:$__jec"`,
-          ].join("; ") + "\r";
-        } else if (isWin) {
-          wrappedCmd = [
-            `Write-Host '${startMark}'`,
-            `& { ${command} }`,
-            `$__jec = if ($LASTEXITCODE) { [int]$LASTEXITCODE } elseif (-not $?) { 1 } else { 0 }`,
-            `Write-Host "${doneMark}:$__jec"`,
-          ].join("; ") + "\r";
+        // For multi-line commands, write to a temp .ps1 file and
+        // dot-source it — PSReadLine treats \n as separate Enter
+        // keystrokes, garbling execution order.
+        let tmpFile: string | null = null;
+        if (command.includes("\n")) {
+          const dir = join(tmpdir(), "jait-terminal");
+          mkdirSync(dir, { recursive: true });
+          tmpFile = join(dir, `cmd-${Date.now()}.ps1`);
+          writeFileSync(tmpFile, command, "utf-8");
+          surface.write(`. '${tmpFile.replace(/'/g, "''")}'\r`);
         } else {
-          wrappedCmd = `echo '${startMark}'; ${command}; __jec=$?; echo '${doneMark}:'$__jec\n`;
+          surface.write(command + "\r");
         }
-
-        surface.write(wrappedCmd);
       });
 
       const cleanOutput = result.output;

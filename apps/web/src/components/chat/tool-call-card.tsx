@@ -337,6 +337,105 @@ function getTerminalId(call: ToolCallInfo): string | null {
   return messageMatch ? messageMatch[0] : null
 }
 
+// ── Pending tool call components ─────────────────────────────────
+
+/** Try to extract the command being built from partial JSON args */
+function extractStreamingCommand(streamingArgs: string | undefined): string | null {
+  if (!streamingArgs) return null
+  // The LLM streams JSON like: {"command":"echo hello...
+  // Try to pull out the value after "command":"
+  const m = streamingArgs.match(/"command"\s*:\s*"((?:[^"\\]|\\.)*)/)
+  if (m) {
+    // Un-escape common JSON escapes for display
+    return m[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\')
+  }
+  return null
+}
+
+/** Header label shown while the tool call is being streamed (pending state) */
+function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs?: string }) {
+  // Once the tool name is complete enough to look up a label, use the rich display
+  const meta = toolMeta[tool]
+  const isTerminalTool = tool.startsWith('terminal.')
+  const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
+
+  if (meta && isTerminalTool && command) {
+    // Terminal with partial command — show like the running state
+    return (
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-blue-500/30 bg-[#0b0f14] px-2 py-0.5 text-[#c9d1d9]">
+        <span className="shrink-0 text-[10px] text-emerald-400">$</span>
+        <code className="min-w-0 truncate text-xs font-mono">{command}</code>
+        <span className="inline-block w-1 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+      </span>
+    )
+  }
+
+  if (meta) {
+    // Known tool, name fully streamed — show its label
+    return (
+      <span className="text-blue-400">
+        {meta.label}
+        <span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-1 align-text-bottom" />
+      </span>
+    )
+  }
+
+  // Still streaming the tool name character by character
+  if (!tool) return <span className="text-muted-foreground">Preparing...</span>
+  return (
+    <span className="text-blue-400">
+      <code className="text-xs font-mono">{tool}</code>
+      <span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+    </span>
+  )
+}
+
+/** Body content shown while the tool call is being streamed (pending state) */
+function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; streamingArgs?: string; scrollRef: React.RefObject<HTMLPreElement | null> }) {
+  const isTerminalTool = tool.startsWith('terminal.')
+  const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
+
+  // Terminal with partial command — show the command being built (no raw JSON)
+  if (isTerminalTool && command) {
+    return (
+      <pre ref={scrollRef} className={cn(
+        'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
+        'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+      )}>
+        <span className="text-emerald-400">$ </span>
+        {command}
+        <span className="inline-block w-1.5 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+      </pre>
+    )
+  }
+
+  // Non-terminal with streaming args — show abbreviated JSON preview
+  if (streamingArgs) {
+    return (
+      <pre ref={scrollRef} className={cn(
+        'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-36 overflow-y-auto whitespace-pre-wrap break-all',
+        'bg-[#1e1e1e] text-[#8b949e] dark:bg-[#0d1117] dark:text-[#8b949e]',
+      )}>
+        {streamingArgs}
+        <span className="inline-block w-1.5 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+      </pre>
+    )
+  }
+
+  // Nothing to show yet
+  return (
+    <div className={cn(
+      'rounded-md border px-3 py-2 text-xs',
+      'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+    )}>
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+        <span>Preparing...</span>
+      </div>
+    </div>
+  )
+}
+
 interface ToolCallCardProps {
   call: ToolCallInfo
   onOpenTerminal?: (terminalId: string | null) => void
@@ -416,9 +515,7 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
           <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
           <span className="text-sm font-medium text-muted-foreground truncate flex-1">
             {isPending ? (
-              <span className="text-blue-400">
-                {call.tool ? <><code className="text-xs font-mono">{call.tool}</code><span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" /></> : 'Preparing...'}
-              </span>
+              <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
             ) : isTerminal ? (
               <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-zinc-700/60 bg-[#0b0f14] px-2 py-0.5 text-[#c9d1d9]">
                 <span className="shrink-0 text-[10px] text-emerald-400">$</span>
@@ -466,27 +563,8 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
 
       <CollapsibleContent>
         <div className="ml-[3.25rem] mr-3 mb-2">
-          {isPending && call.streamingArgs ? (
-            <pre ref={argsScrollRef} className={cn(
-              'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
-              'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
-            )}>
-              <span className="text-blue-400">{'// generating arguments...\n'}</span>
-              <span className="text-[#8b949e]">{call.streamingArgs}</span>
-              <span className="inline-block w-1.5 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
-            </pre>
-          ) : isPending ? (
-            <div
-              className={cn(
-                'rounded-md border px-3 py-2 text-xs',
-                'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
-                <span>Preparing tool call...</span>
-              </div>
-            </div>
+          {isPending ? (
+            <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
           ) : isTerminal ? (
             <pre ref={terminalScrollRef} className={cn(
               'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',

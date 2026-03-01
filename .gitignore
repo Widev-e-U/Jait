@@ -36,3 +36,4 @@ htmlcov/
 
 # Temp
 temp-*/
+playwright-report/

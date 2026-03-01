@@ -34,7 +34,10 @@ interface PersistedToolCall {
   args: unknown;
   ok: boolean;
   message: string;
+  /** @deprecated kept for back-compat with old rows; prefer `data` */
   output?: string;
+  /** Full result.data object — round-trips all tool-specific fields */
+  data?: unknown;
   startedAt?: number;
   completedAt?: number;
 }
@@ -927,14 +930,13 @@ async function runOpenAIAgentLoop(
         });
 
         // Accumulate for DB persistence
-        const outputStr = (result.data as Record<string, unknown>)?.output as string | undefined;
         executedToolCalls.push({
           callId: tc.id,
           tool: internalName,
           args,
           ok: result.ok,
           message: result.message,
-          output: outputStr ?? (result.data ? JSON.stringify(result.data) : undefined),
+          data: result.data,
           startedAt,
           completedAt,
         });

@@ -1,28 +1,29 @@
 /**
- * Terminal Tools — persistent-terminal edition
+ * Terminal Tools — persistent-terminal edition (OSC 633 shell integration)
  *
  * terminal.run    — execute a command in a persistent interactive terminal (like VS Code)
  * terminal.stream — start a new interactive terminal
  *
  * Commands run inside a real, visible terminal that the user can open and
- * interact with in the frontend.  Output is captured via shell-integration
- * style sentinel markers.  Terminals persist between commands (up to 10
- * globally — oldest is stopped when the limit is exceeded).
+ * interact with in the frontend.  Output is captured via OSC 633 escape
+ * sequences emitted by the shell integration scripts — the command itself
+ * is sent unmodified.
+ *
+ * Terminals persist between commands (up to 10 globally — oldest is
+ * stopped when the limit is exceeded).
  */
 
-import { platform, tmpdir } from "node:os";
-import { join } from "node:path";
-import { writeFileSync } from "node:fs";
 import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 import type { TerminalSurface } from "../surfaces/terminal.js";
+import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 // ── Constants ────────────────────────────────────────────────────
 
 const MAX_TERMINALS = 10;
-/** Time to let a freshly-spawned shell initialise before sending commands */
-const SHELL_INIT_MS = 800;
 
 // ── Session → terminal mapping ───────────────────────────────────
 
@@ -37,9 +38,17 @@ function stripAnsi(s: string): string {
   return s.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
 }
 
-/** Escape a string for use in a RegExp */
-function escRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+/** Strip OSC 633 sequences + ANSI + stray BEL from a PTY chunk for safe display */
+function cleanChunk(s: string): string {
+  // Remove OSC 633 shell-integration sequences (contain BEL \x07 which causes system beep)
+  let out = s.replace(/\x1b\]633;[A-Z][^\x07]*(?:\x07|\x1b\\)/g, "");
+  // Remove remaining ANSI escape sequences
+  out = stripAnsi(out);
+  // Remove any stray BEL characters
+  out = out.replace(/\x07/g, "");
+  // Normalise carriage returns
+  out = out.replace(/\r\n/g, "\n").replace(/\r/g, "");
+  return out;
 }
 
 /** Race a promise against an AbortSignal */
@@ -115,24 +124,52 @@ async function ensureSessionTerminal(
 
   sessionTerminalMap.set(context.sessionId, terminalId);
 
-  // Give the shell a moment to show its prompt
-  await new Promise((r) => setTimeout(r, SHELL_INIT_MS));
+  // Wait for shell integration to signal prompt-ready (OSC 633;B)
+  await surface.waitForPrompt();
 
   return { surface, terminalId, isNew: true, warning };
 }
 
-// ── Sentinel-based command execution ─────────────────────────────
+// ── OSC 633 command execution ────────────────────────────────────
 
 /**
- * Write a command into a persistent terminal and capture its output +
- * exit code using start/done sentinel markers.
+ * Parse OSC 633 sequences from raw PTY data.
  *
- *   <start marker>
- *   <command output>
- *   <done marker>:<exit code>
+ * The shell integration scripts emit:
+ *   \x1b]633;C\x07       — command execution started
+ *   \x1b]633;D;{exit}\x07 — command finished, exit code
+ *   \x1b]633;B\x07       — prompt ready (after D)
  *
- * The markers are short unique strings unlikely to collide with real
- * output. On timeout the running command receives Ctrl-C.
+ * We listen for D (command done + exit code) to know the command
+ * finished, and capture all output between C and D.
+ */
+
+// Regex for OSC 633;D;{exitCode} — terminated by BEL (\x07) or ST (\x1b\\)
+// Exit code can be empty (null $LASTEXITCODE), a number, or negative
+const OSC_DONE_RE = /\x1b\]633;D;(-?\d*)(?:\x07|\x1b\\)/;
+
+// Regex for OSC 633;B — prompt end (command-line ready).
+// B is always the LAST marker in the prompt sequence (D → P → A → prompt → B),
+// but PowerShell's formatting pipeline can flush output *after* B arrives in
+// the PTY.  We use a short settle timer after D+B to capture late output.
+const OSC_PROMPT_END_RE = /\x1b\]633;B(?:\x07|\x1b\\)/;
+
+/**
+ * Send a command into a persistent terminal and capture its output + exit
+ * code using OSC 633 shell integration sequences.
+ *
+ * The command is sent **unmodified** — no wrapping, no temp files, no
+ * escaping.  The shell's prompt hook emits OSC 633;D with the exit code
+ * when the command completes.
+ *
+ * Completion is gated on **both** D (exit code) and B (prompt-end), followed
+ * by a short settle period.  B is the last marker in the prompt sequence, but
+ * PowerShell's formatting pipeline can flush command output *after* D+B arrive.
+ * A 50 ms settle timer captures this late output without arbitrary long waits.
+ *
+ * Multi-line commands are written to a temp .ps1 file and dot-sourced so
+ * they execute atomically in the current scope — PSReadLine otherwise
+ * treats each \n as a separate Enter keystroke, garbling execution order.
  */
 function executeInTerminal(
   surface: TerminalSurface,
@@ -141,25 +178,55 @@ function executeInTerminal(
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
 ): Promise<{ output: string; exitCode: number | null; timedOut: boolean }> {
-  const ts = Date.now();
-  const rnd = Math.random().toString(36).slice(2, 8);
-  const startMark = `__JS${ts}${rnd}`;
-  const doneMark = `__JD${ts}${rnd}`;
-  const doneRe = new RegExp(`${escRegex(doneMark)}:(\\d+)`);
-
   return new Promise((resolve) => {
     let raw = "";
     let settled = false;
 
+    // Cached D-marker result so we only scan for it once
+    let dMatch: { exitCode: number; end: number } | null = null;
+
+    // Settle timer: after D+B is detected, wait briefly for any late
+    // output from PowerShell's deferred formatting pipeline before
+    // calling finish().  Each new PTY chunk resets the timer.
+    let settleTimer: ReturnType<typeof setTimeout> | null = null;
+
     const listener = (data: string) => {
       raw += data;
-      onChunk?.(data);
 
-      // Look for the done marker with exit code
-      const clean = stripAnsi(raw);
-      const m = clean.match(doneRe);
-      if (m && m[1] !== undefined) {
-        finish(false, parseInt(m[1], 10));
+      // Stream cleaned output to the frontend (strip OSC 633 / ANSI / BEL
+      // to avoid system beeps and rendering issues in the browser)
+      if (onChunk) {
+        const clean = cleanChunk(data);
+        if (clean) onChunk(clean);
+      }
+
+      if (settled) return;
+
+      // If we're in the settling phase (D+B already detected), reset
+      // the timer — more data just arrived that we want to capture.
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = setTimeout(() => finish(false, dMatch!.exitCode), 50);
+        return;
+      }
+
+      // Step 1: Find D marker (command done — provides exit code)
+      if (!dMatch) {
+        const m = raw.match(OSC_DONE_RE);
+        if (m) {
+          dMatch = {
+            exitCode: m[1] ? parseInt(m[1], 10) : 0,
+            end: m.index! + m[0].length,
+          };
+        }
+      }
+
+      // Step 2: After D, wait for B (prompt-end).  Don't finish
+      // immediately — PowerShell can flush command output *after* the
+      // prompt markers.  Start a settle timer: if no more data arrives
+      // within 50 ms the output is considered complete.
+      if (dMatch && OSC_PROMPT_END_RE.test(raw.slice(dMatch.end))) {
+        settleTimer = setTimeout(() => finish(false, dMatch!.exitCode), 50);
       }
     };
 
@@ -167,38 +234,77 @@ function executeInTerminal(
       if (settled) return;
       settled = true;
       clearTimeout(timer);
+      if (settleTimer) clearTimeout(settleTimer);
       signal?.removeEventListener("abort", onAbort);
       surface.removeOutputListener(listener);
 
-      // Extract the text between markers
-      let clean = stripAnsi(raw).replace(/\r/g, "");
-      const si = clean.indexOf(startMark);
-      const di = clean.search(doneRe);
-
-      if (si !== -1 && di !== -1) {
-        // Skip the start-marker line itself
-        const afterStart = clean.indexOf("\n", si);
-        clean = clean.slice(afterStart !== -1 ? afterStart + 1 : si + startMark.length, di);
-      } else if (si !== -1) {
-        const afterStart = clean.indexOf("\n", si);
-        clean = clean.slice(afterStart !== -1 ? afterStart + 1 : si + startMark.length);
-      }
-      // else: markers never appeared — return everything we got
-
-      clean = clean.trim();
-      if (clean.length > 200_000) {
-        clean = "…(truncated)\n" + clean.slice(-200_000);
+      // Clean up temp script file
+      if (tmpFile) {
+        try { unlinkSync(tmpFile); } catch { /* already gone */ }
       }
 
-      resolve({ output: clean || "(no output)", exitCode, timedOut });
+      // Strip all OSC 633 sequences (A, B, C, D, E, P) — they are invisible
+      // control codes, so removing them leaves only visible text in order:
+      //   echoed command → command output → prompt text
+      let output = raw.replace(/\x1b\]633;[A-Z][^\x07]*(?:\x07|\x1b\\)/g, "");
+
+      // Strip ANSI and clean up
+      output = stripAnsi(output).replace(/\r/g, "");
+
+      // Split into lines for targeted cleanup
+      const lines = output.split("\n");
+
+      // Remove the echoed command.  For single-line commands PSReadLine
+      // echoes the command text.  For multi-line (dot-sourced via temp
+      // file) it echoes the `. 'path'` invocation instead.
+      if (tmpFile) {
+        // Remove the dot-source line echo
+        if (lines.length > 0 && lines[0]!.includes(tmpFile.replace(/\\/g, "\\\\"))) {
+          lines.shift();
+        } else if (lines.length > 0 && (lines[0]!.trim().startsWith(". '") || lines[0]!.trim().startsWith("."))) {
+          lines.shift();
+        }
+      } else {
+        const cmdLines = command.trim().split("\n").map((l) => l.trim());
+        while (lines.length > 0 && cmdLines.length > 0) {
+          const head = lines[0]!.trim();
+          const cmdHead = cmdLines[0]!;
+          if (head === cmdHead || head.endsWith(cmdHead) || cmdHead.startsWith(head)) {
+            lines.shift();
+            cmdLines.shift();
+          } else {
+            break;
+          }
+        }
+      }
+
+      // Remove trailing empty lines
+      while (lines.length > 0 && lines[lines.length - 1]!.trim() === "") {
+        lines.pop();
+      }
+
+      // Remove the prompt line at the end (e.g. "PS E:\path> ")
+      if (lines.length > 0) {
+        const lastLine = lines[lines.length - 1]!.trim();
+        if (/^PS .+?>/.test(lastLine)) {
+          lines.pop();
+        }
+      }
+
+      output = lines.join("\n").trim();
+      if (output.length > 200_000) {
+        output = "…(truncated)\n" + output.slice(-200_000);
+      }
+
+      resolve({ output: output || "(no output)", exitCode, timedOut });
     };
 
     // Listen BEFORE writing so we don't miss fast output
     surface.addOutputListener(listener);
 
     const timer = setTimeout(() => {
-      // Interrupt the running command
-      surface.write("\x03");
+      // Interrupt the running command + Enter for clean prompt
+      surface.write("\x03\r");
       setTimeout(() => finish(true), 500);
     }, timeoutMs);
 
@@ -208,38 +314,21 @@ function executeInTerminal(
     };
     signal?.addEventListener("abort", onAbort, { once: true });
 
-    // Build the wrapped command with markers
-    const isWin = platform() === "win32";
-    const isMultiLine = command.includes("\n");
-    let wrappedCmd: string;
-    let tmpScript: string | null = null;
-
-    if (isWin && isMultiLine) {
-      // Multi-line PowerShell: write to a temp .ps1 and invoke it
-      tmpScript = join(tmpdir(), `jait-cmd-${ts}-${rnd}.ps1`);
-      writeFileSync(tmpScript, command, "utf-8");
-      const escaped = tmpScript.replace(/'/g, "''");
-      wrappedCmd = [
-        `Write-Host '${startMark}'`,
-        `& '${escaped}'`,
-        `$__jec = if ($LASTEXITCODE) { [int]$LASTEXITCODE } elseif (-not $?) { 1 } else { 0 }`,
-        `Remove-Item -LiteralPath '${escaped}' -Force -ErrorAction SilentlyContinue`,
-        `Write-Host "${doneMark}:$__jec"`,
-      ].join("; ") + "\r";
-    } else if (isWin) {
-      // Single-line PowerShell
-      wrappedCmd = [
-        `Write-Host '${startMark}'`,
-        `& { ${command} }`,
-        `$__jec = if ($LASTEXITCODE) { [int]$LASTEXITCODE } elseif (-not $?) { 1 } else { 0 }`,
-        `Write-Host "${doneMark}:$__jec"`,
-      ].join("; ") + "\r";
+    // For multi-line commands, write to a temp .ps1 file and dot-source it.
+    // PSReadLine treats each \n as a separate Enter keystroke — bracketed
+    // paste mode is unreliable across PSReadLine versions.  Dot-sourcing
+    // runs the script in the current scope (variables persist) and
+    // guarantees atomic execution.  Cleanup happens in finish().
+    let tmpFile: string | null = null;
+    if (command.includes("\n")) {
+      const dir = join(tmpdir(), "jait-terminal");
+      mkdirSync(dir, { recursive: true });
+      tmpFile = join(dir, `cmd-${Date.now()}.ps1`);
+      writeFileSync(tmpFile, command, "utf-8");
+      surface.write(`. '${tmpFile.replace(/'/g, "''")}'\r`);
     } else {
-      // POSIX shell
-      wrappedCmd = `echo '${startMark}'; ${command}; __jec=$?; echo '${doneMark}:'$__jec\n`;
+      surface.write(command + "\r");
     }
-
-    surface.write(wrappedCmd);
   });
 }
 
@@ -264,7 +353,8 @@ export function createTerminalRunTool(registry: SurfaceRegistry): ToolDefinition
     name: "terminal.run",
     description:
       "Execute a shell command in a persistent terminal (visible to the user) and return the output. " +
-      "The terminal stays alive between calls — like VS Code's integrated terminal.",
+      "The terminal stays alive between calls — like VS Code's integrated terminal. " +
+      "Multi-line scripts, pipes, and complex syntax all work unchanged.",
     parameters: {
       type: "object",
       properties: {

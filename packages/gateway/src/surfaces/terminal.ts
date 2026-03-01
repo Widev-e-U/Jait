@@ -4,11 +4,16 @@
  * Each TerminalSurface owns a persistent interactive PTY shell process
  * (viewable in the frontend via xterm.js + WebSocket).
  *
- * For command execution, `terminal.run` spawns a separate short-lived PTY
- * and mirrors output into this surface so the user can see it.
+ * Shell integration:
+ * On start, sources an integration script that hooks into the shell's
+ * prompt lifecycle and emits OSC 633 escape sequences (same protocol as
+ * VS Code's terminal shell integration).  This lets us detect command
+ * boundaries, exit codes, and CWD changes without wrapping commands.
  */
 
 import { platform } from "node:os";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import type {
   Surface,
   SurfaceStartInput,
@@ -21,9 +26,39 @@ import type {
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const bunPty = require("bun-pty") as typeof import("bun-pty");
 
+const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/** Directory containing shell integration scripts */
+const SHELL_INTEGRATION_DIR = join(__dirname, "shell-integration");
+
 function defaultShell(): string {
-  if (platform() === "win32") return "powershell.exe";
+  if (platform() === "win32") {
+    // Prefer PowerShell 7 (pwsh) over Windows PowerShell 5.1 (powershell)
+    // pwsh supports modern escape sequences and PSReadLine features
+    try {
+      const { execSync } = require("node:child_process");
+      execSync("pwsh.exe -v", { stdio: "ignore", timeout: 3000 });
+      return "pwsh.exe";
+    } catch {
+      return "powershell.exe";
+    }
+  }
   return process.env["SHELL"] ?? "/bin/bash";
+}
+
+/** Detect which integration script to source based on the shell binary */
+function shellIntegrationScript(shell: string): { path: string; type: "pwsh" | "bash" | "zsh" } | null {
+  const name = shell.toLowerCase().replace(/\.exe$/, "");
+  if (name.includes("pwsh") || name.includes("powershell")) {
+    return { path: join(SHELL_INTEGRATION_DIR, "pwsh.ps1"), type: "pwsh" };
+  }
+  if (name.includes("zsh")) {
+    return { path: join(SHELL_INTEGRATION_DIR, "zsh.sh"), type: "zsh" };
+  }
+  if (name.includes("bash") || name.includes("sh")) {
+    return { path: join(SHELL_INTEGRATION_DIR, "bash.sh"), type: "bash" };
+  }
+  return null;
 }
 
 export interface TerminalSurfaceOptions {
@@ -55,6 +90,11 @@ export class TerminalSurface implements Surface {
   private readonly extraEnv: Record<string, string>;
   private _outputListeners: ((data: string) => void)[] = [];
 
+  /** Whether the OSC 633 shell integration has emitted its first prompt (B marker) */
+  private _shellIntegrationReady = false;
+  private _shellIntegrationReadyResolve?: () => void;
+  private _shellIntegrationReadyPromise: Promise<void>;
+
   /** External callbacks (wired by index.ts / routes) */
   onOutput?: (data: string) => void;
   onStateChange?: (state: SurfaceState) => void;
@@ -68,6 +108,9 @@ export class TerminalSurface implements Surface {
     this._cols = opts.cols ?? 120;
     this._rows = opts.rows ?? 30;
     this.extraEnv = opts.env ?? {};
+    this._shellIntegrationReadyPromise = new Promise<void>((resolve) => {
+      this._shellIntegrationReadyResolve = resolve;
+    });
   }
 
   get state(): SurfaceState {
@@ -82,6 +125,20 @@ export class TerminalSurface implements Surface {
     return this._pid ?? undefined;
   }
 
+  /** True once the shell has emitted at least one OSC 633;B prompt-end marker */
+  get shellIntegrationReady(): boolean {
+    return this._shellIntegrationReady;
+  }
+
+  /** Resolves when the shell integration prompt is first ready (or after a timeout fallback) */
+  waitForPrompt(timeoutMs = 5000): Promise<void> {
+    if (this._shellIntegrationReady) return Promise.resolve();
+    return Promise.race([
+      this._shellIntegrationReadyPromise,
+      new Promise<void>((r) => setTimeout(r, timeoutMs)),
+    ]);
+  }
+
   async start(input: SurfaceStartInput): Promise<void> {
     if (this._state === "running") return;
 
@@ -91,7 +148,23 @@ export class TerminalSurface implements Surface {
     this._startedAt = new Date().toISOString();
 
     try {
-      const shellArgs = platform() === "win32" ? ["-NoProfile"] : [];
+      const integration = shellIntegrationScript(this.shell);
+
+      // Build shell args — inject our integration script
+      let shellArgs: string[];
+      if (integration?.type === "pwsh") {
+        // PowerShell: -NoExit -File <script> runs the script then stays interactive
+        shellArgs = ["-NoExit", "-File", integration.path];
+      } else if (integration?.type === "bash") {
+        shellArgs = ["--rcfile", integration.path];
+      } else if (integration?.type === "zsh") {
+        // zsh: source our script via ZDOTDIR override is complex —
+        // instead we'll source it after spawn via write()
+        shellArgs = [];
+      } else {
+        shellArgs = platform() === "win32" ? ["-NoProfile"] : [];
+      }
+
       const pty = bunPty.spawn(this.shell, shellArgs, {
         name: "xterm-256color",
         cols: this._cols,
@@ -104,11 +177,19 @@ export class TerminalSurface implements Surface {
       this._pid = pty.pid;
 
       // Wire PTY output → surface listeners + buffer
+      // Also watch for OSC 633;B to know when prompt is ready
       pty.onData((data: string) => {
         this._outputBuffer.push(data);
         if (this._outputBuffer.length > 10000) {
           this._outputBuffer = this._outputBuffer.slice(-5000);
         }
+
+        // Detect shell integration prompt-end marker
+        if (!this._shellIntegrationReady && data.includes("\x1b]633;B")) {
+          this._shellIntegrationReady = true;
+          this._shellIntegrationReadyResolve?.();
+        }
+
         this.onOutput?.(data);
         for (const listener of this._outputListeners) {
           listener(data);
@@ -124,6 +205,13 @@ export class TerminalSurface implements Surface {
       });
 
       this._setState("running");
+
+      // For zsh: source integration after the shell starts
+      if (integration?.type === "zsh") {
+        setTimeout(() => {
+          this.write(`source '${integration.path}'\n`);
+        }, 300);
+      }
     } catch (err) {
       this._setState("error");
       throw err;

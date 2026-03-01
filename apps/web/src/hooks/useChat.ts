@@ -121,6 +121,7 @@ export function useChat(sessionId: string | null) {
                     ok?: boolean;
                     message?: string;
                     output?: string;
+                    data?: unknown;
                     streamingOutput?: string;
                     startedAt?: number;
                     completedAt?: number;
@@ -145,7 +146,13 @@ export function useChat(sessionId: string | null) {
                         status,
                         result: status === 'running'
                           ? undefined
-                          : { ok: !!tc.ok, message: tc.message ?? 'Cancelled', data: tc.output != null ? { output: tc.output } : undefined },
+                          : {
+                              ok: !!tc.ok,
+                              message: tc.message ?? 'Cancelled',
+                              // Prefer full data object (new format); fall back to
+                              // { output } wrapper for old persisted rows.
+                              data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
+                            },
                         streamingOutput: tc.streamingOutput,
                         startedAt: tc.startedAt ?? 0,
                         completedAt: tc.completedAt ?? 0,
