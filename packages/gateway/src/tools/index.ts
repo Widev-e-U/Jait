@@ -45,6 +45,7 @@ import type { SchedulerService } from "../scheduler/service.js";
 import type { SessionService } from "../services/sessions.js";
 import type { WsControlPlane } from "../ws.js";
 import type { MemoryService } from "../memory/contracts.js";
+import type { HookBus } from "../scheduler/hooks.js";
 import { ToolRegistry } from "./registry.js";
 import { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tools.js";
 import {
@@ -86,6 +87,7 @@ export interface ToolRegistryDeps {
   ws?: WsControlPlane;
   startedAt?: number;
   memoryService?: MemoryService;
+  hooks?: HookBus;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -131,6 +133,8 @@ export function createToolRegistry(
         surfaceRegistry,
         ws: deps.ws,
         startedAt: deps.startedAt ?? Date.now(),
+        scheduler: deps.scheduler,
+        hooks: deps.hooks,
       }),
     );
   }

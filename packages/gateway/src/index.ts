@@ -74,7 +74,7 @@ async function main() {
   });
 
   // Tool registry — Sprint 3 + Sprint 6 memory tools
-  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory });
+  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   // Consent & Trust — Sprint 4
@@ -157,6 +157,7 @@ async function main() {
     ws,
     startedAt: Date.now(),
     memoryService: memory,
+    hooks,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 

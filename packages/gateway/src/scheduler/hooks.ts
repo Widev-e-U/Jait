@@ -1,3 +1,6 @@
+import { existsSync, readFileSync } from "node:fs";
+import { join } from "node:path";
+
 export interface HookEvent<T = unknown> {
   type: string;
   timestamp: string;
@@ -38,10 +41,58 @@ export class HookBus {
       }
     }
   }
+
+  listenerCount(eventType?: string): number {
+    if (eventType) return this.handlers.get(eventType)?.size ?? 0;
+    let total = 0;
+    for (const handlers of this.handlers.values()) {
+      total += handlers.size;
+    }
+    return total;
+  }
+
+  registeredEventTypes(): string[] {
+    return [...this.handlers.keys()];
+  }
 }
 
-export function registerBuiltInHooks(hooks: HookBus): void {
-  hooks.on("session.start", () => undefined);
+interface SessionStartPayload {
+  sessionId: string;
+  workspaceRoot?: string;
+}
+
+interface BuiltInHooksOptions {
+  defaultWorkspaceRoot?: string;
+}
+
+const BOOTSTRAP_PATHS = [
+  ".jait/bootstrap.md",
+  ".jait/session-bootstrap.md",
+  "BOOTSTRAP.md",
+] as const;
+
+function loadBootstrapFiles(workspaceRoot: string): Array<{ path: string; content: string }> {
+  const loaded: Array<{ path: string; content: string }> = [];
+  for (const relativePath of BOOTSTRAP_PATHS) {
+    const absolutePath = join(workspaceRoot, relativePath);
+    if (!existsSync(absolutePath)) continue;
+    loaded.push({ path: relativePath, content: readFileSync(absolutePath, "utf8") });
+  }
+  return loaded;
+}
+
+export function registerBuiltInHooks(hooks: HookBus, options: BuiltInHooksOptions = {}): void {
+  hooks.on("session.start", (event) => {
+    const payload = (event.payload ?? {}) as SessionStartPayload;
+    const workspaceRoot = payload.workspaceRoot ?? options.defaultWorkspaceRoot ?? process.cwd();
+    const files = loadBootstrapFiles(workspaceRoot);
+    hooks.emit("session.bootstrap.loaded", {
+      sessionId: payload.sessionId,
+      workspaceRoot,
+      fileCount: files.length,
+      files,
+    });
+  });
   hooks.on("session.end", () => undefined);
   hooks.on("session.compact", () => undefined);
   hooks.on("agent.error", () => undefined);

@@ -12,11 +12,13 @@ import type { FastifyInstance } from "fastify";
 import type { SessionService } from "../services/sessions.js";
 import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../lib/uuidv7.js";
+import type { HookBus } from "../scheduler/hooks.js";
 
 export function registerSessionRoutes(
   app: FastifyInstance,
   sessionService: SessionService,
   audit: AuditWriter,
+  hooks?: HookBus,
 ) {
   // Create session
   app.post("/api/sessions", async (request, reply) => {
@@ -35,6 +37,11 @@ export function registerSessionRoutes(
       actionType: "session.create",
       status: "executed",
       consentMethod: "auto",
+    });
+
+    hooks?.emit("session.start", {
+      sessionId: session.id,
+      workspaceRoot: session.workspacePath ?? process.cwd(),
     });
 
     return reply.status(201).send(session);
@@ -108,6 +115,7 @@ export function registerSessionRoutes(
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
     sessionService.archive(id);
+    hooks?.emit("session.end", { sessionId: id });
     return sessionService.getById(id);
   });
 
