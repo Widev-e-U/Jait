@@ -94,6 +94,28 @@ describe("MemoryEngine (Sprint 6)", () => {
     sqlite.close();
   });
 
+
+  it("flushes snippets before compaction for later retrieval", async () => {
+    const { db, sqlite } = openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const memory = new MemoryEngine({ backend: new SqliteMemoryBackend(db) });
+    const saved = await memory.flushPreCompaction("session-42", [
+      "  Keep note about release checklist.  ",
+      "",
+      "User asked to revisit DB migration risk.",
+    ]);
+
+    expect(saved).toBe(2);
+
+    const results = await memory.search("release checklist", 5, "workspace");
+    expect(results).toHaveLength(1);
+    expect(results[0]?.source.type).toBe("pre_compaction");
+    expect(results[0]?.source.id).toBe("session-42");
+
+    sqlite.close();
+  });
+
   it("exposes memory.save/search/forget tools", async () => {
     const { db, sqlite } = openDatabase(":memory:");
     migrateDatabase(sqlite);

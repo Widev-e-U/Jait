@@ -189,6 +189,7 @@ async function main() {
       hooks.emit("agent.webhook", payload);
       return { accepted: true };
     },
+    memoryService: memory,
     toolExecutor,
   });
 

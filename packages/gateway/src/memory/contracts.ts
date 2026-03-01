@@ -43,4 +43,5 @@ export interface MemoryService {
   search(query: string, limit?: number, scope?: MemoryScope): Promise<MemoryEntry[]>;
   forget(id: string): Promise<boolean>;
   forgetExpired(now?: Date): Promise<number>;
+  flushPreCompaction(sessionId: string, snippets: string[]): Promise<number>;
 }

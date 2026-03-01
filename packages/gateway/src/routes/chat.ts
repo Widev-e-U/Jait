@@ -6,6 +6,7 @@ import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { ToolResult } from "../tools/contracts.js";
+import type { MemoryService } from "../memory/contracts.js";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "../lib/uuidv7.js";
@@ -252,6 +253,7 @@ export interface ChatRouteDeps {
   sessionService?: SessionService;
   toolRegistry?: ToolRegistry;
   audit?: AuditWriter;
+  memoryService?: MemoryService;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -272,6 +274,7 @@ export function registerChatRoutes(
   let toolRegistry: ToolRegistry | undefined;
   let audit: AuditWriter | undefined;
   let toolExecutor: ChatRouteDeps["toolExecutor"] | undefined;
+  let memoryService: MemoryService | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -280,6 +283,7 @@ export function registerChatRoutes(
     toolRegistry = deps.toolRegistry;
     audit = deps.audit;
     toolExecutor = deps.toolExecutor;
+    memoryService = deps.memoryService;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
@@ -587,6 +591,14 @@ export function registerChatRoutes(
     const target = visibleEntries[targetVisibleIndex]!;
     if (target.role !== "user") {
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Only user messages can be edited/restarted" });
+    }
+
+    if (memoryService) {
+      const toFlush = visibleEntries
+        .slice(targetVisibleIndex)
+        .filter((entry) => entry.content.trim().length > 0)
+        .map((entry) => `[${entry.role}] ${entry.content}`);
+      await memoryService.flushPreCompaction(sessionId, toFlush);
     }
 
     const truncatedHistory = history.slice(0, target.historyIndex);
