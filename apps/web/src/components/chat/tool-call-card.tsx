@@ -32,6 +32,13 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'web.search':      { icon: Globe,     label: 'Search',     color: 'text-cyan-500' },
   'web.fetch':       { icon: Globe,     label: 'Fetch',      color: 'text-cyan-500' },
   'browser.navigate': { icon: Globe,    label: 'Navigate',   color: 'text-cyan-500' },
+  'browser.snapshot': { icon: Globe,    label: 'Snapshot',   color: 'text-cyan-500' },
+  'browser.click':    { icon: Globe,    label: 'Click',      color: 'text-cyan-500' },
+  'browser.type':     { icon: Globe,    label: 'Type',       color: 'text-cyan-500' },
+  'browser.scroll':   { icon: Globe,    label: 'Scroll',     color: 'text-cyan-500' },
+  'browser.select':   { icon: Globe,    label: 'Select',     color: 'text-cyan-500' },
+  'browser.wait':     { icon: Globe,    label: 'Wait',       color: 'text-cyan-500' },
+  'browser.screenshot': { icon: Globe,  label: 'Screenshot', color: 'text-cyan-500' },
   'browser.search':   { icon: Globe,    label: 'Search',     color: 'text-cyan-500' },
   'browser.fetch':    { icon: Globe,    label: 'Fetch',      color: 'text-cyan-500' },
 }
@@ -47,6 +54,13 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (tool === 'os.query') return String(args.query ?? '')
   if (tool === 'os.install') return String(args.package ?? '')
   if (tool === 'browser.navigate') return String(args.url ?? '')
+  if (tool === 'browser.snapshot') return 'Describe page'
+  if (tool === 'browser.click') return String(args.selector ?? '')
+  if (tool === 'browser.type') return `${String(args.selector ?? '')} ← ${String(args.text ?? '')}`
+  if (tool === 'browser.scroll') return `x:${String(args.x ?? 0)} y:${String(args.y ?? 0)}`
+  if (tool === 'browser.select') return `${String(args.selector ?? '')} = ${String(args.value ?? '')}`
+  if (tool === 'browser.wait') return `${String(args.selector ?? '')} (${String(args.timeoutMs ?? 10000)}ms)`
+  if (tool === 'browser.screenshot') return String(args.path ?? 'auto path')
   if (tool === 'browser.search') return String(args.query ?? '')
   if (tool === 'browser.fetch') return String(args.url ?? '')
   if (tool === 'surfaces.start') return `Start ${args.type ?? 'surface'}`
@@ -89,6 +103,94 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
   }
   if (tool.startsWith('terminal.')) return 'Command is still running...'
   return 'Tool is still running...'
+}
+
+function BrowserSnapshotView({ snapshot }: { snapshot: string }) {
+  const lines = snapshot.split('\n')
+  const url = lines.find((line) => line.startsWith('URL: '))?.replace('URL: ', '').trim()
+  const title = lines.find((line) => line.startsWith('Title: '))?.replace('Title: ', '').trim()
+  const splitIndex = lines.findIndex((line) => line.trim() === 'Interactive elements:')
+  const textSection = splitIndex >= 0
+    ? lines.slice(0, splitIndex)
+    : lines
+  const textStart = textSection.findIndex((line) => line.trim() === 'Text:')
+  const textContent = textStart >= 0
+    ? textSection.slice(textStart + 1).join('\n').trim()
+    : ''
+  const elements = splitIndex >= 0
+    ? lines.slice(splitIndex + 1).map((line) => line.trim()).filter(Boolean)
+    : []
+
+  return (
+    <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
+      <div>
+        <div className="font-semibold text-foreground/90">Browser snapshot</div>
+        {title ? <div className="text-muted-foreground">{title}</div> : null}
+        {url ? <div className="font-mono text-[11px] break-all">{url}</div> : null}
+      </div>
+      <div>
+        <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Text</div>
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono text-[11px] leading-5">
+          {textContent || '(no textual content)'}
+        </pre>
+      </div>
+      <div>
+        <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Interactive elements</div>
+        {elements.length ? (
+          <ul className="max-h-40 space-y-1 overflow-auto rounded bg-background p-2 font-mono text-[11px]">
+            {elements.map((elementLine, index) => (
+              <li key={`${elementLine}-${index}`} className="break-all">{elementLine}</li>
+            ))}
+          </ul>
+        ) : (
+          <div className="rounded bg-background p-2 text-muted-foreground">No interactive elements found.</div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function BrowserScreenshotView({ path }: { path: string }) {
+  const [coords, setCoords] = useState<{ x: number; y: number; xp: number; yp: number } | null>(null)
+  const [loaded, setLoaded] = useState(false)
+  const trimmedPath = path.trim()
+  const src = /^https?:\/\//.test(trimmedPath) ? trimmedPath : trimmedPath
+
+  return (
+    <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
+      <div className="text-[11px] text-muted-foreground">Screenshot path: <span className="font-mono break-all">{trimmedPath}</span></div>
+      <div className="overflow-hidden rounded border bg-background">
+        <img
+          src={src}
+          alt="Browser screenshot"
+          className="max-h-80 w-full cursor-crosshair object-contain"
+          onLoad={() => setLoaded(true)}
+          onError={() => setLoaded(false)}
+          onClick={(event) => {
+            const rect = event.currentTarget.getBoundingClientRect()
+            const x = event.clientX - rect.left
+            const y = event.clientY - rect.top
+            setCoords({
+              x: Math.round(x),
+              y: Math.round(y),
+              xp: Math.round((x / rect.width) * 100),
+              yp: Math.round((y / rect.height) * 100),
+            })
+          }}
+        />
+      </div>
+      {!loaded && (
+        <div className="rounded bg-background p-2 text-muted-foreground">
+          Preview unavailable in browser. Open the screenshot path directly from the host environment.
+        </div>
+      )}
+      {coords ? (
+        <div className="rounded bg-background p-2 font-mono text-[11px]">
+          click: x={coords.x}px y={coords.y}px ({coords.xp}%, {coords.yp}%)
+        </div>
+      ) : null}
+    </div>
+  )
 }
 
 function isTerminalCreationCall(call: ToolCallInfo): boolean {
@@ -154,6 +256,13 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   const summary = getCallSummary(call.tool, call.args)
   const finalOutput = formatOutput(call.result)
   const displayOutput = finalOutput || call.streamingOutput || ''
+  const resultData = call.result?.data && typeof call.result.data === 'object'
+    ? call.result.data as Record<string, unknown>
+    : undefined
+  const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
+  const screenshotPath = call.tool === 'browser.screenshot' && resultData?.result && typeof resultData.result === 'object'
+    ? String((resultData.result as Record<string, unknown>).path ?? '')
+    : null
   const isTerminal = call.tool.startsWith('terminal.')
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getTerminalId(call) : null
@@ -251,6 +360,10 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
                 <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
               )}
             </pre>
+          ) : snapshotText && call.tool === 'browser.snapshot' ? (
+            <BrowserSnapshotView snapshot={snapshotText} />
+          ) : screenshotPath ? (
+            <BrowserScreenshotView path={screenshotPath} />
           ) : displayOutput ? (
             <pre className={cn(
               'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
