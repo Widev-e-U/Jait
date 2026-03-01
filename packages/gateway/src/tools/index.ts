@@ -5,7 +5,12 @@ export { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tool
 export { createFileReadTool, createFileWriteTool, createFilePatchTool, createFileListTool, createFileStatTool } from "./file-tools.js";
 export { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 export { createSurfacesListTool, createSurfacesStartTool, createSurfacesStopTool } from "./surface-tools.js";
+export { createGatewayStatusTool } from "./gateway-tools.js";
 export {
+  createCronAddTool, 
+  createCronListTool, 
+  createCronRemoveTool, 
+  createCronUpdateTool,
   createMemorySaveTool, 
   createMemorySearchTool, 
   createMemoryForgetTool
@@ -22,6 +27,22 @@ import { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tool
 import { createFileReadTool, createFileWriteTool, createFilePatchTool, createFileListTool, createFileStatTool } from "./file-tools.js";
 import { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 import { createSurfacesListTool, createSurfacesStartTool, createSurfacesStopTool } from "./surface-tools.js";
+import { createCronAddTool, createCronListTool, createCronRemoveTool, createCronUpdateTool } from "./cron-tools.js";
+import { createGatewayStatusTool } from "./gateway-tools.js";
+import type { SchedulerService } from "../scheduler/service.js";
+import type { SessionService } from "../services/sessions.js";
+import type { WsControlPlane } from "../ws.js";
+
+/** Create a ToolRegistry with all Sprint 3 tools pre-registered */
+export function createToolRegistry(
+  surfaceRegistry: SurfaceRegistry,
+  deps?: {
+    scheduler?: SchedulerService;
+    sessionService?: SessionService;
+    ws?: WsControlPlane;
+    startedAt?: number;
+  },
+): ToolRegistry {
 import type { MemoryService } from "../memory/contracts.js";
 import {
   createBrowserNavigateTool,
@@ -58,6 +79,21 @@ export function createToolRegistry(surfaceRegistry: SurfaceRegistry, options: { 
   tools.register(createSurfacesStartTool(surfaceRegistry));
   tools.register(createSurfacesStopTool(surfaceRegistry));
 
+  if (deps?.scheduler) {
+    tools.register(createCronAddTool(deps.scheduler));
+    tools.register(createCronListTool(deps.scheduler));
+    tools.register(createCronRemoveTool(deps.scheduler));
+    tools.register(createCronUpdateTool(deps.scheduler));
+  }
+
+  if (deps?.sessionService && deps?.ws) {
+    tools.register(createGatewayStatusTool({
+      sessionService: deps.sessionService,
+      surfaceRegistry,
+      ws: deps.ws,
+      startedAt: deps.startedAt ?? Date.now(),
+    }));
+  }
   if (options.memoryService) {
     tools.register(createMemorySaveTool(options.memoryService));
     tools.register(createMemorySearchTool(options.memoryService));

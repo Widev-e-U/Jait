@@ -147,6 +147,24 @@ export function migrateDatabase(sqlite: Database) {
   `);
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`);
 
+  sqlite.run(`
+    CREATE TABLE IF NOT EXISTS scheduled_jobs (
+      id TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      cron TEXT NOT NULL,
+      tool_name TEXT NOT NULL,
+      input TEXT,
+      session_id TEXT,
+      workspace_root TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      last_run_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)`);
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_updated ON scheduled_jobs(updated_at DESC)`);
+
   // Migration: add tool_calls column if table already existed without it
   try {
     sqlite.run(`ALTER TABLE messages ADD COLUMN tool_calls TEXT`);

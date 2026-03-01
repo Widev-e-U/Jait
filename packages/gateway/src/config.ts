@@ -25,6 +25,8 @@ export interface AppConfig {
   openaiApiKey: string;
   openaiModel: string;
   openaiBaseUrl: string;
+  hookSecret: string;
+  heartbeatCron: string;
 }
 
 export function loadConfig(): AppConfig {
@@ -48,5 +50,7 @@ export function loadConfig(): AppConfig {
     openaiApiKey: process.env["OPENAI_API_KEY"] ?? "",
     openaiModel: process.env["OPENAI_MODEL"] ?? "gpt-4o",
     openaiBaseUrl: process.env["OPENAI_BASE_URL"] ?? "https://api.openai.com/v1",
+    hookSecret: process.env["HOOK_SECRET"] ?? "jait-hook-secret",
+    heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
   };
 }
