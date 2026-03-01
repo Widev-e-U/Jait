@@ -57,6 +57,28 @@ export class MemoryEngine implements MemoryService {
     return this.backend.forgetExpired(now);
   }
 
+  async flushPreCompaction(sessionId: string, snippets: string[]): Promise<number> {
+    let saved = 0;
+
+    for (const snippet of snippets) {
+      const content = snippet.trim();
+      if (!content) continue;
+
+      await this.save({
+        scope: "workspace",
+        content,
+        source: {
+          type: "pre_compaction",
+          id: sessionId,
+          surface: "chat",
+        },
+      });
+      saved += 1;
+    }
+
+    return saved;
+  }
+
   private writeMemoryLog(entry: MemoryEntry): void {
     if (!this.memoryDir) return;
 

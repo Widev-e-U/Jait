@@ -19,6 +19,7 @@ import type { TrustEngine } from "./security/trust-engine.js";
 import type { JaitDB } from "./db/index.js";
 import type { WsControlPlane } from "./ws.js";
 import type { HookBus } from "./scheduler/hooks.js";
+import type { MemoryService } from "./memory/contracts.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -33,6 +34,7 @@ export interface ServerDeps {
   hookSecret?: string;
   onWakeHook?: () => Promise<unknown>;
   onAgentHook?: (payload: unknown) => Promise<unknown>;
+  memoryService?: MemoryService;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -60,6 +62,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     toolRegistry: deps.toolRegistry,
     audit: deps.audit,
     toolExecutor: deps.toolExecutor,
+    memoryService: deps.memoryService,
   });
 
   if (deps.sessionService && deps.audit) {

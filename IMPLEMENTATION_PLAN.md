@@ -185,11 +185,11 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** Agent has persistent memory. "What do I know about X?" works via semantic search.
 
 **Exit criteria:**
-- [ ] Agent can save a fact and retrieve it in a later session
-- [ ] Semantic search returns relevant memories, not just keyword match
-- [ ] Memory entries have source attribution
-- [ ] TTL-expired entries are automatically cleaned up
-- [ ] Pre-compaction flush persists important context before trim
+- [x] Agent can save a fact and retrieve it in a later session
+- [x] Semantic search returns relevant memories, not just keyword match
+- [x] Memory entries have source attribution
+- [x] TTL-expired entries are automatically cleaned up
+- [x] Pre-compaction flush persists important context before trim
 
 ---
 
