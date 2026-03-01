@@ -340,23 +340,42 @@ export function registerChatRoutes(
     args: unknown,
     sessionId: string,
     onOutputChunk?: (chunk: string) => void,
+    signal?: AbortSignal,
   ): Promise<ToolResult> {
     if (!toolRegistry) {
       return { ok: false, message: "Tool registry not available" };
     }
-    const context = {
+    if (signal?.aborted) {
+      return { ok: false, message: "Cancelled" };
+    }
+    const context: ToolContext = {
       sessionId,
       actionId: uuidv7(),
       workspaceRoot: process.cwd(),
       requestedBy: "agent",
       onOutputChunk,
+      signal,
     };
     try {
-      if (toolExecutor) {
-        return await toolExecutor(toolName, args, context);
+      const toolPromise = toolExecutor
+        ? toolExecutor(toolName, args, context)
+        : toolRegistry.execute(toolName, args, context, audit);
+
+      // Race the tool execution against the abort signal so a stuck tool
+      // (e.g. browser launch hanging) doesn't block the cancel flow forever.
+      if (signal && !signal.aborted) {
+        const abortPromise = new Promise<ToolResult>((resolve) => {
+          const onAbort = () => resolve({ ok: false, message: "Cancelled" });
+          signal.addEventListener("abort", onAbort, { once: true });
+          // Clean up if the tool finishes first
+          toolPromise.finally(() => signal.removeEventListener("abort", onAbort));
+        });
+        return await Promise.race([toolPromise, abortPromise]);
       }
-      return await toolRegistry.execute(toolName, args, context, audit);
+
+      return await toolPromise;
     } catch (err) {
+      if (signal?.aborted) return { ok: false, message: "Cancelled" };
       return { ok: false, message: err instanceof Error ? err.message : String(err) };
     }
   }
@@ -407,6 +426,7 @@ export function registerChatRoutes(
     sessionAbortControllers.set(sessionId, streamAbort);
 
     let fullContent = "";
+    let partialToolCalls: PersistedToolCall[] = [];
     activeStreams.add(sessionId);
 
     let clientDisconnected = false;
@@ -428,6 +448,7 @@ export function registerChatRoutes(
           streamAbort, safeWrite, app, executeTool,
         );
         fullContent = result.content;
+        partialToolCalls = result.executedToolCalls;
       } else {
         // ══ Ollama (text only — no tool support) ═══════════════════
         fullContent = await runOllamaStream(
@@ -435,12 +456,16 @@ export function registerChatRoutes(
         );
       }
     } catch (err) {
+      // The OpenAI agentic loop now handles AbortError internally and returns
+      // partial results.  This catch only fires for non-abort errors (OpenAI)
+      // or for Ollama stream errors (including abort).
       const wasCancelled = err instanceof Error && err.name === "AbortError";
       if (!wasCancelled) app.log.error(err, `${providerLabel} streaming error`);
 
-      // Save partial content
-      if (fullContent) {
-        persistMessage(sessionId, "assistant", fullContent);
+      // Save partial content for real (non-cancel) errors
+      if (!wasCancelled && (fullContent || partialToolCalls.length > 0)) {
+        const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
+        persistMessage(sessionId, "assistant", fullContent || "", tcJson);
       }
 
       const errMsg = wasCancelled
@@ -450,12 +475,43 @@ export function registerChatRoutes(
         ? { type: "done" as const, session_id: sessionId, prompt_count: history.filter(m => m.role === "user").length, remaining_prompts: null }
         : { type: "error", message: errMsg });
       try {
-        safeWrite(`data: ${JSON.stringify({ type: "error", message: errMsg })}\n\n`);
+        safeWrite(`data: ${JSON.stringify(wasCancelled ? { type: "done", session_id: sessionId } : { type: "error", message: errMsg })}\n\n`);
       } catch { /* client gone */ }
+    }
+
+    // Persist partial results BEFORE clearing stream state so that a reload
+    // between these two steps loads the cancelled tool calls from the DB.
+    if (streamAbort.signal.aborted && partialToolCalls.length > 0) {
+      const tcJson = JSON.stringify(partialToolCalls);
+      persistMessage(sessionId, "assistant", fullContent || "", tcJson);
     }
 
     activeStreams.delete(sessionId);
     sessionAbortControllers.delete(sessionId);
+
+    // Clean up in-memory history: remove any dangling assistant tool_calls
+    // messages that never got a text response (e.g. cancelled mid-tool-call).
+    // This prevents them from showing as "running" on reload.
+    const currentHistory = sessionHistory.get(sessionId);
+    if (currentHistory) {
+      // Walk backwards: if the last messages are assistant+tool_calls with no
+      // following text response, and the corresponding tool results are missing,
+      // remove them so the history is clean for the next session load.
+      while (currentHistory.length > 0) {
+        const last = currentHistory[currentHistory.length - 1]!;
+        // Remove orphaned tool result messages at the tail
+        if (last.role === "tool") {
+          currentHistory.pop();
+          continue;
+        }
+        // Remove assistant messages that only contain tool_calls with no text
+        if (last.role === "assistant" && last.tool_calls && !last.content) {
+          currentHistory.pop();
+          continue;
+        }
+        break;
+      }
+    }
 
     // Final done event
     const doneEvent = {
@@ -702,12 +758,18 @@ async function runOpenAIAgentLoop(
   streamAbort: AbortController,
   safeWrite: (data: string) => void,
   app: FastifyInstance,
-  executeTool: (name: string, args: unknown, sid: string, onChunk?: (chunk: string) => void) => Promise<ToolResult>,
+  executeTool: (name: string, args: unknown, sid: string, onChunk?: (chunk: string) => void, signal?: AbortSignal) => Promise<ToolResult>,
 ): Promise<{ content: string; executedToolCalls: PersistedToolCall[] }> {
   let fullContent = "";
   const executedToolCalls: PersistedToolCall[] = [];
 
   for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    // Check if the session was cancelled before starting the next round
+    if (streamAbort.signal.aborted) {
+      app.log.info(`Agentic loop cancelled for session ${sessionId} — stopping before round ${round}`);
+      return { content: fullContent, executedToolCalls };
+    }
+
     const reqBody: Record<string, unknown> = {
       model: config.openaiModel,
       messages: serializeMessages(history),
@@ -718,36 +780,53 @@ async function runOpenAIAgentLoop(
       reqBody.tool_choice = "auto";
     }
 
-    const openaiResponse = await fetch(
-      `${config.openaiBaseUrl}/chat/completions`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.openaiApiKey}`,
+    let contentText = "";
+    let toolCalls: OpenAIToolCall[] = [];
+    let finishReason: string | null = null;
+
+    try {
+      const openaiResponse = await fetch(
+        `${config.openaiBaseUrl}/chat/completions`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${config.openaiApiKey}`,
+          },
+          body: JSON.stringify(reqBody),
+          signal: streamAbort.signal,
         },
-        body: JSON.stringify(reqBody),
-        signal: streamAbort.signal,
-      },
-    );
+      );
 
-    if (!openaiResponse.ok) {
-      const errText = await openaiResponse.text();
-      app.log.error(`OpenAI error ${openaiResponse.status}: ${errText}`);
-      safeWrite(`data: ${JSON.stringify({ type: "error", message: `OpenAI error: ${openaiResponse.status}` })}\n\n`);
-      return { content: fullContent, executedToolCalls };
+      if (!openaiResponse.ok) {
+        const errText = await openaiResponse.text();
+        app.log.error(`OpenAI error ${openaiResponse.status}: ${errText}`);
+        safeWrite(`data: ${JSON.stringify({ type: "error", message: `OpenAI error: ${openaiResponse.status}` })}\n\n`);
+        return { content: fullContent, executedToolCalls };
+      }
+
+      const reader = openaiResponse.body?.getReader();
+      if (!reader) {
+        safeWrite(`data: ${JSON.stringify({ type: "error", message: "No response body from OpenAI" })}\n\n`);
+        return { content: fullContent, executedToolCalls };
+      }
+
+      // Parse the stream, accumulating text content and tool calls
+      const parsed = await parseOpenAIStream(
+        reader as any, sessionId, safeWrite,
+      );
+      contentText = parsed.contentText;
+      toolCalls = parsed.toolCalls;
+      finishReason = parsed.finishReason;
+    } catch (fetchErr) {
+      // If the abort signal fired during fetch/streaming, return partial results
+      // instead of throwing — the caller will persist them.
+      if (streamAbort.signal.aborted) {
+        app.log.info(`Agentic loop cancelled for session ${sessionId} during LLM streaming (round ${round})`);
+        return { content: fullContent, executedToolCalls };
+      }
+      throw fetchErr; // re-throw non-abort errors
     }
-
-    const reader = openaiResponse.body?.getReader();
-    if (!reader) {
-      safeWrite(`data: ${JSON.stringify({ type: "error", message: "No response body from OpenAI" })}\n\n`);
-      return { content: fullContent, executedToolCalls };
-    }
-
-    // Parse the stream, accumulating text content and tool calls
-    const { contentText, toolCalls, finishReason } = await parseOpenAIStream(
-      reader as any, sessionId, safeWrite,
-    );
 
     fullContent += contentText;
 
@@ -760,8 +839,29 @@ async function runOpenAIAgentLoop(
         tool_calls: toolCalls,
       });
 
-      // Execute each tool call
+      // Execute each tool call (abort-aware)
       for (const tc of toolCalls) {
+        // Check if cancelled before starting next tool call
+        if (streamAbort.signal.aborted) {
+          app.log.info(`Agentic loop cancelled for session ${sessionId} — skipping remaining tool calls`);
+          // Record skipped tool calls as cancelled so they persist correctly
+          for (const remaining of toolCalls) {
+            if (executedToolCalls.some(etc => etc.callId === remaining.id)) continue;
+            let rArgs: unknown;
+            try { rArgs = JSON.parse(remaining.function.arguments); } catch { rArgs = {}; }
+            executedToolCalls.push({
+              callId: remaining.id,
+              tool: fromOpenAIName(remaining.function.name),
+              args: rArgs,
+              ok: false,
+              message: "Cancelled",
+              startedAt: Date.now(),
+              completedAt: Date.now(),
+            });
+          }
+          return { content: fullContent, executedToolCalls };
+        }
+
         const startedAt = Date.now();
         let args: unknown;
         try { args = JSON.parse(tc.function.arguments); } catch { args = {}; }
@@ -784,7 +884,7 @@ async function runOpenAIAgentLoop(
           const ev: StreamEvent = { type: "tool_output", call_id: tc.id, content: chunk };
           emitToSubscribers(sessionId, ev);
           safeWrite(`data: ${JSON.stringify(ev)}\n\n`);
-        });
+        }, streamAbort.signal);
         const completedAt = Date.now();
 
         // Notify frontend of result

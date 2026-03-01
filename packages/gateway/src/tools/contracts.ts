@@ -5,6 +5,8 @@ export interface ToolContext {
   requestedBy: string;
   /** Optional callback for streaming tool output chunks (e.g. terminal) */
   onOutputChunk?: (chunk: string) => void;
+  /** Optional abort signal — when fired, the tool should stop as soon as possible */
+  signal?: AbortSignal;
 }
 
 export interface ToolResult {

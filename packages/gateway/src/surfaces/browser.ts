@@ -27,14 +27,14 @@ export interface BrowserPageSnapshot {
 }
 
 export interface BrowserDriver {
-  navigate(url: string): Promise<void>;
-  click(selector: string): Promise<void>;
-  typeText(selector: string, text: string): Promise<void>;
-  scroll(x: number, y: number): Promise<void>;
-  select(selector: string, value: string): Promise<void>;
-  waitFor(selector: string, timeoutMs: number): Promise<void>;
-  screenshot(path?: string): Promise<string>;
-  snapshot(): Promise<BrowserPageSnapshot>;
+  navigate(url: string, signal?: AbortSignal): Promise<void>;
+  click(selector: string, signal?: AbortSignal): Promise<void>;
+  typeText(selector: string, text: string, signal?: AbortSignal): Promise<void>;
+  scroll(x: number, y: number, signal?: AbortSignal): Promise<void>;
+  select(selector: string, value: string, signal?: AbortSignal): Promise<void>;
+  waitFor(selector: string, timeoutMs: number, signal?: AbortSignal): Promise<void>;
+  screenshot(path?: string, signal?: AbortSignal): Promise<string>;
+  snapshot(signal?: AbortSignal): Promise<BrowserPageSnapshot>;
   close(): Promise<void>;
 }
 
@@ -107,18 +107,18 @@ export class BrowserSurface implements Surface {
     };
   }
 
-  async navigate(url: string): Promise<BrowserPageSnapshot> {
+  async navigate(url: string, signal?: AbortSignal): Promise<BrowserPageSnapshot> {
     const driver = this.requireDriver();
-    await driver.navigate(url);
+    await driver.navigate(url, signal);
     this._actionCount++;
-    const snap = await driver.snapshot();
+    const snap = await driver.snapshot(signal);
     this.captureSnapshotMeta(snap);
     this.onOutput?.(`navigate ${snap.url}`);
     return snap;
   }
 
-  async describe(): Promise<string> {
-    const snap = await this.requireDriver().snapshot();
+  async describe(signal?: AbortSignal): Promise<string> {
+    const snap = await this.requireDriver().snapshot(signal);
     this.captureSnapshotMeta(snap);
     const lines = [
       `URL: ${snap.url}`,
@@ -136,34 +136,34 @@ export class BrowserSurface implements Surface {
     return lines.join("\n").trim();
   }
 
-  async click(selector: string): Promise<void> {
-    await this.requireDriver().click(selector);
+  async click(selector: string, signal?: AbortSignal): Promise<void> {
+    await this.requireDriver().click(selector, signal);
     this._actionCount++;
   }
 
-  async typeText(selector: string, text: string): Promise<void> {
-    await this.requireDriver().typeText(selector, text);
+  async typeText(selector: string, text: string, signal?: AbortSignal): Promise<void> {
+    await this.requireDriver().typeText(selector, text, signal);
     this._actionCount++;
   }
 
-  async scroll(x: number, y: number): Promise<void> {
-    await this.requireDriver().scroll(x, y);
+  async scroll(x: number, y: number, signal?: AbortSignal): Promise<void> {
+    await this.requireDriver().scroll(x, y, signal);
     this._actionCount++;
   }
 
-  async select(selector: string, value: string): Promise<void> {
-    await this.requireDriver().select(selector, value);
+  async select(selector: string, value: string, signal?: AbortSignal): Promise<void> {
+    await this.requireDriver().select(selector, value, signal);
     this._actionCount++;
   }
 
-  async waitFor(selector: string, timeoutMs: number): Promise<void> {
-    await this.requireDriver().waitFor(selector, timeoutMs);
+  async waitFor(selector: string, timeoutMs: number, signal?: AbortSignal): Promise<void> {
+    await this.requireDriver().waitFor(selector, timeoutMs, signal);
     this._actionCount++;
   }
 
-  async screenshot(path?: string): Promise<string> {
+  async screenshot(path?: string, signal?: AbortSignal): Promise<string> {
     this._actionCount++;
-    return this.requireDriver().screenshot(path);
+    return this.requireDriver().screenshot(path, signal);
   }
 
   private captureSnapshotMeta(snap: BrowserPageSnapshot): void {
@@ -235,44 +235,72 @@ async function createPlaywrightDriver(): Promise<BrowserDriver> {
   });
   const page = await context.newPage();
 
+  /**
+   * Race a Playwright page operation against an AbortSignal.
+   * If the signal fires, we call `window.stop()` on the page (cancels in-flight
+   * network requests and navigation) and reject with "Cancelled".
+   */
+  function withSignal<T>(op: Promise<T>, signal?: AbortSignal): Promise<T> {
+    if (!signal) return op;
+    if (signal.aborted) return Promise.reject(new Error("Cancelled"));
+    return new Promise<T>((resolve, reject) => {
+      let settled = false;
+      const onAbort = () => {
+        if (settled) return;
+        settled = true;
+        // Stop the page's in-flight navigation / network requests
+        page.evaluate(() => window.stop()).catch(() => { /* page may be gone */ });
+        reject(new Error("Cancelled"));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      op.then(
+        (v) => { if (!settled) { settled = true; signal.removeEventListener("abort", onAbort); resolve(v); } },
+        (e) => { if (!settled) { settled = true; signal.removeEventListener("abort", onAbort); reject(e); } },
+      );
+    });
+  }
+
   const driver: BrowserDriver = {
-    async navigate(url: string) {
-      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    async navigate(url: string, signal?: AbortSignal) {
+      await withSignal(page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
     },
-    async click(selector: string) {
-      await page.click(selector);
+    async click(selector: string, signal?: AbortSignal) {
+      await withSignal(page.click(selector), signal);
     },
-    async typeText(selector: string, text: string) {
-      await page.fill(selector, text);
+    async typeText(selector: string, text: string, signal?: AbortSignal) {
+      await withSignal(page.fill(selector, text), signal);
     },
-    async scroll(x: number, y: number) {
-      await page.evaluate(
-        ([targetX, targetY]: [number, number]) => window.scrollTo(targetX, targetY),
-        [x, y],
+    async scroll(x: number, y: number, signal?: AbortSignal) {
+      await withSignal(
+        page.evaluate(
+          ([targetX, targetY]: [number, number]) => window.scrollTo(targetX, targetY),
+          [x, y],
+        ),
+        signal,
       );
     },
-    async select(selector: string, value: string) {
+    async select(selector: string, value: string, signal?: AbortSignal) {
       const selectPage = page as {
         selectOption?: (s: string, v: string) => Promise<unknown>;
       };
       if (!selectPage.selectOption) {
         throw new Error("Browser driver does not support selectOption.");
       }
-      await selectPage.selectOption(selector, value);
+      await withSignal(selectPage.selectOption(selector, value), signal);
     },
-    async waitFor(selector: string, timeoutMs: number) {
-      await page.waitForSelector(selector, { timeout: timeoutMs });
+    async waitFor(selector: string, timeoutMs: number, signal?: AbortSignal) {
+      await withSignal(page.waitForSelector(selector, { timeout: timeoutMs }), signal);
     },
-    async screenshot(path?: string) {
+    async screenshot(path?: string, signal?: AbortSignal) {
       const outPath = path
         ? resolve(path)
         : resolve(process.cwd(), "artifacts", `browser-${Date.now()}.png`);
       await mkdir(dirname(outPath), { recursive: true });
-      await page.screenshot({ path: outPath, fullPage: true });
+      await withSignal(page.screenshot({ path: outPath, fullPage: true }), signal);
       return outPath;
     },
-    async snapshot() {
-      return page.evaluate(() => {
+    async snapshot(signal?: AbortSignal) {
+      return withSignal(page.evaluate(() => {
         const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
         const bodyText = normalize(document.body?.innerText ?? "").slice(0, 12_000);
         const title = document.title || "(untitled)";
@@ -318,7 +346,7 @@ async function createPlaywrightDriver(): Promise<BrowserDriver> {
           text: bodyText,
           elements,
         };
-      }) as Promise<BrowserPageSnapshot>;
+      }) as Promise<BrowserPageSnapshot>, signal);
     },
     async close() {
       await context.close();

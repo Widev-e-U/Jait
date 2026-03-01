@@ -103,8 +103,9 @@ export function createBrowserNavigateTool(registry: SurfaceRegistry): ToolDefini
       required: ["url"],
     },
     async execute(input, context): Promise<ToolResult> {
+      if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
       const surface = await ensureBrowserSurface(registry, context, input.browserId);
-      const snapshot = await surface.navigate(input.url);
+      const snapshot = await surface.navigate(input.url, context.signal);
       return {
         ok: true,
         message: `Navigated to ${snapshot.url}`,
@@ -131,8 +132,9 @@ export function createBrowserSnapshotTool(registry: SurfaceRegistry): ToolDefini
       },
     },
     async execute(input, context): Promise<ToolResult> {
+      if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
       const surface = await ensureBrowserSurface(registry, context, input.browserId);
-      const description = await surface.describe();
+      const description = await surface.describe(context.signal);
       return {
         ok: true,
         message: "Browser snapshot captured",
@@ -148,18 +150,19 @@ function makeActionTool<TInput>(
   description: string,
   properties: Record<string, { type: string; description: string }>,
   required: string[],
-  action: (surface: BrowserSurface, input: TInput) => Promise<unknown>,
+  action: (surface: BrowserSurface, input: TInput, signal?: AbortSignal) => Promise<unknown>,
 ): ToolDefinition<TInput> {
   return {
     name,
     description,
     parameters: { type: "object", properties, required },
     async execute(input: TInput, context: ToolContext): Promise<ToolResult> {
+      if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
       const browserId = typeof input === "object" && input !== null && "browserId" in input
         ? String((input as { browserId?: string }).browserId ?? "") || undefined
         : undefined;
       const surface = await ensureBrowserSurface(registry, context, browserId);
-      const result = await action(surface, input);
+      const result = await action(surface, input, context.signal);
       return {
         ok: true,
         message: `${name} executed`,
@@ -180,8 +183,8 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
         browserId: { type: "string", description: "Optional browser surface ID" },
       },
       ["selector"],
-      async (surface, input) => {
-        await surface.click(input.selector);
+      async (surface, input, signal) => {
+        await surface.click(input.selector, signal);
         return { selector: input.selector };
       },
     ),
@@ -195,8 +198,8 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
         browserId: { type: "string", description: "Optional browser surface ID" },
       },
       ["selector", "text"],
-      async (surface, input) => {
-        await surface.typeText(input.selector, input.text);
+      async (surface, input, signal) => {
+        await surface.typeText(input.selector, input.text, signal);
         return { selector: input.selector };
       },
     ),
@@ -210,8 +213,8 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
         browserId: { type: "string", description: "Optional browser surface ID" },
       },
       ["x", "y"],
-      async (surface, input) => {
-        await surface.scroll(input.x, input.y);
+      async (surface, input, signal) => {
+        await surface.scroll(input.x, input.y, signal);
         return { x: input.x, y: input.y };
       },
     ),
@@ -225,8 +228,8 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
         browserId: { type: "string", description: "Optional browser surface ID" },
       },
       ["selector", "value"],
-      async (surface, input) => {
-        await surface.select(input.selector, input.value);
+      async (surface, input, signal) => {
+        await surface.select(input.selector, input.value, signal);
         return { selector: input.selector, value: input.value };
       },
     ),
@@ -240,8 +243,8 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
         browserId: { type: "string", description: "Optional browser surface ID" },
       },
       ["selector"],
-      async (surface, input) => {
-        await surface.waitFor(input.selector, input.timeoutMs ?? 10000);
+      async (surface, input, signal) => {
+        await surface.waitFor(input.selector, input.timeoutMs ?? 10000, signal);
         return { selector: input.selector, timeoutMs: input.timeoutMs ?? 10000 };
       },
     ),
@@ -254,8 +257,8 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
         browserId: { type: "string", description: "Optional browser surface ID" },
       },
       [],
-      async (surface, input) => {
-        const screenshotPath = await surface.screenshot(input.path);
+      async (surface, input, signal) => {
+        const screenshotPath = await surface.screenshot(input.path, signal);
         return { path: screenshotPath };
       },
     ),
@@ -277,11 +280,17 @@ export function createWebFetchTool(guard = new SSRFGuard()): ToolDefinition<WebF
       },
       required: ["url"],
     },
-    async execute(input): Promise<ToolResult> {
+    async execute(input, context): Promise<ToolResult> {
+      if (context?.signal?.aborted) return { ok: false, message: "Cancelled" };
       const url = guard.validate(input.url).toString();
       const timeoutMs = input.timeoutMs ?? 15000;
       const maxBytes = input.maxBytes ?? 50_000;
       const controller = new AbortController();
+      // Link external abort signal to our controller so cancellation propagates
+      if (context?.signal) {
+        if (context.signal.aborted) { controller.abort(); }
+        else { context.signal.addEventListener("abort", () => controller.abort(), { once: true }); }
+      }
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
       const ignoreTlsErrors =
         input.ignoreTlsErrors === true || process.env["WEB_FETCH_IGNORE_TLS_ERRORS"] === "true";
@@ -339,7 +348,8 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
       },
       required: ["query"],
     },
-    async execute(input): Promise<ToolResult> {
+    async execute(input, context): Promise<ToolResult> {
+      if (context?.signal?.aborted) return { ok: false, message: "Cancelled" };
       const provider = input.provider ?? "duckduckgo";
       const limit = Math.max(1, Math.min(input.limit ?? 5, 10));
 

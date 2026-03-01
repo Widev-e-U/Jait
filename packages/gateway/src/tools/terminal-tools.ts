@@ -10,6 +10,19 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { TerminalSurface } from "../surfaces/terminal.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 
+/** Race a promise against an AbortSignal — rejects with "Cancelled" if aborted first */
+function raceAbort<T>(promise: Promise<T>, signal: AbortSignal): Promise<T> {
+  if (signal.aborted) return Promise.reject(new Error("Cancelled"));
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = () => reject(new Error("Cancelled"));
+    signal.addEventListener("abort", onAbort, { once: true });
+    promise.then(
+      (v) => { signal.removeEventListener("abort", onAbort); resolve(v); },
+      (e) => { signal.removeEventListener("abort", onAbort); reject(e); },
+    );
+  });
+}
+
 interface TerminalRunInput {
   command: string;
   sessionId?: string;
@@ -41,6 +54,11 @@ export function createTerminalRunTool(registry: SurfaceRegistry): ToolDefinition
       const { command, timeout = 30000 } = input;
       const termId = input.terminalId ?? `term-${context.sessionId}-default`;
 
+      // Early cancellation check
+      if (context.signal?.aborted) {
+        return { ok: false, message: "Cancelled" };
+      }
+
       // Find or create a terminal for this session
       let surface = registry.getSurface(termId) as TerminalSurface | undefined;
       if (!surface || surface.state !== "running") {
@@ -51,14 +69,18 @@ export function createTerminalRunTool(registry: SurfaceRegistry): ToolDefinition
       }
 
       try {
-        const output = await surface.execute(command, timeout, context.onOutputChunk);
-        console.log(`[terminal.run] output (${output.length} chars): ${JSON.stringify(output.slice(0, 500))}`);
+        // Race the tool execution against the abort signal
+        const result = await (context.signal
+          ? raceAbort(surface.execute(command, timeout, context.onOutputChunk), context.signal)
+          : surface.execute(command, timeout, context.onOutputChunk));
+        console.log(`[terminal.run] output (${result.length} chars): ${JSON.stringify(result.slice(0, 500))}`);
         return {
           ok: true,
           message: `Command executed successfully`,
-          data: { output: output || "(no output)", terminalId: termId },
+          data: { output: result || "(no output)", terminalId: termId },
         };
       } catch (err) {
+        if (context.signal?.aborted) return { ok: false, message: "Cancelled", data: { terminalId: termId } };
         return {
           ok: false,
           message: err instanceof Error ? err.message : "Command failed",

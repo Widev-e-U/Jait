@@ -124,23 +124,31 @@ export function useChat(sessionId: string | null) {
                     completedAt?: number;
                   }>;
                 }>
+                const snapshotStreaming = data.streaming as boolean
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
                   const msg: ChatMessage = { id: m.id, role: m.role, content: m.content }
                   if (m.toolCalls && m.toolCalls.length > 0) {
-                    msg.toolCalls = m.toolCalls.map(tc => ({
+                    msg.toolCalls = m.toolCalls.map(tc => {
                       // Streaming snapshots may provide explicit running status.
                       // Persisted DB snapshots provide ok/message for completed calls.
-                      callId: tc.callId,
-                      tool: tc.tool,
-                      args: tc.args ?? {},
-                      status: tc.status ?? (tc.ok ? 'success' as const : 'error' as const),
-                      result: tc.status === 'running'
-                        ? undefined
-                        : { ok: !!tc.ok, message: tc.message ?? '', data: tc.output != null ? { output: tc.output } : undefined },
-                      streamingOutput: tc.streamingOutput,
-                      startedAt: tc.startedAt ?? 0,
-                      completedAt: tc.completedAt ?? 0,
-                    }))
+                      let status: 'running' | 'success' | 'error' =
+                        tc.status ?? (tc.ok ? 'success' as const : 'error' as const)
+                      // Safety net: if the server says streaming is done, no tool
+                      // call should remain in 'running' state (handles race conditions).
+                      if (status === 'running' && !snapshotStreaming) status = 'error'
+                      return {
+                        callId: tc.callId,
+                        tool: tc.tool,
+                        args: tc.args ?? {},
+                        status,
+                        result: status === 'running'
+                          ? undefined
+                          : { ok: !!tc.ok, message: tc.message ?? 'Cancelled', data: tc.output != null ? { output: tc.output } : undefined },
+                        streamingOutput: tc.streamingOutput,
+                        startedAt: tc.startedAt ?? 0,
+                        completedAt: tc.completedAt ?? 0,
+                      }
+                    })
                   }
                   return msg
                 })
@@ -151,7 +159,7 @@ export function useChat(sessionId: string | null) {
                   ...prev,
                   messages: msgs,
                   isLoadingHistory: false,
-                  isLoading: data.streaming as boolean,
+                  isLoading: snapshotStreaming,
                 }))
               } else if (data.type === 'token' && assistantId) {
                 // Append token to the tracked assistant message
@@ -219,6 +227,20 @@ export function useChat(sessionId: string | null) {
                   isLoading: false,
                   promptCount: (data.prompt_count as number) ?? prev.promptCount,
                   remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
+                  // Mark any tool calls still stuck in 'running' as cancelled
+                  // (can happen if reload snapshot races with cancel processing)
+                  messages: prev.messages.map(m =>
+                    m.toolCalls?.some(tc => tc.status === 'running')
+                      ? {
+                          ...m,
+                          toolCalls: m.toolCalls!.map(tc =>
+                            tc.status === 'running'
+                              ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
+                              : tc
+                          ),
+                        }
+                      : m
+                  ),
                 }))
               } else if (data.type === 'error') {
                 setState(prev => ({
@@ -420,9 +442,21 @@ export function useChat(sessionId: string | null) {
           setState(prev => ({
             ...prev,
             isLoading: false,
-            messages: prev.messages.filter(m =>
-              !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-            ),
+            messages: prev.messages
+              .filter(m =>
+                !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+              )
+              .map(m => {
+                if (!m.toolCalls?.some(tc => tc.status === 'running')) return m
+                return {
+                  ...m,
+                  toolCalls: m.toolCalls!.map(tc =>
+                    tc.status === 'running'
+                      ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
+                      : tc
+                  ),
+                }
+              }),
           }))
         }
         return
@@ -452,8 +486,22 @@ export function useChat(sessionId: string | null) {
     // 3. Abort the stream-resume SSE connection
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
-    // 4. Update UI
-    setState(prev => ({ ...prev, isLoading: false }))
+    // 4. Update UI — mark any in-flight tool calls as cancelled so spinners stop
+    setState(prev => ({
+      ...prev,
+      isLoading: false,
+      messages: prev.messages.map(m => {
+        if (!m.toolCalls?.some(tc => tc.status === 'running')) return m
+        return {
+          ...m,
+          toolCalls: m.toolCalls!.map(tc =>
+            tc.status === 'running'
+              ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
+              : tc
+          ),
+        }
+      }),
+    }))
   }, [])
 
   const clearMessages = useCallback(() => {
@@ -485,7 +533,7 @@ export function useChat(sessionId: string | null) {
 
       const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
       const waitForStreamingToStop = async () => {
-        for (let attempt = 0; attempt < 80; attempt += 1) {
+        for (let attempt = 0; attempt < 32; attempt += 1) {
           const statusRes = await fetch(
             `${API_URL}/api/sessions/${requestSessionId}/messages?limit=1`,
             { headers },
@@ -494,7 +542,7 @@ export function useChat(sessionId: string | null) {
             const statusData = await statusRes.json().catch(() => ({})) as { streaming?: boolean }
             if (!statusData.streaming) return true
           }
-          await wait(100)
+          await wait(250)
         }
         return false
       }
