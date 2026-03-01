@@ -156,11 +156,11 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** Agent navigates websites, fills forms, reads pages. User sees browser state as structured text.
 
 **Exit criteria:**
-- [ ] Agent can navigate to a URL and describe the page content
-- [ ] Agent can click elements and fill forms
-- [ ] `web.search` returns search results
-- [ ] Private IP access blocked by SSRF guard
-- [ ] Browser snapshot shows structured textual view in UI
+- [x] Agent can navigate to a URL and describe the page content
+- [x] Agent can click elements and fill forms
+- [x] `web.search` returns search results
+- [x] Private IP access blocked by SSRF guard
+- [x] Browser snapshot shows structured textual view in UI
 
 ---
 
