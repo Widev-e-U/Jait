@@ -63,7 +63,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   });
 
   if (deps.sessionService && deps.audit) {
-    registerSessionRoutes(app, deps.sessionService, deps.audit);
+    registerSessionRoutes(app, deps.sessionService, deps.audit, deps.hooks);
   }
 
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {

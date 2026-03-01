@@ -1,13 +1,17 @@
 import { describe, expect, it, vi } from "vitest";
 import { openDatabase, migrateDatabase } from "./db/index.js";
 import { SchedulerService } from "./scheduler/service.js";
-import { HookBus } from "./scheduler/hooks.js";
+import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
 import Fastify from "fastify";
 import { WsControlPlane } from "./ws.js";
 import { registerHookRoutes } from "./routes/hooks.js";
 import { SessionService } from "./services/sessions.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { createToolRegistry } from "./tools/index.js";
+
+import { mkdirSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
 
 
 describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
@@ -84,6 +88,27 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     expect(surfaceHandler).toHaveBeenCalledTimes(2);
   });
 
+  it("fires session.start built-in hook and loads bootstrap files", () => {
+    const hooks = new HookBus();
+    const workspaceRoot = join(tmpdir(), `jait-sprint7-${Date.now()}`);
+    mkdirSync(join(workspaceRoot, ".jait"), { recursive: true });
+    writeFileSync(join(workspaceRoot, ".jait", "bootstrap.md"), "# Bootstrap\nload me");
+
+    const bootstrapSpy = vi.fn();
+    hooks.on("session.bootstrap.loaded", bootstrapSpy);
+    registerBuiltInHooks(hooks, { defaultWorkspaceRoot: workspaceRoot });
+
+    hooks.emit("session.start", { sessionId: "s-bootstrap", workspaceRoot });
+
+    expect(bootstrapSpy).toHaveBeenCalledOnce();
+    const payload = bootstrapSpy.mock.calls[0]?.[0]?.payload as {
+      fileCount: number;
+      files: Array<{ path: string; content: string }>;
+    };
+    expect(payload.fileCount).toBe(1);
+    expect(payload.files[0]?.path).toBe(".jait/bootstrap.md");
+  });
+
   it("accepts authorized webhook posts for /hooks/wake and /hooks/agent", async () => {
     const { db, sqlite } = openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -148,6 +173,8 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       heartbeatCron: "* * * * *",
     });
     const surfaceRegistry = new SurfaceRegistry();
+    const hooks = new HookBus();
+    registerBuiltInHooks(hooks);
 
     const scheduler = new SchedulerService({
       db,
@@ -159,6 +186,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       sessionService,
       ws,
       startedAt: Date.now() - 2_000,
+      hooks,
     });
 
     expect(tools.listNames()).toContain("cron.add");
@@ -175,7 +203,16 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     });
 
     expect(status.ok).toBe(true);
-    expect((status.data as { healthy: boolean }).healthy).toBe(true);
+    const statusData = status.data as {
+      healthy: boolean;
+      scheduler?: { totalJobs: number; enabledJobs: number };
+      hooks?: { registeredEventTypes: string[]; listeners: number };
+      activeServices: string[];
+    };
+    expect(statusData.healthy).toBe(true);
+    expect(statusData.activeServices).toContain("hooks");
+    expect(statusData.scheduler?.totalJobs).toBe(0);
+    expect(statusData.hooks?.registeredEventTypes).toContain("session.start");
 
     sqlite.close();
   });

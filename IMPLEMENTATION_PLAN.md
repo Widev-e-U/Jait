@@ -214,11 +214,11 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** Agent schedules its own CI checks, cleanup tasks. Hooks fire on session lifecycle.
 
 **Exit criteria:**
-- [ ] Agent can create a cron job that runs daily
-- [ ] Cron jobs persist across gateway restart
-- [ ] `session.start` hook fires and loads bootstrap files
-- [ ] Webhook POST triggers an agent turn
-- [ ] `gateway.status` returns comprehensive health info
+- [x] Agent can create a cron job that runs daily
+- [x] Cron jobs persist across gateway restart
+- [x] `session.start` hook fires and loads bootstrap files
+- [x] Webhook POST triggers an agent turn
+- [x] `gateway.status` returns comprehensive health info
 
 ---
 
