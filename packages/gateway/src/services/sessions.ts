@@ -1,12 +1,13 @@
 /**
  * Session service — CRUD for sessions in SQLite.
  */
-import { eq, desc } from "drizzle-orm";
+import { and, eq, desc } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { sessions } from "../db/schema.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 
 export interface CreateSessionParams {
+  userId?: string;
   name?: string;
   workspacePath?: string;
   metadata?: Record<string, unknown>;
@@ -22,6 +23,7 @@ export class SessionService {
 
     this.db.insert(sessions).values({
       id,
+      userId: params.userId ?? null,
       name: params.name ?? `Session ${new Date().toLocaleString()}`,
       workspacePath: params.workspacePath ?? null,
       createdAt: now,
@@ -34,12 +36,28 @@ export class SessionService {
   }
 
   /** List all sessions, newest first. Optionally filter by status. */
-  list(status?: string) {
+  list(status?: string, userId?: string) {
     if (status) {
+      if (userId) {
+        return this.db
+          .select()
+          .from(sessions)
+          .where(and(eq(sessions.status, status), eq(sessions.userId, userId)))
+          .orderBy(desc(sessions.lastActiveAt))
+          .all();
+      }
       return this.db
         .select()
         .from(sessions)
         .where(eq(sessions.status, status))
+        .orderBy(desc(sessions.lastActiveAt))
+        .all();
+    }
+    if (userId) {
+      return this.db
+        .select()
+        .from(sessions)
+        .where(eq(sessions.userId, userId))
         .orderBy(desc(sessions.lastActiveAt))
         .all();
     }
@@ -51,7 +69,14 @@ export class SessionService {
   }
 
   /** Get a single session by ID. */
-  getById(id: string) {
+  getById(id: string, userId?: string) {
+    if (userId) {
+      return this.db
+        .select()
+        .from(sessions)
+        .where(and(eq(sessions.id, id), eq(sessions.userId, userId)))
+        .get();
+    }
     return this.db
       .select()
       .from(sessions)
@@ -69,16 +94,25 @@ export class SessionService {
   }
 
   /** Archive a session. */
-  archive(id: string) {
+  archive(id: string, userId?: string) {
     this.db
       .update(sessions)
       .set({ status: "archived" })
-      .where(eq(sessions.id, id))
+      .where(userId ? and(eq(sessions.id, id), eq(sessions.userId, userId)) : eq(sessions.id, id))
       .run();
   }
 
   /** Get the most recently active session. */
-  lastActive() {
+  lastActive(userId?: string) {
+    if (userId) {
+      return this.db
+        .select()
+        .from(sessions)
+        .where(and(eq(sessions.status, "active"), eq(sessions.userId, userId)))
+        .orderBy(desc(sessions.lastActiveAt))
+        .limit(1)
+        .get() ?? null;
+    }
     return this.db
       .select()
       .from(sessions)
@@ -89,21 +123,25 @@ export class SessionService {
   }
 
   /** Delete (soft) a session. */
-  delete(id: string) {
+  delete(id: string, userId?: string) {
     this.db
       .update(sessions)
       .set({ status: "deleted" })
-      .where(eq(sessions.id, id))
+      .where(userId ? and(eq(sessions.id, id), eq(sessions.userId, userId)) : eq(sessions.id, id))
       .run();
   }
 
   /** Update session name or metadata. */
-  update(id: string, data: { name?: string; metadata?: Record<string, unknown> }) {
+  update(id: string, data: { name?: string; metadata?: Record<string, unknown> }, userId?: string) {
     const set: Record<string, string> = {};
     if (data.name) set["name"] = data.name;
     if (data.metadata) set["metadata"] = JSON.stringify(data.metadata);
     if (Object.keys(set).length > 0) {
-      this.db.update(sessions).set(set).where(eq(sessions.id, id)).run();
+      this.db
+        .update(sessions)
+        .set(set)
+        .where(userId ? and(eq(sessions.id, id), eq(sessions.userId, userId)) : eq(sessions.id, id))
+        .run();
     }
   }
 }

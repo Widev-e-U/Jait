@@ -58,14 +58,8 @@ interface WebFetchInput {
 
 interface WebSearchInput {
   query: string;
-  provider?: "duckduckgo" | "brave" | "perplexity";
+  provider?: "auto" | "openai" | "brave" | "perplexity" | "grok" | "gemini" | "kimi";
   limit?: number;
-}
-
-interface SearchResult {
-  title: string;
-  url: string;
-  snippet: string;
 }
 
 type FetchWithTlsInit = RequestInit & {
@@ -73,6 +67,17 @@ type FetchWithTlsInit = RequestInit & {
 };
 
 const DEFAULT_BROWSER_ID = "browser-default";
+const DEFAULT_OPENAI_BASE_URL = "https://api.openai.com/v1";
+const DEFAULT_OPENAI_WEB_SEARCH_MODEL = "gpt-5";
+const DEFAULT_PERPLEXITY_MODEL = "sonar-pro";
+const DEFAULT_PERPLEXITY_OPENROUTER_MODEL = "perplexity/sonar-pro";
+const DEFAULT_GROK_MODEL = "grok-4-1212";
+const DEFAULT_GEMINI_MODEL = "gemini-2.0-flash";
+const DEFAULT_KIMI_BASE_URL = "https://api.moonshot.ai/v1";
+const DEFAULT_KIMI_MODEL = "moonshot-v1-128k";
+
+type WebSearchProvider = NonNullable<WebSearchInput["provider"]>;
+type ResolvedWebSearchProvider = Exclude<WebSearchProvider, "auto">;
 
 async function ensureBrowserSurface(registry: SurfaceRegistry, context: ToolContext, browserId?: string): Promise<BrowserSurface> {
   const id = browserId ?? DEFAULT_BROWSER_ID;
@@ -338,61 +343,561 @@ export function createWebFetchTool(guard = new SSRFGuard()): ToolDefinition<WebF
 export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<WebSearchInput> {
   return {
     name: "web.search",
-    description: "Search the public web (duckduckgo, brave, or perplexity)",
+    description: "Search the public web (auto, openai, brave, perplexity, grok, gemini, kimi)",
     parameters: {
       type: "object",
       properties: {
         query: { type: "string", description: "Search query" },
-        provider: { type: "string", description: "Provider: duckduckgo|brave|perplexity" },
+        provider: { type: "string", description: "Provider: auto|openai|brave|perplexity|grok|gemini|kimi" },
         limit: { type: "number", description: "Maximum results to return" },
       },
       required: ["query"],
     },
     async execute(input, context): Promise<ToolResult> {
       if (context?.signal?.aborted) return { ok: false, message: "Cancelled" };
-      const provider = input.provider ?? "duckduckgo";
+      const requestedProvider = input.provider ?? "auto";
+      const getApiKey = (name: string) =>
+        normalizeApiKey(context.apiKeys?.[name]) ?? normalizeApiKey(process.env[name]);
+      const provider = resolveWebSearchProvider(requestedProvider, getApiKey);
       const limit = Math.max(1, Math.min(input.limit ?? 5, 10));
+      const openaiOptions = {
+        apiKey: getApiKey("OPENAI_API_KEY"),
+        baseUrl: normalizeApiKey(context.apiKeys?.["OPENAI_BASE_URL"]) ?? process.env["OPENAI_BASE_URL"],
+        model:
+          normalizeApiKey(context.apiKeys?.["OPENAI_WEB_SEARCH_MODEL"])
+          ?? normalizeApiKey(context.apiKeys?.["OPENAI_MODEL"])
+          ?? process.env["OPENAI_WEB_SEARCH_MODEL"]
+          ?? process.env["OPENAI_MODEL"]
+          ?? DEFAULT_OPENAI_WEB_SEARCH_MODEL,
+      };
 
       if (provider === "brave") {
-        const apiKey = process.env["BRAVE_API_KEY"];
-        if (!apiKey) return { ok: false, message: "Missing BRAVE_API_KEY" };
-        const url = guard.validate(`https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(input.query)}`);
-        const response = await fetch(url, { headers: { Accept: "application/json", "X-Subscription-Token": apiKey } });
-        const data = await response.json() as { web?: { results?: Array<{ title?: string; url?: string; description?: string }> } };
-        const results = (data.web?.results ?? []).slice(0, limit).map((r) => ({ title: r.title ?? "", url: r.url ?? "", snippet: r.description ?? "" }));
-        return { ok: response.ok, message: `Search results (${provider})`, data: { provider, query: input.query, results } };
+        const apiKey = getApiKey("BRAVE_API_KEY");
+        if (!apiKey) {
+          return searchOpenAI(
+            guard,
+            input.query,
+            limit,
+            openaiOptions,
+            "Missing BRAVE_API_KEY, falling back to openai web_search",
+          );
+        }
+        return searchBrave(guard, input.query, limit, apiKey);
       }
 
       if (provider === "perplexity") {
-        const apiKey = process.env["PERPLEXITY_API_KEY"];
-        if (!apiKey) return { ok: false, message: "Missing PERPLEXITY_API_KEY" };
-        const url = guard.validate("https://api.perplexity.ai/chat/completions");
-        const response = await fetch(url, {
-          method: "POST",
-          headers: {
-            "content-type": "application/json",
-            authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model: "sonar",
-            messages: [{ role: "user", content: `Provide up to ${limit} web results for: ${input.query}` }],
-          }),
-        });
-        const data = await response.json() as { choices?: Array<{ message?: { content?: string } }> };
-        return {
-          ok: response.ok,
-          message: `Search results (${provider})`,
-          data: {
-            provider,
-            query: input.query,
-            results: [{ title: input.query, url: "", snippet: data.choices?.[0]?.message?.content ?? "" }],
-          },
-        };
+        const perplexityKey = getApiKey("PERPLEXITY_API_KEY");
+        const openRouterKey = getApiKey("OPENROUTER_API_KEY");
+        if (!perplexityKey && !openRouterKey) {
+          return searchOpenAI(
+            guard,
+            input.query,
+            limit,
+            openaiOptions,
+            "Missing PERPLEXITY_API_KEY/OPENROUTER_API_KEY, falling back to openai web_search",
+          );
+        }
+        return searchPerplexity(guard, input.query, limit, { perplexityKey, openRouterKey });
       }
 
-      return searchDuckDuckGo(guard, input.query, limit);
+      if (provider === "grok") {
+        const apiKey = getApiKey("XAI_API_KEY");
+        if (!apiKey) {
+          return searchOpenAI(
+            guard,
+            input.query,
+            limit,
+            openaiOptions,
+            "Missing XAI_API_KEY, falling back to openai web_search",
+          );
+        }
+        return searchGrok(guard, input.query, limit, apiKey);
+      }
+
+      if (provider === "gemini") {
+        const apiKey = getApiKey("GEMINI_API_KEY");
+        if (!apiKey) {
+          return searchOpenAI(
+            guard,
+            input.query,
+            limit,
+            openaiOptions,
+            "Missing GEMINI_API_KEY, falling back to openai web_search",
+          );
+        }
+        return searchGemini(guard, input.query, limit, apiKey);
+      }
+
+      if (provider === "kimi") {
+        const apiKey = getApiKey("MOONSHOT_API_KEY");
+        if (!apiKey) {
+          return searchOpenAI(
+            guard,
+            input.query,
+            limit,
+            openaiOptions,
+            "Missing MOONSHOT_API_KEY, falling back to openai web_search",
+          );
+        }
+        return searchKimi(guard, input.query, limit, apiKey);
+      }
+
+      if (provider === "openai") {
+        return searchOpenAI(guard, input.query, limit, openaiOptions);
+      }
+      return searchOpenAI(
+        guard,
+        input.query,
+        limit,
+        openaiOptions,
+        `Provider '${provider}' not available, using openai web_search`,
+      );
     },
   };
+}
+
+function normalizeApiKey(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveWebSearchProvider(
+  provider: WebSearchProvider,
+  getApiKey: (name: string) => string | undefined,
+): ResolvedWebSearchProvider {
+  if (provider !== "auto") {
+    return provider;
+  }
+  if (getApiKey("BRAVE_API_KEY")) return "brave";
+  if (getApiKey("PERPLEXITY_API_KEY") || getApiKey("OPENROUTER_API_KEY")) {
+    return "perplexity";
+  }
+  if (getApiKey("XAI_API_KEY")) return "grok";
+  if (getApiKey("GEMINI_API_KEY")) return "gemini";
+  if (getApiKey("MOONSHOT_API_KEY")) return "kimi";
+  return "openai";
+}
+
+async function searchOpenAI(
+  guard: SSRFGuard,
+  query: string,
+  limit: number,
+  options: {
+    apiKey?: string;
+    baseUrl?: string;
+    model?: string;
+  },
+  prefixMessage?: string,
+): Promise<ToolResult> {
+  const apiKey = normalizeApiKey(options.apiKey);
+  if (!apiKey) {
+    return {
+      ok: false,
+      message: `${prefixMessage ? `${prefixMessage}. ` : ""}Missing OPENAI_API_KEY`,
+      data: { provider: "openai", query, results: [] },
+    };
+  }
+  const baseUrl = options.baseUrl?.trim() || DEFAULT_OPENAI_BASE_URL;
+  const endpoint = `${baseUrl.replace(/\/+$/, "")}/responses`;
+  const model = options.model?.trim() || DEFAULT_OPENAI_WEB_SEARCH_MODEL;
+
+  try {
+    const url = guard.validate(endpoint);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        tools: [{ type: "web_search" }],
+        input: `Provide up to ${limit} web search results for: ${query}`,
+      }),
+    });
+    const data = await response.json() as OpenAIWebSearchResponse;
+    if (!response.ok) {
+      const detail = data.error?.message || `HTTP ${response.status}`;
+      return {
+        ok: false,
+        message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed (${response.status}): ${detail}`,
+        data: { provider: "openai", query, results: [] },
+      };
+    }
+
+    const { results, summary } = extractOpenAIWebSearchResults(data, query, limit);
+    return {
+      ok: true,
+      message: prefixMessage
+        ? `${prefixMessage}. Search results (openai)`
+        : "Search results (openai)",
+      data: {
+        provider: "openai",
+        model,
+        query,
+        results,
+        summary,
+      },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: `${prefixMessage ? `${prefixMessage}. ` : ""}OpenAI web_search failed: ${extractErrorMessage(err)}`,
+      data: { provider: "openai", query, results: [] },
+    };
+  }
+}
+
+async function searchBrave(
+  guard: SSRFGuard,
+  query: string,
+  limit: number,
+  apiKey: string,
+): Promise<ToolResult> {
+  try {
+    const url = guard.validate(
+      `https://api.search.brave.com/res/v1/web/search?q=${encodeURIComponent(query)}&count=${limit}`,
+    );
+    const response = await fetch(url, {
+      headers: {
+        Accept: "application/json",
+        "X-Subscription-Token": apiKey,
+      },
+    });
+    const data = await response.json() as {
+      web?: { results?: Array<{ title?: string; url?: string; description?: string }> };
+    };
+    const results = (data.web?.results ?? [])
+      .slice(0, limit)
+      .map((entry) => ({
+        title: entry.title ?? "",
+        url: entry.url ?? "",
+        snippet: entry.description ?? "",
+      }))
+      .filter((entry) => entry.title || entry.url || entry.snippet);
+    return {
+      ok: response.ok,
+      message: response.ok ? "Search results (brave)" : `Brave search failed (${response.status})`,
+      data: { provider: "brave", query, results },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Brave search failed: ${extractErrorMessage(err)}`,
+      data: { provider: "brave", query, results: [] },
+    };
+  }
+}
+
+async function searchPerplexity(
+  guard: SSRFGuard,
+  query: string,
+  limit: number,
+  keys: { perplexityKey?: string; openRouterKey?: string },
+): Promise<ToolResult> {
+  const useOpenRouter = !keys.perplexityKey && Boolean(keys.openRouterKey);
+  const apiKey = useOpenRouter ? keys.openRouterKey : keys.perplexityKey;
+  if (!apiKey) {
+    return {
+      ok: false,
+      message: "Perplexity search failed: missing API key",
+      data: { provider: "perplexity", query, results: [] },
+    };
+  }
+  const model = useOpenRouter
+    ? (process.env["PERPLEXITY_OPENROUTER_MODEL"]?.trim() || DEFAULT_PERPLEXITY_OPENROUTER_MODEL)
+    : (process.env["PERPLEXITY_MODEL"]?.trim() || DEFAULT_PERPLEXITY_MODEL);
+  const endpoint = useOpenRouter
+    ? "https://openrouter.ai/api/v1/chat/completions"
+    : "https://api.perplexity.ai/chat/completions";
+
+  try {
+    const url = guard.validate(endpoint);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: `Provide up to ${limit} web results for: ${query}` }],
+      }),
+    });
+    const data = await response.json() as {
+      choices?: Array<{ message?: { content?: string } }>;
+      citations?: string[];
+    };
+    const content = data.choices?.[0]?.message?.content ?? "";
+    const citationResults = (data.citations ?? [])
+      .slice(0, limit)
+      .map((citationUrl) => ({
+        title: safeHostname(citationUrl),
+        url: citationUrl,
+        snippet: content.slice(0, 500),
+      }));
+    const results = citationResults.length > 0
+      ? citationResults
+      : [{ title: query, url: "", snippet: content }];
+    return {
+      ok: response.ok,
+      message: response.ok ? "Search results (perplexity)" : `Perplexity search failed (${response.status})`,
+      data: { provider: "perplexity", query, results },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Perplexity search failed: ${extractErrorMessage(err)}`,
+      data: { provider: "perplexity", query, results: [] },
+    };
+  }
+}
+
+async function searchGrok(
+  guard: SSRFGuard,
+  query: string,
+  limit: number,
+  apiKey: string,
+): Promise<ToolResult> {
+  const model = process.env["GROK_MODEL"]?.trim() || DEFAULT_GROK_MODEL;
+  try {
+    const url = guard.validate("https://api.x.ai/v1/responses");
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        input: query,
+        tools: [{ type: "web_search" }],
+      }),
+    });
+    const data = await response.json() as {
+      output_text?: string;
+      citations?: string[];
+      output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
+    };
+    const contentFromOutput = (data.output ?? [])
+      .flatMap((output) => output.content ?? [])
+      .find((part) => part.type === "output_text" && typeof part.text === "string")?.text;
+    const content = contentFromOutput ?? data.output_text ?? "";
+    const citationResults = (data.citations ?? [])
+      .slice(0, limit)
+      .map((citationUrl) => ({
+        title: safeHostname(citationUrl),
+        url: citationUrl,
+        snippet: content.slice(0, 500),
+      }));
+    const results = citationResults.length > 0
+      ? citationResults
+      : [{ title: query, url: "", snippet: content }];
+    return {
+      ok: response.ok,
+      message: response.ok ? "Search results (grok)" : `Grok search failed (${response.status})`,
+      data: { provider: "grok", query, results },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Grok search failed: ${extractErrorMessage(err)}`,
+      data: { provider: "grok", query, results: [] },
+    };
+  }
+}
+
+async function searchGemini(
+  guard: SSRFGuard,
+  query: string,
+  limit: number,
+  apiKey: string,
+): Promise<ToolResult> {
+  const model = process.env["GEMINI_MODEL"]?.trim() || DEFAULT_GEMINI_MODEL;
+  try {
+    const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+    const url = guard.validate(endpoint);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        contents: [{ parts: [{ text: query }] }],
+        tools: [{ google_search: {} }],
+      }),
+    });
+    const data = await response.json() as {
+      candidates?: Array<{
+        content?: { parts?: Array<{ text?: string }> };
+        groundingMetadata?: {
+          groundingChunks?: Array<{ web?: { uri?: string; title?: string } }>;
+        };
+      }>;
+    };
+    const candidate = data.candidates?.[0];
+    const content = (candidate?.content?.parts ?? [])
+      .map((part) => part.text ?? "")
+      .join("\n")
+      .trim();
+    const grounded = (candidate?.groundingMetadata?.groundingChunks ?? [])
+      .map((chunk) => chunk.web)
+      .filter((web): web is { uri?: string; title?: string } => Boolean(web && web.uri))
+      .slice(0, limit)
+      .map((web) => ({
+        title: web.title ?? safeHostname(web.uri ?? ""),
+        url: web.uri ?? "",
+        snippet: content.slice(0, 500),
+      }));
+    const results = grounded.length > 0
+      ? grounded
+      : [{ title: query, url: "", snippet: content }];
+    return {
+      ok: response.ok,
+      message: response.ok ? "Search results (gemini)" : `Gemini search failed (${response.status})`,
+      data: { provider: "gemini", query, results },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Gemini search failed: ${extractErrorMessage(err)}`,
+      data: { provider: "gemini", query, results: [] },
+    };
+  }
+}
+
+async function searchKimi(
+  guard: SSRFGuard,
+  query: string,
+  limit: number,
+  apiKey: string,
+): Promise<ToolResult> {
+  const baseUrl = process.env["KIMI_BASE_URL"]?.trim() || DEFAULT_KIMI_BASE_URL;
+  const model = process.env["KIMI_MODEL"]?.trim() || DEFAULT_KIMI_MODEL;
+  const endpoint = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  try {
+    const url = guard.validate(endpoint);
+    const response = await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${apiKey}`,
+      },
+      body: JSON.stringify({
+        model,
+        messages: [{ role: "user", content: query }],
+        tools: [{ type: "builtin_function", function: { name: "$web_search" } }],
+        tool_choice: "auto",
+      }),
+    });
+    const data = await response.json() as {
+      search_results?: Array<{ title?: string; url?: string; content?: string }>;
+      choices?: Array<{ message?: { content?: string } }>;
+    };
+    const results = (data.search_results ?? [])
+      .slice(0, limit)
+      .map((entry) => ({
+        title: entry.title ?? safeHostname(entry.url ?? ""),
+        url: entry.url ?? "",
+        snippet: entry.content ?? "",
+      }))
+      .filter((entry) => entry.title || entry.url || entry.snippet);
+    if (results.length === 0) {
+      results.push({
+        title: query,
+        url: "",
+        snippet: data.choices?.[0]?.message?.content ?? "",
+      });
+    }
+    return {
+      ok: response.ok,
+      message: response.ok ? "Search results (kimi)" : `Kimi search failed (${response.status})`,
+      data: { provider: "kimi", query, results },
+    };
+  } catch (err) {
+    return {
+      ok: false,
+      message: `Kimi search failed: ${extractErrorMessage(err)}`,
+      data: { provider: "kimi", query, results: [] },
+    };
+  }
+}
+
+function safeHostname(url: string): string {
+  try {
+    return new URL(url).hostname;
+  } catch {
+    return url || "source";
+  }
+}
+
+type OpenAIWebSearchResponse = {
+  error?: { message?: string };
+  output_text?: string;
+  output?: Array<{
+    type?: string;
+    action?: {
+      sources?: Array<{ url?: string; title?: string }>;
+    };
+    content?: Array<{
+      type?: string;
+      text?: string;
+      annotations?: Array<{
+        type?: string;
+        url?: string;
+        title?: string;
+      }>;
+    }>;
+  }>;
+};
+
+function extractOpenAIWebSearchResults(
+  data: OpenAIWebSearchResponse,
+  query: string,
+  limit: number,
+): { results: Array<{ title: string; url: string; snippet: string }>; summary: string } {
+  const contentBlocks = (data.output ?? []).flatMap((entry) => entry.content ?? []);
+  const summary = normalizeText(
+    data.output_text
+      || contentBlocks
+        .filter((block) => block.type === "output_text" && typeof block.text === "string")
+        .map((block) => block.text ?? "")
+        .join("\n"),
+  );
+
+  const sourceMap = new Map<string, { title: string; url: string; snippet: string }>();
+  const push = (source: { url?: string; title?: string }) => {
+    const url = source.url?.trim() ?? "";
+    if (!url || sourceMap.has(url)) return;
+    sourceMap.set(url, {
+      title: source.title?.trim() || safeHostname(url),
+      url,
+      snippet: summary.slice(0, 500),
+    });
+  };
+
+  for (const entry of data.output ?? []) {
+    for (const source of entry.action?.sources ?? []) push(source);
+  }
+  for (const block of contentBlocks) {
+    for (const annotation of block.annotations ?? []) {
+      if (annotation.type === "url_citation") {
+        push(annotation);
+      }
+    }
+  }
+
+  const results = Array.from(sourceMap.values()).slice(0, limit);
+  if (results.length === 0) {
+    results.push({
+      title: query,
+      url: "",
+      snippet: summary || "OpenAI web_search returned no citation URLs.",
+    });
+  }
+  return { results, summary };
+}
+
+function normalizeText(value: string): string {
+  return value.replace(/\s+/g, " ").trim();
 }
 
 function extractErrorMessage(err: unknown): string {
@@ -429,145 +934,3 @@ async function fetchWithTlsFallback(
   }
 }
 
-async function searchDuckDuckGo(
-  guard: SSRFGuard,
-  query: string,
-  limit: number,
-): Promise<ToolResult> {
-  const jsonUrl = guard.validate(
-    `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
-  );
-  const htmlUrl = guard.validate(`https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
-
-  try {
-    const jsonResponse = await fetch(jsonUrl, {
-      headers: {
-        Accept: "application/json",
-        "User-Agent": "Mozilla/5.0 (compatible; JaitBot/1.0; +https://jait.local)",
-      },
-    });
-    if (jsonResponse.ok) {
-      const data = await jsonResponse.json() as {
-        Results?: Array<{ Text?: string; FirstURL?: string }>;
-        RelatedTopics?: Array<{ Text?: string; FirstURL?: string; Topics?: unknown[] }>;
-      };
-      const jsonResults = extractDdgJsonResults(data, limit);
-      if (jsonResults.length > 0) {
-        return {
-          ok: true,
-          message: "Search results (duckduckgo)",
-          data: { provider: "duckduckgo", query, results: jsonResults },
-        };
-      }
-    }
-  } catch {
-    // Continue to HTML fallback.
-  }
-
-  try {
-    const htmlResponse = await fetch(htmlUrl, {
-      headers: {
-        Accept: "text/html",
-        "User-Agent": "Mozilla/5.0 (compatible; JaitBot/1.0; +https://jait.local)",
-      },
-    });
-    const html = await htmlResponse.text();
-    const results = extractDdgHtmlResults(html, limit);
-    return {
-      ok: htmlResponse.ok,
-      message: results.length > 0 ? "Search results (duckduckgo html fallback)" : "No search results (duckduckgo)",
-      data: { provider: "duckduckgo", query, results },
-    };
-  } catch (err) {
-    const message = extractErrorMessage(err);
-    return {
-      ok: false,
-      message: `DuckDuckGo search failed: ${message}`,
-      data: { provider: "duckduckgo", query, results: [] },
-    };
-  }
-}
-
-function extractDdgJsonResults(
-  data: {
-    Results?: Array<{ Text?: string; FirstURL?: string }>;
-    RelatedTopics?: Array<{ Text?: string; FirstURL?: string; Topics?: unknown[] }>;
-  },
-  limit: number,
-): SearchResult[] {
-  const flat: Array<{ Text?: string; FirstURL?: string; Topics?: unknown[] }> = [
-    ...(data.Results ?? []),
-    ...(data.RelatedTopics ?? []),
-  ];
-  const out: SearchResult[] = [];
-
-  const visit = (node: { Text?: string; FirstURL?: string; Topics?: unknown[] }) => {
-    if (out.length >= limit) return;
-    if (node.FirstURL) {
-      const fullText = node.Text ?? "";
-      const [titlePart, ...snippetParts] = fullText.split(" - ");
-      out.push({
-        title: titlePart || node.FirstURL,
-        url: node.FirstURL,
-        snippet: snippetParts.join(" - ") || fullText,
-      });
-      return;
-    }
-    if (Array.isArray(node.Topics)) {
-      for (const child of node.Topics) {
-        if (typeof child === "object" && child !== null) {
-          visit(child as { Text?: string; FirstURL?: string; Topics?: unknown[] });
-        }
-        if (out.length >= limit) return;
-      }
-    }
-  };
-
-  for (const node of flat) {
-    visit(node);
-    if (out.length >= limit) break;
-  }
-  return out.slice(0, limit);
-}
-
-function extractDdgHtmlResults(html: string, limit: number): SearchResult[] {
-  const results: SearchResult[] = [];
-  const linkRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
-
-  for (const match of html.matchAll(linkRegex)) {
-    const rawUrl = match[1] ?? "";
-    const title = decodeHtmlEntities(stripHtml(match[2] ?? "")).trim();
-    const url = normalizeDuckDuckGoUrl(rawUrl);
-    if (!url || !title) continue;
-    results.push({ title, url, snippet: "" });
-    if (results.length >= limit) break;
-  }
-  return results;
-}
-
-function normalizeDuckDuckGoUrl(rawUrl: string): string {
-  try {
-    if (rawUrl.startsWith("//")) return `https:${rawUrl}`;
-    if (rawUrl.startsWith("/l/?")) {
-      const parsed = new URL(`https://duckduckgo.com${rawUrl}`);
-      const target = parsed.searchParams.get("uddg");
-      if (target) return decodeURIComponent(target);
-    }
-    return rawUrl;
-  } catch {
-    return rawUrl;
-  }
-}
-
-function stripHtml(value: string): string {
-  return value.replace(/<[^>]+>/g, " ");
-}
-
-function decodeHtmlEntities(value: string): string {
-  return value
-    .replace(/&amp;/g, "&")
-    .replace(/&quot;/g, "\"")
-    .replace(/&#39;/g, "'")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">");
-}

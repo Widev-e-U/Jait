@@ -6,6 +6,11 @@ import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 const API_URL = import.meta.env.VITE_API_URL || ''
 const STREAM_SNAPSHOT_LIMIT = 120
 
+function authHeaders(token?: string | null): Record<string, string> {
+  if (!token) return {}
+  return { Authorization: `Bearer ${token}` }
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -33,7 +38,11 @@ interface SendMessageOptions {
 /**
  * @param sessionId - externally managed session ID (from useSessions)
  */
-export function useChat(sessionId: string | null) {
+export function useChat(
+  sessionId: string | null,
+  authToken?: string | null,
+  onLoginRequired?: () => void,
+) {
   const [state, setState] = useState<ChatState>({
     messages: [],
     isLoading: false,
@@ -82,9 +91,15 @@ export function useChat(sessionId: string | null) {
         const res = await fetch(
           `${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`,
           {
-          signal: streamController.signal,
+            signal: streamController.signal,
+            headers: authHeaders(authToken),
           },
         )
+        if (res.status === 401) {
+          onLoginRequired?.()
+          setState(prev => ({ ...prev, isLoadingHistory: false }))
+          return
+        }
         if (!res.ok || cancelled) return
         const reader = res.body?.getReader()
         if (!reader) return
@@ -339,13 +354,15 @@ export function useChat(sessionId: string | null) {
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [sessionId])
+  }, [authToken, onLoginRequired, sessionId])
 
   const sendMessage = useCallback(async (
     content: string,
     options: SendMessageOptions = {}
   ) => {
-    const { token, sessionId: explicitSessionId, onLoginRequired } = options
+    const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired } = options
+    const effectiveToken = token ?? authToken
+    const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     const requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
     const assistantId = `assistant-${Date.now()}`
 
@@ -372,7 +389,7 @@ export function useChat(sessionId: string | null) {
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
 
       const requestBody = { content, sessionId: requestSessionId }
       pushSSEDebugEvent('request', JSON.stringify(requestBody))
@@ -395,7 +412,7 @@ export function useChat(sessionId: string | null) {
               !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
             ),
           }))
-          if (data.detail === 'login_required') onLoginRequired?.()
+          if (data.detail === 'login_required') notifyLoginRequired?.()
           return
         }
       }
@@ -583,14 +600,17 @@ export function useChat(sessionId: string | null) {
         }))
       }
     }
-  }, [sessionId])
+  }, [authToken, onLoginRequired, sessionId])
 
   const cancelRequest = useCallback(() => {
     requestVersionRef.current += 1
     // 1. Tell the gateway to abort the Ollama stream
     const sid = prevSessionIdRef.current
     if (sid) {
-      fetch(`${API_URL}/api/sessions/${sid}/cancel`, { method: 'POST' }).catch(() => {})
+      fetch(`${API_URL}/api/sessions/${sid}/cancel`, {
+        method: 'POST',
+        headers: authHeaders(authToken),
+      }).catch(() => {})
     }
     // 2. Abort the direct chat POST (if we're the originating tab)
     abortControllerRef.current?.abort()
@@ -613,7 +633,7 @@ export function useChat(sessionId: string | null) {
         }
       }),
     }))
-  }, [])
+  }, [authToken])
 
   const clearMessages = useCallback(() => {
     setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null })
@@ -626,14 +646,16 @@ export function useChat(sessionId: string | null) {
     messageFromEnd?: number,
     options: SendMessageOptions = {},
   ) => {
-    const { token, sessionId: explicitSessionId, onLoginRequired } = options
+    const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired } = options
+    const effectiveToken = token ?? authToken
+    const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     const requestSessionId = explicitSessionId ?? sessionId
     if (!requestSessionId || !editedContent.trim() || restartInFlightRef.current) return
     restartInFlightRef.current = true
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
+      if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
 
       const postRestart = () =>
         fetch(`${API_URL}/api/sessions/${requestSessionId}/restart-from`, {
@@ -678,7 +700,7 @@ export function useChat(sessionId: string | null) {
 
       if (res.status === 401) {
         const data = await res.json().catch(() => ({})) as { detail?: string }
-        if (data.detail === 'login_required') onLoginRequired?.()
+        if (data.detail === 'login_required') notifyLoginRequired?.()
         return
       }
 
@@ -695,7 +717,11 @@ export function useChat(sessionId: string | null) {
         error: null,
       }))
 
-      await sendMessage(editedContent.trim(), { token, sessionId: requestSessionId, onLoginRequired })
+      await sendMessage(editedContent.trim(), {
+        token: effectiveToken,
+        sessionId: requestSessionId,
+        onLoginRequired: notifyLoginRequired,
+      })
     } catch (error) {
       setState(prev => ({
         ...prev,
@@ -705,7 +731,7 @@ export function useChat(sessionId: string | null) {
     } finally {
       restartInFlightRef.current = false
     }
-  }, [sessionId, sendMessage])
+  }, [authToken, onLoginRequired, sessionId, sendMessage])
 
   return {
     messages: state.messages,

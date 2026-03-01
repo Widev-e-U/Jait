@@ -9,6 +9,7 @@ export interface SchedulerToolExecution {
   input: unknown;
   sessionId: string;
   workspaceRoot: string;
+  userId?: string | null;
 }
 
 export interface SchedulerExecutionResult {
@@ -19,6 +20,7 @@ export interface SchedulerExecutionResult {
 
 export interface ScheduledJobRecord {
   id: string;
+  userId: string | null;
   name: string;
   cron: string;
   toolName: string;
@@ -67,12 +69,21 @@ function parseInput(input: string | null): unknown {
   }
 }
 
+function normalizeToolName(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return trimmed;
+  const firstUnderscore = trimmed.indexOf("_");
+  if (firstUnderscore === -1) return trimmed;
+  return `${trimmed.slice(0, firstUnderscore)}.${trimmed.slice(firstUnderscore + 1)}`;
+}
+
 function mapJob(row: typeof scheduledJobs.$inferSelect): ScheduledJobRecord {
   return {
     id: row.id,
+    userId: row.userId ?? null,
     name: row.name,
     cron: row.cron,
-    toolName: row.toolName,
+    toolName: normalizeToolName(row.toolName),
     input: parseInput(row.input),
     sessionId: row.sessionId ?? "default",
     workspaceRoot: row.workspaceRoot ?? process.cwd(),
@@ -102,16 +113,19 @@ export class SchedulerService {
     this.timer = null;
   }
 
-  list(): ScheduledJobRecord[] {
+  list(userId?: string): ScheduledJobRecord[] {
     const rows = this.options.db
       .select()
       .from(scheduledJobs)
       .orderBy(desc(scheduledJobs.updatedAt))
       .all();
-    return rows.map(mapJob);
+    const all = rows.map(mapJob);
+    if (!userId) return all;
+    return all.filter((job) => job.userId === userId);
   }
 
   create(params: {
+    userId?: string;
     name: string;
     cron: string;
     toolName: string;
@@ -124,9 +138,10 @@ export class SchedulerService {
     const id = uuidv7();
     this.options.db.insert(scheduledJobs).values({
       id,
+      userId: params.userId ?? null,
       name: params.name,
       cron: params.cron,
-      toolName: params.toolName,
+      toolName: normalizeToolName(params.toolName),
       input: JSON.stringify(params.input ?? {}),
       sessionId: params.sessionId ?? "default",
       workspaceRoot: params.workspaceRoot ?? process.cwd(),
@@ -138,45 +153,54 @@ export class SchedulerService {
     return this.get(id)!;
   }
 
-  get(id: string): ScheduledJobRecord | null {
+  get(id: string, userId?: string): ScheduledJobRecord | null {
     const row = this.options.db.select().from(scheduledJobs).where(eq(scheduledJobs.id, id)).get();
-    return row ? mapJob(row) : null;
+    const job = row ? mapJob(row) : null;
+    if (!job) return null;
+    if (userId && job.userId !== userId) return null;
+    return job;
   }
 
-  remove(id: string): boolean {
-    const exists = this.get(id);
+  remove(id: string, userId?: string): boolean {
+    const exists = this.get(id, userId);
     if (!exists) return false;
     this.options.db.delete(scheduledJobs).where(eq(scheduledJobs.id, id)).run();
     return true;
   }
 
-  update(id: string, patch: { name?: string; cron?: string; enabled?: boolean; input?: unknown }): ScheduledJobRecord | null {
-    const existing = this.get(id);
+  update(
+    id: string,
+    patch: { name?: string; cron?: string; toolName?: string; enabled?: boolean; input?: unknown },
+    userId?: string,
+  ): ScheduledJobRecord | null {
+    const existing = this.get(id, userId);
     if (!existing) return null;
 
     this.options.db.update(scheduledJobs).set({
       name: patch.name ?? existing.name,
       cron: patch.cron ?? existing.cron,
+      toolName: patch.toolName ? normalizeToolName(patch.toolName) : existing.toolName,
       enabled: patch.enabled === undefined ? (existing.enabled ? 1 : 0) : (patch.enabled ? 1 : 0),
       input: patch.input === undefined ? JSON.stringify(existing.input) : JSON.stringify(patch.input),
       updatedAt: new Date().toISOString(),
     }).where(eq(scheduledJobs.id, id)).run();
 
-    return this.get(id);
+    return this.get(id, userId);
   }
 
-  async trigger(id: string): Promise<SchedulerExecutionResult> {
-    const job = this.get(id);
+  async trigger(id: string, userId?: string): Promise<SchedulerExecutionResult> {
+    const job = this.get(id, userId);
     if (!job) {
       throw new Error(`Job not found: ${id}`);
     }
 
     const actionId = uuidv7();
     const result = await this.options.executeTool({
-      toolName: job.toolName,
+      toolName: normalizeToolName(job.toolName),
       input: job.input,
       sessionId: job.sessionId,
       workspaceRoot: job.workspaceRoot,
+      userId: job.userId,
     });
 
     this.options.db.update(scheduledJobs).set({

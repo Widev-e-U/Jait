@@ -5,13 +5,18 @@ import { JobCard } from './JobCard'
 import { CreateJobDialog } from './CreateJobDialog'
 import { JobHistoryDialog } from './JobHistoryDialog'
 import { JobsApi, type ScheduledJob, type JobRun } from '@/lib/jobs-api'
-import { Plus, RefreshCw, Calendar, AlertCircle, Loader2 } from 'lucide-react'
+import { Plus, RefreshCw, Calendar, AlertCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const api = new JobsApi()
+const DEFAULT_PAGE_SIZE = 20
+const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 export function JobsPage() {
   const [jobs, setJobs] = useState<ScheduledJob[]>([])
   const [recentRuns, setRecentRuns] = useState<Record<string, JobRun | null>>({})
+  const [totalJobs, setTotalJobs] = useState(0)
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(DEFAULT_PAGE_SIZE)
   const [isLoading, setIsLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -20,17 +25,20 @@ export function JobsPage() {
   const [editingJob, setEditingJob] = useState<ScheduledJob | null>(null)
   const [historyJob, setHistoryJob] = useState<ScheduledJob | null>(null)
 
-  const loadJobs = useCallback(async () => {
+  const loadJobs = useCallback(async (targetPage: number, targetSize: number) => {
     setIsLoading(true)
     setError(null)
     try {
-      const data = await api.listJobs()
-      setJobs(data)
+      const paged = await api.listJobsPage(targetPage, targetSize, true)
+      setJobs(paged.items)
+      setTotalJobs(paged.total)
+      setPage(paged.page)
+      setPageSize(paged.size)
       
       // Load recent run for each job
       const runsMap: Record<string, JobRun | null> = {}
       await Promise.all(
-        data.map(async (job) => {
+        paged.items.map(async (job) => {
           try {
             const runs = await api.getJobRuns(job.id, 1)
             runsMap[job.id] = runs[0] || null
@@ -39,7 +47,7 @@ export function JobsPage() {
           }
         })
       )
-      setRecentRuns(runsMap)
+      setRecentRuns(prev => ({ ...prev, ...runsMap }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load jobs')
     } finally {
@@ -48,13 +56,13 @@ export function JobsPage() {
   }, [])
 
   useEffect(() => {
-    loadJobs()
-  }, [loadJobs])
+    void loadJobs(page, pageSize)
+  }, [loadJobs, page, pageSize])
 
   const handleToggle = async (id: string, enabled: boolean) => {
     try {
       const updated = await api.updateJob(id, { enabled })
-      setJobs(jobs.map(j => j.id === id ? updated : j))
+      setJobs(prev => prev.map(j => j.id === id ? updated : j))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to update job')
     }
@@ -63,7 +71,7 @@ export function JobsPage() {
   const handleTrigger = async (id: string) => {
     try {
       const run = await api.triggerJob(id)
-      setRecentRuns({ ...recentRuns, [id]: run })
+      setRecentRuns(prev => ({ ...prev, [id]: run }))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to trigger job')
     }
@@ -73,22 +81,30 @@ export function JobsPage() {
     if (!confirm('Are you sure you want to delete this job?')) return
     try {
       await api.deleteJob(id)
-      setJobs(jobs.filter(j => j.id !== id))
+      const nextTotal = Math.max(0, totalJobs - 1)
+      const nextTotalPages = Math.max(1, Math.ceil(nextTotal / pageSize))
+      const nextPage = Math.min(page, nextTotalPages)
+      setPage(nextPage)
+      await loadJobs(nextPage, pageSize)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete job')
     }
   }
 
-  const handleCreated = (job: ScheduledJob) => {
-    setJobs([job, ...jobs])
+  const handleCreated = (_job: ScheduledJob) => {
+    setPage(1)
+    void loadJobs(1, pageSize)
     setIsCreateOpen(false)
   }
 
   const handleUpdated = (job: ScheduledJob) => {
-    setJobs(jobs.map(j => j.id === job.id ? job : j))
+    setJobs(prev => prev.map(j => j.id === job.id ? job : j))
     setEditingJob(null)
   }
 
+  const totalPages = Math.max(1, Math.ceil(totalJobs / pageSize))
+  const pageStart = totalJobs === 0 ? 0 : ((page - 1) * pageSize) + 1
+  const pageEnd = Math.min(totalJobs, page * pageSize)
   const enabledCount = jobs.filter(j => j.enabled).length
   const agentTaskCount = jobs.filter(j => j.job_type === 'agent_task').length
   const systemJobCount = jobs.filter(j => j.job_type === 'system_job').length
@@ -107,7 +123,7 @@ export function JobsPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={loadJobs} disabled={isLoading}>
+          <Button variant="outline" onClick={() => void loadJobs(page, pageSize)} disabled={isLoading}>
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
@@ -121,16 +137,16 @@ export function JobsPage() {
       {/* Stats */}
       <div className="flex items-center gap-4 mb-6">
         <Badge variant="outline" className="text-sm py-1 px-3">
-          {jobs.length} total
+          {totalJobs} total
         </Badge>
         <Badge variant="default" className="text-sm py-1 px-3">
-          {enabledCount} enabled
+          {enabledCount} enabled on page
         </Badge>
         <Badge variant="secondary" className="text-sm py-1 px-3">
-          {agentTaskCount} agent tasks
+          {agentTaskCount} agent tasks on page
         </Badge>
         <Badge variant="secondary" className="text-sm py-1 px-3">
-          {systemJobCount} system jobs
+          {systemJobCount} system jobs on page
         </Badge>
       </div>
 
@@ -185,6 +201,54 @@ export function JobsPage() {
           ))}
         </div>
       )}
+
+      {/* Pagination */}
+      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+        <div className="text-sm text-muted-foreground">
+          Showing {pageStart}–{pageEnd} of {totalJobs}
+        </div>
+        <div className="flex items-center gap-2">
+          <label className="text-sm text-muted-foreground" htmlFor="jobs-page-size">
+            Per page
+          </label>
+          <select
+            id="jobs-page-size"
+            className="h-8 rounded-md border bg-background px-2 text-sm"
+            value={pageSize}
+            onChange={(event) => {
+              const nextSize = Number.parseInt(event.target.value, 10)
+              if (!Number.isFinite(nextSize) || nextSize <= 0) return
+              setPage(1)
+              setPageSize(nextSize)
+            }}
+          >
+            {PAGE_SIZE_OPTIONS.map((size) => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page <= 1 || isLoading}
+            onClick={() => setPage(prev => Math.max(1, prev - 1))}
+          >
+            <ChevronLeft className="h-4 w-4 mr-1" />
+            Prev
+          </Button>
+          <span className="text-sm text-muted-foreground tabular-nums">
+            Page {page} / {totalPages}
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            disabled={page >= totalPages || isLoading}
+            onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+          >
+            Next
+            <ChevronRight className="h-4 w-4 ml-1" />
+          </Button>
+        </div>
+      </div>
 
       {/* Dialogs */}
       <CreateJobDialog

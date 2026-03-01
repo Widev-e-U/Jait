@@ -2,117 +2,217 @@ import { useState, useEffect, useCallback } from 'react'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+export type ThemeMode = 'light' | 'dark' | 'system'
+
 interface User {
   id: string
-  email: string
-  name: string | null
-  picture: string | null
+  username: string
+}
+
+interface UserSettings {
+  theme: ThemeMode
+  api_keys: Record<string, string>
+  updated_at: string
 }
 
 interface AuthState {
   user: User | null
   token: string | null
+  settings: UserSettings | null
   isLoading: boolean
+}
+
+interface AuthResponse {
+  access_token: string
+  user: User
+}
+
+const EMPTY_SETTINGS: UserSettings = {
+  theme: 'system',
+  api_keys: {},
+  updated_at: new Date(0).toISOString(),
+}
+
+async function fetchSettings(token: string): Promise<UserSettings | null> {
+  try {
+    const response = await fetch(`${API_URL}/auth/settings`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+    if (!response.ok) return null
+    return await response.json() as UserSettings
+  } catch {
+    return null
+  }
 }
 
 export function useAuth() {
   const [state, setState] = useState<AuthState>({
     user: null,
     token: null,
+    settings: null,
     isLoading: true,
   })
 
-  // Load token from localStorage on mount
-  useEffect(() => {
-    const token = localStorage.getItem('token')
-    if (token) {
-      // Verify token and get user info
-      fetchUser(token)
-    } else {
-      setState(prev => ({ ...prev, isLoading: false }))
-    }
-  }, [])
-
-  const fetchUser = async (token: string) => {
+  const loadFromToken = useCallback(async (token: string) => {
     try {
       const response = await fetch(`${API_URL}/auth/me`, {
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
         },
-      })
-
-      if (response.ok) {
-        const user = await response.json()
-        setState({ user, token, isLoading: false })
-      } else {
-        // Token invalid, clear it
-        localStorage.removeItem('token')
-        setState({ user: null, token: null, isLoading: false })
-      }
-    } catch {
-      localStorage.removeItem('token')
-      setState({ user: null, token: null, isLoading: false })
-    }
-  }
-
-  const loginWithGoogle = useCallback(async (credential: string) => {
-    try {
-      const response = await fetch(`${API_URL}/auth/google/token`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ credential }),
       })
 
       if (!response.ok) {
-        throw new Error('Login failed')
+        localStorage.removeItem('token')
+        setState({ user: null, token: null, settings: null, isLoading: false })
+        return
       }
 
-      const data = await response.json()
-      localStorage.setItem('token', data.access_token)
+      const user = await response.json() as User
+      const settings = await fetchSettings(token)
       setState({
-        user: data.user,
-        token: data.access_token,
+        user,
+        token,
+        settings: settings ?? EMPTY_SETTINGS,
         isLoading: false,
       })
-
-      return data
-    } catch (error) {
-      console.error('Login error:', error)
-      throw error
+    } catch {
+      localStorage.removeItem('token')
+      setState({ user: null, token: null, settings: null, isLoading: false })
     }
   }, [])
 
+  useEffect(() => {
+    const token = localStorage.getItem('token')
+    if (token) {
+      void loadFromToken(token)
+      return
+    }
+    setState((prev) => ({ ...prev, isLoading: false }))
+  }, [loadFromToken])
+
+  const persistAuth = useCallback(async (payload: AuthResponse) => {
+    localStorage.setItem('token', payload.access_token)
+    const settings = await fetchSettings(payload.access_token)
+    setState({
+      user: payload.user,
+      token: payload.access_token,
+      settings: settings ?? EMPTY_SETTINGS,
+      isLoading: false,
+    })
+  }, [])
+
+  const login = useCallback(async (username: string, password: string) => {
+    const response = await fetch(`${API_URL}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Login failed' }))
+      throw new Error(error.detail ?? 'Login failed')
+    }
+    const data = await response.json() as AuthResponse
+    await persistAuth(data)
+    return data
+  }, [persistAuth])
+
+  const register = useCallback(async (username: string, password: string) => {
+    const response = await fetch(`${API_URL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password }),
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Registration failed' }))
+      throw new Error(error.detail ?? 'Registration failed')
+    }
+    const data = await response.json() as AuthResponse
+    await persistAuth(data)
+    return data
+  }, [persistAuth])
+
   const logout = useCallback(() => {
     localStorage.removeItem('token')
-    setState({ user: null, token: null, isLoading: false })
+    setState({ user: null, token: null, settings: null, isLoading: false })
   }, [])
+
+  const refreshSettings = useCallback(async () => {
+    if (!state.token) return null
+    const settings = await fetchSettings(state.token)
+    if (settings) {
+      setState((prev) => ({ ...prev, settings }))
+      return settings
+    }
+    return null
+  }, [state.token])
+
+  const updateSettings = useCallback(async (patch: {
+    theme?: ThemeMode
+    api_keys?: Record<string, string>
+  }) => {
+    if (!state.token) throw new Error('Not authenticated')
+    const response = await fetch(`${API_URL}/auth/settings`, {
+      method: 'PATCH',
+      headers: {
+        Authorization: `Bearer ${state.token}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(patch),
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to update settings' }))
+      throw new Error(error.detail ?? 'Failed to update settings')
+    }
+    const settings = await response.json() as UserSettings
+    setState((prev) => ({ ...prev, settings }))
+    return settings
+  }, [state.token])
+
+  const clearSessionArchive = useCallback(async () => {
+    if (!state.token) throw new Error('Not authenticated')
+    const response = await fetch(`${API_URL}/auth/settings/archive`, {
+      method: 'DELETE',
+      headers: {
+        Authorization: `Bearer ${state.token}`,
+      },
+    })
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({ detail: 'Failed to clear archive' }))
+      throw new Error(error.detail ?? 'Failed to clear archive')
+    }
+    return await response.json() as { ok: boolean; removed: number }
+  }, [state.token])
 
   const bindSession = useCallback(async (sessionId: string) => {
     if (!state.token) return
-
     try {
       await fetch(`${API_URL}/auth/session/bind`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${state.token}`,
+          Authorization: `Bearer ${state.token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ session_id: sessionId }),
       })
-    } catch (error) {
-      console.error('Failed to bind session:', error)
+    } catch {
+      // no-op
     }
   }, [state.token])
 
   return {
     user: state.user,
     token: state.token,
+    settings: state.settings ?? EMPTY_SETTINGS,
     isLoading: state.isLoading,
     isAuthenticated: !!state.user,
-    loginWithGoogle,
+    login,
+    register,
     logout,
     bindSession,
+    refreshSettings,
+    updateSettings,
+    clearSessionArchive,
   }
 }

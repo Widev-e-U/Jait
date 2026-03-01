@@ -11,6 +11,8 @@ export interface ScheduledJob {
   description: string | null
   cron_expression: string
   job_type: string
+  tool_name?: string
+  payload?: Record<string, unknown> | null
   prompt: string | null
   provider: string | null
   model: string | null
@@ -49,7 +51,9 @@ export interface UpdateJobRequest {
   name?: string
   description?: string
   cron_expression?: string
+  job_type?: JobType
   prompt?: string
+  payload?: Record<string, unknown>
   provider?: string
   model?: string
   enabled?: boolean
@@ -60,14 +64,22 @@ export interface ProviderInfo {
   models: string[]
 }
 
+export interface PaginatedResult<T> {
+  items: T[]
+  total: number
+  page: number
+  size: number
+}
+
 export class JobsApi {
   private getToken(): string | null {
-    return localStorage.getItem('auth_token')
+    return localStorage.getItem('token')
   }
 
-  private getHeaders(): HeadersInit {
-    const headers: HeadersInit = {
-      'Content-Type': 'application/json',
+  private getHeaders(withJsonBody = false): HeadersInit {
+    const headers: HeadersInit = {}
+    if (withJsonBody) {
+      headers['Content-Type'] = 'application/json'
     }
     const token = this.getToken()
     if (token) {
@@ -76,7 +88,7 @@ export class JobsApi {
     return headers
   }
 
-  async listJobs(page = 1, size = 100, includeDisabled = true): Promise<ScheduledJob[]> {
+  async listJobsPage(page = 1, size = 20, includeDisabled = true): Promise<PaginatedResult<ScheduledJob>> {
     const params = new URLSearchParams({
       page: page.toString(),
       size: size.toString(),
@@ -91,8 +103,34 @@ export class JobsApi {
       throw new Error(`Failed to list jobs: ${response.statusText}`)
     }
 
-    const data = await response.json()
-    return Array.isArray(data) ? data : data.items ?? []
+    const data = await response.json() as unknown
+
+    if (Array.isArray(data)) {
+      return {
+        items: data as ScheduledJob[],
+        total: data.length,
+        page: 1,
+        size: data.length,
+      }
+    }
+
+    const record = data && typeof data === 'object' ? data as Record<string, unknown> : {}
+    const rawItems = Array.isArray(record.items) ? record.items as ScheduledJob[] : []
+    const total = typeof record.total === 'number' ? record.total : rawItems.length
+    const currentPage = typeof record.page === 'number' ? record.page : page
+    const currentSize = typeof record.size === 'number' ? record.size : size
+
+    return {
+      items: rawItems,
+      total,
+      page: currentPage,
+      size: currentSize,
+    }
+  }
+
+  async listJobs(page = 1, size = 100, includeDisabled = true): Promise<ScheduledJob[]> {
+    const result = await this.listJobsPage(page, size, includeDisabled)
+    return result.items
   }
 
   async getJob(jobId: string): Promise<ScheduledJob> {
@@ -110,7 +148,7 @@ export class JobsApi {
   async createJob(data: CreateJobRequest): Promise<ScheduledJob> {
     const response = await fetch(`${API_URL}/jobs`, {
       method: 'POST',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(true),
       body: JSON.stringify(data),
     })
 
@@ -125,7 +163,7 @@ export class JobsApi {
   async updateJob(jobId: string, data: UpdateJobRequest): Promise<ScheduledJob> {
     const response = await fetch(`${API_URL}/jobs/${jobId}`, {
       method: 'PATCH',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(true),
       body: JSON.stringify(data),
     })
 
@@ -151,11 +189,13 @@ export class JobsApi {
   async triggerJob(jobId: string): Promise<JobRun> {
     const response = await fetch(`${API_URL}/jobs/${jobId}/trigger`, {
       method: 'POST',
-      headers: this.getHeaders(),
+      headers: this.getHeaders(true),
+      body: JSON.stringify({}),
     })
 
     if (!response.ok) {
-      throw new Error(`Failed to trigger job: ${response.statusText}`)
+      const error = await response.json().catch(() => ({ detail: response.statusText }))
+      throw new Error(error.detail || `Failed to trigger job: ${response.statusText}`)
     }
 
     return response.json()

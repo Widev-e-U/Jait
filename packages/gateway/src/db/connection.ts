@@ -54,12 +54,40 @@ export function migrateDatabase(sqlite: Database) {
   sqlite.run(`
     CREATE TABLE IF NOT EXISTS sessions (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       name TEXT,
       workspace_path TEXT,
       created_at TEXT NOT NULL,
       last_active_at TEXT NOT NULL,
       status TEXT DEFAULT 'active',
       metadata TEXT
+    )
+  `);
+  // Migration: add user_id column if table already existed without it
+  try {
+    sqlite.run(`ALTER TABLE sessions ADD COLUMN user_id TEXT`);
+  } catch {
+    // column already exists — ignore
+  }
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status, last_active_at DESC)`);
+
+  sqlite.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id TEXT PRIMARY KEY,
+      username TEXT NOT NULL UNIQUE,
+      password_hash TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`);
+
+  sqlite.run(`
+    CREATE TABLE IF NOT EXISTS user_settings (
+      user_id TEXT PRIMARY KEY,
+      theme TEXT NOT NULL DEFAULT 'system',
+      api_keys TEXT,
+      updated_at TEXT NOT NULL
     )
   `);
 
@@ -150,6 +178,7 @@ export function migrateDatabase(sqlite: Database) {
   sqlite.run(`
     CREATE TABLE IF NOT EXISTS scheduled_jobs (
       id TEXT PRIMARY KEY,
+      user_id TEXT,
       name TEXT NOT NULL,
       cron TEXT NOT NULL,
       tool_name TEXT NOT NULL,
@@ -162,8 +191,15 @@ export function migrateDatabase(sqlite: Database) {
       updated_at TEXT NOT NULL
     )
   `);
+  // Migration: add user_id column if table already existed without it
+  try {
+    sqlite.run(`ALTER TABLE scheduled_jobs ADD COLUMN user_id TEXT`);
+  } catch {
+    // column already exists — ignore
+  }
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)`);
   sqlite.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_updated ON scheduled_jobs(updated_at DESC)`);
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_user_updated ON scheduled_jobs(user_id, updated_at DESC)`);
 
   // Migration: add tool_calls column if table already existed without it
   try {

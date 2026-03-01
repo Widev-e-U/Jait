@@ -9,21 +9,27 @@
  *   POST   /api/sessions/:id/archive  — archive
  */
 import type { FastifyInstance } from "fastify";
+import type { AppConfig } from "../config.js";
 import type { SessionService } from "../services/sessions.js";
 import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 import type { HookBus } from "../scheduler/hooks.js";
+import { requireAuth } from "../security/http-auth.js";
 
 export function registerSessionRoutes(
   app: FastifyInstance,
+  config: AppConfig,
   sessionService: SessionService,
   audit: AuditWriter,
   hooks?: HookBus,
 ) {
   // Create session
   app.post("/api/sessions", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
     const session = sessionService.create({
+      userId: authUser.id,
       name: typeof body["name"] === "string" ? body["name"] : undefined,
       workspacePath:
         typeof body["workspacePath"] === "string"
@@ -48,25 +54,31 @@ export function registerSessionRoutes(
   });
 
   // List sessions
-  app.get("/api/sessions", async (request) => {
+  app.get("/api/sessions", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const query = request.query as Record<string, unknown>;
     const status =
       typeof query["status"] === "string" ? query["status"] : undefined;
-    return { sessions: sessionService.list(status) };
+    return { sessions: sessionService.list(status, authUser.id) };
   });
 
   // Get the most recently active session
-  app.get("/api/sessions/last-active", async () => {
-    const session = sessionService.lastActive();
+  app.get("/api/sessions/last-active", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const session = sessionService.lastActive(authUser.id);
     return { session };
   });
 
   // Get session by ID
   app.get("/api/sessions/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const { id } = request.params as { id: string };
     // Skip the /:sessionId/messages route (handled by chat.ts)
     if (id === "messages") return reply.callNotFound();
-    const session = sessionService.getById(id);
+    const session = sessionService.getById(id, authUser.id);
     if (!session) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
@@ -75,26 +87,30 @@ export function registerSessionRoutes(
 
   // Update session
   app.patch("/api/sessions/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const { id } = request.params as { id: string };
     const body = (request.body as Record<string, unknown>) ?? {};
-    const session = sessionService.getById(id);
+    const session = sessionService.getById(id, authUser.id);
     if (!session) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
     sessionService.update(id, {
       name: typeof body["name"] === "string" ? body["name"] : undefined,
-    });
-    return sessionService.getById(id);
+    }, authUser.id);
+    return sessionService.getById(id, authUser.id);
   });
 
   // Soft-delete session
   app.delete("/api/sessions/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const { id } = request.params as { id: string };
-    const session = sessionService.getById(id);
+    const session = sessionService.getById(id, authUser.id);
     if (!session) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
-    sessionService.delete(id);
+    sessionService.delete(id, authUser.id);
 
     audit.write({
       sessionId: id,
@@ -109,14 +125,16 @@ export function registerSessionRoutes(
 
   // Archive session
   app.post("/api/sessions/:id/archive", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const { id } = request.params as { id: string };
-    const session = sessionService.getById(id);
+    const session = sessionService.getById(id, authUser.id);
     if (!session) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
     }
-    sessionService.archive(id);
+    sessionService.archive(id, authUser.id);
     hooks?.emit("session.end", { sessionId: id });
-    return sessionService.getById(id);
+    return sessionService.getById(id, authUser.id);
   });
 
   // ─── Self-control tools ────────────────────────────────────────────

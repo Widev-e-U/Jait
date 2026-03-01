@@ -5,8 +5,13 @@ import type {
   SurfaceStopInput,
   SurfaceSnapshot,
 } from "./contracts.js";
+import { spawn } from "node:child_process";
+import { once } from "node:events";
+import { existsSync } from "node:fs";
 import { mkdir } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
+import { createInterface } from "node:readline";
+import { fileURLToPath } from "node:url";
 
 declare const window: any;
 declare const document: any;
@@ -41,6 +46,47 @@ export interface BrowserDriver {
 export interface BrowserSurfaceOptions {
   driverFactory?: () => Promise<BrowserDriver>;
 }
+
+type PlaywrightBrowser = {
+  newContext: (opts: Record<string, unknown>) => Promise<{
+    newPage: () => Promise<{
+      goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
+      click: (selector: string) => Promise<void>;
+      fill: (selector: string, text: string) => Promise<void>;
+      evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
+      waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
+      screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
+    }>;
+    close: () => Promise<void>;
+  }>;
+  close: () => Promise<void>;
+};
+
+type PlaywrightChromium = {
+  launch: (opts: Record<string, unknown>) => Promise<PlaywrightBrowser>;
+};
+
+interface BrowserLaunchStrategy {
+  label: string;
+  options: Record<string, unknown>;
+}
+
+interface NodeBridgeResponse {
+  id: number | null;
+  ok: boolean;
+  result?: unknown;
+  error?: string;
+}
+
+interface NodeBridgeEvent {
+  event: "ready" | "fatal";
+  strategy?: string;
+  error?: string;
+}
+
+const DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS = 45_000;
+const DEFAULT_NODE_BRIDGE_READY_TIMEOUT_MS = 60_000;
+const DEFAULT_NODE_BRIDGE_COMMAND_TIMEOUT_MS = 60_000;
 
 export class BrowserSurface implements Surface {
   readonly type = "browser" as const;
@@ -195,6 +241,43 @@ export class BrowserSurfaceFactory {
 }
 
 async function createPlaywrightDriver(): Promise<BrowserDriver> {
+  const runtime = resolveBrowserRuntimeMode();
+  if (runtime === "node-bridge") {
+    return createNodeBridgePlaywrightDriver();
+  }
+
+  try {
+    return await createInProcessPlaywrightDriver();
+  } catch (err) {
+    if (runtime === "auto" && isBunWindowsRuntime() && shouldFallbackToNodeBridge(err)) {
+      return createNodeBridgePlaywrightDriver();
+    }
+    throw err;
+  }
+}
+
+type BrowserRuntimeMode = "auto" | "in-process" | "node-bridge";
+
+function resolveBrowserRuntimeMode(): BrowserRuntimeMode {
+  const configured = process.env["BROWSER_RUNTIME"]?.trim().toLowerCase();
+  if (configured === "in-process") return "in-process";
+  if (configured === "node" || configured === "node-bridge") return "node-bridge";
+  if (isBunWindowsRuntime()) return "node-bridge";
+  return "auto";
+}
+
+function isBunWindowsRuntime(): boolean {
+  return process.platform === "win32" && Boolean(process.versions.bun);
+}
+
+function shouldFallbackToNodeBridge(err: unknown): boolean {
+  const message = extractErrorMessage(err).toLowerCase();
+  return message.includes("launch: timeout")
+    || message.includes("playwright browser launch failed")
+    || message.includes("failed to create playwright browser context");
+}
+
+async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
   // Optional runtime dependency: keep static imports out so gateway can still
   // boot in environments that do not need browser automation.
   const loadPlaywright = new Function("return import('playwright')") as () => Promise<unknown>;
@@ -208,32 +291,36 @@ async function createPlaywrightDriver(): Promise<BrowserDriver> {
     );
   }
 
-  const chromium = (mod as { chromium?: { launch: (opts: Record<string, unknown>) => Promise<unknown> } }).chromium;
+  const chromium = (mod as { chromium?: PlaywrightChromium }).chromium;
   if (!chromium) {
     throw new Error("Failed to load Playwright chromium driver.");
   }
 
-  const browser = await chromium.launch({
-    headless: process.env["BROWSER_HEADLESS"] !== "false",
-  }) as {
-    newContext: (opts: Record<string, unknown>) => Promise<{
-      newPage: () => Promise<{
-        goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
-        click: (selector: string) => Promise<void>;
-        fill: (selector: string, text: string) => Promise<void>;
-        evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
-        waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
-        screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
-      }>;
-      close: () => Promise<void>;
-    }>;
-    close: () => Promise<void>;
-  };
+  const headless = process.env["BROWSER_HEADLESS"] !== "false";
+  const launchTimeoutMs = parsePositiveIntegerEnv(
+    process.env["BROWSER_LAUNCH_TIMEOUT_MS"],
+    DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS,
+  );
+  const launchStrategies = buildBrowserLaunchStrategies(headless, launchTimeoutMs);
+  const browser = await launchBrowserWithFallback(chromium, launchStrategies);
 
-  const context = await browser.newContext({
-    ignoreHTTPSErrors: process.env["BROWSER_IGNORE_HTTPS_ERRORS"] === "true",
-  });
-  const page = await context.newPage();
+  let context: Awaited<ReturnType<PlaywrightBrowser["newContext"]>> | null = null;
+  let page: Awaited<ReturnType<Awaited<ReturnType<PlaywrightBrowser["newContext"]>>["newPage"]>> | null = null;
+  try {
+    context = await browser.newContext({
+      ignoreHTTPSErrors: process.env["BROWSER_IGNORE_HTTPS_ERRORS"] === "true",
+    });
+    page = await context.newPage();
+  } catch (err) {
+    await browser.close().catch(() => {});
+    throw err;
+  }
+  if (!context || !page) {
+    await browser.close().catch(() => {});
+    throw new Error("Failed to create Playwright browser context.");
+  }
+  const activeContext = context;
+  const activePage = page;
 
   /**
    * Race a Playwright page operation against an AbortSignal.
@@ -249,7 +336,7 @@ async function createPlaywrightDriver(): Promise<BrowserDriver> {
         if (settled) return;
         settled = true;
         // Stop the page's in-flight navigation / network requests
-        page.evaluate(() => window.stop()).catch(() => { /* page may be gone */ });
+        activePage.evaluate(() => window.stop()).catch(() => { /* page may be gone */ });
         reject(new Error("Cancelled"));
       };
       signal.addEventListener("abort", onAbort, { once: true });
@@ -262,17 +349,17 @@ async function createPlaywrightDriver(): Promise<BrowserDriver> {
 
   const driver: BrowserDriver = {
     async navigate(url: string, signal?: AbortSignal) {
-      await withSignal(page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
+      await withSignal(activePage.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
     },
     async click(selector: string, signal?: AbortSignal) {
-      await withSignal(page.click(selector), signal);
+      await withSignal(activePage.click(selector), signal);
     },
     async typeText(selector: string, text: string, signal?: AbortSignal) {
-      await withSignal(page.fill(selector, text), signal);
+      await withSignal(activePage.fill(selector, text), signal);
     },
     async scroll(x: number, y: number, signal?: AbortSignal) {
       await withSignal(
-        page.evaluate(
+        activePage.evaluate(
           ([targetX, targetY]: [number, number]) => window.scrollTo(targetX, targetY),
           [x, y],
         ),
@@ -280,7 +367,7 @@ async function createPlaywrightDriver(): Promise<BrowserDriver> {
       );
     },
     async select(selector: string, value: string, signal?: AbortSignal) {
-      const selectPage = page as {
+      const selectPage = activePage as {
         selectOption?: (s: string, v: string) => Promise<unknown>;
       };
       if (!selectPage.selectOption) {
@@ -289,18 +376,18 @@ async function createPlaywrightDriver(): Promise<BrowserDriver> {
       await withSignal(selectPage.selectOption(selector, value), signal);
     },
     async waitFor(selector: string, timeoutMs: number, signal?: AbortSignal) {
-      await withSignal(page.waitForSelector(selector, { timeout: timeoutMs }), signal);
+      await withSignal(activePage.waitForSelector(selector, { timeout: timeoutMs }), signal);
     },
     async screenshot(path?: string, signal?: AbortSignal) {
       const outPath = path
         ? resolve(path)
         : resolve(process.cwd(), "artifacts", `browser-${Date.now()}.png`);
       await mkdir(dirname(outPath), { recursive: true });
-      await withSignal(page.screenshot({ path: outPath, fullPage: true }), signal);
+      await withSignal(activePage.screenshot({ path: outPath, fullPage: true }), signal);
       return outPath;
     },
     async snapshot(signal?: AbortSignal) {
-      return withSignal(page.evaluate(() => {
+      return withSignal(activePage.evaluate(() => {
         const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
         const bodyText = normalize(document.body?.innerText ?? "").slice(0, 12_000);
         const title = document.title || "(untitled)";
@@ -349,10 +436,332 @@ async function createPlaywrightDriver(): Promise<BrowserDriver> {
       }) as Promise<BrowserPageSnapshot>, signal);
     },
     async close() {
-      await context.close();
+      await activeContext.close();
       await browser.close();
     },
   };
 
   return driver;
+}
+
+async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
+  const nodeBinary = process.env["BROWSER_NODE_BINARY"]?.trim() || "node";
+  const scriptPath = resolveNodeBridgeScriptPath();
+  const launchTimeoutMs = parsePositiveIntegerEnv(
+    process.env["BROWSER_LAUNCH_TIMEOUT_MS"],
+    DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS,
+  );
+  const readyTimeoutMs = parsePositiveIntegerEnv(
+    process.env["BROWSER_NODE_BRIDGE_READY_TIMEOUT_MS"],
+    Math.max(DEFAULT_NODE_BRIDGE_READY_TIMEOUT_MS, launchTimeoutMs + 15_000),
+  );
+  const commandTimeoutMs = parsePositiveIntegerEnv(
+    process.env["BROWSER_NODE_BRIDGE_COMMAND_TIMEOUT_MS"],
+    DEFAULT_NODE_BRIDGE_COMMAND_TIMEOUT_MS,
+  );
+
+  const child = spawn(nodeBinary, [scriptPath], {
+    cwd: process.cwd(),
+    env: process.env,
+    stdio: ["pipe", "pipe", "pipe"],
+  });
+
+  const stdout = child.stdout;
+  const stderr = child.stderr;
+  const stdin = child.stdin;
+  if (!stdout || !stderr || !stdin) {
+    child.kill();
+    throw new Error("Failed to initialize node bridge stdio streams.");
+  }
+
+  const stderrChunks: string[] = [];
+  stderr.setEncoding("utf8");
+  stderr.on("data", (chunk: string) => {
+    if (!chunk) return;
+    stderrChunks.push(chunk);
+    if (stderrChunks.length > 20) stderrChunks.shift();
+  });
+
+  type PendingRequest = {
+    resolve: (value: unknown) => void;
+    reject: (reason?: unknown) => void;
+    timer: ReturnType<typeof setTimeout>;
+  };
+  const pending = new Map<number, PendingRequest>();
+  let nextId = 1;
+  let stopped = false;
+
+  let startResolve: (() => void) | null = null;
+  let startReject: ((reason?: unknown) => void) | null = null;
+  const startPromise = new Promise<void>((resolve, reject) => {
+    startResolve = resolve;
+    startReject = reject;
+  });
+  const readyTimer = setTimeout(() => {
+    startReject?.(new Error(`Node bridge startup timed out after ${readyTimeoutMs}ms`));
+  }, readyTimeoutMs);
+
+  const rejectAllPending = (reason: unknown) => {
+    for (const [id, entry] of pending.entries()) {
+      clearTimeout(entry.timer);
+      pending.delete(id);
+      entry.reject(reason);
+    }
+  };
+  const teardownReason = (prefix: string): Error => {
+    const stderrText = stderrChunks.join("").trim();
+    return new Error(stderrText ? `${prefix}: ${stderrText}` : prefix);
+  };
+
+  const rl = createInterface({ input: stdout, crlfDelay: Infinity });
+  rl.on("line", (line) => {
+    let payload: NodeBridgeEvent | NodeBridgeResponse;
+    try {
+      payload = JSON.parse(line) as NodeBridgeEvent | NodeBridgeResponse;
+    } catch {
+      return;
+    }
+    if ("event" in payload) {
+      if (payload.event === "ready") {
+        startResolve?.();
+        return;
+      }
+      if (payload.event === "fatal") {
+        const message = payload.error?.trim() || "Node bridge reported fatal error";
+        const err = new Error(message);
+        startReject?.(err);
+        rejectAllPending(err);
+        return;
+      }
+      return;
+    }
+    if (typeof payload.id !== "number") return;
+    const entry = pending.get(payload.id);
+    if (!entry) return;
+    pending.delete(payload.id);
+    clearTimeout(entry.timer);
+    if (payload.ok) entry.resolve(payload.result);
+    else entry.reject(new Error(payload.error?.trim() || "Node bridge command failed"));
+  });
+
+  child.on("exit", (code, signal) => {
+    stopped = true;
+    clearTimeout(readyTimer);
+    const reason = teardownReason(
+      `Node bridge exited before completion (code=${code ?? "null"}, signal=${signal ?? "null"})`,
+    );
+    startReject?.(reason);
+    rejectAllPending(reason);
+  });
+
+  child.on("error", (err) => {
+    stopped = true;
+    clearTimeout(readyTimer);
+    startReject?.(err);
+    rejectAllPending(err);
+  });
+
+  try {
+    await startPromise;
+  } catch (err) {
+    clearTimeout(readyTimer);
+    if (!stopped) child.kill();
+    throw err;
+  }
+  clearTimeout(readyTimer);
+
+  const sendCommand = async (
+    method: string,
+    params: Record<string, unknown>,
+    signal?: AbortSignal,
+  ): Promise<unknown> => {
+    if (signal?.aborted) {
+      throw new Error("Cancelled");
+    }
+    if (stopped) {
+      throw teardownReason("Node bridge process is not running");
+    }
+
+    const id = nextId++;
+    const op = new Promise<unknown>((resolveCommand, rejectCommand) => {
+      const timer = setTimeout(() => {
+        pending.delete(id);
+        rejectCommand(new Error(`Node bridge command '${method}' timed out after ${commandTimeoutMs}ms`));
+      }, commandTimeoutMs);
+      pending.set(id, { resolve: resolveCommand, reject: rejectCommand, timer });
+      const payload = JSON.stringify({ id, method, params });
+      stdin.write(`${payload}\n`);
+    });
+
+    if (!signal) return op;
+    return new Promise<unknown>((resolveOp, rejectOp) => {
+      let done = false;
+      const onAbort = () => {
+        if (done) return;
+        done = true;
+        const pendingEntry = pending.get(id);
+        if (pendingEntry) {
+          clearTimeout(pendingEntry.timer);
+          pending.delete(id);
+        }
+        rejectOp(new Error("Cancelled"));
+      };
+      signal.addEventListener("abort", onAbort, { once: true });
+      op.then(
+        (value) => {
+          if (done) return;
+          done = true;
+          signal.removeEventListener("abort", onAbort);
+          resolveOp(value);
+        },
+        (error) => {
+          if (done) return;
+          done = true;
+          signal.removeEventListener("abort", onAbort);
+          rejectOp(error);
+        },
+      );
+    });
+  };
+
+  const closeBridge = async () => {
+    if (stopped) return;
+    try {
+      await sendCommand("close", {});
+    } catch {
+      child.kill();
+    }
+    stopped = true;
+    child.kill();
+    await once(child, "exit").catch(() => {});
+  };
+
+  const driver: BrowserDriver = {
+    async navigate(url: string, signal?: AbortSignal) {
+      await sendCommand("navigate", { url }, signal);
+    },
+    async click(selector: string, signal?: AbortSignal) {
+      await sendCommand("click", { selector }, signal);
+    },
+    async typeText(selector: string, text: string, signal?: AbortSignal) {
+      await sendCommand("typeText", { selector, text }, signal);
+    },
+    async scroll(x: number, y: number, signal?: AbortSignal) {
+      await sendCommand("scroll", { x, y }, signal);
+    },
+    async select(selector: string, value: string, signal?: AbortSignal) {
+      await sendCommand("select", { selector, value }, signal);
+    },
+    async waitFor(selector: string, timeoutMs: number, signal?: AbortSignal) {
+      await sendCommand("waitFor", { selector, timeoutMs }, signal);
+    },
+    async screenshot(path?: string, signal?: AbortSignal) {
+      const result = await sendCommand("screenshot", { path }, signal);
+      if (typeof result !== "string") {
+        throw new Error("Node bridge returned an invalid screenshot path.");
+      }
+      return result;
+    },
+    async snapshot(signal?: AbortSignal) {
+      const result = await sendCommand("snapshot", {}, signal);
+      if (!result || typeof result !== "object") {
+        throw new Error("Node bridge returned an invalid browser snapshot.");
+      }
+      return result as BrowserPageSnapshot;
+    },
+    async close() {
+      await closeBridge();
+    },
+  };
+
+  return driver;
+}
+
+function resolveNodeBridgeScriptPath(): string {
+  const moduleDir = dirname(fileURLToPath(import.meta.url));
+  const candidates = [
+    resolve(moduleDir, "playwright-node-bridge.cjs"),
+    resolve(process.cwd(), "packages", "gateway", "src", "surfaces", "playwright-node-bridge.cjs"),
+  ];
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) return candidate;
+  }
+  throw new Error(
+    `Unable to locate Playwright node bridge script. Looked in: ${candidates.join(", ")}`,
+  );
+}
+
+function parsePositiveIntegerEnv(raw: string | undefined, fallback: number): number {
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return fallback;
+  return parsed;
+}
+
+function buildBrowserLaunchStrategies(headless: boolean, timeoutMs: number): BrowserLaunchStrategy[] {
+  const strategies: BrowserLaunchStrategy[] = [];
+  const seen = new Set<string>();
+  const addStrategy = (label: string, options: Record<string, unknown>) => {
+    const key = JSON.stringify(options);
+    if (seen.has(key)) return;
+    seen.add(key);
+    strategies.push({ label, options });
+  };
+
+  const preferredChannel = process.env["BROWSER_CHANNEL"]?.trim();
+  if (preferredChannel) {
+    addStrategy(`channel=${preferredChannel}`, {
+      headless,
+      channel: preferredChannel,
+      timeout: timeoutMs,
+    });
+  }
+
+  addStrategy("default", { headless, timeout: timeoutMs });
+
+  const fallbackChannels = parseCsvEnv(
+    process.env["BROWSER_FALLBACK_CHANNELS"],
+    ["chromium", "chrome", "msedge"],
+  );
+  for (const channel of fallbackChannels) {
+    if (channel === preferredChannel) continue;
+    addStrategy(`fallback channel=${channel}`, {
+      headless,
+      channel,
+      timeout: timeoutMs,
+    });
+  }
+
+  return strategies;
+}
+
+function parseCsvEnv(raw: string | undefined, fallback: string[]): string[] {
+  const values = (raw ?? "")
+    .split(",")
+    .map((part) => part.trim())
+    .filter(Boolean);
+  return values.length > 0 ? values : fallback;
+}
+
+async function launchBrowserWithFallback(
+  chromium: PlaywrightChromium,
+  strategies: BrowserLaunchStrategy[],
+): Promise<PlaywrightBrowser> {
+  const errors: string[] = [];
+
+  for (const strategy of strategies) {
+    try {
+      return await chromium.launch(strategy.options);
+    } catch (err) {
+      errors.push(`${strategy.label}: ${extractErrorMessage(err)}`);
+    }
+  }
+
+  const summary = errors.length > 0 ? errors.join(" | ") : "No launch strategies configured.";
+  throw new Error(`Playwright browser launch failed after ${strategies.length} attempt(s): ${summary}`);
+}
+
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
 }

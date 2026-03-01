@@ -28,6 +28,15 @@ export interface ToolCallInfo {
   completedAt?: number
 }
 
+/**
+ * OpenAI sends function names like `terminal_run`; internal tools use
+ * dotted names like `terminal.run`. Normalize to dotted for all UI logic.
+ */
+function normalizeTool(name: string): string {
+  const idx = name.indexOf('_')
+  return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
+}
+
 const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: string }> = {
   'terminal.run':    { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'terminal.stream': { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
@@ -41,6 +50,13 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'surfaces.list':   { icon: Server,    label: 'Surfaces',   color: 'text-purple-500' },
   'surfaces.start':  { icon: Server,    label: 'Surfaces',   color: 'text-purple-500' },
   'surfaces.stop':   { icon: Server,    label: 'Surfaces',   color: 'text-purple-500' },
+  'memory.save':     { icon: FileText,  label: 'Save Memory', color: 'text-amber-500' },
+  'memory.search':   { icon: FileText,  label: 'Search Memory', color: 'text-amber-500' },
+  'memory.forget':   { icon: FileText,  label: 'Forget Memory', color: 'text-amber-500' },
+  'cron.add':        { icon: Server,    label: 'Add Cron',   color: 'text-violet-500' },
+  'cron.list':       { icon: Server,    label: 'List Cron',  color: 'text-violet-500' },
+  'cron.update':     { icon: Server,    label: 'Update Cron', color: 'text-violet-500' },
+  'cron.remove':     { icon: Server,    label: 'Remove Cron', color: 'text-violet-500' },
   'web.search':      { icon: Globe,     label: 'Search',     color: 'text-cyan-500' },
   'web.fetch':       { icon: Globe,     label: 'Fetch',      color: 'text-cyan-500' },
   'browser.navigate': { icon: Globe,    label: 'Navigate',   color: 'text-cyan-500' },
@@ -56,29 +72,59 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
 }
 
 function getToolMeta(tool: string) {
-  return toolMeta[tool] ?? { icon: Terminal, label: tool, color: 'text-muted-foreground' }
+  const normalized = normalizeTool(tool)
+  return toolMeta[normalized] ?? { icon: Terminal, label: normalized, color: 'text-muted-foreground' }
+}
+
+function truncate(value: string, max = 64): string {
+  const trimmed = value.trim()
+  if (trimmed.length <= max) return trimmed
+  return `${trimmed.slice(0, max - 1)}…`
 }
 
 /** Format a tool call's primary display text (e.g. the command or file path) */
 function getCallSummary(tool: string, args: Record<string, unknown>): string {
-  if (tool.startsWith('terminal.')) return String(args.command ?? '')
-  if (tool.startsWith('file.')) return String(args.path ?? '')
+  const normalized = normalizeTool(tool)
+  if (normalized.startsWith('terminal.')) return String(args.command ?? '')
+  if (normalized.startsWith('file.')) return String(args.path ?? '')
+  if (normalized === 'memory.save') {
+    const scope = String(args.scope ?? 'memory')
+    const content = String(args.content ?? '').trim()
+    return content ? `${scope}: ${truncate(content, 80)}` : `scope: ${scope}`
+  }
+  if (normalized === 'memory.search') return String(args.query ?? '')
+  if (normalized === 'memory.forget') return String(args.id ?? '')
+  if (normalized === 'cron.add') {
+    const name = String(args.name ?? 'job')
+    const cron = String(args.cron ?? '')
+    const toolName = String(args.toolName ?? '')
+    if (cron && toolName) return `${name} (${cron}) -> ${toolName}`
+    if (cron) return `${name} (${cron})`
+    return name
+  }
+  if (normalized === 'cron.update') {
+    const id = String(args.id ?? 'job')
+    const cron = String(args.cron ?? '')
+    return cron ? `${id} (${cron})` : id
+  }
+  if (normalized === 'cron.remove') return String(args.id ?? '')
+  if (normalized === 'cron.list') return 'List cron jobs'
   if (tool === 'os.query') return String(args.query ?? '')
   if (tool === 'os.install') return String(args.package ?? '')
-  if (tool === 'browser.navigate') return String(args.url ?? '')
-  if (tool === 'browser.snapshot') return 'Describe page'
-  if (tool === 'browser.click') return String(args.selector ?? '')
-  if (tool === 'browser.type') return `${String(args.selector ?? '')} ← ${String(args.text ?? '')}`
-  if (tool === 'browser.scroll') return `x:${String(args.x ?? 0)} y:${String(args.y ?? 0)}`
-  if (tool === 'browser.select') return `${String(args.selector ?? '')} = ${String(args.value ?? '')}`
-  if (tool === 'browser.wait') return `${String(args.selector ?? '')} (${String(args.timeoutMs ?? 10000)}ms)`
-  if (tool === 'browser.screenshot') return String(args.path ?? 'auto path')
-  if (tool === 'browser.search') return String(args.query ?? '')
-  if (tool === 'browser.fetch') return String(args.url ?? '')
-  if (tool === 'surfaces.start') return `Start ${args.type ?? 'surface'}`
-  if (tool === 'surfaces.stop') return `Stop ${args.surfaceId ?? 'surface'}`
-  if (tool === 'surfaces.list') return 'List surfaces'
-  return JSON.stringify(args)
+  if (normalized === 'browser.navigate') return String(args.url ?? '')
+  if (normalized === 'browser.snapshot') return 'Describe page'
+  if (normalized === 'browser.click') return String(args.selector ?? '')
+  if (normalized === 'browser.type') return `${String(args.selector ?? '')} ← ${String(args.text ?? '')}`
+  if (normalized === 'browser.scroll') return `x:${String(args.x ?? 0)} y:${String(args.y ?? 0)}`
+  if (normalized === 'browser.select') return `${String(args.selector ?? '')} = ${String(args.value ?? '')}`
+  if (normalized === 'browser.wait') return `${String(args.selector ?? '')} (${String(args.timeoutMs ?? 10000)}ms)`
+  if (normalized === 'browser.screenshot') return String(args.path ?? 'auto path')
+  if (normalized === 'browser.search') return String(args.query ?? '')
+  if (normalized === 'browser.fetch') return String(args.url ?? '')
+  if (normalized === 'surfaces.start') return `Start ${args.type ?? 'surface'}`
+  if (normalized === 'surfaces.stop') return `Stop ${args.surfaceId ?? 'surface'}`
+  if (normalized === 'surfaces.list') return 'List surfaces'
+  return `${Object.keys(args ?? {}).length} argument(s)`
 }
 
 /** Pretty formatter for os.query info results */
@@ -113,14 +159,98 @@ function formatSystemInfo(data: Record<string, unknown>): string {
   return lines.join('\n')
 }
 
+function formatSearchResults(data: Record<string, unknown>): string | null {
+  const rawResults = data.results
+  if (!Array.isArray(rawResults) || rawResults.length === 0) return null
+
+  const lines: string[] = []
+  const summary = typeof data.summary === 'string' ? data.summary.trim() : ''
+  if (summary) {
+    lines.push(summary)
+    lines.push('')
+  }
+
+  const results = rawResults
+    .filter((value): value is Record<string, unknown> => typeof value === 'object' && value !== null)
+    .slice(0, 5)
+
+  for (let i = 0; i < results.length; i++) {
+    const entry = results[i]!
+    const title = typeof entry.title === 'string' ? entry.title.trim() : ''
+    const url = typeof entry.url === 'string' ? entry.url.trim() : ''
+    const snippet = typeof entry.snippet === 'string' ? entry.snippet.trim() : ''
+    lines.push(`${i + 1}. ${title || url || 'Result'}`)
+    if (url) lines.push(`   ${url}`)
+    if (snippet) lines.push(`   ${snippet}`)
+    if (i < results.length - 1) lines.push('')
+  }
+
+  return lines.join('\n').trim() || null
+}
+
+function formatMemorySaveResult(data: Record<string, unknown>): string | null {
+  const id = typeof data.id === 'string' ? data.id : ''
+  const scope = typeof data.scope === 'string' ? data.scope : ''
+  const content = typeof data.content === 'string' ? data.content : ''
+  const source = data.source && typeof data.source === 'object'
+    ? data.source as Record<string, unknown>
+    : undefined
+  const sourceType = typeof source?.type === 'string' ? source.type : ''
+  const sourceId = typeof source?.id === 'string' ? source.id : ''
+  const sourceSurface = typeof source?.surface === 'string' ? source.surface : ''
+  const expiresAt = typeof data.expiresAt === 'string' ? data.expiresAt : ''
+
+  const lines: string[] = []
+  if (id) lines.push(`Memory saved: ${id}`)
+  if (scope) lines.push(`Scope: ${scope}`)
+  if (content) lines.push(`Content: ${truncate(content, 240)}`)
+  if (sourceType || sourceId || sourceSurface) {
+    const sourceParts = [sourceType, sourceId, sourceSurface].filter(Boolean)
+    lines.push(`Source: ${sourceParts.join(' / ')}`)
+  }
+  if (expiresAt) lines.push(`Expires: ${expiresAt}`)
+
+  return lines.length > 0 ? lines.join('\n') : null
+}
+
+function formatCronAddResult(data: Record<string, unknown>): string | null {
+  const id = typeof data.id === 'string' ? data.id : ''
+  const name = typeof data.name === 'string' ? data.name : ''
+  const cron = typeof data.cron === 'string' ? data.cron : ''
+  const toolName = typeof data.toolName === 'string' ? data.toolName : ''
+  const enabled = typeof data.enabled === 'boolean' ? data.enabled : undefined
+
+  const lines: string[] = []
+  if (id) lines.push(`Cron job created: ${id}`)
+  if (name) lines.push(`Name: ${name}`)
+  if (cron) lines.push(`Schedule: ${cron}`)
+  if (toolName) lines.push(`Tool: ${toolName}`)
+  if (enabled != null) lines.push(`Enabled: ${enabled ? 'yes' : 'no'}`)
+
+  return lines.length > 0 ? lines.join('\n') : null
+}
+
 /** Format the output data from a tool result */
 function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (!result) return ''
   const data = result.data as Record<string, unknown> | undefined
+  const normalizedTool = normalizeTool(tool ?? '')
 
   // Rich system info display
-  if (tool === 'os.query' && data && data.platform != null) {
+  if (normalizedTool === 'os.query' && data && data.platform != null) {
     return formatSystemInfo(data)
+  }
+  if ((normalizedTool === 'web.search' || normalizedTool === 'browser.search') && data) {
+    const formatted = formatSearchResults(data)
+    if (formatted) return formatted
+  }
+  if (normalizedTool === 'memory.save' && data) {
+    const formatted = formatMemorySaveResult(data)
+    if (formatted) return formatted
+  }
+  if (normalizedTool === 'cron.add' && data) {
+    const formatted = formatCronAddResult(data)
+    if (formatted) return formatted
   }
 
   if (data?.output != null) return String(data.output)
@@ -143,6 +273,9 @@ function ElapsedLabel({ startedAt, completedAt, now }: { startedAt: number; comp
 }
 
 function getRunningHint(tool: string, args: Record<string, unknown>): string {
+  const normalized = normalizeTool(tool)
+  if (normalized === 'memory.save') return 'Saving memory entry...'
+  if (normalized === 'cron.add') return 'Creating cron job...'
   if (tool === 'browser.navigate' || tool === 'web.fetch' || tool === 'browser.fetch') {
     const target = String(args.url ?? '').trim()
     return target ? `Connecting to ${target}...` : 'Connecting...'
@@ -156,7 +289,7 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
 }
 
 function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
-  if (!call.tool.startsWith('terminal.')) return null
+  if (!normalizeTool(call.tool).startsWith('terminal.')) return null
   if (call.status === 'running' || call.status === 'pending') return null
 
   const data = call.result?.data && typeof call.result.data === 'object'
@@ -289,8 +422,9 @@ function BrowserScreenshotView({ path }: { path: string }) {
 }
 
 function isTerminalCreationCall(call: ToolCallInfo): boolean {
-  if (call.tool.startsWith('terminal.')) return true
-  if (call.tool !== 'surfaces.start') return false
+  const normalizedTool = normalizeTool(call.tool)
+  if (normalizedTool.startsWith('terminal.')) return true
+  if (normalizedTool !== 'surfaces.start') return false
 
   if (call.args.type === 'terminal') return true
 
@@ -339,17 +473,6 @@ function getTerminalId(call: ToolCallInfo): string | null {
 
 // ── Pending tool call components ─────────────────────────────────
 
-/**
- * OpenAI requires function names as `terminal_run` (underscore) while our
- * toolMeta uses `terminal.run` (dotted).  During the pending phase the name
- * arrives in OpenAI format — normalise it so lookups and startsWith checks
- * work.
- */
-function normalizeTool(name: string): string {
-  const idx = name.indexOf('_')
-  return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
-}
-
 /** Try to extract the command being built from partial JSON args */
 function extractStreamingCommand(streamingArgs: string | undefined): string | null {
   if (!streamingArgs) return null
@@ -361,6 +484,15 @@ function extractStreamingCommand(streamingArgs: string | undefined): string | nu
     return m[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\')
   }
   return null
+}
+
+function extractStreamingStringField(streamingArgs: string | undefined, key: string): string | null {
+  if (!streamingArgs) return null
+  const escapedKey = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const pattern = new RegExp(`"${escapedKey}"\\s*:\\s*"((?:[^"\\\\]|\\\\.)*)`)
+  const match = streamingArgs.match(pattern)
+  if (!match) return null
+  return match[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\')
 }
 
 /** Header label shown while the tool call is being streamed (pending state) */
@@ -422,6 +554,47 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
     )
   }
 
+  if (normalized === 'memory.save') {
+    const scope = extractStreamingStringField(streamingArgs, 'scope') ?? 'memory'
+    const content = extractStreamingStringField(streamingArgs, 'content')
+    return (
+      <div className={cn(
+        'rounded-md border px-3 py-2 text-xs',
+        'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+      )}>
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+          <span>Saving memory ({scope})...</span>
+        </div>
+        {content ? <div className="mt-1 opacity-80">"{truncate(content, 120)}"</div> : null}
+      </div>
+    )
+  }
+
+  if (normalized === 'cron.add') {
+    const name = extractStreamingStringField(streamingArgs, 'name')
+    const cron = extractStreamingStringField(streamingArgs, 'cron')
+    const toolName = extractStreamingStringField(streamingArgs, 'toolName')
+    return (
+      <div className={cn(
+        'rounded-md border px-3 py-2 text-xs',
+        'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+      )}>
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+          <span>Creating cron job{ name ? `: ${name}` : '...' }</span>
+        </div>
+        {(cron || toolName) && (
+          <div className="mt-1 opacity-80">
+            {cron ? `schedule ${cron}` : ''}
+            {cron && toolName ? ' • ' : ''}
+            {toolName ? `tool ${toolName}` : ''}
+          </div>
+        )}
+      </div>
+    )
+  }
+
   // Non-terminal with streaming args — show abbreviated JSON preview
   if (streamingArgs) {
     return (
@@ -458,23 +631,24 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending')
   const [now, setNow] = useState(() => Date.now())
   const prevStatusRef = useRef(call.status)
-  const meta = getToolMeta(call.tool)
+  const normalizedTool = normalizeTool(call.tool)
+  const meta = getToolMeta(normalizedTool)
   const Icon = meta.icon
-  const summary = getCallSummary(call.tool, call.args)
-  const finalOutput = formatOutput(call.result, call.tool)
+  const summary = getCallSummary(normalizedTool, call.args)
+  const finalOutput = formatOutput(call.result, normalizedTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const resultData = call.result?.data && typeof call.result.data === 'object'
     ? call.result.data as Record<string, unknown>
     : undefined
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
-  const screenshotPath = call.tool === 'browser.screenshot' && resultData?.result && typeof resultData.result === 'object'
+  const screenshotPath = normalizedTool === 'browser.screenshot' && resultData?.result && typeof resultData.result === 'object'
     ? String((resultData.result as Record<string, unknown>).path ?? '')
     : null
-  const isTerminal = call.tool.startsWith('terminal.')
+  const isTerminal = normalizedTool.startsWith('terminal.')
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getTerminalId(call) : null
-  const runningHint = getRunningHint(call.tool, call.args)
+  const runningHint = getRunningHint(normalizedTool, call.args)
   const isPending = call.status === 'pending'
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
@@ -592,7 +766,7 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
                 <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
               )}
             </pre>
-          ) : snapshotText && call.tool === 'browser.snapshot' ? (
+          ) : snapshotText && normalizedTool === 'browser.snapshot' ? (
             <BrowserSnapshotView snapshot={snapshotText} />
           ) : screenshotPath ? (
             <BrowserScreenshotView path={screenshotPath} />

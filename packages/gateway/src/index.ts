@@ -16,6 +16,7 @@ import { ConsentManager } from "./security/consent-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
+import { UserService } from "./services/users.js";
 
 async function main() {
   const config = loadConfig();
@@ -27,6 +28,7 @@ async function main() {
 
   // Services
   const sessionService = new SessionService(db);
+  const userService = new UserService(db);
   const audit = new AuditWriter(db);
 
   // Surface registry — register all surface factories
@@ -116,11 +118,14 @@ async function main() {
   const scheduler = new SchedulerService({
     db,
     executeTool: async (execution) => {
+      const userApiKeys = execution.userId ? userService.getSettings(execution.userId).apiKeys : undefined;
       const context = {
         sessionId: execution.sessionId,
         actionId: `sched-${Date.now()}`,
         workspaceRoot: execution.workspaceRoot,
         requestedBy: "scheduler",
+        userId: execution.userId ?? undefined,
+        apiKeys: userApiKeys,
       } as const;
       return toolExecutor(execution.toolName, execution.input, context);
     },
@@ -147,21 +152,13 @@ async function main() {
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   scheduler.start(30_000);
-  scheduler.create({
-    name: "gateway-heartbeat",
-    cron: config.heartbeatCron,
-    toolName: "gateway.status",
-    input: {},
-    sessionId: "system",
-    workspaceRoot: process.cwd(),
-    enabled: true,
-  });
 
   console.log(`Consent manager initialized (profile: coding, timeout: 120s, ${permissions.size} tool permissions)`);
 
   const server = await createServer(config, {
     db,
     sessionService,
+    userService,
     audit,
     surfaceRegistry,
     toolRegistry,
@@ -169,6 +166,7 @@ async function main() {
     trustEngine,
     ws,
     hooks,
+    scheduler,
     hookSecret: config.hookSecret,
     onWakeHook: async () => scheduler.tick(),
     onAgentHook: async (payload) => {

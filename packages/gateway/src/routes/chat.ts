@@ -2,6 +2,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { JaitDB } from "../db/index.js";
 import type { SessionService } from "../services/sessions.js";
+import type { UserService } from "../services/users.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
@@ -10,6 +11,7 @@ import type { MemoryService } from "../memory/contracts.js";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "../lib/uuidv7.js";
+import { requireAuth } from "../security/http-auth.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -19,6 +21,7 @@ interface ChatMessage {
   tool_calls?: OpenAIToolCall[];
   tool_call_id?: string;
   name?: string;
+  uiToolCalls?: PersistedToolCall[];
 }
 
 interface OpenAIToolCall {
@@ -74,13 +77,72 @@ function parseToolArguments(raw: string): unknown {
   }
 }
 
-function mapPendingToolCallsForUI(toolCalls: OpenAIToolCall[]): Array<Record<string, unknown>> {
+type ToolCallResultState = {
+  ok: boolean;
+  message: string;
+  data?: unknown;
+};
+
+function mapPendingToolCallsForUI(
+  toolCalls: OpenAIToolCall[],
+  resultStateByCallId?: Map<string, ToolCallResultState>,
+): Array<Record<string, unknown>> {
+  const now = Date.now();
   return toolCalls.map((tc) => ({
     callId: tc.id,
     tool: fromOpenAIName(tc.function.name),
     args: parseToolArguments(tc.function.arguments),
-    status: "running",
+    ...(resultStateByCallId?.has(tc.id)
+      ? {
+          status: resultStateByCallId.get(tc.id)!.ok ? "success" : "error",
+          ok: resultStateByCallId.get(tc.id)!.ok,
+          message: resultStateByCallId.get(tc.id)!.message,
+          data: resultStateByCallId.get(tc.id)!.data,
+          completedAt: now,
+        }
+      : {
+          status: "running",
+          startedAt: now,
+        }),
   }));
+}
+
+function mapPersistedToolCallsForUI(toolCalls: PersistedToolCall[]): Array<Record<string, unknown>> {
+  return toolCalls.map((tc) => ({
+    callId: tc.callId,
+    tool: tc.tool,
+    args: (typeof tc.args === "object" && tc.args !== null ? tc.args : {}),
+    status: tc.ok ? "success" : "error",
+    ok: tc.ok,
+    message: tc.message,
+    output: tc.output,
+    data: tc.data,
+    startedAt: tc.startedAt,
+    completedAt: tc.completedAt,
+  }));
+}
+
+function buildToolResultStateMap(history: ChatMessage[]): Map<string, ToolCallResultState> {
+  const out = new Map<string, ToolCallResultState>();
+  for (const msg of history) {
+    if (msg.role !== "tool" || !msg.tool_call_id) continue;
+    let parsed: { ok?: unknown; message?: unknown; data?: unknown } | undefined;
+    try {
+      parsed = JSON.parse(msg.content) as { ok?: unknown; message?: unknown; data?: unknown };
+    } catch {
+      // Keep best effort fallback below.
+    }
+    const ok = typeof parsed?.ok === "boolean" ? parsed.ok : false;
+    const message = typeof parsed?.message === "string"
+      ? parsed.message
+      : (msg.content?.trim() || (ok ? "Completed" : "Failed"));
+    out.set(msg.tool_call_id, {
+      ok,
+      message,
+      data: parsed?.data,
+    });
+  }
+  return out;
 }
 
 function emitToSubscribers(sessionId: string, event: StreamEvent) {
@@ -136,13 +198,21 @@ function buildVisibleHistoryEntries(
   const out: VisibleHistoryMsg[] = [];
   let visibleIndex = 0;
   const includePendingAssistantToolCalls = options?.includePendingAssistantToolCalls === true;
+  const toolResultStateByCallId = includePendingAssistantToolCalls
+    ? buildToolResultStateMap(history)
+    : undefined;
   for (let i = 0; i < history.length; i++) {
     const m = history[i]!;
     if (m.role === "system" || m.role === "tool") continue;
 
-    const uiToolCalls = (m.role === "assistant" && m.tool_calls && includePendingAssistantToolCalls)
-      ? mapPendingToolCallsForUI(m.tool_calls)
-      : undefined;
+    let uiToolCalls: Array<Record<string, unknown>> | undefined;
+    if (m.role === "assistant") {
+      if (Array.isArray(m.uiToolCalls) && m.uiToolCalls.length > 0) {
+        uiToolCalls = mapPersistedToolCallsForUI(m.uiToolCalls);
+      } else if (m.tool_calls && includePendingAssistantToolCalls) {
+        uiToolCalls = mapPendingToolCallsForUI(m.tool_calls, toolResultStateByCallId);
+      }
+    }
 
     if (m.role === "assistant" && m.tool_calls && !m.content && !includePendingAssistantToolCalls) {
       continue;
@@ -185,13 +255,16 @@ Key capabilities:
 - file.list / file.stat: Browse the filesystem.
 - os.query: Get system info, running processes, disk usage.
 - surfaces.list / surfaces.start / surfaces.stop: Manage terminal and filesystem surfaces.
+- cron.add / cron.list / cron.update / cron.remove: Create and manage recurring Jait jobs.
 
 Guidelines:
 - Be direct and concise.
 - When running commands, use the actual tools — don't just suggest commands.
 - For multi-step tasks, execute them step by step, checking each result.
 - If a command fails, analyze the error and try to fix it.
-- When editing files, read them first to understand the context before patching.`;
+- When editing files, read them first to understand the context before patching.
+- For recurring or scheduled automation requests, prefer cron tools and Jait jobs instead of OS-native schedulers.
+- Do not create Windows Task Scheduler jobs unless the user explicitly asks for OS-native scheduling.`;
 
 /** Max agentic loop iterations to prevent infinite loops */
 const MAX_TOOL_ROUNDS = 15;
@@ -255,6 +328,7 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
 export interface ChatRouteDeps {
   db?: JaitDB;
   sessionService?: SessionService;
+  userService?: UserService;
   toolRegistry?: ToolRegistry;
   audit?: AuditWriter;
   memoryService?: MemoryService;
@@ -275,6 +349,7 @@ export function registerChatRoutes(
   // Support both old signature (db, sessionService) and new deps object
   let db: JaitDB | undefined;
   let sessionService: SessionService | undefined;
+  let userService: UserService | undefined;
   let toolRegistry: ToolRegistry | undefined;
   let audit: AuditWriter | undefined;
   let toolExecutor: ChatRouteDeps["toolExecutor"] | undefined;
@@ -284,6 +359,7 @@ export function registerChatRoutes(
     const deps = depsOrDb as ChatRouteDeps;
     db = deps.db;
     sessionService = deps.sessionService;
+    userService = deps.userService;
     toolRegistry = deps.toolRegistry;
     audit = deps.audit;
     toolExecutor = deps.toolExecutor;
@@ -315,10 +391,24 @@ export function registerChatRoutes(
     if (rows.length > 0) {
       sessionHistory.set(sessionId, [
         { role: "system", content: SYSTEM_PROMPT },
-        ...rows.map((r) => ({
-          role: r.role as ChatMessage["role"],
-          content: r.content,
-        })),
+        ...rows.map((r) => {
+          let uiToolCalls: PersistedToolCall[] | undefined;
+          if (r.toolCalls) {
+            try {
+              const parsed = JSON.parse(r.toolCalls) as unknown;
+              if (Array.isArray(parsed)) {
+                uiToolCalls = parsed as PersistedToolCall[];
+              }
+            } catch {
+              // Ignore malformed historical toolCalls payloads.
+            }
+          }
+          return {
+            role: r.role as ChatMessage["role"],
+            content: r.content,
+            uiToolCalls,
+          };
+        }),
       ]);
     }
   }
@@ -347,6 +437,7 @@ export function registerChatRoutes(
     toolName: string,
     args: unknown,
     sessionId: string,
+    auth?: { userId?: string; apiKeys?: Record<string, string> },
     onOutputChunk?: (chunk: string) => void,
     signal?: AbortSignal,
   ): Promise<ToolResult> {
@@ -361,6 +452,8 @@ export function registerChatRoutes(
       actionId: uuidv7(),
       workspaceRoot: process.cwd(),
       requestedBy: "agent",
+      userId: auth?.userId,
+      apiKeys: auth?.apiKeys,
       onOutputChunk,
       signal,
     };
@@ -391,6 +484,8 @@ export function registerChatRoutes(
   // ══ POST /api/chat — Main chat endpoint with agentic tool loop ═════
 
   app.post("/api/chat", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const body = request.body as Record<string, unknown>;
     const content =
       typeof body["content"] === "string"
@@ -410,6 +505,18 @@ export function registerChatRoutes(
         .status(400)
         .send({ error: "VALIDATION_ERROR", details: "content is required" });
     }
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
+    const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
+    const llmRuntime = {
+      openaiApiKey: userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey,
+      openaiBaseUrl: userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl,
+      openaiModel: userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel,
+    };
 
     // Set SSE headers
     reply.raw.writeHead(200, {
@@ -452,8 +559,16 @@ export function registerChatRoutes(
       if (config.llmProvider === "openai") {
         // ══ OpenAI agentic loop ════════════════════════════════════
         const result = await runOpenAIAgentLoop(
-          config, history, toolSchemas, hasTools, sessionId,
-          streamAbort, safeWrite, app, executeTool,
+          llmRuntime,
+          history,
+          toolSchemas,
+          hasTools,
+          sessionId,
+          { userId: authUser.id, apiKeys: userApiKeys },
+          streamAbort,
+          safeWrite,
+          app,
+          executeTool,
         );
         fullContent = result.content;
         partialToolCalls = result.executedToolCalls;
@@ -535,8 +650,16 @@ export function registerChatRoutes(
   });
 
   // Cancel an active stream for a session
-  app.post("/api/sessions/:sessionId/cancel", async (request) => {
+  app.post("/api/sessions/:sessionId/cancel", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
     const controller = sessionAbortControllers.get(sessionId);
     if (controller) {
       controller.abort();
@@ -547,7 +670,15 @@ export function registerChatRoutes(
 
   // Truncate a session from a specific user message onward (used for edit + replay).
   app.post("/api/sessions/:sessionId/restart-from", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
     const body = (request.body as Record<string, unknown>) ?? {};
     const messageId = typeof body["messageId"] === "string" ? body["messageId"] : "";
     const messageIndex = typeof body["messageIndex"] === "number" ? body["messageIndex"] : -1;
@@ -637,8 +768,16 @@ export function registerChatRoutes(
   });
 
   // List messages in a session
-  app.get("/api/sessions/:sessionId/messages", async (request) => {
+  app.get("/api/sessions/:sessionId/messages", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
     const query = request.query as { limit?: number | string };
     const limit = parseMessageLimit(query?.limit);
     hydrateSession(sessionId);
@@ -658,7 +797,15 @@ export function registerChatRoutes(
   // SSE stream-resume: join an in-progress session's token stream
   // Client receives a snapshot of current content, then live tokens until done.
   app.get("/api/sessions/:sessionId/stream", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
     const query = request.query as { limit?: number | string };
     const limit = parseMessageLimit(query?.limit);
 
@@ -765,16 +912,30 @@ interface OpenAIToolSchema {
   function: { name: string; description: string; parameters: unknown };
 }
 
+interface RuntimeLLMConfig {
+  openaiApiKey: string;
+  openaiBaseUrl: string;
+  openaiModel: string;
+}
+
 async function runOpenAIAgentLoop(
-  config: AppConfig,
+  runtime: RuntimeLLMConfig,
   history: ChatMessage[],
   toolSchemas: OpenAIToolSchema[],
   hasTools: boolean,
   sessionId: string,
+  auth: { userId?: string; apiKeys?: Record<string, string> },
   streamAbort: AbortController,
   safeWrite: (data: string) => void,
   app: FastifyInstance,
-  executeTool: (name: string, args: unknown, sid: string, onChunk?: (chunk: string) => void, signal?: AbortSignal) => Promise<ToolResult>,
+  executeTool: (
+    name: string,
+    args: unknown,
+    sid: string,
+    auth?: { userId?: string; apiKeys?: Record<string, string> },
+    onChunk?: (chunk: string) => void,
+    signal?: AbortSignal,
+  ) => Promise<ToolResult>,
 ): Promise<{ content: string; executedToolCalls: PersistedToolCall[] }> {
   let fullContent = "";
   const executedToolCalls: PersistedToolCall[] = [];
@@ -787,7 +948,7 @@ async function runOpenAIAgentLoop(
     }
 
     const reqBody: Record<string, unknown> = {
-      model: config.openaiModel,
+      model: runtime.openaiModel,
       messages: serializeMessages(history),
       stream: true,
     };
@@ -802,12 +963,12 @@ async function runOpenAIAgentLoop(
 
     try {
       const openaiResponse = await fetch(
-        `${config.openaiBaseUrl}/chat/completions`,
+        `${runtime.openaiBaseUrl}/chat/completions`,
         {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${config.openaiApiKey}`,
+            Authorization: `Bearer ${runtime.openaiApiKey}`,
           },
           body: JSON.stringify(reqBody),
           signal: streamAbort.signal,
@@ -903,7 +1064,7 @@ async function runOpenAIAgentLoop(
 
         app.log.info(`Executing tool: ${internalName}(${tc.function.arguments})`);
 
-        const result = await executeTool(internalName, args, sessionId, (chunk) => {
+        const result = await executeTool(internalName, args, sessionId, auth, (chunk) => {
           const ev: StreamEvent = { type: "tool_output", call_id: tc.id, content: chunk };
           emitToSubscribers(sessionId, ev);
           safeWrite(`data: ${JSON.stringify(ev)}\n\n`);

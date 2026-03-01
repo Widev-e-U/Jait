@@ -117,7 +117,15 @@ describe("Sprint 5 — SSRF guard + web tools", () => {
   afterEach(() => {
     vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
+    delete process.env["OPENAI_API_KEY"];
+    delete process.env["OPENAI_BASE_URL"];
+    delete process.env["OPENAI_WEB_SEARCH_MODEL"];
     delete process.env["BRAVE_API_KEY"];
+    delete process.env["PERPLEXITY_API_KEY"];
+    delete process.env["OPENROUTER_API_KEY"];
+    delete process.env["XAI_API_KEY"];
+    delete process.env["GEMINI_API_KEY"];
+    delete process.env["MOONSHOT_API_KEY"];
   });
 
   it("blocks private addresses in SSRF guard", () => {
@@ -142,14 +150,22 @@ describe("Sprint 5 — SSRF guard + web tools", () => {
     await expect(tool.execute({ url: "http://127.0.0.1/" }, toolContext)).rejects.toThrow(/Blocked private host/);
   });
 
-  it("web.search supports duckduckgo and brave", async () => {
+  it("web.search auto mode uses openai and supports brave with API key", async () => {
+    process.env["OPENAI_API_KEY"] = "test-openai";
     const mockFetch = vi.fn(async (input: RequestInfo | URL) => {
       const url = input.toString();
-      if (url.includes("duckduckgo.com")) {
+      if (url.includes("/responses")) {
         return new Response(JSON.stringify({
-          RelatedTopics: [
-            { Text: "Result One - Description", FirstURL: "https://example.com/1" },
-            { Text: "Result Two - Description", FirstURL: "https://example.com/2" },
+          output_text: "SQLite WAL notes",
+          output: [
+            {
+              type: "web_search_call",
+              action: {
+                sources: [
+                  { url: "https://sqlite.org/wal.html", title: "SQLite WAL" },
+                ],
+              },
+            },
           ],
         }), { status: 200, headers: { "content-type": "application/json" } });
       }
@@ -162,13 +178,51 @@ describe("Sprint 5 — SSRF guard + web tools", () => {
     globalThis.fetch = mockFetch as typeof fetch;
 
     const tool = createWebSearchTool();
-    const ddg = await tool.execute({ query: "vitest" }, toolContext);
-    expect(ddg.ok).toBe(true);
-    expect((ddg.data as { results: unknown[] }).results.length).toBeGreaterThan(0);
+    const auto = await tool.execute({ query: "vitest" }, toolContext);
+    expect(auto.ok).toBe(true);
+    expect((auto.data as { provider: string }).provider).toBe("openai");
+    expect((auto.data as { results: unknown[] }).results.length).toBeGreaterThan(0);
 
     process.env["BRAVE_API_KEY"] = "test-key";
     const brave = await tool.execute({ query: "typescript", provider: "brave" }, toolContext);
     expect(brave.ok).toBe(true);
     expect((brave.data as { provider: string }).provider).toBe("brave");
+  });
+
+  it("web.search falls back to openai when keyed provider key is missing", async () => {
+    process.env["OPENAI_API_KEY"] = "test-openai";
+    globalThis.fetch = vi.fn(async (input: RequestInfo | URL) => {
+      const url = input.toString();
+      if (url.includes("/responses")) {
+        return new Response(JSON.stringify({
+          output: [
+            {
+              type: "web_search_call",
+              action: {
+                sources: [
+                  { title: "Fallback Result", url: "https://fallback.example" },
+                ],
+              },
+            },
+          ],
+          output_text: "Fallback snippet",
+        }), { status: 200, headers: { "content-type": "application/json" } });
+      }
+      return new Response("unexpected", { status: 500 });
+    }) as typeof fetch;
+
+    const tool = createWebSearchTool();
+    const result = await tool.execute({ query: "sqlite wal", provider: "grok" }, toolContext);
+    expect(result.ok).toBe(true);
+    expect((result.data as { provider: string }).provider).toBe("openai");
+    expect(result.message).toContain("Missing XAI_API_KEY");
+  });
+
+  it("web.search openai provider fails clearly when OPENAI_API_KEY is missing", async () => {
+    const tool = createWebSearchTool();
+    const result = await tool.execute({ query: "SQLite WAL mode best practices", provider: "openai", limit: 5 }, toolContext);
+    expect(result.ok).toBe(false);
+    expect((result.data as { provider: string }).provider).toBe("openai");
+    expect(result.message).toContain("Missing OPENAI_API_KEY");
   });
 });

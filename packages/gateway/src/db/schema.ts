@@ -9,12 +9,36 @@ import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 // ─── Sessions ────────────────────────────────────────────────────────
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(), // UUIDv7
+  userId: text("user_id"),
   name: text("name"),
   workspacePath: text("workspace_path"),
   createdAt: text("created_at").notNull(),
   lastActiveAt: text("last_active_at").notNull(),
   status: text("status").default("active"), // 'active' | 'archived' | 'deleted'
   metadata: text("metadata"), // JSON
+});
+
+// ─── Users ───────────────────────────────────────────────────────────
+export const users = sqliteTable(
+  "users",
+  {
+    id: text("id").primaryKey(),
+    username: text("username").notNull().unique(),
+    passwordHash: text("password_hash").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_users_username").on(table.username),
+  ],
+);
+
+// ─── User Settings ───────────────────────────────────────────────────
+export const userSettings = sqliteTable("user_settings", {
+  userId: text("user_id").primaryKey(),
+  theme: text("theme").notNull().default("system"), // 'light' | 'dark' | 'system'
+  apiKeys: text("api_keys"), // JSON object
+  updatedAt: text("updated_at").notNull(),
 });
 
 // ─── Audit Log ───────────────────────────────────────────────────────
@@ -123,6 +147,7 @@ export const scheduledJobs = sqliteTable(
   "scheduled_jobs",
   {
     id: text("id").primaryKey(),
+    userId: text("user_id"),
     name: text("name").notNull(),
     cron: text("cron").notNull(),
     toolName: text("tool_name").notNull(),

@@ -3,6 +3,8 @@ export interface ToolContext {
   actionId: string;
   workspaceRoot: string;
   requestedBy: string;
+  userId?: string;
+  apiKeys?: Record<string, string>;
   /** Optional callback for streaming tool output chunks (e.g. terminal) */
   onOutputChunk?: (chunk: string) => void;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */

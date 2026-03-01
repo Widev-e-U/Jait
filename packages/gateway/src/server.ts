@@ -5,10 +5,12 @@ import { VERSION } from "@jait/shared";
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
+import { registerAuthRoutes } from "./routes/auth.js";
 import { registerTerminalRoutes } from "./routes/terminals.js";
 import { registerConsentRoutes } from "./routes/consent.js";
 import { registerTrustRoutes } from "./routes/trust.js";
 import { registerHookRoutes } from "./routes/hooks.js";
+import { registerJobRoutes } from "./routes/jobs.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -19,11 +21,14 @@ import type { TrustEngine } from "./security/trust-engine.js";
 import type { JaitDB } from "./db/index.js";
 import type { WsControlPlane } from "./ws.js";
 import type { HookBus } from "./scheduler/hooks.js";
+import type { SchedulerService } from "./scheduler/service.js";
 import type { MemoryService } from "./memory/contracts.js";
+import type { UserService } from "./services/users.js";
 
 export interface ServerDeps {
   db?: JaitDB;
   sessionService?: SessionService;
+  userService?: UserService;
   audit?: AuditWriter;
   surfaceRegistry?: SurfaceRegistry;
   toolRegistry?: ToolRegistry;
@@ -31,6 +36,7 @@ export interface ServerDeps {
   trustEngine?: TrustEngine;
   ws?: WsControlPlane;
   hooks?: HookBus;
+  scheduler?: SchedulerService;
   hookSecret?: string;
   onWakeHook?: () => Promise<unknown>;
   onAgentHook?: (payload: unknown) => Promise<unknown>;
@@ -56,6 +62,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   });
 
   registerHealthRoutes(app, config);
+  if (deps.userService) {
+    registerAuthRoutes(app, config, deps.userService);
+  }
   registerChatRoutes(app, config, {
     db: deps.db,
     sessionService: deps.sessionService,
@@ -63,10 +72,11 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     audit: deps.audit,
     toolExecutor: deps.toolExecutor,
     memoryService: deps.memoryService,
+    userService: deps.userService,
   });
 
   if (deps.sessionService && deps.audit) {
-    registerSessionRoutes(app, deps.sessionService, deps.audit, deps.hooks);
+    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks);
   }
 
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {
@@ -86,6 +96,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       onWake: deps.onWakeHook,
       onAgentHook: deps.onAgentHook,
     });
+  }
+  if (deps.scheduler) {
+    registerJobRoutes(app, config, deps.scheduler);
   }
 
   app.get("/", async () => ({

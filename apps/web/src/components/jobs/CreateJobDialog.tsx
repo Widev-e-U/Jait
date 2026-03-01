@@ -60,25 +60,61 @@ export function CreateJobDialog({
     api.getAvailableProviders().then(setProviders).catch(console.error)
   }, [])
 
+  const applyJobToForm = (job: ScheduledJob) => {
+    setName(job.name)
+    setJobType(job.job_type as JobType)
+    setSchedule(job.cron_expression)
+    setEnabled(job.enabled)
+    setProvider(job.provider || '')
+    setModel(job.model || '')
+    setPrompt(job.prompt || '')
+
+    if (job.job_type === 'system_job') {
+      const payload = job.payload && typeof job.payload === 'object'
+        ? job.payload as Record<string, unknown>
+        : undefined
+      const payloadCommand = typeof payload?.command === 'string' ? payload.command : undefined
+      const fallbackToolName = typeof job.tool_name === 'string' ? job.tool_name : ''
+      setCommand(payloadCommand || fallbackToolName)
+
+      const payloadArgs = payload?.args
+      if (payloadArgs && typeof payloadArgs === 'object') {
+        try {
+          setArgs(JSON.stringify(payloadArgs, null, 2))
+        } catch {
+          setArgs('')
+        }
+      } else {
+        setArgs('')
+      }
+    } else {
+      setArgs('')
+      setCommand('')
+    }
+
+    const cronValue = (job.cron_expression || '').trim()
+    const isPreset = CRON_PRESETS.some(p => p.value === cronValue)
+    setUseCustomSchedule(!isPreset)
+    if (!isPreset) {
+      setCustomSchedule(cronValue)
+    } else {
+      setCustomSchedule('')
+    }
+  }
+
   // Populate form when editing
   useEffect(() => {
     if (editJob) {
-      setName(editJob.name)
-      setJobType(editJob.job_type as JobType)
-      setSchedule(editJob.cron_expression)
-      setEnabled(editJob.enabled)
-      setProvider(editJob.provider || '')
-      setModel(editJob.model || '')
-      setPrompt(editJob.prompt || '')
-      // For system jobs, payload is stored as JSON string in DB, parse it back
-      setArgs('')
-      setCommand('')
-      
-      // Check if schedule is a preset
-      const isPreset = CRON_PRESETS.some(p => p.value === editJob.cron_expression)
-      if (!isPreset) {
-        setUseCustomSchedule(true)
-        setCustomSchedule(editJob.cron_expression)
+      applyJobToForm(editJob)
+      let cancelled = false
+      // Fetch canonical server copy to ensure fields like cron/payload are fresh.
+      api.getJob(editJob.id)
+        .then((freshJob) => {
+          if (!cancelled) applyJobToForm(freshJob)
+        })
+        .catch(() => {})
+      return () => {
+        cancelled = true
       }
     } else {
       // Reset form for new job
