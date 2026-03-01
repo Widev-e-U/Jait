@@ -9,16 +9,28 @@ import type { SurfaceRegistry } from "../surfaces/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
-import type { WsControlPlane } from "../ws.js";
 import { TerminalSurface } from "../surfaces/terminal.js";
 import { uuidv7 } from "../lib/uuidv7.js";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { writeFileSync } from "node:fs";
+
+/** Strip ANSI escape sequences */
+function stripAnsi(s: string): string {
+  // eslint-disable-next-line no-control-regex
+  return s.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
+}
+
+/** Escape a string for use in a RegExp */
+function escRegex(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
 
 export function registerTerminalRoutes(
   app: FastifyInstance,
   surfaceRegistry: SurfaceRegistry,
   toolRegistry: ToolRegistry,
   audit: AuditWriter,
-  ws?: WsControlPlane,
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -42,11 +54,7 @@ export function registerTerminalRoutes(
         workspaceRoot,
       }) as TerminalSurface;
 
-      // Wire PTY output → WebSocket broadcast
-      if (ws) {
-        surface.onOutput = (data) => ws.broadcastTerminalOutput(termId, data);
-      }
-
+      // onOutput is auto-wired by surfaceRegistry.onSurfaceStarted
       if (cols && rows) surface.resize(cols, rows);
 
       audit.write({
@@ -160,7 +168,94 @@ export function registerTerminalRoutes(
     }
 
     try {
-      const output = await surface.execute(command, timeout);
+      // Execute command inside the persistent terminal using sentinel markers
+      const ts = Date.now();
+      const rnd = Math.random().toString(36).slice(2, 8);
+      const startMark = `__JS${ts}${rnd}`;
+      const doneMark = `__JD${ts}${rnd}`;
+      const doneRe = new RegExp(`${escRegex(doneMark)}:(\\d+)`);
+      const { platform } = await import("node:os");
+
+      const result = await new Promise<{ output: string; exitCode: number | null; timedOut: boolean }>((resolve) => {
+        let raw = "";
+        let settled = false;
+
+        const listener = (data: string) => {
+          raw += data;
+          const clean = stripAnsi(raw);
+          const m = clean.match(doneRe);
+          if (m && m[1] !== undefined) {
+            finish(false, parseInt(m[1], 10));
+          }
+        };
+
+        const finish = (timedOut: boolean, exitCode: number | null = null) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          surface.removeOutputListener(listener);
+
+          let clean = stripAnsi(raw).replace(/\r/g, "");
+          const si = clean.indexOf(startMark);
+          const di = clean.search(doneRe);
+          if (si !== -1 && di !== -1) {
+            const afterStart = clean.indexOf("\n", si);
+            clean = clean.slice(afterStart !== -1 ? afterStart + 1 : si + startMark.length, di);
+          } else if (si !== -1) {
+            const afterStart = clean.indexOf("\n", si);
+            clean = clean.slice(afterStart !== -1 ? afterStart + 1 : si + startMark.length);
+          }
+          clean = clean.trim();
+          if (clean.length > 200_000) clean = "…(truncated)\n" + clean.slice(-200_000);
+          resolve({ output: clean || "(no output)", exitCode, timedOut });
+        };
+
+        surface.addOutputListener(listener);
+
+        const timer = setTimeout(() => {
+          surface.write("\x03");
+          setTimeout(() => finish(true), 500);
+        }, timeout);
+
+        const isWin = platform() === "win32";
+        const isMultiLine = command.includes("\n");
+        let wrappedCmd: string;
+
+        if (isWin && isMultiLine) {
+          // Multi-line PowerShell: write to a temp .ps1 and invoke it
+          const tmpScript = join(tmpdir(), `jait-cmd-${ts}-${rnd}.ps1`);
+          writeFileSync(tmpScript, command, "utf-8");
+          const escaped = tmpScript.replace(/'/g, "''");
+          wrappedCmd = [
+            `Write-Host '${startMark}'`,
+            `& '${escaped}'`,
+            `$__jec = if ($LASTEXITCODE) { [int]$LASTEXITCODE } elseif (-not $?) { 1 } else { 0 }`,
+            `Remove-Item -LiteralPath '${escaped}' -Force -ErrorAction SilentlyContinue`,
+            `Write-Host "${doneMark}:$__jec"`,
+          ].join("; ") + "\r";
+        } else if (isWin) {
+          wrappedCmd = [
+            `Write-Host '${startMark}'`,
+            `& { ${command} }`,
+            `$__jec = if ($LASTEXITCODE) { [int]$LASTEXITCODE } elseif (-not $?) { 1 } else { 0 }`,
+            `Write-Host "${doneMark}:$__jec"`,
+          ].join("; ") + "\r";
+        } else {
+          wrappedCmd = `echo '${startMark}'; ${command}; __jec=$?; echo '${doneMark}:'$__jec\n`;
+        }
+
+        surface.write(wrappedCmd);
+      });
+
+      const cleanOutput = result.output;
+      const ok = !result.timedOut && result.exitCode === 0;
+      const message = ok
+        ? "Command completed (exit code 0)"
+        : result.timedOut
+          ? `Command timed out after ${timeout}ms`
+          : result.exitCode == null
+            ? "Command failed (exit status unavailable)"
+            : `Command failed (exit code ${result.exitCode})`;
 
       audit.write({
         sessionId: surface.sessionId ?? undefined,
@@ -168,11 +263,21 @@ export function registerTerminalRoutes(
         actionType: "terminal.run",
         toolName: "terminal.run",
         inputs: { command },
-        outputs: { output: output.slice(0, 10000) },
-        status: "executed",
+        outputs: {
+          output: cleanOutput.slice(0, 10000),
+          exitCode: result.exitCode,
+          timedOut: result.timedOut,
+        },
+        status: ok ? "executed" : "failed",
       });
 
-      return { ok: true, output };
+      return {
+        ok,
+        message,
+        output: cleanOutput,
+        exitCode: result.exitCode,
+        timedOut: result.timedOut,
+      };
     } catch (err) {
       return reply.status(500).send({
         error: "TERMINAL_ERROR",

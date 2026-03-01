@@ -35,22 +35,80 @@ export function createOsQueryTool(): ToolDefinition<OsQueryInput> {
     async execute(input: OsQueryInput, _context: ToolContext): Promise<ToolResult> {
       switch (input.query) {
         case "info": {
-          return {
-            ok: true,
-            message: "System info",
-            data: {
-              platform: platform(),
-              type: osType(),
-              release: release(),
-              hostname: hostname(),
-              arch: arch(),
-              cpus: cpus().length,
-              cpuModel: cpus()[0]?.model ?? "unknown",
-              totalMemoryMB: Math.round(totalmem() / 1048576),
-              freeMemoryMB: Math.round(freemem() / 1048576),
-              uptimeSeconds: Math.round(uptime()),
-            },
+          const data: Record<string, unknown> = {
+            platform: platform(),
+            type: osType(),
+            release: release(),
+            hostname: hostname(),
+            arch: arch(),
+            cpus: cpus().length,
+            cpuModel: cpus()[0]?.model ?? "unknown",
+            totalMemoryGB: +(totalmem() / 1073741824).toFixed(1),
+            freeMemoryGB: +(freemem() / 1073741824).toFixed(1),
+            uptimeHours: +(uptime() / 3600).toFixed(1),
+            cwd: process.cwd(),
+            nodeVersion: process.version,
+            pid: process.pid,
           };
+
+          // Gather extra info in parallel (best-effort, don't fail the whole call)
+          const extras = await Promise.allSettled([
+            // Bun version
+            execAsync("bun --version", { timeout: 5000 }).then(r => ({ bunVersion: r.stdout.trim() })),
+            // Git branch + short status
+            execAsync("git rev-parse --abbrev-ref HEAD", { timeout: 5000 }).then(async r => {
+              const branch = r.stdout.trim();
+              const status = await execAsync("git status --porcelain | measure-object -line", { timeout: 5000 })
+                .then(s => {
+                  const m = s.stdout.match(/(\d+)/);
+                  return m?.[1] ? +m[1] : 0;
+                })
+                .catch(() => null);
+              const result: Record<string, unknown> = { gitBranch: branch };
+              if (status !== null) result.gitDirtyFiles = status;
+              return result;
+            }),
+            // Windows build / edition
+            platform() === "win32"
+              ? execAsync('(Get-CimInstance Win32_OperatingSystem).Caption', { timeout: 5000, shell: "powershell.exe" })
+                  .then(r => ({ osEdition: r.stdout.trim() }))
+              : Promise.resolve({}),
+            // Disk free for current drive (Windows) or root (Unix)
+            platform() === "win32"
+              ? execAsync(`powershell -NoProfile -c "(Get-PSDrive (Get-Location).Drive.Name) | Select-Object Used,Free | ConvertTo-Json"`, { timeout: 5000 })
+                  .then(r => {
+                    try {
+                      const d = JSON.parse(r.stdout.trim());
+                      return {
+                        diskUsedGB: +(d.Used / 1073741824).toFixed(1),
+                        diskFreeGB: +(d.Free / 1073741824).toFixed(1),
+                      };
+                    } catch { return {}; }
+                  })
+              : execAsync("df -BG --output=used,avail / 2>/dev/null | tail -1", { timeout: 5000 })
+                  .then(r => {
+                    const [used, avail] = r.stdout.trim().split(/\s+/).map(s => parseInt(s));
+                    return { diskUsedGB: used, diskFreeGB: avail };
+                  }),
+            // Current user
+            platform() === "win32"
+              ? execAsync("whoami", { timeout: 3000 }).then(r => ({ user: r.stdout.trim() }))
+              : execAsync("whoami", { timeout: 3000 }).then(r => ({ user: r.stdout.trim() })),
+            // Shell version
+            platform() === "win32"
+              ? execAsync('powershell -NoProfile -c "$PSVersionTable.PSVersion.ToString()"', { timeout: 5000 })
+                  .then(r => ({ shellVersion: `PowerShell ${r.stdout.trim()}` }))
+              : execAsync("$SHELL --version 2>/dev/null | head -1 || echo $SHELL", { timeout: 3000 })
+                  .then(r => ({ shellVersion: r.stdout.trim() })),
+          ]);
+
+          for (const result of extras) {
+            if (result.status === "fulfilled" && result.value && typeof result.value === "object") {
+              Object.assign(data, result.value);
+            }
+          }
+
+          return { ok: true, message: "System info", data };
         }
         case "processes": {
           try {

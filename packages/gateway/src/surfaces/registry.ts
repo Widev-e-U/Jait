@@ -4,6 +4,9 @@ export class SurfaceRegistry {
   private readonly factories = new Map<string, SurfaceFactory>();
   private readonly surfaces = new Map<string, Surface>();
 
+  /** Called after every surface is started (regardless of creation path) */
+  onSurfaceStarted?: (id: string, surface: Surface) => void;
+
   register(factory: SurfaceFactory): void {
     this.factories.set(factory.type, factory);
   }
@@ -22,6 +25,7 @@ export class SurfaceRegistry {
     const instance = factory.create(id);
     this.surfaces.set(id, instance);
     await instance.start(input);
+    this.onSurfaceStarted?.(id, instance);
     return instance;
   }
 

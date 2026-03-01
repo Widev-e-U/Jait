@@ -28,7 +28,7 @@ export default defineConfig({
   /* Shared settings for all the projects below */
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: process.env.FRONTEND_URL || 'http://localhost:5173',
+    baseURL: process.env.FRONTEND_URL || 'http://localhost:3000',
 
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',
@@ -78,7 +78,7 @@ export default defineConfig({
   webServer: [
     {
       command: 'cd ../apps/web && bun run dev',
-      url: 'http://localhost:5173',
+      url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
     },

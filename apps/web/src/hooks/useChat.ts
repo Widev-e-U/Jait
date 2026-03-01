@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { flushSync } from 'react-dom'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
+import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 const STREAM_SNAPSHOT_LIMIT = 120
@@ -105,6 +106,7 @@ export function useChat(sessionId: string | null) {
             if (!line.startsWith('data: ')) continue
             try {
               const data = JSON.parse(line.slice(6)) as Record<string, unknown>
+              pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
 
               if (data.type === 'snapshot') {
                 const rawMsgs = data.messages as Array<{
@@ -115,7 +117,7 @@ export function useChat(sessionId: string | null) {
                     callId: string;
                     tool: string;
                     args: Record<string, unknown>;
-                    status?: 'running' | 'success' | 'error';
+                    status?: 'pending' | 'running' | 'success' | 'error';
                     ok?: boolean;
                     message?: string;
                     output?: string;
@@ -131,11 +133,11 @@ export function useChat(sessionId: string | null) {
                     msg.toolCalls = m.toolCalls.map(tc => {
                       // Streaming snapshots may provide explicit running status.
                       // Persisted DB snapshots provide ok/message for completed calls.
-                      let status: 'running' | 'success' | 'error' =
+                      let status: 'pending' | 'running' | 'success' | 'error' =
                         tc.status ?? (tc.ok ? 'success' as const : 'error' as const)
                       // Safety net: if the server says streaming is done, no tool
-                      // call should remain in 'running' state (handles race conditions).
-                      if (status === 'running' && !snapshotStreaming) status = 'error'
+                      // call should remain in 'running' or 'pending' state (handles race conditions).
+                      if ((status === 'running' || status === 'pending') && !snapshotStreaming) status = 'error'
                       return {
                         callId: tc.callId,
                         tool: tc.tool,
@@ -170,22 +172,86 @@ export function useChat(sessionId: string | null) {
                     m.id === assistantId ? { ...m, content: m.content + token } : m
                   ),
                 }))
+              } else if (data.type === 'tool_call_delta' && assistantId) {
+                const callId = data.call_id as string
+                const nameDelta = (data.name_delta as string) || ''
+                const argsDelta = (data.args_delta as string) || ''
+                setState(prev => {
+                  const msg = prev.messages.find(m => m.id === assistantId)
+                  const existing = msg?.toolCalls?.find(tc => tc.callId === callId)
+                  if (existing) {
+                    return {
+                      ...prev,
+                      messages: prev.messages.map(m =>
+                        m.id === assistantId
+                          ? {
+                              ...m,
+                              toolCalls: m.toolCalls?.map(tc =>
+                                tc.callId === callId
+                                  ? { ...tc, tool: tc.tool + nameDelta, streamingArgs: (tc.streamingArgs ?? '') + argsDelta }
+                                  : tc
+                              ),
+                            }
+                          : m
+                      ),
+                    }
+                  }
+                  const callInfo: ToolCallInfo = {
+                    callId,
+                    tool: nameDelta,
+                    args: {},
+                    status: 'pending',
+                    streamingArgs: argsDelta,
+                    startedAt: Date.now(),
+                  }
+                  return {
+                    ...prev,
+                    messages: prev.messages.map(m =>
+                      m.id === assistantId
+                        ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo] }
+                        : m
+                    ),
+                  }
+                })
               } else if (data.type === 'tool_start' && assistantId) {
-                const callInfo: ToolCallInfo = {
-                  callId: data.call_id as string,
-                  tool: data.tool as string,
-                  args: (data.args as Record<string, unknown>) ?? {},
-                  status: 'running',
-                  startedAt: Date.now(),
-                }
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(m =>
-                    m.id === assistantId
-                      ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo] }
-                      : m
-                  ),
-                }))
+                const callId = data.call_id as string
+                setState(prev => {
+                  const msg = prev.messages.find(m => m.id === assistantId)
+                  const existing = msg?.toolCalls?.find(tc => tc.callId === callId)
+                  if (existing) {
+                    // Upgrade pending → running, fill in final args
+                    return {
+                      ...prev,
+                      messages: prev.messages.map(m =>
+                        m.id === assistantId
+                          ? {
+                              ...m,
+                              toolCalls: m.toolCalls?.map(tc =>
+                                tc.callId === callId
+                                  ? { ...tc, tool: data.tool as string, args: (data.args as Record<string, unknown>) ?? {}, status: 'running' as const, streamingArgs: undefined }
+                                  : tc
+                              ),
+                            }
+                          : m
+                      ),
+                    }
+                  }
+                  const callInfo: ToolCallInfo = {
+                    callId,
+                    tool: data.tool as string,
+                    args: (data.args as Record<string, unknown>) ?? {},
+                    status: 'running',
+                    startedAt: Date.now(),
+                  }
+                  return {
+                    ...prev,
+                    messages: prev.messages.map(m =>
+                      m.id === assistantId
+                        ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo] }
+                        : m
+                    ),
+                  }
+                })
               } else if (data.type === 'tool_output' && assistantId) {
                 setState(prev => ({
                   ...prev,
@@ -301,10 +367,13 @@ export function useChat(sessionId: string | null) {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
 
+      const requestBody = { content, sessionId: requestSessionId }
+      pushSSEDebugEvent('request', JSON.stringify(requestBody))
+
       const response = await fetch(`${API_URL}/api/chat`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ content, sessionId: requestSessionId }),
+        body: JSON.stringify(requestBody),
         signal: controller.signal,
       })
 
@@ -361,6 +430,7 @@ export function useChat(sessionId: string | null) {
           if (!line.startsWith('data: ')) continue
           try {
             const data = JSON.parse(line.slice(6))
+            pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6))
 
             if (data.type === 'thinking') {
               if (!thinkingStart) thinkingStart = Date.now()
@@ -372,15 +442,49 @@ export function useChat(sessionId: string | null) {
               }
               assistantContent += data.content
               updateMessage({ content: assistantContent, thinkingDuration })
-            } else if (data.type === 'tool_start') {
-              const callInfo: ToolCallInfo = {
-                callId: data.call_id as string,
-                tool: data.tool as string,
-                args: (data.args as Record<string, unknown>) ?? {},
-                status: 'running',
-                startedAt: Date.now(),
+            } else if (data.type === 'tool_call_delta') {
+              const callId = data.call_id as string
+              const nameDelta = (data.name_delta as string) || ''
+              const argsDelta = (data.args_delta as string) || ''
+              const idx = toolCalls.findIndex(tc => tc.callId === callId)
+              if (idx !== -1) {
+                toolCalls[idx] = {
+                  ...toolCalls[idx],
+                  tool: toolCalls[idx].tool + nameDelta,
+                  streamingArgs: (toolCalls[idx].streamingArgs ?? '') + argsDelta,
+                }
+              } else {
+                toolCalls.push({
+                  callId,
+                  tool: nameDelta,
+                  args: {},
+                  status: 'pending',
+                  streamingArgs: argsDelta,
+                  startedAt: Date.now(),
+                })
               }
-              toolCalls.push(callInfo)
+              updateMessage({ toolCalls: [...toolCalls] })
+            } else if (data.type === 'tool_start') {
+              const callId = data.call_id as string
+              const idx = toolCalls.findIndex(tc => tc.callId === callId)
+              if (idx !== -1) {
+                // Upgrade pending → running with final args
+                toolCalls[idx] = {
+                  ...toolCalls[idx],
+                  tool: data.tool as string,
+                  args: (data.args as Record<string, unknown>) ?? {},
+                  status: 'running',
+                  streamingArgs: undefined,
+                }
+              } else {
+                toolCalls.push({
+                  callId,
+                  tool: data.tool as string,
+                  args: (data.args as Record<string, unknown>) ?? {},
+                  status: 'running',
+                  startedAt: Date.now(),
+                })
+              }
               updateMessage({ toolCalls: [...toolCalls] })
             } else if (data.type === 'tool_output') {
               const idx = toolCalls.findIndex(tc => tc.callId === (data.call_id as string))

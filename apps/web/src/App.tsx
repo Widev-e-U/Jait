@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { GoogleLogin } from '@react-oauth/google'
-import { Sun, Moon, LogOut, MessageSquare, Calendar, PanelLeftOpen, PanelLeftClose, Terminal as TerminalIcon } from 'lucide-react'
+import { Sun, Moon, LogOut, MessageSquare, Calendar, PanelLeftOpen, PanelLeftClose, Terminal as TerminalIcon, Bug } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
@@ -9,6 +9,7 @@ import { Conversation, Message, PromptInput, SessionSelector, Suggestions } from
 import { TerminalView, TerminalTabs, useTerminals } from '@/components/terminal'
 import { ConsentQueue } from '@/components/consent'
 import { JobsPage } from '@/components/jobs'
+import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { useAuth } from '@/hooks/useAuth'
 import { useChat } from '@/hooks/useChat'
 import { useSessions } from '@/hooks/useSessions'
@@ -46,6 +47,7 @@ function App() {
   const [currentView, setCurrentView] = useState<AppView>('chat')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
+  const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const isDragging = useRef(false)
@@ -54,6 +56,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('showSessionsSidebar', showSidebar ? 'true' : 'false')
   }, [showSidebar])
+
+  useEffect(() => {
+    localStorage.setItem('showDebugPanel', showDebugPanel ? 'true' : 'false')
+  }, [showDebugPanel])
 
   const handleDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -276,6 +282,20 @@ function App() {
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
               </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showDebugPanel ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => setShowDebugPanel(d => !d)}
+                  >
+                    <Bug className="h-3.5 w-3.5 mr-1.5" />
+                    Debug
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">SSE debug stream</TooltipContent>
+              </Tooltip>
             </nav>
           </div>
           <div className="flex items-center gap-1.5">
@@ -473,6 +493,13 @@ function App() {
                 </button>
               </div>
             )}
+          </div>
+        )}
+
+        {/* SSE Debug Panel — right sidebar */}
+        {showDebugPanel && (
+          <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
+            <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
           </div>
         )}
 

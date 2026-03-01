@@ -47,6 +47,7 @@ const sessionAbortControllers = new Map<string, AbortController>();
 
 type StreamEvent =
   | { type: "token"; content: string }
+  | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
   | { type: "tool_start"; tool: string; args: unknown; call_id: string }
   | { type: "tool_output"; call_id: string; content: string }
   | { type: "tool_result"; call_id: string; ok: boolean; message: string; data?: unknown }
@@ -843,7 +844,14 @@ async function runOpenAIAgentLoop(
     fullContent += contentText;
 
     // ── Model returned tool calls → execute them ──
-    if (finishReason === "tool_calls" && toolCalls.length > 0) {
+    // Accept tool calls regardless of finish_reason — some providers
+    // (and GPT-5 edge cases) return "stop" instead of "tool_calls".
+    if (toolCalls.length > 0) {
+      if (finishReason && finishReason !== "tool_calls") {
+        app.log.warn(
+          `LLM returned ${toolCalls.length} tool call(s) with finish_reason="${finishReason}" (expected "tool_calls") — executing anyway`,
+        );
+      }
       // Push assistant message with tool_calls to history
       history.push({
         role: "assistant",
@@ -1004,11 +1012,12 @@ async function parseOpenAIStream(
           safeWrite(`data: ${JSON.stringify(tokenEvent)}\n\n`);
         }
 
-        // Tool calls (streamed incrementally)
+        // Tool calls (streamed incrementally — emit deltas to frontend)
         if (delta.tool_calls) {
           for (const tc of delta.tool_calls) {
             const idx: number = tc.index ?? 0;
-            if (!toolCallMap.has(idx)) {
+            const isNew = !toolCallMap.has(idx);
+            if (isNew) {
               toolCallMap.set(idx, {
                 id: tc.id ?? "",
                 type: "function",
@@ -1017,8 +1026,21 @@ async function parseOpenAIStream(
             }
             const existing = toolCallMap.get(idx)!;
             if (tc.id) existing.id = tc.id;
-            if (tc.function?.name) existing.function.name = tc.function.name;
+            // Name: only append on subsequent deltas (first delta sets it in init)
+            if (!isNew && tc.function?.name) existing.function.name += tc.function.name;
             if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+
+            // Stream the delta to the frontend so tool calls appear progressively
+            const callId = existing.id || `pending-${idx}`;
+            const deltaEvent: StreamEvent = {
+              type: "tool_call_delta",
+              call_id: callId,
+              index: idx,
+              name_delta: tc.function?.name || undefined,
+              args_delta: tc.function?.arguments || undefined,
+            };
+            emitToSubscribers(sessionId, deltaEvent);
+            safeWrite(`data: ${JSON.stringify(deltaEvent)}\n\n`);
           }
         }
 

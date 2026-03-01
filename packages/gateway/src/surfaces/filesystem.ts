@@ -17,7 +17,7 @@ import type {
 } from "./contracts.js";
 
 export class FileSystemSurface implements Surface {
-  readonly type = "file-system" as const;
+  readonly type = "filesystem" as const;
 
   private _state: SurfaceState = "idle";
   private _sessionId: string | null = null;
@@ -156,7 +156,7 @@ export class FileSystemSurface implements Surface {
 }
 
 export class FileSystemSurfaceFactory {
-  readonly type = "file-system" as const;
+  readonly type = "filesystem" as const;
   constructor(private guardOpts?: Partial<PathGuardOptions>) {}
 
   create(id: string): FileSystemSurface {

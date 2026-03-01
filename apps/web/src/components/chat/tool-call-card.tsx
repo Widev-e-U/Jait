@@ -5,13 +5,25 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
+/** Auto-scroll a container to the bottom when content changes */
+function useAutoScroll(dep: unknown) {
+  const ref = useRef<HTMLPreElement>(null)
+  useEffect(() => {
+    const el = ref.current
+    if (el) el.scrollTop = el.scrollHeight
+  }, [dep])
+  return ref
+}
+
 export interface ToolCallInfo {
   callId: string
   tool: string
   args: Record<string, unknown>
-  status: 'running' | 'success' | 'error'
+  status: 'pending' | 'running' | 'success' | 'error'
   result?: { ok: boolean; message: string; data?: unknown }
   streamingOutput?: string
+  /** Accumulated raw JSON argument string while LLM is still streaming the tool call */
+  streamingArgs?: string
   startedAt: number
   completedAt?: number
 }
@@ -69,10 +81,48 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   return JSON.stringify(args)
 }
 
+/** Pretty formatter for os.query info results */
+function formatSystemInfo(data: Record<string, unknown>): string {
+  const lines: string[] = []
+  const gb = (v: unknown) => `${v} GB`
+  const maybe = (label: string, key: string, fmt?: (v: unknown) => string) => {
+    if (data[key] != null) lines.push(`${label}: ${fmt ? fmt(data[key]) : data[key]}`)
+  }
+
+  maybe('OS', 'osEdition')
+  if (!data.osEdition) {
+    const parts = [data.type, data.platform, data.release].filter(Boolean)
+    if (parts.length) lines.push(`OS: ${parts.join(' ')}`)
+  }
+  maybe('Host', 'hostname')
+  maybe('User', 'user')
+  maybe('Arch', 'arch')
+  maybe('CPU', 'cpuModel', v => `${v} (${data.cpus ?? '?'} cores)`)
+  maybe('Memory', 'totalMemoryGB', v => `${gb(data.freeMemoryGB)} free / ${gb(v)} total`)
+  maybe('Disk', 'diskFreeGB', v => `${gb(v)} free / ${gb(+(Number(data.diskUsedGB ?? 0) + Number(v)))} total`)
+  maybe('Uptime', 'uptimeHours', v => `${v}h`)
+  lines.push('') // spacer
+  maybe('CWD', 'cwd')
+  maybe('Node', 'nodeVersion')
+  maybe('Bun', 'bunVersion')
+  maybe('Shell', 'shellVersion')
+  maybe('Git', 'gitBranch', v => {
+    const dirty = data.gitDirtyFiles
+    return dirty ? `${v} (${dirty} dirty)` : String(v)
+  })
+  return lines.join('\n')
+}
+
 /** Format the output data from a tool result */
-function formatOutput(result: ToolCallInfo['result']): string {
+function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (!result) return ''
   const data = result.data as Record<string, unknown> | undefined
+
+  // Rich system info display
+  if (tool === 'os.query' && data && data.platform != null) {
+    return formatSystemInfo(data)
+  }
+
   if (data?.output != null) return String(data.output)
   if (data?.content != null) return String(data.content)
   if (data?.entries != null) {
@@ -103,6 +153,51 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
   }
   if (tool.startsWith('terminal.')) return 'Command is still running...'
   return 'Tool is still running...'
+}
+
+function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
+  if (!call.tool.startsWith('terminal.')) return null
+  if (call.status === 'running' || call.status === 'pending') return null
+
+  const data = call.result?.data && typeof call.result.data === 'object'
+    ? call.result.data as Record<string, unknown>
+    : undefined
+
+  const timedOut = data?.timedOut === true || /timed out/i.test(call.result?.message ?? '')
+  if (timedOut) {
+    return {
+      label: 'timeout',
+      className: 'border-red-500/40 bg-red-500/10 text-red-500',
+    }
+  }
+
+  const exitCodeRaw = data?.exitCode
+  if (typeof exitCodeRaw === 'number') {
+    const isOk = exitCodeRaw === 0
+    return {
+      label: `exit ${exitCodeRaw}`,
+      className: isOk
+        ? 'border-green-500/40 bg-green-500/10 text-green-500'
+        : 'border-red-500/40 bg-red-500/10 text-red-500',
+    }
+  }
+
+  const msg = call.result?.message ?? ''
+  const exitMatch = msg.match(/exit code\s+(-?\d+)/i)
+  if (exitMatch) {
+    const code = Number.parseInt(exitMatch[1] ?? '', 10)
+    if (Number.isFinite(code)) {
+      const isOk = code === 0
+      return {
+        label: `exit ${code}`,
+        className: isOk
+          ? 'border-green-500/40 bg-green-500/10 text-green-500'
+          : 'border-red-500/40 bg-red-500/10 text-red-500',
+      }
+    }
+  }
+
+  return null
 }
 
 function BrowserSnapshotView({ snapshot }: { snapshot: string }) {
@@ -248,13 +343,13 @@ interface ToolCallCardProps {
 }
 
 export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
-  const [open, setOpen] = useState(call.status === 'running')
+  const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending')
   const [now, setNow] = useState(() => Date.now())
   const prevStatusRef = useRef(call.status)
   const meta = getToolMeta(call.tool)
   const Icon = meta.icon
   const summary = getCallSummary(call.tool, call.args)
-  const finalOutput = formatOutput(call.result)
+  const finalOutput = formatOutput(call.result, call.tool)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const resultData = call.result?.data && typeof call.result.data === 'object'
     ? call.result.data as Record<string, unknown>
@@ -264,32 +359,43 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
     ? String((resultData.result as Record<string, unknown>).path ?? '')
     : null
   const isTerminal = call.tool.startsWith('terminal.')
+  const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getTerminalId(call) : null
   const runningHint = getRunningHint(call.tool, call.args)
+  const isPending = call.status === 'pending'
+  const terminalScrollRef = useAutoScroll(displayOutput)
+  const argsScrollRef = useAutoScroll(call.streamingArgs)
 
-  const StatusIcon = call.status === 'running'
+  const StatusIcon = call.status === 'pending'
     ? Loader2
-    : call.status === 'success'
-      ? CheckCircle2
-      : XCircle
+    : call.status === 'running'
+      ? Loader2
+      : call.status === 'success'
+        ? CheckCircle2
+        : XCircle
 
-  const statusColor = call.status === 'running'
-    ? 'text-muted-foreground'
-    : call.status === 'success'
-      ? 'text-green-500'
-      : 'text-red-500'
+  const statusColor = call.status === 'pending'
+    ? 'text-blue-400'
+    : call.status === 'running'
+      ? 'text-muted-foreground'
+      : call.status === 'success'
+        ? 'text-green-500'
+        : 'text-red-500'
 
   useEffect(() => {
     const prevStatus = prevStatusRef.current
-    if (prevStatus === 'running' && call.status !== 'running') {
+    if ((prevStatus === 'running' || prevStatus === 'pending') && call.status !== 'running' && call.status !== 'pending') {
       setOpen(false)
+    }
+    if (call.status === 'pending' || call.status === 'running') {
+      setOpen(true)
     }
     prevStatusRef.current = call.status
   }, [call.status])
 
   useEffect(() => {
-    if (call.status !== 'running') return
+    if (call.status !== 'running' && call.status !== 'pending') return
     const id = window.setInterval(() => setNow(Date.now()), 250)
     return () => window.clearInterval(id)
   }, [call.status])
@@ -305,11 +411,15 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
           <StatusIcon className={cn(
             'h-4 w-4 shrink-0',
             statusColor,
-            call.status === 'running' && 'animate-spin'
+            (call.status === 'running' || call.status === 'pending') && 'animate-spin'
           )} />
           <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
           <span className="text-sm font-medium text-muted-foreground truncate flex-1">
-            {isTerminal ? (
+            {isPending ? (
+              <span className="text-blue-400">
+                {call.tool ? <><code className="text-xs font-mono">{call.tool}</code><span className="inline-block w-1 h-3 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" /></> : 'Preparing...'}
+              </span>
+            ) : isTerminal ? (
               <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-zinc-700/60 bg-[#0b0f14] px-2 py-0.5 text-[#c9d1d9]">
                 <span className="shrink-0 text-[10px] text-emerald-400">$</span>
                 <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
@@ -321,6 +431,16 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
           <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
             <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
           </span>
+          {terminalOutcomeBadge && (
+            <span
+              className={cn(
+                'rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0',
+                terminalOutcomeBadge.className,
+              )}
+            >
+              {terminalOutcomeBadge.label}
+            </span>
+          )}
         </CollapsibleTrigger>
         {canOpenTerminal && onOpenTerminal && (
           <Tooltip>
@@ -346,8 +466,29 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
 
       <CollapsibleContent>
         <div className="ml-[3.25rem] mr-3 mb-2">
-          {isTerminal ? (
-            <pre className={cn(
+          {isPending && call.streamingArgs ? (
+            <pre ref={argsScrollRef} className={cn(
+              'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
+              'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+            )}>
+              <span className="text-blue-400">{'// generating arguments...\n'}</span>
+              <span className="text-[#8b949e]">{call.streamingArgs}</span>
+              <span className="inline-block w-1.5 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+            </pre>
+          ) : isPending ? (
+            <div
+              className={cn(
+                'rounded-md border px-3 py-2 text-xs',
+                'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+                <span>Preparing tool call...</span>
+              </div>
+            </div>
+          ) : isTerminal ? (
+            <pre ref={terminalScrollRef} className={cn(
               'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
               'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
               call.result && !call.result.ok && 'text-red-400 dark:text-red-400'

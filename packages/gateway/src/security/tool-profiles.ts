@@ -48,10 +48,10 @@ const CODING: ToolPermission[] = [
   perm("file.stat", "none", "low"),
   perm("file.write", "once", "medium"),
   perm("file.patch", "once", "medium"),
-  perm("terminal.run", "always", "medium", {
+  perm("terminal.run", "once", "medium", {
     deniedCommands: ["rm -rf *", "del /s /q *", "format *", "mkfs*", "dd if=*"],
   }),
-  perm("terminal.stream", "always", "medium"),
+  perm("terminal.stream", "once", "medium"),
   perm("os.query", "none", "low"),
   perm("os.install", "always", "high"),
   perm("surfaces.list", "none", "low"),

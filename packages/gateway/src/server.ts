@@ -70,7 +70,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
 
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {
-    registerTerminalRoutes(app, deps.surfaceRegistry, deps.toolRegistry, deps.audit, deps.ws, deps.toolExecutor);
+    registerTerminalRoutes(app, deps.surfaceRegistry, deps.toolRegistry, deps.audit, deps.toolExecutor);
   }
 
   if (deps.consentManager && deps.audit) {

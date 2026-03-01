@@ -16,7 +16,6 @@ import { ConsentManager } from "./security/consent-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
-import { PtyBrokerClient } from "./pty-broker-client.js";
 
 async function main() {
   const config = loadConfig();
@@ -30,13 +29,9 @@ async function main() {
   const sessionService = new SessionService(db);
   const audit = new AuditWriter(db);
 
-  // Start PTY broker (Node.js subprocess for ConPTY on Windows)
-  const broker = new PtyBrokerClient();
-  await broker.start();
-
   // Surface registry — register all surface factories
   const surfaceRegistry = new SurfaceRegistry();
-  surfaceRegistry.register(new TerminalSurfaceFactory({ broker }));
+  surfaceRegistry.register(new TerminalSurfaceFactory());
   surfaceRegistry.register(new FileSystemSurfaceFactory());
   surfaceRegistry.register(new BrowserSurfaceFactory());
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
@@ -44,29 +39,19 @@ async function main() {
   // WebSocket control plane (created early so consent callbacks can reference it)
   const ws = new WsControlPlane(config);
 
+  // Auto-wire terminal output → WebSocket for ALL terminals (REST, tool, etc.)
+  surfaceRegistry.onSurfaceStarted = (id, surface) => {
+    if (surface.type === "terminal" && "write" in surface) {
+      (surface as import("./surfaces/terminal.js").TerminalSurface).onOutput = (data) =>
+        ws.broadcastTerminalOutput(id, data);
+    }
+  };
+
   // Hook bus + built-ins
   const hooks = new HookBus();
   registerBuiltInHooks(hooks);
 
-  // Wire broker output/exit events → correct TerminalSurface
-  broker.onOutput = (ptyId, data) => {
-    const surface = surfaceRegistry
-      .listSurfaces()
-      .find((s) => s.type === "terminal" && (s as import("./surfaces/terminal.js").TerminalSurface).ptyId === ptyId);
-    if (surface) {
-      (surface as import("./surfaces/terminal.js").TerminalSurface).handleBrokerOutput(data);
-      hooks.emit("surface.output", { ptyId, dataSize: data.length });
-    }
-  };
-  broker.onExit = (ptyId, exitCode, signal) => {
-    const surface = surfaceRegistry
-      .listSurfaces()
-      .find((s) => s.type === "terminal" && (s as import("./surfaces/terminal.js").TerminalSurface).ptyId === ptyId);
-    if (surface) {
-      (surface as import("./surfaces/terminal.js").TerminalSurface).handleBrokerExit(exitCode, signal);
-      hooks.emit("surface.exit", { ptyId, exitCode, signal });
-    }
-  };
+
   // Memory engine — Sprint 6
   const memory = new MemoryEngine({
     backend: new SqliteMemoryBackend(db),
@@ -245,7 +230,6 @@ async function main() {
     consentManager.cancelAll("shutdown");
     await surfaceRegistry.stopAll("shutdown");
     scheduler.stop();
-    await broker.stop();
     ws.stop();
     await server.close();
     sqlite.close();

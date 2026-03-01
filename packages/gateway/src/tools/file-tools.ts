@@ -31,14 +31,18 @@ interface FileStatInput {
   path: string;
 }
 
-/** Get or create the file-system surface for a session */
-function getFs(registry: SurfaceRegistry, context: ToolContext): FileSystemSurface {
+/** Get or auto-start the file-system surface for a session */
+async function getFs(registry: SurfaceRegistry, context: ToolContext): Promise<FileSystemSurface> {
   const fsId = `fs-${context.sessionId}`;
   let surface = registry.getSurface(fsId) as FileSystemSurface | undefined;
-  if (!surface || surface.state !== "running") {
-    throw new Error("File system surface not started for this session");
-  }
-  return surface;
+  if (surface && surface.state === "running") return surface;
+
+  // Auto-start the filesystem surface for this session
+  const started = await registry.startSurface("filesystem", fsId, {
+    sessionId: context.sessionId,
+    workspaceRoot: context.workspaceRoot,
+  });
+  return started as FileSystemSurface;
 }
 
 export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<FileReadInput> {
@@ -54,7 +58,7 @@ export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<Fi
     },
     async execute(input: FileReadInput, context: ToolContext): Promise<ToolResult> {
       try {
-        const fs = getFs(registry, context);
+        const fs = await getFs(registry, context);
         const content = await fs.read(input.path);
         return {
           ok: true,
@@ -85,7 +89,7 @@ export function createFileWriteTool(registry: SurfaceRegistry): ToolDefinition<F
     },
     async execute(input: FileWriteInput, context: ToolContext): Promise<ToolResult> {
       try {
-        const fs = getFs(registry, context);
+        const fs = await getFs(registry, context);
         await fs.write(input.path, input.content);
         return {
           ok: true,
@@ -117,7 +121,7 @@ export function createFilePatchTool(registry: SurfaceRegistry): ToolDefinition<F
     },
     async execute(input: FilePatchInput, context: ToolContext): Promise<ToolResult> {
       try {
-        const fs = getFs(registry, context);
+        const fs = await getFs(registry, context);
         const result = await fs.patch(input.path, input.search, input.replace);
         if (!result.matched) {
           return { ok: false, message: `Search string not found in ${input.path}` };
@@ -150,7 +154,7 @@ export function createFileListTool(registry: SurfaceRegistry): ToolDefinition<Fi
     },
     async execute(input: FileListInput, context: ToolContext): Promise<ToolResult> {
       try {
-        const fs = getFs(registry, context);
+        const fs = await getFs(registry, context);
         const entries = await fs.list(input.path);
         return {
           ok: true,
@@ -180,7 +184,7 @@ export function createFileStatTool(registry: SurfaceRegistry): ToolDefinition<Fi
     },
     async execute(input: FileStatInput, context: ToolContext): Promise<ToolResult> {
       try {
-        const fs = getFs(registry, context);
+        const fs = await getFs(registry, context);
         const info = await fs.statFile(input.path);
         return {
           ok: true,
