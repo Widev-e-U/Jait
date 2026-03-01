@@ -243,10 +243,10 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** Single `npm i -g @jait/cli && jait setup` gets everything running.
 
 **Exit criteria:**
-- [ ] Fresh machine: `jait setup` generates config, pulls images, starts services
-- [ ] `jait status` shows all services healthy
-- [ ] `jait doctor` detects common issues (ports, Docker missing, etc.)
-- [ ] `jait stop` && `jait start` restores state
+- [x] Fresh machine: `jait setup` generates config, pulls images, starts services
+- [x] `jait status` shows all services healthy
+- [x] `jait doctor` detects common issues (ports, Docker missing, etc.)
+- [x] `jait stop` && `jait start` restores state
 
 ---
 
