@@ -339,6 +339,17 @@ function getTerminalId(call: ToolCallInfo): string | null {
 
 // ── Pending tool call components ─────────────────────────────────
 
+/**
+ * OpenAI requires function names as `terminal_run` (underscore) while our
+ * toolMeta uses `terminal.run` (dotted).  During the pending phase the name
+ * arrives in OpenAI format — normalise it so lookups and startsWith checks
+ * work.
+ */
+function normalizeTool(name: string): string {
+  const idx = name.indexOf('_')
+  return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
+}
+
 /** Try to extract the command being built from partial JSON args */
 function extractStreamingCommand(streamingArgs: string | undefined): string | null {
   if (!streamingArgs) return null
@@ -354,9 +365,10 @@ function extractStreamingCommand(streamingArgs: string | undefined): string | nu
 
 /** Header label shown while the tool call is being streamed (pending state) */
 function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs?: string }) {
-  // Once the tool name is complete enough to look up a label, use the rich display
-  const meta = toolMeta[tool]
-  const isTerminalTool = tool.startsWith('terminal.')
+  // Normalise OpenAI name (terminal_run → terminal.run) for meta lookup
+  const normalized = normalizeTool(tool)
+  const meta = toolMeta[normalized]
+  const isTerminalTool = normalized.startsWith('terminal.')
   const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
 
   if (meta && isTerminalTool && command) {
@@ -392,7 +404,8 @@ function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs
 
 /** Body content shown while the tool call is being streamed (pending state) */
 function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; streamingArgs?: string; scrollRef: React.RefObject<HTMLPreElement | null> }) {
-  const isTerminalTool = tool.startsWith('terminal.')
+  const normalized = normalizeTool(tool)
+  const isTerminalTool = normalized.startsWith('terminal.')
   const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
 
   // Terminal with partial command — show the command being built (no raw JSON)
