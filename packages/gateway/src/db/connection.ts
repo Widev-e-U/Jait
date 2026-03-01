@@ -117,6 +117,24 @@ export function migrateDatabase(sqlite: Database) {
     )
   `);
 
+
+  sqlite.run(`
+    CREATE TABLE IF NOT EXISTS memories (
+      id TEXT PRIMARY KEY,
+      scope TEXT NOT NULL,
+      content TEXT NOT NULL,
+      source_type TEXT NOT NULL,
+      source_id TEXT NOT NULL,
+      source_surface TEXT NOT NULL,
+      embedding TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      expires_at TEXT
+    )
+  `);
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, created_at)`);
+  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_memories_expires ON memories(expires_at)`);
+
   sqlite.run(`
     CREATE TABLE IF NOT EXISTS messages (
       id TEXT PRIMARY KEY,

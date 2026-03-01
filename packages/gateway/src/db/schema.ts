@@ -80,6 +80,28 @@ export const consentSessionApprovals = sqliteTable("consent_session_approvals", 
   updatedAt: text("updated_at").notNull(),
 });
 
+
+// ─── Memories ───────────────────────────────────────────────────────
+export const memories = sqliteTable(
+  "memories",
+  {
+    id: text("id").primaryKey(),
+    scope: text("scope").notNull(),
+    content: text("content").notNull(),
+    sourceType: text("source_type").notNull(),
+    sourceId: text("source_id").notNull(),
+    sourceSurface: text("source_surface").notNull(),
+    embedding: text("embedding").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    expiresAt: text("expires_at"),
+  },
+  (table) => [
+    index("idx_memories_scope").on(table.scope, table.createdAt),
+    index("idx_memories_expires").on(table.expiresAt),
+  ],
+);
+
 // ─── Chat Messages ───────────────────────────────────────────────────
 export const messages = sqliteTable(
   "messages",

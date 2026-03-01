@@ -4,10 +4,14 @@ import { WsControlPlane } from "./ws.js";
 import { openDatabase, migrateDatabase } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
 import { AuditWriter } from "./services/audit.js";
-import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory } from "./surfaces/index.js";
+import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, BrowserSurfaceFactory } from "./surfaces/index.js";
 import { createToolRegistry } from "./tools/index.js";
 import { SchedulerService } from "./scheduler/service.js";
 import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
+import { MemoryEngine } from "./memory/service.js";
+import { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
+import { join } from "node:path";
+import { homedir } from "node:os";
 import { ConsentManager } from "./security/consent-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
@@ -34,6 +38,7 @@ async function main() {
   const surfaceRegistry = new SurfaceRegistry();
   surfaceRegistry.register(new TerminalSurfaceFactory({ broker }));
   surfaceRegistry.register(new FileSystemSurfaceFactory());
+  surfaceRegistry.register(new BrowserSurfaceFactory());
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
 
   // WebSocket control plane (created early so consent callbacks can reference it)
@@ -62,6 +67,18 @@ async function main() {
       hooks.emit("surface.exit", { ptyId, exitCode, signal });
     }
   };
+  // Memory engine — Sprint 6
+  const memory = new MemoryEngine({
+    backend: new SqliteMemoryBackend(db),
+    memoryDir: join(homedir(), ".jait", "memory"),
+  });
+
+  // Tool registry — Sprint 3 + Sprint 6 memory tools
+  const toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory });
+  console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
+
+  // WebSocket control plane (created early so consent callbacks can reference it)
+  const ws = new WsControlPlane(config);
 
   // Consent & Trust — Sprint 4
   const trustEngine = new TrustEngine(db);

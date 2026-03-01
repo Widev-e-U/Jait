@@ -40,11 +40,11 @@ interface SurfaceStartInput {
 export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefinition<SurfaceStartInput> {
   return {
     name: "surfaces.start",
-    description: "Start a new surface of the given type (terminal, filesystem)",
+    description: "Start a new surface of the given type (terminal, filesystem, browser)",
     parameters: {
       type: "object",
       properties: {
-        type: { type: "string", description: "Surface type to start", enum: ["terminal", "filesystem"] },
+        type: { type: "string", description: "Surface type to start", enum: ["terminal", "filesystem", "browser"] },
         sessionId: { type: "string", description: "Session to attach the surface to" },
         workspaceRoot: { type: "string", description: "Working directory for the surface" },
       },
