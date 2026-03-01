@@ -58,6 +58,25 @@ const DEFAULT_UI_MESSAGE_LIMIT = 120;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
 type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown };
+type VisibleHistoryMsg = UIMsg & { historyIndex: number };
+
+function parseToolArguments(raw: string): unknown {
+  if (!raw) return {};
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+}
+
+function mapPendingToolCallsForUI(toolCalls: OpenAIToolCall[]): Array<Record<string, unknown>> {
+  return toolCalls.map((tc) => ({
+    callId: tc.id,
+    tool: fromOpenAIName(tc.function.name),
+    args: parseToolArguments(tc.function.arguments),
+    status: "running",
+  }));
+}
 
 function emitToSubscribers(sessionId: string, event: StreamEvent) {
   const subs = sessionSubscribers.get(sessionId);
@@ -100,15 +119,53 @@ function windowMessages<T>(messages: T[], limit: number): {
   };
 }
 
-function buildVisibleHistoryMessages(sessionId: string, history: ChatMessage[]): UIMsg[] {
-  return history
-    .filter((m) => m.role !== "system" && m.role !== "tool")
-    .filter((m) => !(m.role === "assistant" && m.tool_calls && !m.content))
-    .map((m, i) => ({
-      id: `${sessionId}-${i}`,
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function buildVisibleHistoryEntries(
+  sessionId: string,
+  history: ChatMessage[],
+  options?: { includePendingAssistantToolCalls?: boolean },
+): VisibleHistoryMsg[] {
+  const out: VisibleHistoryMsg[] = [];
+  let visibleIndex = 0;
+  const includePendingAssistantToolCalls = options?.includePendingAssistantToolCalls === true;
+  for (let i = 0; i < history.length; i++) {
+    const m = history[i]!;
+    if (m.role === "system" || m.role === "tool") continue;
+
+    const uiToolCalls = (m.role === "assistant" && m.tool_calls && includePendingAssistantToolCalls)
+      ? mapPendingToolCallsForUI(m.tool_calls)
+      : undefined;
+
+    if (m.role === "assistant" && m.tool_calls && !m.content && !includePendingAssistantToolCalls) {
+      continue;
+    }
+
+    out.push({
+      id: `${sessionId}-${visibleIndex}`,
       role: m.role as "user" | "assistant",
       content: m.content,
-    }));
+      toolCalls: uiToolCalls,
+      historyIndex: i,
+    });
+    visibleIndex++;
+  }
+  return out;
+}
+
+function buildVisibleHistoryMessages(
+  sessionId: string,
+  history: ChatMessage[],
+  options?: { includePendingAssistantToolCalls?: boolean },
+): UIMsg[] {
+  return buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls }) => ({
+    id,
+    role,
+    content,
+    toolCalls,
+  }));
 }
 
 // ── System prompt ────────────────────────────────────────────────────
@@ -424,6 +481,89 @@ export function registerChatRoutes(
     return { ok: true, cancelled: false };
   });
 
+  // Truncate a session from a specific user message onward (used for edit + replay).
+  app.post("/api/sessions/:sessionId/restart-from", async (request, reply) => {
+    const { sessionId } = request.params as { sessionId: string };
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const messageId = typeof body["messageId"] === "string" ? body["messageId"] : "";
+    const messageIndex = typeof body["messageIndex"] === "number" ? body["messageIndex"] : -1;
+    const messageFromEnd = typeof body["messageFromEnd"] === "number" ? body["messageFromEnd"] : -1;
+
+    if (!messageId && messageIndex < 0 && messageFromEnd < 0) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "messageId, messageFromEnd, or messageIndex is required" });
+    }
+    if (activeStreams.has(sessionId)) {
+      const controller = sessionAbortControllers.get(sessionId);
+      if (controller) controller.abort();
+      const deadline = Date.now() + 5000;
+      while (activeStreams.has(sessionId) && Date.now() < deadline) {
+        await sleep(50);
+      }
+      if (activeStreams.has(sessionId)) {
+        return reply.status(409).send({ error: "CONFLICT", details: "Cannot restart while session is streaming" });
+      }
+    }
+
+    hydrateSession(sessionId);
+    const history = sessionHistory.get(sessionId) ?? [];
+    const visibleEntries = buildVisibleHistoryEntries(sessionId, history);
+    let targetVisibleIndex = visibleEntries.findIndex((m) => m.id === messageId);
+    if (
+      targetVisibleIndex === -1 &&
+      Number.isFinite(messageFromEnd) &&
+      messageFromEnd >= 0 &&
+      messageFromEnd < visibleEntries.length
+    ) {
+      targetVisibleIndex = visibleEntries.length - 1 - Math.floor(messageFromEnd);
+    }
+    if (
+      targetVisibleIndex === -1 &&
+      Number.isFinite(messageIndex) &&
+      messageIndex >= 0 &&
+      messageIndex < visibleEntries.length
+    ) {
+      targetVisibleIndex = Math.floor(messageIndex);
+    }
+    if (targetVisibleIndex === -1) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Message not found" });
+    }
+
+    const target = visibleEntries[targetVisibleIndex]!;
+    if (target.role !== "user") {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Only user messages can be edited/restarted" });
+    }
+
+    const truncatedHistory = history.slice(0, target.historyIndex);
+    sessionHistory.set(sessionId, truncatedHistory);
+
+    if (db) {
+      const rows = db
+        .select()
+        .from(messagesTable)
+        .where(eq(messagesTable.sessionId, sessionId))
+        .orderBy(messagesTable.createdAt)
+        .all();
+      const rowsToDelete = rows.slice(targetVisibleIndex);
+      for (const row of rowsToDelete) {
+        db.delete(messagesTable).where(eq(messagesTable.id, row.id)).run();
+      }
+    }
+
+    try { sessionService?.touch(sessionId); } catch { /* ignore */ }
+
+    const updatedMessages = buildVisibleHistoryMessages(sessionId, truncatedHistory);
+    const windowed = windowMessages(updatedMessages, DEFAULT_UI_MESSAGE_LIMIT);
+    return {
+      ok: true,
+      sessionId,
+      streaming: false,
+      total: windowed.total,
+      hasMore: windowed.hasMore,
+      limit: DEFAULT_UI_MESSAGE_LIMIT,
+      messages: windowed.messages,
+    };
+  });
+
   // List messages in a session
   app.get("/api/sessions/:sessionId/messages", async (request) => {
     const { sessionId } = request.params as { sessionId: string };
@@ -490,7 +630,11 @@ export function registerChatRoutes(
       total = windowed.total;
       hasMore = windowed.hasMore;
     } else {
-      const allMessages = buildVisibleHistoryMessages(sessionId, history);
+      const allMessages = buildVisibleHistoryMessages(
+        sessionId,
+        history,
+        { includePendingAssistantToolCalls: isStreaming },
+      );
       const windowed = windowMessages(allMessages, limit);
       snapshotMessages = windowed.messages;
       total = windowed.total;

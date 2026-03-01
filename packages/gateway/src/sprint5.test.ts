@@ -115,7 +115,7 @@ describe("Sprint 5 — SSRF guard + web tools", () => {
   const originalFetch = globalThis.fetch;
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
     globalThis.fetch = originalFetch;
     delete process.env["BRAVE_API_KEY"];
   });

@@ -45,10 +45,13 @@ export function useChat(sessionId: string | null) {
   const abortControllerRef = useRef<AbortController | null>(null)
   const prevSessionIdRef = useRef<string | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
+  const requestVersionRef = useRef(0)
+  const restartInFlightRef = useRef(false)
 
   // When sessionId changes, load history / resume active stream via SSE
   useEffect(() => {
     if (sessionId === prevSessionIdRef.current) return
+    requestVersionRef.current += 1
     prevSessionIdRef.current = sessionId
 
     // Don't abort the in-flight chat request — let the gateway finish processing.
@@ -112,9 +115,11 @@ export function useChat(sessionId: string | null) {
                     callId: string;
                     tool: string;
                     args: Record<string, unknown>;
-                    ok: boolean;
-                    message: string;
+                    status?: 'running' | 'success' | 'error';
+                    ok?: boolean;
+                    message?: string;
                     output?: string;
+                    streamingOutput?: string;
                     startedAt?: number;
                     completedAt?: number;
                   }>;
@@ -123,11 +128,16 @@ export function useChat(sessionId: string | null) {
                   const msg: ChatMessage = { id: m.id, role: m.role, content: m.content }
                   if (m.toolCalls && m.toolCalls.length > 0) {
                     msg.toolCalls = m.toolCalls.map(tc => ({
+                      // Streaming snapshots may provide explicit running status.
+                      // Persisted DB snapshots provide ok/message for completed calls.
                       callId: tc.callId,
                       tool: tc.tool,
                       args: tc.args ?? {},
-                      status: tc.ok ? 'success' as const : 'error' as const,
-                      result: { ok: tc.ok, message: tc.message, data: tc.output != null ? { output: tc.output } : undefined },
+                      status: tc.status ?? (tc.ok ? 'success' as const : 'error' as const),
+                      result: tc.status === 'running'
+                        ? undefined
+                        : { ok: !!tc.ok, message: tc.message ?? '', data: tc.output != null ? { output: tc.output } : undefined },
+                      streamingOutput: tc.streamingOutput,
                       startedAt: tc.startedAt ?? 0,
                       completedAt: tc.completedAt ?? 0,
                     }))
@@ -242,6 +252,7 @@ export function useChat(sessionId: string | null) {
   ) => {
     const { token, sessionId: explicitSessionId, onLoginRequired } = options
     const requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
+    const assistantId = `assistant-${Date.now()}`
 
     const userMessage: ChatMessage = {
       id: `user-${Date.now()}`,
@@ -251,16 +262,18 @@ export function useChat(sessionId: string | null) {
 
     setState(prev => ({
       ...prev,
-      messages: [...prev.messages, userMessage],
+      messages: [...prev.messages, userMessage, { id: assistantId, role: 'assistant', content: '' }],
       isLoading: true,
       error: null,
     }))
 
     const controller = new AbortController()
     abortControllerRef.current = controller
+    const requestVersion = ++requestVersionRef.current
 
     // Guard: only update state if we're still on the same session
-    const isStale = () => prevSessionIdRef.current !== requestSessionId
+    const isStale = () =>
+      prevSessionIdRef.current !== requestSessionId || requestVersionRef.current !== requestVersion
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -276,7 +289,14 @@ export function useChat(sessionId: string | null) {
       if (response.status === 401) {
         const data = await response.json()
         if (data.detail === 'login_required' || data.detail === 'limit_reached') {
-          setState(prev => ({ ...prev, isLoading: false, error: data.detail }))
+          setState(prev => ({
+            ...prev,
+            isLoading: false,
+            error: data.detail,
+            messages: prev.messages.filter(m =>
+              !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+            ),
+          }))
           if (data.detail === 'login_required') onLoginRequired?.()
           return
         }
@@ -294,14 +314,6 @@ export function useChat(sessionId: string | null) {
       let thinkingDuration: number | undefined
       const toolCalls: ToolCallInfo[] = []
       let lineBuffer = ''
-
-      const assistantId = `assistant-${Date.now()}`
-      if (!isStale()) {
-        setState(prev => ({
-          ...prev,
-          messages: [...prev.messages, { id: assistantId, role: 'assistant', content: '', thinking: '' }],
-        }))
-      }
 
       const updateMessage = (updates: Partial<ChatMessage>) => {
         if (isStale()) return
@@ -373,22 +385,25 @@ export function useChat(sessionId: string | null) {
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
               }
               if (!isStale()) {
+                const isEmptyAssistant = assistantContent.length === 0 && thinkingContent.length === 0 && toolCalls.length === 0
                 setState(prev => ({
                   ...prev,
                   promptCount: data.prompt_count,
                   remainingPrompts: data.remaining_prompts,
                   isLoading: false,
-                  messages: prev.messages.map(m =>
-                    m.id === assistantId
-                      ? {
-                          ...m,
-                          content: assistantContent,
-                          thinking: thinkingContent || undefined,
-                          thinkingDuration,
-                          toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
-                        }
-                      : m
-                  ),
+                  messages: isEmptyAssistant
+                    ? prev.messages.filter(m => m.id !== assistantId)
+                    : prev.messages.map(m =>
+                        m.id === assistantId
+                          ? {
+                              ...m,
+                              content: assistantContent,
+                              thinking: thinkingContent || undefined,
+                              thinkingDuration,
+                              toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+                            }
+                          : m
+                      ),
                 }))
               }
             } else if (data.type === 'error') {
@@ -401,7 +416,15 @@ export function useChat(sessionId: string | null) {
       }
     } catch (error) {
       if (error instanceof Error && error.name === 'AbortError') {
-        if (!isStale()) setState(prev => ({ ...prev, isLoading: false }))
+        if (!isStale()) {
+          setState(prev => ({
+            ...prev,
+            isLoading: false,
+            messages: prev.messages.filter(m =>
+              !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+            ),
+          }))
+        }
         return
       }
       if (!isStale()) {
@@ -409,12 +432,16 @@ export function useChat(sessionId: string | null) {
           ...prev,
           isLoading: false,
           error: error instanceof Error ? error.message : 'An error occurred',
+          messages: prev.messages.filter(m =>
+            !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+          ),
         }))
       }
     }
   }, [sessionId])
 
   const cancelRequest = useCallback(() => {
+    requestVersionRef.current += 1
     // 1. Tell the gateway to abort the Ollama stream
     const sid = prevSessionIdRef.current
     if (sid) {
@@ -433,6 +460,94 @@ export function useChat(sessionId: string | null) {
     setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null })
   }, [])
 
+  const restartFromMessage = useCallback(async (
+    messageId: string,
+    editedContent: string,
+    messageIndex?: number,
+    messageFromEnd?: number,
+    options: SendMessageOptions = {},
+  ) => {
+    const { token, sessionId: explicitSessionId, onLoginRequired } = options
+    const requestSessionId = explicitSessionId ?? sessionId
+    if (!requestSessionId || !editedContent.trim() || restartInFlightRef.current) return
+    restartInFlightRef.current = true
+
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      const postRestart = () =>
+        fetch(`${API_URL}/api/sessions/${requestSessionId}/restart-from`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ messageId, messageIndex, messageFromEnd }),
+        })
+
+      const wait = (ms: number) => new Promise((resolve) => window.setTimeout(resolve, ms))
+      const waitForStreamingToStop = async () => {
+        for (let attempt = 0; attempt < 80; attempt += 1) {
+          const statusRes = await fetch(
+            `${API_URL}/api/sessions/${requestSessionId}/messages?limit=1`,
+            { headers },
+          ).catch(() => null)
+          if (statusRes?.ok) {
+            const statusData = await statusRes.json().catch(() => ({})) as { streaming?: boolean }
+            if (!statusData.streaming) return true
+          }
+          await wait(100)
+        }
+        return false
+      }
+
+      // Invalidate in-flight local stream updates from the current run,
+      // then proactively cancel server-side stream before restart.
+      // This avoids a common race where restart is sent before the backend
+      // has finished clearing active stream state.
+      requestVersionRef.current += 1
+      abortControllerRef.current?.abort()
+      streamAbortRef.current?.abort()
+      streamAbortRef.current = null
+      await fetch(`${API_URL}/api/sessions/${requestSessionId}/cancel`, { method: 'POST', headers }).catch(() => null)
+      await waitForStreamingToStop()
+
+      let res = await postRestart()
+      if (res.status === 409) {
+        // Fallback: one more wait cycle, then a final restart attempt.
+        await waitForStreamingToStop()
+        res = await postRestart()
+      }
+
+      if (res.status === 401) {
+        const data = await res.json().catch(() => ({})) as { detail?: string }
+        if (data.detail === 'login_required') onLoginRequired?.()
+        return
+      }
+
+      if (!res.ok) {
+        const errText = await res.text().catch(() => '')
+        throw new Error(errText || `HTTP ${res.status}`)
+      }
+
+      const data = await res.json() as { messages?: ChatMessage[] }
+      setState(prev => ({
+        ...prev,
+        messages: data.messages ?? [],
+        isLoading: false,
+        error: null,
+      }))
+
+      await sendMessage(editedContent.trim(), { token, sessionId: requestSessionId, onLoginRequired })
+    } catch (error) {
+      setState(prev => ({
+        ...prev,
+        isLoading: false,
+        error: error instanceof Error ? error.message : 'Failed to restart from message',
+      }))
+    } finally {
+      restartInFlightRef.current = false
+    }
+  }, [sessionId, sendMessage])
+
   return {
     messages: state.messages,
     isLoading: state.isLoading,
@@ -440,6 +555,7 @@ export function useChat(sessionId: string | null) {
     remainingPrompts: state.remainingPrompts,
     error: state.error,
     sendMessage,
+    restartFromMessage,
     cancelRequest,
     clearMessages,
   }

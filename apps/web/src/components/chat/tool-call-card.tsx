@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
 
 export interface ToolCallInfo {
@@ -30,6 +31,9 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'surfaces.stop':   { icon: Server,    label: 'Surfaces',   color: 'text-purple-500' },
   'web.search':      { icon: Globe,     label: 'Search',     color: 'text-cyan-500' },
   'web.fetch':       { icon: Globe,     label: 'Fetch',      color: 'text-cyan-500' },
+  'browser.navigate': { icon: Globe,    label: 'Navigate',   color: 'text-cyan-500' },
+  'browser.search':   { icon: Globe,    label: 'Search',     color: 'text-cyan-500' },
+  'browser.fetch':    { icon: Globe,    label: 'Fetch',      color: 'text-cyan-500' },
 }
 
 function getToolMeta(tool: string) {
@@ -42,6 +46,9 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (tool.startsWith('file.')) return String(args.path ?? '')
   if (tool === 'os.query') return String(args.query ?? '')
   if (tool === 'os.install') return String(args.package ?? '')
+  if (tool === 'browser.navigate') return String(args.url ?? '')
+  if (tool === 'browser.search') return String(args.query ?? '')
+  if (tool === 'browser.fetch') return String(args.url ?? '')
   if (tool === 'surfaces.start') return `Start ${args.type ?? 'surface'}`
   if (tool === 'surfaces.stop') return `Stop ${args.surfaceId ?? 'surface'}`
   if (tool === 'surfaces.list') return 'List surfaces'
@@ -65,10 +72,23 @@ function formatOutput(result: ToolCallInfo['result']): string {
   return result.message
 }
 
-function ElapsedLabel({ startedAt, completedAt }: { startedAt: number; completedAt?: number }) {
-  const ms = (completedAt ?? Date.now()) - startedAt
+function ElapsedLabel({ startedAt, completedAt, now }: { startedAt: number; completedAt?: number; now?: number }) {
+  const ms = (completedAt ?? now ?? Date.now()) - startedAt
   if (ms < 1000) return <span>{ms}ms</span>
   return <span>{(ms / 1000).toFixed(1)}s</span>
+}
+
+function getRunningHint(tool: string, args: Record<string, unknown>): string {
+  if (tool === 'browser.navigate' || tool === 'web.fetch' || tool === 'browser.fetch') {
+    const target = String(args.url ?? '').trim()
+    return target ? `Connecting to ${target}...` : 'Connecting...'
+  }
+  if (tool === 'web.search' || tool === 'browser.search') {
+    const query = String(args.query ?? '').trim()
+    return query ? `Searching for "${query}"...` : 'Searching...'
+  }
+  if (tool.startsWith('terminal.')) return 'Command is still running...'
+  return 'Tool is still running...'
 }
 
 function isTerminalCreationCall(call: ToolCallInfo): boolean {
@@ -127,6 +147,7 @@ interface ToolCallCardProps {
 
 export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   const [open, setOpen] = useState(call.status === 'running')
+  const [now, setNow] = useState(() => Date.now())
   const prevStatusRef = useRef(call.status)
   const meta = getToolMeta(call.tool)
   const Icon = meta.icon
@@ -136,6 +157,7 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   const isTerminal = call.tool.startsWith('terminal.')
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getTerminalId(call) : null
+  const runningHint = getRunningHint(call.tool, call.args)
 
   const StatusIcon = call.status === 'running'
     ? Loader2
@@ -155,6 +177,12 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
       setOpen(false)
     }
     prevStatusRef.current = call.status
+  }, [call.status])
+
+  useEffect(() => {
+    if (call.status !== 'running') return
+    const id = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(id)
   }, [call.status])
 
   return (
@@ -182,24 +210,28 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
             )}
           </span>
           <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
-            <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} />
+            <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
           </span>
         </CollapsibleTrigger>
         {canOpenTerminal && onOpenTerminal && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 shrink-0 px-2 text-[11px]"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              onOpenTerminal(terminalId)
-            }}
-          >
-            <ExternalLink className="mr-1 h-3.5 w-3.5" />
-            Open Terminal
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onOpenTerminal(terminalId)
+                }}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Open terminal</TooltipContent>
+          </Tooltip>
         )}
       </div>
 
@@ -231,9 +263,19 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
               )}
             </pre>
           ) : call.status === 'running' ? (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground py-1">
-              <Loader2 className="h-3 w-3 animate-spin" />
-              Running...
+            <div
+              className={cn(
+                'rounded-md border px-3 py-2 text-xs',
+                'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+              )}
+            >
+              <div className="flex items-center gap-2">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                <span>{runningHint}</span>
+              </div>
+              <div className="mt-1 text-[11px] opacity-75">
+                Elapsed: <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
+              </div>
             </div>
           ) : null}
         </div>

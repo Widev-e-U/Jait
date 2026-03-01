@@ -74,11 +74,8 @@ async function main() {
   });
 
   // Tool registry — Sprint 3 + Sprint 6 memory tools
-  const toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory });
+  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
-
-  // WebSocket control plane (created early so consent callbacks can reference it)
-  const ws = new WsControlPlane(config);
 
   // Consent & Trust — Sprint 4
   const trustEngine = new TrustEngine(db);
@@ -113,7 +110,6 @@ async function main() {
     sessionApprovalsBySession.set(sessionId, created);
     return created;
   };
-  let toolRegistry = createToolRegistry(surfaceRegistry);
 
   const toolExecutor = async (
     toolName: string,
@@ -160,6 +156,7 @@ async function main() {
     sessionService,
     ws,
     startedAt: Date.now(),
+    memoryService: memory,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 

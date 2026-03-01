@@ -5,6 +5,12 @@ import type {
   SurfaceStopInput,
   SurfaceSnapshot,
 } from "./contracts.js";
+import { mkdir } from "node:fs/promises";
+import { dirname, resolve } from "node:path";
+
+declare const window: any;
+declare const document: any;
+declare const CSS: any;
 
 export interface BrowserInteractiveElement {
   role?: string;
@@ -189,7 +195,136 @@ export class BrowserSurfaceFactory {
 }
 
 async function createPlaywrightDriver(): Promise<BrowserDriver> {
-  throw new Error(
-    "No browser driver configured. Provide BrowserSurfaceFactory({ driverFactory }) to enable browser tools.",
-  );
+  // Optional runtime dependency: keep static imports out so gateway can still
+  // boot in environments that do not need browser automation.
+  const loadPlaywright = new Function("return import('playwright')") as () => Promise<unknown>;
+
+  let mod: unknown;
+  try {
+    mod = await loadPlaywright();
+  } catch {
+    throw new Error(
+      "Playwright is not installed. Install it in @jait/gateway: `bun add playwright --cwd packages/gateway`",
+    );
+  }
+
+  const chromium = (mod as { chromium?: { launch: (opts: Record<string, unknown>) => Promise<unknown> } }).chromium;
+  if (!chromium) {
+    throw new Error("Failed to load Playwright chromium driver.");
+  }
+
+  const browser = await chromium.launch({
+    headless: process.env["BROWSER_HEADLESS"] !== "false",
+  }) as {
+    newContext: (opts: Record<string, unknown>) => Promise<{
+      newPage: () => Promise<{
+        goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
+        click: (selector: string) => Promise<void>;
+        fill: (selector: string, text: string) => Promise<void>;
+        evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
+        waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
+        screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
+      }>;
+      close: () => Promise<void>;
+    }>;
+    close: () => Promise<void>;
+  };
+
+  const context = await browser.newContext({
+    ignoreHTTPSErrors: process.env["BROWSER_IGNORE_HTTPS_ERRORS"] === "true",
+  });
+  const page = await context.newPage();
+
+  const driver: BrowserDriver = {
+    async navigate(url: string) {
+      await page.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 });
+    },
+    async click(selector: string) {
+      await page.click(selector);
+    },
+    async typeText(selector: string, text: string) {
+      await page.fill(selector, text);
+    },
+    async scroll(x: number, y: number) {
+      await page.evaluate(
+        ([targetX, targetY]: [number, number]) => window.scrollTo(targetX, targetY),
+        [x, y],
+      );
+    },
+    async select(selector: string, value: string) {
+      const selectPage = page as {
+        selectOption?: (s: string, v: string) => Promise<unknown>;
+      };
+      if (!selectPage.selectOption) {
+        throw new Error("Browser driver does not support selectOption.");
+      }
+      await selectPage.selectOption(selector, value);
+    },
+    async waitFor(selector: string, timeoutMs: number) {
+      await page.waitForSelector(selector, { timeout: timeoutMs });
+    },
+    async screenshot(path?: string) {
+      const outPath = path
+        ? resolve(path)
+        : resolve(process.cwd(), "artifacts", `browser-${Date.now()}.png`);
+      await mkdir(dirname(outPath), { recursive: true });
+      await page.screenshot({ path: outPath, fullPage: true });
+      return outPath;
+    },
+    async snapshot() {
+      return page.evaluate(() => {
+        const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
+        const bodyText = normalize(document.body?.innerText ?? "").slice(0, 12_000);
+        const title = document.title || "(untitled)";
+        const esc = (raw: string) => {
+          if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
+          return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
+        };
+
+        const rawElements = Array.from(
+          document.querySelectorAll("a, button, input, textarea, select, [role], [onclick], [tabindex]"),
+        ) as any[];
+        const limited = rawElements.slice(0, 60);
+
+        const elements = limited.map((el: any) => {
+          const tag = el.tagName.toLowerCase();
+          const role = el.getAttribute("role") ?? tag;
+          const name =
+            el.getAttribute("aria-label") ??
+            el.getAttribute("name") ??
+            el.getAttribute("title") ??
+            el.getAttribute("placeholder") ??
+            el.innerText?.trim() ??
+            "";
+          const text = el.innerText?.trim() ?? "";
+          const id = el.getAttribute("id");
+          const testId = el.getAttribute("data-testid");
+          const selector = id
+            ? `#${esc(id)}`
+            : testId
+              ? `${tag}[data-testid="${testId}"]`
+              : `${tag}${el.getAttribute("name") ? `[name="${el.getAttribute("name")}"]` : ""}`;
+          return {
+            role,
+            name: normalize(name).slice(0, 200),
+            text: normalize(text).slice(0, 200),
+            selector,
+          };
+        });
+
+        return {
+          url: window.location.href,
+          title,
+          text: bodyText,
+          elements,
+        };
+      }) as Promise<BrowserPageSnapshot>;
+    },
+    async close() {
+      await context.close();
+      await browser.close();
+    },
+  };
+
+  return driver;
 }

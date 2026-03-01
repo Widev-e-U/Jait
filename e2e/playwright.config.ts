@@ -77,14 +77,14 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'cd ../src/frontend && npm run dev',
+      command: 'cd ../apps/web && bun run dev',
       url: 'http://localhost:5173',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
     },
     {
-      command: 'cd ../src/backend && uvicorn app.main:app --host 0.0.0.0 --port 8000',
-      url: 'http://localhost:8000/docs',
+      command: 'cd ../packages/gateway && bun run dev',
+      url: 'http://localhost:8000',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
     },

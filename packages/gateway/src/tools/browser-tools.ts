@@ -53,6 +53,7 @@ interface WebFetchInput {
   headers?: Record<string, string>;
   timeoutMs?: number;
   maxBytes?: number;
+  ignoreTlsErrors?: boolean;
 }
 
 interface WebSearchInput {
@@ -60,6 +61,16 @@ interface WebSearchInput {
   provider?: "duckduckgo" | "brave" | "perplexity";
   limit?: number;
 }
+
+interface SearchResult {
+  title: string;
+  url: string;
+  snippet: string;
+}
+
+type FetchWithTlsInit = RequestInit & {
+  tls?: { rejectUnauthorized?: boolean };
+};
 
 const DEFAULT_BROWSER_ID = "browser-default";
 
@@ -262,6 +273,7 @@ export function createWebFetchTool(guard = new SSRFGuard()): ToolDefinition<WebF
         method: { type: "string", description: "HTTP method" },
         body: { type: "string", description: "Request body" },
         timeoutMs: { type: "number", description: "Request timeout in ms" },
+        ignoreTlsErrors: { type: "boolean", description: "Allow retry with TLS verification disabled" },
       },
       required: ["url"],
     },
@@ -271,23 +283,41 @@ export function createWebFetchTool(guard = new SSRFGuard()): ToolDefinition<WebF
       const maxBytes = input.maxBytes ?? 50_000;
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), timeoutMs);
+      const ignoreTlsErrors =
+        input.ignoreTlsErrors === true || process.env["WEB_FETCH_IGNORE_TLS_ERRORS"] === "true";
       try {
-        const response = await fetch(url, {
-          method: input.method ?? "GET",
-          body: input.body,
-          headers: input.headers,
-          signal: controller.signal,
-        });
+        const { response, insecureTlsUsed } = await fetchWithTlsFallback(
+          url,
+          {
+            method: input.method ?? "GET",
+            body: input.body,
+            headers: input.headers,
+            signal: controller.signal,
+          },
+          ignoreTlsErrors,
+        );
         const text = await response.text();
         return {
           ok: response.ok,
-          message: response.ok ? `Fetched ${url}` : `Request failed with ${response.status}`,
+          message: response.ok
+            ? insecureTlsUsed
+              ? `Fetched ${url} (TLS verification disabled)`
+              : `Fetched ${url}`
+            : `Request failed with ${response.status}`,
           data: {
             url,
             status: response.status,
             contentType: response.headers.get("content-type"),
             body: text.slice(0, maxBytes),
+            insecureTlsUsed,
           },
+        };
+      } catch (err) {
+        const message = extractErrorMessage(err);
+        return {
+          ok: false,
+          message: `Fetch failed: ${message}`,
+          data: { url, error: message },
         };
       } finally {
         clearTimeout(timeout);
@@ -350,18 +380,184 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
         };
       }
 
-      const ddgUrl = guard.validate(`https://duckduckgo.com/?q=${encodeURIComponent(input.query)}&format=json`);
-      const response = await fetch(ddgUrl, { headers: { Accept: "application/json" } });
-      const data = await response.json() as { RelatedTopics?: Array<{ Text?: string; FirstURL?: string }> };
-      const results = (data.RelatedTopics ?? [])
-        .flatMap((item) => ("FirstURL" in item ? [item] : []))
-        .slice(0, limit)
-        .map((item) => ({
-          title: item.Text?.split(" - ")[0] ?? "",
-          url: item.FirstURL ?? "",
-          snippet: item.Text ?? "",
-        }));
-      return { ok: response.ok, message: "Search results (duckduckgo)", data: { provider: "duckduckgo", query: input.query, results } };
+      return searchDuckDuckGo(guard, input.query, limit);
     },
   };
+}
+
+function extractErrorMessage(err: unknown): string {
+  if (err instanceof Error) return err.message;
+  return String(err);
+}
+
+function isTlsFailure(err: unknown): boolean {
+  const msg = extractErrorMessage(err).toLowerCase();
+  return (
+    msg.includes("certificate") ||
+    msg.includes("self signed") ||
+    msg.includes("unable to get local issuer certificate") ||
+    msg.includes("tls")
+  );
+}
+
+async function fetchWithTlsFallback(
+  url: string,
+  init: FetchWithTlsInit,
+  allowInsecureTls: boolean,
+): Promise<{ response: Response; insecureTlsUsed: boolean }> {
+  try {
+    const response = await fetch(url, init);
+    return { response, insecureTlsUsed: false };
+  } catch (err) {
+    if (!allowInsecureTls || !isTlsFailure(err)) throw err;
+    const retryInit: FetchWithTlsInit = {
+      ...init,
+      tls: { rejectUnauthorized: false },
+    };
+    const response = await fetch(url, retryInit);
+    return { response, insecureTlsUsed: true };
+  }
+}
+
+async function searchDuckDuckGo(
+  guard: SSRFGuard,
+  query: string,
+  limit: number,
+): Promise<ToolResult> {
+  const jsonUrl = guard.validate(
+    `https://api.duckduckgo.com/?q=${encodeURIComponent(query)}&format=json&no_html=1&skip_disambig=1`,
+  );
+  const htmlUrl = guard.validate(`https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`);
+
+  try {
+    const jsonResponse = await fetch(jsonUrl, {
+      headers: {
+        Accept: "application/json",
+        "User-Agent": "Mozilla/5.0 (compatible; JaitBot/1.0; +https://jait.local)",
+      },
+    });
+    if (jsonResponse.ok) {
+      const data = await jsonResponse.json() as {
+        Results?: Array<{ Text?: string; FirstURL?: string }>;
+        RelatedTopics?: Array<{ Text?: string; FirstURL?: string; Topics?: unknown[] }>;
+      };
+      const jsonResults = extractDdgJsonResults(data, limit);
+      if (jsonResults.length > 0) {
+        return {
+          ok: true,
+          message: "Search results (duckduckgo)",
+          data: { provider: "duckduckgo", query, results: jsonResults },
+        };
+      }
+    }
+  } catch {
+    // Continue to HTML fallback.
+  }
+
+  try {
+    const htmlResponse = await fetch(htmlUrl, {
+      headers: {
+        Accept: "text/html",
+        "User-Agent": "Mozilla/5.0 (compatible; JaitBot/1.0; +https://jait.local)",
+      },
+    });
+    const html = await htmlResponse.text();
+    const results = extractDdgHtmlResults(html, limit);
+    return {
+      ok: htmlResponse.ok,
+      message: results.length > 0 ? "Search results (duckduckgo html fallback)" : "No search results (duckduckgo)",
+      data: { provider: "duckduckgo", query, results },
+    };
+  } catch (err) {
+    const message = extractErrorMessage(err);
+    return {
+      ok: false,
+      message: `DuckDuckGo search failed: ${message}`,
+      data: { provider: "duckduckgo", query, results: [] },
+    };
+  }
+}
+
+function extractDdgJsonResults(
+  data: {
+    Results?: Array<{ Text?: string; FirstURL?: string }>;
+    RelatedTopics?: Array<{ Text?: string; FirstURL?: string; Topics?: unknown[] }>;
+  },
+  limit: number,
+): SearchResult[] {
+  const flat: Array<{ Text?: string; FirstURL?: string; Topics?: unknown[] }> = [
+    ...(data.Results ?? []),
+    ...(data.RelatedTopics ?? []),
+  ];
+  const out: SearchResult[] = [];
+
+  const visit = (node: { Text?: string; FirstURL?: string; Topics?: unknown[] }) => {
+    if (out.length >= limit) return;
+    if (node.FirstURL) {
+      const fullText = node.Text ?? "";
+      const [titlePart, ...snippetParts] = fullText.split(" - ");
+      out.push({
+        title: titlePart || node.FirstURL,
+        url: node.FirstURL,
+        snippet: snippetParts.join(" - ") || fullText,
+      });
+      return;
+    }
+    if (Array.isArray(node.Topics)) {
+      for (const child of node.Topics) {
+        if (typeof child === "object" && child !== null) {
+          visit(child as { Text?: string; FirstURL?: string; Topics?: unknown[] });
+        }
+        if (out.length >= limit) return;
+      }
+    }
+  };
+
+  for (const node of flat) {
+    visit(node);
+    if (out.length >= limit) break;
+  }
+  return out.slice(0, limit);
+}
+
+function extractDdgHtmlResults(html: string, limit: number): SearchResult[] {
+  const results: SearchResult[] = [];
+  const linkRegex = /<a[^>]*class="[^"]*result__a[^"]*"[^>]*href="([^"]+)"[^>]*>([\s\S]*?)<\/a>/gi;
+
+  for (const match of html.matchAll(linkRegex)) {
+    const rawUrl = match[1] ?? "";
+    const title = decodeHtmlEntities(stripHtml(match[2] ?? "")).trim();
+    const url = normalizeDuckDuckGoUrl(rawUrl);
+    if (!url || !title) continue;
+    results.push({ title, url, snippet: "" });
+    if (results.length >= limit) break;
+  }
+  return results;
+}
+
+function normalizeDuckDuckGoUrl(rawUrl: string): string {
+  try {
+    if (rawUrl.startsWith("//")) return `https:${rawUrl}`;
+    if (rawUrl.startsWith("/l/?")) {
+      const parsed = new URL(`https://duckduckgo.com${rawUrl}`);
+      const target = parsed.searchParams.get("uddg");
+      if (target) return decodeURIComponent(target);
+    }
+    return rawUrl;
+  } catch {
+    return rawUrl;
+  }
+}
+
+function stripHtml(value: string): string {
+  return value.replace(/<[^>]+>/g, " ");
+}
+
+function decodeHtmlEntities(value: string): string {
+  return value
+    .replace(/&amp;/g, "&")
+    .replace(/&quot;/g, "\"")
+    .replace(/&#39;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">");
 }

@@ -81,7 +81,7 @@ function App() {
 
   const { user, token, isAuthenticated, loginWithGoogle, logout, bindSession } = useAuth()
   const { sessions, activeSessionId, createSession, switchSession, archiveSession } = useSessions()
-  const { messages, isLoading, remainingPrompts, error, sendMessage, cancelRequest, clearMessages } = useChat(activeSessionId)
+  const { messages, isLoading, remainingPrompts, error, sendMessage, restartFromMessage, cancelRequest, clearMessages } = useChat(activeSessionId)
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals()
   const { provider, model } = useModelInfo()
 
@@ -133,6 +133,20 @@ function App() {
     if (!sid) return
     sendMessage(suggestion, { token, sessionId: sid, onLoginRequired: () => setShowLoginDialog(true) })
   }
+
+  const handleEditPreviousMessage = useCallback(async (
+    messageId: string,
+    newContent: string,
+    messageIndex?: number,
+    messageFromEnd?: number,
+  ) => {
+    if (!activeSessionId) return
+    await restartFromMessage(messageId, newContent, messageIndex, messageFromEnd, {
+      token,
+      sessionId: activeSessionId,
+      onLoginRequired: () => setShowLoginDialog(true),
+    })
+  }, [activeSessionId, restartFromMessage, token])
 
   const handleGoogleSuccess = async (credentialResponse: { credential?: string }) => {
     if (credentialResponse.credential) {
@@ -362,9 +376,12 @@ function App() {
         ) : (
           <div className="flex flex-col flex-1 min-h-0">
             <Conversation className="min-h-0 flex-1 border-b">
-              {messages.map((msg) => (
+              {messages.map((msg, idx) => (
                 <Message
                   key={msg.id}
+                  messageId={msg.id}
+                  messageIndex={idx}
+                  messageFromEnd={messages.length - 1 - idx}
                   role={msg.role}
                   content={msg.content}
                   thinking={msg.thinking}
@@ -372,6 +389,7 @@ function App() {
                   toolCalls={msg.toolCalls}
                   isStreaming={isLoading && msg === messages[messages.length - 1]}
                   onOpenTerminal={handleOpenTerminalFromToolCall}
+                  onEditMessage={handleEditPreviousMessage}
                 />
               ))}
             </Conversation>
