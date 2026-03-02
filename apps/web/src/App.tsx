@@ -68,6 +68,7 @@ function App() {
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
+  const [talkModeEnabled, setTalkModeEnabled] = useState(false)
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [registerUsername, setRegisterUsername] = useState('')
@@ -162,6 +163,17 @@ function App() {
     void loadApproveAllState()
   }, [activeSessionId])
 
+
+  useEffect(() => {
+    if (!talkModeEnabled || !activeSessionId) return
+    const last = messages[messages.length - 1]
+    if (!last || last.role !== 'assistant' || !last.content.trim()) return
+    void fetch(`${API_URL}/api/voice/speak`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sessionId: activeSessionId, text: last.content.slice(0, 600) }),
+    })
+  }, [messages, talkModeEnabled, activeSessionId])
   const handleThemeModeChange = useCallback(async (next: ThemeMode) => {
     const previous = themeMode
     setThemeMode(next)
@@ -358,6 +370,51 @@ function App() {
     }
   }, [activeSessionId])
 
+  const handleVoiceInput = useCallback(async () => {
+    if (!token) {
+      setShowLoginDialog(true)
+      return
+    }
+    let sid = activeSessionId
+    if (!sid) {
+      const session = await createSession()
+      sid = session?.id ?? null
+    }
+    if (!sid) return
+
+    const spoken = window.prompt('Speak now (simulated transcript):')?.trim()
+    if (!spoken) return
+
+    try {
+      const res = await fetch(`${API_URL}/api/voice/transcribe`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: sid, transcript: spoken }),
+      })
+      const data = (await res.json()) as { text?: string }
+      if (data.text) {
+        sendMessage(data.text, { token, sessionId: sid, onLoginRequired: () => setShowLoginDialog(true) })
+      }
+    } catch {
+      // noop
+    }
+  }, [token, activeSessionId, createSession, sendMessage])
+
+  const handleToggleTalkMode = useCallback(async () => {
+    if (!activeSessionId) return
+    const next = !talkModeEnabled
+    setTalkModeEnabled(next)
+    try {
+      await fetch(`${API_URL}/api/voice/state/${activeSessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ talkModeEnabled: next }),
+      })
+    } catch {
+      setTalkModeEnabled(!next)
+    }
+  }, [activeSessionId, talkModeEnabled])
+
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
@@ -537,6 +594,9 @@ function App() {
                     onChange={setInputValue}
                     onSubmit={handleSubmit}
                     isLoading={isLoading}
+                    onVoiceInput={handleVoiceInput}
+                    talkModeEnabled={talkModeEnabled}
+                    onToggleTalkMode={handleToggleTalkMode}
                   />
                 </div>
               </div>
@@ -580,6 +640,9 @@ function App() {
                       onStop={cancelRequest}
                       isLoading={isLoading}
                       disabled={limitReached}
+                      onVoiceInput={handleVoiceInput}
+                      talkModeEnabled={talkModeEnabled}
+                      onToggleTalkMode={handleToggleTalkMode}
                     />
                     <div className="flex items-center justify-between gap-2 px-1">
                       <div className="flex items-center gap-2 min-w-0">

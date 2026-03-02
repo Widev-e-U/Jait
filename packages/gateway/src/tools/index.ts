@@ -39,6 +39,7 @@ export {
   createMemorySearchTool,
   createMemoryForgetTool,
 } from "./memory-tools.js";
+export { createVoiceSpeakTool } from "./voice-tools.js";
 
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import type { SchedulerService } from "../scheduler/service.js";
@@ -80,6 +81,8 @@ import {
   createMemorySearchTool,
   createMemoryForgetTool,
 } from "./memory-tools.js";
+import { createVoiceSpeakTool } from "./voice-tools.js";
+import type { VoiceService } from "../voice/service.js";
 
 export interface ToolRegistryDeps {
   scheduler?: SchedulerService;
@@ -88,6 +91,7 @@ export interface ToolRegistryDeps {
   startedAt?: number;
   memoryService?: MemoryService;
   hooks?: HookBus;
+  voiceService?: VoiceService;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -144,6 +148,10 @@ export function createToolRegistry(
     tools.register(createMemorySaveTool(deps.memoryService));
     tools.register(createMemorySearchTool(deps.memoryService));
     tools.register(createMemoryForgetTool(deps.memoryService));
+  }
+
+  if (deps.voiceService) {
+    tools.register(createVoiceSpeakTool(deps.voiceService));
   }
 
   // Browser + web tools

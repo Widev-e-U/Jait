@@ -17,6 +17,7 @@ import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
 import { UserService } from "./services/users.js";
+import { VoiceService } from "./voice/service.js";
 
 async function main() {
   const config = loadConfig();
@@ -61,7 +62,8 @@ async function main() {
   });
 
   // Tool registry — Sprint 3 + Sprint 6 memory tools
-  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks });
+  const voiceService = new VoiceService();
+  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, voiceService });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   // Consent & Trust — Sprint 4
@@ -148,6 +150,7 @@ async function main() {
     startedAt: Date.now(),
     memoryService: memory,
     hooks,
+    voiceService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -174,6 +177,7 @@ async function main() {
       return { accepted: true };
     },
     memoryService: memory,
+    voiceService,
     toolExecutor,
   });
 
