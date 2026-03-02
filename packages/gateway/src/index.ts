@@ -18,6 +18,8 @@ import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
 import { UserService } from "./services/users.js";
 import { DeviceRegistry } from "./services/device-registry.js";
+import { VoiceService } from "./voice/service.js";
+import { ScreenShareService } from "@jait/screen-share";
 
 async function main() {
   const config = loadConfig();
@@ -63,7 +65,12 @@ async function main() {
   });
 
   // Tool registry — Sprint 3 + Sprint 6 memory tools
-  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks });
+  const voiceService = new VoiceService();
+  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, voiceService });
+  const screenShare = new ScreenShareService();
+
+  // Tool registry — Sprint 3 + Sprint 10
+  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, screenShare });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   // Consent & Trust — Sprint 4
@@ -150,6 +157,8 @@ async function main() {
     startedAt: Date.now(),
     memoryService: memory,
     hooks,
+    voiceService,
+    screenShare,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -177,6 +186,7 @@ async function main() {
     },
     memoryService: memory,
     deviceRegistry,
+    voiceService,
     toolExecutor,
   });
 

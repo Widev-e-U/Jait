@@ -14,3 +14,12 @@ export type {
   WsEvent,
 } from "./message.js";
 export type { GatewayStatus, DeviceInfo } from "./gateway.js";
+
+export type {
+  DevicePlatform,
+  ScreenShareDevice,
+  ScreenShareRouteMode,
+  ScreenShareViewer,
+  ScreenShareSessionState,
+  OsToolNetworkShareState,
+} from "./screen-share.js";

@@ -12,6 +12,7 @@ import { registerTrustRoutes } from "./routes/trust.js";
 import { registerHookRoutes } from "./routes/hooks.js";
 import { registerJobRoutes } from "./routes/jobs.js";
 import { registerMobileRoutes } from "./routes/mobile.js";
+import { registerVoiceRoutes } from "./routes/voice.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -26,6 +27,7 @@ import type { SchedulerService } from "./scheduler/service.js";
 import type { MemoryService } from "./memory/contracts.js";
 import type { UserService } from "./services/users.js";
 import type { DeviceRegistry } from "./services/device-registry.js";
+import type { VoiceService } from "./voice/service.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -50,6 +52,7 @@ export interface ServerDeps {
     context: ToolContext,
     options?: { dryRun?: boolean; consentTimeoutMs?: number },
   ) => Promise<ToolResult>;
+  voiceService?: VoiceService;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -88,6 +91,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   if (deps.consentManager && deps.audit) {
     registerConsentRoutes(app, deps.consentManager, deps.audit);
+  }
+  if (deps.voiceService && deps.consentManager) {
+    registerVoiceRoutes(app, deps.voiceService, deps.consentManager);
   }
   if (deps.trustEngine) {
     registerTrustRoutes(app, deps.trustEngine);
