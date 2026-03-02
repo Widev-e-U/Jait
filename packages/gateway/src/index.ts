@@ -64,13 +64,10 @@ async function main() {
     memoryDir: join(homedir(), ".jait", "memory"),
   });
 
-  // Tool registry — Sprint 3 + Sprint 6 memory tools
-  const voiceService = new VoiceService();
-  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, voiceService });
-  const screenShare = new ScreenShareService();
-
   // Tool registry — Sprint 3 + Sprint 10
-  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, screenShare });
+  const voiceService = new VoiceService();
+  const screenShare = new ScreenShareService();
+  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, voiceService, screenShare });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   // Consent & Trust — Sprint 4
