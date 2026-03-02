@@ -270,11 +270,11 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** Electron app that connects to gateway. Full terminal + chat + browser snapshot + activity feed.
 
 **Exit criteria:**
-- [ ] Desktop app launches, connects to gateway via WS
-- [ ] Terminal sessions run natively (not in Docker)
-- [ ] Chat works same as web
-- [ ] Activity feed shows all surface events
-- [ ] System tray icon, native notifications work
+- [x] Desktop app launches, connects to gateway via WS
+- [x] Terminal sessions run natively (not in Docker)
+- [x] Chat works same as web
+- [x] Activity feed shows all surface events
+- [x] System tray icon, native notifications work
 
 ---
 
