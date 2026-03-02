@@ -1,5 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import { createTerminalRunTool } from "./tools/terminal-tools.js";
+import { SurfaceRegistry } from "./surfaces/registry.js";
+import { SandboxManager } from "./security/sandbox-manager.js";
 
 function makeContext() {
   return {
@@ -11,65 +13,41 @@ function makeContext() {
 }
 
 describe("terminal.run tool status reporting", () => {
-  it("returns ok=true when exit code is zero", async () => {
-    const execute = vi.fn().mockResolvedValue({
-      output: "done",
-      exitCode: 0,
-      timedOut: false,
-    });
-    const surface = { state: "running", execute };
-    const registry = {
-      getSurface: vi.fn().mockReturnValue(surface),
-      startSurface: vi.fn(),
-    };
+  it("returns ok=true when sandbox exit code is zero", async () => {
+    const sandbox = new SandboxManager(async () => ({ output: "done", exitCode: 0, timedOut: false }));
+    const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
 
-    const tool = createTerminalRunTool(registry as any);
-    const result = await tool.execute({ command: "echo hi" }, makeContext());
+    const result = await tool.execute({ command: "echo hi", sandbox: true }, makeContext());
 
     expect(result.ok).toBe(true);
-    expect(result.message).toContain("exit code 0");
+    expect(result.message).toContain("Sandbox command completed");
     expect((result.data as any).exitCode).toBe(0);
     expect((result.data as any).timedOut).toBe(false);
   });
 
-  it("returns ok=false when exit code is non-zero", async () => {
-    const execute = vi.fn().mockResolvedValue({
-      output: "error",
-      exitCode: 1,
-      timedOut: false,
-    });
-    const surface = { state: "running", execute };
-    const registry = {
-      getSurface: vi.fn().mockReturnValue(surface),
-      startSurface: vi.fn(),
-    };
+  it("returns ok=false when sandbox exit code is non-zero", async () => {
+    const sandbox = new SandboxManager(async () => ({ output: "error", exitCode: 1, timedOut: false }));
+    const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
 
-    const tool = createTerminalRunTool(registry as any);
-    const result = await tool.execute({ command: "bad-command" }, makeContext());
+    const result = await tool.execute({ command: "bad-command", sandbox: true }, makeContext());
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain("exit code 1");
     expect((result.data as any).output).toContain("error");
   });
 
-  it("returns ok=false when command times out", async () => {
-    const execute = vi.fn().mockResolvedValue({
+  it("returns ok=false when sandbox command times out", async () => {
+    const sandbox = new SandboxManager(async () => ({
       output: "[timeout after 1000ms]",
       exitCode: null,
       timedOut: true,
-    });
-    const surface = { state: "running", execute };
-    const registry = {
-      getSurface: vi.fn().mockReturnValue(surface),
-      startSurface: vi.fn(),
-    };
+    }));
+    const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
 
-    const tool = createTerminalRunTool(registry as any);
-    const result = await tool.execute({ command: "sleep 20", timeout: 1000 }, makeContext());
+    const result = await tool.execute({ command: "sleep 20", timeout: 1000, sandbox: true }, makeContext());
 
     expect(result.ok).toBe(false);
     expect(result.message).toContain("timed out");
     expect((result.data as any).timedOut).toBe(true);
   });
 });
-

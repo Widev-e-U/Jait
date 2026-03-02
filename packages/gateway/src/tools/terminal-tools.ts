@@ -17,6 +17,7 @@ import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 import type { TerminalSurface } from "../surfaces/terminal.js";
+import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -339,6 +340,8 @@ interface TerminalRunInput {
   sessionId?: string;
   terminalId?: string;
   timeout?: number;
+  sandbox?: boolean;
+  sandboxMountMode?: SandboxMountMode;
 }
 
 interface TerminalStreamInput {
@@ -348,7 +351,10 @@ interface TerminalStreamInput {
   rows?: number;
 }
 
-export function createTerminalRunTool(registry: SurfaceRegistry): ToolDefinition<TerminalRunInput> {
+export function createTerminalRunTool(
+  registry: SurfaceRegistry,
+  sandboxManager = new SandboxManager(),
+): ToolDefinition<TerminalRunInput> {
   return {
     name: "terminal.run",
     description:
@@ -361,11 +367,42 @@ export function createTerminalRunTool(registry: SurfaceRegistry): ToolDefinition
         command: { type: "string", description: "The shell command to execute" },
         terminalId: { type: "string", description: "Reuse a specific terminal (omit to auto-select or create)" },
         timeout: { type: "number", description: "Execution timeout in ms (default 30000)" },
+        sandbox: { type: "boolean", description: "Run inside Docker sandbox container" },
+        sandboxMountMode: { type: "string", description: "Sandbox mount mode: none, read-only, read-write" },
       },
       required: ["command"],
     },
     async execute(input: TerminalRunInput, context: ToolContext): Promise<ToolResult> {
       const { command, timeout = 30000, terminalId: preferredId } = input;
+
+      if (input.sandbox) {
+        const result = await sandboxManager.runCommand({
+          command,
+          workspaceRoot: context.workspaceRoot,
+          timeoutMs: timeout,
+          mountMode: input.sandboxMountMode ?? "read-write",
+          networkEnabled: false,
+          memoryLimitMb: 512,
+          cpuLimit: "1.0",
+        });
+
+        return {
+          ok: result.ok,
+          message: result.ok
+            ? "Sandbox command completed (container isolated)"
+            : result.timedOut
+              ? `Sandbox command timed out after ${timeout}ms`
+              : `Sandbox command failed (exit code ${result.exitCode ?? "unknown"})`,
+          data: {
+            output: result.output,
+            exitCode: result.exitCode,
+            timedOut: result.timedOut,
+            sandbox: true,
+            containerName: result.containerName,
+            hostUnaffected: true,
+          },
+        };
+      }
 
       if (context.signal?.aborted) {
         return { ok: false, message: "Cancelled" };

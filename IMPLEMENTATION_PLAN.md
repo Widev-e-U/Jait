@@ -407,11 +407,11 @@ For Sprint 10 and Sprint 12, `E:\deskreen` is a required implementation referenc
 **Deliverable:** Dangerous commands run in containers. Sandbox browser available for safe browsing.
 
 **Exit criteria:**
-- [ ] Tool with `sandbox: true` runs inside Docker container
-- [ ] Container cannot access paths outside workspace mount
-- [ ] Container killed after timeout
-- [ ] Sandbox browser runs Chromium in container, viewable via noVNC
-- [ ] Host OS unaffected by sandboxed commands
+- [x] Tool with `sandbox: true` runs inside Docker container
+- [x] Container cannot access paths outside workspace mount
+- [x] Container killed after timeout
+- [x] Sandbox browser runs Chromium in container, viewable via noVNC
+- [x] Host OS unaffected by sandboxed commands
 
 ---
 

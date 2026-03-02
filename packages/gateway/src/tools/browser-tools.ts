@@ -1,6 +1,7 @@
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { BrowserSurface } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
+import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 
 interface BrowserNavigateInput {
@@ -46,6 +47,13 @@ interface BrowserScreenshotInput {
   browserId?: string;
 }
 
+
+
+interface BrowserSandboxStartInput {
+  novncPort?: number;
+  vncPort?: number;
+  mountMode?: SandboxMountMode;
+}
 interface WebFetchInput {
   url: string;
   method?: string;
@@ -934,3 +942,33 @@ async function fetchWithTlsFallback(
   }
 }
 
+
+export function createBrowserSandboxStartTool(sandboxManager = new SandboxManager()): ToolDefinition<BrowserSandboxStartInput> {
+  return {
+    name: "browser.sandbox.start",
+    description: "Start Chromium sandbox container with noVNC access",
+    parameters: {
+      type: "object",
+      properties: {
+        novncPort: { type: "number", description: "Host noVNC port (default 6080)" },
+        vncPort: { type: "number", description: "Host VNC port (default 5900)" },
+        mountMode: { type: "string", description: "Workspace mount mode: none, read-only, read-write" },
+      },
+      required: [],
+    },
+    async execute(input, context): Promise<ToolResult> {
+      const result = await sandboxManager.startBrowserSandbox({
+        workspaceRoot: context.workspaceRoot,
+        novncPort: input.novncPort,
+        vncPort: input.vncPort,
+        mountMode: input.mountMode ?? "read-only",
+      });
+
+      return {
+        ok: true,
+        message: "Sandbox browser started",
+        data: result,
+      };
+    },
+  };
+}

@@ -33,6 +33,7 @@ export {
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
+  createBrowserSandboxStartTool,
 } from "./browser-tools.js";
 export {
   createMemorySaveTool,
@@ -74,6 +75,7 @@ import {
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
+  createBrowserSandboxStartTool,
 } from "./browser-tools.js";
 import {
   createMemorySaveTool,
@@ -154,6 +156,7 @@ export function createToolRegistry(
   }
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
+  tools.register(createBrowserSandboxStartTool());
 
   return tools;
 }
