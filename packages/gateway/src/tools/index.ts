@@ -27,6 +27,7 @@ export {
   createCronUpdateTool,
 } from "./cron-tools.js";
 export { createGatewayStatusTool } from "./gateway-tools.js";
+export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 export {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
@@ -46,6 +47,7 @@ import type { SessionService } from "../services/sessions.js";
 import type { WsControlPlane } from "../ws.js";
 import type { MemoryService } from "../memory/contracts.js";
 import type { HookBus } from "../scheduler/hooks.js";
+import type { ScreenShareService } from "@jait/screen-share";
 import { ToolRegistry } from "./registry.js";
 import { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tools.js";
 import {
@@ -68,6 +70,7 @@ import {
   createCronUpdateTool,
 } from "./cron-tools.js";
 import { createGatewayStatusTool } from "./gateway-tools.js";
+import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 import {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
@@ -88,6 +91,7 @@ export interface ToolRegistryDeps {
   startedAt?: number;
   memoryService?: MemoryService;
   hooks?: HookBus;
+  screenShare?: ScreenShareService;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -144,6 +148,15 @@ export function createToolRegistry(
     tools.register(createMemorySaveTool(deps.memoryService));
     tools.register(createMemorySearchTool(deps.memoryService));
     tools.register(createMemoryForgetTool(deps.memoryService));
+  }
+
+
+  if (deps.screenShare) {
+    tools.register(createScreenShareTool(deps.screenShare));
+    tools.register(createScreenCaptureTool(deps.screenShare));
+    tools.register(createScreenRecordTool(deps.screenShare));
+    tools.register(createOsTool(deps.screenShare, "os.tool"));
+    tools.register(createOsTool(deps.screenShare, "os_tool"));
   }
 
   // Browser + web tools
