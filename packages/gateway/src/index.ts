@@ -17,6 +17,7 @@ import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
 import { UserService } from "./services/users.js";
+import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
 
 async function main() {
@@ -61,6 +62,9 @@ async function main() {
     memoryDir: join(homedir(), ".jait", "memory"),
   });
 
+  // Tool registry — Sprint 3 + Sprint 6 memory tools
+  const voiceService = new VoiceService();
+  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, voiceService });
   const screenShare = new ScreenShareService();
 
   // Tool registry — Sprint 3 + Sprint 10
@@ -151,6 +155,7 @@ async function main() {
     startedAt: Date.now(),
     memoryService: memory,
     hooks,
+    voiceService,
     screenShare,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
@@ -178,6 +183,7 @@ async function main() {
       return { accepted: true };
     },
     memoryService: memory,
+    voiceService,
     toolExecutor,
   });
 

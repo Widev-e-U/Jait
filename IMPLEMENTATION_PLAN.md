@@ -352,11 +352,11 @@ For Sprint 10 and Sprint 12, `E:\deskreen` is a required implementation referenc
 **Deliverable:** User says "Hey Jait, run the tests." Agent speaks back the results.
 
 **Exit criteria:**
-- [ ] Voice input transcribed and sent to agent as text
-- [ ] Agent response spoken via TTS
-- [ ] Wake word activates listening
-- [ ] "Yes, run it" approves a pending consent request
-- [ ] Works in Electron desktop app
+- [x] Voice input transcribed and sent to agent as text
+- [x] Agent response spoken via TTS
+- [x] Wake word activates listening
+- [x] "Yes, run it" approves a pending consent request
+- [x] Works in Electron desktop app
 
 ---
 

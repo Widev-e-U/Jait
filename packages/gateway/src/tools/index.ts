@@ -40,6 +40,7 @@ export {
   createMemorySearchTool,
   createMemoryForgetTool,
 } from "./memory-tools.js";
+export { createVoiceSpeakTool } from "./voice-tools.js";
 
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import type { SchedulerService } from "../scheduler/service.js";
@@ -83,6 +84,8 @@ import {
   createMemorySearchTool,
   createMemoryForgetTool,
 } from "./memory-tools.js";
+import { createVoiceSpeakTool } from "./voice-tools.js";
+import type { VoiceService } from "../voice/service.js";
 
 export interface ToolRegistryDeps {
   scheduler?: SchedulerService;
@@ -91,6 +94,7 @@ export interface ToolRegistryDeps {
   startedAt?: number;
   memoryService?: MemoryService;
   hooks?: HookBus;
+  voiceService?: VoiceService;
   screenShare?: ScreenShareService;
 }
 
@@ -150,6 +154,8 @@ export function createToolRegistry(
     tools.register(createMemoryForgetTool(deps.memoryService));
   }
 
+  if (deps.voiceService) {
+    tools.register(createVoiceSpeakTool(deps.voiceService));
 
   if (deps.screenShare) {
     tools.register(createScreenShareTool(deps.screenShare));
