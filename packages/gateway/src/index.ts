@@ -17,6 +17,7 @@ import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
 import { UserService } from "./services/users.js";
+import { ScreenShareService } from "@jait/screen-share";
 
 async function main() {
   const config = loadConfig();
@@ -60,8 +61,10 @@ async function main() {
     memoryDir: join(homedir(), ".jait", "memory"),
   });
 
-  // Tool registry — Sprint 3 + Sprint 6 memory tools
-  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks });
+  const screenShare = new ScreenShareService();
+
+  // Tool registry — Sprint 3 + Sprint 10
+  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, screenShare });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   // Consent & Trust — Sprint 4
@@ -148,6 +151,7 @@ async function main() {
     startedAt: Date.now(),
     memoryService: memory,
     hooks,
+    screenShare,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
