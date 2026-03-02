@@ -158,6 +158,7 @@ export function createToolRegistry(
 
   if (deps.voiceService) {
     tools.register(createVoiceSpeakTool(deps.voiceService));
+  }
 
   if (deps.screenShare) {
     tools.register(createScreenShareTool(deps.screenShare));
