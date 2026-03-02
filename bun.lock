@@ -9,6 +9,14 @@
         "vitest": "^3.0.0",
       },
     },
+    "apps/mobile": {
+      "name": "@jait/mobile",
+      "version": "0.1.0",
+      "dependencies": {
+        "@jait/api-client": "workspace:*",
+        "@jait/shared": "workspace:*",
+      },
+      "devDependencies": {
     "apps/desktop": {
       "name": "@jait/desktop",
       "version": "0.1.0",
@@ -362,6 +370,8 @@
 
     "@jait/gateway": ["@jait/gateway@workspace:packages/gateway"],
 
+    "@jait/mobile": ["@jait/mobile@workspace:apps/mobile"],
+    
     "@jait/screen-share": ["@jait/screen-share@workspace:packages/screen-share"],
 
     "@jait/shared": ["@jait/shared@workspace:packages/shared"],

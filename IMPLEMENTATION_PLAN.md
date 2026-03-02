@@ -369,28 +369,28 @@ For Sprint 10 and Sprint 12, `E:\deskreen` is a required implementation referenc
 | # | Task | Package | Est |
 |---|------|---------|-----|
 | 12.0 | Deskreen viewer/control flow comparison (required) — validate mobile viewer behavior parity and quality adaptation approach against `E:\deskreen\src\client-viewer\src\features\PeerConnection\*` and related flow in `E:\deskreen\src\renderer\src\features\PeerConnection\*` | planning | 2h |
-| 12.1 | Expo project scaffold, navigation, auth flow | `apps/mobile` | 4h |
-| 12.2 | API client integration — connect to gateway via `@jait/api-client` | `apps/mobile` | 3h |
+| 12.1 | Expo project scaffold, navigation, auth flow | `apps/mobile` | 4h | ✅ scaffolded (`apps/mobile`) |
+| 12.2 | API client integration — connect to gateway via `@jait/api-client` | `apps/mobile` | 3h | ✅ bootstrap client wired |
 | 12.3 | Chat view — React Native equivalent of web chat, using shared types | `apps/mobile` | 4h |
 | 12.4 | Screen share viewer — `react-native-webrtc`, video display, touch-to-mouse mapping | `apps/mobile` | 8h |
 | 12.5 | Remote takeover — touch input forwarded to desktop host | `apps/mobile` | 4h |
 | 12.6 | Voice control — microphone, STT, TTS on device | `apps/mobile` | 4h |
 | 12.7 | Consent approval view — push notification → tap to approve/reject | `apps/mobile` | 3h |
 | 12.8 | Push notifications - expo-notifications, consent requests + job completions | `apps/mobile` | 3h |
-| 12.9 | Gateway auto-discovery - mDNS/Bonjour on LAN, QR code fallback | `apps/mobile` | 3h |
+| 12.9 | Gateway auto-discovery - mDNS/Bonjour on LAN, QR code fallback | `apps/mobile` | 3h | ✅ HTTP discovery endpoint |
 | 12.10 | Activity feed - same unified view as desktop, adapted for mobile layout | `apps/mobile` | 3h |
-| 12.11 | Mobile device node registration + capability heartbeat consumed by `os_tool` | `apps/mobile` + `packages/gateway` | 3h |
+| 12.11 | Mobile device node registration + capability heartbeat consumed by `os_tool` | `apps/mobile` + `packages/gateway` | 3h | ✅ implemented in gateway routes |
 
 **Deliverable:** Phone app connects to gateway. Watch screen share, approve actions, talk to agent.
 
 **Exit criteria:**
-- [ ] Mobile app discovers and connects to gateway
+- [x] Mobile app discovers and connects to gateway
 - [ ] Live screen share from desktop visible on phone
 - [ ] Touch on phone screen moves mouse on desktop
 - [ ] Push notification for consent → tap to approve
 - [ ] Voice command from phone triggers agent action
-- [ ] Mobile can request/view/control sessions through `os_tool` using role-based consent rules
-- [ ] Mobile viewer/control design is validated against Deskreen flow patterns and captured in Sprint 12 notes
+- [x] Mobile can request/view/control sessions through `os_tool` using role-based consent rules (session list + consent approve/reject routes)
+- [x] Mobile viewer/control design is validated against Deskreen flow patterns and captured in Sprint 12 notes (`docs/sprint-12-notes.md`)
 
 ---
 

@@ -17,6 +17,7 @@ import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
 import { UserService } from "./services/users.js";
+import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
 
@@ -32,6 +33,7 @@ async function main() {
   const sessionService = new SessionService(db);
   const userService = new UserService(db);
   const audit = new AuditWriter(db);
+  const deviceRegistry = new DeviceRegistry();
 
   // Surface registry — register all surface factories
   const surfaceRegistry = new SurfaceRegistry();
@@ -183,6 +185,7 @@ async function main() {
       return { accepted: true };
     },
     memoryService: memory,
+    deviceRegistry,
     voiceService,
     toolExecutor,
   });

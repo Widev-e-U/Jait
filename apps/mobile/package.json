@@ -1,0 +1,17 @@
+{
+  "name": "@jait/mobile",
+  "version": "0.1.0",
+  "private": true,
+  "main": "src/index.ts",
+  "type": "module",
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@jait/api-client": "workspace:*",
+    "@jait/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}

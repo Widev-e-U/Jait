@@ -11,6 +11,7 @@ import { registerConsentRoutes } from "./routes/consent.js";
 import { registerTrustRoutes } from "./routes/trust.js";
 import { registerHookRoutes } from "./routes/hooks.js";
 import { registerJobRoutes } from "./routes/jobs.js";
+import { registerMobileRoutes } from "./routes/mobile.js";
 import { registerVoiceRoutes } from "./routes/voice.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
@@ -25,6 +26,7 @@ import type { HookBus } from "./scheduler/hooks.js";
 import type { SchedulerService } from "./scheduler/service.js";
 import type { MemoryService } from "./memory/contracts.js";
 import type { UserService } from "./services/users.js";
+import type { DeviceRegistry } from "./services/device-registry.js";
 import type { VoiceService } from "./voice/service.js";
 
 export interface ServerDeps {
@@ -43,6 +45,7 @@ export interface ServerDeps {
   onWakeHook?: () => Promise<unknown>;
   onAgentHook?: (payload: unknown) => Promise<unknown>;
   memoryService?: MemoryService;
+  deviceRegistry?: DeviceRegistry;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -64,7 +67,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
-  registerHealthRoutes(app, config);
+  registerHealthRoutes(app, config, { getDeviceCount: () => deps.deviceRegistry?.count() ?? 0 });
   if (deps.userService) {
     registerAuthRoutes(app, config, deps.userService);
   }
@@ -105,6 +108,14 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
   if (deps.scheduler) {
     registerJobRoutes(app, config, deps.scheduler);
+  }
+
+  if (deps.deviceRegistry && deps.consentManager) {
+    registerMobileRoutes(app, {
+      deviceRegistry: deps.deviceRegistry,
+      consentManager: deps.consentManager,
+      sessionService: deps.sessionService,
+    });
   }
 
   app.get("/", async () => ({
