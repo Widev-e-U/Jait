@@ -33,7 +33,9 @@ import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { SettingsPage } from '@/components/settings/SettingsPage'
+import { ActivityFeed } from '@/components/activity'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
+import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode } from '@/hooks/useAuth'
 import { useChat } from '@/hooks/useChat'
@@ -42,7 +44,7 @@ import { useSessions } from '@/hooks/useSessions'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
-type AppView = 'chat' | 'jobs' | 'settings'
+type AppView = 'chat' | 'jobs' | 'activity' | 'settings'
 
 const suggestions = [
   'What can you help me with?',
@@ -418,6 +420,20 @@ function App() {
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
+  const activityEvents: ActivityEvent[] = [
+    ...messages.slice(-10).map((msg) => createActivityEvent({
+      id: `msg-${msg.id}`,
+      source: 'chat',
+      title: `Message: ${msg.role}`,
+      detail: msg.content.slice(0, 120) || '(empty message)',
+    })),
+    ...terminals.map((terminal) => createActivityEvent({
+      id: `term-${terminal.id}`,
+      source: 'terminal',
+      title: 'Terminal session',
+      detail: `${terminal.id} (${terminal.state})`,
+    })),
+  ]
 
   return (
     <TooltipProvider>
@@ -451,6 +467,15 @@ function App() {
               >
                 <Calendar className="h-3.5 w-3.5 mr-1.5" />
                 Jobs
+              </Button>
+              <Button
+                variant={currentView === 'activity' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setCurrentView('activity')}
+              >
+                <Monitor className="h-3.5 w-3.5 mr-1.5" />
+                Activity
               </Button>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -556,6 +581,10 @@ function App() {
         {currentView === 'jobs' ? (
           <div className="flex-1 overflow-y-auto">
             <JobsPage />
+          </div>
+        ) : currentView === 'activity' ? (
+          <div className="flex-1 overflow-y-auto">
+            <ActivityFeed events={activityEvents} />
           </div>
         ) : currentView === 'settings' ? (
           <div className="flex-1 overflow-y-auto">

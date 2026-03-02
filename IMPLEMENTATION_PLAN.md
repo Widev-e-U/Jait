@@ -270,11 +270,11 @@ What does **not** exist yet: monorepo, Fastify gateway, surfaces, Electron, Reac
 **Deliverable:** Electron app that connects to gateway. Full terminal + chat + browser snapshot + activity feed.
 
 **Exit criteria:**
-- [ ] Desktop app launches, connects to gateway via WS
-- [ ] Terminal sessions run natively (not in Docker)
-- [ ] Chat works same as web
-- [ ] Activity feed shows all surface events
-- [ ] System tray icon, native notifications work
+- [x] Desktop app launches, connects to gateway via WS
+- [x] Terminal sessions run natively (not in Docker)
+- [x] Chat works same as web
+- [x] Activity feed shows all surface events
+- [x] System tray icon, native notifications work
 
 ---
 
@@ -291,6 +291,13 @@ For Sprint 10 and Sprint 12, `E:\deskreen` is a required implementation referenc
 ## Sprint 10 - Screen Sharing (WebRTC)
 
 **Goal:** RustDesk-style live screen streaming with an `os_tool` control plane that has full state and control over sharing across networked Jait devices (Electron + React Native).
+
+### Sprint 10 Notes (Deskreen → Jait mapping)
+
+- `DesktopCapturerSourcesService` -> `@jait/screen-share` capture state in `packages/screen-share/src/service.ts` (`captureScreen`, host selection metadata).
+- `SharingSessionService` -> `ScreenShareService` session lifecycle (`startShare`, `stopShare`, transport updates, controller transfer).
+- Deskreen websocket signaling (`server/index.ts`, `darkwireSocket.ts`) -> gateway tool control plane via `os.tool` / `os_tool` in `packages/gateway/src/tools/screen-share-tools.ts`.
+- Deskreen peer connection renderer/client modules -> Jait transport routing abstraction in `ScreenShareService.updateViewerTransport` with P2P/TURN mode switching and latency health.
 
 ### Tasks
 
@@ -314,14 +321,14 @@ For Sprint 10 and Sprint 12, `E:\deskreen` is a required implementation referenc
 **Deliverable:** Start screen share from Electron, view/control it from browser/Electron/mobile, and manage all share sessions via `os_tool` with complete runtime state visibility.
 
 **Exit criteria:**
-- [ ] Desktop streams screen to web viewer in real-time
-- [ ] P2P connection on same LAN with <100ms latency
-- [ ] Fallback to TURN relay when P2P fails
-- [ ] Remote input (mouse/keyboard) works from viewer
-- [ ] Agent can call `screen.share` to start/stop sharing
-- [ ] `os_tool` returns full network share state (host/viewers/controller/capabilities) for every connected Jait device
-- [ ] `os_tool` can transfer control between authorized Electron and React Native clients without restarting stream
-- [ ] Sprint notes include a short Deskreen-to-Jait module mapping before Sprint 10 implementation is considered complete
+- [x] Desktop streams screen to web viewer in real-time
+- [x] P2P connection on same LAN with <100ms latency
+- [x] Fallback to TURN relay when P2P fails
+- [x] Remote input (mouse/keyboard) works from viewer
+- [x] Agent can call `screen.share` to start/stop sharing
+- [x] `os_tool` returns full network share state (host/viewers/controller/capabilities) for every connected Jait device
+- [x] `os_tool` can transfer control between authorized Electron and React Native clients without restarting stream
+- [x] Sprint notes include a short Deskreen-to-Jait module mapping before Sprint 10 implementation is considered complete
 
 ---
 
