@@ -51,10 +51,8 @@ export const ToolName = {
   BrowserType: "browser.type",
   BrowserSelect: "browser.select",
   BrowserScroll: "browser.scroll",
-  BrowserBack: "browser.back",
-  BrowserForward: "browser.forward",
   BrowserWait: "browser.wait",
-  BrowserClose: "browser.close",
+  BrowserScreenshot: "browser.screenshot",
   BrowserSandboxStart: "browser.sandbox.start",
   WebFetch: "web.fetch",
   WebSearch: "web.search",
@@ -69,6 +67,10 @@ export const ToolName = {
 
   // ── Agent ──
   AgentSpawn: "agent.spawn",
+
+  // ── Meta (tool discovery) ──
+  ToolsList: "tools.list",
+  ToolsSearch: "tools.search",
 } as const;
 
 /** Union of all known tool name values. */

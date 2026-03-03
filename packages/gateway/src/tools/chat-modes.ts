@@ -41,7 +41,11 @@ export const ASK_MODE_TOOLS = new Set([
   "web.search",
   "browser.navigate",
   "browser.snapshot",
+  "browser.wait",
   "gateway.status",
+  "surfaces.list",
+  "cron.list",
+  "screen.capture",
   "tools.list",
   "tools.search",
 ]);
@@ -72,10 +76,10 @@ export const MUTATING_TOOLS = new Set([
   "browser.type",
   "browser.select",
   "browser.scroll",
-  "browser.back",
-  "browser.forward",
-  "browser.close",
+  "browser.screenshot",
   "browser.sandbox.start",
+  "os.tool",
+  "os_tool",
   "agent.spawn",
 ]);
 
