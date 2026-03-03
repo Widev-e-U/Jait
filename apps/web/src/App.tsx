@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Calendar,
   Bug,
+  FolderTree,
   LogOut,
   MessageSquare,
   Monitor,
@@ -37,6 +38,7 @@ import { JobsPage } from '@/components/jobs'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { ActivityFeed } from '@/components/activity'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
+import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile } from '@/components/workspace'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode } from '@/hooks/useAuth'
@@ -69,6 +71,7 @@ function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
+  const [showWorkspace, setShowWorkspace] = useState(false)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
@@ -80,6 +83,9 @@ function App() {
   const [registerPassword, setRegisterPassword] = useState('')
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
+  const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
+  const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
+  const [referencedFiles, setReferencedFiles] = useState<WorkspaceFile[]>([])
   const isDragging = useRef(false)
 
   const {
@@ -269,6 +275,98 @@ function App() {
     }
   }, [terminals, killTerminal])
 
+
+
+  const mergeWorkspaceFiles = useCallback((incoming: WorkspaceFile[]) => {
+    if (incoming.length === 0) return
+    setWorkspaceFiles((prev) => {
+      const next = [...prev]
+      for (const file of incoming) {
+        const idx = next.findIndex((existing) => existing.path === file.path)
+        if (idx >= 0) next[idx] = file
+        else next.push(file)
+      }
+      return next
+    })
+    setActiveWorkspaceFileId((prev) => prev ?? incoming[0]?.id ?? null)
+  }, [])
+
+  const handleFileDrop = useCallback(async (dropped: FileList | File[]) => {
+    const list = Array.from(dropped)
+    const resolved = await Promise.all(
+      list
+        .filter((file) => file.size < 1024 * 1024)
+        .map(async (file) => {
+          const content = await file.text()
+          const path = file.webkitRelativePath || file.name
+          return {
+            id: `${path}-${file.lastModified}`,
+            name: file.name,
+            path,
+            content,
+            language: workspaceLanguageForPath(path),
+          } satisfies WorkspaceFile
+        }),
+    )
+    mergeWorkspaceFiles(resolved)
+  }, [mergeWorkspaceFiles])
+
+  const handleOpenDirectory = useCallback(async () => {
+    if (typeof window === 'undefined') return
+
+    type PickerWindow = Window & {
+      showDirectoryPicker?: () => Promise<any>
+    }
+
+    const pickerWindow = window as PickerWindow
+    if (!pickerWindow.showDirectoryPicker) {
+      window.alert('Directory picker is not supported in this browser. You can still drag and drop files into the explorer.')
+      return
+    }
+
+    const readDirectory = async (dir: any, prefix = ''): Promise<WorkspaceFile[]> => {
+      const collected: WorkspaceFile[] = []
+      for await (const entry of dir.values()) {
+        const nextPath = prefix ? `${prefix}/${entry.name}` : entry.name
+        if (entry.kind === 'directory') {
+          collected.push(...(await readDirectory(entry, nextPath)))
+          continue
+        }
+        const file = await entry.getFile()
+        if (file.size > 1024 * 1024) continue
+        const content = await file.text()
+        collected.push({
+          id: `${nextPath}-${file.lastModified}`,
+          name: file.name,
+          path: nextPath,
+          content,
+          language: workspaceLanguageForPath(nextPath),
+        })
+      }
+      return collected
+    }
+
+    try {
+      const root = await pickerWindow.showDirectoryPicker()
+      const files = await readDirectory(root)
+      mergeWorkspaceFiles(files)
+      setShowWorkspace(true)
+    } catch {
+      // user cancelled
+    }
+  }, [mergeWorkspaceFiles])
+
+  const handleReferenceFile = useCallback((file: WorkspaceFile) => {
+    setReferencedFiles((prev) => {
+      if (prev.some((entry) => entry.path === file.path)) return prev
+      return [...prev, file]
+    })
+  }, [])
+
+  const removeReferencedFile = useCallback((path: string) => {
+    setReferencedFiles((prev) => prev.filter((file) => file.path !== path))
+  }, [])
+
   const handleSubmit = async () => {
     if (!inputValue.trim() || isLoading) return
     if (!token) {
@@ -281,8 +379,20 @@ function App() {
       sid = session?.id ?? null
     }
     if (!sid) return
-    sendMessage(inputValue.trim(), { token, sessionId: sid, mode: chatMode, onLoginRequired: () => setShowLoginDialog(true) })
+    const promptWithReferences = referencedFiles.length > 0
+      ? `${inputValue.trim()}
+
+Referenced files:
+${referencedFiles
+        .map((file) => `- ${file.path}
+\`\`\`
+${file.content.slice(0, 2000)}
+\`\`\``)
+        .join('\n')}`
+      : inputValue.trim()
+    sendMessage(promptWithReferences, { token, sessionId: sid, mode: chatMode, onLoginRequired: () => setShowLoginDialog(true) })
     setInputValue('')
+    setReferencedFiles([])
   }
 
   const handleSuggestion = async (suggestion: string) => {
@@ -504,6 +614,20 @@ function App() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
+                    variant={showWorkspace ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-8 text-xs"
+                    onClick={() => setShowWorkspace((open) => !open)}
+                  >
+                    <FolderTree className="h-3.5 w-3.5 mr-1.5" />
+                    Workspace
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Toggle file explorer + editor</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
                     variant={showDebugPanel ? 'secondary' : 'ghost'}
                     size="sm"
                     className="h-8 text-xs"
@@ -620,8 +744,19 @@ function App() {
               </aside>
             )}
 
+            {showWorkspace && (
+              <WorkspacePanel
+                files={workspaceFiles}
+                activeFileId={activeWorkspaceFileId}
+                onActiveFileChange={setActiveWorkspaceFileId}
+                onOpenDirectory={() => { void handleOpenDirectory() }}
+                onFileDrop={(files) => { void handleFileDrop(files) }}
+                onReferenceFile={handleReferenceFile}
+              />
+            )}
+
             {!hasMessages ? (
-              <div className="flex-1 flex flex-col items-center justify-center px-4">
+              <div className={`flex-1 flex flex-col items-center justify-center px-4 transition-all duration-300 ease-out ${showWorkspace ? 'translate-x-2' : 'translate-x-0'}`}>
                 <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
@@ -643,7 +778,7 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col flex-1 min-h-0">
+              <div className={`flex flex-col flex-1 min-h-0 transition-all duration-300 ease-out ${showWorkspace ? 'translate-x-2' : 'translate-x-0'}`}>
                 <Conversation className="min-h-0 flex-1 border-b">
                   {messages.map((msg, idx) => (
                     <Message
@@ -682,6 +817,20 @@ function App() {
                       <p className="text-center text-sm text-destructive">
                         Daily limit reached. Come back tomorrow.
                       </p>
+                    )}
+                    {referencedFiles.length > 0 && (
+                      <div className="flex flex-wrap gap-1 pb-1">
+                        {referencedFiles.map((file) => (
+                          <button
+                            key={file.path}
+                            className="text-[11px] px-2 py-0.5 rounded-full bg-muted hover:bg-muted/70"
+                            onClick={() => removeReferencedFile(file.path)}
+                            title="Click to remove"
+                          >
+                            {file.name}
+                          </button>
+                        ))}
+                      </div>
                     )}
                     <PromptInput
                       value={inputValue}
