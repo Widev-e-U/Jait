@@ -1,6 +1,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { UserService, ThemeMode } from "../services/users.js";
+import type { ToolRegistry } from "../tools/registry.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
@@ -23,6 +24,7 @@ export function registerAuthRoutes(
   app: FastifyInstance,
   config: AppConfig,
   users: UserService,
+  toolRegistry?: ToolRegistry,
 ) {
   app.post("/auth/register", async (request, reply) => {
     const body = (request.body as Record<string, unknown>) ?? {};
@@ -93,6 +95,7 @@ export function registerAuthRoutes(
     return {
       theme: settings.theme,
       api_keys: settings.apiKeys,
+      disabled_tools: settings.disabledTools,
       updated_at: settings.updatedAt,
     };
   });
@@ -101,7 +104,7 @@ export function registerAuthRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
-    const patch: { theme?: ThemeMode; apiKeys?: Record<string, string> } = {};
+    const patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[] } = {};
 
     if (typeof body.theme === "string" && THEME_VALUES.has(body.theme as ThemeMode)) {
       patch.theme = body.theme as ThemeMode;
@@ -112,10 +115,15 @@ export function registerAuthRoutes(
       patch.apiKeys = sanitizeApiKeys(apiKeysInput);
     }
 
+    if (Array.isArray(body.disabled_tools)) {
+      patch.disabledTools = body.disabled_tools.filter((v: unknown) => typeof v === "string") as string[];
+    }
+
     const updated = users.updateSettings(authUser.id, patch);
     return {
       theme: updated.theme,
       api_keys: updated.apiKeys,
+      disabled_tools: updated.disabledTools,
       updated_at: updated.updatedAt,
     };
   });
@@ -173,6 +181,75 @@ export function registerAuthRoutes(
       return reply.status(404).send({ detail: "session not found" });
     }
     return { ok: true };
+  });
+
+  // ── Tool settings endpoints ──────────────────────────────────────
+
+  /** GET /auth/settings/tools — list all tools with enabled/disabled status */
+  app.get("/auth/settings/tools", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    if (!toolRegistry) {
+      return reply.status(503).send({ detail: "tool registry not available" });
+    }
+
+    const settings = users.getSettings(authUser.id);
+    const disabledSet = new Set(settings.disabledTools ?? []);
+    const tools = toolRegistry.listInfo();
+
+    const toolList = tools.map((t) => ({
+      name: t.name,
+      description: t.description,
+      tier: t.tier,
+      category: t.category,
+      source: t.source,
+      enabled: !disabledSet.has(t.name),
+      /** Core tools cannot be disabled */
+      locked: t.tier === "core",
+    }));
+
+    return {
+      tools: toolList,
+      total: toolList.length,
+      disabled_count: disabledSet.size,
+    };
+  });
+
+  /** PATCH /auth/settings/tools — update which tools are disabled */
+  app.patch("/auth/settings/tools", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    if (!toolRegistry) {
+      return reply.status(503).send({ detail: "tool registry not available" });
+    }
+
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const disabledToolsInput = body.disabled_tools;
+
+    if (!Array.isArray(disabledToolsInput)) {
+      return reply.status(400).send({ detail: "disabled_tools must be an array of tool name strings" });
+    }
+
+    // Validate: only allow disabling non-core tools
+    const allTools = toolRegistry.listInfo();
+    const coreTools = new Set(allTools.filter((t) => t.tier === "core").map((t) => t.name));
+    const validNames = new Set(allTools.map((t) => t.name));
+
+    const filtered: string[] = [];
+    for (const name of disabledToolsInput) {
+      if (typeof name !== "string") continue;
+      if (!validNames.has(name)) continue; // ignore unknown tools
+      if (coreTools.has(name)) continue; // can't disable core tools
+      filtered.push(name);
+    }
+
+    const updated = users.updateSettings(authUser.id, { disabledTools: filtered });
+    return {
+      disabled_tools: updated.disabledTools,
+      updated_at: updated.updatedAt,
+    };
   });
 }
 

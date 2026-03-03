@@ -361,6 +361,9 @@ export function createTerminalRunTool(
       "Execute a shell command in a persistent terminal (visible to the user) and return the output. " +
       "The terminal stays alive between calls — like VS Code's integrated terminal. " +
       "Multi-line scripts, pipes, and complex syntax all work unchanged.",
+    tier: "core",
+    category: "terminal",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -466,6 +469,9 @@ export function createTerminalStreamTool(registry: SurfaceRegistry): ToolDefinit
   return {
     name: "terminal.stream",
     description: "Start a new streaming terminal session (output sent via WebSocket). Use when you need an interactive terminal.",
+    tier: "standard",
+    category: "terminal",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {

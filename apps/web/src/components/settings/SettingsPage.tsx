@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { ToolSettings } from './ToolSettings'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -235,6 +236,8 @@ export function SettingsPage({
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
       </Card>
+
+      <ToolSettings token={token} />
     </div>
   )
 }

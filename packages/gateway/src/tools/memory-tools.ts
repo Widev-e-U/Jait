@@ -12,6 +12,9 @@ export function createMemorySaveTool(memory: MemoryService): ToolDefinition<{
   return {
     name: "memory.save",
     description: "Save a memory entry for later retrieval.",
+    tier: "standard",
+    category: "memory",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -46,6 +49,9 @@ export function createMemorySearchTool(memory: MemoryService): ToolDefinition<{ 
   return {
     name: "memory.search",
     description: "Search saved memories using semantic similarity.",
+    tier: "standard",
+    category: "memory",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -66,6 +72,9 @@ export function createMemoryForgetTool(memory: MemoryService): ToolDefinition<{ 
   return {
     name: "memory.forget",
     description: "Forget a memory by ID.",
+    tier: "standard",
+    category: "memory",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {

@@ -29,10 +29,29 @@ interface ChatState {
   error: string | null
 }
 
+export type ChatMode = 'ask' | 'agent' | 'plan'
+
+export interface PlanAction {
+  id: string
+  tool: string
+  args: unknown
+  description: string
+  order: number
+  status: 'pending' | 'approved' | 'rejected' | 'executed' | 'failed'
+  result?: { ok: boolean; message: string; data?: unknown }
+}
+
+export interface PlanData {
+  plan_id: string
+  summary: string
+  actions: PlanAction[]
+}
+
 interface SendMessageOptions {
   token?: string | null
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
   onLoginRequired?: () => void
+  mode?: ChatMode
 }
 
 /**
@@ -51,6 +70,8 @@ export function useChat(
     remainingPrompts: null,
     error: null,
   })
+
+  const [pendingPlan, setPendingPlan] = useState<PlanData | null>(null)
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const prevSessionIdRef = useRef<string | null>(null)
@@ -391,7 +412,7 @@ export function useChat(
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
 
-      const requestBody = { content, sessionId: requestSessionId }
+      const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}) }
       pushSSEDebugEvent('request', JSON.stringify(requestBody))
 
       const response = await fetch(`${API_URL}/api/chat`, {
@@ -530,6 +551,18 @@ export function useChat(
                 }
                 updateMessage({ toolCalls: [...toolCalls] })
               }
+            } else if (data.type === 'plan_complete') {
+              // Plan mode completed — store the plan for review
+              const plan: PlanData = {
+                plan_id: data.plan_id as string,
+                summary: data.summary as string,
+                actions: (data.actions as PlanAction[]) ?? [],
+              }
+              setPendingPlan(plan)
+            } else if (data.type === 'mode_notice') {
+              // Mode notice — append as assistant content
+              assistantContent += `\n\n*${data.message as string}*`
+              updateMessage({ content: assistantContent })
             } else if (data.type === 'done') {
               if (thinkingStart && !thinkingDuration) {
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
@@ -733,15 +766,101 @@ export function useChat(
     }
   }, [authToken, onLoginRequired, sessionId, sendMessage])
 
+  const executePlan = useCallback(async (actionIds?: string[]) => {
+    const sid = prevSessionIdRef.current
+    if (!sid || !pendingPlan) return
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+
+    try {
+      const res = await fetch(`${API_URL}/api/sessions/${sid}/plan/execute`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(actionIds ? { action_ids: actionIds } : {}),
+      })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+
+      const reader = res.body?.getReader()
+      if (!reader) throw new Error('No response body')
+
+      const decoder = new TextDecoder()
+      let lineBuffer = ''
+
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        lineBuffer += decoder.decode(value, { stream: true })
+        const lines = lineBuffer.split('\n')
+        lineBuffer = lines.pop() || ''
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue
+          try {
+            const data = JSON.parse(line.slice(6))
+            if (data.type === 'plan_action_start') {
+              setPendingPlan(prev => prev ? {
+                ...prev,
+                actions: prev.actions.map(a =>
+                  a.id === data.action_id ? { ...a, status: 'approved' as const } : a
+                ),
+              } : null)
+            } else if (data.type === 'plan_action_result') {
+              setPendingPlan(prev => prev ? {
+                ...prev,
+                actions: prev.actions.map(a =>
+                  a.id === data.action_id ? {
+                    ...a,
+                    status: (data.ok ? 'executed' : 'failed') as PlanAction['status'],
+                    result: { ok: data.ok, message: data.message, data: data.data },
+                  } : a
+                ),
+              } : null)
+            } else if (data.type === 'plan_execution_complete') {
+              // Plan execution complete — clear plan after a brief delay so user sees final state
+              setTimeout(() => setPendingPlan(null), 2000)
+            }
+          } catch { /* incomplete JSON */ }
+        }
+      }
+    } catch (err) {
+      setState(prev => ({
+        ...prev,
+        error: err instanceof Error ? err.message : 'Plan execution failed',
+      }))
+    }
+  }, [authToken, pendingPlan])
+
+  const rejectPlan = useCallback(async () => {
+    const sid = prevSessionIdRef.current
+    if (!sid || !pendingPlan) return
+
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+    if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+
+    try {
+      await fetch(`${API_URL}/api/sessions/${sid}/plan/reject`, {
+        method: 'POST',
+        headers,
+      })
+      setPendingPlan(null)
+    } catch {
+      setPendingPlan(null)
+    }
+  }, [authToken, pendingPlan])
+
   return {
     messages: state.messages,
     isLoading: state.isLoading,
     isLoadingHistory: state.isLoadingHistory,
     remainingPrompts: state.remainingPrompts,
     error: state.error,
+    pendingPlan,
     sendMessage,
     restartFromMessage,
     cancelRequest,
     clearMessages,
+    executePlan,
+    rejectPlan,
   }
 }

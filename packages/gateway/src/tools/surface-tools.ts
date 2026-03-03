@@ -13,6 +13,9 @@ export function createSurfacesListTool(registry: SurfaceRegistry): ToolDefinitio
   return {
     name: "surfaces.list",
     description: "List all active surfaces and their current state",
+    tier: "standard",
+    category: "surfaces",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {},
@@ -41,6 +44,9 @@ export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefiniti
   return {
     name: "surfaces.start",
     description: "Start a new surface of the given type (terminal, filesystem, browser)",
+    tier: "standard",
+    category: "surfaces",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -83,6 +89,9 @@ export function createSurfacesStopTool(registry: SurfaceRegistry): ToolDefinitio
   return {
     name: "surfaces.stop",
     description: "Stop a running surface by its ID",
+    tier: "standard",
+    category: "surfaces",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {

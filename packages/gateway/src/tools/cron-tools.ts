@@ -17,6 +17,9 @@ export function createCronAddTool(scheduler: SchedulerService): ToolDefinition {
   return {
     name: "cron.add",
     description: "Add a scheduled cron job",
+    tier: "standard",
+    category: "scheduler",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -49,6 +52,9 @@ export function createCronListTool(scheduler: SchedulerService): ToolDefinition 
   return {
     name: "cron.list",
     description: "List configured cron jobs",
+    tier: "standard",
+    category: "scheduler",
+    source: "builtin",
     parameters: { type: "object", properties: {} },
     execute: async (_input, context): Promise<ToolResult> => ({
       ok: true,
@@ -62,6 +68,9 @@ export function createCronRemoveTool(scheduler: SchedulerService): ToolDefinitio
   return {
     name: "cron.remove",
     description: "Remove a cron job by id",
+    tier: "standard",
+    category: "scheduler",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: { id: { type: "string" } },
@@ -79,6 +88,9 @@ export function createCronUpdateTool(scheduler: SchedulerService): ToolDefinitio
   return {
     name: "cron.update",
     description: "Update cron job fields",
+    tier: "standard",
+    category: "scheduler",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {

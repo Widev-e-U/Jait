@@ -17,6 +17,7 @@ export interface UserSettingsRecord {
   userId: string;
   theme: ThemeMode;
   apiKeys: Record<string, string>;
+  disabledTools: string[];
   updatedAt: string;
 }
 
@@ -38,6 +39,17 @@ function parseApiKeys(raw: string | null): Record<string, string> {
     return out;
   } catch {
     return {};
+  }
+}
+
+function parseStringArray(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter((v): v is string => typeof v === "string");
+  } catch {
+    return [];
   }
 }
 
@@ -128,12 +140,14 @@ export class UserService {
         userId,
         theme: "system",
         apiKeys: JSON.stringify({}),
+        disabledTools: JSON.stringify([]),
         updatedAt: now,
       }).run();
       return {
         userId,
         theme: "system",
         apiKeys: {},
+        disabledTools: [],
         updatedAt: now,
       };
     }
@@ -141,25 +155,28 @@ export class UserService {
       userId: row.userId,
       theme: (row.theme as ThemeMode) || "system",
       apiKeys: parseApiKeys(row.apiKeys),
+      disabledTools: parseStringArray((row as any).disabledTools ?? null),
       updatedAt: row.updatedAt,
     };
   }
 
   updateSettings(
     userId: string,
-    patch: { theme?: ThemeMode; apiKeys?: Record<string, string> },
+    patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[] },
   ): UserSettingsRecord {
     const existing = this.getSettings(userId);
     const theme = patch.theme ?? existing.theme;
     const apiKeys = patch.apiKeys ?? existing.apiKeys;
+    const disabledTools = patch.disabledTools ?? existing.disabledTools;
     const now = new Date().toISOString();
     this.db
       .update(userSettings)
       .set({
         theme,
         apiKeys: JSON.stringify(apiKeys),
+        disabledTools: JSON.stringify(disabledTools),
         updatedAt: now,
-      })
+      } as any)
       .where(eq(userSettings.userId, userId))
       .run();
     return this.getSettings(userId);

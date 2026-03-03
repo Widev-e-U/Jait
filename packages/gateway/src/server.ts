@@ -69,7 +69,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   registerHealthRoutes(app, config, { getDeviceCount: () => deps.deviceRegistry?.count() ?? 0 });
   if (deps.userService) {
-    registerAuthRoutes(app, config, deps.userService);
+    registerAuthRoutes(app, config, deps.userService, deps.toolRegistry);
   }
   registerChatRoutes(app, config, {
     db: deps.db,

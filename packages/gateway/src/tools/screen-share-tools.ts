@@ -28,6 +28,9 @@ export function createScreenShareTool(screenShare: ScreenShareService): ToolDefi
   return {
     name: "screen.share",
     description: "Start/stop/pause/resume active screen sharing session.",
+    tier: "standard",
+    category: "screen",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -70,6 +73,9 @@ export function createScreenCaptureTool(screenShare: ScreenShareService): ToolDe
   return {
     name: "screen.capture",
     description: "Capture a point-in-time screenshot from active screen source.",
+    tier: "standard",
+    category: "screen",
+    source: "builtin",
     parameters: { type: "object", properties: {} },
     async execute(): Promise<ToolResult> {
       return { ok: true, message: "Screen captured.", data: screenShare.captureScreen() };
@@ -81,6 +87,9 @@ export function createScreenRecordTool(screenShare: ScreenShareService): ToolDef
   return {
     name: "screen.record",
     description: "Start recording an active screen share session for audit/playback.",
+    tier: "standard",
+    category: "screen",
+    source: "builtin",
     parameters: { type: "object", properties: {} },
     async execute(): Promise<ToolResult> {
       return { ok: true, message: "Screen recording started.", data: screenShare.startRecording() };
@@ -92,6 +101,9 @@ export function createOsTool(screenShare: ScreenShareService, name: "os.tool" | 
   return {
     name,
     description: "Distributed OS control plane for screen-share network state and control transfer.",
+    tier: "standard",
+    category: "screen",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {

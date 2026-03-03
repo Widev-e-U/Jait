@@ -107,6 +107,9 @@ export function createBrowserNavigateTool(registry: SurfaceRegistry): ToolDefini
   return {
     name: "browser.navigate",
     description: "Navigate the browser to a URL and return a page summary",
+    tier: "standard",
+    category: "browser",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -138,6 +141,9 @@ export function createBrowserSnapshotTool(registry: SurfaceRegistry): ToolDefini
   return {
     name: "browser.snapshot",
     description: "Return a structured textual browser snapshot for the current page",
+    tier: "standard",
+    category: "browser",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -168,6 +174,9 @@ function makeActionTool<TInput>(
   return {
     name,
     description,
+    tier: "standard",
+    category: "browser",
+    source: "builtin",
     parameters: { type: "object", properties, required },
     async execute(input: TInput, context: ToolContext): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
@@ -282,6 +291,9 @@ export function createWebFetchTool(guard = new SSRFGuard()): ToolDefinition<WebF
   return {
     name: "web.fetch",
     description: "Fetch URL content with SSRF protections for public web access",
+    tier: "standard",
+    category: "web",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -352,6 +364,9 @@ export function createWebSearchTool(guard = new SSRFGuard()): ToolDefinition<Web
   return {
     name: "web.search",
     description: "Search the public web (auto, openai, brave, perplexity, grok, gemini, kimi)",
+    tier: "standard",
+    category: "web",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -947,6 +962,9 @@ export function createBrowserSandboxStartTool(sandboxManager = new SandboxManage
   return {
     name: "browser.sandbox.start",
     description: "Start Chromium sandbox container with noVNC access",
+    tier: "standard",
+    category: "browser",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {

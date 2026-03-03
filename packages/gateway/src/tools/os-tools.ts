@@ -25,6 +25,9 @@ export function createOsQueryTool(): ToolDefinition<OsQueryInput> {
   return {
     name: "os.query",
     description: "Query system information: info, processes, disk usage, or environment",
+    tier: "core",
+    category: "os",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {
@@ -160,6 +163,9 @@ export function createOsInstallTool(): ToolDefinition<OsInstallInput> {
   return {
     name: "os.install",
     description: "Install a system package via winget (Windows), apt (Linux), or brew (macOS)",
+    tier: "standard",
+    category: "os",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {

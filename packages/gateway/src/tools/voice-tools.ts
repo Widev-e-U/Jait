@@ -9,6 +9,9 @@ export function createVoiceSpeakTool(voiceService: VoiceService): ToolDefinition
   return {
     name: "voice.speak",
     description: "Speak text via the configured TTS output",
+    tier: "standard",
+    category: "voice",
+    source: "builtin",
     parameters: {
       type: "object",
       properties: {

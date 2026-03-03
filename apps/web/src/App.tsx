@@ -29,6 +29,8 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, Suggestions } from '@/components/chat'
+import { ModeSelector } from '@/components/chat/mode-selector'
+import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
@@ -38,7 +40,7 @@ import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode } from '@/hooks/useAuth'
-import { useChat } from '@/hooks/useChat'
+import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSessions } from '@/hooks/useSessions'
 
@@ -71,6 +73,7 @@ function App() {
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [talkModeEnabled, setTalkModeEnabled] = useState(false)
+  const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [registerUsername, setRegisterUsername] = useState('')
@@ -104,10 +107,13 @@ function App() {
     isLoading,
     remainingPrompts,
     error,
+    pendingPlan,
     sendMessage,
     restartFromMessage,
     cancelRequest,
     clearMessages,
+    executePlan,
+    rejectPlan,
   } = useChat(activeSessionId, token, onLoginRequired)
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals()
   const { provider, model } = useModelInfo()
@@ -119,6 +125,10 @@ function App() {
   useEffect(() => {
     localStorage.setItem('showDebugPanel', showDebugPanel ? 'true' : 'false')
   }, [showDebugPanel])
+
+  useEffect(() => {
+    localStorage.setItem('chatMode', chatMode)
+  }, [chatMode])
 
   useEffect(() => {
     setThemeMode(settings.theme)
@@ -271,7 +281,7 @@ function App() {
       sid = session?.id ?? null
     }
     if (!sid) return
-    sendMessage(inputValue.trim(), { token, sessionId: sid, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(inputValue.trim(), { token, sessionId: sid, mode: chatMode, onLoginRequired: () => setShowLoginDialog(true) })
     setInputValue('')
   }
 
@@ -286,7 +296,7 @@ function App() {
       sid = session?.id ?? null
     }
     if (!sid) return
-    sendMessage(suggestion, { token, sessionId: sid, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const handleEditPreviousMessage = useCallback(async (
@@ -627,6 +637,9 @@ function App() {
                     talkModeEnabled={talkModeEnabled}
                     onToggleTalkMode={handleToggleTalkMode}
                   />
+                  <div className="flex justify-center pt-1">
+                    <ModeSelector mode={chatMode} onChange={setChatMode} />
+                  </div>
                 </div>
               </div>
             ) : (
@@ -657,6 +670,14 @@ function App() {
                       sessionId={activeSessionId}
                       onApproveAllEnabled={() => setApproveAllInSession(true)}
                     />
+                    {pendingPlan && (
+                      <PlanReview
+                        plan={pendingPlan}
+                        onApprove={executePlan}
+                        onReject={rejectPlan}
+                        isExecuting={isLoading}
+                      />
+                    )}
                     {limitReached && (
                       <p className="text-center text-sm text-destructive">
                         Daily limit reached. Come back tomorrow.
@@ -675,6 +696,7 @@ function App() {
                     />
                     <div className="flex items-center justify-between gap-2 px-1">
                       <div className="flex items-center gap-2 min-w-0">
+                        <ModeSelector mode={chatMode} onChange={setChatMode} disabled={isLoading} />
                         <button onClick={() => { clearMessages(); createSession() }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
                           New chat
                         </button>

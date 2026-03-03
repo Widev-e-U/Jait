@@ -16,6 +16,9 @@ export function createGatewayStatusTool(deps: {
   return {
     name: "gateway.status",
     description: "Return gateway runtime health information",
+    tier: "standard",
+    category: "gateway",
+    source: "builtin",
     parameters: { type: "object", properties: {} },
     execute: async (): Promise<ToolResult> => {
       const sessions = deps.sessionService.list("active").length;

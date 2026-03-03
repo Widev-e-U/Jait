@@ -12,6 +12,22 @@ import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "../lib/uuidv7.js";
 import { requireAuth } from "../security/http-auth.js";
+import {
+  runAgentLoop,
+  retryToolCall,
+  buildTieredToolSchemas,
+  fromOpenAIName,
+  SteeringController,
+  type AgentLoopEvent,
+  type ExecutedToolCall,
+  type OpenAIToolCall,
+} from "../tools/agent-loop.js";
+import {
+  type ChatMode,
+  type PlannedAction,
+  isValidChatMode,
+  getSystemPromptForMode,
+} from "../tools/chat-modes.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -22,12 +38,6 @@ interface ChatMessage {
   tool_call_id?: string;
   name?: string;
   uiToolCalls?: PersistedToolCall[];
-}
-
-interface OpenAIToolCall {
-  id: string;
-  type: "function";
-  function: { name: string; arguments: string };
 }
 
 /** Serialized tool call info for DB persistence */
@@ -269,38 +279,6 @@ Guidelines:
 /** Max agentic loop iterations to prevent infinite loops */
 const MAX_TOOL_ROUNDS = 15;
 
-/** OpenAI requires function names to match ^[a-zA-Z0-9_-]+$ — no dots */
-function toOpenAIName(name: string): string { return name.replace(/\./g, "_"); }
-function fromOpenAIName(name: string): string {
-  // Our tools use "namespace.action" format — only the first underscore is the dot
-  const idx = name.indexOf("_");
-  if (idx === -1) return name;
-  return name.slice(0, idx) + "." + name.slice(idx + 1);
-}
-
-/** Build OpenAI-format tool schemas from ToolRegistry */
-function buildToolSchemas(registry: ToolRegistry) {
-  return registry.list().map((t) => ({
-    type: "function" as const,
-    function: {
-      name: toOpenAIName(t.name),
-      description: t.description,
-      parameters: t.parameters,
-    },
-  }));
-}
-
-/** Serialize messages for OpenAI API (drop undefined fields) */
-function serializeMessages(messages: ChatMessage[]) {
-  return messages.map((m) => {
-    const msg: Record<string, unknown> = { role: m.role, content: m.content };
-    if (m.tool_calls) msg.tool_calls = m.tool_calls;
-    if (m.tool_call_id) msg.tool_call_id = m.tool_call_id;
-    if (m.name) msg.name = m.name;
-    return msg;
-  });
-}
-
 // ── Module-level DB ref for persistence from extracted functions ──────
 let _dbRef: JaitDB | undefined;
 let _appRef: FastifyInstance | undefined;
@@ -373,10 +351,15 @@ export function registerChatRoutes(
   _dbRef = db;
   _appRef = app;
 
-  const toolSchemas = toolRegistry ? buildToolSchemas(toolRegistry) : [];
-  const hasTools = toolSchemas.length > 0;
+  const hasTools = !!toolRegistry && toolRegistry.list().length > 0;
 
-  app.log.info(`Chat route: ${hasTools ? toolSchemas.length + " tools available for agent" : "no tools (text-only mode)"}`);
+  // ── Per-session steering controllers and executed tool call tracking ──
+  const sessionSteeringControllers = new Map<string, SteeringController>();
+  const sessionExecutedToolCalls = new Map<string, ExecutedToolCall[]>();
+  /** Plans produced by plan mode — keyed by session ID */
+  const sessionPlans = new Map<string, { id: string; summary: string; actions: PlannedAction[] }>();
+
+  app.log.info(`Chat route: ${hasTools ? toolRegistry!.list().length + " tools available for agent (tiered)" : "no tools (text-only mode)"}`);
 
   // Hydrate in-memory cache from DB if session not yet loaded
   function hydrateSession(sessionId: string): void {
@@ -499,6 +482,7 @@ export function registerChatRoutes(
         : typeof body["session_id"] === "string"
           ? (body["session_id"] as string)
           : crypto.randomUUID();
+    const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
 
     if (!content.trim()) {
       return reply
@@ -529,8 +513,15 @@ export function registerChatRoutes(
     hydrateSession(sessionId);
     if (!sessionHistory.has(sessionId)) {
       sessionHistory.set(sessionId, [
-        { role: "system", content: SYSTEM_PROMPT },
+        { role: "system", content: getSystemPromptForMode(chatMode) },
       ]);
+    } else {
+      // Update system prompt if mode changed mid-session
+      const h = sessionHistory.get(sessionId)!;
+      const modePrompt = getSystemPromptForMode(chatMode);
+      if (h[0]?.role === "system" && h[0].content !== modePrompt) {
+        h[0] = { role: "system", content: modePrompt };
+      }
     }
     const history = sessionHistory.get(sessionId)!;
     history.push({ role: "user", content });
@@ -555,23 +546,56 @@ export function registerChatRoutes(
 
     const providerLabel = config.llmProvider === "openai" ? "OpenAI" : "Ollama";
 
+    // Create steering controller for this session
+    const steering = new SteeringController();
+    sessionSteeringControllers.set(sessionId, steering);
+
     try {
       if (config.llmProvider === "openai") {
-        // ══ OpenAI agentic loop ════════════════════════════════════
-        const result = await runOpenAIAgentLoop(
-          llmRuntime,
-          history,
-          toolSchemas,
-          hasTools,
-          sessionId,
-          { userId: authUser.id, apiKeys: userApiKeys },
-          streamAbort,
-          safeWrite,
-          app,
+        // ══ OpenAI agentic loop (using extracted runAgentLoop) ═════
+
+        // Build tiered schemas per request — respects user-disabled tools
+        const userSettings = userService?.getSettings(authUser.id);
+        const disabledTools = userSettings?.disabledTools?.length
+          ? new Set(userSettings.disabledTools)
+          : undefined;
+        const toolSchemas = toolRegistry
+          ? buildTieredToolSchemas(toolRegistry, disabledTools)
+          : [];
+
+        const onEvent = (event: AgentLoopEvent) => {
+          emitToSubscribers(sessionId, event as StreamEvent);
+          safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+        };
+        const result = await runAgentLoop(
+          {
+            llm: llmRuntime,
+            history,
+            toolSchemas,
+            hasTools,
+            sessionId,
+            auth: { userId: authUser.id, apiKeys: userApiKeys },
+            abort: streamAbort,
+            maxRounds: MAX_TOOL_ROUNDS,
+            parallel: true,
+            toolRegistry,
+            disabledTools,
+            mode: chatMode,
+            onEvent,
+            onPersist: (sid, role, content, tc) => persistMessage(sid, role, content, tc),
+            log: app.log,
+          },
           executeTool,
+          steering,
         );
         fullContent = result.content;
-        partialToolCalls = result.executedToolCalls;
+        partialToolCalls = result.executedToolCalls as unknown as PersistedToolCall[];
+        // Track executed tool calls for retry API
+        sessionExecutedToolCalls.set(sessionId, result.executedToolCalls);
+        // Store plan if plan mode produced one
+        if (result.plan) {
+          sessionPlans.set(sessionId, result.plan);
+        }
       } else {
         // ══ Ollama (text only — no tool support) ═══════════════════
         fullContent = await runOllamaStream(
@@ -611,6 +635,7 @@ export function registerChatRoutes(
 
     activeStreams.delete(sessionId);
     sessionAbortControllers.delete(sessionId);
+    sessionSteeringControllers.delete(sessionId);
 
     // Clean up in-memory history: remove any dangling assistant tool_calls
     // messages that never got a text response (e.g. cancelled mid-tool-call).
@@ -901,327 +926,322 @@ export function registerChatRoutes(
       unsubscribe();
     });
   });
-}
 
-// ══════════════════════════════════════════════════════════════════════
-// OpenAI Agentic Loop — tool calling + streaming
-// ══════════════════════════════════════════════════════════════════════
-
-interface OpenAIToolSchema {
-  type: "function";
-  function: { name: string; description: string; parameters: unknown };
-}
-
-interface RuntimeLLMConfig {
-  openaiApiKey: string;
-  openaiBaseUrl: string;
-  openaiModel: string;
-}
-
-async function runOpenAIAgentLoop(
-  runtime: RuntimeLLMConfig,
-  history: ChatMessage[],
-  toolSchemas: OpenAIToolSchema[],
-  hasTools: boolean,
-  sessionId: string,
-  auth: { userId?: string; apiKeys?: Record<string, string> },
-  streamAbort: AbortController,
-  safeWrite: (data: string) => void,
-  app: FastifyInstance,
-  executeTool: (
-    name: string,
-    args: unknown,
-    sid: string,
-    auth?: { userId?: string; apiKeys?: Record<string, string> },
-    onChunk?: (chunk: string) => void,
-    signal?: AbortSignal,
-  ) => Promise<ToolResult>,
-): Promise<{ content: string; executedToolCalls: PersistedToolCall[] }> {
-  let fullContent = "";
-  const executedToolCalls: PersistedToolCall[] = [];
-
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    // Check if the session was cancelled before starting the next round
-    if (streamAbort.signal.aborted) {
-      app.log.info(`Agentic loop cancelled for session ${sessionId} — stopping before round ${round}`);
-      return { content: fullContent, executedToolCalls };
+  // ── POST /api/sessions/:sessionId/retry-tool ────────────────────────
+  // Retry a specific failed tool call by its callId.
+  app.post("/api/sessions/:sessionId/retry-tool", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
     }
 
-    const reqBody: Record<string, unknown> = {
-      model: runtime.openaiModel,
-      messages: serializeMessages(history),
-      stream: true,
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const callId = typeof body["callId"] === "string" ? body["callId"] : "";
+    if (!callId) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "callId is required" });
+    }
+
+    // Cannot retry while a stream is active
+    if (activeStreams.has(sessionId)) {
+      return reply.status(409).send({ error: "CONFLICT", details: "Cannot retry while session is streaming" });
+    }
+
+    const executed = sessionExecutedToolCalls.get(sessionId);
+    if (!executed) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "No tool calls recorded for this session" });
+    }
+
+    const original = executed.find((tc) => tc.callId === callId);
+    if (!original) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: `Tool call ${callId} not found` });
+    }
+
+    hydrateSession(sessionId);
+    const history = sessionHistory.get(sessionId);
+    if (!history) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Session history not found" });
+    }
+
+    const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
+
+    const result = await retryToolCall(
+      callId,
+      history as any,
+      executed,
+      executeTool,
+      sessionId,
+      { userId: authUser.id, apiKeys: userApiKeys },
+      (event) => emitToSubscribers(sessionId, event as StreamEvent),
+    );
+
+    // Persist updated history entry
+    if (db) {
+      const tcJson = JSON.stringify(executed);
+      // Find the last assistant message and update its tool calls
+      const rows = db
+        .select()
+        .from(messagesTable)
+        .where(eq(messagesTable.sessionId, sessionId))
+        .orderBy(messagesTable.createdAt)
+        .all();
+      const lastAssistant = [...rows].reverse().find((r) => r.role === "assistant");
+      if (lastAssistant) {
+        db.update(messagesTable)
+          .set({ toolCalls: tcJson })
+          .where(eq(messagesTable.id, lastAssistant.id))
+          .run();
+      }
+    }
+
+    return {
+      ok: result.ok,
+      callId,
+      tool: original.tool,
+      message: result.message,
+      data: result.data,
+      retryCount: original.retryCount,
     };
-    if (hasTools) {
-      reqBody.tools = toolSchemas;
-      reqBody.tool_choice = "auto";
+  });
+
+  // ── POST /api/sessions/:sessionId/steer ─────────────────────────────
+  // Inject a steering message into an active agent loop.
+  app.post("/api/sessions/:sessionId/steer", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
     }
 
-    let contentText = "";
-    let toolCalls: OpenAIToolCall[] = [];
-    let finishReason: string | null = null;
-
-    try {
-      const openaiResponse = await fetch(
-        `${runtime.openaiBaseUrl}/chat/completions`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${runtime.openaiApiKey}`,
-          },
-          body: JSON.stringify(reqBody),
-          signal: streamAbort.signal,
-        },
-      );
-
-      if (!openaiResponse.ok) {
-        const errText = await openaiResponse.text();
-        app.log.error(`OpenAI error ${openaiResponse.status}: ${errText}`);
-        safeWrite(`data: ${JSON.stringify({ type: "error", message: `OpenAI error: ${openaiResponse.status}` })}\n\n`);
-        return { content: fullContent, executedToolCalls };
-      }
-
-      const reader = openaiResponse.body?.getReader();
-      if (!reader) {
-        safeWrite(`data: ${JSON.stringify({ type: "error", message: "No response body from OpenAI" })}\n\n`);
-        return { content: fullContent, executedToolCalls };
-      }
-
-      // Parse the stream, accumulating text content and tool calls
-      const parsed = await parseOpenAIStream(
-        reader as any, sessionId, safeWrite,
-      );
-      contentText = parsed.contentText;
-      toolCalls = parsed.toolCalls;
-      finishReason = parsed.finishReason;
-    } catch (fetchErr) {
-      // If the abort signal fired during fetch/streaming, return partial results
-      // instead of throwing — the caller will persist them.
-      if (streamAbort.signal.aborted) {
-        app.log.info(`Agentic loop cancelled for session ${sessionId} during LLM streaming (round ${round})`);
-        return { content: fullContent, executedToolCalls };
-      }
-      throw fetchErr; // re-throw non-abort errors
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const message = typeof body["message"] === "string" ? body["message"] : "";
+    if (!message.trim()) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "message is required" });
     }
 
-    fullContent += contentText;
-
-    // ── Model returned tool calls → execute them ──
-    // Accept tool calls regardless of finish_reason — some providers
-    // (and GPT-5 edge cases) return "stop" instead of "tool_calls".
-    if (toolCalls.length > 0) {
-      if (finishReason && finishReason !== "tool_calls") {
-        app.log.warn(
-          `LLM returned ${toolCalls.length} tool call(s) with finish_reason="${finishReason}" (expected "tool_calls") — executing anyway`,
-        );
-      }
-      // Push assistant message with tool_calls to history
-      history.push({
-        role: "assistant",
-        content: contentText || "",
-        tool_calls: toolCalls,
-      });
-
-      // Execute each tool call (abort-aware)
-      for (const tc of toolCalls) {
-        // Check if cancelled before starting next tool call
-        if (streamAbort.signal.aborted) {
-          app.log.info(`Agentic loop cancelled for session ${sessionId} — skipping remaining tool calls`);
-          // Record skipped tool calls as cancelled so they persist correctly
-          for (const remaining of toolCalls) {
-            if (executedToolCalls.some(etc => etc.callId === remaining.id)) continue;
-            let rArgs: unknown;
-            try { rArgs = JSON.parse(remaining.function.arguments); } catch { rArgs = {}; }
-            executedToolCalls.push({
-              callId: remaining.id,
-              tool: fromOpenAIName(remaining.function.name),
-              args: rArgs,
-              ok: false,
-              message: "Cancelled",
-              startedAt: Date.now(),
-              completedAt: Date.now(),
-            });
-          }
-          return { content: fullContent, executedToolCalls };
-        }
-
-        const startedAt = Date.now();
-        let args: unknown;
-        try { args = JSON.parse(tc.function.arguments); } catch { args = {}; }
-
-        const internalName = fromOpenAIName(tc.function.name);
-
-        // Notify frontend (use internal dotted name for display)
-        const toolStartEvent: StreamEvent = {
-          type: "tool_start",
-          tool: internalName,
-          args,
-          call_id: tc.id,
-        };
-        emitToSubscribers(sessionId, toolStartEvent);
-        safeWrite(`data: ${JSON.stringify(toolStartEvent)}\n\n`);
-
-        app.log.info(`Executing tool: ${internalName}(${tc.function.arguments})`);
-
-        const result = await executeTool(internalName, args, sessionId, auth, (chunk) => {
-          const ev: StreamEvent = { type: "tool_output", call_id: tc.id, content: chunk };
-          emitToSubscribers(sessionId, ev);
-          safeWrite(`data: ${JSON.stringify(ev)}\n\n`);
-        }, streamAbort.signal);
-        const completedAt = Date.now();
-
-        // Notify frontend of result
-        const toolResultEvent: StreamEvent = {
-          type: "tool_result",
-          call_id: tc.id,
-          ok: result.ok,
-          message: result.message,
-          data: result.data,
-        };
-        emitToSubscribers(sessionId, toolResultEvent);
-        safeWrite(`data: ${JSON.stringify(toolResultEvent)}\n\n`);
-
-        // Push tool result to history for next LLM call
-        history.push({
-          role: "tool",
-          content: JSON.stringify({ ok: result.ok, message: result.message, data: result.data }),
-          tool_call_id: tc.id,
-          name: tc.function.name,  // keep OpenAI name for serialization
-        });
-
-        // Accumulate for DB persistence
-        executedToolCalls.push({
-          callId: tc.id,
-          tool: internalName,
-          args,
-          ok: result.ok,
-          message: result.message,
-          data: result.data,
-          startedAt,
-          completedAt,
-        });
-      }
-
-      // Loop continues — LLM sees results and responds or calls more tools
-      continue;
+    if (!activeStreams.has(sessionId)) {
+      return reply.status(409).send({ error: "CONFLICT", details: "No active stream for this session — steering only works during streaming" });
     }
 
-    // ── Normal text response — done ──
-    if (contentText) {
-      history.push({ role: "assistant", content: contentText });
-      const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
-      persistMessageGlobal(sessionId, "assistant", contentText, tcJson);
+    const controller = sessionSteeringControllers.get(sessionId);
+    if (!controller) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "No steering controller for this session" });
     }
-    return { content: fullContent, executedToolCalls };
-  }
 
-  // Hit max rounds
-  app.log.warn(`Agentic loop hit max rounds (${MAX_TOOL_ROUNDS}) for session ${sessionId}`);
-  const msg = "\n\n[Reached maximum tool execution rounds. Stopping.]";
-  safeWrite(`data: ${JSON.stringify({ type: "token", content: msg })}\n\n`);
-  fullContent += msg;
-  return { content: fullContent, executedToolCalls };
-}
+    controller.steer(message);
+    return { ok: true, steered: true };
+  });
 
-// ── OpenAI SSE stream parser ─────────────────────────────────────────
+  // ══ GET /api/sessions/:sessionId/plan — Get pending plan ═══════════
 
-interface ParsedStream {
-  contentText: string;
-  toolCalls: OpenAIToolCall[];
-  finishReason: string | null;
-}
+  app.get("/api/sessions/:sessionId/plan", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
 
-async function parseOpenAIStream(
-  reader: ReadableStreamDefaultReader,
-  sessionId: string,
-  safeWrite: (data: string) => void,
-): Promise<ParsedStream> {
-  const decoder = new TextDecoder();
-  let buffer = "";
-  let contentText = "";
-  let finishReason: string | null = null;
+    const plan = sessionPlans.get(sessionId);
+    if (!plan) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "No pending plan for this session" });
+    }
 
-  // Accumulate tool_calls incrementally
-  const toolCallMap = new Map<number, { id: string; type: "function"; function: { name: string; arguments: string } }>();
+    return {
+      plan_id: plan.id,
+      summary: plan.summary,
+      actions: plan.actions.map((a) => ({
+        id: a.id,
+        tool: a.tool,
+        args: a.args,
+        description: a.description,
+        order: a.order,
+        status: a.status,
+      })),
+    };
+  });
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  // ══ POST /api/sessions/:sessionId/plan/execute — Execute approved plan ═
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
+  app.post("/api/sessions/:sessionId/plan/execute", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
 
-    for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data: ")) continue;
-      const payload = trimmed.slice(6);
-      if (payload === "[DONE]") continue;
+    const plan = sessionPlans.get(sessionId);
+    if (!plan) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "No pending plan for this session" });
+    }
+
+    const body = (request.body as Record<string, unknown>) ?? {};
+    // Optional: allow partial approval by specifying action IDs to execute
+    const approvedActionIds = Array.isArray(body["action_ids"])
+      ? new Set((body["action_ids"] as string[]).filter((id) => typeof id === "string"))
+      : null;
+
+    const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
+
+    // SSE headers for streaming plan execution
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+    });
+
+    let clientDisconnected = false;
+    reply.raw.on("close", () => { clientDisconnected = true; });
+    const safeWrite = (data: string) => {
+      if (!clientDisconnected) {
+        try { reply.raw.write(data); } catch { clientDisconnected = true; }
+      }
+    };
+
+    const executionResults: Array<{ id: string; tool: string; ok: boolean; message: string; data?: unknown }> = [];
+
+    for (const action of plan.actions) {
+      // Skip rejected or already-executed actions
+      if (action.status === "rejected" || action.status === "executed") continue;
+      // If partial approval, skip non-approved
+      if (approvedActionIds && !approvedActionIds.has(action.id)) {
+        action.status = "rejected";
+        continue;
+      }
+
+      action.status = "approved";
+
+      safeWrite(`data: ${JSON.stringify({ type: "plan_action_start", id: action.id, tool: action.tool, order: action.order })}\n\n`);
+      emitToSubscribers(sessionId, { type: "tool_start", tool: action.tool, args: action.args, call_id: action.id });
 
       try {
-        const chunk = JSON.parse(payload);
-        const choice = chunk.choices?.[0];
-        if (!choice) continue;
+        const result = await executeTool(
+          action.tool,
+          action.args,
+          sessionId,
+          { userId: authUser.id, apiKeys: userApiKeys },
+          (chunk) => {
+            safeWrite(`data: ${JSON.stringify({ type: "plan_action_output", id: action.id, content: chunk })}\n\n`);
+          },
+        );
 
-        const delta = choice.delta;
-        if (!delta) continue;
+        action.status = result.ok ? "executed" : "failed";
+        action.result = { ok: result.ok, message: result.message, data: result.data };
+        executionResults.push({ id: action.id, tool: action.tool, ok: result.ok, message: result.message, data: result.data });
 
-        // Text content
-        if (delta.content) {
-          contentText += delta.content;
-          const tokenEvent = { type: "token" as const, content: delta.content };
-          emitToSubscribers(sessionId, tokenEvent);
-          safeWrite(`data: ${JSON.stringify(tokenEvent)}\n\n`);
+        safeWrite(`data: ${JSON.stringify({
+          type: "plan_action_result",
+          id: action.id,
+          tool: action.tool,
+          ok: result.ok,
+          message: result.message,
+          data: result.data,
+        })}\n\n`);
+
+        emitToSubscribers(sessionId, {
+          type: "tool_result",
+          call_id: action.id,
+          ok: result.ok,
+          message: result.message,
+          data: result.data,
+        });
+
+        // Add to conversation history so the agent has context
+        const history = sessionHistory.get(sessionId);
+        if (history) {
+          history.push({
+            role: "tool",
+            content: JSON.stringify({ ok: result.ok, message: result.message, data: result.data }),
+            tool_call_id: action.id,
+            name: action.tool,
+          });
         }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        action.status = "failed";
+        action.result = { ok: false, message };
+        executionResults.push({ id: action.id, tool: action.tool, ok: false, message });
 
-        // Tool calls (streamed incrementally — emit deltas to frontend)
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const idx: number = tc.index ?? 0;
-            const isNew = !toolCallMap.has(idx);
-            if (isNew) {
-              toolCallMap.set(idx, {
-                id: tc.id ?? "",
-                type: "function",
-                function: { name: tc.function?.name ?? "", arguments: "" },
-              });
-            }
-            const existing = toolCallMap.get(idx)!;
-            if (tc.id) existing.id = tc.id;
-            // Name: only append on subsequent deltas (first delta sets it in init)
-            if (!isNew && tc.function?.name) existing.function.name += tc.function.name;
-            if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
-
-            // Stream the delta to the frontend so tool calls appear progressively
-            const callId = existing.id || `pending-${idx}`;
-            const deltaEvent: StreamEvent = {
-              type: "tool_call_delta",
-              call_id: callId,
-              index: idx,
-              name_delta: tc.function?.name || undefined,
-              args_delta: tc.function?.arguments || undefined,
-            };
-            emitToSubscribers(sessionId, deltaEvent);
-            safeWrite(`data: ${JSON.stringify(deltaEvent)}\n\n`);
-          }
-        }
-
-        if (choice.finish_reason) {
-          finishReason = choice.finish_reason;
-        }
-      } catch {
-        // partial JSON chunk
+        safeWrite(`data: ${JSON.stringify({ type: "plan_action_result", id: action.id, tool: action.tool, ok: false, message })}\n\n`);
       }
     }
-  }
 
-  const toolCalls = [...toolCallMap.entries()]
-    .sort(([a], [b]) => a - b)
-    .map(([, tc]) => tc);
+    // Plan fully executed — clean up
+    const allDone = plan.actions.every((a) => a.status === "executed" || a.status === "rejected" || a.status === "failed");
+    if (allDone) {
+      sessionPlans.delete(sessionId);
+    }
 
-  return { contentText, toolCalls, finishReason };
+    const succeeded = executionResults.filter((r) => r.ok).length;
+    const failed = executionResults.filter((r) => !r.ok).length;
+
+    safeWrite(`data: ${JSON.stringify({
+      type: "plan_execution_complete",
+      plan_id: plan.id,
+      total: executionResults.length,
+      succeeded,
+      failed,
+      results: executionResults,
+    })}\n\n`);
+
+    reply.raw.end();
+  });
+
+  // ══ POST /api/sessions/:sessionId/plan/reject — Reject/discard plan ═
+
+  app.post("/api/sessions/:sessionId/plan/reject", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    if (sessionService) {
+      const session = sessionService.getById(sessionId, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+    }
+
+    const plan = sessionPlans.get(sessionId);
+    if (!plan) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "No pending plan for this session" });
+    }
+
+    for (const action of plan.actions) {
+      if (action.status === "pending") action.status = "rejected";
+    }
+    sessionPlans.delete(sessionId);
+
+    // Add a system message so the agent knows the plan was rejected
+    const history = sessionHistory.get(sessionId);
+    if (history) {
+      history.push({
+        role: "system",
+        content: "[PLAN REJECTED] The user rejected the proposed plan. Ask if they want to revise it or try a different approach.",
+      });
+    }
+
+    return { ok: true, plan_id: plan.id, message: "Plan rejected and discarded." };
+  });
 }
+
+// ══════════════════════════════════════════════════════════════════════
+// Agent loop extracted to ../tools/agent-loop.ts
+// (runAgentLoop, parseOpenAIStream, serializeMessages, etc.)
+// ══════════════════════════════════════════════════════════════════════
 
 // ══════════════════════════════════════════════════════════════════════
 // Ollama streaming (text-only — no tool support)

@@ -38,6 +38,7 @@ export const userSettings = sqliteTable("user_settings", {
   userId: text("user_id").primaryKey(),
   theme: text("theme").notNull().default("system"), // 'light' | 'dark' | 'system'
   apiKeys: text("api_keys"), // JSON object
+  disabledTools: text("disabled_tools"), // JSON string[] of disabled tool names
   updatedAt: text("updated_at").notNull(),
 });
 
