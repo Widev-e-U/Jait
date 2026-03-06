@@ -303,13 +303,7 @@ function App() {
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   const handleFullState = useCallback((state: Record<string, unknown>) => {
-    // Mark that we've received authoritative state from WS.
-    // This prevents the REST-based restore effects from overriding.
     wsFullStateReceivedRef.current = true
-
-    // The backend pushes ALL session state keys on subscribe.
-    // Keys that are ABSENT mean that panel/feature is off — we must handle both
-    // present and absent keys to fully hydrate.
 
     // Workspace panel
     const wp = state['workspace.panel'] as WorkspacePanelState | null | undefined
@@ -491,9 +485,7 @@ function App() {
 
     try {
       const dirHandle = await w.showDirectoryPicker()
-      // User picked a folder — open the workspace panel with the local handle.
-      // NOTE: In browser mode we can't get the absolute path, so we open
-      // locally. Cross-device sync requires Electron or manual path entry.
+      // Browser picker mode is local-only because no absolute server path is available.
       setShowWorkspace(true)
       setSavedWorkspace({ open: true, remotePath: '' })
       sendUIState('workspace.panel', { open: true }, activeSessionId)
