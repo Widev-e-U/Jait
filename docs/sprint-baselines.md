@@ -36,7 +36,7 @@ This file sets up low-complexity scaffolding so upcoming sprints can plug in con
 
 ## Notes
 
-- Use `AGENT_SPRINT_CONTENT_GUIDE.md` as the mandatory discovery checklist before implementation.
+- Use `docs/agent-sprint-content-guide.md` as the mandatory discovery checklist before implementation.
 - These are intentionally contracts + minimal registry only.
 - No behavior changes were introduced to running routes/server.
 - Safe to implement incrementally sprint-by-sprint.
