@@ -150,6 +150,25 @@ describe("POST /api/workspace/open", () => {
     expect(data.error).toBe("PATH_NOT_FOUND");
   });
 
+  it("should reject path traversal in POST /api/workspace/apply-diff", async () => {
+    const openRes = await fetch(`${address}/api/workspace/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: TEST_DIR, sessionId }),
+    });
+    const { surfaceId } = (await openRes.json()) as { surfaceId: string };
+
+    const applyRes = await fetch(`${address}/api/workspace/apply-diff`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: "../outside.txt", content: "blocked", surfaceId }),
+    });
+
+    expect(applyRes.status).toBe(400);
+    const data = (await applyRes.json()) as { error: string };
+    expect(data.error).toBe("VALIDATION_ERROR");
+  });
+
   it("should replace existing filesystem surface for the session", async () => {
     // Open first workspace
     const res1 = await fetch(`${address}/api/workspace/open`, {

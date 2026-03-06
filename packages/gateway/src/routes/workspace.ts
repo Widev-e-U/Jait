@@ -229,7 +229,7 @@ export function registerWorkspaceRoutes(
     };
   });
 
-  // POST /api/workspace/apply-diff — write merged diff result and clear backup
+  // POST /api/workspace/apply-diff — apply merged file content and clear backup
   app.post("/api/workspace/apply-diff", async (req, reply) => {
     const body = req.body as { path?: string; content?: string | null; surfaceId?: string } | null;
     const filePath = body?.path;
@@ -244,21 +244,23 @@ export function registerWorkspaceRoutes(
     }
 
     try {
-      // If content is provided, write it; otherwise just clear the backup (accept as-is)
+      // If content is provided, write it through the surface to keep path validation
+      // and backup behavior consistent with other file mutations.
       if (content !== undefined && content !== null) {
-        const { writeFile: fsWriteFile } = await import("node:fs/promises");
-        const { resolve } = await import("node:path");
-        const snap = fs.snapshot();
-        const root = (snap.metadata as Record<string, unknown>)?.workspaceRoot as string;
-        const abs = resolve(root, filePath);
-        await fsWriteFile(abs, content, "utf-8");
+        await fs.write(filePath, content);
       }
       fs.clearBackup(filePath);
       return { ok: true, path: filePath };
     } catch (err) {
-      return reply.status(500).send({
-        error: "APPLY_FAILED",
-        message: err instanceof Error ? err.message : "Failed to apply diff",
+      const message = err instanceof Error ? err.message : "Failed to apply diff";
+      const isValidationError = err instanceof Error && (
+        message.includes("outside workspace root")
+        || message.includes("refers to a symlink")
+        || message.includes("must be relative")
+      );
+      return reply.status(isValidationError ? 400 : 500).send({
+        error: isValidationError ? "VALIDATION_ERROR" : "APPLY_FAILED",
+        message,
       });
     }
   });
