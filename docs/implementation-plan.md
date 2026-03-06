@@ -5,7 +5,7 @@
 **Start Date:** March 2026
 **Cadence:** 2-week sprints
 **One developer** — all estimates assume solo work.
-**Canonical planning file:** `IMPLEMENTATION_PLAN.md` (also referenced as `ImplementationPlan.md` in conversation).
+**Canonical planning file:** `docs/implementation-plan.md` (also referenced as `ImplementationPlan.md` in conversation).
 
 ---
 
