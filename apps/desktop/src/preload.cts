@@ -27,6 +27,10 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   confirmShare: (opts: { title: string; message: string }) =>
     ipcRenderer.invoke("desktop:confirm-share", opts) as Promise<{ accepted: boolean }>,
 
+  /** Open a native directory picker and return the absolute path */
+  pickDirectory: () =>
+    ipcRenderer.invoke("desktop:pick-directory") as Promise<{ path: string } | null>,
+
   /** Listen for screen-share commands from main process (tray, etc.) */
   onScreenShareStart: (callback: () => void) =>
     ipcRenderer.on("screen-share:start", callback),

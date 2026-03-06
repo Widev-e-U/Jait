@@ -93,6 +93,8 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     toolExecutor: deps.toolExecutor,
     memoryService: deps.memoryService,
     userService: deps.userService,
+    ws: deps.ws,
+    sessionState: deps.sessionState,
   });
 
   if (deps.sessionService && deps.audit) {
@@ -139,7 +141,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
 
   if (deps.surfaceRegistry) {
-    registerWorkspaceRoutes(app, deps.surfaceRegistry);
+    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState);
   }
 
   app.get("/", async () => ({

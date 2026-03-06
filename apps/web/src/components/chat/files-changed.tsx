@@ -1,4 +1,4 @@
-import { Check, FileText, Undo2 } from 'lucide-react'
+import { Check, FileText, Undo2, ExternalLink } from 'lucide-react'
 import { FileIcon } from '@/components/icons/file-icons'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -17,6 +17,8 @@ interface FilesChangedProps {
   onReject?: (path: string) => void
   onAcceptAll?: () => void
   onRejectAll?: () => void
+  /** Open the diff view for a file */
+  onFileClick?: (path: string) => void
   className?: string
 }
 
@@ -26,6 +28,7 @@ export function FilesChanged({
   onReject,
   onAcceptAll,
   onRejectAll,
+  onFileClick,
   className,
 }: FilesChangedProps) {
   if (files.length === 0) return null
@@ -83,23 +86,33 @@ export function FilesChanged({
             )}
           >
             <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />
-            <span
+            <button
+              type="button"
               className={cn(
-                'truncate flex-1',
+                'truncate flex-1 text-left hover:underline cursor-pointer',
                 file.state === 'rejected' && 'line-through',
               )}
-              title={file.path}
+              title={`Review diff for ${file.path}`}
+              onClick={() => onFileClick?.(file.path)}
             >
               {file.path}
-            </span>
+            </button>
 
             {file.state === 'undecided' && (
               <div className="flex items-center gap-0.5 shrink-0">
                 <button
                   type="button"
+                  className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
+                  onClick={() => onFileClick?.(file.path)}
+                  title="Review changes"
+                >
+                  <ExternalLink className="h-3 w-3" />
+                </button>
+                <button
+                  type="button"
                   className="p-1 rounded hover:bg-green-500/20 text-green-600 dark:text-green-400 transition-colors"
                   onClick={() => onAccept?.(file.path)}
-                  title="Keep changes"
+                  title="Keep all changes"
                 >
                   <Check className="h-3 w-3" />
                 </button>
@@ -107,7 +120,7 @@ export function FilesChanged({
                   type="button"
                   className="p-1 rounded hover:bg-red-500/20 text-red-600 dark:text-red-400 transition-colors"
                   onClick={() => onReject?.(file.path)}
-                  title="Undo changes"
+                  title="Undo all changes"
                 >
                   <Undo2 className="h-3 w-3" />
                 </button>

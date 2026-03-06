@@ -48,7 +48,7 @@ export class WsControlPlane {
       console.log(`WebSocket control plane listening on port ${this.config.wsPort}`);
     }
 
-    this.wss.on("connection", (ws, req) => {
+    this.wss.on("connection", async (ws, req) => {
       const clientId = nanoid();
       const client: ConnectedClient = {
         id: clientId,
@@ -67,7 +67,7 @@ export class WsControlPlane {
       const token = url.searchParams.get("token") ?? this.extractBearerToken(req.headers.authorization);
 
       if (token) {
-        this.authenticateClient(client, token);
+        await this.authenticateClient(client, token);
       } else if (this.config.nodeEnv === "development") {
         // In development mode, allow unauthenticated connections
         client.authenticated = true;
@@ -178,6 +178,10 @@ export class WsControlPlane {
           timestamp: new Date().toISOString(),
           payload: { subscribed: true },
         });
+        // Push full session state to the newly-subscribed client
+        if (client.sessionId && this.onClientSubscribe) {
+          this.onClientSubscribe(client.sessionId, client.id);
+        }
         break;
       }
       case "terminal.subscribe": {
@@ -284,6 +288,15 @@ export class WsControlPlane {
         }
         break;
       }
+      case "ui.state": {
+        // Client is reporting a UI component state change (e.g. panel closed)
+        const update = msg.payload as { sessionId?: string; key?: string; value?: unknown } | undefined;
+        const uiSessionId = update?.sessionId ?? client.sessionId;
+        if (uiSessionId && update?.key && this.onUIStateUpdate) {
+          this.onUIStateUpdate(uiSessionId, update.key, update.value ?? null, client.id);
+        }
+        break;
+      }
       default: {
         this.send(client.ws, {
           type: "error",
@@ -292,6 +305,14 @@ export class WsControlPlane {
           payload: { message: `Unknown message type: ${msg.type}` },
         });
       }
+    }
+  }
+
+  /** Send an event to a specific client by ID */
+  sendToClient(clientId: string, event: WsEvent) {
+    const client = this.clients.get(clientId);
+    if (client && client.ws.readyState === 1) {
+      this.send(client.ws, event);
     }
   }
 
@@ -313,14 +334,33 @@ export class WsControlPlane {
     }
   }
 
-  /** Send a typed UI command to all connected clients (server → frontend) */
+  /** Send a typed UI command to all clients subscribed to the session (server → frontend) */
   sendUICommand(command: UICommandPayload, sessionId = "") {
-    this.broadcastAll({
+    const event: WsEvent = {
       type: "ui.command",
       sessionId,
       timestamp: new Date().toISOString(),
       payload: command,
-    });
+    };
+    // Use session-scoped broadcast if sessionId is provided, otherwise all clients
+    if (sessionId) {
+      this.broadcast(sessionId, event);
+    } else {
+      this.broadcastAll(event);
+    }
+  }
+
+  /**
+   * Broadcast to all clients subscribed to a session, excluding one client.
+   * Used to relay state changes to other clients without echoing back to the sender.
+   */
+  broadcastExcluding(sessionId: string, excludeClientId: string, event: WsEvent) {
+    for (const client of this.clients.values()) {
+      if (client.id === excludeClientId) continue;
+      if (client.sessionId === sessionId && client.ws.readyState === 1) {
+        this.send(client.ws, event);
+      }
+    }
   }
 
   /** Send terminal output data to all clients subscribed to this terminal */
@@ -347,6 +387,10 @@ export class WsControlPlane {
   onConsentApprove?: (requestId: string) => void;
   /** Callback for consent rejection from WS clients */
   onConsentReject?: (requestId: string, reason?: string) => void;
+  /** Callback when a client updates UI component state (panel open/close) */
+  onUIStateUpdate?: (sessionId: string, key: string, value: unknown | null, clientId: string) => void;
+  /** Callback when a client subscribes to a session — used to push full state */
+  onClientSubscribe?: (sessionId: string, clientId: string) => void;
   /** Callback when a screen-share start is requested via WS */
   onScreenShareStart?: (hostDeviceId: string, viewerDeviceIds?: string[]) => void;
   /** Callback when a screen-share stop is requested via WS */
@@ -390,14 +434,14 @@ export class WsControlPlane {
    * Used by tools/routes when the session is created server-side and the host
    * device needs to be told to begin capture.
    */
-  sendScreenShareStartRequest(sessionId: string, hostDeviceId: string) {
+  sendScreenShareStartRequest(sessionId: string, hostDeviceId: string, viewerDeviceIds?: string[]) {
     for (const client of this.clients.values()) {
       if (client.ws.readyState !== 1) continue;
       this.send(client.ws, {
         type: "screen-share:start-request" as WsEvent["type"],
         sessionId: "",
         timestamp: new Date().toISOString(),
-        payload: { sessionId, hostDeviceId },
+        payload: { sessionId, hostDeviceId, viewerDeviceIds },
       });
     }
   }

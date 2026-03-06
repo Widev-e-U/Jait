@@ -732,6 +732,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
           </div>
         </ScrollArea>
+
       </div>
 
       {/* Resize handle: tree ↔ editor */}

@@ -59,6 +59,13 @@ export {
   type Plan,
 } from "./chat-modes.js";
 export {
+  buildSystemPrompt,
+  getReminderInstructions,
+  promptRegistry,
+  type ModelEndpoint,
+  type IAgentPrompt,
+} from "./prompts/index.js";
+export {
   runAgentLoop,
   retryToolCall,
   buildToolSchemas,

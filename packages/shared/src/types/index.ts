@@ -14,10 +14,13 @@ export type {
   WsEvent,
   UICommandType,
   UICommandPayload,
+  UIStateKey,
+  UIStateUpdate,
   WorkspaceOpenData,
   WorkspaceCloseData,
   TerminalFocusData,
   FileHighlightData,
+  ScreenShareOpenData,
 } from "./message.js";
 export type { GatewayStatus, DeviceInfo } from "./gateway.js";
 

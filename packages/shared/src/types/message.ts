@@ -31,6 +31,8 @@ export type WsEventType =
   | "surface.connected"
   | "surface.disconnected"
   | "ui.command"
+  | "ui.state-sync"
+  | "ui.full-state"
   | "error";
 
 export interface WsEvent<T = unknown> {
@@ -45,7 +47,9 @@ export type UICommandType =
   | "workspace.open"
   | "workspace.close"
   | "terminal.focus"
-  | "file.highlight";
+  | "file.highlight"
+  | "screen-share.open"
+  | "screen-share.close";
 
 /** Payload sent inside a `ui.command` WsEvent */
 export interface UICommandPayload<T = Record<string, unknown>> {
@@ -69,4 +73,29 @@ export interface TerminalFocusData {
 export interface FileHighlightData {
   path: string;
   line?: number;
+}
+
+export interface ScreenShareOpenData {
+  sessionId: string;
+  targetDeviceId: string;
+}
+
+// ── UI state sync (client → server → other clients) ─────────────────
+
+/**
+ * Keys for UI component state that can be synced between client and server.
+ * Each key maps to a specific panel/component that the agent can control.
+ */
+export type UIStateKey =
+  | "workspace.panel"
+  | "screen-share.panel"
+  | "terminal.panel"
+  | "todo_list"
+  | "changed_files";
+
+/** Payload sent inside a `ui.state` client→server WS message */
+export interface UIStateUpdate {
+  sessionId: string;
+  key: UIStateKey;
+  value: unknown | null;  // null = delete / panel closed
 }

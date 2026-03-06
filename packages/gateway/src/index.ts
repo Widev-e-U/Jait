@@ -56,6 +56,7 @@ async function main() {
     }
     if (surface.type === "filesystem") {
       const snap = surface.snapshot();
+      const sid = snap.sessionId ?? "";
       const workspaceRoot = (snap.metadata as Record<string, unknown>)?.workspaceRoot ?? null;
       // Push a UI command to open the workspace panel
       ws.sendUICommand(
@@ -66,21 +67,38 @@ async function main() {
             workspaceRoot: workspaceRoot as string,
           },
         },
-        snap.sessionId ?? "",
+        sid,
       );
+      // Persist workspace state to DB so late-joining clients get it
+      if (sid) {
+        try {
+          sessionState.set(sid, { "workspace.panel": { open: true, remotePath: workspaceRoot, surfaceId: id } });
+        } catch (err) {
+          console.error("Failed to persist workspace state:", err);
+        }
+      }
     }
   };
 
   surfaceRegistry.onSurfaceStopped = (id, surface) => {
     if (surface.type === "filesystem") {
       const snap = surface.snapshot();
+      const sid = snap.sessionId ?? "";
       ws.sendUICommand(
         {
           command: "workspace.close",
           data: { surfaceId: id },
         },
-        snap.sessionId ?? "",
+        sid,
       );
+      // Clear workspace state from DB
+      if (sid) {
+        try {
+          sessionState.set(sid, { "workspace.panel": null });
+        } catch (err) {
+          console.error("Failed to clear workspace state:", err);
+        }
+      }
     }
   };
 
@@ -290,6 +308,40 @@ async function main() {
   };
   ws.onConsentReject = (requestId, reason) => {
     consentManager.reject(requestId, "click", reason);
+  };
+
+  // UI state sync (client → server → DB → other clients)
+  ws.onUIStateUpdate = (sid, key, value, clientId) => {
+    try {
+      sessionState.set(sid, { [key]: value });
+      // Broadcast to other session clients so they stay in sync
+      ws.broadcastExcluding(sid, clientId, {
+        type: "ui.state-sync",
+        sessionId: sid,
+        timestamp: new Date().toISOString(),
+        payload: { key, value },
+      });
+      console.log(`UI state synced: session=${sid} key=${key} value=${value === null ? "null" : "set"}`);
+    } catch (err) {
+      console.error(`Failed to persist UI state (${key}):`, err);
+    }
+  };
+
+  // Push full session state when a client subscribes to a session.
+  // This ensures every client gets the authoritative state on connect/reconnect.
+  ws.onClientSubscribe = (sid, clientId) => {
+    try {
+      const allState = sessionState.get(sid);
+      ws.sendToClient(clientId, {
+        type: "ui.full-state",
+        sessionId: sid,
+        timestamp: new Date().toISOString(),
+        payload: allState, // Record<string, unknown>
+      });
+      console.log(`Full state pushed to client ${clientId}: session=${sid} keys=${Object.keys(allState).join(", ") || "(empty)"}`);
+    } catch (err) {
+      console.error(`Failed to push full state to client ${clientId}:`, err);
+    }
   };
 
   // Screen-share WS start callback is no longer needed here — the start-request

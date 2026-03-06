@@ -68,7 +68,7 @@ export function registerScreenShareRoutes(app: FastifyInstance, deps: ScreenShar
       const session = screenShare.startShare({ hostDeviceId, viewerDeviceIds });
       ws.broadcastScreenShareState(session);
       // Tell the host device to begin screen capture
-      ws.sendScreenShareStartRequest(session.id, hostDeviceId);
+      ws.sendScreenShareStartRequest(session.id, hostDeviceId, viewerDeviceIds);
       return { ok: true, session };
     } catch (err) {
       return reply.code(400).send({

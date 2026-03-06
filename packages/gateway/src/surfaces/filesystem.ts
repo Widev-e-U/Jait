@@ -25,6 +25,13 @@ export class FileSystemSurface implements Surface {
   private guard: PathGuard | null = null;
   private _opCount = 0;
 
+  /**
+   * Backup map: absolute path → original file content.
+   * Stored before the first write/patch so that undo can restore the original.
+   * Only the *first* version is kept (subsequent edits don't overwrite the backup).
+   */
+  private _backups = new Map<string, string | null>();
+
   onOutput?: (data: string) => void;
   onStateChange?: (state: SurfaceState) => void;
 
@@ -86,6 +93,17 @@ export class FileSystemSurface implements Surface {
     const abs = await this.guard!.validateWithSymlinkCheck(filePath);
     this._opCount++;
 
+    // Save backup of original content (only on first modification)
+    if (!this._backups.has(abs)) {
+      try {
+        const original = await readFile(abs, "utf-8");
+        this._backups.set(abs, original);
+      } catch {
+        // File didn't exist before — backup is null (undo = delete)
+        this._backups.set(abs, null);
+      }
+    }
+
     // Ensure parent directory exists
     await mkdir(dirname(abs), { recursive: true });
     await writeFile(abs, content, "utf-8");
@@ -100,6 +118,11 @@ export class FileSystemSurface implements Surface {
     const original = await readFile(abs, "utf-8");
     if (!original.includes(search)) {
       return { matched: false };
+    }
+
+    // Save backup of original content (only on first modification)
+    if (!this._backups.has(abs)) {
+      this._backups.set(abs, original);
     }
 
     const patched = original.replace(search, replace);
@@ -141,6 +164,63 @@ export class FileSystemSurface implements Surface {
   /** Check if a path is within workspace boundary */
   isPathAllowed(filePath: string): boolean {
     return this.guard?.isAllowed(filePath) ?? false;
+  }
+
+  /**
+   * Restore a file to its pre-modification state.
+   * Returns true if a backup existed and was restored, false otherwise.
+   */
+  async restore(filePath: string): Promise<boolean> {
+    this.ensureRunning();
+    const abs = await this.guard!.validateWithSymlinkCheck(filePath);
+    if (!this._backups.has(abs)) return false;
+
+    const backup = this._backups.get(abs)!;
+    if (backup === null) {
+      // File was newly created — remove it
+      const { unlink } = await import("node:fs/promises");
+      try { await unlink(abs); } catch { /* already gone */ }
+    } else {
+      await writeFile(abs, backup, "utf-8");
+    }
+    this._backups.delete(abs);
+    this.onOutput?.(`restored ${relative(this.guard!.workspaceRoot, abs)}`);
+    return true;
+  }
+
+  /** Check whether we have a backup for a given file path */
+  hasBackup(filePath: string): boolean {
+    if (!this.guard) return false;
+    try {
+      const abs = this.guard.validate(filePath);
+      return this._backups.has(abs);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Get the backup (original) content for a file.
+   * Returns the original string, null if the file was newly created, or undefined if no backup exists.
+   */
+  getBackup(filePath: string): string | null | undefined {
+    if (!this.guard) return undefined;
+    try {
+      const abs = this.guard.validate(filePath);
+      if (!this._backups.has(abs)) return undefined;
+      return this._backups.get(abs) ?? null;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Clear the backup for a file (e.g. after user accepts changes). */
+  clearBackup(filePath: string): void {
+    if (!this.guard) return;
+    try {
+      const abs = this.guard.validate(filePath);
+      this._backups.delete(abs);
+    } catch { /* ignore */ }
   }
 
   private ensureRunning() {

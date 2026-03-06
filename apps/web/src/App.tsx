@@ -31,8 +31,8 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, FilesChanged, MessageQueue } from '@/components/chat'
-import type { ReferencedFile, PromptInputHandle } from '@/components/chat'
+import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
+import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
@@ -42,7 +42,7 @@ import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
-import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle } from '@/components/workspace'
+import { WorkspacePanel, workspaceLanguageForPath, DiffView, type WorkspaceFile, type WorkspacePanelHandle } from '@/components/workspace'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode } from '@/hooks/useAuth'
@@ -95,6 +95,12 @@ function App() {
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
   const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
   const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string }[]>([])
+  const [activeDiff, setActiveDiff] = useState<{
+    filePath: string
+    originalContent: string
+    modifiedContent: string
+    language: string
+  } | null>(null)
   const isDragging = useRef(false)
   const workspaceRef = useRef<WorkspacePanelHandle>(null)
   const promptInputRef = useRef<PromptInputHandle>(null)
@@ -123,31 +129,6 @@ function App() {
     document.addEventListener('mouseup', onUp)
   }, [screenShareChatWidth])
 
-  const handleOpenWorkspace = useCallback(async () => {
-    if (showWorkspace) {
-      // Already open — close it
-      setShowWorkspace(false)
-      return
-    }
-    // Prompt for a directory first — only show workspace if user selects one
-    const w = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }
-    if (!w.showDirectoryPicker) {
-      window.alert('Directory picker is not supported in this browser.')
-      return
-    }
-    try {
-      const dirHandle = await w.showDirectoryPicker()
-      // User picked a folder — open the workspace panel and pass the handle
-      setShowWorkspace(true)
-      // Small delay so the panel mounts, then trigger scan with the handle
-      setTimeout(() => {
-        workspaceRef.current?.openDirectory(dirHandle)
-      }, 50)
-    } catch {
-      // User cancelled the picker — do nothing
-    }
-  }, [showWorkspace])
-
   const {
     user,
     token,
@@ -173,6 +154,7 @@ function App() {
     isLoading,
     remainingPrompts,
     error,
+    hitMaxRounds,
     pendingPlan,
     todoList,
     changedFiles,
@@ -181,6 +163,7 @@ function App() {
     restartFromMessage,
     cancelRequest,
     clearMessages,
+    continueChat,
     executePlan,
     rejectPlan,
     enqueueMessage,
@@ -189,6 +172,10 @@ function App() {
     rejectFile,
     acceptAllFiles,
     rejectAllFiles,
+    setTodoList,
+    addChangedFile,
+    setChangedFiles,
+    setOnChangedFilesSync,
   } = useChat(activeSessionId, token, onLoginRequired)
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals()
   const { provider, model } = useModelInfo()
@@ -196,19 +183,40 @@ function App() {
   // ── Screen share (always active so Electron auto-registers) ───────
   const screenShare = useScreenShare({ token })
 
-  // ── UI command channel (server → frontend via WebSocket) ──────────
+  // ── UI command channel (server ↔ frontend via WebSocket) ──────────
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
 
-  // ── Persistent session state for workspace panel ──────────────────
+  // Track whether the WS has delivered an authoritative full-state push.
+  // When true, the REST-based restore effects are skipped to avoid races.
+  const wsFullStateReceivedRef = useRef(false)
+
+  // Reset the flag on session switch so the next full-state push takes effect
+  useEffect(() => {
+    wsFullStateReceivedRef.current = false
+  }, [activeSessionId])
+
+  // ── Persistent session state for panels ───────────────────────────
   interface WorkspacePanelState { open: boolean; remotePath: string; surfaceId?: string }
   const [savedWorkspace, setSavedWorkspace] = useSessionState<WorkspacePanelState>(
     activeSessionId, 'workspace.panel', token,
   )
+  const [savedScreenShare, setSavedScreenShare] = useSessionState<{ open: boolean }>(
+    activeSessionId, 'screen-share.panel', token,
+  )
+  const [savedTerminal, setSavedTerminal] = useSessionState<{ open: boolean }>(
+    activeSessionId, 'terminal.panel', token,
+  )
 
-  // Restore workspace from persisted session state on mount / session switch
+  // ── Persistent session state for todos & changed files ────────────
+  type SavedTodo = { id: number; title: string; status: 'not-started' | 'in-progress' | 'completed' }
+  const [savedTodos] = useSessionState<SavedTodo[]>(activeSessionId, 'todo_list', token)
+  type SavedChangedFile = { path: string; name: string }
+  const [savedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
+
+  // Restore panel state from REST fallback (only if WS full-state hasn't arrived yet)
   useEffect(() => {
+    if (wsFullStateReceivedRef.current) return // WS already delivered authoritative state
     if (!savedWorkspace) return
-    // Only restore if we don't already have an active workspace from WS
     if (activeWorkspace) return
     if (savedWorkspace.open && savedWorkspace.remotePath) {
       setActiveWorkspace({
@@ -218,17 +226,163 @@ function App() {
     }
   }, [savedWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  useUICommands({
-    'workspace.open': useCallback((data: WorkspaceOpenData) => {
-      setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
-      setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId })
-    }, [setSavedWorkspace]),
-    'workspace.close': useCallback(() => {
-      setActiveWorkspace(null)
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedScreenShare?.open) setShowScreenShare(true)
+  }, [savedScreenShare]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedTerminal?.open) setShowTerminal(true)
+  }, [savedTerminal]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Restore todos and changed files (REST fallback)
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedTodos && savedTodos.length > 0) setTodoList(savedTodos)
+  }, [savedTodos, setTodoList])
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedChangedFiles && savedChangedFiles.length > 0) {
+      for (const f of savedChangedFiles) addChangedFile(f.path, f.name)
+    }
+  }, [savedChangedFiles, addChangedFile])
+
+  // ── Cross-client state sync handler ───────────────────────────────
+  const handleStateSync = useCallback((key: string, value: unknown) => {
+    switch (key) {
+      case 'workspace.panel': {
+        if (!value) {
+          setShowWorkspace(false)
+          setActiveWorkspace(null)
+        } else {
+          const v = value as WorkspacePanelState
+          if (v.open) {
+            setShowWorkspace(true)
+            if (v.remotePath) setActiveWorkspace({ surfaceId: v.surfaceId ?? '', workspaceRoot: v.remotePath })
+          } else {
+            setShowWorkspace(false)
+          }
+        }
+        break
+      }
+      case 'screen-share.panel':
+        if (!value) setShowScreenShare(false)
+        else {
+          const v = value as { open?: boolean }
+          setShowScreenShare(v.open !== false)
+        }
+        break
+      case 'terminal.panel':
+        if (!value) setShowTerminal(false)
+        else {
+          const v = value as { open?: boolean }
+          setShowTerminal(v.open !== false)
+        }
+        break
+      case 'todo_list':
+        if (Array.isArray(value)) setTodoList(value)
+        break
+      case 'file_changed': {
+        const fc = value as { path?: string; name?: string } | null
+        if (fc?.path) addChangedFile(fc.path, fc.name ?? fc.path.split('/').pop() ?? fc.path)
+        break
+      }
+      case 'changed_files': {
+        // Full state sync of all changed files (including accept/reject decisions)
+        if (Array.isArray(value)) {
+          setChangedFiles(value as ChangedFile[])
+        } else if (value === null) {
+          setChangedFiles([])
+        }
+        break
+      }
+    }
+  }, [setTodoList, addChangedFile, setChangedFiles])
+
+  // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
+  const handleFullState = useCallback((state: Record<string, unknown>) => {
+    // Mark that we've received authoritative state from WS.
+    // This prevents the REST-based restore effects from overriding.
+    wsFullStateReceivedRef.current = true
+
+    // The backend pushes ALL session state keys on subscribe.
+    // Keys that are ABSENT mean that panel/feature is off — we must handle both
+    // present and absent keys to fully hydrate.
+
+    // Workspace panel
+    const wp = state['workspace.panel'] as WorkspacePanelState | null | undefined
+    if (wp && wp.open) {
+      setShowWorkspace(true)
+      if (wp.remotePath) setActiveWorkspace({ surfaceId: wp.surfaceId ?? '', workspaceRoot: wp.remotePath })
+    } else {
       setShowWorkspace(false)
-      setSavedWorkspace(null)
-    }, [setSavedWorkspace]),
+      setActiveWorkspace(null)
+    }
+
+    // Screen share panel
+    const sp = state['screen-share.panel'] as { open?: boolean } | null | undefined
+    if (sp && sp.open !== false) {
+      setShowScreenShare(true)
+    } else {
+      setShowScreenShare(false)
+    }
+
+    // Terminal panel
+    const tp = state['terminal.panel'] as { open?: boolean } | null | undefined
+    if (tp && tp.open !== false) {
+      setShowTerminal(true)
+    } else {
+      setShowTerminal(false)
+    }
+
+    // Todo list
+    const tl = state['todo_list']
+    if (Array.isArray(tl) && tl.length > 0) {
+      setTodoList(tl)
+    }
+
+    // Changed files
+    const cf = state['changed_files']
+    if (Array.isArray(cf)) {
+      setChangedFiles(cf as ChangedFile[])
+    }
+  }, [setTodoList, setChangedFiles])
+
+  const { sendUIState } = useUICommands({
+    sessionId: activeSessionId,
+    token,
+    onStateSync: handleStateSync,
+    onFullState: handleFullState,
+    listeners: {
+      'workspace.open': useCallback((data: WorkspaceOpenData) => {
+        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
+        setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId })
+      }, [setSavedWorkspace]),
+      'workspace.close': useCallback(() => {
+        setActiveWorkspace(null)
+        setShowWorkspace(false)
+        setSavedWorkspace(null)
+      }, [setSavedWorkspace]),
+      'screen-share.open': useCallback(() => {
+        setShowScreenShare(true)
+        setSavedScreenShare({ open: true })
+      }, [setSavedScreenShare]),
+      'screen-share.close': useCallback(() => {
+        setShowScreenShare(false)
+        setSavedScreenShare(null)
+      }, [setSavedScreenShare]),
+    },
   })
+
+  // Register broadcast callback: when file decisions change, sync to other clients
+  useEffect(() => {
+    setOnChangedFilesSync((files: ChangedFile[]) => {
+      sendUIState('changed_files', files, activeSessionId)
+    })
+    return () => setOnChangedFilesSync(null)
+  }, [sendUIState, activeSessionId, setOnChangedFilesSync])
 
   useEffect(() => {
     localStorage.setItem('showSessionsSidebar', showSidebar ? 'true' : 'false')
@@ -242,11 +396,126 @@ function App() {
     localStorage.setItem('chatMode', chatMode)
   }, [chatMode])
 
+  // ── Synced panel controllers (local state + WS + DB) ──────────────
+  // Use these instead of raw setShowX for user-initiated open/close.
+
+  const openScreenSharePanel = useCallback(() => {
+    setShowScreenShare(true)
+    setSavedScreenShare({ open: true })
+    sendUIState('screen-share.panel', { open: true }, activeSessionId)
+  }, [setSavedScreenShare, sendUIState, activeSessionId])
+
+  const closeScreenSharePanel = useCallback(() => {
+    setShowScreenShare(false)
+    setSavedScreenShare(null)
+    sendUIState('screen-share.panel', null, activeSessionId)
+  }, [setSavedScreenShare, sendUIState, activeSessionId])
+
+  const openTerminalPanel = useCallback(() => {
+    setShowTerminal(true)
+    setSavedTerminal({ open: true })
+    sendUIState('terminal.panel', { open: true }, activeSessionId)
+  }, [setSavedTerminal, sendUIState, activeSessionId])
+
+  const closeTerminalPanel = useCallback(() => {
+    setShowTerminal(false)
+    setSavedTerminal(null)
+    sendUIState('terminal.panel', null, activeSessionId)
+  }, [setSavedTerminal, sendUIState, activeSessionId])
+
+  const closeWorkspacePanel = useCallback(() => {
+    setShowWorkspace(false)
+    setActiveWorkspace(null)
+    setSavedWorkspace(null)
+    sendUIState('workspace.panel', null, activeSessionId)
+  }, [setSavedWorkspace, sendUIState, activeSessionId])
+
+  const handleOpenWorkspace = useCallback(async () => {
+    if (showWorkspace) {
+      // Already open — close it
+      closeWorkspacePanel()
+      return
+    }
+
+    // If there's an existing remote workspace, just reopen the panel
+    if (activeWorkspace) {
+      setShowWorkspace(true)
+      const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId }
+      setSavedWorkspace(state)
+      sendUIState('workspace.panel', state, activeSessionId)
+      return
+    }
+
+    // Helper: create a filesystem surface on the gateway so ALL clients
+    // can browse the directory remotely (enables cross-device sync).
+    const openRemoteWorkspaceOnGateway = async (dirPath: string) => {
+      const res = await fetch(`${API_URL}/api/workspace/open`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: dirPath, sessionId: activeSessionId }),
+      })
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({ message: 'Unknown error' }))
+        throw new Error((err as { message?: string }).message ?? 'Failed to open workspace')
+      }
+      // The gateway broadcasts `workspace.open` via WS and persists state.
+      // All clients (including this one) will receive it and hydrate automatically.
+    }
+
+    // ── Electron: use native OS dialog → absolute path → POST to gateway ──
+    if (window.jaitDesktop?.pickDirectory) {
+      try {
+        const result = await window.jaitDesktop.pickDirectory()
+        if (!result) return // user cancelled
+        await openRemoteWorkspaceOnGateway(result.path)
+      } catch (err) {
+        console.error('Failed to open workspace via Electron picker:', err)
+      }
+      return
+    }
+
+    // ── Browser: try showDirectoryPicker for local-only fallback,
+    //    but also POST to gateway so other clients can browse remotely.
+    const w = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }
+    if (!w.showDirectoryPicker) {
+      // No directory picker available — prompt for a server-side path
+      const dirPath = window.prompt('Enter the absolute directory path on the server:')
+      if (!dirPath) return
+      try {
+        await openRemoteWorkspaceOnGateway(dirPath)
+      } catch (err) {
+        window.alert(`Failed to open workspace: ${err instanceof Error ? err.message : 'Unknown error'}`)
+      }
+      return
+    }
+
+    try {
+      const dirHandle = await w.showDirectoryPicker()
+      // User picked a folder — open the workspace panel with the local handle.
+      // NOTE: In browser mode we can't get the absolute path, so we open
+      // locally. Cross-device sync requires Electron or manual path entry.
+      setShowWorkspace(true)
+      setSavedWorkspace({ open: true, remotePath: '' })
+      sendUIState('workspace.panel', { open: true }, activeSessionId)
+      setTimeout(() => {
+        workspaceRef.current?.openDirectory(dirHandle)
+      }, 50)
+    } catch {
+      // User cancelled the picker — do nothing
+    }
+  }, [showWorkspace, activeWorkspace, closeWorkspacePanel, setSavedWorkspace, sendUIState, activeSessionId])
+
   // Auto-open workspace panel when a filesystem surface starts
   useEffect(() => {
     if (!activeWorkspace) return
     if (!showWorkspace) setShowWorkspace(true)
   }, [activeWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-open workspace panel when the agent modifies files
+  useEffect(() => {
+    if (changedFiles.length === 0) return
+    if (!showWorkspace) setShowWorkspace(true)
+  }, [changedFiles.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setThemeMode(settings.theme)
@@ -355,29 +624,27 @@ function App() {
 
   const handleOpenTerminalFromToolCall = useCallback(async (terminalId: string | null) => {
     setCurrentView('chat')
-    setShowTerminal(true)
+    openTerminalPanel()
     await ensureActiveTerminal(terminalId)
-  }, [ensureActiveTerminal])
+  }, [ensureActiveTerminal, openTerminalPanel])
 
   const handleToggleTerminal = useCallback(async () => {
     if (showTerminal) {
-      setShowTerminal(false)
+      closeTerminalPanel()
       return
     }
     setCurrentView('chat')
-    setShowTerminal(true)
+    openTerminalPanel()
     await ensureActiveTerminal()
-  }, [showTerminal, ensureActiveTerminal])
+  }, [showTerminal, ensureActiveTerminal, openTerminalPanel, closeTerminalPanel])
 
   const handleKillTerminal = useCallback(async (id: string) => {
     const isLastTerminal = terminals.length === 1 && terminals[0]?.id === id
     await killTerminal(id)
     if (isLastTerminal) {
-      setShowTerminal(false)
+      closeTerminalPanel()
     }
-  }, [terminals, killTerminal])
-
-
+  }, [terminals, killTerminal, closeTerminalPanel])
 
   const mergeWorkspaceFiles = useCallback((incoming: WorkspaceFile[]) => {
     if (incoming.length === 0) return
@@ -392,6 +659,89 @@ function App() {
     })
     setActiveWorkspaceFileId((prev) => prev ?? incoming[0]?.id ?? null)
   }, [])
+
+  /** Open a changed file in the diff view (fetches backup + current content) */
+  const handleChangedFileClick = useCallback(async (filePath: string) => {
+    try {
+      const headers: Record<string, string> = {}
+      if (token) headers['Authorization'] = `Bearer ${token}`
+
+      // Try to fetch the backup (original) content from the gateway
+      const backupRes = await fetch(
+        `${API_URL}/api/workspace/backup?path=${encodeURIComponent(filePath)}`,
+        { headers },
+      )
+
+      if (backupRes.ok) {
+        const data = await backupRes.json() as {
+          path: string
+          originalContent: string | null
+          currentContent: string
+        }
+        const name = filePath.split(/[\/\\]/).pop() ?? filePath
+        setActiveDiff({
+          filePath: data.path,
+          originalContent: data.originalContent ?? '',
+          modifiedContent: data.currentContent,
+          language: workspaceLanguageForPath(name),
+        })
+        if (!showWorkspace) setShowWorkspace(true)
+        return
+      }
+
+      // No backup — fall back to opening the file normally in the workspace editor
+      const file = await workspaceRef.current?.readFileByPath(filePath)
+      if (file) {
+        mergeWorkspaceFiles([file])
+        setActiveWorkspaceFileId(file.id)
+        if (!showWorkspace) setShowWorkspace(true)
+        return
+      }
+      // Fallback: fetch from the workspace REST API
+      const readRes = await fetch(
+        `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}`,
+        { headers },
+      )
+      if (!readRes.ok) return
+      const readData = await readRes.json() as { path: string; content: string }
+      const name = filePath.split('/').pop() ?? filePath
+      const wf: WorkspaceFile = {
+        id: `changed-${filePath}`,
+        name,
+        path: readData.path,
+        content: readData.content,
+        language: workspaceLanguageForPath(name),
+      }
+      mergeWorkspaceFiles([wf])
+      setActiveWorkspaceFileId(wf.id)
+      if (!showWorkspace) setShowWorkspace(true)
+    } catch {
+      // silently ignore
+    }
+  }, [token, showWorkspace, mergeWorkspaceFiles])
+
+  /** Close the diff view */
+  const handleDiffClose = useCallback(() => {
+    setActiveDiff(null)
+  }, [])
+
+  /** Apply the merged diff result — write to server and clear backup */
+  const handleDiffApply = useCallback(async (resultContent: string) => {
+    if (!activeDiff) return
+    const filePath = activeDiff.filePath
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      await fetch(`${API_URL}/api/workspace/apply-diff`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ path: filePath, content: resultContent }),
+      })
+    } catch { /* ignore */ }
+    // Mark the file as accepted in the changed-files list, then close diff view
+    acceptFile(filePath)
+    setActiveDiff(null)
+  }, [activeDiff, token, acceptFile])
 
   const handleFileDrop = useCallback(async (dropped: FileList | File[]) => {
     const list = Array.from(dropped)
@@ -470,7 +820,15 @@ ${file.content.slice(0, 2000)}
 \`\`\``)
         .join('\n')}`
       : inputValue.trim()
-    sendMessage(promptWithReferences, { token, sessionId: sid, mode: chatMode, onLoginRequired: () => setShowLoginDialog(true) })
+    const displayContent = inputValue.trim()
+    const refs = chipFiles?.length ? chipFiles.map(f => ({ path: f.path, name: f.name })) : undefined
+    sendMessage(promptWithReferences, {
+      token,
+      sessionId: sid,
+      mode: chatMode,
+      onLoginRequired: () => setShowLoginDialog(true),
+      ...(refs ? { displayContent, referencedFiles: refs } : {}),
+    })
     setInputValue('')
   }
 
@@ -786,7 +1144,7 @@ ${file.content.slice(0, 2000)}
                   variant={showScreenShare ? 'secondary' : 'ghost'}
                   size="sm"
                   className="h-6 text-[11px] px-2"
-                  onClick={() => setShowScreenShare(s => !s)}
+                  onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                 >
                   <Cast className="h-3 w-3 mr-1" />
                   Share
@@ -830,7 +1188,7 @@ ${file.content.slice(0, 2000)}
               </aside>
             )}
 
-            {showWorkspace && (
+            {showWorkspace && !activeDiff && (
               <WorkspacePanel
                 ref={workspaceRef}
                 autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
@@ -843,13 +1201,26 @@ ${file.content.slice(0, 2000)}
               />
             )}
 
+            {showWorkspace && activeDiff && (
+              <aside className="flex-[4] min-w-0 border-r bg-background overflow-hidden flex flex-col">
+                <DiffView
+                  filePath={activeDiff.filePath}
+                  originalContent={activeDiff.originalContent}
+                  modifiedContent={activeDiff.modifiedContent}
+                  language={activeDiff.language}
+                  onClose={handleDiffClose}
+                  onApply={(result) => { void handleDiffApply(result) }}
+                />
+              </aside>
+            )}
+
             {showScreenShare && (
               <aside className="flex-[3] min-w-0 border-r bg-background overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between h-9 px-3 border-b bg-muted/30 shrink-0">
                   <span className="text-xs font-medium flex items-center gap-1.5">
                     <Cast className="h-3 w-3" /> Screen Share
                   </span>
-                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setShowScreenShare(false)}>
+                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closeScreenSharePanel}>
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
@@ -900,6 +1271,8 @@ ${file.content.slice(0, 2000)}
                       messageFromEnd={messages.length - 1 - idx}
                       role={msg.role}
                       content={msg.content}
+                      displayContent={msg.displayContent}
+                      referencedFiles={msg.referencedFiles}
                       thinking={msg.thinking}
                       thinkingDuration={msg.thinkingDuration}
                       toolCalls={msg.toolCalls}
@@ -909,13 +1282,25 @@ ${file.content.slice(0, 2000)}
                       onEditMessage={handleEditPreviousMessage}
                     />
                   ))}
-                  {todoList.length > 0 && (
-                    <TodoList items={todoList} className="mx-auto max-w-3xl mt-2" />
-                  )}
                 </Conversation>
 
                 <div className={`shrink-0 py-3 ${(showWorkspace || showScreenShare) ? 'px-3' : 'px-4'}`}>
                   <div className={`mx-auto space-y-1.5 ${(showWorkspace || showScreenShare) ? 'max-w-none' : 'max-w-3xl'}`}>
+                    {todoList.length > 0 && (
+                      <TodoList items={todoList} />
+                    )}
+                    {hitMaxRounds && !isLoading && (
+                      <div className="flex items-center justify-center gap-2 py-1.5">
+                        <button
+                          onClick={() => continueChat({ token, sessionId: activeSessionId })}
+                          className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-accent transition-colors"
+                        >
+                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                          Continue
+                        </button>
+                        <span className="text-[11px] text-muted-foreground">Agent stopped — hit the tool execution limit</span>
+                      </div>
+                    )}
                     <ConsentQueue
                       compact
                       sessionId={activeSessionId}
@@ -941,6 +1326,7 @@ ${file.content.slice(0, 2000)}
                         onReject={rejectFile}
                         onAcceptAll={acceptAllFiles}
                         onRejectAll={rejectAllFiles}
+                        onFileClick={handleChangedFileClick}
                       />
                     )}
                     {messageQueue.length > 0 && (
@@ -1009,7 +1395,7 @@ ${file.content.slice(0, 2000)}
                 onKill={handleKillTerminal}
               />
               <button
-                onClick={() => setShowTerminal(false)}
+                onClick={closeTerminalPanel}
                 className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                 aria-label="Close terminal"
               >

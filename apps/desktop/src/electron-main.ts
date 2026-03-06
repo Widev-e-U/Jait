@@ -164,6 +164,21 @@ ipcMain.handle(
   },
 );
 
+// Directory picker — opens native OS folder dialog and returns the absolute path
+ipcMain.handle("desktop:pick-directory", async () => {
+  const { dialog } = await import("electron");
+  const win = mainWindow ?? BrowserWindow.getAllWindows()[0] ?? null;
+  const opts: Electron.OpenDialogOptions = {
+    properties: ["openDirectory"],
+    title: "Open Workspace Directory",
+  };
+  const result = win
+    ? await dialog.showOpenDialog(win, opts)
+    : await dialog.showOpenDialog(opts);
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return { path: result.filePaths[0] };
+});
+
 // ── App lifecycle ─────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   // Set up CSP for screen sharing

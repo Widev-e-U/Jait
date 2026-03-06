@@ -1,11 +1,32 @@
-import { useEffect, useRef, useState } from 'react'
+import { useMemo, useEffect, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy, Pencil, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
+
+/** Parse "Referenced files:" block from message content and return clean text + file paths. */
+function parseReferencedFiles(content: string): { text: string; files: { path: string; name: string }[] } {
+  const marker = '\nReferenced files:\n'
+  const idx = content.indexOf(marker)
+  if (idx === -1) return { text: content, files: [] }
+
+  const text = content.slice(0, idx).trimEnd()
+  const refBlock = content.slice(idx + marker.length)
+  const files: { path: string; name: string }[] = []
+  // Each file starts with "- path/to/file"
+  for (const line of refBlock.split('\n')) {
+    const m = line.match(/^- (.+)$/)
+    if (m) {
+      const path = m[1].trim()
+      files.push({ path, name: path.split('/').pop() ?? path })
+    }
+  }
+  return { text, files }
+}
 
 interface MessageProps {
   messageId?: string
@@ -13,6 +34,10 @@ interface MessageProps {
   messageFromEnd?: number
   role: 'user' | 'assistant'
   content: string
+  /** Clean display text (without appended file contents). Falls back to parsing content. */
+  displayContent?: string
+  /** Files the user referenced via @ chips — rendered as inline badges. */
+  referencedFiles?: { path: string; name: string }[]
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
@@ -33,6 +58,8 @@ export function Message({
   messageFromEnd,
   role,
   content,
+  displayContent: displayContentProp,
+  referencedFiles: referencedFilesProp,
   thinking,
   thinkingDuration,
   toolCalls,
@@ -42,9 +69,22 @@ export function Message({
   onEditMessage,
 }: MessageProps) {
   const isUser = role === 'user'
+
+  // Resolve display text & referenced files:
+  // - If props carry them, use directly (new messages)
+  // - Otherwise parse from content (historical messages)
+  const { userDisplayText, userFiles } = useMemo(() => {
+    if (!isUser) return { userDisplayText: content, userFiles: [] as { path: string; name: string }[] }
+    if (displayContentProp) {
+      return { userDisplayText: displayContentProp, userFiles: referencedFilesProp ?? [] }
+    }
+    const parsed = parseReferencedFiles(content)
+    return { userDisplayText: parsed.text, userFiles: parsed.files }
+  }, [isUser, content, displayContentProp, referencedFilesProp])
+
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
-  const [draft, setDraft] = useState(content)
+  const [draft, setDraft] = useState(userDisplayText)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
   const [editWidthPx, setEditWidthPx] = useState<number | null>(null)
@@ -58,8 +98,8 @@ export function Message({
   }, [])
 
   useEffect(() => {
-    if (!isEditing) setDraft(content)
-  }, [content, isEditing])
+    if (!isEditing) setDraft(userDisplayText)
+  }, [userDisplayText, isEditing])
 
   /** Build copyable text including tool calls when present */
   const buildCopyText = (): string => {
@@ -261,10 +301,24 @@ export function Message({
             </div>
           ) : isUser ? (
             <div ref={userBubbleRef} className={cn(
-              'relative rounded-lg px-4 py-3 whitespace-pre-wrap bg-muted',
+              'relative rounded-lg px-4 py-3 bg-muted',
               compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
             )}>
-              {content}
+              <div className="whitespace-pre-wrap">{userDisplayText}</div>
+              {userFiles.length > 0 && (
+                <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-foreground/5">
+                  {userFiles.map((f) => (
+                    <span
+                      key={f.path}
+                      className="inline-flex items-center gap-1 text-[12px] leading-tight px-1.5 py-0.5 rounded bg-background/60 text-muted-foreground select-none"
+                      title={f.path}
+                    >
+                      <FileIcon filename={f.name} className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate max-w-[180px]">{f.name}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
               {renderActions()}
             </div>
           ) : (

@@ -9,6 +9,8 @@ import type { AuditWriter } from "../services/audit.js";
 import type { ToolResult } from "../tools/contracts.js";
 import type { MemoryService } from "../memory/contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
+import type { WsControlPlane } from "../ws.js";
+import type { SessionStateService } from "../services/session-state.js";
 import { resolveWorkspaceRoot } from "../tools/core/get-fs.js";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -28,8 +30,8 @@ import {
   type ChatMode,
   type PlannedAction,
   isValidChatMode,
-  getSystemPromptForMode,
 } from "../tools/chat-modes.js";
+import { buildSystemPrompt, type ModelEndpoint } from "../tools/prompts/index.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -314,6 +316,8 @@ export interface ChatRouteDeps {
   surfaceRegistry?: SurfaceRegistry;
   audit?: AuditWriter;
   memoryService?: MemoryService;
+  ws?: WsControlPlane;
+  sessionState?: SessionStateService;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -337,6 +341,8 @@ export function registerChatRoutes(
   let audit: AuditWriter | undefined;
   let toolExecutor: ChatRouteDeps["toolExecutor"] | undefined;
   let memoryService: MemoryService | undefined;
+  let ws: WsControlPlane | undefined;
+  let sessionStateService: SessionStateService | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -348,6 +354,8 @@ export function registerChatRoutes(
     audit = deps.audit;
     toolExecutor = deps.toolExecutor;
     memoryService = deps.memoryService;
+    ws = deps.ws;
+    sessionStateService = deps.sessionState;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
@@ -517,16 +525,22 @@ export function registerChatRoutes(
       Connection: "keep-alive",
     });
 
+    // Build model endpoint for prompt resolution
+    const modelEndpoint: ModelEndpoint = {
+      model: llmRuntime.openaiModel,
+      baseUrl: llmRuntime.openaiBaseUrl,
+    };
+
     // Build conversation history (hydrate from DB if needed)
     hydrateSession(sessionId);
     if (!sessionHistory.has(sessionId)) {
       sessionHistory.set(sessionId, [
-        { role: "system", content: getSystemPromptForMode(chatMode) },
+        { role: "system", content: buildSystemPrompt(chatMode, modelEndpoint) },
       ]);
     } else {
-      // Update system prompt if mode changed mid-session
+      // Update system prompt if mode/model changed mid-session
       const h = sessionHistory.get(sessionId)!;
-      const modePrompt = getSystemPromptForMode(chatMode);
+      const modePrompt = buildSystemPrompt(chatMode, modelEndpoint);
       if (h[0]?.role === "system" && h[0].content !== modePrompt) {
         h[0] = { role: "system", content: modePrompt };
       }
@@ -541,6 +555,7 @@ export function registerChatRoutes(
 
     let fullContent = "";
     let partialToolCalls: PersistedToolCall[] = [];
+    let hitMaxRounds = false;
     activeStreams.add(sessionId);
 
     let clientDisconnected = false;
@@ -574,6 +589,47 @@ export function registerChatRoutes(
         const onEvent = (event: AgentLoopEvent) => {
           emitToSubscribers(sessionId, event as StreamEvent);
           safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+
+          // ── Cross-client sync: persist & broadcast state changes ──
+          const ev = event as Record<string, unknown>;
+
+          // Broadcast todo list updates to all session clients and persist to DB
+          if (ev.type === "todo_list" && Array.isArray(ev.items)) {
+            if (sessionStateService) {
+              try { sessionStateService.set(sessionId, { "todo_list": ev.items }); } catch { /* ignore */ }
+            }
+            if (ws) {
+              ws.broadcast(sessionId, {
+                type: "ui.state-sync",
+                sessionId,
+                timestamp: new Date().toISOString(),
+                payload: { key: "todo_list", value: ev.items },
+              });
+            }
+          }
+
+          // Broadcast file change events and persist cumulative list
+          if (ev.type === "file_changed" && typeof ev.path === "string") {
+            if (ws) {
+              ws.broadcast(sessionId, {
+                type: "ui.state-sync",
+                sessionId,
+                timestamp: new Date().toISOString(),
+                payload: { key: "file_changed", value: { path: ev.path, name: ev.name } },
+              });
+            }
+            // Persist cumulative changed files list
+            if (sessionStateService) {
+              try {
+                const existing = sessionStateService.get(sessionId, ["changed_files"]);
+                const files = Array.isArray(existing["changed_files"]) ? existing["changed_files"] as { path: string; name: string }[] : [];
+                if (!files.some((f: { path: string }) => f.path === ev.path)) {
+                  files.push({ path: ev.path as string, name: (ev.name as string) ?? "" });
+                  sessionStateService.set(sessionId, { "changed_files": files });
+                }
+              } catch { /* ignore */ }
+            }
+          }
         };
         const result = await runAgentLoop(
           {
@@ -598,6 +654,7 @@ export function registerChatRoutes(
         );
         fullContent = result.content;
         partialToolCalls = result.executedToolCalls as unknown as PersistedToolCall[];
+        hitMaxRounds = result.hitMaxRounds;
         // Track executed tool calls for retry API
         sessionExecutedToolCalls.set(sessionId, result.executedToolCalls);
         // Store plan if plan mode produced one
@@ -675,6 +732,7 @@ export function registerChatRoutes(
       session_id: sessionId,
       prompt_count: history.filter(m => m.role === "user").length,
       remaining_prompts: null,
+      hit_max_rounds: hitMaxRounds,
     };
     emitToSubscribers(sessionId, doneEvent);
     safeWrite(`data: ${JSON.stringify(doneEvent)}\n\n`);

@@ -19,6 +19,7 @@
  */
 
 import { useState, useCallback, useRef, useEffect } from 'react'
+import { toast } from 'sonner'
 import type {
   ScreenShareDevice,
   ScreenShareSessionState,
@@ -26,6 +27,23 @@ import type {
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
+
+// ── Auto-approve helpers ──────────────────────────────────────────────
+
+const AUTO_APPROVE_KEY = 'jait-screen-share-auto-approve'
+
+function getAutoApprovedDevices(): Set<string> {
+  try {
+    const raw = localStorage.getItem(AUTO_APPROVE_KEY)
+    return raw ? new Set(JSON.parse(raw) as string[]) : new Set()
+  } catch { return new Set() }
+}
+
+function addAutoApprovedDevice(deviceId: string): void {
+  const set = getAutoApprovedDevices()
+  set.add(deviceId)
+  localStorage.setItem(AUTO_APPROVE_KEY, JSON.stringify([...set]))
+}
 
 // ── Types ─────────────────────────────────────────────────────────────
 
@@ -432,44 +450,92 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
             break
           }
 
-          // A viewer wants this device to start sharing its screen
+          // A viewer wants this device to start sharing its screen,
+          // OR this device should set itself up as a viewer.
           case 'screen-share:start-request': {
             const req = msg.payload as {
               sessionId: string
               hostDeviceId: string
               viewerDeviceIds?: string[]
             }
+
             if (req.hostDeviceId === deviceIdRef.current) {
+              // ── HOST side: we're being asked to share our screen ────
+              const viewerId = req.viewerDeviceIds?.[0] ?? 'unknown'
+              const autoApproved = getAutoApprovedDevices()
+
+              if (autoApproved.has(viewerId) || autoApproved.has('*')) {
+                console.log('[screen-share] Auto-approved share request from', viewerId)
+                startHosting(req.sessionId)
+                break
+              }
+
               const platform = detectPlatform()
-              if (platform === 'electron' && window.jaitDesktop?.confirmShare) {
-                // Electron: show a native dialog for approval, then auto-capture
-                console.log('[screen-share] Received start-request, showing native approval dialog (Electron)...')
-                // Also fire a notification so the user sees it even when minimised
-                window.jaitDesktop.notify({
+
+              if (platform === 'electron') {
+                window.jaitDesktop?.notify({
                   title: 'Screen Share Request',
                   body: 'A remote device wants to view your screen.',
                 }).catch(() => { /* best-effort */ })
-                window.jaitDesktop.confirmShare({
-                  title: 'Screen Share Request',
-                  message: 'A remote device wants to view your screen. Allow screen sharing?',
-                }).then(({ accepted }) => {
-                  if (accepted) {
-                    console.log('[screen-share] User accepted screen share request')
-                    startHosting(req.sessionId)
-                  } else {
-                    console.log('[screen-share] User declined screen share request')
-                  }
-                }).catch(err => console.error('[screen-share] confirmShare failed:', err))
-              } else {
-                // Web browser: getDisplayMedia requires a user gesture.
-                // Store the request and show a prompt instead of auto-calling.
-                console.log('[screen-share] Received start-request, waiting for user gesture (web)...')
-                setState(prev => ({
-                  ...prev,
-                  pendingShareRequest: { sessionId: req.sessionId, hostDeviceId: req.hostDeviceId },
-                }))
               }
+
+              // Persistent Sonner toast — only dismisses on action click
+              const toastId = toast('Screen share requested', {
+                description: 'A remote device wants to view your screen.',
+                duration: Infinity,
+                important: true,
+                action: {
+                  label: 'Share Screen',
+                  onClick: () => {
+                    console.log('[screen-share] User accepted share request')
+                    startHosting(req.sessionId)
+                    toast.dismiss(toastId)
+                  },
+                },
+                cancel: {
+                  label: 'Decline',
+                  onClick: () => {
+                    console.log('[screen-share] User declined share request')
+                    toast.dismiss(toastId)
+                  },
+                },
+              })
+
+              // Follow-up "Always Allow" toast
+              setTimeout(() => {
+                toast('Remember this choice?', {
+                  description: 'Auto-approve future share requests from all devices.',
+                  duration: Infinity,
+                  action: {
+                    label: 'Always Allow',
+                    onClick: () => {
+                      addAutoApprovedDevice('*')
+                      console.log('[screen-share] User enabled always-approve')
+                    },
+                  },
+                  cancel: {
+                    label: 'Dismiss',
+                    onClick: () => { /* just dismiss */ },
+                  },
+                })
+              }, 300)
+
+            } else if (
+              !req.viewerDeviceIds ||
+              req.viewerDeviceIds.length === 0 ||
+              req.viewerDeviceIds.includes(deviceIdRef.current)
+            ) {
+              // ── VIEWER side: set up WebRTC to receive the host's stream ─
+              console.log('[screen-share] Setting up as viewer for session:', req.sessionId, 'host:', req.hostDeviceId)
+              setState(prev => ({
+                ...prev,
+                isViewer: true,
+                isActive: true,
+                connectedDeviceId: req.hostDeviceId,
+              }))
+              setupPeerConnection(null, false, req.sessionId)
             }
+
             break
           }
 

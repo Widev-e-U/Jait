@@ -8,7 +8,9 @@
 
 import type { FastifyInstance } from "fastify";
 import type { SurfaceRegistry } from "../surfaces/index.js";
+import type { SessionStateService } from "../services/session-state.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
+import { uuidv7 } from "../lib/uuidv7.js";
 
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
@@ -29,6 +31,7 @@ function findFsSurface(registry: SurfaceRegistry, surfaceId?: string): FileSyste
 export function registerWorkspaceRoutes(
   app: FastifyInstance,
   surfaceRegistry: SurfaceRegistry,
+  sessionState?: SessionStateService,
 ) {
   // GET /api/workspace/info — returns the active workspace root + surface ID
   app.get("/api/workspace/info", async (_req, reply) => {
@@ -42,6 +45,61 @@ export function registerWorkspaceRoutes(
       workspaceRoot: (snap.metadata as Record<string, unknown>)?.workspaceRoot ?? null,
       state: snap.state,
     };
+  });
+
+  // POST /api/workspace/open — create a filesystem surface for the given path
+  // This is called when a client picks a directory (e.g. Electron native dialog)
+  // so that ALL clients on the session can browse files via the gateway REST API.
+  app.post("/api/workspace/open", async (req, reply) => {
+    const body = req.body as { path?: string; sessionId?: string } | null;
+    const workspacePath = body?.path;
+    const sessionId = body?.sessionId;
+
+    if (!workspacePath) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
+    }
+    if (!sessionId) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "sessionId is required" });
+    }
+
+    // Verify the path exists on the filesystem
+    const { stat } = await import("node:fs/promises");
+    try {
+      const info = await stat(workspacePath);
+      if (!info.isDirectory()) {
+        return reply.status(400).send({ error: "NOT_A_DIRECTORY", message: "The specified path is not a directory" });
+      }
+    } catch {
+      return reply.status(400).send({ error: "PATH_NOT_FOUND", message: "The specified path does not exist" });
+    }
+
+    // Stop any existing filesystem surface for this session
+    const existing = surfaceRegistry.getBySession(sessionId)
+      .filter((s) => s instanceof FileSystemSurface && s.state === "running");
+    for (const s of existing) {
+      await surfaceRegistry.stopSurface(s.snapshot().id, "replaced");
+    }
+
+    // Create a new filesystem surface
+    const surfaceId = `filesystem-${uuidv7()}`;
+    try {
+      await surfaceRegistry.startSurface("filesystem", surfaceId, {
+        sessionId,
+        workspaceRoot: workspacePath,
+      });
+    } catch (err) {
+      return reply.status(500).send({
+        error: "SURFACE_START_FAILED",
+        message: err instanceof Error ? err.message : "Failed to start filesystem surface",
+      });
+    }
+
+    // Persist workspace state to session DB so late-joiners get it
+    if (sessionState) {
+      sessionState.set(sessionId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId } });
+    }
+
+    return { surfaceId, workspaceRoot: workspacePath };
   });
 
   // GET /api/workspace/list?path=&surfaceId= — list directory entries
@@ -109,5 +167,124 @@ export function registerWorkspaceRoutes(
         message: err instanceof Error ? err.message : "Failed to stat path",
       });
     }
+  });
+
+  // POST /api/workspace/undo — restore a file to its pre-modification state
+  app.post("/api/workspace/undo", async (req, reply) => {
+    const body = req.body as { path?: string; surfaceId?: string } | null;
+    const filePath = body?.path;
+    if (!filePath) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
+    }
+
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    if (!fs) {
+      return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
+    }
+
+    try {
+      const restored = await fs.restore(filePath);
+      if (!restored) {
+        return reply.status(404).send({ error: "NO_BACKUP", message: "No backup found for this file" });
+      }
+      return { ok: true, path: filePath };
+    } catch (err) {
+      return reply.status(500).send({
+        error: "UNDO_FAILED",
+        message: err instanceof Error ? err.message : "Failed to undo file change",
+      });
+    }
+  });
+
+  // GET /api/workspace/backup?path= — get the original (backed-up) content of a file
+  app.get("/api/workspace/backup", async (req, reply) => {
+    const { path: filePath, surfaceId } = req.query as { path?: string; surfaceId?: string };
+    const fs = findFsSurface(surfaceRegistry, surfaceId);
+    if (!fs) {
+      return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
+    }
+    if (!filePath) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path query parameter is required" });
+    }
+
+    const hasBackup = fs.hasBackup(filePath);
+    if (!hasBackup) {
+      return reply.status(404).send({ error: "NO_BACKUP", message: "No backup found for this file" });
+    }
+
+    const backup = fs.getBackup(filePath);
+    // Also read the current content
+    let currentContent: string;
+    try {
+      currentContent = await fs.read(filePath);
+    } catch {
+      currentContent = "";
+    }
+
+    return {
+      path: filePath,
+      originalContent: backup, // null if file was newly created
+      currentContent,
+      hasBackup: true,
+    };
+  });
+
+  // POST /api/workspace/apply-diff — write merged diff result and clear backup
+  app.post("/api/workspace/apply-diff", async (req, reply) => {
+    const body = req.body as { path?: string; content?: string | null; surfaceId?: string } | null;
+    const filePath = body?.path;
+    const content = body?.content;
+    if (!filePath) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
+    }
+
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    if (!fs) {
+      return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
+    }
+
+    try {
+      // If content is provided, write it; otherwise just clear the backup (accept as-is)
+      if (content !== undefined && content !== null) {
+        const { writeFile: fsWriteFile } = await import("node:fs/promises");
+        const { resolve } = await import("node:path");
+        const snap = fs.snapshot();
+        const root = (snap.metadata as Record<string, unknown>)?.workspaceRoot as string;
+        const abs = resolve(root, filePath);
+        await fsWriteFile(abs, content, "utf-8");
+      }
+      fs.clearBackup(filePath);
+      return { ok: true, path: filePath };
+    } catch (err) {
+      return reply.status(500).send({
+        error: "APPLY_FAILED",
+        message: err instanceof Error ? err.message : "Failed to apply diff",
+      });
+    }
+  });
+
+  // POST /api/workspace/undo-all — restore all modified files to pre-modification state
+  app.post("/api/workspace/undo-all", async (req, reply) => {
+    const body = req.body as { paths?: string[]; surfaceId?: string } | null;
+    const paths = body?.paths;
+    if (!paths || paths.length === 0) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "paths array is required" });
+    }
+
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    if (!fs) {
+      return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
+    }
+
+    const results: { path: string; restored: boolean }[] = [];
+    for (const p of paths) {
+      try {
+        const restored = await fs.restore(p);
+        results.push({ path: p, restored });
+      } catch {
+        results.push({ path: p, restored: false });
+      }
+    }
+    return { ok: true, results };
   });
 }

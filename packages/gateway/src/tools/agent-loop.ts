@@ -15,6 +15,7 @@ import type { ToolResult } from "./contracts.js";
 import type { ToolRegistry } from "./registry.js";
 import { validateToolInput } from "./validate.js";
 import { type ChatMode, ASK_MODE_TOOLS, MUTATING_TOOLS, type PlannedAction } from "./chat-modes.js";
+import { getReminderInstructions, type ModelEndpoint } from "./prompts/index.js";
 
 // ── Public types ─────────────────────────────────────────────────────
 
@@ -140,6 +141,8 @@ export interface AgentLoopResult {
   rounds: number;
   /** Whether the loop was stopped by abort */
   aborted: boolean;
+  /** Whether the loop was stopped because it hit the max rounds limit */
+  hitMaxRounds: boolean;
   /** Plan data — only populated in plan mode */
   plan?: {
     id: string;
@@ -559,6 +562,18 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
     }
   }
 
+  // If this was a file-modifying tool, emit file_changed event for cross-client sync
+  if (result.ok && (internalName === "file.write" || internalName === "file.patch" || internalName === "edit")) {
+    const filePath = String((args as Record<string, unknown>)?.path ?? "");
+    if (filePath) {
+      onEvent?.({
+        type: "file_changed",
+        path: filePath,
+        name: filePath.split("/").pop() ?? filePath,
+      } as any);
+    }
+  }
+
   return {
     result,
     executed: {
@@ -675,7 +690,7 @@ export async function runAgentLoop(
     // ── Check abort ──
     if (abort.signal.aborted) {
       log.info(`Agent loop cancelled for session ${sessionId} — stopping before round ${round}`);
-      return { content: fullContent, executedToolCalls, rounds: round, aborted: true };
+      return { content: fullContent, executedToolCalls, rounds: round, aborted: true, hitMaxRounds: false };
     }
 
     // ── Apply steering messages ──
@@ -685,6 +700,15 @@ export async function runAgentLoop(
         history.push({ role: "system", content: `[STEERING] ${msg}` });
         onEvent?.({ type: "steering", message: msg });
         log.info(`Steering injected for session ${sessionId}: ${msg.slice(0, 100)}`);
+      }
+    }
+
+    // ── Periodic reminder (every 4 rounds) to reinforce good agent behaviour ──
+    if (round > 0 && round % 4 === 0 && mode !== "ask") {
+      const modelEndpoint: ModelEndpoint = { model: llm.openaiModel, baseUrl: "" };
+      const reminder = getReminderInstructions(mode, modelEndpoint);
+      if (reminder) {
+        history.push({ role: "system", content: reminder });
       }
     }
 
@@ -718,13 +742,13 @@ export async function runAgentLoop(
         const errText = await response.text();
         log.error(`LLM error ${response.status}: ${errText}`);
         onEvent?.({ type: "error", message: `LLM error: ${response.status}` });
-        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false };
+        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false, hitMaxRounds: false };
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
         onEvent?.({ type: "error", message: "No response body from LLM" });
-        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false };
+        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false, hitMaxRounds: false };
       }
 
       const parsed = await parseOpenAIStream(reader as any, onEvent);
@@ -734,7 +758,7 @@ export async function runAgentLoop(
     } catch (fetchErr) {
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
-        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: true };
+        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: true, hitMaxRounds: false };
       }
       throw fetchErr;
     }
@@ -871,7 +895,7 @@ export async function runAgentLoop(
               });
             }
           }
-          return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: true };
+          return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: true, hitMaxRounds: false };
         }
 
         const batch = queue.dequeueBatch(parallel);
@@ -969,7 +993,7 @@ export async function runAgentLoop(
     const planResult = mode === "plan" && plannedActions.length > 0
       ? { id: planId, summary: contentText || "Plan ready for review.", actions: plannedActions }
       : undefined;
-    return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false, plan: planResult };
+    return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false, hitMaxRounds: false, plan: planResult };
   }
 
   // Hit max rounds
@@ -981,7 +1005,7 @@ export async function runAgentLoop(
   const planResultMaxRounds = mode === "plan" && plannedActions.length > 0
     ? { id: planId, summary: fullContent, actions: plannedActions }
     : undefined;
-  return { content: fullContent, executedToolCalls, rounds: maxRounds, aborted: false, plan: planResultMaxRounds };
+  return { content: fullContent, executedToolCalls, rounds: maxRounds, aborted: false, hitMaxRounds: true, plan: planResultMaxRounds };
 }
 
 // ── Retry API ────────────────────────────────────────────────────────

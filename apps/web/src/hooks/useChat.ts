@@ -18,6 +18,10 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /** Clean display text for user messages (without appended file contents) */
+  displayContent?: string
+  /** File references attached by the user (shown as chips in the bubble) */
+  referencedFiles?: { path: string; name: string }[]
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
@@ -30,6 +34,8 @@ interface ChatState {
   promptCount: number
   remainingPrompts: number | null
   error: string | null
+  /** Whether the last response was cut short by hitting the max tool rounds limit */
+  hitMaxRounds: boolean
 }
 
 export type ChatMode = 'ask' | 'agent' | 'plan'
@@ -55,6 +61,10 @@ interface SendMessageOptions {
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
   onLoginRequired?: () => void
   mode?: ChatMode
+  /** Clean display text for user message (without file contents appended) */
+  displayContent?: string
+  /** File references to attach as metadata on the user message */
+  referencedFiles?: { path: string; name: string }[]
 }
 
 /**
@@ -72,6 +82,7 @@ export function useChat(
     promptCount: 0,
     remainingPrompts: null,
     error: null,
+    hitMaxRounds: false,
   })
 
   const [pendingPlan, setPendingPlan] = useState<PlanData | null>(null)
@@ -433,6 +444,8 @@ export function useChat(
       id: `user-${Date.now()}`,
       role: 'user',
       content,
+      ...(options.displayContent ? { displayContent: options.displayContent } : {}),
+      ...(options.referencedFiles?.length ? { referencedFiles: options.referencedFiles } : {}),
     }
 
     setState(prev => ({
@@ -440,7 +453,13 @@ export function useChat(
       messages: [...prev.messages, userMessage, { id: assistantId, role: 'assistant', content: '' }],
       isLoading: true,
       error: null,
+      hitMaxRounds: false,
     }))
+
+    // Clear the todo list and changed files for the new turn — the agent
+    // will push a fresh list if it uses the todo tool again.
+    setTodoList([])
+    setChangedFiles([])
 
     const controller = new AbortController()
     abortControllerRef.current = controller
@@ -645,6 +664,7 @@ export function useChat(
                   promptCount: data.prompt_count,
                   remainingPrompts: data.remaining_prompts,
                   isLoading: false,
+                  hitMaxRounds: !!(data.hit_max_rounds),
                   messages: isEmptyAssistant
                     ? prev.messages.filter(m => m.id !== assistantId)
                     : prev.messages.map(m =>
@@ -755,21 +775,85 @@ export function useChat(
   }, [state.isLoading, messageQueue.length, processQueue, authToken, onLoginRequired])
 
   // --- File change callbacks ---
-  const acceptFile = useCallback((path: string) => {
-    setChangedFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'accepted' as FileChangeState } : f))
+  // Ref for broadcasting changed files to other clients
+  const onChangedFilesSyncRef = useRef<((files: ChangedFile[]) => void) | null>(null)
+
+  /** Register an external callback for broadcasting file state changes to other clients. */
+  const setOnChangedFilesSync = useCallback((cb: ((files: ChangedFile[]) => void) | null) => {
+    onChangedFilesSyncRef.current = cb
   }, [])
 
-  const rejectFile = useCallback((path: string) => {
-    setChangedFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'rejected' as FileChangeState } : f))
+  /** Helper to update + broadcast changed files in one step. */
+  const updateAndBroadcastFiles = useCallback((updater: (prev: ChangedFile[]) => ChangedFile[]) => {
+    setChangedFiles(prev => {
+      const next = updater(prev)
+      // Fire the sync callback with the new state
+      onChangedFilesSyncRef.current?.(next)
+      return next
+    })
   }, [])
+
+  const acceptFile = useCallback(async (path: string) => {
+    updateAndBroadcastFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'accepted' as FileChangeState } : f))
+    // Clear the server-side backup since the user accepted the changes
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+      await fetch(`${API_URL}/api/workspace/apply-diff`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ path, content: null }), // null content = just clear backup
+      })
+    } catch { /* ignore */ }
+  }, [authToken, updateAndBroadcastFiles])
+
+  const rejectFile = useCallback(async (path: string) => {
+    // Call undo endpoint to restore the original file
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+      await fetch(`${API_URL}/api/workspace/undo`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ path }),
+      })
+    } catch {
+      // Silently ignore — we still mark it rejected visually
+    }
+    updateAndBroadcastFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'rejected' as FileChangeState } : f))
+  }, [authToken, updateAndBroadcastFiles])
 
   const acceptAllFiles = useCallback(() => {
-    setChangedFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'accepted' as FileChangeState } : f))
-  }, [])
+    updateAndBroadcastFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'accepted' as FileChangeState } : f))
+  }, [updateAndBroadcastFiles])
 
-  const rejectAllFiles = useCallback(() => {
-    setChangedFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'rejected' as FileChangeState } : f))
-  }, [])
+  const rejectAllFiles = useCallback(async () => {
+    // Collect all undecided file paths and undo them in batch
+    const undecidedPaths = changedFiles.filter(f => f.state === 'undecided').map(f => f.path)
+    if (undecidedPaths.length > 0) {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (authToken) headers['Authorization'] = `Bearer ${authToken}`
+        await fetch(`${API_URL}/api/workspace/undo-all`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ paths: undecidedPaths }),
+        })
+      } catch {
+        // Silently ignore
+      }
+    }
+    updateAndBroadcastFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'rejected' as FileChangeState } : f))
+  }, [authToken, changedFiles, updateAndBroadcastFiles])
+
+  // Auto-hide the files-changed list once every file has been decided
+  useEffect(() => {
+    if (changedFiles.length === 0) return
+    const allDecided = changedFiles.every(f => f.state !== 'undecided')
+    if (!allDecided) return
+    const timer = setTimeout(() => setChangedFiles([]), 1200)
+    return () => clearTimeout(timer)
+  }, [changedFiles])
 
   const cancelRequest = useCallback(() => {
     requestVersionRef.current += 1
@@ -805,11 +889,17 @@ export function useChat(
   }, [authToken])
 
   const clearMessages = useCallback(() => {
-    setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null })
+    setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null, hitMaxRounds: false })
     setTodoList([])
     setChangedFiles([])
     setMessageQueue([])
   }, [])
+
+  /** Send "Continue" to resume the agent after hitting max tool rounds */
+  const continueChat = useCallback((options: SendMessageOptions = {}) => {
+    setState(prev => ({ ...prev, hitMaxRounds: false }))
+    return sendMessage('Continue from where you left off.', options)
+  }, [sendMessage])
 
   const restartFromMessage = useCallback(async (
     messageId: string,
@@ -988,12 +1078,21 @@ export function useChat(
     }
   }, [authToken, pendingPlan])
 
+  /** Add a changed file from an external source (e.g. cross-client WS sync). Deduplicates by path. */
+  const addChangedFile = useCallback((path: string, name: string) => {
+    setChangedFiles(prev => {
+      if (prev.some(f => f.path === path)) return prev
+      return [...prev, { path, name, state: 'undecided' as const }]
+    })
+  }, [])
+
   return {
     messages: state.messages,
     isLoading: state.isLoading,
     isLoadingHistory: state.isLoadingHistory,
     remainingPrompts: state.remainingPrompts,
     error: state.error,
+    hitMaxRounds: state.hitMaxRounds,
     pendingPlan,
     todoList,
     changedFiles,
@@ -1002,6 +1101,7 @@ export function useChat(
     restartFromMessage,
     cancelRequest,
     clearMessages,
+    continueChat,
     executePlan,
     rejectPlan,
     enqueueMessage,
@@ -1010,5 +1110,9 @@ export function useChat(
     rejectFile,
     acceptAllFiles,
     rejectAllFiles,
+    setTodoList,
+    addChangedFile,
+    setChangedFiles,
+    setOnChangedFilesSync,
   }
 }

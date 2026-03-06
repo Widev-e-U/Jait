@@ -20,6 +20,7 @@ interface JaitDesktopBridge {
   getDesktopSources: () => Promise<DesktopSource[]>
   notify: (opts: { title: string; body: string }) => Promise<{ ok: true }>
   confirmShare: (opts: { title: string; message: string }) => Promise<{ accepted: boolean }>
+  pickDirectory: () => Promise<{ path: string } | null>
   onScreenShareStart: (callback: () => void) => void
   onScreenShareStop: (callback: () => void) => void
   platform: 'electron'

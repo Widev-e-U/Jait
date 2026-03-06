@@ -29,7 +29,9 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
     name: "screen.share",
     description:
       "Connect to a remote device and view its screen, or manage remote screen viewing sessions. " +
-      "Use 'list-devices' to discover connected devices (desktop Electron app, mobile, browser). " +
+      "Use 'list-devices' to discover connected devices. The response distinguishes the user's local device " +
+      "(the browser they are chatting from — platform 'web') from remote devices (Electron desktop, mobile, etc.). " +
+      "Only remote devices are valid targets for 'connect'. " +
       "Use 'connect' with a targetDeviceId to view that device's screen remotely. " +
       "Use 'disconnect' to end the current viewing session.",
     tier: "standard",
@@ -53,17 +55,30 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
     async execute(input): Promise<ToolResult> {
       if (input.action === "list-devices") {
         const state = screenShare.getState();
+        const webDevices = state.devices.filter((d) => d.platform === "web");
+        const localDevice = webDevices.length === 1 ? webDevices[0] : null;
+
+        // Build a concise device list with "(current)" marker
+        const deviceLines = state.devices.map((d) => {
+          const isCurrent = localDevice && d.id === localDevice.id;
+          return `- ${d.name} [${d.platform}] id=${d.id}${isCurrent ? " (current — cannot connect to this)" : ""}`;
+        });
+
+        const remoteDevices = state.devices.filter((d) => !localDevice || d.id !== localDevice.id);
+
         return {
           ok: true,
-          message: `Found ${state.devices.length} registered device(s). Active session: ${state.activeSession ? state.activeSession.status : "none"}.`,
+          message: deviceLines.length > 0
+            ? `Devices:\n${deviceLines.join("\n")}${remoteDevices.length === 0 ? "\n\nNo remote devices available to connect to." : ""}`
+            : "No devices registered. The user needs to open Jait on another device first.",
           data: {
+            localDeviceId: localDevice?.id ?? null,
             devices: state.devices.map((d) => ({
               id: d.id,
               name: d.name,
               platform: d.platform,
-              authorized: d.authorized,
+              isCurrent: localDevice ? d.id === localDevice.id : false,
               capabilities: d.capabilities,
-              lastSeenAt: d.lastSeenAt,
             })),
             activeSession: state.activeSession
               ? { id: state.activeSession.id, status: state.activeSession.status, hostDeviceId: state.activeSession.hostDeviceId }
@@ -87,18 +102,23 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
           };
         }
         // Start a session with the target device as the host (screen sharer)
-        // The viewer (user's current browser) will be added automatically
-        const state = screenShare.startShare({ hostDeviceId: input.targetDeviceId });
+        // Determine which connected devices are viewers (all except the host)
+        const viewerDeviceIds = ws
+          ? ws.getConnectedDeviceIds().filter(id => id !== input.targetDeviceId)
+          : [];
+        const state = screenShare.startShare({ hostDeviceId: input.targetDeviceId, viewerDeviceIds });
 
         // Tell the host device to begin screen capture via WS
+        // and open the Screen Share panel in the viewer's UI
         if (ws) {
-          ws.sendScreenShareStartRequest(state.id, input.targetDeviceId);
+          ws.sendScreenShareStartRequest(state.id, input.targetDeviceId, viewerDeviceIds);
           ws.broadcastScreenShareState(state);
+          ws.sendUICommand({ command: "screen-share.open", data: { sessionId: state.id, targetDeviceId: input.targetDeviceId } });
         }
 
         return {
           ok: true,
-          message: `Connecting to remote device "${input.targetDeviceId}". The remote device will start sharing its screen. The user can now see the remote screen in the Screen Share panel.`,
+          message: `Connecting to remote device "${input.targetDeviceId}". The remote device will start sharing its screen. The Screen Share panel has been opened automatically.`,
           data: state,
         };
       }
