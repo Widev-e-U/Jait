@@ -1,0 +1,30 @@
+{
+  "appId": "dev.jait.desktop",
+  "productName": "Jait",
+  "directories": {
+    "output": "release",
+    "buildResources": "assets"
+  },
+  "files": [
+    "dist/**/*",
+    "assets/**/*"
+  ],
+  "extraResources": [
+    {
+      "from": "../web/dist",
+      "to": "web",
+      "filter": ["**/*"]
+    }
+  ],
+  "win": {
+    "target": ["nsis", "portable"]
+  },
+  "mac": {
+    "target": ["dmg"],
+    "category": "public.app-category.developer-tools"
+  },
+  "linux": {
+    "target": ["AppImage", "deb"],
+    "category": "Development"
+  }
+}

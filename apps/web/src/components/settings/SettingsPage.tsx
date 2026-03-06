@@ -6,6 +6,8 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToolSettings } from './ToolSettings'
+import { ActivityFeed } from '@/components/activity'
+import type { ActivityEvent } from '@jait/ui-shared'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -67,6 +69,7 @@ interface SettingsPageProps {
   apiKeys: Record<string, string>
   onSaveApiKeys: (next: Record<string, string>) => Promise<void>
   onClearArchive: () => Promise<number>
+  activityEvents?: ActivityEvent[]
 }
 
 export function SettingsPage({
@@ -75,6 +78,7 @@ export function SettingsPage({
   apiKeys,
   onSaveApiKeys,
   onClearArchive,
+  activityEvents,
 }: SettingsPageProps) {
   const [draft, setDraft] = useState<Record<string, string>>(apiKeys)
   const [saving, setSaving] = useState(false)
@@ -238,6 +242,18 @@ export function SettingsPage({
       </Card>
 
       <ToolSettings token={token} />
+
+      {activityEvents && activityEvents.length > 0 && (
+        <Card className="p-5 space-y-4">
+          <div>
+            <h2 className="text-base font-medium">Recent activity</h2>
+            <p className="text-sm text-muted-foreground">
+              Recent chat messages and terminal sessions.
+            </p>
+          </div>
+          <ActivityFeed events={activityEvents} />
+        </Card>
+      )}
     </div>
   )
 }

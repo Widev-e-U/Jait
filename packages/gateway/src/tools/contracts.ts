@@ -20,7 +20,20 @@ export interface ToolResult {
 /** JSON Schema for OpenAI function-calling format */
 export interface ToolParametersSchema {
   type: "object";
-  properties: Record<string, { type: string; description?: string; enum?: string[] }>;
+  properties: Record<string, ToolPropertySchema>;
+  required?: string[];
+}
+
+/** JSON Schema for a single tool parameter property */
+export interface ToolPropertySchema {
+  type: string;
+  description?: string;
+  enum?: string[];
+  /** For type: "array" — describes the shape of each array element */
+  items?: ToolPropertySchema & { properties?: Record<string, ToolPropertySchema>; required?: string[] };
+  /** For type: "object" — nested properties */
+  properties?: Record<string, ToolPropertySchema>;
+  /** For nested objects — which properties are required */
   required?: string[];
 }
 
@@ -57,6 +70,7 @@ export type ToolCategory =
   | "memory"
   | "voice"
   | "agent"
+  | "network"
   | "meta"
   | "external";
 

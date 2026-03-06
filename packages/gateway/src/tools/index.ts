@@ -43,6 +43,7 @@ export {
 } from "./memory-tools.js";
 export { createVoiceSpeakTool } from "./voice-tools.js";
 export { createAgentSpawnTool } from "./agent-tools.js";
+export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
 export { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 export { McpManager, wrapMcpTool, registerMcpTools, unregisterMcpTools, type McpServerConfig, type McpConnection } from "./mcp-bridge.js";
 export { ToolName, type ToolNameValue } from "./tool-names.js";
@@ -126,9 +127,22 @@ import {
 } from "./memory-tools.js";
 import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
+import { createNetworkScanTool } from "./network-tools.js";
 import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import type { VoiceService } from "../voice/service.js";
 import type { AppConfig } from "../config.js";
+
+// ── Core tools (simplified set of 8) ────────────────────────────────
+import {
+  createReadTool,
+  createEditTool,
+  createExecuteTool,
+  createSearchTool,
+  createWebTool,
+  createAgentTool,
+  createTodoTool,
+  createJaitTool,
+} from "./core/index.js";
 
 export interface ToolRegistryDeps {
   scheduler?: SchedulerService;
@@ -149,11 +163,36 @@ export function createToolRegistry(
 ): ToolRegistry {
   const tools = new ToolRegistry();
 
-  // Terminal tools
+  // ════════════════════════════════════════════════════════════════════
+  // Core tools (8 simplified tools — always sent to LLM)
+  // ════════════════════════════════════════════════════════════════════
+  tools.register(createReadTool(surfaceRegistry));
+  tools.register(createEditTool(surfaceRegistry));
+  tools.register(createExecuteTool(surfaceRegistry));
+  tools.register(createSearchTool(surfaceRegistry));
+  tools.register(createWebTool());
+  tools.register(createTodoTool());
+  tools.register(createJaitTool({
+    memoryService: deps.memoryService,
+    scheduler: deps.scheduler,
+    sessionService: deps.sessionService,
+    surfaceRegistry,
+    ws: deps.ws,
+    startedAt: deps.startedAt,
+    hooks: deps.hooks,
+  }));
+  // Agent tool registered below (needs config for LLM settings)
+
+  // ════════════════════════════════════════════════════════════════════
+  // Standard tools (available via tools.search/tools.list, or for
+  // backward compat — not sent to LLM by default in tiered mode)
+  // ════════════════════════════════════════════════════════════════════
+
+  // Terminal tools (underlying implementations for core "execute")
   tools.register(createTerminalRunTool(surfaceRegistry));
   tools.register(createTerminalStreamTool(surfaceRegistry));
 
-  // File tools
+  // File tools (underlying implementations for core "read"/"edit")
   tools.register(createFileReadTool(surfaceRegistry));
   tools.register(createFileWriteTool(surfaceRegistry));
   tools.register(createFilePatchTool(surfaceRegistry));
@@ -169,7 +208,7 @@ export function createToolRegistry(
   tools.register(createSurfacesStartTool(surfaceRegistry));
   tools.register(createSurfacesStopTool(surfaceRegistry));
 
-  // Scheduler tools
+  // Scheduler tools (underlying implementations for jait cron.*)
   if (deps.scheduler) {
     tools.register(createCronAddTool(deps.scheduler));
     tools.register(createCronListTool(deps.scheduler));
@@ -203,7 +242,7 @@ export function createToolRegistry(
   }
 
   if (deps.screenShare) {
-    tools.register(createScreenShareTool(deps.screenShare));
+    tools.register(createScreenShareTool(deps.screenShare, deps.ws));
     tools.register(createScreenCaptureTool(deps.screenShare));
     tools.register(createScreenRecordTool(deps.screenShare));
     tools.register(createOsTool(deps.screenShare, "os.tool"));
@@ -224,21 +263,26 @@ export function createToolRegistry(
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());
 
+  // Network tools
+  tools.register(createNetworkScanTool());
+
   // Agent spawn (sub-agent) tool — needs config for LLM settings
   if (deps.config) {
-    tools.register(
-      createAgentSpawnTool({
-        toolRegistry: tools,
-        getLLMConfig: (context) => ({
-          openaiApiKey:
-            context.apiKeys?.["OPENAI_API_KEY"]?.trim() || deps.config!.openaiApiKey,
-          openaiBaseUrl:
-            context.apiKeys?.["OPENAI_BASE_URL"]?.trim() || deps.config!.openaiBaseUrl,
-          openaiModel:
-            context.apiKeys?.["OPENAI_MODEL"]?.trim() || deps.config!.openaiModel,
-        }),
+    const agentDeps = {
+      toolRegistry: tools,
+      getLLMConfig: (context: { apiKeys?: Record<string, string> }) => ({
+        openaiApiKey:
+          context.apiKeys?.["OPENAI_API_KEY"]?.trim() || deps.config!.openaiApiKey,
+        openaiBaseUrl:
+          context.apiKeys?.["OPENAI_BASE_URL"]?.trim() || deps.config!.openaiBaseUrl,
+        openaiModel:
+          context.apiKeys?.["OPENAI_MODEL"]?.trim() || deps.config!.openaiModel,
       }),
-    );
+    };
+    // Core: simplified "agent" tool
+    tools.register(createAgentTool(agentDeps));
+    // Standard: legacy "agent.spawn" tool (backward compat)
+    tools.register(createAgentSpawnTool(agentDeps));
   }
 
   return tools;

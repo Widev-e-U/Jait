@@ -7,10 +7,11 @@ const startedAt = Date.now();
 export function registerHealthRoutes(
   app: FastifyInstance,
   config?: AppConfig,
-  deps?: { getDeviceCount?: () => number },
+  deps?: { getDeviceCount?: () => number; getSchemaVersion?: () => number },
 ) {
   app.get("/health", async () => ({
     version: VERSION,
+    schemaVersion: deps?.getSchemaVersion?.() ?? 0,
     uptime: Math.floor((Date.now() - startedAt) / 1000),
     sessions: 0,
     surfaces: 0,

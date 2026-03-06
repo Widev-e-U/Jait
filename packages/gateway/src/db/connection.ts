@@ -7,6 +7,7 @@
 import { Database } from "bun:sqlite";
 import { drizzle, type BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
 import * as schema from "./schema.js";
+import { migrations } from "./migrations.js";
 import { mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
@@ -49,162 +50,54 @@ export function openDatabase(dbPath?: string) {
 /**
  * Run DDL to create all tables if they don't already exist.
  * Uses raw SQL so we don't need drizzle-kit push in production.
+ *
+ * Migrations are numbered and tracked in a `_migrations` table.
+ * Only new (un-applied) migrations run on each startup — safe for updates.
  */
 export function migrateDatabase(sqlite: Database) {
+  // Ensure the migrations tracking table exists
   sqlite.run(`
-    CREATE TABLE IF NOT EXISTS sessions (
-      id TEXT PRIMARY KEY,
-      user_id TEXT,
-      name TEXT,
-      workspace_path TEXT,
-      created_at TEXT NOT NULL,
-      last_active_at TEXT NOT NULL,
-      status TEXT DEFAULT 'active',
-      metadata TEXT
-    )
-  `);
-  // Migration: add user_id column if table already existed without it
-  try {
-    sqlite.run(`ALTER TABLE sessions ADD COLUMN user_id TEXT`);
-  } catch {
-    // column already exists — ignore
-  }
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status, last_active_at DESC)`);
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id TEXT PRIMARY KEY,
-      username TEXT NOT NULL UNIQUE,
-      password_hash TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
-    )
-  `);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`);
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS user_settings (
-      user_id TEXT PRIMARY KEY,
-      theme TEXT NOT NULL DEFAULT 'system',
-      api_keys TEXT,
-      updated_at TEXT NOT NULL
-    )
-  `);
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS audit_log (
-      id TEXT PRIMARY KEY,
-      timestamp TEXT NOT NULL,
-      session_id TEXT,
-      surface_type TEXT,
-      device_id TEXT,
-      action_id TEXT UNIQUE,
-      action_type TEXT,
-      tool_name TEXT,
-      inputs TEXT,
-      outputs TEXT,
-      side_effects TEXT,
-      signature TEXT,
-      parent_action_id TEXT,
-      status TEXT,
-      consent_method TEXT
-    )
-  `);
-
-  // Indexes for audit_log
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_audit_action_id ON audit_log(action_id)`);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_log(session_id, timestamp DESC)`);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_audit_surface ON audit_log(surface_type, timestamp DESC)`);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_log(device_id, timestamp DESC)`);
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS trust_levels (
-      action_type TEXT PRIMARY KEY,
-      approved_count INTEGER DEFAULT 0,
-      reverted_count INTEGER DEFAULT 0,
-      current_level INTEGER DEFAULT 0
-    )
-  `);
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS consent_log (
-      id TEXT PRIMARY KEY,
-      action_id TEXT NOT NULL,
-      tool_name TEXT NOT NULL,
-      decision TEXT NOT NULL,
-      decided_at TEXT NOT NULL,
-      decided_via TEXT
-    )
-  `);
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS consent_session_approvals (
-      session_id TEXT PRIMARY KEY,
-      approve_all INTEGER NOT NULL DEFAULT 1,
-      updated_at TEXT NOT NULL
-    )
-  `);
-
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS memories (
-      id TEXT PRIMARY KEY,
-      scope TEXT NOT NULL,
-      content TEXT NOT NULL,
-      source_type TEXT NOT NULL,
-      source_id TEXT NOT NULL,
-      source_surface TEXT NOT NULL,
-      embedding TEXT NOT NULL,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL,
-      expires_at TEXT
-    )
-  `);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, created_at)`);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_memories_expires ON memories(expires_at)`);
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS messages (
-      id TEXT PRIMARY KEY,
-      session_id TEXT NOT NULL,
-      role TEXT NOT NULL,
-      content TEXT NOT NULL,
-      tool_calls TEXT,
-      created_at TEXT NOT NULL
-    )
-  `);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`);
-
-  sqlite.run(`
-    CREATE TABLE IF NOT EXISTS scheduled_jobs (
-      id TEXT PRIMARY KEY,
-      user_id TEXT,
+    CREATE TABLE IF NOT EXISTS _migrations (
+      id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
-      cron TEXT NOT NULL,
-      tool_name TEXT NOT NULL,
-      input TEXT,
-      session_id TEXT,
-      workspace_root TEXT,
-      enabled INTEGER NOT NULL DEFAULT 1,
-      last_run_at TEXT,
-      created_at TEXT NOT NULL,
-      updated_at TEXT NOT NULL
+      applied_at TEXT NOT NULL
     )
   `);
-  // Migration: add user_id column if table already existed without it
-  try {
-    sqlite.run(`ALTER TABLE scheduled_jobs ADD COLUMN user_id TEXT`);
-  } catch {
-    // column already exists — ignore
-  }
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)`);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_updated ON scheduled_jobs(updated_at DESC)`);
-  sqlite.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_user_updated ON scheduled_jobs(user_id, updated_at DESC)`);
 
-  // Migration: add tool_calls column if table already existed without it
+  // Load which migrations have already been applied
+  const applied = new Set(
+    (sqlite.query("SELECT id FROM _migrations").all() as { id: number }[])
+      .map((r) => r.id),
+  );
+
+  let ran = 0;
+  for (const migration of migrations) {
+    if (applied.has(migration.id)) continue;
+
+    console.log(`  Running migration ${migration.id}: ${migration.name}`);
+    migration.run(sqlite);
+
+    // Record that this migration has been applied
+    sqlite.run(
+      "INSERT INTO _migrations (id, name, applied_at) VALUES (?, ?, ?)",
+      [migration.id, migration.name, new Date().toISOString()],
+    );
+    ran++;
+  }
+
+  if (ran > 0) {
+    console.log(`  ${ran} migration(s) applied (schema now at v${migrations.length}).`);
+  }
+}
+
+/**
+ * Get the current schema version (highest applied migration ID).
+ */
+export function getSchemaVersion(sqlite: Database): number {
   try {
-    sqlite.run(`ALTER TABLE messages ADD COLUMN tool_calls TEXT`);
+    const row = sqlite.query("SELECT MAX(id) as v FROM _migrations").get() as { v: number | null } | null;
+    return row?.v ?? 0;
   } catch {
-    // column already exists — ignore
+    return 0;
   }
 }

@@ -17,7 +17,9 @@
     "test:watch": "vitest",
     "lint": "oxlint .",
     "typecheck": "bun run --filter '*' typecheck",
-    "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache"
+    "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache",
+    "version:sync": "bun scripts/version-sync.ts",
+    "release": "bun scripts/release.ts"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

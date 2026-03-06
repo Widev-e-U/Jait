@@ -12,7 +12,10 @@ import { registerTrustRoutes } from "./routes/trust.js";
 import { registerHookRoutes } from "./routes/hooks.js";
 import { registerJobRoutes } from "./routes/jobs.js";
 import { registerMobileRoutes } from "./routes/mobile.js";
+import { registerNetworkRoutes } from "./routes/network.js";
 import { registerVoiceRoutes } from "./routes/voice.js";
+import { registerWorkspaceRoutes } from "./routes/workspace.js";
+import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -28,9 +31,14 @@ import type { MemoryService } from "./memory/contracts.js";
 import type { UserService } from "./services/users.js";
 import type { DeviceRegistry } from "./services/device-registry.js";
 import type { VoiceService } from "./voice/service.js";
+import type { ScreenShareService } from "@jait/screen-share";
+import type { SessionStateService } from "./services/session-state.js";
+import type { Database } from "bun:sqlite";
+import { getSchemaVersion } from "./db/connection.js";
 
 export interface ServerDeps {
   db?: JaitDB;
+  sqlite?: Database;
   sessionService?: SessionService;
   userService?: UserService;
   audit?: AuditWriter;
@@ -46,6 +54,7 @@ export interface ServerDeps {
   onAgentHook?: (payload: unknown) => Promise<unknown>;
   memoryService?: MemoryService;
   deviceRegistry?: DeviceRegistry;
+  sessionState?: SessionStateService;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -53,6 +62,7 @@ export interface ServerDeps {
     options?: { dryRun?: boolean; consentTimeoutMs?: number },
   ) => Promise<ToolResult>;
   voiceService?: VoiceService;
+  screenShare?: ScreenShareService;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -67,7 +77,10 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
-  registerHealthRoutes(app, config, { getDeviceCount: () => deps.deviceRegistry?.count() ?? 0 });
+  registerHealthRoutes(app, config, {
+    getDeviceCount: () => deps.deviceRegistry?.count() ?? 0,
+    getSchemaVersion: () => deps.sqlite ? getSchemaVersion(deps.sqlite) : 0,
+  });
   if (deps.userService) {
     registerAuthRoutes(app, config, deps.userService, deps.toolRegistry);
   }
@@ -75,6 +88,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     db: deps.db,
     sessionService: deps.sessionService,
     toolRegistry: deps.toolRegistry,
+    surfaceRegistry: deps.surfaceRegistry,
     audit: deps.audit,
     toolExecutor: deps.toolExecutor,
     memoryService: deps.memoryService,
@@ -82,7 +96,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   });
 
   if (deps.sessionService && deps.audit) {
-    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks);
+    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState);
   }
 
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {
@@ -116,6 +130,16 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       consentManager: deps.consentManager,
       sessionService: deps.sessionService,
     });
+  }
+
+  registerNetworkRoutes(app);
+
+  if (deps.screenShare && deps.ws) {
+    registerScreenShareRoutes(app, { screenShare: deps.screenShare, ws: deps.ws });
+  }
+
+  if (deps.surfaceRegistry) {
+    registerWorkspaceRoutes(app, deps.surfaceRegistry);
   }
 
   app.get("/", async () => ({

@@ -7,9 +7,10 @@ import { cn } from '@/lib/utils'
 interface ConversationProps {
   children: React.ReactNode
   className?: string
+  compact?: boolean
 }
 
-export function Conversation({ children, className }: ConversationProps) {
+export function Conversation({ children, className, compact }: ConversationProps) {
   const { scrollRef, contentRef, isAtBottom, scrollToBottom } = useStickToBottom({
     initial: 'instant',
   })
@@ -34,7 +35,7 @@ export function Conversation({ children, className }: ConversationProps) {
   return (
     <div className={cn('relative flex-1 overflow-hidden', className)}>
       <div ref={scrollRef} className="h-full overflow-y-auto">
-        <div ref={contentRef} className="max-w-3xl mx-auto px-4 py-6">
+        <div ref={contentRef} className={cn('mx-auto py-6', compact ? 'max-w-none px-4' : 'max-w-3xl px-4')}>
           {children}
         </div>
       </div>

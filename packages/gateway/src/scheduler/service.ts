@@ -121,7 +121,8 @@ export class SchedulerService {
       .all();
     const all = rows.map(mapJob);
     if (!userId) return all;
-    return all.filter((job) => job.userId === userId);
+    // Include both the user's own jobs AND system-level jobs (userId === null)
+    return all.filter((job) => job.userId === userId || job.userId === null);
   }
 
   create(params: {
@@ -157,7 +158,8 @@ export class SchedulerService {
     const row = this.options.db.select().from(scheduledJobs).where(eq(scheduledJobs.id, id)).get();
     const job = row ? mapJob(row) : null;
     if (!job) return null;
-    if (userId && job.userId !== userId) return null;
+    // Allow access to system-level jobs (userId === null) for any authenticated user
+    if (userId && job.userId !== null && job.userId !== userId) return null;
     return job;
   }
 

@@ -71,6 +71,19 @@ export const ToolName = {
   // ── Meta (tool discovery) ──
   ToolsList: "tools.list",
   ToolsSearch: "tools.search",
+
+  // ── Network ──
+  NetworkScan: "network.scan",
+
+  // ── Core tools (simplified set) ──
+  CoreRead: "read",
+  CoreEdit: "edit",
+  CoreExecute: "execute",
+  CoreSearch: "search",
+  CoreWeb: "web",
+  CoreAgent: "agent",
+  CoreTodo: "todo",
+  CoreJait: "jait",
 } as const;
 
 /** Union of all known tool name values. */

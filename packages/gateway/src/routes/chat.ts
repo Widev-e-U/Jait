@@ -8,6 +8,8 @@ import type { ToolContext } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { ToolResult } from "../tools/contracts.js";
 import type { MemoryService } from "../memory/contracts.js";
+import type { SurfaceRegistry } from "../surfaces/registry.js";
+import { resolveWorkspaceRoot } from "../tools/core/get-fs.js";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "../lib/uuidv7.js";
@@ -66,7 +68,8 @@ type StreamEvent =
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
   | { type: "tool_start"; tool: string; args: unknown; call_id: string }
   | { type: "tool_output"; call_id: string; content: string }
-  | { type: "tool_result"; call_id: string; ok: boolean; message: string; data?: unknown }
+  | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; data?: unknown }
+  | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
   | { type: "done"; session_id: string; prompt_count: number; remaining_prompts: null }
   | { type: "error"; message: string };
 type StreamSubscriber = (event: StreamEvent) => void;
@@ -308,6 +311,7 @@ export interface ChatRouteDeps {
   sessionService?: SessionService;
   userService?: UserService;
   toolRegistry?: ToolRegistry;
+  surfaceRegistry?: SurfaceRegistry;
   audit?: AuditWriter;
   memoryService?: MemoryService;
   toolExecutor?: (
@@ -329,6 +333,7 @@ export function registerChatRoutes(
   let sessionService: SessionService | undefined;
   let userService: UserService | undefined;
   let toolRegistry: ToolRegistry | undefined;
+  let surfaceRegistry: SurfaceRegistry | undefined;
   let audit: AuditWriter | undefined;
   let toolExecutor: ChatRouteDeps["toolExecutor"] | undefined;
   let memoryService: MemoryService | undefined;
@@ -339,6 +344,7 @@ export function registerChatRoutes(
     sessionService = deps.sessionService;
     userService = deps.userService;
     toolRegistry = deps.toolRegistry;
+    surfaceRegistry = deps.surfaceRegistry;
     audit = deps.audit;
     toolExecutor = deps.toolExecutor;
     memoryService = deps.memoryService;
@@ -433,7 +439,9 @@ export function registerChatRoutes(
     const context: ToolContext = {
       sessionId,
       actionId: uuidv7(),
-      workspaceRoot: process.cwd(),
+      workspaceRoot: surfaceRegistry
+        ? resolveWorkspaceRoot(surfaceRegistry, sessionId)
+        : process.cwd(),
       requestedBy: "agent",
       userId: auth?.userId,
       apiKeys: auth?.apiKeys,
@@ -1156,6 +1164,7 @@ export function registerChatRoutes(
         emitToSubscribers(sessionId, {
           type: "tool_result",
           call_id: action.id,
+          tool: action.tool,
           ok: result.ok,
           message: result.message,
           data: result.data,

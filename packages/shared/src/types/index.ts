@@ -12,8 +12,22 @@ export type {
   ToolCall,
   WsEventType,
   WsEvent,
+  UICommandType,
+  UICommandPayload,
+  WorkspaceOpenData,
+  WorkspaceCloseData,
+  TerminalFocusData,
+  FileHighlightData,
 } from "./message.js";
 export type { GatewayStatus, DeviceInfo } from "./gateway.js";
+
+export type {
+  NetworkHost,
+  NetworkScanResult,
+  SshTestResult,
+  DeployStatus,
+  GatewayNode,
+} from "./network.js";
 
 export type {
   DevicePlatform,
@@ -22,4 +36,10 @@ export type {
   ScreenShareViewer,
   ScreenShareSessionState,
   OsToolNetworkShareState,
+  ScreenShareOffer,
+  ScreenShareAnswer,
+  ScreenShareIceCandidate,
+  ScreenShareSignalType,
+  ScreenShareStartRequest,
+  ScreenShareStopRequest,
 } from "./screen-share.js";

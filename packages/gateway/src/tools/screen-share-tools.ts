@@ -1,10 +1,10 @@
 import type { ScreenShareService } from "@jait/screen-share";
+import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 
 interface ScreenShareInput {
-  action: "start" | "stop" | "pause" | "resume";
-  hostDeviceId?: string;
-  viewerDeviceIds?: string[];
+  action: "connect" | "disconnect" | "list-devices";
+  targetDeviceId?: string;
 }
 
 interface OsToolInput {
@@ -24,47 +24,90 @@ interface OsToolInput {
   };
 }
 
-export function createScreenShareTool(screenShare: ScreenShareService): ToolDefinition<ScreenShareInput> {
+export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsControlPlane): ToolDefinition<ScreenShareInput> {
   return {
     name: "screen.share",
-    description: "Start/stop/pause/resume active screen sharing session.",
+    description:
+      "Connect to a remote device and view its screen, or manage remote screen viewing sessions. " +
+      "Use 'list-devices' to discover connected devices (desktop Electron app, mobile, browser). " +
+      "Use 'connect' with a targetDeviceId to view that device's screen remotely. " +
+      "Use 'disconnect' to end the current viewing session.",
     tier: "standard",
     category: "screen",
     source: "builtin",
     parameters: {
       type: "object",
       properties: {
-        action: { type: "string", enum: ["start", "stop", "pause", "resume"] },
-        hostDeviceId: { type: "string" },
-        viewerDeviceIds: { type: "string", description: "Optional comma-separated viewer device IDs" },
+        action: {
+          type: "string",
+          enum: ["connect", "disconnect", "list-devices"],
+          description: "Action to perform. Use 'list-devices' to discover devices, 'connect' to view a remote screen, 'disconnect' to stop.",
+        },
+        targetDeviceId: {
+          type: "string",
+          description: "Device ID to connect to and view its screen. Required for 'connect'.",
+        },
       },
       required: ["action"],
     },
     async execute(input): Promise<ToolResult> {
-      if (input.action === "start") {
-        if (!input.hostDeviceId) return { ok: false, message: "hostDeviceId is required for start." };
-        const state = screenShare.startShare({ hostDeviceId: input.hostDeviceId, viewerDeviceIds: input.viewerDeviceIds });
-        return { ok: true, message: "Screen sharing started.", data: state };
-      }
-      if (input.action === "stop") {
-        return { ok: true, message: "Screen sharing stopped.", data: screenShare.stopShare() };
-      }
-
-      const current = screenShare.getState().activeSession;
-      if (!current) return { ok: false, message: "No active share session." };
-
-      const nextStatus = input.action === "pause" ? "paused" : "sharing";
-      const next = { ...current, status: nextStatus, updatedAt: new Date().toISOString() };
-      // keep write path centralized by restarting from current config (simple state transition)
-      if (nextStatus === "sharing" && current.status === "paused") {
-        screenShare.updateViewerTransport({
-          deviceId: current.viewers[0]?.deviceId ?? "",
-          latencyMs: current.transport.avgLatencyMs,
-          preferP2P: current.transport.routeMode === "p2p",
-        });
+      if (input.action === "list-devices") {
+        const state = screenShare.getState();
+        return {
+          ok: true,
+          message: `Found ${state.devices.length} registered device(s). Active session: ${state.activeSession ? state.activeSession.status : "none"}.`,
+          data: {
+            devices: state.devices.map((d) => ({
+              id: d.id,
+              name: d.name,
+              platform: d.platform,
+              authorized: d.authorized,
+              capabilities: d.capabilities,
+              lastSeenAt: d.lastSeenAt,
+            })),
+            activeSession: state.activeSession
+              ? { id: state.activeSession.id, status: state.activeSession.status, hostDeviceId: state.activeSession.hostDeviceId }
+              : null,
+          },
+        };
       }
 
-      return { ok: true, message: `Screen sharing ${input.action}d.`, data: next };
+      if (input.action === "connect") {
+        if (!input.targetDeviceId) {
+          const devices = screenShare.getState().devices;
+          if (devices.length === 0) {
+            return {
+              ok: false,
+              message: "No devices registered. The user needs to open Jait on the target device (desktop app, mobile app, or browser) first. Each device auto-registers when it opens.",
+            };
+          }
+          return {
+            ok: false,
+            message: `targetDeviceId is required. Available devices: ${devices.map((d) => `${d.name} (${d.id})`).join(", ")}`,
+          };
+        }
+        // Start a session with the target device as the host (screen sharer)
+        // The viewer (user's current browser) will be added automatically
+        const state = screenShare.startShare({ hostDeviceId: input.targetDeviceId });
+
+        // Tell the host device to begin screen capture via WS
+        if (ws) {
+          ws.sendScreenShareStartRequest(state.id, input.targetDeviceId);
+          ws.broadcastScreenShareState(state);
+        }
+
+        return {
+          ok: true,
+          message: `Connecting to remote device "${input.targetDeviceId}". The remote device will start sharing its screen. The user can now see the remote screen in the Screen Share panel.`,
+          data: state,
+        };
+      }
+
+      if (input.action === "disconnect") {
+        return { ok: true, message: "Screen viewing session ended.", data: screenShare.stopShare() };
+      }
+
+      return { ok: false, message: `Unknown action: ${String(input.action)}` };
     },
   };
 }

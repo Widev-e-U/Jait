@@ -11,6 +11,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { SessionService } from "../services/sessions.js";
+import type { SessionStateService } from "../services/session-state.js";
 import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 import type { HookBus } from "../scheduler/hooks.js";
@@ -22,6 +23,7 @@ export function registerSessionRoutes(
   sessionService: SessionService,
   audit: AuditWriter,
   hooks?: HookBus,
+  sessionState?: SessionStateService,
 ) {
   // Create session
   app.post("/api/sessions", async (request, reply) => {
@@ -161,4 +163,39 @@ export function registerSessionRoutes(
     }
     return session;
   });
+
+  // ─── Session State (per-session key-value store) ───────────────────
+  if (sessionState) {
+    // GET /api/sessions/:id/state?keys=workspace.panel,terminal.visible
+    app.get("/api/sessions/:id/state", async (request, reply) => {
+      const authUser = await requireAuth(request, reply, config.jwtSecret);
+      if (!authUser) return;
+      const { id } = request.params as { id: string };
+      const session = sessionService.getById(id, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+      const query = request.query as Record<string, unknown>;
+      const keysParam = typeof query["keys"] === "string" ? query["keys"] : undefined;
+      const keys = keysParam ? keysParam.split(",").map((k) => k.trim()).filter(Boolean) : undefined;
+      return sessionState.get(id, keys);
+    });
+
+    // PATCH /api/sessions/:id/state  — body: { "workspace.panel": {...}, "key2": null }
+    app.patch("/api/sessions/:id/state", async (request, reply) => {
+      const authUser = await requireAuth(request, reply, config.jwtSecret);
+      if (!authUser) return;
+      const { id } = request.params as { id: string };
+      const session = sessionService.getById(id, authUser.id);
+      if (!session) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
+      }
+      const body = (request.body as Record<string, unknown>) ?? {};
+      if (typeof body !== "object" || Array.isArray(body)) {
+        return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Body must be a JSON object of key→value pairs" });
+      }
+      sessionState.set(id, body);
+      return { ok: true };
+    });
+  }
 }

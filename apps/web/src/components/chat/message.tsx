@@ -17,6 +17,7 @@ interface MessageProps {
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
   isStreaming?: boolean
+  compact?: boolean
   onOpenTerminal?: (terminalId: string | null) => void
   onEditMessage?: (
     messageId: string,
@@ -36,6 +37,7 @@ export function Message({
   thinkingDuration,
   toolCalls,
   isStreaming,
+  compact,
   onOpenTerminal,
   onEditMessage,
 }: MessageProps) {
@@ -59,13 +61,46 @@ export function Message({
     if (!isEditing) setDraft(content)
   }, [content, isEditing])
 
+  /** Build copyable text including tool calls when present */
+  const buildCopyText = (): string => {
+    const parts: string[] = []
+
+    if (toolCalls && toolCalls.length > 0) {
+      for (const call of toolCalls) {
+        const label = call.tool.replace(/_/g, '.')
+        const summary = Object.entries(call.args)
+          .filter(([, v]) => v != null && v !== '')
+          .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
+          .join(', ')
+        const status = call.status === 'success' ? '\u2713' : call.status === 'error' ? '\u2717' : '\u2026'
+        const duration = call.completedAt && call.startedAt
+          ? `${((call.completedAt - call.startedAt) / 1000).toFixed(1)}s`
+          : ''
+
+        parts.push(`[${status} ${label}] ${summary}`)
+        if (call.result?.message) {
+          const msg = call.result.message.length > 500
+            ? call.result.message.slice(0, 500) + '\u2026'
+            : call.result.message
+          parts.push(msg)
+        }
+        if (duration) parts.push(`Duration: ${duration}`)
+        parts.push('')
+      }
+    }
+
+    if (content) parts.push(content)
+    return parts.join('\n').trim()
+  }
+
   const copyToClipboard = async () => {
-    if (!content) return
+    const text = buildCopyText()
+    if (!text) return
     try {
-      await navigator.clipboard.writeText(content)
+      await navigator.clipboard.writeText(text)
     } catch {
       const textArea = document.createElement('textarea')
-      textArea.value = content
+      textArea.value = text
       textArea.style.position = 'fixed'
       textArea.style.opacity = '0'
       document.body.appendChild(textArea)
@@ -178,7 +213,7 @@ export function Message({
   }
 
   return (
-    <div className={cn('group/message flex gap-3 py-4', isUser && 'justify-end')}>
+    <div className={cn('group/message flex gap-3', compact ? 'py-2' : 'py-4', isUser && 'justify-end')}>
       <div className={cn('max-w-[85%] space-y-2', isUser && 'order-1')}>
         {!isUser && thinking && (
           <Reasoning
@@ -225,13 +260,21 @@ export function Message({
               </div>
             </div>
           ) : isUser ? (
-            <div ref={userBubbleRef} className="relative rounded-lg px-4 py-3 text-base leading-relaxed whitespace-pre-wrap bg-muted">
+            <div ref={userBubbleRef} className={cn(
+              'relative rounded-lg px-4 py-3 whitespace-pre-wrap bg-muted',
+              compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
+            )}>
               {content}
               {renderActions()}
             </div>
           ) : (
             <div className="relative">
-              <div className="prose prose-base dark:prose-invert max-w-none prose-p:leading-relaxed prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none">
+              <div className={cn(
+                'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none',
+                compact
+                  ? 'prose-sm prose-p:leading-normal'
+                  : 'prose-base prose-p:leading-relaxed',
+              )}>
                 <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
               </div>
               {renderActions()}

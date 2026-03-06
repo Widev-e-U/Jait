@@ -6,6 +6,8 @@ export class SurfaceRegistry {
 
   /** Called after every surface is started (regardless of creation path) */
   onSurfaceStarted?: (id: string, surface: Surface) => void;
+  /** Called just before a surface is removed after stopping */
+  onSurfaceStopped?: (id: string, surface: Surface) => void;
 
   register(factory: SurfaceFactory): void {
     this.factories.set(factory.type, factory);
@@ -33,7 +35,9 @@ export class SurfaceRegistry {
   async stopSurface(id: string, reason?: string): Promise<boolean> {
     const surface = this.surfaces.get(id);
     if (!surface) return false;
+    const snap = surface.snapshot();
     await surface.stop({ reason });
+    this.onSurfaceStopped?.(id, { ...surface, snapshot: () => snap } as Surface);
     this.surfaces.delete(id);
     return true;
   }

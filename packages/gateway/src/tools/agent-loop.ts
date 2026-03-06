@@ -67,13 +67,14 @@ export type AgentLoopEvent =
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
   | { type: "tool_start"; tool: string; args: unknown; call_id: string }
   | { type: "tool_output"; call_id: string; content: string }
-  | { type: "tool_result"; call_id: string; ok: boolean; message: string; data?: unknown }
+  | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; data?: unknown }
   | { type: "tool_retry"; call_id: string; attempt: number; maxAttempts: number }
   | { type: "tool_validation_error"; call_id: string; tool: string; errors: string[] }
   | { type: "steering"; message: string }
   | { type: "plan_action"; action: PlannedAction }
   | { type: "plan_complete"; planId: string; summary: string; actions: PlannedAction[] }
   | { type: "mode_notice"; mode: ChatMode; message: string }
+  | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
   | { type: "error"; message: string };
 
 /** Priority levels for queued tool calls */
@@ -544,10 +545,19 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
   onEvent?.({
     type: "tool_result",
     call_id: tc.id,
+    tool: internalName,
     ok: result.ok,
     message: result.message,
     data: result.data,
   });
+
+  // If this was a todo tool call, emit todo_list event for the UI
+  if (internalName === "todo" && result.ok && result.data) {
+    const items = (result.data as any).items;
+    if (Array.isArray(items)) {
+      onEvent?.({ type: "todo_list", items });
+    }
+  }
 
   return {
     result,
@@ -1031,6 +1041,7 @@ export async function retryToolCall(
   onEvent?.({
     type: "tool_result",
     call_id: callId,
+    tool: original.tool,
     ok: result.ok,
     message: result.message,
     data: result.data,

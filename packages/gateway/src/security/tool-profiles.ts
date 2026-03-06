@@ -37,6 +37,7 @@ const MINIMAL: ToolPermission[] = [
   perm("surfaces.list", "none", "low"),
   perm("surfaces.start", "always", "medium"),
   perm("surfaces.stop", "always", "medium"),
+  perm("network.scan", "none", "low"),
 ];
 
 // ── Coding Profile ───────────────────────────────────────────────────
@@ -57,6 +58,7 @@ const CODING: ToolPermission[] = [
   perm("surfaces.list", "none", "low"),
   perm("surfaces.start", "once", "low"),
   perm("surfaces.stop", "once", "low"),
+  perm("network.scan", "none", "low"),
 ];
 
 // ── Full Profile ─────────────────────────────────────────────────────
@@ -77,6 +79,7 @@ const FULL: ToolPermission[] = [
   perm("surfaces.list", "none", "low"),
   perm("surfaces.start", "none", "low"),
   perm("surfaces.stop", "none", "low"),
+  perm("network.scan", "none", "low"),
 ];
 
 // ── Profile Map ──────────────────────────────────────────────────────

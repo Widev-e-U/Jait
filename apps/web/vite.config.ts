@@ -22,5 +22,9 @@ export default defineConfig({
         changeOrigin: true,
       },
     },
+    // Allow WebSocket upgrade for screen sharing signaling
+    hmr: {
+      clientPort: 3000,
+    },
   },
 })

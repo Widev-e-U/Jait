@@ -1,0 +1,14 @@
+{
+  "appId": "dev.jait.mobile",
+  "appName": "Jait",
+  "webDir": "../../apps/web/dist",
+  "server": {
+    "androidScheme": "https",
+    "iosScheme": "https"
+  },
+  "plugins": {
+    "CapacitorHttp": {
+      "enabled": true
+    }
+  }
+}

@@ -3,6 +3,7 @@ import { createServer } from "./server.js";
 import { WsControlPlane } from "./ws.js";
 import { openDatabase, migrateDatabase } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
+import { SessionStateService } from "./services/session-state.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, BrowserSurfaceFactory } from "./surfaces/index.js";
 import { createToolRegistry } from "./tools/index.js";
@@ -31,6 +32,7 @@ async function main() {
 
   // Services
   const sessionService = new SessionService(db);
+  const sessionState = new SessionStateService(db);
   const userService = new UserService(db);
   const audit = new AuditWriter(db);
   const deviceRegistry = new DeviceRegistry();
@@ -46,10 +48,39 @@ async function main() {
   const ws = new WsControlPlane(config);
 
   // Auto-wire terminal output → WebSocket for ALL terminals (REST, tool, etc.)
+  // Also broadcast workspace activation for filesystem surfaces.
   surfaceRegistry.onSurfaceStarted = (id, surface) => {
     if (surface.type === "terminal" && "write" in surface) {
       (surface as import("./surfaces/terminal.js").TerminalSurface).onOutput = (data) =>
         ws.broadcastTerminalOutput(id, data);
+    }
+    if (surface.type === "filesystem") {
+      const snap = surface.snapshot();
+      const workspaceRoot = (snap.metadata as Record<string, unknown>)?.workspaceRoot ?? null;
+      // Push a UI command to open the workspace panel
+      ws.sendUICommand(
+        {
+          command: "workspace.open",
+          data: {
+            surfaceId: id,
+            workspaceRoot: workspaceRoot as string,
+          },
+        },
+        snap.sessionId ?? "",
+      );
+    }
+  };
+
+  surfaceRegistry.onSurfaceStopped = (id, surface) => {
+    if (surface.type === "filesystem") {
+      const snap = surface.snapshot();
+      ws.sendUICommand(
+        {
+          command: "workspace.close",
+          data: { surfaceId: id },
+        },
+        snap.sessionId ?? "",
+      );
     }
   };
 
@@ -161,10 +192,41 @@ async function main() {
 
   scheduler.start(30_000);
 
+  // Seed built-in "Network Scan" job if it doesn't already exist
+  {
+    const existingJobs = scheduler.list();
+    const hasNetworkScan = existingJobs.some(
+      (j) => j.toolName === "network.scan" && j.name === "Network Scan",
+    );
+    if (!hasNetworkScan) {
+      // Remove legacy "Device Discovery" job if present
+      const legacy = existingJobs.find(
+        (j) => j.toolName === "network.scan" && j.name === "Device Discovery",
+      );
+      if (legacy) scheduler.remove(legacy.id);
+
+      scheduler.create({
+        name: "Network Scan",
+        cron: "0 * * * *", // every hour at :00
+        toolName: "network.scan",
+        input: {
+          __jaitJobMeta: {
+            jobType: "system_job",
+            description:
+              "Scans the local network for devices, checks SSH connectivity, and detects running Jait gateway nodes.",
+          },
+        },
+        enabled: true,
+      });
+      console.log("Seeded built-in job: Network Scan (hourly)");
+    }
+  }
+
   console.log(`Consent manager initialized (profile: coding, timeout: 120s, ${permissions.size} tool permissions)`);
 
   const server = await createServer(config, {
     db,
+    sqlite,
     sessionService,
     userService,
     audit,
@@ -183,8 +245,10 @@ async function main() {
     },
     memoryService: memory,
     deviceRegistry,
+    sessionState,
     voiceService,
     toolExecutor,
+    screenShare,
   });
 
   // Wire terminal WS ↔ PTY
@@ -226,6 +290,20 @@ async function main() {
   };
   ws.onConsentReject = (requestId, reason) => {
     consentManager.reject(requestId, "click", reason);
+  };
+
+  // Screen-share WS start callback is no longer needed here — the start-request
+  // is relayed directly to clients by the WS handler, and session creation happens
+  // via the REST route or tool. This callback is kept as a no-op for safety.
+  ws.onScreenShareStart = (hostDeviceId, _viewerDeviceIds) => {
+    console.log(`Screen share start-request relayed for host: ${hostDeviceId}`);
+  };
+  ws.onScreenShareStop = (sessionId) => {
+    const session = screenShare.stopShare();
+    if (session) {
+      ws.broadcastScreenShareState(session);
+      console.log(`Screen share stopped: ${sessionId}`);
+    }
   };
 
   // Start Fastify first, then attach WS to its HTTP server (shared port)

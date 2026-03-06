@@ -143,6 +143,20 @@ export const messages = sqliteTable(
   ],
 );
 
+// ─── Session State (per-session key-value UI/app state) ─────────────
+export const sessionState = sqliteTable(
+  "session_state",
+  {
+    sessionId: text("session_id").notNull(),
+    key: text("key").notNull(),
+    value: text("value"),       // JSON-serialized
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_session_state_session").on(table.sessionId),
+  ],
+);
+
 // ─── Scheduled Jobs ──────────────────────────────────────────────────
 export const scheduledJobs = sqliteTable(
   "scheduled_jobs",

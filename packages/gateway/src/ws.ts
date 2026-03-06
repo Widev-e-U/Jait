@@ -1,5 +1,12 @@
 import { WebSocketServer, type WebSocket } from "ws";
 import type { WsEvent } from "@jait/shared";
+import type { UICommandPayload } from "@jait/shared";
+import type {
+  ScreenShareOffer,
+  ScreenShareAnswer,
+  ScreenShareIceCandidate,
+  ScreenShareSessionState,
+} from "@jait/shared";
 import type { AppConfig } from "./config.js";
 import { nanoid } from "nanoid";
 import * as jose from "jose";
@@ -245,6 +252,38 @@ export class WsControlPlane {
         }
         break;
       }
+      // ── Screen sharing signaling ────────────────────────────────
+      case "screen-share:offer": {
+        const offer = msg.payload as ScreenShareOffer | undefined;
+        if (offer) this.relayToDevice(offer.hostDeviceId, client.deviceId, msg);
+        break;
+      }
+      case "screen-share:answer": {
+        const answer = msg.payload as ScreenShareAnswer | undefined;
+        if (answer) this.relayToDevice(answer.viewerDeviceId, client.deviceId, msg);
+        break;
+      }
+      case "screen-share:ice-candidate": {
+        const ice = msg.payload as ScreenShareIceCandidate | undefined;
+        if (ice) this.relayToDevice(ice.fromDeviceId, client.deviceId, msg);
+        break;
+      }
+      case "screen-share:start-request": {
+        // Relay the start-request to all other connected clients so
+        // the target host device receives it and begins screen capture.
+        const startReq = msg.payload as { hostDeviceId: string; sessionId?: string; viewerDeviceIds?: string[] } | undefined;
+        if (startReq) {
+          this.relayToDevice(startReq.hostDeviceId, client.deviceId, msg);
+        }
+        break;
+      }
+      case "screen-share:stop-request": {
+        if (this.onScreenShareStop) {
+          const req = msg.payload as { sessionId: string } | undefined;
+          if (req) this.onScreenShareStop(req.sessionId);
+        }
+        break;
+      }
       default: {
         this.send(client.ws, {
           type: "error",
@@ -274,6 +313,16 @@ export class WsControlPlane {
     }
   }
 
+  /** Send a typed UI command to all connected clients (server → frontend) */
+  sendUICommand(command: UICommandPayload, sessionId = "") {
+    this.broadcastAll({
+      type: "ui.command",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      payload: command,
+    });
+  }
+
   /** Send terminal output data to all clients subscribed to this terminal */
   broadcastTerminalOutput(terminalId: string, data: string) {
     for (const client of this.clients.values()) {
@@ -298,6 +347,67 @@ export class WsControlPlane {
   onConsentApprove?: (requestId: string) => void;
   /** Callback for consent rejection from WS clients */
   onConsentReject?: (requestId: string, reason?: string) => void;
+  /** Callback when a screen-share start is requested via WS */
+  onScreenShareStart?: (hostDeviceId: string, viewerDeviceIds?: string[]) => void;
+  /** Callback when a screen-share stop is requested via WS */
+  onScreenShareStop?: (sessionId: string) => void;
+
+  // ── Screen sharing helpers ────────────────────────────────────────
+
+  /** Relay a signaling message to a specific device ID */
+  private relayToDevice(
+    _targetDeviceId: string,
+    fromDeviceId: string | null,
+    msg: { type: string; payload?: unknown },
+  ) {
+    // Broadcast to all clients except the sender.
+    // A production implementation would look up targetDeviceId,
+    // but for LAN-first P2P, broadcasting to all authenticated clients works.
+    for (const client of this.clients.values()) {
+      if (client.deviceId === fromDeviceId) continue;
+      if (client.ws.readyState !== 1) continue;
+      this.send(client.ws, {
+        type: msg.type as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: msg.payload,
+      });
+    }
+  }
+
+  /** Broadcast a screen-share state update to all connected clients */
+  broadcastScreenShareState(state: ScreenShareSessionState) {
+    this.broadcastAll({
+      type: "screen-share:state-update" as WsEvent["type"],
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: state,
+    });
+  }
+
+  /**
+   * Programmatically send a screen-share start-request to all connected clients.
+   * Used by tools/routes when the session is created server-side and the host
+   * device needs to be told to begin capture.
+   */
+  sendScreenShareStartRequest(sessionId: string, hostDeviceId: string) {
+    for (const client of this.clients.values()) {
+      if (client.ws.readyState !== 1) continue;
+      this.send(client.ws, {
+        type: "screen-share:start-request" as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { sessionId, hostDeviceId },
+      });
+    }
+  }
+
+  /** Find all connected device IDs */
+  getConnectedDeviceIds(): string[] {
+    return [...this.clients.values()]
+      .filter((c) => c.deviceId && c.authenticated)
+      .map((c) => c.deviceId!);
+  }
 
   get clientCount() {
     return this.clients.size;

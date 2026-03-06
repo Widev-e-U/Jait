@@ -45,3 +45,42 @@ export interface OsToolNetworkShareState {
   devices: ScreenShareDevice[];
   activeSession: ScreenShareSessionState | null;
 }
+
+// ── WebRTC Signaling types ──────────────────────────────────────────
+
+export interface ScreenShareOffer {
+  sessionId: string;
+  hostDeviceId: string;
+  sdp: string;
+}
+
+export interface ScreenShareAnswer {
+  sessionId: string;
+  viewerDeviceId: string;
+  sdp: string;
+}
+
+export interface ScreenShareIceCandidate {
+  sessionId: string;
+  fromDeviceId: string;
+  candidate: string;
+  sdpMid: string | null;
+  sdpMLineIndex: number | null;
+}
+
+export type ScreenShareSignalType =
+  | "screen-share:offer"
+  | "screen-share:answer"
+  | "screen-share:ice-candidate"
+  | "screen-share:start-request"
+  | "screen-share:stop-request"
+  | "screen-share:state-update";
+
+export interface ScreenShareStartRequest {
+  hostDeviceId: string;
+  viewerDeviceIds?: string[];
+}
+
+export interface ScreenShareStopRequest {
+  sessionId: string;
+}

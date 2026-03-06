@@ -1,6 +1,9 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
 import { flushSync } from 'react-dom'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
+import type { TodoItem } from '@/components/chat/todo-list'
+import type { ChangedFile, FileChangeState } from '@/components/chat/files-changed'
+import type { QueuedMessage } from '@/components/chat/message-queue'
 import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
@@ -72,6 +75,10 @@ export function useChat(
   })
 
   const [pendingPlan, setPendingPlan] = useState<PlanData | null>(null)
+  const [todoList, setTodoList] = useState<TodoItem[]>([])
+  const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([])
+  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([])
+  const processingQueueRef = useRef(false)
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const prevSessionIdRef = useRef<string | null>(null)
@@ -96,6 +103,9 @@ export function useChat(
 
     if (!sessionId) {
       setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null })
+      setTodoList([])
+      setChangedFiles([])
+      setMessageQueue([])
       return
     }
 
@@ -330,6 +340,38 @@ export function useChat(
                     }
                   }),
                 }))
+
+                // Auto-track file edits in changedFiles (stream-resume path)
+                if (data.ok) {
+                  const msg = state.messages.find(m => m.id === assistantId)
+                  const tc = msg?.toolCalls?.find(t => t.callId === (data.call_id as string))
+                  if (tc) {
+                    const toolName = tc.tool.replace('_', '.')
+                    if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
+                      const filePath = String(tc.args?.path ?? '')
+                      if (filePath) {
+                        const fileName = filePath.split('/').pop() ?? filePath
+                        setChangedFiles(prev => {
+                          if (prev.some(f => f.path === filePath)) return prev
+                          return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
+                        })
+                      }
+                    }
+                  }
+                }
+              } else if (data.type === 'todo_list') {
+                // AI updated the task list
+                const items = data.items as TodoItem[]
+                setTodoList(items)
+              } else if (data.type === 'file_changed') {
+                // AI reported a file change
+                const filePath = data.path as string
+                const fileName = data.name as string
+                setChangedFiles(prev => {
+                  const existing = prev.find(f => f.path === filePath)
+                  if (existing) return prev // don't reset state if already tracked
+                  return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
+                })
               } else if (data.type === 'done') {
                 setState(prev => ({
                   ...prev,
@@ -550,6 +592,22 @@ export function useChat(
                   completedAt: Date.now(),
                 }
                 updateMessage({ toolCalls: [...toolCalls] })
+
+                // Auto-track file edits in changedFiles
+                if (data.ok) {
+                  const tc = toolCalls[idx]
+                  const toolName = tc.tool.replace('_', '.')
+                  if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
+                    const filePath = String(tc.args?.path ?? '')
+                    if (filePath) {
+                      const fileName = filePath.split('/').pop() ?? filePath
+                      setChangedFiles(prev => {
+                        if (prev.some(f => f.path === filePath)) return prev
+                        return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
+                      })
+                    }
+                  }
+                }
               }
             } else if (data.type === 'plan_complete') {
               // Plan mode completed — store the plan for review
@@ -563,6 +621,19 @@ export function useChat(
               // Mode notice — append as assistant content
               assistantContent += `\n\n*${data.message as string}*`
               updateMessage({ content: assistantContent })
+            } else if (data.type === 'todo_list') {
+              // AI updated the task list
+              const items = data.items as TodoItem[]
+              setTodoList(items)
+            } else if (data.type === 'file_changed') {
+              // AI reported a file change
+              const filePath = data.path as string
+              const fileName = data.name as string
+              setChangedFiles(prev => {
+                const existing = prev.find(f => f.path === filePath)
+                if (existing) return prev
+                return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
+              })
             } else if (data.type === 'done') {
               if (thinkingStart && !thinkingDuration) {
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
@@ -635,6 +706,71 @@ export function useChat(
     }
   }, [authToken, onLoginRequired, sessionId])
 
+  // --- Message queue (queueing & steering) ---
+  const enqueueMessage = useCallback((content: string) => {
+    const item: QueuedMessage = {
+      id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      content,
+      queuedAt: Date.now(),
+    }
+    setMessageQueue(prev => [...prev, item])
+  }, [])
+
+  const dequeueMessage = useCallback((id: string) => {
+    setMessageQueue(prev => prev.filter(q => q.id !== id))
+  }, [])
+
+  // Process the next queued message when the model finishes
+  const processQueue = useCallback(async (options: SendMessageOptions = {}) => {
+    if (processingQueueRef.current) return
+    processingQueueRef.current = true
+    // Drain one item at a time
+    setMessageQueue(prev => {
+      if (prev.length === 0) {
+        processingQueueRef.current = false
+        return prev
+      }
+      const [next, ...rest] = prev
+      // Send the message (fire-and-forget; sendMessage sets isLoading)
+      sendMessage(next!.content, options)
+      return rest
+    })
+    processingQueueRef.current = false
+  }, [sendMessage])
+
+  // Auto-process queue when model finishes and queue is non-empty
+  const prevIsLoadingRef = useRef(false)
+  useEffect(() => {
+    const wasLoading = prevIsLoadingRef.current
+    prevIsLoadingRef.current = state.isLoading
+    // Only trigger when transitioning from loading → not loading
+    if (wasLoading && !state.isLoading && messageQueue.length > 0) {
+      const sid = prevSessionIdRef.current
+      processQueue({
+        token: authToken,
+        sessionId: sid,
+        onLoginRequired,
+      })
+    }
+  }, [state.isLoading, messageQueue.length, processQueue, authToken, onLoginRequired])
+
+  // --- File change callbacks ---
+  const acceptFile = useCallback((path: string) => {
+    setChangedFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'accepted' as FileChangeState } : f))
+  }, [])
+
+  const rejectFile = useCallback((path: string) => {
+    setChangedFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'rejected' as FileChangeState } : f))
+  }, [])
+
+  const acceptAllFiles = useCallback(() => {
+    setChangedFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'accepted' as FileChangeState } : f))
+  }, [])
+
+  const rejectAllFiles = useCallback(() => {
+    setChangedFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'rejected' as FileChangeState } : f))
+  }, [])
+
   const cancelRequest = useCallback(() => {
     requestVersionRef.current += 1
     // 1. Tell the gateway to abort the Ollama stream
@@ -670,6 +806,9 @@ export function useChat(
 
   const clearMessages = useCallback(() => {
     setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null })
+    setTodoList([])
+    setChangedFiles([])
+    setMessageQueue([])
   }, [])
 
   const restartFromMessage = useCallback(async (
@@ -856,11 +995,20 @@ export function useChat(
     remainingPrompts: state.remainingPrompts,
     error: state.error,
     pendingPlan,
+    todoList,
+    changedFiles,
+    messageQueue,
     sendMessage,
     restartFromMessage,
     cancelRequest,
     clearMessages,
     executePlan,
     rejectPlan,
+    enqueueMessage,
+    dequeueMessage,
+    acceptFile,
+    rejectFile,
+    acceptAllFiles,
+    rejectAllFiles,
   }
 }

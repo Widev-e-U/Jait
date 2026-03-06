@@ -3,17 +3,25 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "main": "dist/main.js",
-  "types": "dist/main.d.ts",
+  "main": "dist/electron-main.js",
   "scripts": {
+    "dev": "bun run build:main && electron dist/electron-main.js",
+    "dev:watch": "tsc --watch & electron dist/electron-main.js",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "build:main": "tsc",
+    "typecheck": "tsc --noEmit",
+    "pack": "electron-builder --dir --config electron-builder.json",
+    "dist": "electron-builder --config electron-builder.json"
   },
   "dependencies": {
+    "@jait/api-client": "workspace:*",
+    "@jait/shared": "workspace:*",
     "@jait/ui-shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.7.3",
-    "@types/node": "^22.10.2"
+    "@types/node": "^22.10.2",
+    "electron": "^33.0.0",
+    "electron-builder": "^25.1.8"
   }
 }

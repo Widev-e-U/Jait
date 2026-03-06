@@ -63,6 +63,19 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Extract version from package.json
+        id: version
+        shell: bash
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          # Produce semver tag only on version tags (e.g. v0.2.0)
+          if [[ "${{ github.ref }}" == refs/tags/v* ]]; then
+            echo "semver=true" >> $GITHUB_OUTPUT
+          else
+            echo "semver=false" >> $GITHUB_OUTPUT
+          fi
+
       - name: Build and push gateway
         uses: docker/build-push-action@v5
         with:
@@ -72,9 +85,11 @@ jobs:
           platforms: linux/amd64
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
           tags: |
             ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-gateway:latest
             ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-gateway:${{ github.sha }}
+            ${{ steps.version.outputs.semver == 'true' && format('{0}/{1}/jait-gateway:v{2}', env.REGISTRY_HOST, env.IMAGE_OWNER, steps.version.outputs.version) || '' }}
 
       - name: Build and push web
         uses: docker/build-push-action@v5
@@ -85,9 +100,11 @@ jobs:
           platforms: linux/amd64
           labels: |
             org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.version=${{ steps.version.outputs.version }}
           build-args: |
             VITE_API_URL=${{ vars.VITE_API_URL || '' }}
             VITE_GOOGLE_CLIENT_ID=${{ vars.VITE_GOOGLE_CLIENT_ID || '' }}
           tags: |
             ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-web:latest
             ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-web:${{ github.sha }}
+            ${{ steps.version.outputs.semver == 'true' && format('{0}/{1}/jait-web:v{2}', env.REGISTRY_HOST, env.IMAGE_OWNER, steps.version.outputs.version) || '' }}

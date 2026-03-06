@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Calendar,
   Bug,
+  Cast,
   FolderTree,
   LogOut,
   MessageSquare,
@@ -12,6 +13,7 @@ import {
   Settings,
   Sun,
   Terminal as TerminalIcon,
+  Wifi,
   X,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
@@ -29,26 +31,31 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Conversation, Message, PromptInput, SessionSelector, Suggestions } from '@/components/chat'
-import { ModeSelector } from '@/components/chat/mode-selector'
+import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, FilesChanged, MessageQueue } from '@/components/chat'
+import type { ReferencedFile, PromptInputHandle } from '@/components/chat'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { SettingsPage } from '@/components/settings/SettingsPage'
-import { ActivityFeed } from '@/components/activity'
+import { NetworkPanel } from '@/components/network'
+import { ScreenSharePanel } from '@/components/screen-share'
+import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
-import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile } from '@/components/workspace'
+import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle } from '@/components/workspace'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSessions } from '@/hooks/useSessions'
+import { useUICommands } from '@/hooks/useUICommands'
+import { useSessionState } from '@/hooks/useSessionState'
+import type { WorkspaceOpenData } from '@jait/shared'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
-type AppView = 'chat' | 'jobs' | 'activity' | 'settings'
+type AppView = 'chat' | 'jobs' | 'network' | 'settings'
 
 const suggestions = [
   'What can you help me with?',
@@ -72,10 +79,12 @@ function App() {
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
   const [showWorkspace, setShowWorkspace] = useState(false)
+  const [showScreenShare, setShowScreenShare] = useState(false)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [terminalHeight, setTerminalHeight] = useState(280)
+  const [screenShareChatWidth, setScreenShareChatWidth] = useState<number | null>(null)
+  const screenShareDragging = useRef(false)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
-  const [talkModeEnabled, setTalkModeEnabled] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -85,8 +94,59 @@ function App() {
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
   const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
-  const [referencedFiles, setReferencedFiles] = useState<WorkspaceFile[]>([])
+  const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string }[]>([])
   const isDragging = useRef(false)
+  const workspaceRef = useRef<WorkspacePanelHandle>(null)
+  const promptInputRef = useRef<PromptInputHandle>(null)
+
+  const onScreenShareDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    screenShareDragging.current = true
+    const startX = e.clientX
+    const startWidth = screenShareChatWidth
+    const onMove = (ev: MouseEvent) => {
+      if (!screenShareDragging.current) return
+      // Dragging the handle LEFT makes chat wider, RIGHT makes it narrower
+      const delta = startX - ev.clientX
+      setScreenShareChatWidth(Math.min(800, Math.max(240, (startWidth ?? 320) + delta)))
+    }
+    const onUp = () => {
+      screenShareDragging.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [screenShareChatWidth])
+
+  const handleOpenWorkspace = useCallback(async () => {
+    if (showWorkspace) {
+      // Already open — close it
+      setShowWorkspace(false)
+      return
+    }
+    // Prompt for a directory first — only show workspace if user selects one
+    const w = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }
+    if (!w.showDirectoryPicker) {
+      window.alert('Directory picker is not supported in this browser.')
+      return
+    }
+    try {
+      const dirHandle = await w.showDirectoryPicker()
+      // User picked a folder — open the workspace panel and pass the handle
+      setShowWorkspace(true)
+      // Small delay so the panel mounts, then trigger scan with the handle
+      setTimeout(() => {
+        workspaceRef.current?.openDirectory(dirHandle)
+      }, 50)
+    } catch {
+      // User cancelled the picker — do nothing
+    }
+  }, [showWorkspace])
 
   const {
     user,
@@ -114,15 +174,61 @@ function App() {
     remainingPrompts,
     error,
     pendingPlan,
+    todoList,
+    changedFiles,
+    messageQueue,
     sendMessage,
     restartFromMessage,
     cancelRequest,
     clearMessages,
     executePlan,
     rejectPlan,
+    enqueueMessage,
+    dequeueMessage,
+    acceptFile,
+    rejectFile,
+    acceptAllFiles,
+    rejectAllFiles,
   } = useChat(activeSessionId, token, onLoginRequired)
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals()
   const { provider, model } = useModelInfo()
+
+  // ── Screen share (always active so Electron auto-registers) ───────
+  const screenShare = useScreenShare({ token })
+
+  // ── UI command channel (server → frontend via WebSocket) ──────────
+  const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
+
+  // ── Persistent session state for workspace panel ──────────────────
+  interface WorkspacePanelState { open: boolean; remotePath: string; surfaceId?: string }
+  const [savedWorkspace, setSavedWorkspace] = useSessionState<WorkspacePanelState>(
+    activeSessionId, 'workspace.panel', token,
+  )
+
+  // Restore workspace from persisted session state on mount / session switch
+  useEffect(() => {
+    if (!savedWorkspace) return
+    // Only restore if we don't already have an active workspace from WS
+    if (activeWorkspace) return
+    if (savedWorkspace.open && savedWorkspace.remotePath) {
+      setActiveWorkspace({
+        surfaceId: savedWorkspace.surfaceId ?? '',
+        workspaceRoot: savedWorkspace.remotePath,
+      })
+    }
+  }, [savedWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useUICommands({
+    'workspace.open': useCallback((data: WorkspaceOpenData) => {
+      setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
+      setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId })
+    }, [setSavedWorkspace]),
+    'workspace.close': useCallback(() => {
+      setActiveWorkspace(null)
+      setShowWorkspace(false)
+      setSavedWorkspace(null)
+    }, [setSavedWorkspace]),
+  })
 
   useEffect(() => {
     localStorage.setItem('showSessionsSidebar', showSidebar ? 'true' : 'false')
@@ -135,6 +241,12 @@ function App() {
   useEffect(() => {
     localStorage.setItem('chatMode', chatMode)
   }, [chatMode])
+
+  // Auto-open workspace panel when a filesystem surface starts
+  useEffect(() => {
+    if (!activeWorkspace) return
+    if (!showWorkspace) setShowWorkspace(true)
+  }, [activeWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     setThemeMode(settings.theme)
@@ -182,16 +294,6 @@ function App() {
   }, [activeSessionId])
 
 
-  useEffect(() => {
-    if (!talkModeEnabled || !activeSessionId) return
-    const last = messages[messages.length - 1]
-    if (!last || last.role !== 'assistant' || !last.content.trim()) return
-    void fetch(`${API_URL}/api/voice/speak`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sessionId: activeSessionId, text: last.content.slice(0, 600) }),
-    })
-  }, [messages, talkModeEnabled, activeSessionId])
   const handleThemeModeChange = useCallback(async (next: ThemeMode) => {
     const previous = themeMode
     setThemeMode(next)
@@ -311,66 +413,22 @@ function App() {
     mergeWorkspaceFiles(resolved)
   }, [mergeWorkspaceFiles])
 
-  const handleOpenDirectory = useCallback(async () => {
-    if (typeof window === 'undefined') return
+  /** Lazy search files in the workspace directory for @ mention autocomplete */
+  const handleSearchFiles = useCallback(async (query: string, limit: number, signal?: AbortSignal) => {
+    return workspaceRef.current?.searchFiles(query, limit, signal) ?? []
+  }, [])
 
-    type PickerWindow = Window & {
-      showDirectoryPicker?: () => Promise<any>
-    }
-
-    const pickerWindow = window as PickerWindow
-    if (!pickerWindow.showDirectoryPicker) {
-      window.alert('Directory picker is not supported in this browser. You can still drag and drop files into the explorer.')
+  const handleSubmit = async (chipFiles?: ReferencedFile[]) => {
+    if (!inputValue.trim() && (!chipFiles || chipFiles.length === 0)) return
+    if (!token) {
+      setShowLoginDialog(true)
       return
     }
 
-    const readDirectory = async (dir: any, prefix = ''): Promise<WorkspaceFile[]> => {
-      const collected: WorkspaceFile[] = []
-      for await (const entry of dir.values()) {
-        const nextPath = prefix ? `${prefix}/${entry.name}` : entry.name
-        if (entry.kind === 'directory') {
-          collected.push(...(await readDirectory(entry, nextPath)))
-          continue
-        }
-        const file = await entry.getFile()
-        if (file.size > 1024 * 1024) continue
-        const content = await file.text()
-        collected.push({
-          id: `${nextPath}-${file.lastModified}`,
-          name: file.name,
-          path: nextPath,
-          content,
-          language: workspaceLanguageForPath(nextPath),
-        })
-      }
-      return collected
-    }
-
-    try {
-      const root = await pickerWindow.showDirectoryPicker()
-      const files = await readDirectory(root)
-      mergeWorkspaceFiles(files)
-      setShowWorkspace(true)
-    } catch {
-      // user cancelled
-    }
-  }, [mergeWorkspaceFiles])
-
-  const handleReferenceFile = useCallback((file: WorkspaceFile) => {
-    setReferencedFiles((prev) => {
-      if (prev.some((entry) => entry.path === file.path)) return prev
-      return [...prev, file]
-    })
-  }, [])
-
-  const removeReferencedFile = useCallback((path: string) => {
-    setReferencedFiles((prev) => prev.filter((file) => file.path !== path))
-  }, [])
-
-  const handleSubmit = async () => {
-    if (!inputValue.trim() || isLoading) return
-    if (!token) {
-      setShowLoginDialog(true)
+    // Steering: if the model is currently generating, queue the message
+    if (isLoading) {
+      enqueueMessage(inputValue.trim())
+      setInputValue('')
       return
     }
     let sid = activeSessionId
@@ -379,11 +437,33 @@ function App() {
       sid = session?.id ?? null
     }
     if (!sid) return
-    const promptWithReferences = referencedFiles.length > 0
+
+    // Lazy-read content for inline chip files (@ mentions and drag-dropped)
+    const fileContents: { path: string; content: string }[] = []
+    if (chipFiles?.length) {
+      const seen = new Set<string>()
+      for (const chip of chipFiles) {
+        if (seen.has(chip.path)) continue
+        seen.add(chip.path)
+        // Check workspace files cache first
+        const cached = workspaceFiles.find((f) => f.path === chip.path)
+        if (cached) {
+          fileContents.push({ path: cached.path, content: cached.content })
+        } else {
+          // Lazy read from the filesystem via workspace panel
+          const file = await workspaceRef.current?.readFileByPath(chip.path)
+          if (file) {
+            fileContents.push({ path: file.path, content: file.content })
+          }
+        }
+      }
+    }
+
+    const promptWithReferences = fileContents.length > 0
       ? `${inputValue.trim()}
 
 Referenced files:
-${referencedFiles
+${fileContents
         .map((file) => `- ${file.path}
 \`\`\`
 ${file.content.slice(0, 2000)}
@@ -392,7 +472,6 @@ ${file.content.slice(0, 2000)}
       : inputValue.trim()
     sendMessage(promptWithReferences, { token, sessionId: sid, mode: chatMode, onLoginRequired: () => setShowLoginDialog(true) })
     setInputValue('')
-    setReferencedFiles([])
   }
 
   const handleSuggestion = async (suggestion: string) => {
@@ -522,21 +601,6 @@ ${file.content.slice(0, 2000)}
     }
   }, [token, activeSessionId, createSession, sendMessage])
 
-  const handleToggleTalkMode = useCallback(async () => {
-    if (!activeSessionId) return
-    const next = !talkModeEnabled
-    setTalkModeEnabled(next)
-    try {
-      await fetch(`${API_URL}/api/voice/state/${activeSessionId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ talkModeEnabled: next }),
-      })
-    } catch {
-      setTalkModeEnabled(!next)
-    }
-  }, [activeSessionId, talkModeEnabled])
-
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
@@ -589,56 +653,15 @@ ${file.content.slice(0, 2000)}
                 Jobs
               </Button>
               <Button
-                variant={currentView === 'activity' ? 'secondary' : 'ghost'}
+                variant={currentView === 'network' ? 'secondary' : 'ghost'}
                 size="sm"
                 className="h-8 text-xs"
-                onClick={() => setCurrentView('activity')}
+                onClick={() => setCurrentView('network')}
               >
-                <Monitor className="h-3.5 w-3.5 mr-1.5" />
-                Activity
+                <Wifi className="h-3.5 w-3.5 mr-1.5" />
+                Network
               </Button>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showTerminal ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={() => { void handleToggleTerminal() }}
-                  >
-                    <TerminalIcon className="h-3.5 w-3.5 mr-1.5" />
-                    Terminal
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showWorkspace ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={() => setShowWorkspace((open) => !open)}
-                  >
-                    <FolderTree className="h-3.5 w-3.5 mr-1.5" />
-                    Workspace
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Toggle file explorer + editor</TooltipContent>
-              </Tooltip>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showDebugPanel ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-8 text-xs"
-                    onClick={() => setShowDebugPanel(d => !d)}
-                  >
-                    <Bug className="h-3.5 w-3.5 mr-1.5" />
-                    Debug
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">SSE debug stream</TooltipContent>
-              </Tooltip>
+
             </nav>
           </div>
 
@@ -712,13 +735,75 @@ ${file.content.slice(0, 2000)}
           </div>
         </header>
 
+        {/* Chat-specific toolbar */}
+        {currentView === 'chat' && (
+          <div className="flex items-center gap-1 px-5 h-9 border-b shrink-0 bg-muted/30">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showTerminal ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-[11px] px-2"
+                  onClick={() => { void handleToggleTerminal() }}
+                >
+                  <TerminalIcon className="h-3 w-3 mr-1" />
+                  Terminal
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showWorkspace ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-[11px] px-2"
+                  onClick={() => { void handleOpenWorkspace() }}
+                >
+                  <FolderTree className="h-3 w-3 mr-1" />
+                  Workspace
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Open workspace</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showDebugPanel ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-[11px] px-2"
+                  onClick={() => setShowDebugPanel(d => !d)}
+                >
+                  <Bug className="h-3 w-3 mr-1" />
+                  Debug
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">SSE debug stream</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showScreenShare ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-[11px] px-2"
+                  onClick={() => setShowScreenShare(s => !s)}
+                >
+                  <Cast className="h-3 w-3 mr-1" />
+                  Share
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Screen sharing</TooltipContent>
+            </Tooltip>
+          </div>
+        )}
+
         {currentView === 'jobs' ? (
           <div className="flex-1 overflow-y-auto">
             <JobsPage />
           </div>
-        ) : currentView === 'activity' ? (
+        ) : currentView === 'network' ? (
           <div className="flex-1 overflow-y-auto">
-            <ActivityFeed events={activityEvents} />
+            <NetworkPanel token={token} />
           </div>
         ) : currentView === 'settings' ? (
           <div className="flex-1 overflow-y-auto">
@@ -728,6 +813,7 @@ ${file.content.slice(0, 2000)}
               apiKeys={settings.api_keys}
               onSaveApiKeys={handleSaveApiKeys}
               onClearArchive={handleClearArchive}
+              activityEvents={activityEvents}
             />
           </div>
         ) : (
@@ -746,17 +832,41 @@ ${file.content.slice(0, 2000)}
 
             {showWorkspace && (
               <WorkspacePanel
+                ref={workspaceRef}
+                autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
                 files={workspaceFiles}
                 activeFileId={activeWorkspaceFileId}
                 onActiveFileChange={setActiveWorkspaceFileId}
-                onOpenDirectory={() => { void handleOpenDirectory() }}
                 onFileDrop={(files) => { void handleFileDrop(files) }}
-                onReferenceFile={handleReferenceFile}
+                onReferenceFile={(file) => promptInputRef.current?.insertChip({ path: file.path, name: file.name })}
+                onAvailableFilesChange={setAvailableFilesForMention}
+              />
+            )}
+
+            {showScreenShare && (
+              <aside className="flex-[3] min-w-0 border-r bg-background overflow-hidden flex flex-col">
+                <div className="flex items-center justify-between h-9 px-3 border-b bg-muted/30 shrink-0">
+                  <span className="text-xs font-medium flex items-center gap-1.5">
+                    <Cast className="h-3 w-3" /> Screen Share
+                  </span>
+                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setShowScreenShare(false)}>
+                    <X className="h-3 w-3" />
+                  </Button>
+                </div>
+                <ScreenSharePanel screenShare={screenShare} />
+              </aside>
+            )}
+
+            {showScreenShare && (
+              <div
+                className="w-1 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
+                onMouseDown={onScreenShareDragStart}
               />
             )}
 
             {!hasMessages ? (
-              <div className={`flex-1 flex flex-col items-center justify-center px-4 transition-all duration-300 ease-out ${showWorkspace ? 'translate-x-2' : 'translate-x-0'}`}>
+              <div className={`${showScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 flex flex-col items-center justify-center px-4 transition-all duration-300 ease-out`}
+                style={showScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
                 <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
@@ -764,22 +874,24 @@ ${file.content.slice(0, 2000)}
                   </div>
                   <Suggestions suggestions={suggestions} onSelect={handleSuggestion} />
                   <PromptInput
+                    ref={promptInputRef}
                     value={inputValue}
                     onChange={setInputValue}
                     onSubmit={handleSubmit}
                     isLoading={isLoading}
                     onVoiceInput={handleVoiceInput}
-                    talkModeEnabled={talkModeEnabled}
-                    onToggleTalkMode={handleToggleTalkMode}
+                    mode={chatMode}
+                    onModeChange={setChatMode}
+                    availableFiles={availableFilesForMention}
+                    onSearchFiles={handleSearchFiles}
+                    workspaceOpen={showWorkspace}
                   />
-                  <div className="flex justify-center pt-1">
-                    <ModeSelector mode={chatMode} onChange={setChatMode} />
-                  </div>
                 </div>
               </div>
             ) : (
-              <div className={`flex flex-col flex-1 min-h-0 transition-all duration-300 ease-out ${showWorkspace ? 'translate-x-2' : 'translate-x-0'}`}>
-                <Conversation className="min-h-0 flex-1 border-b">
+              <div className={`flex flex-col ${showScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 min-h-0 transition-all duration-300 ease-out`}
+                style={showScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
+                <Conversation className="min-h-0 flex-1 border-b" compact={showWorkspace || showScreenShare}>
                   {messages.map((msg, idx) => (
                     <Message
                       key={msg.id}
@@ -792,14 +904,18 @@ ${file.content.slice(0, 2000)}
                       thinkingDuration={msg.thinkingDuration}
                       toolCalls={msg.toolCalls}
                       isStreaming={isLoading && msg === messages[messages.length - 1]}
+                      compact={showWorkspace || showScreenShare}
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
                     />
                   ))}
+                  {todoList.length > 0 && (
+                    <TodoList items={todoList} className="mx-auto max-w-3xl mt-2" />
+                  )}
                 </Conversation>
 
-                <div className="shrink-0 px-4 py-3">
-                  <div className="max-w-3xl mx-auto space-y-1.5">
+                <div className={`shrink-0 py-3 ${(showWorkspace || showScreenShare) ? 'px-3' : 'px-4'}`}>
+                  <div className={`mx-auto space-y-1.5 ${(showWorkspace || showScreenShare) ? 'max-w-none' : 'max-w-3xl'}`}>
                     <ConsentQueue
                       compact
                       sessionId={activeSessionId}
@@ -818,21 +934,23 @@ ${file.content.slice(0, 2000)}
                         Daily limit reached. Come back tomorrow.
                       </p>
                     )}
-                    {referencedFiles.length > 0 && (
-                      <div className="flex flex-wrap gap-1 pb-1">
-                        {referencedFiles.map((file) => (
-                          <button
-                            key={file.path}
-                            className="text-[11px] px-2 py-0.5 rounded-full bg-muted hover:bg-muted/70"
-                            onClick={() => removeReferencedFile(file.path)}
-                            title="Click to remove"
-                          >
-                            {file.name}
-                          </button>
-                        ))}
-                      </div>
+                    {changedFiles.length > 0 && (
+                      <FilesChanged
+                        files={changedFiles}
+                        onAccept={acceptFile}
+                        onReject={rejectFile}
+                        onAcceptAll={acceptAllFiles}
+                        onRejectAll={rejectAllFiles}
+                      />
+                    )}
+                    {messageQueue.length > 0 && (
+                      <MessageQueue
+                        items={messageQueue}
+                        onRemove={dequeueMessage}
+                      />
                     )}
                     <PromptInput
+                      ref={promptInputRef}
                       value={inputValue}
                       onChange={setInputValue}
                       onSubmit={handleSubmit}
@@ -840,12 +958,14 @@ ${file.content.slice(0, 2000)}
                       isLoading={isLoading}
                       disabled={limitReached}
                       onVoiceInput={handleVoiceInput}
-                      talkModeEnabled={talkModeEnabled}
-                      onToggleTalkMode={handleToggleTalkMode}
+                      mode={chatMode}
+                      onModeChange={setChatMode}
+                      availableFiles={availableFilesForMention}
+                      onSearchFiles={handleSearchFiles}
+                      workspaceOpen={showWorkspace}
                     />
                     <div className="flex items-center justify-between gap-2 px-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        <ModeSelector mode={chatMode} onChange={setChatMode} disabled={isLoading} />
                         <button onClick={() => { clearMessages(); createSession() }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
                           New chat
                         </button>

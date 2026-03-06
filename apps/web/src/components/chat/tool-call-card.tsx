@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { cn } from '@/lib/utils'
 
 /** Auto-scroll a container to the bottom when content changes */
@@ -38,6 +39,16 @@ function normalizeTool(name: string): string {
 }
 
 const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: string }> = {
+  // ── Core tools ──────────────────────────────────────────
+  'read':            { icon: FileText,  label: 'Read',        color: 'text-blue-500' },
+  'edit':            { icon: FileText,  label: 'Edit',        color: 'text-blue-500' },
+  'execute':         { icon: Terminal,  label: 'Execute',     color: 'text-yellow-500' },
+  'search':          { icon: Search,    label: 'Search',      color: 'text-emerald-500' },
+  'web':             { icon: Globe,     label: 'Web',         color: 'text-cyan-500' },
+  'agent':           { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
+  'todo':            { icon: ListTodo,  label: 'Todo',        color: 'text-orange-500' },
+  'jait':            { icon: Zap,       label: 'Jait',        color: 'text-indigo-500' },
+  // ── Legacy / standard tools ─────────────────────────────
   'terminal.run':    { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'terminal.stream': { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'file.read':       { icon: FileText,  label: 'Read File',  color: 'text-blue-500' },
@@ -85,6 +96,39 @@ function truncate(value: string, max = 64): string {
 /** Format a tool call's primary display text (e.g. the command or file path) */
 function getCallSummary(tool: string, args: Record<string, unknown>): string {
   const normalized = normalizeTool(tool)
+  // ── Core tools ──────────────────────────────────────────
+  if (normalized === 'read') return String(args.path ?? '')
+  if (normalized === 'edit') {
+    const path = String(args.path ?? '')
+    if (args.search) return `${path} (patch)`
+    return path
+  }
+  if (normalized === 'execute') return String(args.command ?? '')
+  if (normalized === 'search') {
+    const pattern = String(args.pattern ?? '')
+    const mode = String(args.mode ?? 'content')
+    return mode === 'files' ? `Find: ${pattern}` : pattern
+  }
+  if (normalized === 'web') {
+    if (args.url) return String(args.url)
+    if (args.urls) return `${(args.urls as string[]).length} URLs`
+    return String(args.query ?? '')
+  }
+  if (normalized === 'agent') return truncate(String(args.description ?? args.prompt ?? ''), 80)
+  if (normalized === 'todo') {
+    const list = args.todoList as Array<{ title: string; status: string }> | undefined
+    if (!list) return 'Track tasks'
+    const inProgress = list.filter(t => t.status === 'in-progress')
+    if (inProgress.length) return truncate(inProgress[0].title, 60)
+    return `${list.length} task(s)`
+  }
+  if (normalized === 'jait') {
+    const action = String(args.action ?? '')
+    if (action.startsWith('memory.')) return `${action}: ${truncate(String(args.query ?? args.content ?? ''), 60)}`
+    if (action.startsWith('cron.')) return `${action}: ${truncate(String(args.name ?? args.id ?? ''), 40)}`
+    return action || 'jait'
+  }
+  // ── Legacy tools ─────────────────────────────────────────
   if (normalized.startsWith('terminal.')) return String(args.command ?? '')
   if (normalized.startsWith('file.')) return String(args.path ?? '')
   if (normalized === 'memory.save') {
@@ -423,6 +467,7 @@ function BrowserScreenshotView({ path }: { path: string }) {
 
 function isTerminalCreationCall(call: ToolCallInfo): boolean {
   const normalizedTool = normalizeTool(call.tool)
+  if (normalizedTool === 'execute') return true
   if (normalizedTool.startsWith('terminal.')) return true
   if (normalizedTool !== 'surfaces.start') return false
 
@@ -645,6 +690,7 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
     ? String((resultData.result as Record<string, unknown>).path ?? '')
     : null
   const isTerminal = normalizedTool.startsWith('terminal.')
+  const isFileEdit = normalizedTool === 'file.write' || normalizedTool === 'file.patch'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getTerminalId(call) : null
@@ -770,6 +816,14 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
             <BrowserSnapshotView snapshot={snapshotText} />
           ) : screenshotPath ? (
             <BrowserScreenshotView path={screenshotPath} />
+          ) : isFileEdit && call.status === 'success' ? (
+            <EditDiffView
+              filePath={String(call.args.path ?? '')}
+              oldText={normalizedTool === 'file.patch' ? String(call.args.search ?? '') : undefined}
+              newText={normalizedTool === 'file.patch' ? String(call.args.replace ?? '') : undefined}
+              writtenContent={normalizedTool === 'file.write' ? String(call.args.content ?? '') : undefined}
+              isNewFile={normalizedTool === 'file.write'}
+            />
           ) : displayOutput ? (
             <pre className={cn(
               'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',

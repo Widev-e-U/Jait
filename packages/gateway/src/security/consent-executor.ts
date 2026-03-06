@@ -105,8 +105,9 @@ export class ConsentAwareExecutor {
     // ── Auto-execute if no consent required ──
     const needsConsent = requiresConsent(permission, trustLevel, this.sessionApprovals);
     const approveAllEnabled = this.consentManager.isApproveAllEnabledForSession(context.sessionId);
+    const isScheduler = context.requestedBy === "scheduler";
 
-    if (!needsConsent || approveAllEnabled) {
+    if (!needsConsent || approveAllEnabled || isScheduler) {
       const result = await this.toolRegistry.execute(toolName, input, context, this.audit);
 
       // Record successful approval for trust progression

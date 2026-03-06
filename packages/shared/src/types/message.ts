@@ -30,6 +30,7 @@ export type WsEventType =
   | "consent.resolved"
   | "surface.connected"
   | "surface.disconnected"
+  | "ui.command"
   | "error";
 
 export interface WsEvent<T = unknown> {
@@ -37,4 +38,35 @@ export interface WsEvent<T = unknown> {
   sessionId: string;
   timestamp: string;
   payload: T;
+}
+
+// ── UI command channel (server → client) ────────────────────────────
+export type UICommandType =
+  | "workspace.open"
+  | "workspace.close"
+  | "terminal.focus"
+  | "file.highlight";
+
+/** Payload sent inside a `ui.command` WsEvent */
+export interface UICommandPayload<T = Record<string, unknown>> {
+  command: UICommandType;
+  data: T;
+}
+
+export interface WorkspaceOpenData {
+  surfaceId: string;
+  workspaceRoot: string;
+}
+
+export interface WorkspaceCloseData {
+  surfaceId: string;
+}
+
+export interface TerminalFocusData {
+  terminalId: string;
+}
+
+export interface FileHighlightData {
+  path: string;
+  line?: number;
 }
