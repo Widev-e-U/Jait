@@ -19,7 +19,6 @@ import { WsControlPlane } from "../ws.js";
 import { UserService } from "../services/users.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import WebSocket from "ws";
 
 // Use a known directory that exists on the system
 const TEST_DIR = join(homedir(), ".jait");
@@ -89,7 +88,7 @@ describe("POST /api/workspace/open", () => {
   it("should create a filesystem surface and return surfaceId", async () => {
     const res = await fetch(`${address}/api/workspace/open`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: TEST_DIR, sessionId }),
     });
 
@@ -103,7 +102,7 @@ describe("POST /api/workspace/open", () => {
     // First open the workspace
     const openRes = await fetch(`${address}/api/workspace/open`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: TEST_DIR, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
@@ -111,7 +110,6 @@ describe("POST /api/workspace/open", () => {
     // Now list the directory
     const listRes = await fetch(
       `${address}/api/workspace/list?path=${encodeURIComponent(TEST_DIR)}&surfaceId=${surfaceId}`,
-      { headers: { Authorization: `Bearer ${token}` } },
     );
 
     expect(listRes.ok).toBe(true);
@@ -125,7 +123,7 @@ describe("POST /api/workspace/open", () => {
   it("should persist workspace state to session_state DB", async () => {
     const openRes = await fetch(`${address}/api/workspace/open`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: TEST_DIR, sessionId }),
     });
     const { surfaceId } = (await openRes.json()) as { surfaceId: string };
@@ -142,7 +140,7 @@ describe("POST /api/workspace/open", () => {
   it("should reject non-existent paths", async () => {
     const res = await fetch(`${address}/api/workspace/open`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: "/nonexistent/path/12345", sessionId }),
     });
 
@@ -156,7 +154,7 @@ describe("POST /api/workspace/open", () => {
     // Open first workspace
     const res1 = await fetch(`${address}/api/workspace/open`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: TEST_DIR, sessionId }),
     });
     const { surfaceId: first } = (await res1.json()) as { surfaceId: string };
@@ -164,7 +162,7 @@ describe("POST /api/workspace/open", () => {
     // Open a different workspace (same session)
     const res2 = await fetch(`${address}/api/workspace/open`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ path: homedir(), sessionId }),
     });
     const { surfaceId: second } = (await res2.json()) as { surfaceId: string };
