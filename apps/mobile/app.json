@@ -1,0 +1,19 @@
+{
+  "expo": {
+    "name": "Jait",
+    "slug": "jait-mobile",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "dark",
+    "assetBundlePatterns": [
+      "**/*"
+    ],
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "dev.jait.mobile"
+    },
+    "android": {
+      "package": "dev.jait.mobile"
+    }
+  }
+}
