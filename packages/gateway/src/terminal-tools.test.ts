@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { createTerminalRunTool } from "./tools/terminal-tools.js";
+import { createTerminalRunTool, detectInteractivePrompt } from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
 
@@ -49,5 +49,16 @@ describe("terminal.run tool status reporting", () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain("timed out");
     expect((result.data as any).timedOut).toBe(true);
+  });
+});
+
+
+describe("interactive prompt detection", () => {
+  it("detects sudo password prompts", () => {
+    expect(detectInteractivePrompt("[sudo] password for alice:")).toBe(true);
+  });
+
+  it("does not flag regular command output", () => {
+    expect(detectInteractivePrompt("build finished successfully")).toBe(false);
   });
 });

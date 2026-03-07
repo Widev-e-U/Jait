@@ -68,6 +68,8 @@ export interface WorkspaceCloseData {
 
 export interface TerminalFocusData {
   terminalId: string;
+  reason?: "interactive-input-required" | string;
+  message?: string;
 }
 
 export interface FileHighlightData {
