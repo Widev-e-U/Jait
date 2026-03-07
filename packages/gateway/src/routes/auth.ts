@@ -1,10 +1,11 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
-import type { UserService, ThemeMode } from "../services/users.js";
+import type { UserService, ThemeMode, SttProvider } from "../services/users.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
+const STT_PROVIDER_VALUES = new Set<SttProvider>(["simulated", "browser"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
@@ -96,6 +97,7 @@ export function registerAuthRoutes(
       theme: settings.theme,
       api_keys: settings.apiKeys,
       disabled_tools: settings.disabledTools,
+      stt_provider: settings.sttProvider,
       updated_at: settings.updatedAt,
     };
   });
@@ -104,7 +106,7 @@ export function registerAuthRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
-    const patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[] } = {};
+    const patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[]; sttProvider?: SttProvider } = {};
 
     if (typeof body.theme === "string" && THEME_VALUES.has(body.theme as ThemeMode)) {
       patch.theme = body.theme as ThemeMode;
@@ -119,11 +121,16 @@ export function registerAuthRoutes(
       patch.disabledTools = body.disabled_tools.filter((v: unknown) => typeof v === "string") as string[];
     }
 
+    if (typeof body.stt_provider === "string" && STT_PROVIDER_VALUES.has(body.stt_provider as SttProvider)) {
+      patch.sttProvider = body.stt_provider as SttProvider;
+    }
+
     const updated = users.updateSettings(authUser.id, patch);
     return {
       theme: updated.theme,
       api_keys: updated.apiKeys,
       disabled_tools: updated.disabledTools,
+      stt_provider: updated.sttProvider,
       updated_at: updated.updatedAt,
     };
   });

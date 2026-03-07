@@ -253,8 +253,11 @@ export function registerWorkspaceRoutes(
       return { ok: true, path: filePath };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to apply diff";
+      const code = typeof err === "object" && err !== null ? (err as { code?: unknown }).code : undefined;
       const isValidationError = err instanceof Error && (
-        message.includes("outside workspace root")
+        code === "PATH_TRAVERSAL"
+        || message.includes("outside workspace root")
+        || message.includes("escapes workspace boundary")
         || message.includes("refers to a symlink")
         || message.includes("must be relative")
       );

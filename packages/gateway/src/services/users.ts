@@ -5,6 +5,7 @@ import { messages, sessions, userSettings, users } from "../db/schema.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 
 export type ThemeMode = "light" | "dark" | "system";
+export type SttProvider = "simulated" | "browser";
 
 export interface UserRecord {
   id: string;
@@ -18,6 +19,7 @@ export interface UserSettingsRecord {
   theme: ThemeMode;
   apiKeys: Record<string, string>;
   disabledTools: string[];
+  sttProvider: SttProvider;
   updatedAt: string;
 }
 
@@ -114,6 +116,7 @@ export class UserService {
       userId: id,
       theme: "system",
       apiKeys: JSON.stringify({}),
+      sttProvider: "simulated",
       updatedAt: now,
     }).run();
     return this.findById(id)!;
@@ -141,6 +144,7 @@ export class UserService {
         theme: "system",
         apiKeys: JSON.stringify({}),
         disabledTools: JSON.stringify([]),
+        sttProvider: "simulated",
         updatedAt: now,
       }).run();
       return {
@@ -148,6 +152,7 @@ export class UserService {
         theme: "system",
         apiKeys: {},
         disabledTools: [],
+        sttProvider: "simulated",
         updatedAt: now,
       };
     }
@@ -156,18 +161,20 @@ export class UserService {
       theme: (row.theme as ThemeMode) || "system",
       apiKeys: parseApiKeys(row.apiKeys),
       disabledTools: parseStringArray((row as any).disabledTools ?? null),
+      sttProvider: ((row as any).sttProvider as SttProvider) || "simulated",
       updatedAt: row.updatedAt,
     };
   }
 
   updateSettings(
     userId: string,
-    patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[] },
+    patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[]; sttProvider?: SttProvider },
   ): UserSettingsRecord {
     const existing = this.getSettings(userId);
     const theme = patch.theme ?? existing.theme;
     const apiKeys = patch.apiKeys ?? existing.apiKeys;
     const disabledTools = patch.disabledTools ?? existing.disabledTools;
+    const sttProvider = patch.sttProvider ?? existing.sttProvider;
     const now = new Date().toISOString();
     this.db
       .update(userSettings)
@@ -175,6 +182,7 @@ export class UserService {
         theme,
         apiKeys: JSON.stringify(apiKeys),
         disabledTools: JSON.stringify(disabledTools),
+        sttProvider,
         updatedAt: now,
       } as any)
       .where(eq(userSettings.userId, userId))

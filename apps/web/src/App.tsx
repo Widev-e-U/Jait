@@ -47,7 +47,7 @@ import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
 import { WorkspacePanel, workspaceLanguageForPath, DiffView, type WorkspaceFile, type WorkspacePanelHandle } from '@/components/workspace'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
-import { useAuth, type ThemeMode } from '@/hooks/useAuth'
+import { useAuth, type ThemeMode, type SttProvider } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSessions } from '@/hooks/useSessions'
@@ -939,14 +939,44 @@ ${file.content.slice(0, 2000)}
     }
     if (!sid) return
 
-    const spoken = window.prompt('Speak now (simulated transcript):')?.trim()
-    if (!spoken) return
+    let transcript = ''
+    if (settings.stt_provider === 'browser') {
+      const win = window as typeof window & { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any }
+      const speechApi = win.SpeechRecognition ?? win.webkitSpeechRecognition
+      if (!speechApi) {
+        window.alert('Speech-to-Text provider "Browser" is not supported in this browser.')
+        return
+      }
+      transcript = await new Promise<string>((resolve) => {
+        const recognition = new speechApi()
+        let resolved = false
+        const finish = (value: string) => {
+          if (resolved) return
+          resolved = true
+          resolve(value)
+        }
+        recognition.lang = 'de-DE'
+        recognition.interimResults = false
+        recognition.maxAlternatives = 1
+        recognition.onresult = (event: any) => {
+          const spoken = event.results?.[0]?.[0]?.transcript?.trim() ?? ''
+          finish(spoken)
+        }
+        recognition.onerror = () => finish('')
+        recognition.onnomatch = () => finish('')
+        recognition.onend = () => finish('')
+        recognition.start()
+      })
+    } else {
+      transcript = window.prompt('Speak now (simulated transcript):')?.trim() ?? ''
+    }
+    if (!transcript) return
 
     try {
       const res = await fetch(`${API_URL}/api/voice/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sid, transcript: spoken }),
+        body: JSON.stringify({ sessionId: sid, transcript }),
       })
       const data = (await res.json()) as { text?: string }
       if (data.text) {
@@ -955,7 +985,7 @@ ${file.content.slice(0, 2000)}
     } catch {
       // noop
     }
-  }, [token, activeSessionId, createSession, sendMessage])
+  }, [token, activeSessionId, createSession, sendMessage, settings.stt_provider])
 
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0
@@ -1181,6 +1211,10 @@ ${file.content.slice(0, 2000)}
               token={token}
               apiKeys={settings.api_keys}
               onSaveApiKeys={handleSaveApiKeys}
+              sttProvider={settings.stt_provider}
+              onSttProviderChange={async (next: SttProvider) => {
+                await updateSettings({ stt_provider: next })
+              }}
               onClearArchive={handleClearArchive}
               activityEvents={activityEvents}
             />
