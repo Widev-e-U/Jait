@@ -58,6 +58,7 @@ export const migrations: Migration[] = [
           user_id TEXT PRIMARY KEY,
           theme TEXT NOT NULL DEFAULT 'system',
           api_keys TEXT,
+          stt_provider TEXT NOT NULL DEFAULT 'simulated',
           updated_at TEXT NOT NULL
         )
       `);
@@ -203,4 +204,13 @@ export const migrations: Migration[] = [
       db.run(`CREATE INDEX IF NOT EXISTS idx_session_state_session ON session_state(session_id)`);
     },
   },
+  // ─── 005: stt_provider in user_settings ────────────────────────────
+  {
+    id: 5,
+    name: "user_settings_stt_provider",
+    run(db) {
+      try { db.run(`ALTER TABLE user_settings ADD COLUMN stt_provider TEXT NOT NULL DEFAULT 'simulated'`); } catch { /* exists */ }
+    },
+  },
+
 ];

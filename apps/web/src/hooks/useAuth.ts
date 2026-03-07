@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback } from 'react'
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
+export type SttProvider = 'simulated' | 'browser'
 
 interface User {
   id: string
@@ -12,6 +13,7 @@ interface User {
 interface UserSettings {
   theme: ThemeMode
   api_keys: Record<string, string>
+  stt_provider: SttProvider
   updated_at: string
 }
 
@@ -30,6 +32,7 @@ interface AuthResponse {
 const EMPTY_SETTINGS: UserSettings = {
   theme: 'system',
   api_keys: {},
+  stt_provider: 'simulated',
   updated_at: new Date(0).toISOString(),
 }
 
@@ -151,6 +154,7 @@ export function useAuth() {
   const updateSettings = useCallback(async (patch: {
     theme?: ThemeMode
     api_keys?: Record<string, string>
+    stt_provider?: SttProvider
   }) => {
     if (!state.token) throw new Error('Not authenticated')
     const response = await fetch(`${API_URL}/auth/settings`, {

@@ -6,8 +6,10 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToolSettings } from './ToolSettings'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ActivityFeed } from '@/components/activity'
 import type { ActivityEvent } from '@jait/ui-shared'
+import type { SttProvider } from '@/hooks/useAuth'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -68,6 +70,8 @@ interface SettingsPageProps {
   token: string | null
   apiKeys: Record<string, string>
   onSaveApiKeys: (next: Record<string, string>) => Promise<void>
+  sttProvider: SttProvider
+  onSttProviderChange: (next: SttProvider) => Promise<void>
   onClearArchive: () => Promise<number>
   activityEvents?: ActivityEvent[]
 }
@@ -77,6 +81,8 @@ export function SettingsPage({
   token,
   apiKeys,
   onSaveApiKeys,
+  sttProvider,
+  onSttProviderChange,
   onClearArchive,
   activityEvents,
 }: SettingsPageProps) {
@@ -177,6 +183,31 @@ export function SettingsPage({
           <Button variant="destructive" onClick={() => { void handleClearArchive() }} disabled={clearing}>
             {clearing ? 'Clearing...' : 'Clear archived sessions'}
           </Button>
+        </div>
+      </Card>
+
+
+      <Card className="p-5 space-y-4">
+        <div>
+          <h2 className="text-base font-medium">Spracheingabe (Speech-to-Text)</h2>
+          <p className="text-sm text-muted-foreground">
+            Wähle aus, wie gesprochene Sprache in Text umgewandelt wird, bevor sie als Nachricht gesendet wird.
+          </p>
+        </div>
+        <div className="max-w-sm">
+          <Label htmlFor="stt-provider" className="mb-1.5 block">STT-Anbieter</Label>
+          <Select
+            value={sttProvider}
+            onValueChange={(value) => { void onSttProviderChange(value as SttProvider) }}
+          >
+            <SelectTrigger id="stt-provider">
+              <SelectValue placeholder="STT-Anbieter wählen" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="simulated">Simuliert (Eingabe-Prompt)</SelectItem>
+              <SelectItem value="browser">Browser (Web Speech API)</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
       </Card>
 
