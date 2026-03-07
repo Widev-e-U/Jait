@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Calendar,
   Bug,
+  Bot,
   Cast,
   FolderTree,
   LogOut,
@@ -37,6 +38,7 @@ import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
+import { AutomationPage } from '@/components/automation'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
@@ -56,7 +58,7 @@ import type { WorkspaceOpenData } from '@jait/shared'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
-type AppView = 'chat' | 'jobs' | 'network' | 'settings'
+type AppView = 'chat' | 'automation' | 'jobs' | 'network' | 'settings'
 
 const suggestions = [
   'What can you help me with?',
@@ -998,6 +1000,15 @@ ${file.content.slice(0, 2000)}
                 Chat
               </Button>
               <Button
+                variant={currentView === 'automation' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setCurrentView('automation')}
+              >
+                <Bot className="h-3.5 w-3.5 mr-1.5" />
+                Automation
+              </Button>
+              <Button
                 variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
                 size="sm"
                 className="h-8 text-xs"
@@ -1151,7 +1162,11 @@ ${file.content.slice(0, 2000)}
           </div>
         )}
 
-        {currentView === 'jobs' ? (
+        {currentView === 'automation' ? (
+          <div className="flex-1 overflow-y-auto">
+            <AutomationPage />
+          </div>
+        ) : currentView === 'jobs' ? (
           <div className="flex-1 overflow-y-auto">
             <JobsPage />
           </div>
