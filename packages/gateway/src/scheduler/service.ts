@@ -45,11 +45,14 @@ function matchesCronMinute(cron: string, date: Date): boolean {
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) return false;
 
-  const minute = parts[0];
-  const hour = parts[1];
+  const minute = parts[0] ?? "";
+  const hour = parts[1] ?? "";
 
-  const minuteOk = minute === "*" || minute === String(date.getUTCMinutes());
-  const hourOk = hour === "*" || hour === String(date.getUTCHours());
+  const minuteValue = date.getUTCMinutes();
+  const hourValue = date.getUTCHours();
+
+  const minuteOk = minute === "*" || Number.parseInt(minute, 10) === minuteValue;
+  const hourOk = hour === "*" || Number.parseInt(hour, 10) === hourValue;
 
   // keep support intentionally small for Sprint 7:
   // day-of-month, month, day-of-week are wildcard only.
@@ -58,6 +61,17 @@ function matchesCronMinute(cron: string, date: Date): boolean {
   const weekday = parts[4] === "*";
 
   return minuteOk && hourOk && day && month && weekday;
+}
+
+function isSameUtcMinute(iso: string | null, now: Date): boolean {
+  if (!iso) return false;
+  const previous = new Date(iso);
+  if (Number.isNaN(previous.getTime())) return false;
+  return previous.getUTCFullYear() === now.getUTCFullYear()
+    && previous.getUTCMonth() === now.getUTCMonth()
+    && previous.getUTCDate() === now.getUTCDate()
+    && previous.getUTCHours() === now.getUTCHours()
+    && previous.getUTCMinutes() === now.getUTCMinutes();
 }
 
 function parseInput(input: string | null): unknown {
@@ -190,7 +204,7 @@ export class SchedulerService {
     return this.get(id, userId);
   }
 
-  async trigger(id: string, userId?: string): Promise<SchedulerExecutionResult> {
+  async trigger(id: string, userId?: string, runAt = new Date()): Promise<SchedulerExecutionResult> {
     const job = this.get(id, userId);
     if (!job) {
       throw new Error(`Job not found: ${id}`);
@@ -206,7 +220,7 @@ export class SchedulerService {
     });
 
     this.options.db.update(scheduledJobs).set({
-      lastRunAt: new Date().toISOString(),
+      lastRunAt: runAt.toISOString(),
       updatedAt: new Date().toISOString(),
     }).where(eq(scheduledJobs.id, id)).run();
 
@@ -221,8 +235,8 @@ export class SchedulerService {
     try {
       const jobs = this.list().filter((j) => j.enabled);
       for (const job of jobs) {
-        if (matchesCronMinute(job.cron, now)) {
-          await this.trigger(job.id);
+        if (matchesCronMinute(job.cron, now) && !isSameUtcMinute(job.lastRunAt, now)) {
+          await this.trigger(job.id, undefined, now);
         }
       }
     } finally {
