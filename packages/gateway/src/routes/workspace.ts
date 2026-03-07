@@ -12,6 +12,7 @@ import { PathTraversalError } from "../security/path-guard.js";
 import type { SessionStateService } from "../services/session-state.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import { uuidv7 } from "../lib/uuidv7.js";
+import { PathTraversalError } from "../security/path-guard.js";
 
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
@@ -259,6 +260,7 @@ export function registerWorkspaceRoutes(
         || message.includes("refers to a symlink")
         || message.includes("must be relative")
         || message.includes("escapes workspace boundary")
+        || message.includes("path traversal")
       ));
       return reply.status(isValidationError ? 400 : 500).send({
         error: isValidationError ? "VALIDATION_ERROR" : "APPLY_FAILED",
