@@ -51,7 +51,8 @@ import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSessions } from '@/hooks/useSessions'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
-import type { WorkspaceOpenData } from '@jait/shared'
+import type { WorkspaceOpenData, TerminalFocusData } from '@jait/shared'
+import { toast } from 'sonner'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -359,6 +360,20 @@ function App() {
         setShowWorkspace(false)
         setSavedWorkspace(null)
       }, [setSavedWorkspace]),
+      'terminal.focus': useCallback((data: TerminalFocusData) => {
+        setCurrentView('chat')
+        setShowTerminal(true)
+        setSavedTerminal({ open: true })
+        if (data.terminalId) {
+          setActiveTerminalId(data.terminalId)
+        }
+        if (data.reason === 'interactive-input-required') {
+          toast(data.message ?? 'Terminal wartet auf deine Eingabe (z. B. sudo Passwort).', {
+            description: 'Klicke ins Terminal und gib die erforderliche Eingabe ein.',
+            duration: 10000,
+          })
+        }
+      }, [setSavedTerminal, setActiveTerminalId]),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
         setSavedScreenShare({ open: true })

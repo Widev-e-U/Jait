@@ -18,6 +18,7 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { uuidv7 } from "../lib/uuidv7.js";
 import type { TerminalSurface } from "../surfaces/terminal.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
+import type { WsControlPlane } from "../ws.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -25,6 +26,13 @@ import { tmpdir } from "node:os";
 // ── Constants ────────────────────────────────────────────────────
 
 const MAX_TERMINALS = 10;
+const INTERACTIVE_PROMPT_PATTERNS = [
+  /\[sudo\]\s+password\s+for\s+[^:]+:/i,
+  /password:\s*$/im,
+  /enter\s+passphrase\s+for\s+key/i,
+  /verification\s+code:\s*$/im,
+  /press\s+enter\s+to\s+continue/i,
+];
 
 // ── Session → terminal mapping ───────────────────────────────────
 
@@ -50,6 +58,11 @@ function cleanChunk(s: string): string {
   // Normalise carriage returns
   out = out.replace(/\r\n/g, "\n").replace(/\r/g, "");
   return out;
+}
+
+export function detectInteractivePrompt(output: string): boolean {
+  if (!output) return false;
+  return INTERACTIVE_PROMPT_PATTERNS.some((pattern) => pattern.test(output));
 }
 
 /** Race a promise against an AbortSignal */
@@ -354,6 +367,7 @@ interface TerminalStreamInput {
 export function createTerminalRunTool(
   registry: SurfaceRegistry,
   sandboxManager = new SandboxManager(),
+  ws?: WsControlPlane,
 ): ToolDefinition<TerminalRunInput> {
   return {
     name: "terminal.run",
@@ -431,14 +445,32 @@ export function createTerminalRunTool(
 
         // 3. Build response
         const ok = !result.timedOut && result.exitCode === 0;
+        const needsInteraction = result.timedOut && detectInteractivePrompt(result.output);
         const reason = result.timedOut
           ? `timed out after ${timeout}ms`
           : result.exitCode == null
             ? "exit status unavailable"
             : `exit code ${result.exitCode}`;
         let message = ok ? "Command completed (exit code 0)" : `Command failed (${reason})`;
+        if (needsInteraction) {
+          message += " [user interaction required in terminal]";
+        }
         if (isNew) message += ` [new terminal ${terminalId}]`;
         if (warning) message += ` [${warning}]`;
+
+        if (needsInteraction) {
+          ws?.sendUICommand(
+            {
+              command: "terminal.focus",
+              data: {
+                terminalId,
+                reason: "interactive-input-required",
+                message: "This command is waiting for input in the terminal (for example a sudo password).",
+              },
+            },
+            context.sessionId,
+          );
+        }
 
         console.log(
           `[terminal.run] ${message}; output (${result.output.length} chars): ${JSON.stringify(result.output.slice(0, 500))}`,
@@ -452,6 +484,7 @@ export function createTerminalRunTool(
             exitCode: result.exitCode,
             timedOut: result.timedOut,
             terminalId,
+            needsInteraction,
           },
         };
       } catch (err) {
