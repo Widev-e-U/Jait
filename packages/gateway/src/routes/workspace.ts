@@ -11,6 +11,7 @@ import type { SurfaceRegistry } from "../surfaces/index.js";
 import type { SessionStateService } from "../services/session-state.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import { uuidv7 } from "../lib/uuidv7.js";
+import { PathTraversalError } from "../security/path-guard.js";
 
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
@@ -253,11 +254,14 @@ export function registerWorkspaceRoutes(
       return { ok: true, path: filePath };
     } catch (err) {
       const message = err instanceof Error ? err.message : "Failed to apply diff";
-      const isValidationError = err instanceof Error && (
-        message.includes("outside workspace root")
-        || message.includes("refers to a symlink")
-        || message.includes("must be relative")
-      );
+      const isValidationError = err instanceof PathTraversalError
+        || (err instanceof Error && (
+          message.includes("outside workspace root")
+          || message.includes("refers to a symlink")
+          || message.includes("must be relative")
+          || message.includes("escapes workspace boundary")
+          || message.includes("path traversal")
+        ));
       return reply.status(isValidationError ? 400 : 500).send({
         error: isValidationError ? "VALIDATION_ERROR" : "APPLY_FAILED",
         message,
