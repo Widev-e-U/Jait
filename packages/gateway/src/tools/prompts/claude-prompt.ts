@@ -12,7 +12,6 @@ import {
   CORE_INSTRUCTIONS,
   TOOL_USE_INSTRUCTIONS,
   EDITING_INSTRUCTIONS,
-  SEARCH_INSTRUCTIONS,
   TODO_INSTRUCTIONS,
   getModeInstructions,
 } from "./shared-sections.js";

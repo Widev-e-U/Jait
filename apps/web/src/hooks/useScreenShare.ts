@@ -191,7 +191,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
         ...prev,
         session: data.activeSession ?? prev.session,
         devices: data.devices,
-        isActive: data.activeSession?.status === 'sharing' ?? prev.isActive,
+        isActive: data.activeSession?.status === 'sharing',
       }))
     } catch (err) {
       console.error('Failed to refresh screen-share state:', err)
@@ -274,7 +274,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
   // ── Start sharing THIS device's screen (HOST side) ────────────────
   // Called automatically when receiving a start-request, or manually
-  const startHosting = useCallback(async (sessionId?: string, sourceId?: string) => {
+  const startHosting = useCallback(async (sessionId?: string) => {
     setState(prev => ({ ...prev, loading: true, error: null }))
 
     try {
@@ -483,7 +483,6 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
               const toastId = toast('Screen share requested', {
                 description: 'A remote device wants to view your screen.',
                 duration: Infinity,
-                important: true,
                 action: {
                   label: 'Share Screen',
                   onClick: () => {

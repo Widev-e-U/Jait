@@ -249,8 +249,6 @@ export function DiffView({
     return () => clearTimeout(timer)
   }, [allDecided, handleApply])
 
-  /* ---- Is it a new file? (no original content) ---- */
-  const isNewFile = originalContent === ''
 
   return (
     <div className="flex flex-col h-full bg-background">

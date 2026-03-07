@@ -28,7 +28,6 @@ import {
   RefreshCw,
   X,
   ScreenShare,
-  ShieldAlert,
 } from 'lucide-react'
 import type { ScreenShareState } from '@/hooks/useScreenShare'
 import type { ScreenShareDevice } from '@jait/shared'

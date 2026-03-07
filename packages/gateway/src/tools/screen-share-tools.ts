@@ -3,8 +3,10 @@ import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 
 interface ScreenShareInput {
-  action: "connect" | "disconnect" | "list-devices";
+  action: "connect" | "disconnect" | "list-devices" | "start";
   targetDeviceId?: string;
+  hostDeviceId?: string;
+  viewerDeviceIds?: string[];
 }
 
 interface OsToolInput {
@@ -42,8 +44,8 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
       properties: {
         action: {
           type: "string",
-          enum: ["connect", "disconnect", "list-devices"],
-          description: "Action to perform. Use 'list-devices' to discover devices, 'connect' to view a remote screen, 'disconnect' to stop.",
+          enum: ["connect", "disconnect", "list-devices", "start"],
+          description: "Action to perform. Use 'list-devices' to discover devices, 'connect'/'start' to view a remote screen, 'disconnect' to stop.",
         },
         targetDeviceId: {
           type: "string",
@@ -87,8 +89,9 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
         };
       }
 
-      if (input.action === "connect") {
-        if (!input.targetDeviceId) {
+      if (input.action === "connect" || input.action === "start") {
+        const hostDeviceId = input.targetDeviceId ?? input.hostDeviceId;
+        if (!hostDeviceId) {
           const devices = screenShare.getState().devices;
           if (devices.length === 0) {
             return {
@@ -98,27 +101,27 @@ export function createScreenShareTool(screenShare: ScreenShareService, ws?: WsCo
           }
           return {
             ok: false,
-            message: `targetDeviceId is required. Available devices: ${devices.map((d) => `${d.name} (${d.id})`).join(", ")}`,
+            message: `targetDeviceId/hostDeviceId is required. Available devices: ${devices.map((d) => `${d.name} (${d.id})`).join(", ")}`,
           };
         }
         // Start a session with the target device as the host (screen sharer)
         // Determine which connected devices are viewers (all except the host)
         const viewerDeviceIds = ws
-          ? ws.getConnectedDeviceIds().filter(id => id !== input.targetDeviceId)
-          : [];
-        const state = screenShare.startShare({ hostDeviceId: input.targetDeviceId, viewerDeviceIds });
+          ? (input.viewerDeviceIds ?? ws.getConnectedDeviceIds().filter((id) => id !== hostDeviceId))
+          : (input.viewerDeviceIds ?? []);
+        const state = screenShare.startShare({ hostDeviceId, viewerDeviceIds });
 
         // Tell the host device to begin screen capture via WS
         // and open the Screen Share panel in the viewer's UI
         if (ws) {
-          ws.sendScreenShareStartRequest(state.id, input.targetDeviceId, viewerDeviceIds);
+          ws.sendScreenShareStartRequest(state.id, hostDeviceId, viewerDeviceIds);
           ws.broadcastScreenShareState(state);
-          ws.sendUICommand({ command: "screen-share.open", data: { sessionId: state.id, targetDeviceId: input.targetDeviceId } });
+          ws.sendUICommand({ command: "screen-share.open", data: { sessionId: state.id, targetDeviceId: hostDeviceId } });
         }
 
         return {
           ok: true,
-          message: `Connecting to remote device "${input.targetDeviceId}". The remote device will start sharing its screen. The Screen Share panel has been opened automatically.`,
+          message: `Connecting to remote device "${hostDeviceId}". The remote device will start sharing its screen. The Screen Share panel has been opened automatically.`,
           data: state,
         };
       }

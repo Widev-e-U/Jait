@@ -1,5 +1,3 @@
-import { JaitClient } from "@jait/api-client";
-
 export interface MobileBootstrapResult {
   apiBaseUrl: string;
   wsUrl: string;
@@ -9,8 +7,8 @@ export interface MobileBootstrapResult {
 
 /** Detect the Capacitor platform we're running on. */
 function detectPlatform(): MobileBootstrapResult["platform"] {
-  if (typeof window !== "undefined" && (window as Record<string, unknown>)["Capacitor"]) {
-    const cap = (window as Record<string, unknown>)["Capacitor"] as Record<string, unknown>;
+  if (typeof window !== "undefined" && (window as unknown as Record<string, unknown>)["Capacitor"]) {
+    const cap = (window as unknown as Record<string, unknown>)["Capacitor"] as Record<string, unknown>;
     const p = cap["getPlatform"] as (() => string) | undefined;
     const platform = p?.() ?? "web";
     if (platform === "android") return "capacitor-android";
@@ -26,8 +24,8 @@ export async function bootstrapMobileClient(gatewayUrl: string): Promise<MobileB
   }
 
   const discovery = (await discoveryRes.json()) as { baseUrl: string; wsUrl: string };
-  const client = new JaitClient({ baseUrl: discovery.baseUrl, wsUrl: discovery.wsUrl });
-  const health = await client.health();
+  const healthRes = await fetch(`${discovery.baseUrl}/health`);
+  const health = (await healthRes.json()) as { healthy: boolean };
 
   const platform = detectPlatform();
 

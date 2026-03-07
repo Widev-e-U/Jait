@@ -22,11 +22,42 @@ import type {
   SurfaceState,
 } from "./contracts.js";
 
-// bun-pty is a Bun native PTY implementation
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const bunPty = require("bun-pty") as typeof import("bun-pty");
+import { execSync } from "node:child_process";
+import { createRequire } from "node:module";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+const require = createRequire(import.meta.url);
+
+interface PTYInstance {
+  pid: number;
+  onData(cb: (data: string) => void): void;
+  onExit(cb: (event: { exitCode: number; signal?: number }) => void): void;
+  write(data: string): void;
+  resize(cols: number, rows: number): void;
+  kill(signal?: string): void;
+}
+
+function spawnPty(shell: string, shellArgs: string[], opts: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string | undefined> }): PTYInstance {
+  // Bun runtime path
+  if (typeof Bun !== "undefined") {
+    const bunPty = require("bun-pty") as { spawn: (shell: string, args: string[], options: typeof opts) => PTYInstance };
+    return bunPty.spawn(shell, shellArgs, opts);
+  }
+
+  // Node/Vitest fallback path
+  const nodePty = require("node-pty") as {
+    spawn: (shell: string, args: string[], options: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string | undefined> }) => {
+      pid: number;
+      onData(cb: (data: string) => void): void;
+      onExit(cb: (event: { exitCode: number; signal: number }) => void): void;
+      write(data: string): void;
+      resize(cols: number, rows: number): void;
+      kill(signal?: string): void;
+    };
+  };
+  return nodePty.spawn(shell, shellArgs, opts);
+}
 
 /** Directory containing shell integration scripts */
 const SHELL_INTEGRATION_DIR = join(__dirname, "shell-integration");
@@ -36,7 +67,6 @@ function defaultShell(): string {
     // Prefer PowerShell 7 (pwsh) over Windows PowerShell 5.1 (powershell)
     // pwsh supports modern escape sequences and PSReadLine features
     try {
-      const { execSync } = require("node:child_process");
       execSync("pwsh.exe -v", { stdio: "ignore", timeout: 3000 });
       return "pwsh.exe";
     } catch {
@@ -82,7 +112,7 @@ export class TerminalSurface implements Surface {
   private _startedAt: string | null = null;
   private _cwd: string | null = null;
   private _pid: number | null = null;
-  private _pty: ReturnType<typeof bunPty.spawn> | null = null;
+  private _pty: PTYInstance | null = null;
   private _outputBuffer: string[] = [];
   private _cols: number;
   private _rows: number;
@@ -165,7 +195,7 @@ export class TerminalSurface implements Surface {
         shellArgs = platform() === "win32" ? ["-NoProfile"] : [];
       }
 
-      const pty = bunPty.spawn(this.shell, shellArgs, {
+      const pty = spawnPty(this.shell, shellArgs, {
         name: "xterm-256color",
         cols: this._cols,
         rows: this._rows,

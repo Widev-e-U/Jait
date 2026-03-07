@@ -1,3 +1,4 @@
+const { allowedIpcChannels } = require("./preload-allow-list.js");
 /**
  * Jait Desktop — Preload script
  *
@@ -14,28 +15,28 @@ const { contextBridge, ipcRenderer } = electron;
 // Expose safe API to the renderer process
 contextBridge.exposeInMainWorld("jaitDesktop", {
   /** Get desktop info (platform, arch, gateway URL) */
-  getInfo: () => ipcRenderer.invoke("desktop:get-info"),
+  getInfo: () => ipcRenderer.invoke(allowedIpcChannels.invoke[0]),
 
   /** Get available screen/window sources for screen sharing */
-  getDesktopSources: () => ipcRenderer.invoke("desktop:get-sources"),
+  getDesktopSources: () => ipcRenderer.invoke(allowedIpcChannels.invoke[1]),
 
   /** Show a native notification */
   notify: (opts: { title: string; body: string }) =>
-    ipcRenderer.invoke("desktop:notify", opts),
+    ipcRenderer.invoke(allowedIpcChannels.invoke[2], opts),
 
   /** Show a native confirmation dialog for screen-share approval */
   confirmShare: (opts: { title: string; message: string }) =>
-    ipcRenderer.invoke("desktop:confirm-share", opts) as Promise<{ accepted: boolean }>,
+    ipcRenderer.invoke(allowedIpcChannels.invoke[3], opts) as Promise<{ accepted: boolean }>,
 
   /** Open a native directory picker and return the absolute path */
   pickDirectory: () =>
-    ipcRenderer.invoke("desktop:pick-directory") as Promise<{ path: string } | null>,
+    ipcRenderer.invoke(allowedIpcChannels.invoke[4]) as Promise<{ path: string } | null>,
 
   /** Listen for screen-share commands from main process (tray, etc.) */
   onScreenShareStart: (callback: () => void) =>
-    ipcRenderer.on("screen-share:start", callback),
+    ipcRenderer.on(allowedIpcChannels.on[0], callback),
   onScreenShareStop: (callback: () => void) =>
-    ipcRenderer.on("screen-share:stop", callback),
+    ipcRenderer.on(allowedIpcChannels.on[1], callback),
 
   /** Platform identifier */
   platform: "electron" as const,
