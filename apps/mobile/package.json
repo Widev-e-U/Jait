@@ -2,7 +2,7 @@
   "name": "@jait/mobile",
   "version": "0.1.0",
   "private": true,
-  "main": "src/index.ts",
+  "main": "App.tsx",
   "type": "module",
   "scripts": {
     "typecheck": "tsc --noEmit",
@@ -13,13 +13,21 @@
     "cap:open:android": "cap open android",
     "cap:open:ios": "cap open ios",
     "dev:android": "bun run --filter '@jait/web' build && cap sync android && cap open android",
-    "dev:ios": "bun run --filter '@jait/web' build && cap sync ios && cap open ios"
+    "dev:ios": "bun run --filter '@jait/web' build && cap sync ios && cap open ios",
+    "dev": "expo start",
+    "dev:tunnel": "expo start --tunnel",
+    "android": "expo run:android",
+    "ios": "expo run:ios"
   },
   "dependencies": {
     "@jait/api-client": "workspace:*",
     "@jait/shared": "workspace:*",
     "@capacitor/core": "^6.2.0",
-    "@capacitor/screen-reader": "^6.0.0"
+    "@capacitor/screen-reader": "^6.0.0",
+    "@jait/ui-shared": "workspace:*",
+    "expo": "^51.0.39",
+    "react": "^18.3.1",
+    "react-native": "0.74.5"
   },
   "devDependencies": {
     "typescript": "^5.7.3",

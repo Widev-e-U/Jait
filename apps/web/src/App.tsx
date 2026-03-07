@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef } from 'react'
 import {
   Calendar,
   Bug,
+  Bot,
   Cast,
   FolderTree,
   LogOut,
@@ -37,6 +38,7 @@ import { PlanReview } from '@/components/chat/plan-review'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
+import { AutomationPage } from '@/components/automation'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
@@ -53,10 +55,11 @@ import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import type { WorkspaceOpenData, TerminalFocusData } from '@jait/shared'
 import { toast } from 'sonner'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
-type AppView = 'chat' | 'jobs' | 'network' | 'settings'
+type AppView = 'chat' | 'automation' | 'jobs' | 'network' | 'settings'
 
 const suggestions = [
   'What can you help me with?',
@@ -105,6 +108,9 @@ function App() {
   const isDragging = useRef(false)
   const workspaceRef = useRef<WorkspacePanelHandle>(null)
   const promptInputRef = useRef<PromptInputHandle>(null)
+  const isMobile = useIsMobile()
+  const showDesktopWorkspace = !isMobile && showWorkspace
+  const showDesktopScreenShare = !isMobile && showScreenShare
 
   const onScreenShareDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -1009,6 +1015,15 @@ ${file.content.slice(0, 2000)}
                 Chat
               </Button>
               <Button
+                variant={currentView === 'automation' ? 'secondary' : 'ghost'}
+                size="sm"
+                className="h-8 text-xs"
+                onClick={() => setCurrentView('automation')}
+              >
+                <Bot className="h-3.5 w-3.5 mr-1.5" />
+                Automation
+              </Button>
+              <Button
                 variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
                 size="sm"
                 className="h-8 text-xs"
@@ -1162,7 +1177,11 @@ ${file.content.slice(0, 2000)}
           </div>
         )}
 
-        {currentView === 'jobs' ? (
+        {currentView === 'automation' ? (
+          <div className="flex-1 overflow-y-auto">
+            <AutomationPage />
+          </div>
+        ) : currentView === 'jobs' ? (
           <div className="flex-1 overflow-y-auto">
             <JobsPage />
           </div>
@@ -1182,9 +1201,9 @@ ${file.content.slice(0, 2000)}
             />
           </div>
         ) : (
-          <div className="flex flex-1 min-h-0 overflow-hidden">
+          <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
             {showSidebar && (
-              <aside className="w-56 border-r shrink-0">
+              <aside className={isMobile ? 'h-52 border-b shrink-0' : 'w-56 border-r shrink-0'}>
                 <SessionSelector
                   sessions={sessions}
                   activeSessionId={activeSessionId}
@@ -1195,7 +1214,7 @@ ${file.content.slice(0, 2000)}
               </aside>
             )}
 
-            {showWorkspace && !activeDiff && (
+            {showDesktopWorkspace && !activeDiff && (
               <WorkspacePanel
                 ref={workspaceRef}
                 autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
@@ -1208,7 +1227,7 @@ ${file.content.slice(0, 2000)}
               />
             )}
 
-            {showWorkspace && activeDiff && (
+            {showDesktopWorkspace && activeDiff && (
               <aside className="flex-[4] min-w-0 border-r bg-background overflow-hidden flex flex-col">
                 <DiffView
                   filePath={activeDiff.filePath}
@@ -1221,7 +1240,7 @@ ${file.content.slice(0, 2000)}
               </aside>
             )}
 
-            {showScreenShare && (
+            {showDesktopScreenShare && (
               <aside className="flex-[3] min-w-0 border-r bg-background overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between h-9 px-3 border-b bg-muted/30 shrink-0">
                   <span className="text-xs font-medium flex items-center gap-1.5">
@@ -1235,7 +1254,7 @@ ${file.content.slice(0, 2000)}
               </aside>
             )}
 
-            {showScreenShare && (
+            {showDesktopScreenShare && (
               <div
                 className="w-1 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
                 onMouseDown={onScreenShareDragStart}
@@ -1243,8 +1262,8 @@ ${file.content.slice(0, 2000)}
             )}
 
             {!hasMessages ? (
-              <div className={`${showScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 flex flex-col items-center justify-center px-4 transition-all duration-300 ease-out`}
-                style={showScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
+              <div className={`${showDesktopScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 flex flex-col items-center justify-center px-4 transition-all duration-300 ease-out`}
+                style={showDesktopScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
                 <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
@@ -1267,9 +1286,9 @@ ${file.content.slice(0, 2000)}
                 </div>
               </div>
             ) : (
-              <div className={`flex flex-col ${showScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 min-h-0 transition-all duration-300 ease-out`}
-                style={showScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
-                <Conversation className="min-h-0 flex-1 border-b" compact={showWorkspace || showScreenShare}>
+              <div className={`flex flex-col ${showDesktopScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 min-h-0 transition-all duration-300 ease-out`}
+                style={showDesktopScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
+                <Conversation className="min-h-0 flex-1 border-b" compact={showDesktopWorkspace || showDesktopScreenShare}>
                   {messages.map((msg, idx) => (
                     <Message
                       key={msg.id}
@@ -1291,8 +1310,8 @@ ${file.content.slice(0, 2000)}
                   ))}
                 </Conversation>
 
-                <div className={`shrink-0 py-3 ${(showWorkspace || showScreenShare) ? 'px-3' : 'px-4'}`}>
-                  <div className={`mx-auto space-y-1.5 ${(showWorkspace || showScreenShare) ? 'max-w-none' : 'max-w-3xl'}`}>
+                <div className={`shrink-0 py-3 ${(showDesktopWorkspace || showDesktopScreenShare) ? 'px-3' : 'px-4'}`}>
+                  <div className={`mx-auto space-y-1.5 ${(showDesktopWorkspace || showDesktopScreenShare) ? 'max-w-none' : 'max-w-3xl'}`}>
                     {todoList.length > 0 && (
                       <TodoList items={todoList} />
                     )}

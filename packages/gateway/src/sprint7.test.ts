@@ -77,6 +77,31 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     sqlite.close();
   });
 
+  it("matches zero-padded cron fields and avoids duplicate execution within one minute", async () => {
+    const { db, sqlite } = openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { ran: true } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    scheduler.create({
+      name: "hourly-with-zero-padding",
+      cron: "05 09 * * *",
+      toolName: "gateway.status",
+      input: {},
+      sessionId: "s1",
+      workspaceRoot: "/workspace/Jait",
+    });
+
+    const runAt = new Date("2026-03-02T09:05:00.000Z");
+    await scheduler.tick(runAt);
+    await scheduler.tick(runAt);
+
+    expect(executeTool).toHaveBeenCalledTimes(1);
+
+    sqlite.close();
+  });
+
   it("fires wildcard hook listeners for lifecycle events", () => {
     const hooks = new HookBus();
     const surfaceHandler = vi.fn();
