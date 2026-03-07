@@ -8,6 +8,7 @@ import {
   type ServerResponse,
 } from "node:http";
 import type { AddressInfo } from "node:net";
+import { signAuthToken } from "./security/http-auth.js";
 
 /* -------------------------------------------------------------------------- */
 /*  Mock Ollama                                                               */
@@ -119,18 +120,45 @@ describe("parallel session chat (E2E)", () => {
     };
   }
 
+
+
+  async function setupAuthedApp() {
+    const config = testConfig();
+    const app = await createServer(config);
+    const token = await signAuthToken({ id: "parallel-user", username: "parallel" }, config.jwtSecret);
+    const authHeaders = { authorization: `Bearer ${token}` };
+
+    const inject = (options: Parameters<typeof app.inject>[0]) => app.inject({
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...(("headers" in options && options.headers) ? options.headers : {}),
+      },
+    });
+
+    const authFetch: typeof fetch = (input, init) => fetch(input, {
+      ...init,
+      headers: {
+        ...authHeaders,
+        ...(init?.headers ?? {}),
+      },
+    });
+
+    return { app, inject, authFetch };
+  }
+
   /* ----- 1. Two parallel requests to different sessions both complete ---- */
 
   it("parallel chat to two sessions yields independent histories", async () => {
-    const app = await createServer(testConfig());
+    const { app, inject, authFetch } = await setupAuthedApp();
 
     const [res1, res2] = await Promise.all([
-      app.inject({
+      inject({
         method: "POST",
         url: "/api/chat",
         payload: { content: "hello from session A", sessionId: "par-a" },
       }),
-      app.inject({
+      inject({
         method: "POST",
         url: "/api/chat",
         payload: { content: "hello from session B", sessionId: "par-b" },
@@ -155,8 +183,8 @@ describe("parallel session chat (E2E)", () => {
     expect(tokensToString(events2)).toBe("Echo: hello from session B");
 
     // Verify session histories are independent
-    const histA = await app.inject({ method: "GET", url: "/api/sessions/par-a/messages" });
-    const histB = await app.inject({ method: "GET", url: "/api/sessions/par-b/messages" });
+    const histA = await inject({ method: "GET", url: "/api/sessions/par-a/messages" });
+    const histB = await inject({ method: "GET", url: "/api/sessions/par-b/messages" });
 
     const msgsA = (JSON.parse(histA.body) as { messages: { role: string; content: string }[] }).messages;
     const msgsB = (JSON.parse(histB.body) as { messages: { role: string; content: string }[] }).messages;
@@ -182,12 +210,12 @@ describe("parallel session chat (E2E)", () => {
   /* ----- 2. Three parallel sessions to stress the in-memory Map ---------- */
 
   it("three parallel sessions don't cross-contaminate", async () => {
-    const app = await createServer(testConfig());
+    const { app, inject, authFetch } = await setupAuthedApp();
 
     const ids = ["stress-1", "stress-2", "stress-3"];
     const results = await Promise.all(
       ids.map((id) =>
-        app.inject({
+        inject({
           method: "POST",
           url: "/api/chat",
           payload: { content: `msg for ${id}`, sessionId: id },
@@ -203,7 +231,7 @@ describe("parallel session chat (E2E)", () => {
 
     // Verify all histories
     for (const id of ids) {
-      const hist = await app.inject({ method: "GET", url: `/api/sessions/${id}/messages` });
+      const hist = await inject({ method: "GET", url: `/api/sessions/${id}/messages` });
       const msgs = (JSON.parse(hist.body) as { messages: { role: string; content: string }[] }).messages;
       expect(msgs).toHaveLength(2);
       expect(msgs[0].content).toBe(`msg for ${id}`);
@@ -216,10 +244,10 @@ describe("parallel session chat (E2E)", () => {
   /* ----- 3. Multi-turn within one session while another is in-flight ----- */
 
   it("multi-turn on one session does not interfere with parallel session", async () => {
-    const app = await createServer(testConfig());
+    const { app, inject, authFetch } = await setupAuthedApp();
 
     // First turn for session X
-    const r1 = await app.inject({
+    const r1 = await inject({
       method: "POST",
       url: "/api/chat",
       payload: { content: "first message", sessionId: "multi-x" },
@@ -228,12 +256,12 @@ describe("parallel session chat (E2E)", () => {
 
     // Second turn for X in parallel with first turn for Y
     const [r2, rY] = await Promise.all([
-      app.inject({
+      inject({
         method: "POST",
         url: "/api/chat",
         payload: { content: "second message", sessionId: "multi-x" },
       }),
-      app.inject({
+      inject({
         method: "POST",
         url: "/api/chat",
         payload: { content: "only message", sessionId: "multi-y" },
@@ -244,7 +272,7 @@ describe("parallel session chat (E2E)", () => {
     expect(rY.statusCode).toBe(200);
 
     // Session X should have 2 turns (4 messages: 2 user + 2 assistant)
-    const histX = await app.inject({ method: "GET", url: "/api/sessions/multi-x/messages" });
+    const histX = await inject({ method: "GET", url: "/api/sessions/multi-x/messages" });
     const msgsX = (JSON.parse(histX.body) as { messages: { role: string; content: string }[] }).messages;
     expect(msgsX).toHaveLength(4);
     expect(msgsX[0].content).toBe("first message");
@@ -253,7 +281,7 @@ describe("parallel session chat (E2E)", () => {
     expect(msgsX[3].content).toBe("Echo: second message");
 
     // Session Y should have 1 turn (2 messages)
-    const histY = await app.inject({ method: "GET", url: "/api/sessions/multi-y/messages" });
+    const histY = await inject({ method: "GET", url: "/api/sessions/multi-y/messages" });
     const msgsY = (JSON.parse(histY.body) as { messages: { role: string; content: string }[] }).messages;
     expect(msgsY).toHaveLength(2);
     expect(msgsY[0].content).toBe("only message");
@@ -265,7 +293,7 @@ describe("parallel session chat (E2E)", () => {
   /* ----- 4. Client disconnect mid-stream — history still saved ----------- */
 
   it("history is saved even when client disconnects mid-stream", async () => {
-    const app = await createServer(testConfig());
+    const { app, inject, authFetch } = await setupAuthedApp();
 
     // Need a real listening server for the disconnect test
     await app.listen({ port: 0, host: "127.0.0.1" });
@@ -275,7 +303,7 @@ describe("parallel session chat (E2E)", () => {
     const controller = new AbortController();
 
     // Start a real fetch to the chat endpoint
-    const response = await fetch(`${baseUrl}/api/chat`, {
+    const response = await authFetch(`${baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -299,7 +327,7 @@ describe("parallel session chat (E2E)", () => {
     await sleep(1500);
 
     // Verify the history was saved despite the client disconnect
-    const hist = await app.inject({
+    const hist = await inject({
       method: "GET",
       url: "/api/sessions/disco-session/messages",
     });
@@ -317,9 +345,9 @@ describe("parallel session chat (E2E)", () => {
   /* ----- 5. Done event contains correct session_id & prompt_count -------- */
 
   it("done event contains correct session_id and prompt_count", async () => {
-    const app = await createServer(testConfig());
+    const { app, inject, authFetch } = await setupAuthedApp();
 
-    const res = await app.inject({
+    const res = await inject({
       method: "POST",
       url: "/api/chat",
       payload: { content: "count test", sessionId: "count-session" },
@@ -333,7 +361,7 @@ describe("parallel session chat (E2E)", () => {
     expect(doneEvent!.prompt_count).toBe(1);
 
     // Send a second message
-    const res2 = await app.inject({
+    const res2 = await inject({
       method: "POST",
       url: "/api/chat",
       payload: { content: "second count test", sessionId: "count-session" },
@@ -353,16 +381,33 @@ describe("parallel session chat (E2E)", () => {
     const slowOllama = await startMockOllama(400);
     const slowAddr = slowOllama.address() as AddressInfo;
 
-    const app = await createServer({
+    const config = {
       ...testConfig(),
       ollamaUrl: `http://127.0.0.1:${slowAddr.port}`,
+    };
+    const app = await createServer(config);
+    const token = await signAuthToken({ id: "parallel-user", username: "parallel" }, config.jwtSecret);
+    const authHeaders = { authorization: `Bearer ${token}` };
+    const inject = (options: Parameters<typeof app.inject>[0]) => app.inject({
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...(("headers" in options && options.headers) ? options.headers : {}),
+      },
+    });
+    const authFetch: typeof fetch = (input, init) => fetch(input, {
+      ...init,
+      headers: {
+        ...authHeaders,
+        ...(init?.headers ?? {}),
+      },
     });
     await app.listen({ port: 0, host: "127.0.0.1" });
     const addr = app.server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${addr.port}`;
 
     // Start streaming (don't await — let it proceed in background)
-    const streamPromise = fetch(`${baseUrl}/api/chat`, {
+    const streamPromise = authFetch(`${baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -375,7 +420,7 @@ describe("parallel session chat (E2E)", () => {
     await sleep(900);
 
     // Query messages while stream is in progress
-    const hist = await app.inject({
+    const hist = await inject({
       method: "GET",
       url: "/api/sessions/midstream-sess/messages",
     });
@@ -394,7 +439,7 @@ describe("parallel session chat (E2E)", () => {
     const response = await streamPromise;
     await response.text();
 
-    const histFinal = await app.inject({
+    const histFinal = await inject({
       method: "GET",
       url: "/api/sessions/midstream-sess/messages",
     });
@@ -413,9 +458,26 @@ describe("parallel session chat (E2E)", () => {
     const slowOllama = await startMockOllama(300);
     const slowAddr = slowOllama.address() as AddressInfo;
 
-    const app = await createServer({
+    const config = {
       ...testConfig(),
       ollamaUrl: `http://127.0.0.1:${slowAddr.port}`,
+    };
+    const app = await createServer(config);
+    const token = await signAuthToken({ id: "parallel-user", username: "parallel" }, config.jwtSecret);
+    const authHeaders = { authorization: `Bearer ${token}` };
+    const inject = (options: Parameters<typeof app.inject>[0]) => app.inject({
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...(("headers" in options && options.headers) ? options.headers : {}),
+      },
+    });
+    const authFetch: typeof fetch = (input, init) => fetch(input, {
+      ...init,
+      headers: {
+        ...authHeaders,
+        ...(init?.headers ?? {}),
+      },
     });
     await app.listen({ port: 0, host: "127.0.0.1" });
     const addr = app.server.address() as AddressInfo;
@@ -423,7 +485,7 @@ describe("parallel session chat (E2E)", () => {
 
     // Start streaming to session A
     const controllerA = new AbortController();
-    const fetchA = fetch(`${baseUrl}/api/chat`, {
+    const fetchA = authFetch(`${baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -440,7 +502,7 @@ describe("parallel session chat (E2E)", () => {
     controllerA.abort();
 
     // Meanwhile, complete a message on session B
-    const resB = await fetch(`${baseUrl}/api/chat`, {
+    const resB = await authFetch(`${baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -454,7 +516,7 @@ describe("parallel session chat (E2E)", () => {
     await sleep(2500);
 
     // "Switch back" to session A — simulate reload/refetch
-    const histA = await app.inject({
+    const histA = await inject({
       method: "GET",
       url: "/api/sessions/switch-a/messages",
     });
@@ -468,7 +530,7 @@ describe("parallel session chat (E2E)", () => {
     expect(msgsA[1].content).toBe("Echo: message for A");
 
     // Session B also correct
-    const histB = await app.inject({
+    const histB = await inject({
       method: "GET",
       url: "/api/sessions/switch-b/messages",
     });
@@ -485,10 +547,10 @@ describe("parallel session chat (E2E)", () => {
   /* ----- 8. Omitted sessionId creates orphaned messages (bug 2 doc) ------ */
 
   it("omitting sessionId orphans messages under a random id", async () => {
-    const app = await createServer(testConfig());
+    const { app, inject, authFetch } = await setupAuthedApp();
 
     // Send message without sessionId (mimics client stale-closure bug)
-    const res = await app.inject({
+    const res = await inject({
       method: "POST",
       url: "/api/chat",
       payload: { content: "orphan me" },
@@ -501,7 +563,7 @@ describe("parallel session chat (E2E)", () => {
     const assignedId = doneEvent!.session_id as string;
 
     // Messages are under the random id
-    const hist1 = await app.inject({
+    const hist1 = await inject({
       method: "GET",
       url: `/api/sessions/${assignedId}/messages`,
     });
@@ -510,7 +572,7 @@ describe("parallel session chat (E2E)", () => {
     ).toHaveLength(2);
 
     // But NOT under any "intended" session id
-    const hist2 = await app.inject({
+    const hist2 = await inject({
       method: "GET",
       url: "/api/sessions/my-intended-session/messages",
     });
@@ -528,16 +590,33 @@ describe("parallel session chat (E2E)", () => {
     const slowOllama = await startMockOllama(300);
     const slowAddr = slowOllama.address() as AddressInfo;
 
-    const app = await createServer({
+    const config = {
       ...testConfig(),
       ollamaUrl: `http://127.0.0.1:${slowAddr.port}`,
+    };
+    const app = await createServer(config);
+    const token = await signAuthToken({ id: "parallel-user", username: "parallel" }, config.jwtSecret);
+    const authHeaders = { authorization: `Bearer ${token}` };
+    const inject = (options: Parameters<typeof app.inject>[0]) => app.inject({
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...(("headers" in options && options.headers) ? options.headers : {}),
+      },
+    });
+    const authFetch: typeof fetch = (input, init) => fetch(input, {
+      ...init,
+      headers: {
+        ...authHeaders,
+        ...(init?.headers ?? {}),
+      },
     });
     await app.listen({ port: 0, host: "127.0.0.1" });
     const addr = app.server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${addr.port}`;
 
     // Start the original chat stream (don't await)
-    const chatPromise = fetch(`${baseUrl}/api/chat`, {
+    const chatPromise = authFetch(`${baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -550,7 +629,7 @@ describe("parallel session chat (E2E)", () => {
     await sleep(700);
 
     // Connect to the stream-resume SSE endpoint
-    const streamRes = await fetch(`${baseUrl}/api/sessions/sse-resume/stream`);
+    const streamRes = await authFetch(`${baseUrl}/api/sessions/sse-resume/stream`);
     expect(streamRes.status).toBe(200);
     expect(streamRes.headers.get("content-type")).toContain("text/event-stream");
 
@@ -610,10 +689,10 @@ describe("parallel session chat (E2E)", () => {
   /* ----- 10. Stream endpoint on inactive session returns snapshot+done ---- */
 
   it("GET /stream on finished session returns snapshot and immediate done", async () => {
-    const app = await createServer(testConfig());
+    const { app, inject, authFetch } = await setupAuthedApp();
 
     // Complete a chat first
-    const chatRes = await app.inject({
+    const chatRes = await inject({
       method: "POST",
       url: "/api/chat",
       payload: { content: "finished message", sessionId: "finished-sess" },
@@ -625,7 +704,7 @@ describe("parallel session chat (E2E)", () => {
     const addr = app.server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${addr.port}`;
 
-    const streamRes = await fetch(`${baseUrl}/api/sessions/finished-sess/stream`);
+    const streamRes = await authFetch(`${baseUrl}/api/sessions/finished-sess/stream`);
     const body = await streamRes.text();
     const events = body
       .split("\n")
@@ -651,16 +730,33 @@ describe("parallel session chat (E2E)", () => {
     const slowOllama = await startMockOllama(400);
     const slowAddr = slowOllama.address() as AddressInfo;
 
-    const app = await createServer({
+    const config = {
       ...testConfig(),
       ollamaUrl: `http://127.0.0.1:${slowAddr.port}`,
+    };
+    const app = await createServer(config);
+    const token = await signAuthToken({ id: "parallel-user", username: "parallel" }, config.jwtSecret);
+    const authHeaders = { authorization: `Bearer ${token}` };
+    const inject = (options: Parameters<typeof app.inject>[0]) => app.inject({
+      ...options,
+      headers: {
+        ...authHeaders,
+        ...(("headers" in options && options.headers) ? options.headers : {}),
+      },
+    });
+    const authFetch: typeof fetch = (input, init) => fetch(input, {
+      ...init,
+      headers: {
+        ...authHeaders,
+        ...(init?.headers ?? {}),
+      },
     });
     await app.listen({ port: 0, host: "127.0.0.1" });
     const addr = app.server.address() as AddressInfo;
     const baseUrl = `http://127.0.0.1:${addr.port}`;
 
     // Start a slow chat stream (don't await)
-    const chatPromise = fetch(`${baseUrl}/api/chat`, {
+    const chatPromise = authFetch(`${baseUrl}/api/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -673,7 +769,7 @@ describe("parallel session chat (E2E)", () => {
     await sleep(900);
 
     // Call the cancel endpoint
-    const cancelRes = await fetch(`${baseUrl}/api/sessions/cancel-sess/cancel`, {
+    const cancelRes = await authFetch(`${baseUrl}/api/sessions/cancel-sess/cancel`, {
       method: "POST",
     });
     expect(cancelRes.status).toBe(200);
@@ -685,7 +781,7 @@ describe("parallel session chat (E2E)", () => {
     await sleep(300);
 
     // Check that the history has partial content saved (not empty, not full)
-    const hist = await app.inject({
+    const hist = await inject({
       method: "GET",
       url: "/api/sessions/cancel-sess/messages",
     });
@@ -706,7 +802,7 @@ describe("parallel session chat (E2E)", () => {
     );
 
     // Cancelling again should return cancelled: false (no active stream)
-    const cancel2 = await fetch(`${baseUrl}/api/sessions/cancel-sess/cancel`, {
+    const cancel2 = await authFetch(`${baseUrl}/api/sessions/cancel-sess/cancel`, {
       method: "POST",
     });
     const cancel2Body = await cancel2.json() as { ok: boolean; cancelled: boolean };
@@ -717,4 +813,45 @@ describe("parallel session chat (E2E)", () => {
     await new Promise<void>((r) => slowOllama.close(() => r()));
     await app.close();
   });
+
+  /* ----- 12. Burst/soak baseline across many concurrent sessions --------- */
+
+  it("handles a burst of concurrent sessions without cross-session bleed", async () => {
+    const { app, inject } = await setupAuthedApp();
+
+    const sessionIds = Array.from({ length: 12 }, (_, i) => `burst-${i + 1}`);
+
+    const responses = await Promise.all(
+      sessionIds.map((sessionId) =>
+        inject({
+          method: "POST",
+          url: "/api/chat",
+          payload: { content: `payload for ${sessionId}`, sessionId },
+        })
+      ),
+    );
+
+    for (const res of responses) {
+      expect(res.statusCode).toBe(200);
+      const events = parseSSE(res.body);
+      expect(events.some((e) => e.type === "done")).toBe(true);
+    }
+
+    const histories = await Promise.all(
+      sessionIds.map((sessionId) =>
+        inject({ method: "GET", url: `/api/sessions/${sessionId}/messages` })
+      ),
+    );
+
+    histories.forEach((hist, idx) => {
+      const sessionId = sessionIds[idx]!;
+      const msgs = (JSON.parse(hist.body) as { messages: { role: string; content: string }[] }).messages;
+      expect(msgs).toHaveLength(2);
+      expect(msgs[0]?.content).toBe(`payload for ${sessionId}`);
+      expect(msgs[1]?.content).toBe(`Echo: payload for ${sessionId}`);
+    });
+
+    await app.close();
+  });
+
 });

@@ -1,14 +1,24 @@
 import { describe, it, expect } from "vitest";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
+import { signAuthToken } from "./security/http-auth.js";
 
 const testConfig = {
   ...loadConfig(),
   port: 0, // random port
   wsPort: 0,
   logLevel: "silent",
-  nodeEnv: "test",
+  nodeEnv: "development",
 };
+
+
+
+async function createAuthedServer() {
+  const app = await createServer(testConfig);
+  const token = await signAuthToken({ id: "test-user", username: "tester" }, testConfig.jwtSecret);
+  const headers = { authorization: `Bearer ${token}` };
+  return { app, headers };
+}
 
 describe("@jait/gateway health", () => {
   it("GET /health returns healthy status", async () => {
@@ -42,10 +52,11 @@ describe("@jait/gateway health", () => {
   });
 
   it("POST /api/chat rejects empty content", async () => {
-    const app = await createServer(testConfig);
+    const { app, headers } = await createAuthedServer();
     const response = await app.inject({
       method: "POST",
       url: "/api/chat",
+      headers,
       payload: { content: "", sessionId: "test" },
     });
 
@@ -54,10 +65,11 @@ describe("@jait/gateway health", () => {
   });
 
   it("POST /api/chat rejects missing body", async () => {
-    const app = await createServer(testConfig);
+    const { app, headers } = await createAuthedServer();
     const response = await app.inject({
       method: "POST",
       url: "/api/chat",
+      headers,
       payload: {},
     });
 
@@ -66,10 +78,11 @@ describe("@jait/gateway health", () => {
   });
 
   it("GET /api/sessions/:id/messages returns empty for unknown session", async () => {
-    const app = await createServer(testConfig);
+    const { app, headers } = await createAuthedServer();
     const response = await app.inject({
       method: "GET",
       url: "/api/sessions/unknown-session/messages",
+      headers,
     });
 
     expect(response.statusCode).toBe(200);

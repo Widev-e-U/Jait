@@ -1,6 +1,13 @@
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
 export default defineConfig({
+  resolve: {
+    alias: {
+      "bun:sqlite": fileURLToPath(new URL("./test-shims/bun-sqlite.ts", import.meta.url)),
+      "drizzle-orm/bun-sqlite": "drizzle-orm/better-sqlite3",
+    },
+  },
   test: {
     globals: true,
     environment: "node",

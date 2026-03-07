@@ -6,10 +6,9 @@
  */
 
 import type { ChatMode } from "../chat-modes.js";
-import type { IAgentPrompt, ModelEndpoint } from "./prompt-registry.js";
+import type { IAgentPrompt } from "./prompt-registry.js";
 import { promptRegistry } from "./prompt-registry.js";
 import {
-  CORE_INSTRUCTIONS,
   TOOL_USE_INSTRUCTIONS,
   EDITING_INSTRUCTIONS,
   SEARCH_INSTRUCTIONS,

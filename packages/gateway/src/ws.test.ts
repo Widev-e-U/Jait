@@ -365,6 +365,194 @@ describe("WsControlPlane", () => {
     });
   });
 
+  describe("multi-device synchronization", () => {
+    it("relays screen-share offers to other devices but not back to sender", async () => {
+      const token = await createToken("user-screen-share");
+
+      const host = openWs(port, { token });
+      await waitForOpen(host.ws);
+      await host.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      host.ws.send(JSON.stringify({ type: "subscribe", sessionId: "session-share", deviceId: "host-device" }));
+      await host.collector.next();
+
+      const viewer = openWs(port, { token });
+      await waitForOpen(viewer.ws);
+      await viewer.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      viewer.ws.send(JSON.stringify({ type: "subscribe", sessionId: "session-share", deviceId: "viewer-device" }));
+      await viewer.collector.next();
+
+      host.ws.send(
+        JSON.stringify({
+          type: "screen-share:offer",
+          payload: {
+            sessionId: "session-share",
+            hostDeviceId: "host-device",
+            viewerDeviceId: "viewer-device",
+            sdp: { type: "offer", sdp: "fake-sdp" },
+          },
+        }),
+      );
+
+      const relayed = await viewer.collector.next();
+      expect(relayed.type).toBe("screen-share:offer");
+      expect(relayed.payload.sdp.sdp).toBe("fake-sdp");
+
+      const senderEcho = await host.collector.maybeNext(500);
+      expect(senderEcho).toBeNull();
+
+      host.ws.close();
+      viewer.ws.close();
+    });
+
+    it("reports UI state updates with fallback to subscribed session and sender client id", async () => {
+      const token = await createToken("user-ui-state");
+      const updatePromise = new Promise<{ sessionId: string; key: string; value: unknown | null; clientId: string }>((resolve) => {
+        plane.onUIStateUpdate = (sessionId, key, value, clientId) => resolve({ sessionId, key, value, clientId });
+      });
+
+      const { ws, collector } = openWs(port, { token });
+      await waitForOpen(ws);
+      const connected = await collector.next();
+      const connectedClientId = connected.payload.clientId;
+      await new Promise((r) => setTimeout(r, 100));
+
+      ws.send(JSON.stringify({ type: "subscribe", sessionId: "ui-session-1", deviceId: "ui-device" }));
+      await collector.next();
+
+      ws.send(
+        JSON.stringify({
+          type: "ui.state",
+          payload: {
+            key: "jobs.drawer.open",
+            value: false,
+          },
+        }),
+      );
+
+      await expect(updatePromise).resolves.toEqual({
+        sessionId: "ui-session-1",
+        key: "jobs.drawer.open",
+        value: false,
+        clientId: connectedClientId,
+      });
+
+      ws.close();
+    });
+
+    it("replays terminal buffer on subscription and only streams to subscribed clients", async () => {
+      const token = await createToken("user-terminal-sync");
+      plane.onTerminalReplay = (terminalId) => (terminalId === "term-sync" ? "buffered prompt>" : null);
+
+      const subscribed = openWs(port, { token });
+      await waitForOpen(subscribed.ws);
+      await subscribed.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      subscribed.ws.send(JSON.stringify({ type: "subscribe", sessionId: "term-session", deviceId: "term-a" }));
+      await subscribed.collector.next();
+
+      const observer = openWs(port, { token });
+      await waitForOpen(observer.ws);
+      await observer.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      observer.ws.send(JSON.stringify({ type: "subscribe", sessionId: "term-session", deviceId: "term-b" }));
+      await observer.collector.next();
+
+      subscribed.ws.send(JSON.stringify({ type: "terminal.subscribe", terminalId: "term-sync" }));
+      const ack = await subscribed.collector.next();
+      expect(ack.type).toBe("surface.connected");
+      expect(ack.payload.subscribed).toBe(true);
+      const replay = await subscribed.collector.next();
+      expect(replay.payload.data).toContain("buffered prompt>");
+
+      plane.broadcastTerminalOutput("term-sync", "live output line");
+
+      const streamed = await subscribed.collector.next();
+      expect(streamed.payload.data).toContain("live output line");
+
+      const noStream = await observer.collector.maybeNext(500);
+      expect(noStream).toBeNull();
+
+      subscribed.ws.close();
+      observer.ws.close();
+    });
+
+    it("returns only authenticated device ids from connected clients", async () => {
+      const token = await createToken("user-devices");
+
+      const authed = openWs(port, { token });
+      await waitForOpen(authed.ws);
+      await authed.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      authed.ws.send(JSON.stringify({ type: "subscribe", sessionId: "devices", deviceId: "device-auth" }));
+      await authed.collector.next();
+
+      const unauth = openWs(port);
+      await waitForOpen(unauth.ws);
+      await unauth.collector.next();
+      unauth.ws.send(JSON.stringify({ type: "subscribe", sessionId: "devices", deviceId: "device-unauth" }));
+      await unauth.collector.next();
+
+      expect(plane.getConnectedDeviceIds()).toEqual(["device-auth"]);
+
+      authed.ws.close();
+      unauth.ws.close();
+    });
+
+    it("reconnects with same device id without creating duplicates", async () => {
+      const token = await createToken("user-reconnect");
+
+      const first = openWs(port, { token });
+      await waitForOpen(first.ws);
+      await first.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      first.ws.send(JSON.stringify({ type: "subscribe", sessionId: "reconnect", deviceId: "device-r1" }));
+      await first.collector.next();
+      expect(plane.getConnectedDeviceIds()).toEqual(["device-r1"]);
+
+      first.ws.close();
+      await new Promise((r) => setTimeout(r, 150));
+
+      const second = openWs(port, { token });
+      await waitForOpen(second.ws);
+      await second.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      second.ws.send(JSON.stringify({ type: "subscribe", sessionId: "reconnect", deviceId: "device-r1" }));
+      await second.collector.next();
+
+      expect(plane.getConnectedDeviceIds()).toEqual(["device-r1"]);
+      second.ws.close();
+    });
+
+    it("handles subscribe/auth race: rejects before auth and accepts after authenticate", async () => {
+      const token = await createToken("user-auth-race");
+      const client = openWs(port);
+      await waitForOpen(client.ws);
+      await client.collector.next();
+
+      client.ws.send(JSON.stringify({ type: "subscribe", sessionId: "race-session", deviceId: "race-device" }));
+      const unauthorized = await client.collector.next();
+      expect(unauthorized.type).toBe("error");
+      expect(unauthorized.payload.code).toBe("UNAUTHORIZED");
+
+      client.ws.send(JSON.stringify({ type: "authenticate", token }));
+      const authenticated = await client.collector.next();
+      expect(authenticated.type).toBe("session.created");
+      expect(authenticated.payload.authenticated).toBe(true);
+
+      client.ws.send(JSON.stringify({ type: "subscribe", sessionId: "race-session", deviceId: "race-device" }));
+      const subscribed = await client.collector.next();
+      expect(subscribed.type).toBe("session.created");
+      expect(subscribed.payload.subscribed).toBe(true);
+
+      client.ws.close();
+    });
+  });
+
+
+
+
   describe("error handling", () => {
     it("returns error for invalid JSON", async () => {
       const token = await createToken("user-err");

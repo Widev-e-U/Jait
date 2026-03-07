@@ -309,10 +309,10 @@ describe("ToolProfiles", () => {
     expect(perms.get("terminal.run")?.consentLevel).toBe("dangerous");
   });
 
-  it("coding profile: file.write is once, terminal.run is always", () => {
+  it("coding profile: file.write is once, terminal.run is once", () => {
     const perms = getProfile("coding");
     expect(perms.get("file.write")?.consentLevel).toBe("once");
-    expect(perms.get("terminal.run")?.consentLevel).toBe("always");
+    expect(perms.get("terminal.run")?.consentLevel).toBe("once");
   });
 
   it("full profile: terminal.run is once", () => {

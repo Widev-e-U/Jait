@@ -113,7 +113,7 @@ export function useChat(
     }
 
     if (!sessionId) {
-      setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null })
+      setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, hitMaxRounds: false, error: null })
       setTodoList([])
       setChangedFiles([])
       setMessageQueue([])
