@@ -53,8 +53,10 @@ import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSessions } from '@/hooks/useSessions'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
+import type { WorkspaceOpenData, TerminalFocusData } from '@jait/shared'
+import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import type { WorkspaceOpenData } from '@jait/shared'
+import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -109,7 +111,6 @@ function App() {
   const promptInputRef = useRef<PromptInputHandle>(null)
   const isMobile = useIsMobile()
   const showDesktopWorkspace = !isMobile && showWorkspace
-  const showDesktopScreenShare = !isMobile && showScreenShare
 
   const onScreenShareDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -365,6 +366,20 @@ function App() {
         setShowWorkspace(false)
         setSavedWorkspace(null)
       }, [setSavedWorkspace]),
+      'terminal.focus': useCallback((data: TerminalFocusData) => {
+        setCurrentView('chat')
+        setShowTerminal(true)
+        setSavedTerminal({ open: true })
+        if (data.terminalId) {
+          setActiveTerminalId(data.terminalId)
+        }
+        if (data.reason === 'interactive-input-required') {
+          toast(data.message ?? 'Terminal wartet auf deine Eingabe (z. B. sudo Passwort).', {
+            description: 'Klicke ins Terminal und gib die erforderliche Eingabe ein.',
+            duration: 10000,
+          })
+        }
+      }, [setSavedTerminal, setActiveTerminalId]),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
         setSavedScreenShare({ open: true })
@@ -989,6 +1004,15 @@ ${file.content.slice(0, 2000)}
 
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0
+  const {
+    showDesktopScreenShare,
+    showMobileScreenShare,
+    mobilePanelHeightClass,
+  } = getScreenShareLayoutState({
+    isMobile,
+    showScreenShare,
+    hasMessages,
+  })
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
   const activityEvents: ActivityEvent[] = [
     ...messages.slice(-10).map((msg) => createActivityEvent({
@@ -1271,6 +1295,22 @@ ${file.content.slice(0, 2000)}
                 </div>
                 <ScreenSharePanel screenShare={screenShare} />
               </aside>
+            )}
+
+            {showMobileScreenShare && (
+              <section className={`shrink-0 border-b bg-background p-2 ${mobilePanelHeightClass}`}>
+                <div className="h-full rounded-lg border bg-background overflow-hidden">
+                  <div className="flex items-center justify-between h-8 px-2.5 border-b bg-muted/30 shrink-0">
+                    <span className="text-[11px] font-medium flex items-center gap-1.5">
+                      <Cast className="h-3 w-3" /> Screen Share
+                    </span>
+                    <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closeScreenSharePanel}>
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                  <ScreenSharePanel screenShare={screenShare} />
+                </div>
+              </section>
             )}
 
             {showDesktopScreenShare && (

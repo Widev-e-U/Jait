@@ -196,7 +196,7 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
 
   // Terminal tools (underlying implementations for core "execute")
-  tools.register(createTerminalRunTool(surfaceRegistry));
+  tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws));
   tools.register(createTerminalStreamTool(surfaceRegistry));
 
   // File tools (underlying implementations for core "read"/"edit")

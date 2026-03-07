@@ -106,6 +106,12 @@ function parseBool(value: unknown, fallback: boolean): boolean {
   return fallback;
 }
 
+function parsePrompt(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
+}
+
 function toRunResultText(data: unknown): string | null {
   if (data == null) return null;
   if (typeof data === "string") return data;
@@ -195,7 +201,7 @@ export function registerJobRoutes(
       ? body["job_type"] as JobType
       : "system_job";
     const description = typeof body["description"] === "string" ? body["description"] : undefined;
-    const prompt = typeof body["prompt"] === "string" ? body["prompt"] : undefined;
+    const prompt = parsePrompt(body["prompt"]);
     const provider = typeof body["provider"] === "string" ? body["provider"] : undefined;
     const model = typeof body["model"] === "string" ? body["model"] : undefined;
     const payload = asRecord(body["payload"]);
@@ -213,8 +219,15 @@ export function registerJobRoutes(
       }
       input = args ?? {};
     } else {
-      toolName = "gateway.status";
-      input = {};
+      if (!prompt) {
+        return reply.status(400).send({ detail: "prompt is required for agent_task" });
+      }
+      toolName = "agent.spawn";
+      input = {
+        ...(payload ?? {}),
+        prompt,
+        description: description ?? name,
+      };
     }
 
     input = {
@@ -261,7 +274,7 @@ export function registerJobRoutes(
     const nextMeta: JobMeta = {
       jobType: requestedJobType,
       description: typeof body["description"] === "string" ? body["description"] : existingMeta.description,
-      prompt: typeof body["prompt"] === "string" ? body["prompt"] : existingMeta.prompt,
+      prompt: parsePrompt(body["prompt"]) ?? existingMeta.prompt,
       provider: typeof body["provider"] === "string" ? body["provider"] : existingMeta.provider,
       model: typeof body["model"] === "string" ? body["model"] : existingMeta.model,
     };
@@ -282,8 +295,17 @@ export function registerJobRoutes(
         nextPayload = payloadArgs ?? {};
       }
     } else {
-      nextToolName = "gateway.status";
-      nextPayload = {};
+      const payload = asRecord(body["payload"]);
+      const nextPrompt = parsePrompt(body["prompt"]) ?? existingMeta.prompt;
+      if (!nextPrompt) {
+        return reply.status(400).send({ detail: "prompt is required for agent_task" });
+      }
+      nextToolName = "agent.spawn";
+      nextPayload = {
+        ...(payload ?? existingPayload),
+        prompt: nextPrompt,
+        description: nextMeta.description ?? existing.name,
+      };
     }
 
     const updatedInput = {
