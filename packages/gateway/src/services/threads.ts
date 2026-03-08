@@ -6,7 +6,7 @@
  * status, configuration, and activity log in SQLite via Drizzle.
  */
 
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, gt } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { agentThreads, agentThreadActivities } from "../db/schema.js";
 import { uuidv7 } from "../lib/uuidv7.js";
@@ -212,22 +212,23 @@ export class ThreadService {
 
   getActivities(
     threadId: string,
-    limit = 100,
+    limit?: number,
     after?: string,
   ): ThreadActivity[] {
+    const filters = [eq(agentThreadActivities.threadId, threadId)];
+    if (after) {
+      filters.push(gt(agentThreadActivities.createdAt, after));
+    }
+
     let query = this.db
       .select()
       .from(agentThreadActivities)
-      .where(
-        after
-          ? and(
-              eq(agentThreadActivities.threadId, threadId),
-              // Simple comparison works for ISO timestamps
-            )
-          : eq(agentThreadActivities.threadId, threadId),
-      )
-      .orderBy(desc(agentThreadActivities.createdAt))
-      .limit(limit);
+      .where(filters.length === 1 ? filters[0]! : and(...filters))
+      .orderBy(desc(agentThreadActivities.createdAt));
+
+    if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
+      query = query.limit(limit);
+    }
 
     const rows = query.all();
     return rows.map((r) => ({

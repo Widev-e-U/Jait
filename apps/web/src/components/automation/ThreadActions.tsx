@@ -2,8 +2,8 @@ import { useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Eye, GitPullRequest, Loader2, AlertTriangle } from 'lucide-react'
-import { gitApi, summarizeGitResult } from '@/lib/git-api'
-import { agentsApi } from '@/lib/agents-api'
+import { summarizeGitResult } from '@/lib/git-api'
+import { agentsApi, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 
@@ -26,9 +26,11 @@ interface ThreadActionsProps {
   prState?: 'open' | 'closed' | 'merged' | null
   /** Whether GitHub CLI is available on the server. */
   ghAvailable?: boolean
+  /** Current thread lifecycle status. */
+  threadStatus: ThreadStatus
 }
 
-export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, threadTitle, prUrl, prState, ghAvailable = true }: ThreadActionsProps) {
+export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, threadTitle, prUrl, prState, ghAvailable = true, threadStatus }: ThreadActionsProps) {
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
@@ -51,6 +53,7 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
       ? 'Open PR'
       : 'Open PR Page'
     : 'Create Pull Request'
+  const canCreatePr = existingPrLink != null || threadStatus === 'completed'
 
   const handlePushAndPR = useCallback(async () => {
     // If PR already exists, just open it
@@ -58,16 +61,21 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
       window.open(existingPrLink.url, '_blank')
       return
     }
+    if (threadStatus !== 'completed') {
+      toast.error('Thread not completed', { description: 'Finish the thread before creating a pull request.' })
+      return
+    }
 
     setBusy(true)
     const toastId = toast.loading('Creating pull request…')
     try {
       const commitMsg = threadTitle.replace(/^\[.*?\]\s*/, '')
-      const result = await gitApi.runStackedAction(cwd, 'commit_push_pr', {
+      const response = await agentsApi.createPullRequest(threadId, {
         commitMessage: commitMsg,
         baseBranch,
         ...(githubToken ? { githubToken } : {}),
       })
+      const result = response.result
       const summary = summarizeGitResult(result)
       toast.success(summary.title, { id: toastId, description: summary.description })
 
@@ -92,7 +100,7 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
     } finally {
       setBusy(false)
     }
-  }, [cwd, threadTitle, baseBranch, threadId, existingPrLink])
+  }, [baseBranch, githubToken, threadId, threadStatus, threadTitle, existingPrLink])
 
   return (
     <>
@@ -105,8 +113,9 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
           variant="ghost"
           size="sm"
           className="h-5 text-[10px] gap-1"
-          disabled={busy}
+          disabled={busy || !canCreatePr}
           onClick={handlePushAndPR}
+          title={!existingPrLink && threadStatus !== 'completed' ? 'Finish the thread before creating a pull request.' : undefined}
         >
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitPullRequest className="h-3 w-3" />}
           {buttonLabel}
@@ -133,10 +142,10 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
                   : 'PR ready to open'}
           </Badge>
         )}
-        {!ghAvailable && !existingPrLink && (
+        {!ghAvailable && !githubToken && !existingPrLink && (
           <span
             className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 cursor-help"
-            title="GitHub CLI (gh) is not installed or authenticated. Install it to enable PR creation and status tracking."
+            title="GitHub CLI (gh) is not installed. Install it or configure a GitHub token to enable PR creation and status tracking."
           >
             <AlertTriangle className="h-3 w-3" />
           </span>

@@ -144,9 +144,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       });
 
       const unsubscribe = provider.onEvent((event: ProviderEvent) => {
-        // Providers that include sessionId can be scoped to this thread's session.
-        const eventSessionId = (event as { sessionId?: unknown }).sessionId;
-        if (typeof eventSessionId === "string" && eventSessionId !== session.id) {
+        if (event.sessionId !== session.id) {
           return;
         }
 
@@ -457,6 +455,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             const provider = deps.providerRegistry.get(thread.providerId as ProviderId);
             if (!provider) return { ok: false, message: `Provider '${thread.providerId}' not found` };
 
+            deps.threadService.update(thread.id, { status: "running", error: null });
+            broadcastThreadEvent(thread.id, "status", { status: "running" });
             await provider.sendTurn(thread.providerSessionId, input.message, input.attachments);
             const activity = deps.threadService.addActivity(thread.id, "message", input.message.slice(0, 500), { role: "user" });
             broadcastThreadEvent(thread.id, "activity", { activity });
@@ -529,6 +529,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             const thread = input.threadId ? getAccessibleThread(input.threadId, userId) : undefined;
             if (input.threadId && !thread) {
               return { ok: false, message: "Thread not found." };
+            }
+            if (thread && thread.status !== "completed") {
+              return {
+                ok: false,
+                message: "Thread must be completed before creating a pull request.",
+              };
             }
 
             const cwd = input.cwd || thread?.workingDirectory || context.workspaceRoot;

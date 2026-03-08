@@ -2,6 +2,8 @@
  * API client for agent threads and providers.
  */
 
+import type { GitStepResult } from './git-api'
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -70,6 +72,24 @@ export interface UpdateThreadRequest {
   prNumber?: number | null
   prTitle?: string | null
   prState?: 'open' | 'closed' | 'merged' | null
+}
+
+export interface GenerateThreadTitleRequest {
+  task: string
+  prefix?: string
+}
+
+export interface CreateThreadPrRequest {
+  commitMessage?: string
+  baseBranch?: string
+  githubToken?: string | null
+}
+
+export interface CreateThreadPrResponse {
+  message: string
+  prUrl: string | null
+  result: GitStepResult
+  thread?: AgentThread
 }
 
 // ── API Client ───────────────────────────────────────────────────────
@@ -151,6 +171,16 @@ export class AgentsApi {
     return res.json() as Promise<AgentThread>
   }
 
+  async generateThreadTitle(id: string, params: GenerateThreadTitleRequest): Promise<AgentThread> {
+    const res = await fetch(`${API_URL}/api/threads/${id}/generate-title`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to generate thread title: ${res.statusText}`)
+    return res.json() as Promise<AgentThread>
+  }
+
   async deleteThread(id: string): Promise<void> {
     const res = await fetch(`${API_URL}/api/threads/${id}`, {
       method: 'DELETE',
@@ -208,10 +238,24 @@ export class AgentsApi {
     if (!res.ok) throw new Error(`Failed to approve: ${res.statusText}`)
   }
 
+  async createPullRequest(id: string, params: CreateThreadPrRequest): Promise<CreateThreadPrResponse> {
+    const res = await fetch(`${API_URL}/api/threads/${id}/create-pr`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as Record<string, unknown>
+      throw new Error((err.error as string) || `Failed to create pull request: ${res.statusText}`)
+    }
+    return res.json() as Promise<CreateThreadPrResponse>
+  }
+
   // ── Activities ─────────────────────────────────────────────────
 
-  async getActivities(threadId: string, limit = 100): Promise<ThreadActivity[]> {
-    const res = await fetch(`${API_URL}/api/threads/${threadId}/activities?limit=${limit}`, {
+  async getActivities(threadId: string, limit?: number): Promise<ThreadActivity[]> {
+    const params = typeof limit === 'number' ? `?limit=${limit}` : ''
+    const res = await fetch(`${API_URL}/api/threads/${threadId}/activities${params}`, {
       headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to get activities: ${res.statusText}`)
