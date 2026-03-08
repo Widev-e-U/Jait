@@ -220,15 +220,16 @@ export class ThreadService {
       filters.push(gt(agentThreadActivities.createdAt, after));
     }
 
-    let query = this.db
+    const baseQuery = this.db
       .select()
       .from(agentThreadActivities)
       .where(filters.length === 1 ? filters[0]! : and(...filters))
       .orderBy(desc(agentThreadActivities.createdAt));
 
-    if (typeof limit === "number" && Number.isFinite(limit) && limit > 0) {
-      query = query.limit(limit);
-    }
+    const query =
+      typeof limit === "number" && Number.isFinite(limit) && limit > 0
+        ? baseQuery.limit(limit)
+        : baseQuery;
 
     const rows = query.all();
     return rows.map((r) => ({
