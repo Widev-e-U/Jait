@@ -1,5 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
 <resources>
-  <string name="app_name">Jait</string>
-  <string name="expo_splash_screen_resize_mode" translatable="false">contain</string>
-  <string name="expo_splash_screen_status_bar_translucent" translatable="false">false</string>
+    <string name="app_name">Jait</string>
+    <string name="title_activity_main">Jait</string>
+    <string name="package_name">dev.jait.mobile</string>
+    <string name="custom_url_scheme">dev.jait.mobile</string>
 </resources>

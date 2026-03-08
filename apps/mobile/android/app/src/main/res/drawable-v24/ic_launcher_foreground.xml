@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportHeight="108"
+    android:viewportWidth="108">
+    <!-- Jait chevron: < -->
+    <path
+        android:pathData="M33.54,39.23L45.35,51.24L33.54,63.28"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="9.28"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+    <!-- Jait J stem + curve -->
+    <path
+        android:pathData="M64.34,27.21L64.34,67.71C64.34,77.41 57.91,83.95 47.99,83.95C41.45,83.95 35.65,80.79 31.54,75.41"
+        android:strokeColor="#FFFFFF"
+        android:strokeWidth="9.28"
+        android:strokeLineCap="round"
+        android:strokeLineJoin="round"
+        android:fillColor="#00000000" />
+</vector>
