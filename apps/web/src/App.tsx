@@ -520,6 +520,12 @@ function App() {
     localStorage.setItem('viewMode', viewMode)
   }, [viewMode])
 
+  useEffect(() => {
+    if (viewMode === 'manager' && showDebugPanel) {
+      setShowDebugPanel(false)
+    }
+  }, [viewMode, showDebugPanel])
+
   // ── Synced panel controllers (local state + WS + DB) ──────────────
   // Use these instead of raw setShowX for user-initiated open/close.
 
@@ -1415,21 +1421,22 @@ ${file.content.slice(0, 2000)}
               </>
             )}
 
-            {/* Debug — both modes */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showDebugPanel ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-6 text-[11px] px-2 shrink-0"
-                  onClick={() => setShowDebugPanel(d => !d)}
-                >
-                  <Bug className="h-3 w-3 mr-1" />
-                  Debug
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">SSE debug stream</TooltipContent>
-            </Tooltip>
+            {viewMode === 'developer' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showDebugPanel ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-6 text-[11px] px-2 shrink-0"
+                    onClick={() => setShowDebugPanel(d => !d)}
+                  >
+                    <Bug className="h-3 w-3 mr-1" />
+                    Debug
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">SSE debug stream</TooltipContent>
+              </Tooltip>
+            )}
 
             {/* Developer-only: Share */}
             {viewMode === 'developer' && (
@@ -2151,7 +2158,7 @@ ${file.content.slice(0, 2000)}
           </div>
         )}
 
-        {showDebugPanel && (
+        {viewMode === 'developer' && showDebugPanel && (
           <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
             <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
           </div>
