@@ -14,6 +14,7 @@
  *   POST   /api/threads/:id/stop     — stop agent session
  *   POST   /api/threads/:id/interrupt — interrupt current turn
  *   POST   /api/threads/:id/approve  — approve a tool call
+ *   POST   /api/threads/:id/create-pr — create a PR for a completed thread
  *   GET    /api/threads/:id/activities — get activity log
  *   GET    /api/providers            — list available providers
  */
@@ -25,6 +26,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
+import { GitService, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
 import {
   fallbackThreadTitle,
@@ -37,6 +39,16 @@ export interface ThreadRouteDeps {
   providerRegistry: ProviderRegistry;
   userService?: UserService;
   ws?: WsControlPlane;
+  gitService?: {
+    runStackedAction(
+      cwd: string,
+      action: GitStackedAction,
+      commitMessage?: string,
+      featureBranch?: boolean,
+      baseBranch?: string,
+      githubToken?: string,
+    ): Promise<GitStepResult>;
+  };
 }
 
 export function registerThreadRoutes(
@@ -45,6 +57,7 @@ export function registerThreadRoutes(
   deps: ThreadRouteDeps,
 ): void {
   const { threadService, providerRegistry, ws } = deps;
+  const gitService = deps.gitService ?? new GitService();
 
   // Track active onEvent unsubscribe functions per thread so we can clean up
   const threadUnsubs = new Map<string, () => void>();
@@ -404,6 +417,83 @@ export function registerThreadRoutes(
 
     await provider.respondToApproval(thread.providerSessionId, requestId, approved);
     return reply.status(200).send({ ok: true });
+  });
+
+  /** Create a pull request for a completed thread */
+  app.post("/api/threads/:id/create-pr", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const thread = threadService.getById(id);
+    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    if (thread.status !== "completed") {
+      return reply.status(409).send({
+        error: "Thread must be completed before creating a pull request.",
+      });
+    }
+    if (!thread.workingDirectory) {
+      return reply.status(400).send({ error: "Thread has no working directory configured." });
+    }
+
+    const commitMessage =
+      typeof body["commitMessage"] === "string"
+        ? body["commitMessage"].trim() || undefined
+        : undefined;
+    const baseBranch = typeof body["baseBranch"] === "string" ? body["baseBranch"] : undefined;
+    const githubToken = typeof body["githubToken"] === "string" ? body["githubToken"] : undefined;
+
+    try {
+      const result = await gitService.runStackedAction(
+        thread.workingDirectory,
+        "commit_push_pr",
+        commitMessage,
+        false,
+        baseBranch,
+        githubToken,
+      );
+
+      const prUrl = result.pr.url ?? result.push.createPrUrl;
+      const updatedThread = threadService.update(thread.id, {
+        branch: result.push.branch ?? undefined,
+        prUrl: result.pr.url ?? undefined,
+        prNumber: result.pr.number ?? undefined,
+        prTitle: result.pr.title ?? undefined,
+        prState:
+          result.pr.status === "created" || result.pr.status === "opened_existing"
+            ? "open"
+            : undefined,
+      });
+
+      if (updatedThread) {
+        broadcastThreadEvent(thread.id, "updated", { thread: updatedThread });
+      }
+
+      if (prUrl) {
+        const activity = threadService.addActivity(
+          thread.id,
+          "activity",
+          result.pr.url ? `Pull request created: ${prUrl}` : `Open pull request: ${prUrl}`,
+          { action: "commit_push_pr", prUrl, result },
+        );
+        broadcastThreadEvent(thread.id, "activity", { activity });
+      }
+
+      return reply.status(200).send({
+        message: result.pr.url
+          ? `Pull request ready: ${result.pr.url}`
+          : prUrl
+            ? `Create pull request here: ${prUrl}`
+            : "Git action completed, but no pull request link is available.",
+        prUrl: prUrl ?? null,
+        result,
+        thread: updatedThread,
+      });
+    } catch (err) {
+      return reply.status(500).send({
+        error: err instanceof Error ? err.message : "Failed to create pull request",
+      });
+    }
   });
 
   // ── Activity log ─────────────────────────────────────────────────

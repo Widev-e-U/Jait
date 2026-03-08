@@ -136,10 +136,7 @@ export function useAutomation(enabled = true) {
       selectedThread != null &&
       selectedRepo != null &&
       selectedRepo.source === 'local' &&
-      (selectedThread.status === 'idle' ||
-        selectedThread.status === 'completed' ||
-        selectedThread.status === 'error' ||
-        selectedThread.status === 'interrupted'),
+      (selectedThread.status === 'completed' || Boolean(selectedThread.prUrl)),
     [selectedThread, selectedRepo],
   )
 

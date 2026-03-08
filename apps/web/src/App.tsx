@@ -1478,6 +1478,7 @@ ${file.content.slice(0, 2000)}
                           branch={automation.selectedThread.branch}
                           baseBranch={automation.selectedRepo.defaultBranch}
                           threadTitle={automation.selectedThread.title}
+                          threadStatus={automation.selectedThread.status}
                           prUrl={automation.selectedThread.prUrl}
                           prState={automation.selectedThread.prState as 'open' | 'closed' | 'merged' | null | undefined}
                           ghAvailable={automation.ghAvailable}

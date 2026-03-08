@@ -2,6 +2,8 @@
  * API client for agent threads and providers.
  */
 
+import type { GitStepResult } from './git-api'
+
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -75,6 +77,19 @@ export interface UpdateThreadRequest {
 export interface GenerateThreadTitleRequest {
   task: string
   prefix?: string
+}
+
+export interface CreateThreadPrRequest {
+  commitMessage?: string
+  baseBranch?: string
+  githubToken?: string | null
+}
+
+export interface CreateThreadPrResponse {
+  message: string
+  prUrl: string | null
+  result: GitStepResult
+  thread?: AgentThread
 }
 
 // ── API Client ───────────────────────────────────────────────────────
@@ -221,6 +236,19 @@ export class AgentsApi {
       body: JSON.stringify({ requestId, approved }),
     })
     if (!res.ok) throw new Error(`Failed to approve: ${res.statusText}`)
+  }
+
+  async createPullRequest(id: string, params: CreateThreadPrRequest): Promise<CreateThreadPrResponse> {
+    const res = await fetch(`${API_URL}/api/threads/${id}/create-pr`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as Record<string, unknown>
+      throw new Error((err.error as string) || `Failed to create pull request: ${res.statusText}`)
+    }
+    return res.json() as Promise<CreateThreadPrResponse>
   }
 
   // ── Activities ─────────────────────────────────────────────────

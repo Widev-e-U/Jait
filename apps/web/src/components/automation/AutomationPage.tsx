@@ -138,9 +138,7 @@ export function AutomationPage() {
     () =>
       selectedThread != null &&
       selectedRepo != null &&
-      (selectedThread.status === 'completed' ||
-        selectedThread.status === 'error' ||
-        selectedThread.status === 'interrupted'),
+      (selectedThread.status === 'completed' || Boolean(selectedThread.prUrl)),
     [selectedThread, selectedRepo],
   )
 
@@ -638,10 +636,11 @@ export function AutomationPage() {
                 {showGitActions && selectedRepo && selectedThread && (
                   <ThreadActions
                     threadId={selectedThread.id}
-                    cwd={selectedRepo.localPath}
+                    cwd={selectedThread.workingDirectory ?? selectedRepo.localPath}
                     branch={selectedThread.branch}
                     baseBranch={selectedRepo.defaultBranch}
                     threadTitle={selectedThread.title}
+                    threadStatus={selectedThread.status}
                   />
                 )}
               </div>
