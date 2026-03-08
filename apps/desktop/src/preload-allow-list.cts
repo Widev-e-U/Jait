@@ -10,6 +10,6 @@ const allowedIpcChannels = {
     "desktop:get-roots",
   ],
   on: ["screen-share:start", "screen-share:stop", "gateway:event"],
-} as const;
+};
 
-export = allowedIpcChannels;
+module.exports = allowedIpcChannels;
