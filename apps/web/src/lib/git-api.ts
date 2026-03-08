@@ -111,8 +111,8 @@ async function gitPost<T>(path: string, body: unknown): Promise<T> {
 // ── Public API ───────────────────────────────────────────────────────
 
 export const gitApi = {
-  status(cwd: string): Promise<GitStatusResult> {
-    return gitPost<GitStatusResult>('status', { cwd })
+  status(cwd: string, branch?: string): Promise<GitStatusResult> {
+    return gitPost<GitStatusResult>('status', { cwd, ...(branch ? { branch } : {}) })
   },
 
   listBranches(cwd: string): Promise<GitListBranchesResult> {

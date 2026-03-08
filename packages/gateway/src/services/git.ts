@@ -126,7 +126,7 @@ export class GitService {
     await gitExec(cwd, "init");
   }
 
-  async status(cwd: string): Promise<GitStatusResult> {
+  async status(cwd: string, requestedBranch?: string): Promise<GitStatusResult> {
     const isGit = await this.isRepo(cwd);
     if (!isGit) {
       return {
@@ -140,12 +140,13 @@ export class GitService {
       };
     }
 
-    // Branch
-    let branch: string | null = null;
+    // Current checked-out branch
+    let currentBranch: string | null = null;
     try {
-      branch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD");
-      if (branch === "HEAD") branch = null;
+      currentBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD");
+      if (currentBranch === "HEAD") currentBranch = null;
     } catch { /* detached HEAD */ }
+    const branch = requestedBranch?.trim() || currentBranch;
 
     // Status summary
     const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
@@ -200,9 +201,10 @@ export class GitService {
       try {
         const hasGh = await ghAvailable(cwd);
         if (hasGh) {
+          const escapedBranch = branch.replace(/"/g, '\\"');
           const json = await ghExec(
             cwd,
-            `pr view --head "${branch}" --json number,title,url,state,baseRefName,headRefName 2>/dev/null`,
+            `pr view --head "${escapedBranch}" --json number,title,url,state,baseRefName,headRefName 2>/dev/null`,
           );
           if (json) {
             const parsed = JSON.parse(json) as Record<string, unknown>;
