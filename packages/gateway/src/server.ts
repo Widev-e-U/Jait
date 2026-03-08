@@ -163,6 +163,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     registerThreadRoutes(app, config, {
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
+      userService: deps.userService,
       ws: deps.ws,
     });
   }

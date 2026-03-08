@@ -439,8 +439,11 @@ export function useAutomation(enabled = true) {
             workingDirectory: worktreePath ?? selectedRepo.localPath,
             branch: branchName,
           })
-          setSelectedThreadId(thread.id)
           await agentsApi.startThread(thread.id, text)
+          void agentsApi.generateThreadTitle(thread.id, {
+            task: text,
+            prefix: `[${selectedRepo.name}] `,
+          }).catch(() => {})
         }
 
         void refresh()
