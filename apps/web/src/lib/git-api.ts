@@ -65,6 +65,16 @@ export interface GitDiffResult {
   hasChanges: boolean
 }
 
+export interface FileDiffEntry {
+  path: string
+  /** Original (HEAD) content, empty for new files */
+  original: string
+  /** Current working-tree content, empty for deleted files */
+  modified: string
+  /** 'A' = added, 'M' = modified, 'D' = deleted, 'R' = renamed, '?' = untracked */
+  status: string
+}
+
 export interface GitPullResult {
   status: 'pulled' | 'skipped_up_to_date'
   branch: string
@@ -144,6 +154,10 @@ export const gitApi = {
 
   diff(cwd: string): Promise<GitDiffResult> {
     return gitPost<GitDiffResult>('diff', { cwd })
+  },
+
+  fileDiffs(cwd: string, baseBranch?: string): Promise<FileDiffEntry[]> {
+    return gitPost<{ files: FileDiffEntry[] }>('file-diffs', { cwd, ...(baseBranch ? { baseBranch } : {}) }).then(r => r.files)
   },
 }
 

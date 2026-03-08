@@ -589,12 +589,10 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 
-  // Register on mount, poll devices
+  // Register on mount, fetch initial state once (no polling — WS pushes updates)
   useEffect(() => {
     registerDevice()
     refreshState()
-    const interval = setInterval(refreshState, 10_000)
-    return () => clearInterval(interval)
   }, [registerDevice, refreshState])
 
   // Listen for Electron tray commands

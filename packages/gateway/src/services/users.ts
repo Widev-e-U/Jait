@@ -6,6 +6,7 @@ import { uuidv7 } from "../lib/uuidv7.js";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type SttProvider = "simulated" | "browser";
+export type ChatProvider = "jait" | "codex" | "claude-code";
 
 export interface UserRecord {
   id: string;
@@ -20,6 +21,7 @@ export interface UserSettingsRecord {
   apiKeys: Record<string, string>;
   disabledTools: string[];
   sttProvider: SttProvider;
+  chatProvider: ChatProvider;
   updatedAt: string;
 }
 
@@ -145,6 +147,7 @@ export class UserService {
         apiKeys: JSON.stringify({}),
         disabledTools: JSON.stringify([]),
         sttProvider: "simulated",
+        chatProvider: "jait",
         updatedAt: now,
       }).run();
       return {
@@ -153,6 +156,7 @@ export class UserService {
         apiKeys: {},
         disabledTools: [],
         sttProvider: "simulated",
+        chatProvider: "jait",
         updatedAt: now,
       };
     }
@@ -162,19 +166,21 @@ export class UserService {
       apiKeys: parseApiKeys(row.apiKeys),
       disabledTools: parseStringArray((row as any).disabledTools ?? null),
       sttProvider: ((row as any).sttProvider as SttProvider) || "simulated",
+      chatProvider: ((row as any).chatProvider as ChatProvider) || "jait",
       updatedAt: row.updatedAt,
     };
   }
 
   updateSettings(
     userId: string,
-    patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[]; sttProvider?: SttProvider },
+    patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[]; sttProvider?: SttProvider; chatProvider?: ChatProvider },
   ): UserSettingsRecord {
     const existing = this.getSettings(userId);
     const theme = patch.theme ?? existing.theme;
     const apiKeys = patch.apiKeys ?? existing.apiKeys;
     const disabledTools = patch.disabledTools ?? existing.disabledTools;
     const sttProvider = patch.sttProvider ?? existing.sttProvider;
+    const chatProvider = patch.chatProvider ?? existing.chatProvider;
     const now = new Date().toISOString();
     this.db
       .update(userSettings)
@@ -183,6 +189,7 @@ export class UserService {
         apiKeys: JSON.stringify(apiKeys),
         disabledTools: JSON.stringify(disabledTools),
         sttProvider,
+        chatProvider,
         updatedAt: now,
       } as any)
       .where(eq(userSettings.userId, userId))

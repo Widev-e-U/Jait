@@ -17,7 +17,6 @@ import {
   Loader2,
   ArrowDownToLine,
   Eye,
-  X,
 } from 'lucide-react'
 import {
   gitApi,
@@ -28,15 +27,18 @@ import {
   type GitStackedAction,
   type GitActionMenuItem,
   type GitQuickAction,
-  type GitDiffResult,
 } from '@/lib/git-api'
 import { toast } from 'sonner'
+import { GitDiffViewer } from './GitDiffViewer'
 
 interface GitActionsControlProps {
   /** Absolute path to the git repo working directory */
   cwd: string
-  /** Poll interval for status refresh (ms, 0 = manual only) */
-  pollInterval?: number
+  /**
+   * When this value changes, git status is re-fetched.
+   * Pass e.g. the selected thread's status or updatedAt.
+   */
+  refreshTrigger?: unknown
 }
 
 // ── Sub-components ───────────────────────────────────────────────────
@@ -60,7 +62,7 @@ function QuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
 
 // ── Main component ───────────────────────────────────────────────────
 
-export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsControlProps) {
+export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProps) {
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isBusy, setIsBusy] = useState(false)
@@ -68,11 +70,9 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
   const [commitDialogOpen, setCommitDialogOpen] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
   const [diffOpen, setDiffOpen] = useState(false)
-  const [diffResult, setDiffResult] = useState<GitDiffResult | null>(null)
-  const [diffLoading, setDiffLoading] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // ── Status polling ─────────────────────────────────────────────
+  // ── Status refresh (event-driven, no polling) ─────────────────
 
   const refreshStatus = useCallback(async () => {
     try {
@@ -85,13 +85,10 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
     }
   }, [cwd])
 
+  // Fetch on mount + whenever refreshTrigger changes (e.g. thread status)
   useEffect(() => {
     refreshStatus()
-    if (pollInterval > 0) {
-      const id = setInterval(refreshStatus, pollInterval)
-      return () => clearInterval(id)
-    }
-  }, [refreshStatus, pollInterval])
+  }, [refreshStatus, refreshTrigger])
 
   // Close menu on outside click
   useEffect(() => {
@@ -236,20 +233,6 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
     runStackedAction('commit', { commitMessage: msg || undefined, featureBranch: true })
   }, [commitMessage, runStackedAction])
 
-  const openDiff = useCallback(async () => {
-    setDiffLoading(true)
-    setDiffOpen(true)
-    try {
-      const result = await gitApi.diff(cwd)
-      setDiffResult(result)
-    } catch (err) {
-      toast.error('Failed to load diff', { description: err instanceof Error ? err.message : 'Unknown error' })
-      setDiffOpen(false)
-    } finally {
-      setDiffLoading(false)
-    }
-  }, [cwd])
-
   // ── Render ─────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -264,10 +247,9 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
           variant="ghost"
           size="sm"
           className="text-xs gap-1"
-          disabled={diffLoading}
-          onClick={openDiff}
+          onClick={() => setDiffOpen(true)}
         >
-          {diffLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+          <Eye className="h-3.5 w-3.5" />
           View changes
         </Button>
       )}
@@ -349,59 +331,9 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
         </div>
       )}
 
-      {/* Diff view dialog (full-screen overlay) */}
+      {/* Monaco diff viewer */}
       {diffOpen && (
-        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-popover border rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
-            <div className="flex items-center justify-between px-4 py-3 border-b">
-              <div className="flex items-center gap-2">
-                <Eye className="h-4 w-4 text-muted-foreground" />
-                <h3 className="text-sm font-medium">Changes</h3>
-                {diffResult && (
-                  <span className="text-xs text-muted-foreground">
-                    {diffResult.files.length} file{diffResult.files.length !== 1 ? 's' : ''} changed
-                  </span>
-                )}
-              </div>
-              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setDiffOpen(false)}>
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-
-            {diffLoading ? (
-              <div className="flex items-center justify-center py-12">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : diffResult && !diffResult.hasChanges ? (
-              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-                No changes detected.
-              </div>
-            ) : diffResult ? (
-              <div className="flex-1 overflow-auto">
-                {/* File list */}
-                <div className="px-4 py-2 border-b bg-muted/30">
-                  <div className="flex flex-wrap gap-1">
-                    {diffResult.files.map((f) => (
-                      <span key={f} className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">{f}</span>
-                    ))}
-                  </div>
-                </div>
-                {/* Diff content */}
-                <pre className="p-4 text-xs font-mono leading-5 overflow-x-auto whitespace-pre">
-                  {diffResult.diff.split('\n').map((line, i) => {
-                    let cls = 'text-foreground'
-                    if (line.startsWith('+') && !line.startsWith('+++')) cls = 'text-green-600 dark:text-green-400'
-                    else if (line.startsWith('-') && !line.startsWith('---')) cls = 'text-red-600 dark:text-red-400'
-                    else if (line.startsWith('@@')) cls = 'text-blue-600 dark:text-blue-400'
-                    else if (line.startsWith('diff ') || line.startsWith('index ')) cls = 'text-muted-foreground font-semibold'
-                    else if (line.startsWith('#')) cls = 'text-muted-foreground italic'
-                    return <span key={i} className={cls}>{line}{'\n'}</span>
-                  })}
-                </pre>
-              </div>
-            ) : null}
-          </div>
-        </div>
+        <GitDiffViewer cwd={cwd} onClose={() => setDiffOpen(false)} />
       )}
     </div>
   )

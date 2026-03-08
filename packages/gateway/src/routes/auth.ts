@@ -1,11 +1,12 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
-import type { UserService, ThemeMode, SttProvider } from "../services/users.js";
+import type { UserService, ThemeMode, SttProvider, ChatProvider } from "../services/users.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
 const STT_PROVIDER_VALUES = new Set<SttProvider>(["simulated", "browser"]);
+const CHAT_PROVIDER_VALUES = new Set<ChatProvider>(["jait", "codex", "claude-code"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
@@ -98,6 +99,7 @@ export function registerAuthRoutes(
       api_keys: settings.apiKeys,
       disabled_tools: settings.disabledTools,
       stt_provider: settings.sttProvider,
+      chat_provider: settings.chatProvider,
       updated_at: settings.updatedAt,
     };
   });
@@ -106,7 +108,7 @@ export function registerAuthRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
-    const patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[]; sttProvider?: SttProvider } = {};
+    const patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[]; sttProvider?: SttProvider; chatProvider?: ChatProvider } = {};
 
     if (typeof body.theme === "string" && THEME_VALUES.has(body.theme as ThemeMode)) {
       patch.theme = body.theme as ThemeMode;
@@ -125,12 +127,17 @@ export function registerAuthRoutes(
       patch.sttProvider = body.stt_provider as SttProvider;
     }
 
+    if (typeof body.chat_provider === "string" && CHAT_PROVIDER_VALUES.has(body.chat_provider as ChatProvider)) {
+      patch.chatProvider = body.chat_provider as ChatProvider;
+    }
+
     const updated = users.updateSettings(authUser.id, patch);
     return {
       theme: updated.theme,
       api_keys: updated.apiKeys,
       disabled_tools: updated.disabledTools,
       stt_provider: updated.sttProvider,
+      chat_provider: updated.chatProvider,
       updated_at: updated.updatedAt,
     };
   });

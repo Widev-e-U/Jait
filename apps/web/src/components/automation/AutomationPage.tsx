@@ -39,7 +39,7 @@ import {
 } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
-import { GitActionsControl } from './GitActionsControl'
+import { ThreadActions } from './ThreadActions'
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -514,12 +514,7 @@ export function AutomationPage() {
               </span>
             )}
 
-            {/* Git actions button — shows after thread completes */}
-            {showGitActions && selectedRepo && (
-              <div className="ml-auto">
-                <GitActionsControl cwd={selectedRepo.localPath} pollInterval={10_000} />
-              </div>
-            )}
+
           </div>
         )}
 
@@ -638,6 +633,14 @@ export function AutomationPage() {
                     </Button>
                   </div>
                 </div>
+                {showGitActions && selectedRepo && selectedThread && (
+                  <ThreadActions
+                    cwd={selectedRepo.localPath}
+                    branch={selectedThread.branch}
+                    baseBranch={selectedRepo.defaultBranch}
+                    threadTitle={selectedThread.title}
+                  />
+                )}
               </div>
             </div>
           </div>

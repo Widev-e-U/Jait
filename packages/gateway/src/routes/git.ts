@@ -140,6 +140,20 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
     }
   });
 
+  /** Per-file original/modified content for Monaco diff editor */
+  app.post("/api/git/file-diffs", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; baseBranch?: string };
+    if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const files = await git.fileDiffs(body.cwd, body.baseBranch || undefined);
+      return { files };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "File diffs failed" });
+    }
+  });
+
   /** Git init */
   app.post("/api/git/init", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

@@ -53,7 +53,7 @@ import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { ActivityItem } from '@/components/automation/ActivityItem'
-import { GitActionsControl } from '@/components/automation/GitActionsControl'
+import { ThreadActions } from '@/components/automation/ThreadActions'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
@@ -63,7 +63,7 @@ import { WorkspacePanel, workspaceLanguageForPath, DiffView, type WorkspaceFile,
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
-import { useAuth, type ThemeMode, type SttProvider } from '@/hooks/useAuth'
+import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSessions } from '@/hooks/useSessions'
@@ -76,7 +76,6 @@ import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
 import { Badge } from '@/components/ui/badge'
-import { ScrollArea } from '@/components/ui/scroll-area'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
@@ -127,7 +126,9 @@ function App() {
   const screenShareDragging = useRef(false)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
-  const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(() => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || 'jait')
+  const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(
+    () => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || settings?.chat_provider || 'jait'
+  )
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('viewMode') as ViewMode) || 'developer')
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -403,6 +404,7 @@ function App() {
     onStateSync: handleStateSync,
     onFullState: handleFullState,
     onMessageComplete: refreshMessages,
+    onThreadEvent: automation.handleThreadEvent,
     listeners: {
       'workspace.open': useCallback((data: WorkspaceOpenData) => {
         setShowWorkspace(true)
@@ -460,8 +462,20 @@ function App() {
     localStorage.setItem('chatMode', chatMode)
   }, [chatMode])
 
+  // Track whether the initial server sync has happened so we don't PATCH on mount
+  const chatProviderInitialized = useRef(false)
+
   useEffect(() => {
     localStorage.setItem('chatProvider', chatProvider)
+    // Only persist to server after the first render (user-initiated change)
+    if (!chatProviderInitialized.current) {
+      chatProviderInitialized.current = true
+      return
+    }
+    if (token) {
+      void updateSettings({ chat_provider: chatProvider as ChatProvider })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatProvider])
 
   useEffect(() => {
@@ -615,6 +629,17 @@ function App() {
   useEffect(() => {
     setThemeMode(settings.theme)
   }, [settings.theme])
+
+  // Sync chat provider from server settings (e.g. on login or new device).
+  // Guard on authLoading so EMPTY_SETTINGS ('jait') doesn't override the
+  // localStorage value before the real server settings arrive.
+  useEffect(() => {
+    if (authLoading) return
+    if (settings.chat_provider && settings.chat_provider !== chatProvider) {
+      setChatProvider(settings.chat_provider as import('@/lib/agents-api').ProviderId)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.chat_provider, authLoading])
 
   useEffect(() => {
     applyTheme(themeMode)
@@ -942,7 +967,7 @@ ${file.content.slice(0, 2000)}
   const handleManagerSubmit = async () => {
     const text = inputValue.trim()
     if (!text) return
-    await automation.handleSend(text)
+    await automation.handleSend(text, chatProvider)
     setInputValue('')
   }
 
@@ -1397,10 +1422,15 @@ ${file.content.slice(0, 2000)}
                         <Square className="h-2.5 w-2.5" />
                       </Button>
                     )}
-                    {automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
-                      <Button variant="ghost" size="sm" className="h-5 text-[10px]" onClick={() => automation.setSelectedThreadId(null)}>
-                        New
-                      </Button>
+                    {automation.showGitActions && automation.selectedRepo && (
+                      <div className="ml-2 shrink-0">
+                        <ThreadActions
+                          cwd={automation.selectedRepo.localPath}
+                          branch={automation.selectedThread.branch}
+                          baseBranch={automation.selectedRepo.defaultBranch}
+                          threadTitle={automation.selectedThread.title}
+                        />
+                      </div>
                     )}
                   </div>
                 ) : automation.selectedRepo ? (
@@ -1408,11 +1438,6 @@ ${file.content.slice(0, 2000)}
                     {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
                   </span>
                 ) : null}
-                {automation.showGitActions && automation.selectedRepo && (
-                  <div className="ml-2 shrink-0">
-                    <GitActionsControl cwd={automation.selectedRepo.localPath} pollInterval={10_000} />
-                  </div>
-                )}
               </>
             )}
           </div>
@@ -1678,8 +1703,8 @@ ${file.content.slice(0, 2000)}
                   </div>
                 ) : automation.selectedThread ? (
                   <>
-                    <ScrollArea className="flex-1 min-h-0">
-                      <div className="max-w-3xl mx-auto py-4 px-4 space-y-2">
+                    <Conversation className="min-h-0 flex-1 border-b">
+                      <div className="space-y-2">
                         {automation.activities.length === 0 && (
                           <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
                         )}
@@ -1687,7 +1712,7 @@ ${file.content.slice(0, 2000)}
                           <ActivityItem key={a.id} activity={a} />
                         ))}
                       </div>
-                    </ScrollArea>
+                    </Conversation>
                     <div className="shrink-0 py-3 px-4">
                       <div className="mx-auto max-w-3xl">
                         {automation.error && (
@@ -1707,9 +1732,19 @@ ${file.content.slice(0, 2000)}
                           placeholder={automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
                           viewMode={viewMode}
                           onViewModeChange={setViewMode}
-                          provider={automation.selectedProvider}
-                          onProviderChange={automation.setSelectedProvider}
+                          provider={chatProvider}
+                          onProviderChange={setChatProvider}
                         />
+                        {automation.selectedThread && automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
+                          <div className="flex items-center gap-2 px-1 mt-1.5">
+                            <button
+                              onClick={() => automation.setSelectedThreadId(null)}
+                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                            >
+                              New task
+                            </button>
+                          </div>
+                        )}
                       </div>
                     </div>
                   </>
@@ -1735,8 +1770,8 @@ ${file.content.slice(0, 2000)}
                         placeholder="Describe what you want to do..."
                         viewMode={viewMode}
                         onViewModeChange={setViewMode}
-                        provider={automation.selectedProvider}
-                        onProviderChange={automation.setSelectedProvider}
+                        provider={chatProvider}
+                        onProviderChange={setChatProvider}
                       />
                     </div>
                   </div>

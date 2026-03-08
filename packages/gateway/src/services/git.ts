@@ -7,6 +7,8 @@
  */
 
 import { exec as execCb } from "node:child_process";
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import { promisify } from "node:util";
 
 const exec = promisify(execCb);
@@ -69,6 +71,16 @@ export interface GitDiffResult {
   diff: string;
   files: string[];
   hasChanges: boolean;
+}
+
+export interface FileDiffEntry {
+  path: string;
+  /** Original (HEAD) content, empty for new files */
+  original: string;
+  /** Current working-tree content, empty for deleted files */
+  modified: string;
+  /** 'A' = added, 'M' = modified, 'D' = deleted, 'R' = renamed, '?' = untracked */
+  status: string;
 }
 
 export interface GitPullResult {
@@ -504,5 +516,125 @@ export class GitService {
       files,
       hasChanges: files.length > 0,
     };
+  }
+
+  /**
+   * Return per-file original and modified content so the frontend can
+   * render a Monaco diff editor.
+   *
+   * @param baseBranch — when given, diff working tree against that branch
+   *   (shows all thread changes: committed + uncommitted). When omitted,
+   *   only uncommitted working-tree changes are returned (original = HEAD).
+   */
+  async fileDiffs(cwd: string, baseBranch?: string): Promise<FileDiffEntry[]> {
+    const isGit = await this.isRepo(cwd);
+    if (!isGit) return [];
+
+    if (baseBranch) {
+      return this.fileDiffsBranch(cwd, baseBranch);
+    }
+
+    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+    const lines = porcelain.split("\n").filter(Boolean);
+    const entries: FileDiffEntry[] = [];
+
+    for (const line of lines) {
+      const xy = line.slice(0, 2);
+      let filePath = line.slice(3).trim();
+
+      // Handle renames: "R  old -> new"
+      if (filePath.includes(" -> ")) {
+        filePath = filePath.split(" -> ").pop()!.trim();
+      }
+
+      // Determine status code
+      let status = "M";
+      if (xy.includes("?")) status = "?";
+      else if (xy.includes("A")) status = "A";
+      else if (xy.includes("D")) status = "D";
+      else if (xy.includes("R")) status = "R";
+
+      // Get original from HEAD
+      let original = "";
+      if (status !== "A" && status !== "?") {
+        try {
+          original = await gitExec(cwd, `show HEAD:${JSON.stringify(filePath)}`);
+        } catch {
+          original = "";
+        }
+      }
+
+      // Get current working tree content
+      let modified = "";
+      if (status !== "D") {
+        try {
+          modified = await readFile(join(cwd, filePath), "utf-8");
+        } catch {
+          modified = "";
+        }
+      }
+
+      entries.push({ path: filePath, original, modified, status });
+    }
+
+    return entries;
+  }
+
+  /**
+   * Diff working tree against a base branch (shows all committed + uncommitted changes).
+   */
+  private async fileDiffsBranch(cwd: string, baseBranch: string): Promise<FileDiffEntry[]> {
+    // Get list of files that differ between baseBranch and working tree
+    const nameStatus = await gitExec(cwd, `diff --name-status ${baseBranch}`).catch(() => "");
+    const lines = nameStatus.split("\n").filter(Boolean);
+    const entries: FileDiffEntry[] = [];
+    const seen = new Set<string>();
+
+    for (const line of lines) {
+      const parts = line.split("\t");
+      const statusCode = parts[0]?.trim() ?? "M";
+      let filePath = parts[parts.length - 1]?.trim() ?? "";
+
+      let status = "M";
+      if (statusCode.startsWith("A")) status = "A";
+      else if (statusCode.startsWith("D")) status = "D";
+      else if (statusCode.startsWith("R")) {
+        status = "R";
+        filePath = parts[2]?.trim() ?? filePath;
+      }
+
+      if (!filePath || seen.has(filePath)) continue;
+      seen.add(filePath);
+
+      let original = "";
+      if (status !== "A") {
+        try {
+          original = await gitExec(cwd, `show ${baseBranch}:${JSON.stringify(filePath)}`);
+        } catch { original = ""; }
+      }
+
+      let modified = "";
+      if (status !== "D") {
+        try {
+          modified = await readFile(join(cwd, filePath), "utf-8");
+        } catch { modified = ""; }
+      }
+
+      entries.push({ path: filePath, original, modified, status });
+    }
+
+    // Also include untracked files that aren't already listed
+    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+    for (const pl of porcelain.split("\n").filter(Boolean)) {
+      if (!pl.startsWith("??")) continue;
+      const fp = pl.slice(3).trim();
+      if (!fp || seen.has(fp)) continue;
+      seen.add(fp);
+      let modified = "";
+      try { modified = await readFile(join(cwd, fp), "utf-8"); } catch { /* skip */ }
+      entries.push({ path: fp, original: "", modified, status: "?" });
+    }
+
+    return entries;
   }
 }

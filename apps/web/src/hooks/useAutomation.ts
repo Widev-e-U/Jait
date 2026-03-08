@@ -55,6 +55,11 @@ function generateBranchName(): string {
   return `jait/${hex}`
 }
 
+/** Render thread activity in chat order (oldest → newest). */
+function sortActivities(activities: ThreadActivity[]): ThreadActivity[] {
+  return [...activities].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function useAutomation(enabled = true) {
@@ -72,7 +77,6 @@ export function useAutomation(enabled = true) {
   const [error, setError] = useState<string | null>(null)
 
   // Send state
-  const [selectedProvider, setSelectedProvider] = useState<ProviderId>('jait')
   const [creating, setCreating] = useState(false)
   const activityEndRef = useRef<HTMLDivElement | null>(null)
 
@@ -129,14 +133,71 @@ export function useAutomation(enabled = true) {
     }
   }, [])
 
+  // Fetch threads + providers once on mount (no polling — WS pushes updates)
   useEffect(() => {
     if (!enabled) return
     void refresh()
-    const id = setInterval(() => void refresh(), 5_000)
-    return () => clearInterval(id)
   }, [refresh, enabled])
 
-  // Fetch activities for selected thread
+  // ── WS-driven thread event handler ────────────────────────────
+
+  const selectedThreadIdRef = useRef(selectedThreadId)
+  selectedThreadIdRef.current = selectedThreadId
+
+  const handleThreadEvent = useCallback((eventType: string, payload: Record<string, unknown>) => {
+    switch (eventType) {
+      case 'thread.created': {
+        const thread = payload.thread as AgentThread | undefined
+        if (thread) {
+          setThreads(prev => {
+            // Deduplicate — the creating client may already have it from REST
+            if (prev.some(t => t.id === thread.id)) return prev
+            return [thread, ...prev]
+          })
+        }
+        break
+      }
+      case 'thread.updated': {
+        const thread = payload.thread as AgentThread | undefined
+        if (thread) setThreads(prev => prev.map(t => t.id === thread.id ? thread : t))
+        break
+      }
+      case 'thread.deleted': {
+        const threadId = payload.threadId as string | undefined
+        if (threadId) {
+          setThreads(prev => prev.filter(t => t.id !== threadId))
+          if (selectedThreadIdRef.current === threadId) setSelectedThreadId(null)
+        }
+        break
+      }
+      case 'thread.status': {
+        const threadId = payload.threadId as string | undefined
+        const status = payload.status as string | undefined
+        if (threadId && status) {
+          setThreads(prev => prev.map(t =>
+            t.id === threadId
+              ? {
+                  ...t,
+                  status: status as AgentThread['status'],
+                  error: (payload.error as string) ?? t.error,
+                }
+              : t,
+          ))
+        }
+        break
+      }
+      case 'thread.activity': {
+        // Re-fetch activities if this event is for the currently selected thread
+        const threadId = payload.threadId as string | undefined
+        if (threadId && threadId === selectedThreadIdRef.current) {
+          void agentsApi.getActivities(threadId).then(acts => setActivities(sortActivities(acts))).catch(() => {})
+        }
+        break
+      }
+    }
+  }, [])
+
+  // Fetch activities once when selected thread changes (no polling)
   useEffect(() => {
     if (!enabled || !selectedThreadId) {
       setActivities([])
@@ -147,16 +208,14 @@ export function useAutomation(enabled = true) {
       if (!localStorage.getItem('token')) return
       try {
         const acts = await agentsApi.getActivities(selectedThreadId)
-        if (!cancelled) setActivities(acts)
+        if (!cancelled) setActivities(sortActivities(acts))
       } catch {
         /* ignore */
       }
     }
     void fetchActivities()
-    const id = setInterval(() => void fetchActivities(), 3_000)
     return () => {
       cancelled = true
-      clearInterval(id)
     }
   }, [selectedThreadId, enabled])
 
@@ -221,7 +280,7 @@ export function useAutomation(enabled = true) {
   // ── Thread lifecycle ───────────────────────────────────────────
 
   const handleSend = useCallback(
-    async (text: string) => {
+    async (text: string, providerId: ProviderId = 'jait') => {
       if (!text.trim() || !selectedRepo) return
 
       setCreating(true)
@@ -240,7 +299,7 @@ export function useAutomation(enabled = true) {
 
           const thread = await agentsApi.createThread({
             title: `[${selectedRepo.name}] ${text.slice(0, 60)}`,
-            providerId: selectedProvider,
+            providerId,
             workingDirectory: selectedRepo.localPath,
             branch: branchName,
           })
@@ -255,7 +314,7 @@ export function useAutomation(enabled = true) {
         setCreating(false)
       }
     },
-    [selectedRepo, selectedThread, selectedProvider, refresh],
+    [selectedRepo, selectedThread, refresh],
   )
 
   const handleStop = useCallback(
@@ -309,14 +368,13 @@ export function useAutomation(enabled = true) {
     creating,
     showGitActions,
 
-    // Provider
-    selectedProvider,
-    setSelectedProvider,
-
     // Actions
     refresh,
     handleSend,
     handleStop,
     handleDelete,
+
+    // WS event handler
+    handleThreadEvent,
   }
 }

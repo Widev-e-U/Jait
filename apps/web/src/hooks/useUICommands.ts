@@ -92,6 +92,13 @@ export type StateSyncHandler = (key: string, value: unknown) => void
  */
 export type FullStateHandler = (state: Record<string, unknown>) => void
 
+/**
+ * Callback for thread-related WS events (thread.created, thread.updated, etc.).
+ * `eventType` is the full WS event type (e.g. "thread.created").
+ * `payload` is the event payload (e.g. { threadId, thread }).
+ */
+export type ThreadEventHandler = (eventType: string, payload: Record<string, unknown>) => void
+
 interface UseUICommandsOptions {
   /** Listeners for UI commands pushed by the gateway (server → client). */
   listeners: Listeners
@@ -105,6 +112,8 @@ interface UseUICommandsOptions {
   onFullState?: FullStateHandler
   /** Called when the gateway broadcasts that an assistant message has completed. */
   onMessageComplete?: () => void
+  /** Called when the gateway broadcasts a thread lifecycle event. */
+  onThreadEvent?: ThreadEventHandler
 }
 
 /**
@@ -122,7 +131,7 @@ interface UseUICommandsOptions {
  * to other clients via `ui.state-sync`.
  */
 export function useUICommands(opts: UseUICommandsOptions) {
-  const { listeners, sessionId, token, onStateSync, onFullState, onMessageComplete } = opts
+  const { listeners, sessionId, token, onStateSync, onFullState, onMessageComplete, onThreadEvent } = opts
   const listenersRef = useRef(listeners)
   listenersRef.current = listeners
   const onStateSyncRef = useRef(onStateSync)
@@ -131,6 +140,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onFullStateRef.current = onFullState
   const onMessageCompleteRef = useRef(onMessageComplete)
   onMessageCompleteRef.current = onMessageComplete
+  const onThreadEventRef = useRef(onThreadEvent)
+  onThreadEventRef.current = onThreadEvent
   const wsRef = useRef<WebSocket | null>(null)
   const currentSessionRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
@@ -190,6 +201,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'fs.roots-request') {
         // Gateway is asking for our root directories
         void handleFsRootsRequest(msg.payload as { requestId: string })
+      } else if (msg.type.startsWith('thread.')) {
+        // Thread lifecycle events — forward to automation hook
+        onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
       }
     } catch {
       // ignore parse errors

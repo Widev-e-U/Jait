@@ -265,4 +265,15 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 008: Add chat_provider to user_settings ──────────────────────
+  {
+    id: 8,
+    name: "user_settings_chat_provider",
+    run(db) {
+      try {
+        db.run(`ALTER TABLE user_settings ADD COLUMN chat_provider TEXT NOT NULL DEFAULT 'jait'`);
+      } catch { /* column already exists */ }
+    },
+  },
+
 ];
