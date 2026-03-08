@@ -106,6 +106,26 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
     }
   });
 
+  /** Create a new branch */
+  app.post("/api/git/create-branch", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; branch?: string; baseBranch?: string };
+    if (!body.cwd || !body.branch) {
+      return reply.status(400).send({ error: "Missing cwd or branch" });
+    }
+    try {
+      // If baseBranch specified, checkout that first
+      if (body.baseBranch) {
+        await git.checkout(body.cwd, body.baseBranch);
+      }
+      await git.createBranch(body.cwd, body.branch);
+      return { ok: true, branch: body.branch };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Branch creation failed" });
+    }
+  });
+
   /** Git init */
   app.post("/api/git/init", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

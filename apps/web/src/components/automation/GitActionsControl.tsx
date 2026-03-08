@@ -8,9 +8,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   ChevronDown,
   GitCommit,
@@ -18,8 +16,6 @@ import {
   Github,
   Loader2,
   ArrowDownToLine,
-  AlertCircle,
-  RefreshCw,
 } from 'lucide-react'
 import {
   gitApi,
@@ -68,7 +64,6 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
   const [menuOpen, setMenuOpen] = useState(false)
   const [commitDialogOpen, setCommitDialogOpen] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
-  const [error, setError] = useState<string | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // ── Status polling ─────────────────────────────────────────────
@@ -77,9 +72,8 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
     try {
       const status = await gitApi.status(cwd)
       setGitStatus(status)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Git status failed')
+    } catch {
+      // silently ignore — status just won't update
     } finally {
       setIsLoading(false)
     }
@@ -238,42 +232,7 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
   }
 
   return (
-    <div className="relative">
-      {/* Status summary */}
-      <div className="flex items-center gap-2 mb-2">
-        {gitStatus?.branch && (
-          <Badge variant="outline" className="text-xs">
-            {gitStatus.branch}
-          </Badge>
-        )}
-        {gitStatus?.hasWorkingTreeChanges && (
-          <Badge variant="secondary" className="text-xs">
-            {gitStatus.workingTree.files.length} changed
-          </Badge>
-        )}
-        {gitStatus?.pr && (
-          <Badge variant={gitStatus.pr.state === 'open' ? 'default' : 'secondary'} className="text-xs cursor-pointer" onClick={() => window.open(gitStatus.pr!.url, '_blank')}>
-            PR #{gitStatus.pr.number}
-          </Badge>
-        )}
-        {gitStatus?.aheadCount ? (
-          <span className="text-xs text-muted-foreground">↑{gitStatus.aheadCount}</span>
-        ) : null}
-        {gitStatus?.behindCount ? (
-          <span className="text-xs text-muted-foreground">↓{gitStatus.behindCount}</span>
-        ) : null}
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-auto" onClick={refreshStatus} disabled={isBusy}>
-          <RefreshCw className={`h-3 w-3 ${isBusy ? 'animate-spin' : ''}`} />
-        </Button>
-      </div>
-
-      {error && (
-        <div className="flex items-center gap-1.5 text-xs text-destructive mb-2">
-          <AlertCircle className="h-3 w-3" />
-          {error}
-        </div>
-      )}
-
+    <div className="relative inline-flex items-center gap-2">
       {/* Quick action + menu */}
       <div className="flex items-center gap-0.5" ref={menuRef}>
         <Button
@@ -316,35 +275,9 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
         )}
       </div>
 
-      {/* Changed files list */}
-      {gitStatus?.hasWorkingTreeChanges && gitStatus.workingTree.files.length > 0 && (
-        <div className="mt-3 rounded-md border bg-muted/40 p-2">
-          <p className="text-xs text-muted-foreground mb-1">Changed files</p>
-          <ScrollArea className="max-h-32">
-            <div className="space-y-0.5">
-              {gitStatus.workingTree.files.map((file) => (
-                <div key={file.path} className="flex items-center justify-between text-xs font-mono px-1 py-0.5">
-                  <span className="truncate">{file.path}</span>
-                  <span className="shrink-0 ml-2">
-                    <span className="text-green-600">+{file.insertions}</span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="text-red-600">-{file.deletions}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-          <div className="flex justify-end text-xs font-mono mt-1">
-            <span className="text-green-600">+{gitStatus.workingTree.insertions}</span>
-            <span className="text-muted-foreground mx-1">/</span>
-            <span className="text-red-600">-{gitStatus.workingTree.deletions}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Commit dialog (inline) */}
+      {/* Commit dialog (popover-style) */}
       {commitDialogOpen && (
-        <div className="mt-3 rounded-md border bg-background p-3 space-y-2">
+        <div className="absolute top-full right-0 mt-1 z-50 w-80 rounded-md border bg-popover p-3 shadow-md space-y-2">
           <p className="text-sm font-medium">Commit changes</p>
           <p className="text-xs text-muted-foreground">Leave blank to auto-generate a commit message.</p>
           {isDefaultBranch && (

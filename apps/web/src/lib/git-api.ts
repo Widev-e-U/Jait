@@ -124,6 +124,14 @@ export const gitApi = {
     return gitPost<void>('checkout', { cwd, branch })
   },
 
+  createBranch(
+    cwd: string,
+    branch: string,
+    baseBranch?: string,
+  ): Promise<{ ok: boolean; branch: string }> {
+    return gitPost<{ ok: boolean; branch: string }>('create-branch', { cwd, branch, baseBranch })
+  },
+
   init(cwd: string): Promise<void> {
     return gitPost<void>('init', { cwd })
   },
