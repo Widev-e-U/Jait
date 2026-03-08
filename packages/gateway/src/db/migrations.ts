@@ -276,4 +276,16 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 009: Pull request metadata on agent_threads ──────────────────
+  {
+    id: 9,
+    name: "agent_threads_pr_metadata",
+    run(db) {
+      try { db.run(`ALTER TABLE agent_threads ADD COLUMN pr_url TEXT`); } catch { /* exists */ }
+      try { db.run(`ALTER TABLE agent_threads ADD COLUMN pr_number INTEGER`); } catch { /* exists */ }
+      try { db.run(`ALTER TABLE agent_threads ADD COLUMN pr_title TEXT`); } catch { /* exists */ }
+      try { db.run(`ALTER TABLE agent_threads ADD COLUMN pr_state TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];

@@ -292,6 +292,7 @@ export class GitService {
     action: GitStackedAction,
     commitMessage?: string,
     featureBranch?: boolean,
+    targetBranch?: string,
   ): Promise<GitStepResult> {
     const result: GitStepResult = {
       commit: { status: "skipped_no_changes" },
@@ -308,7 +309,13 @@ export class GitService {
       result.branch = { status: "created", name: branchName };
     }
 
-    const currentBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
+    let currentBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
+
+    // For thread-scoped actions, ensure we operate on that thread's branch.
+    if (targetBranch && currentBranch !== targetBranch) {
+      await gitExec(cwd, `checkout "${targetBranch}"`);
+      currentBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
+    }
 
     // Commit step
     const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");

@@ -1458,6 +1458,7 @@ ${file.content.slice(0, 2000)}
                     {automation.showGitActions && automation.selectedRepo && (
                       <div className="ml-2 shrink-0">
                         <ThreadActions
+                          threadId={automation.selectedThread.id}
                           cwd={automation.selectedRepo.localPath}
                           branch={automation.selectedThread.branch}
                           baseBranch={automation.selectedRepo.defaultBranch}
@@ -1551,13 +1552,42 @@ ${file.content.slice(0, 2000)}
                           </Button>
                         </div>
                         <div className="flex-1 overflow-y-auto">
-                          {automation.repoThreads.map(thread => {
-                            const prState = automation.threadPrStates[thread.id]
-                            return (
-                              <button
-                                key={thread.id}
-                                className={`w-full flex items-start gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedThread?.id === thread.id ? 'bg-muted font-medium' : ''}`}
-                                onClick={() => automation.setSelectedThreadId(thread.id)}
+                          {automation.repoThreads.map(thread => (
+                            <button
+                              key={thread.id}
+                              className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedThread?.id === thread.id ? 'bg-muted font-medium' : ''}`}
+                              onClick={() => automation.setSelectedThreadId(thread.id)}
+                            >
+                              <ManagerStatusDot status={thread.status} />
+                              <div className="min-w-0 flex-1 text-left">
+                                <span className="block truncate">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+                                {thread.prUrl && (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    className="inline-flex items-center mt-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      window.open(thread.prUrl!, '_blank')
+                                    }}
+                                    onKeyDown={(e) => {
+                                      e.stopPropagation()
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault()
+                                        window.open(thread.prUrl!, '_blank')
+                                      }
+                                    }}
+                                  >
+                                    {thread.prNumber ? `PR #${thread.prNumber}` : 'Pull Request'}
+                                  </span>
+                                )}
+                              </div>
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                                onClick={(e) => { e.stopPropagation(); void automation.handleDelete(thread.id) }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void automation.handleDelete(thread.id) } }}
                               >
                                 <div className="pt-0.5">
                                   <ManagerStatusDot status={thread.status} />

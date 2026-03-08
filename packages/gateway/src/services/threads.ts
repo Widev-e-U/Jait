@@ -42,6 +42,10 @@ export interface UpdateThreadParams {
   runtimeMode?: RuntimeMode;
   workingDirectory?: string;
   branch?: string;
+  prUrl?: string | null;
+  prNumber?: number | null;
+  prTitle?: string | null;
+  prState?: "open" | "closed" | "merged" | null;
   status?: ThreadStatus;
   providerSessionId?: string | null;
   error?: string | null;
