@@ -924,6 +924,16 @@ function App() {
     setInputValue('')
   }, [inputValue, enqueueMessage])
 
+  const handleProviderChange = useCallback((nextProvider: import('@/lib/agents-api').ProviderId) => {
+    setChatProvider(nextProvider)
+    // In manager mode, provider selection applies to new tasks/threads.
+    // Clear the selected thread when switching providers so the next send
+    // starts a fresh thread with the selected provider defaults.
+    if (viewMode === 'manager' && automation.selectedThread && automation.selectedThread.providerId !== nextProvider) {
+      automation.setSelectedThreadId(null)
+    }
+  }, [viewMode, automation.selectedThread, automation.setSelectedThreadId])
+
   const handleSubmit = async (chipFiles?: ReferencedFile[]) => {
     if (viewMode === 'manager') {
       return handleManagerSubmit()
@@ -1787,7 +1797,7 @@ ${file.content.slice(0, 2000)}
                           viewMode={viewMode}
                           onViewModeChange={setViewMode}
                           provider={chatProvider}
-                          onProviderChange={setChatProvider}
+                          onProviderChange={handleProviderChange}
                         />
                         {automation.selectedThread && automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
                           <div className="flex items-center gap-2 px-1 mt-1.5">
@@ -1825,7 +1835,7 @@ ${file.content.slice(0, 2000)}
                         viewMode={viewMode}
                         onViewModeChange={setViewMode}
                         provider={chatProvider}
-                        onProviderChange={setChatProvider}
+                        onProviderChange={handleProviderChange}
                       />
                     </div>
                   </div>
@@ -1852,7 +1862,7 @@ ${file.content.slice(0, 2000)}
                     mode={chatMode}
                     onModeChange={setChatMode}
                     provider={chatProvider}
-                    onProviderChange={setChatProvider}
+                    onProviderChange={handleProviderChange}
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
                     availableFiles={availableFilesForMention}
@@ -1993,7 +2003,7 @@ ${file.content.slice(0, 2000)}
                       mode={chatMode}
                       onModeChange={setChatMode}
                       provider={chatProvider}
-                      onProviderChange={setChatProvider}
+                      onProviderChange={handleProviderChange}
                       viewMode={viewMode}
                       onViewModeChange={setViewMode}
                       availableFiles={availableFilesForMention}

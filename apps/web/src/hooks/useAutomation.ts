@@ -331,7 +331,26 @@ export function useAutomation(enabled = true) {
 
       setCreating(true)
       try {
-        if (selectedThread && selectedThread.status === 'running') {
+        // Provider is thread-scoped in manager mode.
+        // If the user switched provider, start a fresh thread so the
+        // selected provider's default model/session is used.
+        if (selectedThread && selectedThread.providerId !== providerId) {
+          const branchName = generateBranchName()
+          try {
+            await gitApi.createBranch(selectedRepo.localPath, branchName, selectedRepo.defaultBranch)
+          } catch {
+            // If branch creation fails, continue without it
+          }
+
+          const thread = await agentsApi.createThread({
+            title: `[${selectedRepo.name}] ${text.slice(0, 60)}`,
+            providerId,
+            workingDirectory: selectedRepo.localPath,
+            branch: branchName,
+          })
+          setSelectedThreadId(thread.id)
+          await agentsApi.startThread(thread.id, text)
+        } else if (selectedThread && selectedThread.status === 'running') {
           await agentsApi.sendTurn(selectedThread.id, text)
         } else if (selectedThread && selectedThread.status === 'idle') {
           await agentsApi.startThread(selectedThread.id, text)
