@@ -14,17 +14,16 @@ import {
   type ProviderInfo,
   type ProviderId,
 } from '@/lib/agents-api'
+import {
+  inferSharedRepositories,
+  threadBelongsToRepository,
+  type AutomationRepository,
+} from '@/lib/automation-repositories'
 import { gitApi, type GitStatusPr } from '@/lib/git-api'
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export interface RepositoryConnection {
-  id: string
-  name: string
-  defaultBranch: string
-  localPath: string
-  githubToken?: string | null
-}
+export type RepositoryConnection = AutomationRepository
 
 export type ThreadPrState = GitStatusPr['state'] | null
 
@@ -35,14 +34,30 @@ const REPOS_STORAGE_KEY = 'jait_automation_repos'
 function loadRepos(): RepositoryConnection[] {
   try {
     const raw = localStorage.getItem(REPOS_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as RepositoryConnection[]) : []
+    const parsed = raw ? (JSON.parse(raw) as Array<Omit<RepositoryConnection, 'source'> & { source?: RepositoryConnection['source'] }>) : []
+    return parsed.map((repo) => ({
+      ...repo,
+      githubToken: repo.githubToken ?? null,
+      source: 'local',
+    }))
   } catch {
     return []
   }
 }
 
 function saveRepos(repos: RepositoryConnection[]) {
-  localStorage.setItem(REPOS_STORAGE_KEY, JSON.stringify(repos))
+  localStorage.setItem(
+    REPOS_STORAGE_KEY,
+    JSON.stringify(
+      repos.map(({ id, name, defaultBranch, localPath, githubToken }) => ({
+        id,
+        name,
+        defaultBranch,
+        localPath,
+        githubToken: githubToken ?? null,
+      })),
+    ),
+  )
 }
 
 /** Extract the last segment of a path as the repo display name. */
@@ -67,7 +82,7 @@ function sortActivities(activities: ThreadActivity[]): ThreadActivity[] {
 
 export function useAutomation(enabled = true) {
   // Repositories
-  const [repositories, setRepositories] = useState<RepositoryConnection[]>(loadRepos)
+  const [localRepositories, setLocalRepositories] = useState<RepositoryConnection[]>(loadRepos)
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null)
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
 
@@ -85,6 +100,15 @@ export function useAutomation(enabled = true) {
   const [creating, setCreating] = useState(false)
   const activityEndRef = useRef<HTMLDivElement | null>(null)
 
+  const sharedRepositories = useMemo(
+    () => inferSharedRepositories(threads, localRepositories),
+    [threads, localRepositories],
+  )
+  const repositories = useMemo(
+    () => [...localRepositories, ...sharedRepositories],
+    [localRepositories, sharedRepositories],
+  )
+
   const selectedRepo = useMemo(
     () => repositories.find((r) => r.id === selectedRepoId) ?? null,
     [repositories, selectedRepoId],
@@ -98,6 +122,7 @@ export function useAutomation(enabled = true) {
     () =>
       selectedThread != null &&
       selectedRepo != null &&
+      selectedRepo.source === 'local' &&
       (selectedThread.status === 'idle' ||
         selectedThread.status === 'completed' ||
         selectedThread.status === 'error' ||
@@ -109,8 +134,8 @@ export function useAutomation(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return
-    saveRepos(repositories)
-  }, [repositories, enabled])
+    saveRepos(localRepositories)
+  }, [localRepositories, enabled])
 
   // Auto-select first repo
   useEffect(() => {
@@ -240,13 +265,7 @@ export function useAutomation(enabled = true) {
   const repoThreads = useMemo(
     () =>
       selectedRepo
-        ? threads.filter(
-            (t) =>
-              t.workingDirectory === selectedRepo.localPath ||
-              t.title.startsWith(`[${selectedRepo.name}]`) ||
-              // Worktree threads have paths like ~/.jait/worktrees/<repoName>/...
-              (t.workingDirectory && t.workingDirectory.includes(`/worktrees/${selectedRepo.name}/`)),
-          )
+        ? threads.filter((t) => threadBelongsToRepository(t, selectedRepo))
         : [],
     [threads, selectedRepo],
   )
@@ -326,8 +345,8 @@ export function useAutomation(enabled = true) {
 
   const handleFolderSelected = useCallback(
     async (path: string) => {
-      if (repositories.some((r) => r.localPath === path)) {
-        setSelectedRepoId(repositories.find((r) => r.localPath === path)!.id)
+      if (localRepositories.some((r) => r.localPath === path)) {
+        setSelectedRepoId(localRepositories.find((r) => r.localPath === path)!.id)
         return
       }
 
@@ -345,24 +364,25 @@ export function useAutomation(enabled = true) {
         defaultBranch: branch,
         localPath: path,
         githubToken: null,
+        source: 'local',
       }
-      setRepositories((prev) => [repo, ...prev])
+      setLocalRepositories((prev) => [repo, ...prev])
       setSelectedRepoId(repo.id)
       setError(null)
     },
-    [repositories],
+    [localRepositories],
   )
 
   const updateRepositoryToken = useCallback(
     (id: string, githubToken: string | null) => {
-      setRepositories((prev) => prev.map((r) => (r.id === id ? { ...r, githubToken } : r)))
+      setLocalRepositories((prev) => prev.map((r) => (r.id === id ? { ...r, githubToken } : r)))
     },
     [],
   )
 
   const removeRepository = useCallback(
     (id: string) => {
-      setRepositories((prev) => prev.filter((r) => r.id !== id))
+      setLocalRepositories((prev) => prev.filter((r) => r.id !== id))
       if (selectedRepoId === id) setSelectedRepoId(null)
     },
     [selectedRepoId],
@@ -372,7 +392,7 @@ export function useAutomation(enabled = true) {
 
   const handleSend = useCallback(
     async (text: string, providerId: ProviderId = 'jait', model?: string | null) => {
-      if (!text.trim() || !selectedRepo) return
+      if (!text.trim()) return
 
       setCreating(true)
       try {
@@ -388,6 +408,12 @@ export function useAutomation(enabled = true) {
           // Re-start the existing thread (worktree is still available)
           await agentsApi.startThread(selectedThread.id, text)
         } else {
+          if (!selectedRepo) return
+          if (selectedRepo.source !== 'local') {
+            setError('Add this repository locally on this device to start a new thread. Existing threads stay shared across clients.')
+            return
+          }
+
           // No thread selected — create a new one with a fresh worktree
           const branchName = generateBranchName()
           let worktreePath: string | undefined
