@@ -176,6 +176,10 @@ export const agentThreads = sqliteTable(
     status: text("status").notNull().default("idle"), // idle | running | completed | error | interrupted
     providerSessionId: text("provider_session_id"), // Active provider session ID
     error: text("error"),
+    prUrl: text("pr_url"),
+    prNumber: integer("pr_number"),
+    prTitle: text("pr_title"),
+    prState: text("pr_state"), // open | closed | merged
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     completedAt: text("completed_at"),

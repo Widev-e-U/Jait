@@ -280,9 +280,11 @@ export function AutomationPage() {
         await agentsApi.startThread(selectedThread.id, text)
       } else {
         // No thread or thread is finished — create a new branch + thread
-        const branchName = generateBranchName()
+        let branchName: string | undefined
+        const candidateBranchName = generateBranchName()
         try {
-          await gitApi.createBranch(selectedRepo.localPath, branchName, selectedRepo.defaultBranch)
+          await gitApi.createBranch(selectedRepo.localPath, candidateBranchName, selectedRepo.defaultBranch)
+          branchName = candidateBranchName
         } catch {
           // If branch creation fails (not a git repo, etc.), continue without it
         }
@@ -291,7 +293,7 @@ export function AutomationPage() {
           title: `[${selectedRepo.name}] ${text.slice(0, 60)}`,
           providerId: selectedProvider,
           workingDirectory: selectedRepo.localPath,
-          branch: branchName,
+          ...(branchName ? { branch: branchName } : {}),
         })
         setSelectedThreadId(thread.id)
         // Start and send the initial message
@@ -635,6 +637,7 @@ export function AutomationPage() {
                 </div>
                 {showGitActions && selectedRepo && selectedThread && (
                   <ThreadActions
+                    threadId={selectedThread.id}
                     cwd={selectedRepo.localPath}
                     branch={selectedThread.branch}
                     baseBranch={selectedRepo.defaultBranch}

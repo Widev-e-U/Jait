@@ -9,10 +9,13 @@ import { useState, useCallback } from 'react'
 import { Button } from '@/components/ui/button'
 import { Eye, GitPullRequest, Loader2 } from 'lucide-react'
 import { gitApi, summarizeGitResult } from '@/lib/git-api'
+import { agentsApi } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 
 interface ThreadActionsProps {
+  /** Thread id to persist PR metadata after creation/open. */
+  threadId: string
   /** Absolute path to the working directory. */
   cwd: string
   /** The thread's feature branch (e.g. "jait/a1b2c3d4"). */
@@ -23,7 +26,7 @@ interface ThreadActionsProps {
   threadTitle: string
 }
 
-export function ThreadActions({ cwd, branch, baseBranch, threadTitle }: ThreadActionsProps) {
+export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle }: ThreadActionsProps) {
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
 
@@ -34,9 +37,23 @@ export function ThreadActions({ cwd, branch, baseBranch, threadTitle }: ThreadAc
       const commitMsg = threadTitle.replace(/^\[.*?\]\s*/, '')
       const result = await gitApi.runStackedAction(cwd, 'commit_push_pr', {
         commitMessage: commitMsg,
+        targetBranch: branch ?? undefined,
       })
       const summary = summarizeGitResult(result)
       toast.success(summary.title, { id: toastId, description: summary.description })
+
+      if (result.pr.url) {
+        try {
+          await agentsApi.updateThread(threadId, {
+            prUrl: result.pr.url,
+            prNumber: result.pr.number ?? null,
+            prTitle: result.pr.title ?? null,
+            prState: 'open',
+          })
+        } catch {
+          // PR creation succeeded; sidebar metadata sync can fail independently.
+        }
+      }
 
       if (result.pr.url) {
         window.open(result.pr.url, '_blank')
@@ -51,7 +68,7 @@ export function ThreadActions({ cwd, branch, baseBranch, threadTitle }: ThreadAc
     } finally {
       setBusy(false)
     }
-  }, [cwd, threadTitle])
+  }, [branch, cwd, threadId, threadTitle])
 
   return (
     <>

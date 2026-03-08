@@ -126,13 +126,14 @@ export const gitApi = {
   runStackedAction(
     cwd: string,
     action: GitStackedAction,
-    opts?: { commitMessage?: string; featureBranch?: boolean },
+    opts?: { commitMessage?: string; featureBranch?: boolean; targetBranch?: string },
   ): Promise<GitStepResult> {
     return gitPost<GitStepResult>('run-stacked-action', {
       cwd,
       action,
       ...(opts?.commitMessage ? { commitMessage: opts.commitMessage } : {}),
       ...(opts?.featureBranch ? { featureBranch: true } : {}),
+      ...(opts?.targetBranch ? { targetBranch: opts.targetBranch } : {}),
     })
   },
 

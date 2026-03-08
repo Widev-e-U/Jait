@@ -1425,6 +1425,7 @@ ${file.content.slice(0, 2000)}
                     {automation.showGitActions && automation.selectedRepo && (
                       <div className="ml-2 shrink-0">
                         <ThreadActions
+                          threadId={automation.selectedThread.id}
                           cwd={automation.selectedRepo.localPath}
                           branch={automation.selectedThread.branch}
                           baseBranch={automation.selectedRepo.defaultBranch}
@@ -1525,7 +1526,29 @@ ${file.content.slice(0, 2000)}
                               onClick={() => automation.setSelectedThreadId(thread.id)}
                             >
                               <ManagerStatusDot status={thread.status} />
-                              <span className="truncate flex-1 text-left">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+                              <div className="min-w-0 flex-1 text-left">
+                                <span className="block truncate">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+                                {thread.prUrl && (
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    className="inline-flex items-center mt-0.5 text-[10px] text-muted-foreground hover:text-foreground"
+                                    onClick={(e) => {
+                                      e.stopPropagation()
+                                      window.open(thread.prUrl!, '_blank')
+                                    }}
+                                    onKeyDown={(e) => {
+                                      e.stopPropagation()
+                                      if (e.key === 'Enter' || e.key === ' ') {
+                                        e.preventDefault()
+                                        window.open(thread.prUrl!, '_blank')
+                                      }
+                                    }}
+                                  >
+                                    {thread.prNumber ? `PR #${thread.prNumber}` : 'Pull Request'}
+                                  </span>
+                                )}
+                              </div>
                               <span
                                 role="button"
                                 tabIndex={0}

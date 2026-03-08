@@ -71,6 +71,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
     const action = typeof body["action"] === "string" ? body["action"] : "";
     const commitMessage = typeof body["commitMessage"] === "string" ? body["commitMessage"] : undefined;
     const featureBranch = body["featureBranch"] === true;
+    const targetBranch = typeof body["targetBranch"] === "string" ? body["targetBranch"] : undefined;
 
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     if (!["commit", "commit_push", "commit_push_pr"].includes(action)) {
@@ -83,6 +84,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
         action as "commit" | "commit_push" | "commit_push_pr",
         commitMessage,
         featureBranch,
+        targetBranch,
       );
       return result;
     } catch (err) {
