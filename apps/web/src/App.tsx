@@ -98,12 +98,35 @@ function ManagerStatusDot({ status }: { status: string }) {
   const map: Record<string, { icon: typeof Circle; color: string }> = {
     running: { icon: SpinnerIcon, color: 'text-blue-500 animate-spin' },
     paused: { icon: Pause, color: 'text-yellow-500' },
+    interrupted: { icon: Pause, color: 'text-yellow-500' },
     done: { icon: CheckCircle2, color: 'text-green-500' },
+    completed: { icon: CheckCircle2, color: 'text-green-500' },
     error: { icon: XCircle, color: 'text-red-500' },
     idle: { icon: Circle, color: 'text-muted-foreground' },
   }
   const { icon: Icon, color } = map[status] ?? { icon: AlertCircle, color: 'text-muted-foreground' }
   return <Icon className={`h-3 w-3 shrink-0 ${color}`} />
+}
+
+function ThreadPrBadge({ prState }: { prState: 'open' | 'closed' | 'merged' | null | undefined }) {
+  if (!prState) return null
+  const label =
+    prState === 'open'
+      ? 'PR created'
+      : prState === 'merged'
+        ? 'PR merged'
+        : 'PR closed'
+  const className =
+    prState === 'open'
+      ? 'bg-blue-500/10 text-blue-700 border-blue-500/20'
+      : prState === 'merged'
+        ? 'bg-green-500/10 text-green-700 border-green-500/20'
+        : 'bg-muted text-muted-foreground border-border'
+  return (
+    <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 ${className}`}>
+      {label}
+    </Badge>
+  )
 }
 
 function App() {
@@ -1518,25 +1541,56 @@ ${file.content.slice(0, 2000)}
                           </Button>
                         </div>
                         <div className="flex-1 overflow-y-auto">
-                          {automation.repoThreads.map(thread => (
-                            <button
-                              key={thread.id}
-                              className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedThread?.id === thread.id ? 'bg-muted font-medium' : ''}`}
-                              onClick={() => automation.setSelectedThreadId(thread.id)}
-                            >
-                              <ManagerStatusDot status={thread.status} />
-                              <span className="truncate flex-1 text-left">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                                onClick={(e) => { e.stopPropagation(); void automation.handleDelete(thread.id) }}
-                                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void automation.handleDelete(thread.id) } }}
+                          {automation.repoThreads.map(thread => {
+                            const prState = automation.threadPrStates[thread.id]
+                            return (
+                              <button
+                                key={thread.id}
+                                className={`w-full flex items-start gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedThread?.id === thread.id ? 'bg-muted font-medium' : ''}`}
+                                onClick={() => automation.setSelectedThreadId(thread.id)}
                               >
-                                <Trash2 className="h-3 w-3" />
-                              </span>
-                            </button>
-                          ))}
+                                <div className="pt-0.5">
+                                  <ManagerStatusDot status={thread.status} />
+                                </div>
+                                <div className="min-w-0 flex-1 text-left">
+                                  <span className="truncate block">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+                                  <div className="mt-0.5 flex items-center gap-1 min-w-0">
+                                    {thread.branch && (
+                                      <span className="truncate text-[10px] text-muted-foreground font-mono">{thread.branch}</span>
+                                    )}
+                                    <ThreadPrBadge prState={prState} />
+                                  </div>
+                                </div>
+                                <div className="ml-auto flex items-center gap-1 shrink-0">
+                                  {thread.status === 'running' && (
+                                    <span
+                                      role="button"
+                                      tabIndex={0}
+                                      className="shrink-0 hover:text-foreground transition-colors"
+                                      onClick={(e) => { e.stopPropagation(); void automation.handleStop(thread.id) }}
+                                      onKeyDown={(e) => {
+                                        if (e.key === 'Enter') {
+                                          e.stopPropagation()
+                                          void automation.handleStop(thread.id)
+                                        }
+                                      }}
+                                    >
+                                      <Square className="h-3 w-3" />
+                                    </span>
+                                  )}
+                                  <span
+                                    role="button"
+                                    tabIndex={0}
+                                    className="shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                                    onClick={(e) => { e.stopPropagation(); void automation.handleDelete(thread.id) }}
+                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void automation.handleDelete(thread.id) } }}
+                                  >
+                                    <Trash2 className="h-3 w-3" />
+                                  </span>
+                                </div>
+                              </button>
+                            )
+                          })}
                           {automation.repoThreads.length === 0 && (
                             <div className="px-3 py-4 text-center text-xs text-muted-foreground">No threads yet</div>
                           )}
