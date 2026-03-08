@@ -68,6 +68,7 @@ interface ThreadControlGit {
     commitMessage?: string,
     featureBranch?: boolean,
     baseBranch?: string,
+    githubToken?: string,
   ): Promise<GitStepResult>;
 }
 

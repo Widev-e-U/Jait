@@ -24,10 +24,10 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
   app.post("/api/git/status", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    const { cwd, branch } = request.body as { cwd: string; branch?: string };
+    const { cwd, branch, githubToken } = request.body as { cwd: string; branch?: string; githubToken?: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const status = await git.status(cwd, branch);
+      const status = await git.status(cwd, branch, githubToken);
       return status;
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Git status failed" });
@@ -72,6 +72,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
     const commitMessage = typeof body["commitMessage"] === "string" ? body["commitMessage"] : undefined;
     const featureBranch = body["featureBranch"] === true;
     const baseBranch = typeof body["baseBranch"] === "string" ? body["baseBranch"] : undefined;
+    const githubToken = typeof body["githubToken"] === "string" ? body["githubToken"] : undefined;
 
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     if (!["commit", "commit_push", "commit_push_pr"].includes(action)) {
@@ -85,6 +86,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
         commitMessage,
         featureBranch,
         baseBranch,
+        githubToken,
       );
       return result;
     } catch (err) {

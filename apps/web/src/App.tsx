@@ -8,6 +8,7 @@ import {
   Eye,
   FolderTree,
   FolderOpen,
+  Key,
   LogOut,
   MessageSquare,
   Monitor,
@@ -1476,6 +1477,7 @@ ${file.content.slice(0, 2000)}
                         <ThreadActions
                           threadId={automation.selectedThread.id}
                           cwd={automation.selectedThread.workingDirectory ?? automation.selectedRepo.localPath}
+                          githubToken={automation.selectedRepo.githubToken}
                           branch={automation.selectedThread.branch}
                           baseBranch={automation.selectedRepo.defaultBranch}
                           threadTitle={automation.selectedThread.title}
@@ -1539,6 +1541,11 @@ ${file.content.slice(0, 2000)}
                         >
                           <FolderOpen className="h-3 w-3 shrink-0" />
                           <span className="truncate flex-1 text-left">{repo.name}</span>
+                          {repo.githubToken && (
+                            <Badge variant="outline" className="h-4 px-1.5 text-[9px] font-medium text-green-700 border-green-500/40 shrink-0">
+                              GH token
+                            </Badge>
+                          )}
                           <span
                             role="button"
                             tabIndex={0}
@@ -1547,6 +1554,30 @@ ${file.content.slice(0, 2000)}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); automation.removeRepository(repo.id) } }}
                           >
                             <Trash2 className="h-3 w-3" />
+                          </span>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="shrink-0 opacity-0 group-hover:opacity-100 hover:text-foreground transition-opacity"
+                            onClick={(e) => {
+                              e.stopPropagation()
+                              const next = window.prompt('Set a GitHub token for this repo (leave empty to clear):', repo.githubToken ?? '')
+                              if (next === null) return
+                              const value = next.trim()
+                              automation.updateRepositoryToken(repo.id, value.length > 0 ? value : null)
+                            }}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Enter') {
+                                e.stopPropagation()
+                                const next = window.prompt('Set a GitHub token for this repo (leave empty to clear):', repo.githubToken ?? '')
+                                if (next === null) return
+                                const value = next.trim()
+                                automation.updateRepositoryToken(repo.id, value.length > 0 ? value : null)
+                              }
+                            }}
+                            title="Set GitHub token"
+                          >
+                            <Key className="h-3 w-3" />
                           </span>
                         </button>
                       ))}
@@ -2047,6 +2078,14 @@ ${file.content.slice(0, 2000)}
                         <button onClick={() => { clearMessages(); createSession() }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
                           New chat
                         </button>
+                        {viewMode === 'manager' && (
+                          <button
+                            onClick={() => automation.setSelectedThreadId(null)}
+                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                          >
+                            New thread
+                          </button>
+                        )}
                         {approveAllInSession && (
                           <>
                             <span className="text-[11px] text-green-600 dark:text-green-400 truncate">

@@ -23,6 +23,7 @@ export interface RepositoryConnection {
   name: string
   defaultBranch: string
   localPath: string
+  githubToken?: string | null
 }
 
 export type ThreadPrState = GitStatusPr['state'] | null
@@ -272,7 +273,11 @@ export function useAutomation(enabled = true) {
 
       const settled = await Promise.allSettled(
         threadsWithBranch.map(async (thread) => {
-          const status = await gitApi.status(repoPath, thread.branch ?? undefined)
+          const status = await gitApi.status(
+            repoPath,
+            thread.branch ?? undefined,
+            selectedRepo.githubToken ? { githubToken: selectedRepo.githubToken } : undefined,
+          )
           const prState: ThreadPrState = status.pr?.state ?? null
           return { threadId: thread.id, prState }
         }),
@@ -313,12 +318,20 @@ export function useAutomation(enabled = true) {
         name: folderName(path),
         defaultBranch: branch,
         localPath: path,
+        githubToken: null,
       }
       setRepositories((prev) => [repo, ...prev])
       setSelectedRepoId(repo.id)
       setError(null)
     },
     [repositories],
+  )
+
+  const updateRepositoryToken = useCallback(
+    (id: string, githubToken: string | null) => {
+      setRepositories((prev) => prev.map((r) => (r.id === id ? { ...r, githubToken } : r)))
+    },
+    [],
   )
 
   const removeRepository = useCallback(
@@ -423,6 +436,7 @@ export function useAutomation(enabled = true) {
     setFolderPickerOpen,
     handleFolderSelected,
     removeRepository,
+    updateRepositoryToken,
 
     // Threads
     threads,
