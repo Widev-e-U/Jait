@@ -462,6 +462,7 @@ export class CodexProvider implements CliProviderAdapter {
       const tool = String(params.command ?? params.tool ?? request.method);
       this.emit({
         type: "tool.approval-required",
+        sessionId: state.session.id,
         tool,
         args: params,
         requestId: String(request.id),
