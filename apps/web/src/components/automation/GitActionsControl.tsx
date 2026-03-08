@@ -147,6 +147,11 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
         toast.success('PR is ready', {
           action: { label: 'Open PR', onClick: () => window.open(result.pr.url, '_blank') },
         })
+      } else if (result.push.status === 'pushed' && result.push.createPrUrl && result.pr.status !== 'created' && result.pr.status !== 'opened_existing') {
+        toast.info('Create a pull request for your changes', {
+          action: { label: 'Create PR', onClick: () => window.open(result.push.createPrUrl, '_blank') },
+          duration: 10000,
+        })
       }
 
       await refreshStatus()

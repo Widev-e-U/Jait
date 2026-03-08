@@ -60,7 +60,7 @@ export interface GitListBranchesResult {
 
 export interface GitStepResult {
   commit: { status: "created" | "skipped_no_changes"; commitSha?: string; subject?: string };
-  push: { status: "pushed" | "skipped_not_requested" | "skipped_up_to_date" | "skipped_no_remote"; branch?: string; upstreamBranch?: string; setUpstream?: boolean };
+  push: { status: "pushed" | "skipped_not_requested" | "skipped_up_to_date" | "skipped_no_remote"; branch?: string; upstreamBranch?: string; setUpstream?: boolean; createPrUrl?: string };
   branch: { status: "created" | "skipped_not_requested"; name?: string };
   pr: { status: "created" | "opened_existing" | "skipped_not_requested" | "skipped_no_remote"; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string };
 }
@@ -344,6 +344,11 @@ export class GitService {
           result.push = { status: "pushed", branch: currentBranch, setUpstream: true };
         }
       }
+
+      // Attach a "create PR" URL so the frontend can link to it
+      if (result.push.status === "pushed" && currentBranch) {
+        result.push.createPrUrl = await this.buildCreatePrUrl(cwd, currentBranch);
+      }
     }
 
     // PR creation step
@@ -417,6 +422,49 @@ export class GitService {
     } catch {
       return false;
     }
+  }
+
+  /** Get the remote URL for a named remote, or null if not set. */
+  async getRemoteUrl(cwd: string, name: string): Promise<string | null> {
+    try {
+      return (await gitExec(cwd, `remote get-url ${name}`)).trim() || null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Build a URL to create a new pull request on the hosting provider.
+   * Supports GitHub, GitLab, Bitbucket, and Azure DevOps remote URLs.
+   */
+  async buildCreatePrUrl(cwd: string, branch: string): Promise<string | undefined> {
+    const raw = await this.getRemoteUrl(cwd, "origin");
+    if (!raw) return undefined;
+
+    // Normalise SSH / HTTPS remote URL → "https://host/owner/repo"
+    let url = raw
+      .replace(/\.git$/, "")
+      .replace(/^git@([^:]+):(.+)$/, "https://$1/$2")
+      .replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
+
+    // GitHub
+    if (url.includes("github.com")) {
+      return `${url}/compare/${encodeURIComponent(branch)}?expand=1`;
+    }
+    // GitLab
+    if (url.includes("gitlab")) {
+      return `${url}/-/merge_requests/new?merge_request[source_branch]=${encodeURIComponent(branch)}`;
+    }
+    // Bitbucket
+    if (url.includes("bitbucket")) {
+      return `${url}/pull-requests/new?source=${encodeURIComponent(branch)}`;
+    }
+    // Azure DevOps
+    if (url.includes("dev.azure.com") || url.includes("visualstudio.com")) {
+      return `${url}/pullrequestcreate?sourceRef=${encodeURIComponent(branch)}`;
+    }
+
+    return undefined;
   }
 
   /** Return the diff of uncommitted changes (staged + unstaged). */

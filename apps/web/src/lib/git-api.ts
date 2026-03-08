@@ -54,7 +54,7 @@ export interface GitListBranchesResult {
 
 export interface GitStepResult {
   commit: { status: 'created' | 'skipped_no_changes'; commitSha?: string; subject?: string }
-  push: { status: 'pushed' | 'skipped_not_requested' | 'skipped_up_to_date' | 'skipped_no_remote'; branch?: string; upstreamBranch?: string; setUpstream?: boolean }
+  push: { status: 'pushed' | 'skipped_not_requested' | 'skipped_up_to_date' | 'skipped_no_remote'; branch?: string; upstreamBranch?: string; setUpstream?: boolean; createPrUrl?: string }
   branch: { status: 'created' | 'skipped_not_requested'; name?: string }
   pr: { status: 'created' | 'opened_existing' | 'skipped_not_requested' | 'skipped_no_remote'; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string }
 }
