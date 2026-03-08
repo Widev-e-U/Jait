@@ -119,10 +119,10 @@ function ThreadPrBadge({ prState }: { prState: 'open' | 'closed' | 'merged' | nu
         : 'PR closed'
   const className =
     prState === 'open'
-      ? 'bg-blue-500/10 text-blue-700 border-blue-500/20'
+      ? 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300 dark:bg-blue-500/20 dark:border-blue-400/30'
       : prState === 'merged'
-        ? 'bg-green-500/10 text-green-700 border-green-500/20'
-        : 'bg-muted text-muted-foreground border-border'
+        ? 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/30'
+        : 'bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-300 dark:bg-red-500/20 dark:border-red-400/30'
   return (
     <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 ${className}`}>
       {label}
@@ -939,15 +939,6 @@ function App() {
     setInputValue('')
   }, [inputValue, enqueueMessage])
 
-  const handleProviderChange = useCallback((nextProvider: import('@/lib/agents-api').ProviderId) => {
-    setChatProvider(nextProvider)
-    // In manager mode, provider selection applies to new tasks/threads.
-    // Clear the selected thread when switching providers so the next send
-    // starts a fresh thread with the selected provider defaults.
-    if (viewMode === 'manager' && automation.selectedThread && automation.selectedThread.providerId !== nextProvider) {
-      automation.setSelectedThreadId(null)
-    }
-  }, [viewMode, automation.selectedThread, automation.setSelectedThreadId])
 
   const handleSubmit = async (chipFiles?: ReferencedFile[]) => {
     if (viewMode === 'manager') {
@@ -1482,6 +1473,8 @@ ${file.content.slice(0, 2000)}
                           baseBranch={automation.selectedRepo.defaultBranch}
                           threadTitle={automation.selectedThread.title}
                           prUrl={automation.selectedThread.prUrl}
+                          prState={automation.selectedThread.prState as 'open' | 'closed' | 'merged' | null | undefined}
+                          ghAvailable={automation.ghAvailable}
                         />
                       </div>
                     )}
@@ -2078,7 +2071,7 @@ ${file.content.slice(0, 2000)}
                         <button onClick={() => { clearMessages(); createSession() }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
                           New chat
                         </button>
-                        {viewMode === 'manager' && (
+                        {(viewMode as string) === 'manager' && (
                           <button
                             onClick={() => automation.setSelectedThreadId(null)}
                             className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"

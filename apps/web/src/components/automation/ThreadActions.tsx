@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Eye, GitPullRequest, Loader2 } from 'lucide-react'
+import { Eye, GitPullRequest, Loader2, AlertTriangle } from 'lucide-react'
 import { gitApi, summarizeGitResult } from '@/lib/git-api'
 import { agentsApi } from '@/lib/agents-api'
 import { toast } from 'sonner'
@@ -22,9 +22,13 @@ interface ThreadActionsProps {
   threadTitle: string
   /** Existing PR URL from previous creation (allows retry to just open it). */
   prUrl?: string | null
+  /** Current PR state synced from GitHub (open, merged, closed). */
+  prState?: 'open' | 'closed' | 'merged' | null
+  /** Whether GitHub CLI is available on the server. */
+  ghAvailable?: boolean
 }
 
-export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, threadTitle, prUrl }: ThreadActionsProps) {
+export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, threadTitle, prUrl, prState, ghAvailable = true }: ThreadActionsProps) {
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
@@ -110,10 +114,32 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
         {existingPrLink && (
           <Badge
             variant="outline"
-            className={`h-5 px-1.5 text-[10px] font-medium ${existingPrLink.kind === 'created' ? 'border-green-500/40 text-green-700' : 'border-amber-500/40 text-amber-700'}`}
+            className={`h-5 px-1.5 text-[10px] font-medium ${
+              prState === 'merged'
+                ? 'border-purple-500/40 text-purple-700 bg-purple-500/10 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/40'
+                : prState === 'closed'
+                  ? 'border-red-500/40 text-red-700 bg-red-500/10 dark:text-red-300 dark:bg-red-500/20 dark:border-red-400/40'
+                  : existingPrLink.kind === 'created'
+                    ? 'border-green-500/40 text-green-700 dark:text-green-300 dark:border-green-400/40'
+                    : 'border-amber-500/40 text-amber-700 dark:text-amber-300 dark:border-amber-400/40'
+            }`}
           >
-            {existingPrLink.kind === 'created' ? 'PR created' : 'PR ready to open'}
+            {prState === 'merged'
+              ? 'PR merged'
+              : prState === 'closed'
+                ? 'PR closed'
+                : existingPrLink.kind === 'created'
+                  ? 'PR open'
+                  : 'PR ready to open'}
           </Badge>
+        )}
+        {!ghAvailable && !existingPrLink && (
+          <span
+            className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 cursor-help"
+            title="GitHub CLI (gh) is not installed or authenticated. Install it to enable PR creation and status tracking."
+          >
+            <AlertTriangle className="h-3 w-3" />
+          </span>
         )}
       </div>
 

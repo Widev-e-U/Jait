@@ -76,6 +76,7 @@ export function useAutomation(enabled = true) {
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [activities, setActivities] = useState<ThreadActivity[]>([])
   const [threadPrStates, setThreadPrStates] = useState<Record<string, ThreadPrState>>({})
+  const [ghAvailable, setGhAvailable] = useState(true)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -97,7 +98,8 @@ export function useAutomation(enabled = true) {
     () =>
       selectedThread != null &&
       selectedRepo != null &&
-      (selectedThread.status === 'completed' ||
+      (selectedThread.status === 'idle' ||
+        selectedThread.status === 'completed' ||
         selectedThread.status === 'error' ||
         selectedThread.status === 'interrupted'),
     [selectedThread, selectedRepo],
@@ -273,23 +275,47 @@ export function useAutomation(enabled = true) {
 
       const settled = await Promise.allSettled(
         threadsWithBranch.map(async (thread) => {
+          // Use the thread's worktree directory when available so git
+          // status resolves the correct branch (not the main repo's HEAD).
+          const statusCwd = thread.workingDirectory ?? repoPath
           const status = await gitApi.status(
-            repoPath,
+            statusCwd,
             thread.branch ?? undefined,
             selectedRepo.githubToken ? { githubToken: selectedRepo.githubToken } : undefined,
           )
           const prState: ThreadPrState = status.pr?.state ?? null
-          return { threadId: thread.id, prState }
+
+          // Sync discovered PR metadata back to the thread DB so it
+          // persists across sessions and shows in ThreadActions / sidebar.
+          if (status.pr && (
+            thread.prUrl !== status.pr.url ||
+            thread.prState !== status.pr.state ||
+            thread.prNumber !== status.pr.number
+          )) {
+            try {
+              await agentsApi.updateThread(thread.id, {
+                prUrl: status.pr.url,
+                prNumber: status.pr.number,
+                prTitle: status.pr.title,
+                prState: status.pr.state,
+              })
+            } catch { /* best-effort sync */ }
+          }
+
+          return { threadId: thread.id, prState, ghAvailable: status.ghAvailable }
         }),
       )
       if (requestId !== prStateRequestRef.current) return
 
       const nextStates = { ...baseStates }
+      let anyGhAvailable = false
       for (const result of settled) {
         if (result.status === 'fulfilled') {
           nextStates[result.value.threadId] = result.value.prState
+          if (result.value.ghAvailable) anyGhAvailable = true
         }
       }
+      setGhAvailable(anyGhAvailable)
       setThreadPrStates(nextStates)
     }
 
@@ -445,6 +471,7 @@ export function useAutomation(enabled = true) {
     setSelectedThreadId,
     selectedThread,
     threadPrStates,
+    ghAvailable,
     activities,
     activityEndRef,
     providers,

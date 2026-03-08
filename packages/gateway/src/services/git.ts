@@ -46,6 +46,8 @@ export interface GitStatusResult {
   aheadCount: number;
   behindCount: number;
   pr: GitStatusPr | null;
+  /** Whether GitHub CLI (`gh`) is installed and authenticated. */
+  ghAvailable: boolean;
 }
 
 export interface GitBranch {
@@ -139,6 +141,50 @@ function resolveGithubToken(explicit?: string): string | null {
   return explicit ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_PAT ?? null;
 }
 
+/** Cache for git credential manager token (avoids shelling out every request). */
+let _gitCredentialToken: string | null | undefined;
+let _gitCredentialExpiry = 0;
+
+/**
+ * Attempt to extract a GitHub token from git's credential manager.
+ * Returns null if git credential fill fails or isn't configured.
+ * Caches the result for 5 minutes to avoid repeated subprocess calls.
+ */
+async function resolveGitCredentialToken(): Promise<string | null> {
+  if (_gitCredentialToken !== undefined && Date.now() < _gitCredentialExpiry) {
+    return _gitCredentialToken;
+  }
+  try {
+    const { spawn } = await import("node:child_process");
+    const token = await new Promise<string | null>((resolve) => {
+      const proc = spawn("git", ["credential", "fill"], { timeout: 5_000 });
+      let out = "";
+      proc.stdout.on("data", (d: Buffer) => { out += d.toString(); });
+      proc.on("close", () => {
+        const match = out.match(/^password=(.+)$/m);
+        resolve(match?.[1]?.trim() ?? null);
+      });
+      proc.on("error", () => resolve(null));
+      proc.stdin.write("protocol=https\nhost=github.com\n\n");
+      proc.stdin.end();
+    });
+    _gitCredentialToken = token;
+  } catch {
+    _gitCredentialToken = null;
+  }
+  _gitCredentialExpiry = Date.now() + 5 * 60 * 1000;
+  return _gitCredentialToken;
+}
+
+/**
+ * Resolve a usable GitHub token — explicit > env > git credential manager.
+ */
+async function resolveGithubTokenWithFallback(explicit?: string): Promise<string | null> {
+  const quick = resolveGithubToken(explicit);
+  if (quick) return quick;
+  return resolveGitCredentialToken();
+}
+
 // ── Service ────────────────────────────────────────────────────────
 
 export class GitService {
@@ -156,7 +202,7 @@ export class GitService {
   }
 
   async status(cwd: string, _branch?: string, githubToken?: string): Promise<GitStatusResult> {
-    const effectiveToken = resolveGithubToken(githubToken);
+    const effectiveToken = await resolveGithubTokenWithFallback(githubToken);
     const isGit = await this.isRepo(cwd);
     if (!isGit) {
       return {
@@ -167,6 +213,7 @@ export class GitService {
         aheadCount: 0,
         behindCount: 0,
         pr: null,
+        ghAvailable: false,
       };
     }
 
@@ -226,9 +273,11 @@ export class GitService {
 
     // PR status (via gh cli)
     let pr: GitStatusPr | null = null;
+    let ghIsAvailable = false;
     if (branch) {
       try {
         const hasGh = await ghAvailable(cwd);
+        ghIsAvailable = hasGh;
         if (hasGh) {
           const json = await ghExec(
             cwd,
@@ -270,6 +319,7 @@ export class GitService {
       aheadCount,
       behindCount,
       pr,
+      ghAvailable: ghIsAvailable,
     };
   }
 
@@ -341,7 +391,7 @@ export class GitService {
     baseBranch?: string,
     githubToken?: string,
   ): Promise<GitStepResult> {
-    const effectiveToken = resolveGithubToken(githubToken);
+    const effectiveToken = await resolveGithubTokenWithFallback(githubToken);
     const result: GitStepResult = {
       commit: { status: "skipped_no_changes" },
       push: { status: "skipped_not_requested" },
@@ -733,8 +783,8 @@ export class GitService {
             status: "opened_existing",
             url: String(first.html_url),
             number: Number(first.number ?? 0),
-            baseBranch: String(first.base?.ref ?? input.baseBranch),
-            headBranch: String(first.head?.ref ?? input.headBranch),
+            baseBranch: String((first.base as Record<string, unknown>)?.ref ?? input.baseBranch),
+            headBranch: String((first.head as Record<string, unknown>)?.ref ?? input.headBranch),
             title: String(first.title ?? input.title),
           };
         }

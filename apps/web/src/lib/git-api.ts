@@ -37,6 +37,8 @@ export interface GitStatusResult {
   aheadCount: number
   behindCount: number
   pr: GitStatusPr | null
+  /** Whether GitHub CLI (`gh`) is installed and authenticated on the server. */
+  ghAvailable: boolean
 }
 
 export interface GitBranch {
