@@ -151,7 +151,7 @@ function App() {
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
   const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(
-    () => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || settings?.chat_provider || 'jait'
+    () => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || 'jait'
   )
   const [cliModel, setCliModel] = useState<string | null>(
     () => localStorage.getItem('cliModel') || null
@@ -1203,7 +1203,13 @@ ${file.content.slice(0, 2000)}
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
         <header className="flex items-center h-14 px-2 sm:px-5 border-b shrink-0 gap-1 sm:gap-2">
           {/* Left: Logo — always visible */}
-          <div className="flex items-center shrink-0">
+          <div className="flex items-center shrink-0 gap-1.5">
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 1024 1024" className="shrink-0">
+              <path d="M318 372 L430 486 L318 600"
+                    fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715"
+                    fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round"/>
+            </svg>
             <span className="text-base font-medium tracking-tight">Jait</span>
           </div>
 

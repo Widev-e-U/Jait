@@ -4,7 +4,13 @@
     "slug": "jait-mobile",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon.png",
     "userInterfaceStyle": "dark",
+    "splash": {
+      "image": "./assets/splash.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#09090b"
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -13,7 +19,11 @@
       "bundleIdentifier": "dev.jait.mobile"
     },
     "android": {
-      "package": "dev.jait.mobile"
+      "package": "dev.jait.mobile",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#09090b"
+      }
     },
     "plugins": [
       "expo-asset",

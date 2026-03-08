@@ -5,6 +5,7 @@
     "output": "release",
     "buildResources": "assets"
   },
+  "icon": "assets/icon-1024.png",
   "files": [
     "dist/**/*",
     "assets/**/*"
