@@ -24,10 +24,10 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
   app.post("/api/git/status", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    const { cwd } = request.body as { cwd: string };
+    const { cwd, branch } = request.body as { cwd: string; branch?: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
-      const status = await git.status(cwd);
+      const status = await git.status(cwd, branch);
       return status;
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Git status failed" });

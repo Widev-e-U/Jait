@@ -23,6 +23,10 @@ export interface AgentThread {
   status: ThreadStatus
   providerSessionId: string | null
   error: string | null
+  prUrl: string | null
+  prNumber: number | null
+  prTitle: string | null
+  prState: 'open' | 'closed' | 'merged' | null
   createdAt: string
   updatedAt: string
   completedAt: string | null
@@ -54,6 +58,18 @@ export interface CreateThreadRequest {
   runtimeMode?: RuntimeMode
   workingDirectory?: string
   branch?: string
+}
+
+export interface UpdateThreadRequest {
+  title?: string
+  model?: string
+  runtimeMode?: RuntimeMode
+  workingDirectory?: string
+  branch?: string
+  prUrl?: string | null
+  prNumber?: number | null
+  prTitle?: string | null
+  prState?: 'open' | 'closed' | 'merged' | null
 }
 
 // ── API Client ───────────────────────────────────────────────────────
@@ -125,7 +141,7 @@ export class AgentsApi {
     return res.json() as Promise<AgentThread>
   }
 
-  async updateThread(id: string, params: Partial<CreateThreadRequest>): Promise<AgentThread> {
+  async updateThread(id: string, params: UpdateThreadRequest): Promise<AgentThread> {
     const res = await fetch(`${API_URL}/api/threads/${id}`, {
       method: 'PATCH',
       headers: this.getHeaders(true),

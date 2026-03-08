@@ -106,12 +106,22 @@ export function registerThreadRoutes(
     if (!authUser) return;
     const { id } = request.params as { id: string };
     const body = request.body as Record<string, unknown>;
+    const prState =
+      body["prState"] === "open" || body["prState"] === "closed" || body["prState"] === "merged"
+        ? body["prState"]
+        : body["prState"] === null
+          ? null
+          : undefined;
     const thread = threadService.update(id, {
       title: typeof body["title"] === "string" ? body["title"] : undefined,
       model: typeof body["model"] === "string" ? body["model"] : undefined,
       runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : body["runtimeMode"] === "full-access" ? "full-access" : undefined,
       workingDirectory: typeof body["workingDirectory"] === "string" ? body["workingDirectory"] : undefined,
       branch: typeof body["branch"] === "string" ? body["branch"] : undefined,
+      prUrl: typeof body["prUrl"] === "string" ? body["prUrl"] : body["prUrl"] === null ? null : undefined,
+      prNumber: typeof body["prNumber"] === "number" ? body["prNumber"] : body["prNumber"] === null ? null : undefined,
+      prTitle: typeof body["prTitle"] === "string" ? body["prTitle"] : body["prTitle"] === null ? null : undefined,
+      prState,
     });
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
     broadcastThreadEvent(id, "updated", { thread });

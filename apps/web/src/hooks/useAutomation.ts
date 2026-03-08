@@ -14,7 +14,7 @@ import {
   type ProviderInfo,
   type ProviderId,
 } from '@/lib/agents-api'
-import { gitApi } from '@/lib/git-api'
+import { gitApi, type GitStatusPr } from '@/lib/git-api'
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -24,6 +24,8 @@ export interface RepositoryConnection {
   defaultBranch: string
   localPath: string
 }
+
+export type ThreadPrState = GitStatusPr['state'] | null
 
 // ── Persistence helpers ──────────────────────────────────────────────
 
@@ -72,6 +74,7 @@ export function useAutomation(enabled = true) {
   const [threads, setThreads] = useState<AgentThread[]>([])
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [activities, setActivities] = useState<ThreadActivity[]>([])
+  const [threadPrStates, setThreadPrStates] = useState<Record<string, ThreadPrState>>({})
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -245,6 +248,49 @@ export function useAutomation(enabled = true) {
     [threads, selectedRepo],
   )
 
+  const prStateRequestRef = useRef(0)
+
+  useEffect(() => {
+    if (!enabled || !selectedRepo) {
+      setThreadPrStates({})
+      return
+    }
+
+    const requestId = ++prStateRequestRef.current
+    const repoPath = selectedRepo.localPath
+    const currentThreads = repoThreads
+    const baseStates = Object.fromEntries(currentThreads.map((t) => [t.id, null])) as Record<string, ThreadPrState>
+    const threadsWithBranch = currentThreads.filter((t) => typeof t.branch === 'string' && t.branch.length > 0)
+
+    const loadPrStates = async () => {
+      if (threadsWithBranch.length === 0) {
+        if (requestId === prStateRequestRef.current) {
+          setThreadPrStates(baseStates)
+        }
+        return
+      }
+
+      const settled = await Promise.allSettled(
+        threadsWithBranch.map(async (thread) => {
+          const status = await gitApi.status(repoPath, thread.branch ?? undefined)
+          const prState: ThreadPrState = status.pr?.state ?? null
+          return { threadId: thread.id, prState }
+        }),
+      )
+      if (requestId !== prStateRequestRef.current) return
+
+      const nextStates = { ...baseStates }
+      for (const result of settled) {
+        if (result.status === 'fulfilled') {
+          nextStates[result.value.threadId] = result.value.prState
+        }
+      }
+      setThreadPrStates(nextStates)
+    }
+
+    void loadPrStates()
+  }, [enabled, repoThreads, selectedRepo])
+
   // ── Repository CRUD ────────────────────────────────────────────
 
   const handleFolderSelected = useCallback(
@@ -332,6 +378,28 @@ export function useAutomation(enabled = true) {
           })
           setSelectedThreadId(thread.id)
           await agentsApi.startThread(thread.id, text)
+        } else if (selectedThread && selectedThread.status === 'running') {
+          await agentsApi.sendTurn(selectedThread.id, text)
+        } else if (selectedThread && selectedThread.status === 'idle') {
+          await agentsApi.startThread(selectedThread.id, text)
+        } else {
+          let branchName: string | undefined
+          const candidateBranchName = generateBranchName()
+          try {
+            await gitApi.createBranch(selectedRepo.localPath, candidateBranchName, selectedRepo.defaultBranch)
+            branchName = candidateBranchName
+          } catch {
+            // If branch creation fails, continue without it
+          }
+
+          const thread = await agentsApi.createThread({
+            title: `[${selectedRepo.name}] ${text.slice(0, 60)}`,
+            providerId,
+            workingDirectory: selectedRepo.localPath,
+            ...(branchName ? { branch: branchName } : {}),
+          })
+          setSelectedThreadId(thread.id)
+          await agentsApi.startThread(thread.id, text)
         }
 
         void refresh()
@@ -386,6 +454,7 @@ export function useAutomation(enabled = true) {
     selectedThreadId,
     setSelectedThreadId,
     selectedThread,
+    threadPrStates,
     activities,
     activityEndRef,
     providers,
