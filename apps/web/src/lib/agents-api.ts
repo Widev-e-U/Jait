@@ -72,6 +72,11 @@ export interface UpdateThreadRequest {
   prState?: 'open' | 'closed' | 'merged' | null
 }
 
+export interface GenerateThreadTitleRequest {
+  task: string
+  prefix?: string
+}
+
 // ── API Client ───────────────────────────────────────────────────────
 
 export class AgentsApi {
@@ -148,6 +153,16 @@ export class AgentsApi {
       body: JSON.stringify(params),
     })
     if (!res.ok) throw new Error(`Failed to update thread: ${res.statusText}`)
+    return res.json() as Promise<AgentThread>
+  }
+
+  async generateThreadTitle(id: string, params: GenerateThreadTitleRequest): Promise<AgentThread> {
+    const res = await fetch(`${API_URL}/api/threads/${id}/generate-title`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to generate thread title: ${res.statusText}`)
     return res.json() as Promise<AgentThread>
   }
 
