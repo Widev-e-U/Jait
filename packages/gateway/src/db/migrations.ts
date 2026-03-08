@@ -222,4 +222,47 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 007: Agent threads & activities ───────────────────────────────
+  {
+    id: 7,
+    name: "agent_threads_tables",
+    run(db) {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS agent_threads (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          session_id TEXT,
+          title TEXT NOT NULL,
+          provider_id TEXT NOT NULL,
+          model TEXT,
+          runtime_mode TEXT NOT NULL DEFAULT 'full-access',
+          working_directory TEXT,
+          branch TEXT,
+          status TEXT NOT NULL DEFAULT 'idle',
+          provider_session_id TEXT,
+          error TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          completed_at TEXT
+        )
+      `);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_threads_user ON agent_threads(user_id)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_threads_session ON agent_threads(session_id)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_threads_status ON agent_threads(status)`);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_threads_updated ON agent_threads(updated_at)`);
+
+      db.run(`
+        CREATE TABLE IF NOT EXISTS agent_thread_activities (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL,
+          kind TEXT NOT NULL,
+          summary TEXT NOT NULL,
+          payload TEXT,
+          created_at TEXT NOT NULL
+        )
+      `);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_thread_activities_thread ON agent_thread_activities(thread_id, created_at)`);
+    },
+  },
+
 ];
