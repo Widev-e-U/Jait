@@ -24,13 +24,25 @@ interface ThreadActionsProps {
   baseBranch: string
   /** Thread title — used as commit message / PR title. */
   threadTitle: string
+  /** Existing PR URL from previous creation (allows retry to just open it). */
+  prUrl?: string | null
 }
 
-export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle }: ThreadActionsProps) {
+export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, prUrl }: ThreadActionsProps) {
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
+  const [createdPrUrl, setCreatedPrUrl] = useState<string | null>(null)
+
+  // Use already-known PR URL (from previous creation or thread metadata)
+  const existingPrUrl = createdPrUrl ?? prUrl ?? null
 
   const handlePushAndPR = useCallback(async () => {
+    // If PR already exists, just open it
+    if (existingPrUrl) {
+      window.open(existingPrUrl, '_blank')
+      return
+    }
+
     setBusy(true)
     const toastId = toast.loading('Creating pull request…')
     try {
@@ -43,6 +55,7 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle }
       toast.success(summary.title, { id: toastId, description: summary.description })
 
       if (result.pr.url) {
+        setCreatedPrUrl(result.pr.url)
         try {
           await agentsApi.updateThread(threadId, {
             prUrl: result.pr.url,
@@ -68,7 +81,7 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle }
     } finally {
       setBusy(false)
     }
-  }, [cwd, threadTitle, baseBranch])
+  }, [cwd, threadTitle, baseBranch, threadId, existingPrUrl])
 
   return (
     <>
@@ -85,7 +98,7 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle }
           onClick={handlePushAndPR}
         >
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitPullRequest className="h-3 w-3" />}
-          Create Pull Request
+          {existingPrUrl ? 'Open PR' : 'Create Pull Request'}
         </Button>
       </div>
 

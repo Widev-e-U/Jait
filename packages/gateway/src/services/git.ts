@@ -355,25 +355,27 @@ export class GitService {
         } catch { /* no upstream */ }
 
         if (hasUpstream) {
-          await gitExec(cwd, "push");
-          result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+          try {
+            await gitExec(cwd, "push");
+            result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+          } catch {
+            // Already up-to-date or push failed — still proceed to PR
+            result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+          }
         } else {
           const remoteName = await this.getPreferredRemote(cwd, currentBranch);
           if (!remoteName) {
             result.push = { status: "skipped_no_remote", branch: currentBranch };
-            // Also skip PR if no remote
-            if (action === "commit_push_pr") {
-              result.pr = { status: "skipped_no_remote" };
-            }
-            return result;
+            // Don't return early — still try PR via gh CLI which may work
+          } else {
+            await gitExec(cwd, `push --set-upstream "${remoteName}" "${currentBranch}"`);
+            result.push = {
+              status: "pushed",
+              branch: currentBranch,
+              upstreamBranch: `${remoteName}/${currentBranch}`,
+              setUpstream: true,
+            };
           }
-          await gitExec(cwd, `push --set-upstream "${remoteName}" "${currentBranch}"`);
-          result.push = {
-            status: "pushed",
-            branch: currentBranch,
-            upstreamBranch: `${remoteName}/${currentBranch}`,
-            setUpstream: true,
-          };
         }
       }
 
@@ -384,7 +386,7 @@ export class GitService {
       }
     }
 
-    // PR creation step
+    // PR creation step — try even if push was skipped (gh CLI can push internally)
     if (action === "commit_push_pr" && currentBranch) {
       try {
         const hasGh = await ghAvailable(cwd);
@@ -414,12 +416,13 @@ export class GitService {
             }
           } catch { /* no existing PR */ }
 
-          // Create new PR
-          const prTitle = result.commit.subject ?? `Changes from ${currentBranch}`;
+          // Create new PR — use --push if branch wasn't pushed yet
+          const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const baseFlag = baseBranch ? ` --base "${baseBranch}"` : '';
+          const pushFlag = result.push.status !== "pushed" ? " --push" : "";
           const prJson = await ghExec(
             cwd,
-            `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body "Automated PR from Jait automation."${baseFlag} --json number,url,title,baseRefName,headRefName`,
+            `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body "Automated PR from Jait automation."${baseFlag}${pushFlag} --json number,url,title,baseRefName,headRefName`,
           );
           const parsed = JSON.parse(prJson) as Record<string, unknown>;
           result.pr = {
@@ -430,10 +433,19 @@ export class GitService {
             headBranch: String(parsed.headRefName ?? ""),
             title: String(parsed.title ?? prTitle),
           };
+          // If gh pushed the branch for us, update push status
+          if (result.push.status !== "pushed") {
+            result.push = { status: "pushed", branch: currentBranch };
+          }
         }
       } catch (err) {
-        // PR creation failed but commit/push succeeded
-        result.pr = { status: "skipped_not_requested" };
+        // PR creation failed — report as error with details
+        const errMsg = err instanceof Error ? err.message : String(err);
+        result.pr = { status: "skipped_no_remote" };
+        if (result.push.status === "skipped_no_remote") {
+          // Neither push nor PR worked — surface the real reason
+          throw new Error(`Push failed (no remote configured) and PR creation failed: ${errMsg}`);
+        }
       }
     }
 
@@ -538,9 +550,21 @@ export class GitService {
   /**
    * Resolve the best remote for push/PR operations.
    * Priority: branch-specific remote -> origin -> first configured remote.
+   * Falls back to main repo root remotes for worktrees.
    */
   async getPreferredRemote(cwd: string, branch?: string): Promise<string | null> {
-    const remotes = await this.listRemotes(cwd);
+    let remotes = await this.listRemotes(cwd);
+
+    // If no remotes found and we're in a worktree, try the main repo root
+    if (remotes.length === 0) {
+      try {
+        const mainRoot = await this.getMainRepoRoot(cwd);
+        if (mainRoot && mainRoot !== cwd) {
+          remotes = await this.listRemotes(mainRoot);
+        }
+      } catch { /* ignore */ }
+    }
+
     if (remotes.length === 0) return null;
 
     if (branch) {

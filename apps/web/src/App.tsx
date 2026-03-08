@@ -1479,6 +1479,7 @@ ${file.content.slice(0, 2000)}
                           branch={automation.selectedThread.branch}
                           baseBranch={automation.selectedRepo.defaultBranch}
                           threadTitle={automation.selectedThread.title}
+                          prUrl={automation.selectedThread.prUrl}
                         />
                       </div>
                     )}
@@ -1821,6 +1822,8 @@ ${file.content.slice(0, 2000)}
                           onViewModeChange={setViewMode}
                           provider={chatProvider}
                           onProviderChange={setChatProvider}
+                          cliModel={cliModel}
+                          onCliModelChange={setCliModel}
                         />
                         {automation.selectedThread && automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
                           <div className="flex items-center gap-2 px-1 mt-1.5">
@@ -1859,6 +1862,8 @@ ${file.content.slice(0, 2000)}
                         onViewModeChange={setViewMode}
                         provider={chatProvider}
                         onProviderChange={setChatProvider}
+                        cliModel={cliModel}
+                        onCliModelChange={setCliModel}
                       />
                     </div>
                   </div>
@@ -1886,6 +1891,8 @@ ${file.content.slice(0, 2000)}
                     onModeChange={setChatMode}
                     provider={chatProvider}
                     onProviderChange={setChatProvider}
+                    cliModel={cliModel}
+                    onCliModelChange={setCliModel}
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
                     availableFiles={availableFilesForMention}
@@ -2027,6 +2034,8 @@ ${file.content.slice(0, 2000)}
                       onModeChange={setChatMode}
                       provider={chatProvider}
                       onProviderChange={setChatProvider}
+                      cliModel={cliModel}
+                      onCliModelChange={setCliModel}
                       viewMode={viewMode}
                       onViewModeChange={setViewMode}
                       availableFiles={availableFilesForMention}
