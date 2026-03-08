@@ -43,6 +43,7 @@ export {
 } from "./memory-tools.js";
 export { createVoiceSpeakTool } from "./voice-tools.js";
 export { createAgentSpawnTool } from "./agent-tools.js";
+export { createThreadControlTool } from "./thread-tools.js";
 export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
 export { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 export { McpManager, wrapMcpTool, registerMcpTools, unregisterMcpTools, type McpServerConfig, type McpConnection } from "./mcp-bridge.js";
@@ -135,10 +136,13 @@ import {
 } from "./memory-tools.js";
 import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
+import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
 import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import type { VoiceService } from "../voice/service.js";
 import { type AppConfig, inferContextWindow } from "../config.js";
+import type { ThreadService } from "../services/threads.js";
+import type { ProviderRegistry } from "../providers/registry.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -162,6 +166,9 @@ export interface ToolRegistryDeps {
   voiceService?: VoiceService;
   screenShare?: ScreenShareService;
   config?: AppConfig;
+  threadMcpConfig?: { host: string; port: number };
+  threadService?: ThreadService;
+  providerRegistry?: ProviderRegistry;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -247,6 +254,17 @@ export function createToolRegistry(
 
   if (deps.voiceService) {
     tools.register(createVoiceSpeakTool(deps.voiceService));
+  }
+
+  if (deps.threadService && deps.providerRegistry) {
+    tools.register(
+      createThreadControlTool({
+        threadService: deps.threadService,
+        providerRegistry: deps.providerRegistry,
+        ws: deps.ws,
+        mcpConfig: deps.threadMcpConfig,
+      }),
+    );
   }
 
   if (deps.screenShare) {

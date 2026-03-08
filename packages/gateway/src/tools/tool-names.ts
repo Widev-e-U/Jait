@@ -67,6 +67,7 @@ export const ToolName = {
 
   // ── Agent ──
   AgentSpawn: "agent.spawn",
+  ThreadControl: "thread.control",
 
   // ── Meta (tool discovery) ──
   ToolsList: "tools.list",

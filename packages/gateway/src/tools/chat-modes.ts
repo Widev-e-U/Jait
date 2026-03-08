@@ -94,6 +94,7 @@ export const MUTATING_TOOLS = new Set([
   "os.tool",
   "os_tool",
   "agent.spawn",
+  "thread.control",
 ]);
 
 // ── Plan types ───────────────────────────────────────────────────────
