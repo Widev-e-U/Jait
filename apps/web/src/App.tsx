@@ -1574,79 +1574,47 @@ ${file.content.slice(0, 2000)}
                               className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedThread?.id === thread.id ? 'bg-muted font-medium' : ''}`}
                               onClick={() => automation.setSelectedThreadId(thread.id)}
                             >
-                              <ManagerStatusDot status={thread.status} />
+                              <div className="pt-0.5">
+                                <ManagerStatusDot status={thread.status} />
+                              </div>
                               <div className="min-w-0 flex-1 text-left">
-                                <span className="block truncate">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
-                                {thread.prUrl && (
+                                <span className="truncate block">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+                                <div className="mt-0.5 flex items-center gap-1 min-w-0">
+                                  {thread.branch && (
+                                    <span className="truncate text-[10px] text-muted-foreground font-mono">{thread.branch}</span>
+                                  )}
+                                  <ThreadPrBadge prState={thread.prState} />
+                                </div>
+                              </div>
+                              <div className="ml-auto flex items-center gap-1 shrink-0">
+                                {thread.status === 'running' && (
                                   <span
                                     role="button"
                                     tabIndex={0}
-                                    className="inline-flex items-center mt-0.5 text-[10px] text-muted-foreground hover:text-foreground"
-                                    onClick={(e) => {
-                                      e.stopPropagation()
-                                      window.open(thread.prUrl!, '_blank')
-                                    }}
+                                    className="shrink-0 hover:text-foreground transition-colors"
+                                    onClick={(e) => { e.stopPropagation(); void automation.handleStop(thread.id) }}
                                     onKeyDown={(e) => {
-                                      e.stopPropagation()
-                                      if (e.key === 'Enter' || e.key === ' ') {
-                                        e.preventDefault()
-                                        window.open(thread.prUrl!, '_blank')
+                                      if (e.key === 'Enter') {
+                                        e.stopPropagation()
+                                        void automation.handleStop(thread.id)
                                       }
                                     }}
                                   >
-                                    {thread.prNumber ? `PR #${thread.prNumber}` : 'Pull Request'}
+                                    <Square className="h-3 w-3" />
                                   </span>
                                 )}
+                                <span
+                                  role="button"
+                                  tabIndex={0}
+                                  className="shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                                  onClick={(e) => { e.stopPropagation(); void automation.handleDelete(thread.id) }}
+                                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void automation.handleDelete(thread.id) } }}
+                                >
+                                  <Trash2 className="h-3 w-3" />
+                                </span>
                               </div>
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                                onClick={(e) => { e.stopPropagation(); void automation.handleDelete(thread.id) }}
-                                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void automation.handleDelete(thread.id) } }}
-                              >
-                                <div className="pt-0.5">
-                                  <ManagerStatusDot status={thread.status} />
-                                </div>
-                                <div className="min-w-0 flex-1 text-left">
-                                  <span className="truncate block">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
-                                  <div className="mt-0.5 flex items-center gap-1 min-w-0">
-                                    {thread.branch && (
-                                      <span className="truncate text-[10px] text-muted-foreground font-mono">{thread.branch}</span>
-                                    )}
-                                    <ThreadPrBadge prState={prState} />
-                                  </div>
-                                </div>
-                                <div className="ml-auto flex items-center gap-1 shrink-0">
-                                  {thread.status === 'running' && (
-                                    <span
-                                      role="button"
-                                      tabIndex={0}
-                                      className="shrink-0 hover:text-foreground transition-colors"
-                                      onClick={(e) => { e.stopPropagation(); void automation.handleStop(thread.id) }}
-                                      onKeyDown={(e) => {
-                                        if (e.key === 'Enter') {
-                                          e.stopPropagation()
-                                          void automation.handleStop(thread.id)
-                                        }
-                                      }}
-                                    >
-                                      <Square className="h-3 w-3" />
-                                    </span>
-                                  )}
-                                  <span
-                                    role="button"
-                                    tabIndex={0}
-                                    className="shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                                    onClick={(e) => { e.stopPropagation(); void automation.handleDelete(thread.id) }}
-                                    onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void automation.handleDelete(thread.id) } }}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </span>
-                                </div>
-                              </button>
-                            )
-                          })}
+                            </button>
+                          ))}
                           {automation.repoThreads.length === 0 && (
                             <div className="px-3 py-4 text-center text-xs text-muted-foreground">No threads yet</div>
                           )}

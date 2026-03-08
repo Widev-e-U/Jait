@@ -378,28 +378,6 @@ export function useAutomation(enabled = true) {
           })
           setSelectedThreadId(thread.id)
           await agentsApi.startThread(thread.id, text)
-        } else if (selectedThread && selectedThread.status === 'running') {
-          await agentsApi.sendTurn(selectedThread.id, text)
-        } else if (selectedThread && selectedThread.status === 'idle') {
-          await agentsApi.startThread(selectedThread.id, text)
-        } else {
-          let branchName: string | undefined
-          const candidateBranchName = generateBranchName()
-          try {
-            await gitApi.createBranch(selectedRepo.localPath, candidateBranchName, selectedRepo.defaultBranch)
-            branchName = candidateBranchName
-          } catch {
-            // If branch creation fails, continue without it
-          }
-
-          const thread = await agentsApi.createThread({
-            title: `[${selectedRepo.name}] ${text.slice(0, 60)}`,
-            providerId,
-            workingDirectory: selectedRepo.localPath,
-            ...(branchName ? { branch: branchName } : {}),
-          })
-          setSelectedThreadId(thread.id)
-          await agentsApi.startThread(thread.id, text)
         }
 
         void refresh()
