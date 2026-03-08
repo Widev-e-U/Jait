@@ -1309,23 +1309,33 @@ export function registerChatRoutes(
 
     // Subscribe to live events
     let closed = false;
-    reply.raw.on("close", () => { closed = true; });
+    let unsubscribe = () => {};
+    const closeStream = () => {
+      if (closed) return;
+      closed = true;
+      unsubscribe();
+      try { reply.raw.end(); } catch { /* already closed */ }
+    };
 
-    const unsubscribe = subscribe(sessionId, (event) => {
+    reply.raw.on("close", () => {
+      closeStream();
+    });
+
+    unsubscribe = subscribe(sessionId, (event) => {
       if (closed) return;
       try {
         reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
         if (event.type === "done" || event.type === "error") {
-          try { reply.raw.end(); } catch { /* */ }
+          closeStream();
         }
       } catch {
-        closed = true;
+        closeStream();
       }
     });
 
     // Clean up subscription if client disconnects before stream finishes
     request.raw.on("close", () => {
-      unsubscribe();
+      closeStream();
     });
   });
 

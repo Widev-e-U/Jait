@@ -25,11 +25,17 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
+import type { UserService } from "../services/users.js";
+import {
+  fallbackThreadTitle,
+  generateThreadTitle,
+} from "../services/thread-title.js";
 import type { WsEventType } from "@jait/shared";
 
 export interface ThreadRouteDeps {
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
+  userService?: UserService;
   ws?: WsControlPlane;
 }
 
@@ -129,6 +135,58 @@ export function registerThreadRoutes(
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
     broadcastThreadEvent(id, "updated", { thread });
     return thread;
+  });
+
+  /** Generate a provider-based title for an existing thread */
+  app.post("/api/threads/:id/generate-title", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const task = typeof body["task"] === "string" ? body["task"].trim() : "";
+    const prefix = typeof body["prefix"] === "string" ? body["prefix"] : "";
+
+    if (!task) {
+      return reply.status(400).send({ error: "task is required" });
+    }
+
+    const thread = threadService.getById(id);
+    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+
+    const fallbackTitle = `${prefix}${fallbackThreadTitle(task)}`.trim();
+
+    try {
+      const apiKeys = deps.userService?.getSettings(authUser.id).apiKeys ?? {};
+      const generatedTitle = await generateThreadTitle({
+        providerId: thread.providerId as ProviderId,
+        task,
+        model: thread.model ?? undefined,
+        workingDirectory: thread.workingDirectory ?? undefined,
+        config,
+        apiKeys,
+      });
+      const updated = threadService.update(id, {
+        title: `${prefix}${generatedTitle}`.trim(),
+      });
+      if (!updated) return reply.status(404).send({ error: "Thread not found" });
+      broadcastThreadEvent(id, "updated", { thread: updated });
+      return updated;
+    } catch (err) {
+      app.log.warn(
+        { err, threadId: id, providerId: thread.providerId },
+        "Failed to generate provider thread title",
+      );
+
+      if (thread.title.trim() !== fallbackTitle) {
+        const updated = threadService.update(id, { title: fallbackTitle });
+        if (updated) {
+          broadcastThreadEvent(id, "updated", { thread: updated });
+          return updated;
+        }
+      }
+
+      return thread;
+    }
   });
 
   /** Delete thread */

@@ -116,6 +116,7 @@ describe("parallel session chat (E2E)", () => {
       wsPort: 0,
       logLevel: "silent" as const,
       nodeEnv: "test",
+      llmProvider: "ollama" as const,
       ollamaUrl,
     };
   }
