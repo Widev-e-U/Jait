@@ -13,6 +13,7 @@ import type { ChatMode } from '@/components/chat/mode-selector'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import { ProviderSelector } from '@/components/chat/provider-selector'
+import { CliModelSelector } from '@/components/chat/cli-model-selector'
 import type { ProviderId } from '@/lib/agents-api'
 import { FileIcon } from '@/components/icons/file-icons'
 import { cn } from '@/lib/utils'
@@ -45,6 +46,9 @@ interface PromptInputProps {
   onModeChange?: (mode: ChatMode) => void
   provider?: ProviderId
   onProviderChange?: (provider: ProviderId) => void
+  /** Model override for CLI providers (codex / claude-code). */
+  cliModel?: string | null
+  onCliModelChange?: (model: string | null) => void
   /** All files available for @ mention (pre-loaded from visible tree) */
   availableFiles?: ReferencedFile[]
   /** Lazy search across the entire workspace directory */
@@ -182,6 +186,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onModeChange,
   provider,
   onProviderChange,
+  cliModel,
+  onCliModelChange,
   availableFiles = EMPTY_FILES,
   onSearchFiles,
   workspaceOpen = false,
@@ -681,6 +687,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           )}
           {provider && onProviderChange && (
             <ProviderSelector provider={provider} onChange={onProviderChange} disabled={disabled || isLoading} />
+          )}
+          {provider && provider !== 'jait' && onCliModelChange && (
+            <CliModelSelector provider={provider} model={cliModel ?? null} onChange={onCliModelChange} disabled={disabled || isLoading} />
           )}
           {mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager' && (
             <ModeSelector mode={mode} onChange={onModeChange} disabled={disabled || isLoading} />

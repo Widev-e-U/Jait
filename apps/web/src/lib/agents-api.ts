@@ -86,6 +86,15 @@ export class AgentsApi {
     return data.providers
   }
 
+  async listProviderModels(providerId: ProviderId): Promise<{ id: string; name: string; description?: string; isDefault?: boolean }[]> {
+    const res = await fetch(`${API_URL}/api/providers/${providerId}/models`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to list models: ${res.statusText}`)
+    const data = await res.json() as { models: { id: string; name: string; description?: string; isDefault?: boolean }[] }
+    return data.models
+  }
+
   // ── Threads CRUD ───────────────────────────────────────────────
 
   async listThreads(sessionId?: string): Promise<AgentThread[]> {
@@ -161,7 +170,7 @@ export class AgentsApi {
   async stopThread(id: string): Promise<void> {
     const res = await fetch(`${API_URL}/api/threads/${id}/stop`, {
       method: 'POST',
-      headers: this.getHeaders(true),
+      headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to stop thread: ${res.statusText}`)
   }
@@ -169,7 +178,7 @@ export class AgentsApi {
   async interruptThread(id: string): Promise<void> {
     const res = await fetch(`${API_URL}/api/threads/${id}/interrupt`, {
       method: 'POST',
-      headers: this.getHeaders(true),
+      headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to interrupt thread: ${res.statusText}`)
   }

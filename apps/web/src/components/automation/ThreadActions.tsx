@@ -29,11 +29,12 @@ export function ThreadActions({ cwd, branch, baseBranch, threadTitle }: ThreadAc
 
   const handlePushAndPR = useCallback(async () => {
     setBusy(true)
-    const toastId = toast.loading('Committing, pushing & creating PR…')
+    const toastId = toast.loading('Creating pull request…')
     try {
       const commitMsg = threadTitle.replace(/^\[.*?\]\s*/, '')
       const result = await gitApi.runStackedAction(cwd, 'commit_push_pr', {
         commitMessage: commitMsg,
+        baseBranch,
       })
       const summary = summarizeGitResult(result)
       toast.success(summary.title, { id: toastId, description: summary.description })
@@ -51,7 +52,7 @@ export function ThreadActions({ cwd, branch, baseBranch, threadTitle }: ThreadAc
     } finally {
       setBusy(false)
     }
-  }, [cwd, threadTitle])
+  }, [cwd, threadTitle, baseBranch])
 
   return (
     <>
@@ -68,7 +69,7 @@ export function ThreadActions({ cwd, branch, baseBranch, threadTitle }: ThreadAc
           onClick={handlePushAndPR}
         >
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitPullRequest className="h-3 w-3" />}
-          Push & PR
+          Create Pull Request
         </Button>
       </div>
 

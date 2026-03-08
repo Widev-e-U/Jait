@@ -181,8 +181,10 @@ export function registerThreadRoutes(
 
       // Subscribe to provider events and log them
       const unsubscribe = provider.onEvent((event: ProviderEvent) => {
-        threadService.logProviderEvent(id, event);
-        broadcastThreadEvent(id, "activity", { event });
+        const activity = threadService.logProviderEvent(id, event);
+        if (activity) {
+          broadcastThreadEvent(id, "activity", { event, activity });
+        }
 
         // Handle session completion
         if (event.type === "session.completed") {
@@ -202,6 +204,9 @@ export function registerThreadRoutes(
       // Send initial message if provided
       const message = typeof body["message"] === "string" ? body["message"] : undefined;
       if (message) {
+        // Log the user's prompt as an activity so it shows in the thread
+        const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user" });
+        broadcastThreadEvent(id, "activity", { activity: userActivity });
         await provider.sendTurn(session.id, message);
       }
 
@@ -234,7 +239,8 @@ export function registerThreadRoutes(
 
     await provider.sendTurn(thread.providerSessionId, message, attachments);
 
-    threadService.addActivity(id, "message", message.slice(0, 500), { role: "user" });
+    const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user" });
+    broadcastThreadEvent(id, "activity", { activity: userActivity });
     return reply.status(200).send({ ok: true });
   });
 
@@ -340,6 +346,29 @@ export function registerThreadRoutes(
         modes: p.info.modes,
       })),
     };
+  });
+
+  /** List models for a specific provider */
+  app.get("/api/providers/:id/models", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    const { id } = request.params as { id: string };
+    const provider = providerRegistry.get(id as ProviderId);
+    if (!provider) {
+      return reply.status(404).send({ error: `Unknown provider: ${id}` });
+    }
+
+    if (!provider.listModels) {
+      return { models: [] };
+    }
+
+    try {
+      const models = await provider.listModels();
+      return { models };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Failed to list models" });
+    }
   });
 
   app.log.info("Agent thread routes registered at /api/threads");

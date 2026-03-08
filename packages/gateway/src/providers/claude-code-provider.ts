@@ -20,6 +20,7 @@ import { uuidv7 } from "../lib/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
@@ -71,6 +72,19 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       this.info.unavailableReason = "Failed to check Claude Code CLI availability";
       return false;
     }
+  }
+
+  /**
+   * Claude Code doesn't expose a model listing API.
+   * Return known model aliases — the CLI accepts both aliases and full names.
+   */
+  async listModels(): Promise<ProviderModelInfo[]> {
+    return [
+      { id: "sonnet", name: "Sonnet", description: "Claude Sonnet — fast & capable (alias)", isDefault: true },
+      { id: "opus", name: "Opus", description: "Claude Opus — most capable (alias)" },
+      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Claude Sonnet 4 (full name)" },
+      { id: "claude-opus-4-20250514", name: "Claude Opus 4", description: "Claude Opus 4 (full name)" },
+    ];
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {

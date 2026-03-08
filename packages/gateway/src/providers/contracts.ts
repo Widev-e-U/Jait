@@ -67,6 +67,17 @@ export type ProviderEvent =
 
 // ── Provider interface ───────────────────────────────────────────────
 
+export interface ProviderModelInfo {
+  /** Model identifier / slug */
+  id: string;
+  /** Human-readable model name */
+  name: string;
+  /** Optional description */
+  description?: string;
+  /** Whether this is the provider's current/default model */
+  isDefault?: boolean;
+}
+
 export interface CliProviderAdapter {
   readonly id: ProviderId;
   readonly info: ProviderInfo;
@@ -76,6 +87,12 @@ export interface CliProviderAdapter {
    * Updates `info.available` and returns the result.
    */
   checkAvailability(): Promise<boolean>;
+
+  /**
+   * List models available for this provider.
+   * Returns an empty array if listing is not supported.
+   */
+  listModels?(): Promise<ProviderModelInfo[]>;
 
   /**
    * Start a provider session for a given thread.

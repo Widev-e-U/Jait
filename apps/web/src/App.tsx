@@ -52,8 +52,8 @@ import { ContextIndicator } from '@/components/chat/context-indicator'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
-import { ActivityItem } from '@/components/automation/ActivityItem'
 import { ThreadActions } from '@/components/automation/ThreadActions'
+import { activitiesToMessages } from '@/lib/activity-to-messages'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
@@ -128,6 +128,9 @@ function App() {
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
   const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(
     () => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || settings?.chat_provider || 'jait'
+  )
+  const [cliModel, setCliModel] = useState<string | null>(
+    () => localStorage.getItem('cliModel') || null
   )
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('viewMode') as ViewMode) || 'developer')
   const [loginUsername, setLoginUsername] = useState('')
@@ -236,6 +239,12 @@ function App() {
 
   // ── Automation / Manager mode state ───────────────────────────────
   const automation = useAutomation(viewMode === 'manager')
+
+  // Convert thread activities → ChatMessage[] for Message rendering
+  const automationMessages = useMemo(
+    () => activitiesToMessages(automation.activities),
+    [automation.activities],
+  )
 
   // ── UI command channel (server ↔ frontend via WebSocket) ──────────
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
@@ -461,6 +470,11 @@ function App() {
   useEffect(() => {
     localStorage.setItem('chatMode', chatMode)
   }, [chatMode])
+
+  useEffect(() => {
+    if (cliModel) localStorage.setItem('cliModel', cliModel)
+    else localStorage.removeItem('cliModel')
+  }, [cliModel])
 
   // Track whether the initial server sync has happened so we don't PATCH on mount
   const chatProviderInitialized = useRef(false)
@@ -957,6 +971,7 @@ ${file.content.slice(0, 2000)}
       sessionId: sid,
       mode: chatMode,
       provider: chatProvider,
+      model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
       ...(refs ? { displayContent, referencedFiles: refs } : {}),
     })
@@ -967,7 +982,7 @@ ${file.content.slice(0, 2000)}
   const handleManagerSubmit = async () => {
     const text = inputValue.trim()
     if (!text) return
-    await automation.handleSend(text, chatProvider)
+    await automation.handleSend(text, chatProvider, chatProvider !== 'jait' ? cliModel : undefined)
     setInputValue('')
   }
 
@@ -982,7 +997,7 @@ ${file.content.slice(0, 2000)}
       sid = session?.id ?? null
     }
     if (!sid) return
-    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const handleEditPreviousMessage = useCallback(async (
@@ -997,9 +1012,10 @@ ${file.content.slice(0, 2000)}
       sessionId: activeSessionId,
       mode: chatMode,
       provider: chatProvider,
+      model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider])
+  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, cliModel])
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -1207,11 +1223,11 @@ ${file.content.slice(0, 2000)}
               const displayProvider = chatProvider === 'codex' ? 'openai'
                 : chatProvider === 'claude-code' ? 'anthropic'
                 : provider ?? 'ollama'
-              const displayModel = chatProvider === 'codex' ? 'Codex'
-                : chatProvider === 'claude-code' ? 'Claude Code'
+              const displayModel = chatProvider === 'codex' ? (cliModel ?? 'Codex')
+                : chatProvider === 'claude-code' ? (cliModel ?? 'Claude Code')
                 : model ? getModelDisplayName(model) : null
-              const tooltipText = chatProvider === 'codex' ? 'OpenAI Codex CLI'
-                : chatProvider === 'claude-code' ? 'Anthropic Claude Code CLI'
+              const tooltipText = chatProvider === 'codex' ? `OpenAI Codex CLI${cliModel ? ` · ${cliModel}` : ''}`
+                : chatProvider === 'claude-code' ? `Anthropic Claude Code CLI${cliModel ? ` · ${cliModel}` : ''}`
                 : model ?? ''
               return displayModel ? (
                 <Tooltip>
@@ -1425,7 +1441,7 @@ ${file.content.slice(0, 2000)}
                     {automation.showGitActions && automation.selectedRepo && (
                       <div className="ml-2 shrink-0">
                         <ThreadActions
-                          cwd={automation.selectedRepo.localPath}
+                          cwd={automation.selectedThread.workingDirectory ?? automation.selectedRepo.localPath}
                           branch={automation.selectedThread.branch}
                           baseBranch={automation.selectedRepo.defaultBranch}
                           threadTitle={automation.selectedThread.title}
@@ -1703,15 +1719,24 @@ ${file.content.slice(0, 2000)}
                   </div>
                 ) : automation.selectedThread ? (
                   <>
-                    <Conversation className="min-h-0 flex-1 border-b">
-                      <div className="space-y-2">
-                        {automation.activities.length === 0 && (
-                          <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
-                        )}
-                        {automation.activities.map(a => (
-                          <ActivityItem key={a.id} activity={a} />
-                        ))}
-                      </div>
+                    <Conversation className="min-h-0 flex-1 border-b" compact>
+                      {automationMessages.length === 0 && (
+                        <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
+                      )}
+                      {automationMessages.map((msg, idx) => (
+                        <Message
+                          key={msg.id}
+                          messageId={msg.id}
+                          messageIndex={idx}
+                          messageFromEnd={automationMessages.length - 1 - idx}
+                          role={msg.role}
+                          content={msg.content}
+                          toolCalls={msg.toolCalls}
+                          segments={msg.segments}
+                          isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
+                          compact
+                        />
+                      ))}
                     </Conversation>
                     <div className="shrink-0 py-3 px-4">
                       <div className="mx-auto max-w-3xl">
@@ -1734,6 +1759,8 @@ ${file.content.slice(0, 2000)}
                           onViewModeChange={setViewMode}
                           provider={chatProvider}
                           onProviderChange={setChatProvider}
+                          cliModel={cliModel}
+                          onCliModelChange={setCliModel}
                         />
                         {automation.selectedThread && automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
                           <div className="flex items-center gap-2 px-1 mt-1.5">
@@ -1772,6 +1799,8 @@ ${file.content.slice(0, 2000)}
                         onViewModeChange={setViewMode}
                         provider={chatProvider}
                         onProviderChange={setChatProvider}
+                        cliModel={cliModel}
+                        onCliModelChange={setCliModel}
                       />
                     </div>
                   </div>
@@ -1799,6 +1828,8 @@ ${file.content.slice(0, 2000)}
                     onModeChange={setChatMode}
                     provider={chatProvider}
                     onProviderChange={setChatProvider}
+                    cliModel={cliModel}
+                    onCliModelChange={setCliModel}
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
                     availableFiles={availableFilesForMention}
@@ -1940,6 +1971,8 @@ ${file.content.slice(0, 2000)}
                       onModeChange={setChatMode}
                       provider={chatProvider}
                       onProviderChange={setChatProvider}
+                      cliModel={cliModel}
+                      onCliModelChange={setCliModel}
                       viewMode={viewMode}
                       onViewModeChange={setViewMode}
                       availableFiles={availableFilesForMention}

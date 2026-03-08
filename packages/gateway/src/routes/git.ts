@@ -71,6 +71,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
     const action = typeof body["action"] === "string" ? body["action"] : "";
     const commitMessage = typeof body["commitMessage"] === "string" ? body["commitMessage"] : undefined;
     const featureBranch = body["featureBranch"] === true;
+    const baseBranch = typeof body["baseBranch"] === "string" ? body["baseBranch"] : undefined;
 
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     if (!["commit", "commit_push", "commit_push_pr"].includes(action)) {
@@ -83,6 +84,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
         action as "commit" | "commit_push" | "commit_push_pr",
         commitMessage,
         featureBranch,
+        baseBranch,
       );
       return result;
     } catch (err) {
@@ -165,6 +167,38 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
       return { ok: true };
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Git init failed" });
+    }
+  });
+
+  /** Create a worktree for branch isolation */
+  app.post("/api/git/create-worktree", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; baseBranch?: string; newBranch?: string; path?: string };
+    if (!body.cwd || !body.baseBranch || !body.newBranch) {
+      return reply.status(400).send({ error: "Missing cwd, baseBranch, or newBranch" });
+    }
+    try {
+      const result = await git.createWorktree(body.cwd, body.baseBranch, body.newBranch, body.path || undefined);
+      return result;
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Worktree creation failed" });
+    }
+  });
+
+  /** Remove a worktree */
+  app.post("/api/git/remove-worktree", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; path?: string; force?: boolean };
+    if (!body.cwd || !body.path) {
+      return reply.status(400).send({ error: "Missing cwd or path" });
+    }
+    try {
+      await git.removeWorktree(body.cwd, body.path, body.force ?? false);
+      return { ok: true };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Worktree removal failed" });
     }
   });
 

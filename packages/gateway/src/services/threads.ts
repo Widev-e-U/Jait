@@ -234,50 +234,49 @@ export class ThreadService {
 
   // ── Provider event → activity log mapping ───────────────────────
 
-  logProviderEvent(threadId: string, event: ProviderEvent): void {
+  logProviderEvent(threadId: string, event: ProviderEvent): ThreadActivity | undefined {
     switch (event.type) {
       case "token":
         // Don't log individual tokens — too noisy
-        break;
+        return undefined;
       case "tool.start":
-        this.addActivity(threadId, "tool.start", `Using ${event.tool}`, {
+        return this.addActivity(threadId, "tool.start", `Using ${event.tool}`, {
           tool: event.tool,
           args: event.args,
+          callId: event.callId,
         });
-        break;
       case "tool.result":
-        this.addActivity(
+        return this.addActivity(
           threadId,
           event.ok ? "tool.result" : "tool.error",
           `${event.tool}: ${event.message}`,
-          { tool: event.tool, ok: event.ok, message: event.message },
+          { tool: event.tool, ok: event.ok, message: event.message, callId: event.callId },
         );
-        break;
+      case "tool.output":
+        // Don't persist per-delta output — too noisy (like tokens).
+        // The frontend can reconstruct final output from tool.result.
+        return undefined;
       case "tool.approval-required":
-        this.addActivity(
+        return this.addActivity(
           threadId,
           "tool.approval",
           `Approval required: ${event.tool}`,
           { tool: event.tool, args: event.args, requestId: event.requestId },
         );
-        break;
       case "message":
-        this.addActivity(threadId, "message", event.content.slice(0, 500), {
+        return this.addActivity(threadId, "message", event.content.slice(0, 500), {
           role: event.role,
         });
-        break;
       case "session.started":
-        this.addActivity(threadId, "session", "Session started");
-        break;
+        return this.addActivity(threadId, "session", "Session started");
       case "session.completed":
-        this.addActivity(threadId, "session", "Session completed");
-        break;
+        return this.addActivity(threadId, "session", "Session completed");
       case "session.error":
-        this.addActivity(threadId, "error", event.error);
-        break;
+        return this.addActivity(threadId, "error", event.error);
       case "activity":
-        this.addActivity(threadId, event.kind, event.summary, event.payload);
-        break;
+        return this.addActivity(threadId, event.kind, event.summary, event.payload);
+      default:
+        return undefined;
     }
   }
 }

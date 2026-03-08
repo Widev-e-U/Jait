@@ -81,6 +81,11 @@ export interface GitPullResult {
   upstreamBranch: string | null
 }
 
+export interface GitWorktreeResult {
+  path: string
+  branch: string
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function getToken(): string | null {
@@ -126,13 +131,14 @@ export const gitApi = {
   runStackedAction(
     cwd: string,
     action: GitStackedAction,
-    opts?: { commitMessage?: string; featureBranch?: boolean },
+    opts?: { commitMessage?: string; featureBranch?: boolean; baseBranch?: string },
   ): Promise<GitStepResult> {
     return gitPost<GitStepResult>('run-stacked-action', {
       cwd,
       action,
       ...(opts?.commitMessage ? { commitMessage: opts.commitMessage } : {}),
       ...(opts?.featureBranch ? { featureBranch: true } : {}),
+      ...(opts?.baseBranch ? { baseBranch: opts.baseBranch } : {}),
     })
   },
 
@@ -158,6 +164,19 @@ export const gitApi = {
 
   fileDiffs(cwd: string, baseBranch?: string): Promise<FileDiffEntry[]> {
     return gitPost<{ files: FileDiffEntry[] }>('file-diffs', { cwd, ...(baseBranch ? { baseBranch } : {}) }).then(r => r.files)
+  },
+
+  createWorktree(
+    cwd: string,
+    baseBranch: string,
+    newBranch: string,
+    path?: string,
+  ): Promise<GitWorktreeResult> {
+    return gitPost<GitWorktreeResult>('create-worktree', { cwd, baseBranch, newBranch, ...(path ? { path } : {}) })
+  },
+
+  removeWorktree(cwd: string, path: string, force = false): Promise<void> {
+    return gitPost<void>('remove-worktree', { cwd, path, force })
   },
 }
 

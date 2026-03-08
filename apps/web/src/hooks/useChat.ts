@@ -89,6 +89,8 @@ interface SendMessageOptions {
   mode?: ChatMode
   /** CLI provider to use for this message (jait, codex, claude-code) */
   provider?: string
+  /** Model override for CLI providers */
+  model?: string | null
   /** Clean display text for user message (without file contents appended) */
   displayContent?: string
   /** File references to attach as metadata on the user message */
@@ -548,7 +550,7 @@ export function useChat(
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
 
-      const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}), ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}) }
+      const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}), ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}), ...(options.model ? { model: options.model } : {}) }
       pushSSEDebugEvent('request', JSON.stringify(requestBody))
 
       const response = await fetch(`${API_URL}/api/chat`, {

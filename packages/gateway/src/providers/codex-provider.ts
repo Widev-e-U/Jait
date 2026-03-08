@@ -20,6 +20,7 @@ import { uuidv7 } from "../lib/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
@@ -99,6 +100,103 @@ export class CodexProvider implements CliProviderAdapter {
       this.info.available = false;
       this.info.unavailableReason = "Failed to check Codex CLI availability";
       return false;
+    }
+  }
+
+  /**
+   * List available models by spawning a short-lived `codex app-server`,
+   * performing the initialize handshake, then calling `model/list`.
+   */
+  async listModels(): Promise<ProviderModelInfo[]> {
+    const cmd = this.codexPath ?? "codex";
+    const child = spawn(cmd, ["app-server"], {
+      cwd: process.cwd(),
+      env: process.env as Record<string, string>,
+      stdio: ["pipe", "pipe", "pipe"],
+      shell: true,
+    });
+
+    const rl = readline.createInterface({ input: child.stdout! });
+    const pending = new Map<string, PendingRequest>();
+    let nextId = 1;
+
+    const writeMsg = (msg: unknown) => {
+      if (child.stdin?.writable) child.stdin.write(JSON.stringify(msg) + "\n");
+    };
+
+    const sendReq = (method: string, params: unknown, timeoutMs = 15_000): Promise<unknown> => {
+      const id = nextId++;
+      return new Promise((resolve, reject) => {
+        const timeout = setTimeout(() => {
+          pending.delete(String(id));
+          reject(new Error(`Timed out waiting for ${method}`));
+        }, timeoutMs);
+        pending.set(String(id), { method, timeout, resolve, reject });
+        writeMsg({ method, id, params });
+      });
+    };
+
+    // Listen for JSON-RPC responses
+    rl.on("line", (line) => {
+      try {
+        const msg = JSON.parse(line);
+        if (msg.id != null) {
+          const p = pending.get(String(msg.id));
+          if (p) {
+            pending.delete(String(msg.id));
+            clearTimeout(p.timeout);
+            if (msg.error) {
+              p.reject(new Error(msg.error.message ?? "RPC error"));
+            } else {
+              p.resolve(msg.result);
+            }
+          }
+        }
+      } catch { /* ignore non-JSON lines */ }
+    });
+
+    try {
+      // Handshake
+      await sendReq("initialize", {
+        clientInfo: { name: "jait", title: "Jait Gateway", version: "1.0.0" },
+        capabilities: { experimentalApi: true },
+      });
+      writeMsg({ method: "initialized" });
+
+      // Fetch model list — response shape: { data: [{id, model, displayName, description, isDefault, ...}], nextCursor }
+      const result = await sendReq("model/list", {}) as {
+        data?: Array<{ id?: string; model?: string; displayName?: string; description?: string; isDefault?: boolean }>;
+        models?: Array<{ id?: string; name?: string; description?: string }>;
+      } | undefined;
+
+      const models: ProviderModelInfo[] = [];
+      const items = (result as Record<string, unknown>)?.data ?? (result as Record<string, unknown>)?.models;
+      if (Array.isArray(items)) {
+        for (const m of items as Array<Record<string, unknown>>) {
+          const id = String(m.id ?? m.model ?? m.name ?? "");
+          const name = String(m.displayName ?? m.name ?? m.id ?? "");
+          if (!id) continue;
+          models.push({
+            id,
+            name,
+            ...(m.description ? { description: String(m.description) } : {}),
+            ...(m.isDefault ? { isDefault: true } : {}),
+          });
+        }
+      }
+      return models;
+    } catch (err) {
+      console.error("[codex] model/list failed:", err);
+      return [];
+    } finally {
+      // Clean up
+      for (const p of pending.values()) {
+        clearTimeout(p.timeout);
+        p.reject(new Error("Session closed"));
+      }
+      pending.clear();
+      rl.close();
+      child.kill("SIGTERM");
     }
   }
 
@@ -395,16 +493,10 @@ export class CodexProvider implements CliProviderAdapter {
 
       // ── Reasoning / chain-of-thought tokens ──
       case "item/reasoning/textDelta":
-      case "item/reasoning/summaryTextDelta": {
-        const delta =
-          typeof params.delta === "string" ? params.delta
-          : typeof params.text === "string" ? params.text
-          : "";
-        if (delta) {
-          this.emit({ type: "activity", kind: "reasoning", summary: delta });
-        }
+      case "item/reasoning/summaryTextDelta":
+        // Handled in the noisy-events skip block below; these tokens
+        // are too granular to persist as individual activities.
         break;
-      }
 
       // ── Tool/command output deltas ──
       case "item/commandExecution/outputDelta":
@@ -415,7 +507,8 @@ export class CodexProvider implements CliProviderAdapter {
           if (itemId) {
             this.emit({ type: "tool.output", callId: itemId, content: delta });
           }
-          this.emit({ type: "activity", kind: notification.method, summary: delta });
+          // Don't emit a redundant generic activity — the tool.output event
+          // is already logged by logProviderEvent.
         }
         break;
       }
@@ -542,15 +635,45 @@ export class CodexProvider implements CliProviderAdapter {
         break;
       }
 
+      // ── Agent / user complete messages → emit as proper message events ──
+      case "codex/event/agent_message": {
+        const text =
+          typeof params.content === "string" ? params.content
+          : typeof params.text === "string" ? params.text
+          : typeof params.message === "string" ? params.message
+          : typeof params.delta === "string" ? params.delta
+          : "";
+        if (text) {
+          this.emit({ type: "message", role: "assistant", content: text });
+        }
+        break;
+      }
+      case "codex/event/user_message": {
+        const text =
+          typeof params.content === "string" ? params.content
+          : typeof params.text === "string" ? params.text
+          : typeof params.message === "string" ? params.message
+          : "";
+        if (text) {
+          this.emit({ type: "message", role: "user", content: text });
+        }
+        break;
+      }
+
+      // ── Noisy / redundant events — skip logging to DB ──
+      case "item/plan/delta":
+      case "turn/plan/updated":
+      case "turn/diff/updated":
+      case "thread/tokenUsage/updated":
+      case "codex/event/token_count":
+      case "codex/event/agent_message_delta":
+        // Already handled as token events or too noisy to persist
+        break;
+
       // ── Known lifecycle / status notifications → emit as activity ──
       case "thread/started":
       case "thread/status/changed":
       case "thread/name/updated":
-      case "thread/tokenUsage/updated":
-      case "item/reasoning/textDelta":
-      case "item/plan/delta":
-      case "turn/plan/updated":
-      case "turn/diff/updated":
       case "model/rerouted":
       case "configWarning":
       case "deprecationNotice":
@@ -560,11 +683,7 @@ export class CodexProvider implements CliProviderAdapter {
       case "codex/event/skills_update_available":
       case "codex/event/task_started":
       case "codex/event/task_complete":
-      case "codex/event/agent_reasoning":
-      case "codex/event/agent_message_delta":
-      case "codex/event/agent_message":
-      case "codex/event/user_message":
-      case "codex/event/token_count": {
+      case "codex/event/agent_reasoning": {
         this.emit({
           type: "activity",
           kind: notification.method,

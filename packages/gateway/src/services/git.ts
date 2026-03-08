@@ -7,8 +7,9 @@
  */
 
 import { exec as execCb } from "node:child_process";
-import { readFile } from "node:fs/promises";
-import { join } from "node:path";
+import { readFile, mkdir } from "node:fs/promises";
+import { basename, join } from "node:path";
+import { homedir } from "node:os";
 import { promisify } from "node:util";
 
 const exec = promisify(execCb);
@@ -87,6 +88,11 @@ export interface GitPullResult {
   status: "pulled" | "skipped_up_to_date";
   branch: string;
   upstreamBranch: string | null;
+}
+
+export interface GitWorktreeResult {
+  path: string;
+  branch: string;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────
@@ -290,6 +296,7 @@ export class GitService {
     action: GitStackedAction,
     commitMessage?: string,
     featureBranch?: boolean,
+    baseBranch?: string,
   ): Promise<GitStepResult> {
     const result: GitStepResult = {
       commit: { status: "skipped_no_changes" },
@@ -395,9 +402,10 @@ export class GitService {
 
           // Create new PR
           const prTitle = result.commit.subject ?? `Changes from ${currentBranch}`;
+          const baseFlag = baseBranch ? ` --base "${baseBranch}"` : '';
           const prJson = await ghExec(
             cwd,
-            `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body "Automated PR from Jait automation." --json number,url,title,baseRefName,headRefName`,
+            `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body "Automated PR from Jait automation."${baseFlag} --json number,url,title,baseRefName,headRefName`,
           );
           const parsed = JSON.parse(prJson) as Record<string, unknown>;
           result.pr = {
@@ -424,6 +432,65 @@ export class GitService {
 
   async createBranch(cwd: string, branch: string): Promise<void> {
     await gitExec(cwd, `checkout -b "${branch}"`);
+  }
+
+  // ── Worktree operations ───────────────────────────────────────
+
+  /**
+   * Create a git worktree for a new branch.
+   * Worktrees live under ~/.jait/worktrees/{repoName}/{sanitizedBranch}.
+   * Uses `git worktree add -b <newBranch> <path> <baseBranch>`.
+   */
+  async createWorktree(
+    cwd: string,
+    baseBranch: string,
+    newBranch: string,
+    customPath?: string,
+  ): Promise<GitWorktreeResult> {
+    const sanitized = newBranch.replace(/\//g, "-");
+    const repoName = basename(cwd);
+    const worktreePath =
+      customPath ??
+      join(homedir(), ".jait", "worktrees", repoName, sanitized);
+
+    // Ensure parent directory exists
+    await mkdir(join(worktreePath, ".."), { recursive: true });
+
+    await gitExec(
+      cwd,
+      `worktree add -b "${newBranch}" "${worktreePath}" "${baseBranch}"`,
+      60_000,
+    );
+
+    return { path: worktreePath, branch: newBranch };
+  }
+
+  /** Remove a git worktree. */
+  async removeWorktree(
+    cwd: string,
+    worktreePath: string,
+    force = false,
+  ): Promise<void> {
+    const forceFlag = force ? " --force" : "";
+    await gitExec(cwd, `worktree remove "${worktreePath}"${forceFlag}`, 30_000);
+  }
+
+  /** Get the top-level git directory (the main repo root, even from a worktree). */
+  async getMainRepoRoot(cwd: string): Promise<string> {
+    // In a worktree, --git-common-dir points to the main repo's .git
+    // and --show-toplevel gives the worktree root. We need the main root.
+    try {
+      const commonDir = await gitExec(cwd, "rev-parse --git-common-dir");
+      // commonDir is like /path/to/main-repo/.git
+      // We want /path/to/main-repo
+      if (commonDir.endsWith("/.git") || commonDir.endsWith("\\.git")) {
+        return commonDir.slice(0, -5);
+      }
+      // Fallback: it's a regular repo
+      return gitExec(cwd, "rev-parse --show-toplevel");
+    } catch {
+      return gitExec(cwd, "rev-parse --show-toplevel");
+    }
   }
 
   /** Check whether a named remote (e.g. "origin") exists. */

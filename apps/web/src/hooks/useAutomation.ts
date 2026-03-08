@@ -187,10 +187,14 @@ export function useAutomation(enabled = true) {
         break
       }
       case 'thread.activity': {
-        // Re-fetch activities if this event is for the currently selected thread
+        // Append the inline activity directly — no HTTP re-fetch needed
         const threadId = payload.threadId as string | undefined
-        if (threadId && threadId === selectedThreadIdRef.current) {
-          void agentsApi.getActivities(threadId).then(acts => setActivities(sortActivities(acts))).catch(() => {})
+        const activity = payload.activity as ThreadActivity | undefined
+        if (threadId && activity && threadId === selectedThreadIdRef.current) {
+          setActivities(prev => {
+            if (prev.some(a => a.id === activity.id)) return prev
+            return [...prev, activity]
+          })
         }
         break
       }
@@ -233,7 +237,9 @@ export function useAutomation(enabled = true) {
         ? threads.filter(
             (t) =>
               t.workingDirectory === selectedRepo.localPath ||
-              t.title.startsWith(`[${selectedRepo.name}]`),
+              t.title.startsWith(`[${selectedRepo.name}]`) ||
+              // Worktree threads have paths like ~/.jait/worktrees/<repoName>/...
+              (t.workingDirectory && t.workingDirectory.includes(`/worktrees/${selectedRepo.name}/`)),
           )
         : [],
     [threads, selectedRepo],
@@ -280,27 +286,48 @@ export function useAutomation(enabled = true) {
   // ── Thread lifecycle ───────────────────────────────────────────
 
   const handleSend = useCallback(
-    async (text: string, providerId: ProviderId = 'jait') => {
+    async (text: string, providerId: ProviderId = 'jait', model?: string | null) => {
       if (!text.trim() || !selectedRepo) return
 
       setCreating(true)
       try {
         if (selectedThread && selectedThread.status === 'running') {
+          // Follow-up turn while the agent is still working
           await agentsApi.sendTurn(selectedThread.id, text)
         } else if (selectedThread && selectedThread.status === 'idle') {
           await agentsApi.startThread(selectedThread.id, text)
+        } else if (
+          selectedThread &&
+          (selectedThread.status === 'completed' ||
+            selectedThread.status === 'error' ||
+            selectedThread.status === 'interrupted')
+        ) {
+          // Re-start the existing thread (worktree is still available)
+          await agentsApi.startThread(selectedThread.id, text)
         } else {
+          // No thread selected — create a new one with a fresh worktree
           const branchName = generateBranchName()
+          let worktreePath: string | undefined
           try {
-            await gitApi.createBranch(selectedRepo.localPath, branchName, selectedRepo.defaultBranch)
+            const wt = await gitApi.createWorktree(
+              selectedRepo.localPath,
+              selectedRepo.defaultBranch,
+              branchName,
+            )
+            worktreePath = wt.path
           } catch {
-            // If branch creation fails, continue without it
+            // Worktree creation failed — fall back to branch in-place
+            try {
+              await gitApi.createBranch(selectedRepo.localPath, branchName, selectedRepo.defaultBranch)
+            } catch { /* ignore */ }
           }
 
           const thread = await agentsApi.createThread({
             title: `[${selectedRepo.name}] ${text.slice(0, 60)}`,
             providerId,
-            workingDirectory: selectedRepo.localPath,
+            ...(model ? { model } : {}),
+            // The agent runs inside the worktree, not the main repo
+            workingDirectory: worktreePath ?? selectedRepo.localPath,
             branch: branchName,
           })
           setSelectedThreadId(thread.id)
