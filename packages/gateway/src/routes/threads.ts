@@ -66,6 +66,10 @@ export function registerThreadRoutes(
     });
   }
 
+  function isThreadSessionEvent(event: ProviderEvent, sessionId: string): boolean {
+    return event.sessionId === sessionId;
+  }
+
   // ── CRUD Routes ──────────────────────────────────────────────────
 
   /** List threads (optionally filtered by sessionId) */
@@ -259,6 +263,10 @@ export function registerThreadRoutes(
 
       // Subscribe to provider events and log them
       const unsubscribe = provider.onEvent((event: ProviderEvent) => {
+        if (!isThreadSessionEvent(event, session.id)) {
+          return;
+        }
+
         const activity = threadService.logProviderEvent(id, event);
         if (activity) {
           broadcastThreadEvent(id, "activity", { event, activity });
@@ -328,6 +336,9 @@ export function registerThreadRoutes(
     // Persist user message BEFORE sendTurn so it survives provider errors
     const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
     broadcastThreadEvent(id, "activity", { activity: userActivity });
+
+    threadService.update(id, { status: "running", error: null });
+    broadcastThreadEvent(id, "status", { status: "running" });
 
     await provider.sendTurn(thread.providerSessionId, message, attachments);
     return reply.status(200).send({ ok: true });
@@ -403,7 +414,12 @@ export function registerThreadRoutes(
     if (!authUser) return;
     const { id } = request.params as { id: string };
     const query = request.query as Record<string, string>;
-    const limit = Math.min(parseInt(query["limit"] || "100", 10), 500);
+    const rawLimit = query["limit"];
+    const parsedLimit = rawLimit == null ? undefined : parseInt(rawLimit, 10);
+    const limit =
+      parsedLimit == null || Number.isNaN(parsedLimit)
+        ? undefined
+        : Math.min(Math.max(parsedLimit, 1), 2000);
 
     const thread = threadService.getById(id);
     if (!thread) return reply.status(404).send({ error: "Thread not found" });

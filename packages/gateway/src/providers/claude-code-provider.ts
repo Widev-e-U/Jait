@@ -270,7 +270,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     }
   }
 
-  private handleEvent(_sessionId: string, event: Record<string, unknown>): void {
+  private handleEvent(sessionId: string, event: Record<string, unknown>): void {
     const type = event["type"] as string;
 
     switch (type) {
@@ -278,11 +278,11 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
         const message = event["message"] as Record<string, unknown> | undefined;
         const content = message?.["content"];
         if (typeof content === "string") {
-          this.emit({ type: "token", content });
+          this.emit({ type: "token", sessionId, content });
         } else if (Array.isArray(content)) {
           for (const block of content) {
             if ((block as Record<string, unknown>)?.["type"] === "text") {
-              this.emit({ type: "token", content: String((block as Record<string, unknown>)["text"] ?? "") });
+              this.emit({ type: "token", sessionId, content: String((block as Record<string, unknown>)["text"] ?? "") });
             }
           }
         }
@@ -292,7 +292,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       case "content_block_delta": {
         const delta = event["delta"] as Record<string, unknown> | undefined;
         if (delta?.["type"] === "text_delta") {
-          this.emit({ type: "token", content: String(delta["text"] ?? "") });
+          this.emit({ type: "token", sessionId, content: String(delta["text"] ?? "") });
         }
         break;
       }
@@ -300,6 +300,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       case "tool_use": {
         this.emit({
           type: "tool.start",
+          sessionId,
           tool: String(event["name"] ?? event["tool"] ?? ""),
           args: event["input"] ?? {},
         });
@@ -309,6 +310,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       case "tool_result": {
         this.emit({
           type: "tool.result",
+          sessionId,
           tool: String(event["tool"] ?? ""),
           ok: event["is_error"] !== true,
           message: String(event["content"] ?? event["output"] ?? ""),
@@ -319,7 +321,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       case "result": {
         const resultContent = event["result"] as string | undefined;
         if (resultContent) {
-          this.emit({ type: "message", role: "assistant", content: resultContent });
+          this.emit({ type: "message", sessionId, role: "assistant", content: resultContent });
         }
         break;
       }
@@ -327,6 +329,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       default:
         this.emit({
           type: "activity",
+          sessionId,
           kind: type ?? "unknown",
           summary: `Claude Code: ${type}`,
           payload: event,

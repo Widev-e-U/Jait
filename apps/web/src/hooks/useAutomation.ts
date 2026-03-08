@@ -78,6 +78,18 @@ function sortActivities(activities: ThreadActivity[]): ThreadActivity[] {
   return [...activities].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime())
 }
 
+function mergeActivities(
+  current: ThreadActivity[],
+  incoming: ThreadActivity[],
+): ThreadActivity[] {
+  if (incoming.length === 0) return current
+  const byId = new Map(current.map((activity) => [activity.id, activity]))
+  for (const activity of incoming) {
+    byId.set(activity.id, activity)
+  }
+  return sortActivities([...byId.values()])
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function useAutomation(enabled = true) {
@@ -99,6 +111,7 @@ export function useAutomation(enabled = true) {
   // Send state
   const [creating, setCreating] = useState(false)
   const activityEndRef = useRef<HTMLDivElement | null>(null)
+  const activityCacheRef = useRef(new Map<string, ThreadActivity[]>())
 
   const sharedRepositories = useMemo(
     () => inferSharedRepositories(threads, localRepositories),
@@ -152,6 +165,7 @@ export function useAutomation(enabled = true) {
 
   const refresh = useCallback(async () => {
     if (!localStorage.getItem('token')) return // skip when not authenticated
+    setLoading(true)
     try {
       const [ts, ps] = await Promise.all([agentsApi.listThreads(), agentsApi.listProviders()])
       setThreads(ts)
@@ -196,6 +210,7 @@ export function useAutomation(enabled = true) {
       case 'thread.deleted': {
         const threadId = payload.threadId as string | undefined
         if (threadId) {
+          activityCacheRef.current.delete(threadId)
           setThreads(prev => prev.filter(t => t.id !== threadId))
           if (selectedThreadIdRef.current === threadId) setSelectedThreadId(null)
         }
@@ -218,14 +233,17 @@ export function useAutomation(enabled = true) {
         break
       }
       case 'thread.activity': {
-        // Append the inline activity directly — no HTTP re-fetch needed
         const threadId = payload.threadId as string | undefined
         const activity = payload.activity as ThreadActivity | undefined
-        if (threadId && activity && threadId === selectedThreadIdRef.current) {
-          setActivities(prev => {
-            if (prev.some(a => a.id === activity.id)) return prev
-            return [...prev, activity]
-          })
+        if (threadId && activity) {
+          const nextActivities = mergeActivities(
+            activityCacheRef.current.get(threadId) ?? [],
+            [activity],
+          )
+          activityCacheRef.current.set(threadId, nextActivities)
+          if (threadId === selectedThreadIdRef.current) {
+            setActivities(nextActivities)
+          }
         }
         break
       }
@@ -238,12 +256,24 @@ export function useAutomation(enabled = true) {
       setActivities([])
       return
     }
+
+    const cached = activityCacheRef.current.get(selectedThreadId)
+    if (cached) {
+      setActivities(cached)
+      return
+    }
+
+    setActivities([])
     let cancelled = false
     const fetchActivities = async () => {
       if (!localStorage.getItem('token')) return
       try {
         const acts = await agentsApi.getActivities(selectedThreadId)
-        if (!cancelled) setActivities(sortActivities(acts))
+        if (!cancelled) {
+          const sorted = sortActivities(acts)
+          activityCacheRef.current.set(selectedThreadId, sorted)
+          setActivities(sorted)
+        }
       } catch {
         /* ignore */
       }
