@@ -21,6 +21,7 @@ import {
   type AutomationRepository,
 } from '@/lib/automation-repositories'
 import { gitApi, type GitStatusPr } from '@/lib/git-api'
+import { generateDeviceId } from '@/lib/device-id'
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -61,20 +62,23 @@ function mergeActivities(
 }
 
 /** Convert DB repo row to frontend AutomationRepository */
-function dbRepoToLocal(repo: AutomationRepo): RepositoryConnection {
+function dbRepoToLocal(repo: AutomationRepo, localDeviceId: string): RepositoryConnection {
   return {
     id: repo.id,
     name: repo.name,
     defaultBranch: repo.defaultBranch,
     localPath: repo.localPath,
-    githubToken: repo.githubToken,
-    source: 'local',
+    deviceId: repo.deviceId,
+    source: (!repo.deviceId || repo.deviceId === localDeviceId) ? 'local' : 'shared',
   }
 }
 
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function useAutomation(enabled = true) {
+  // Stable device ID for this client
+  const localDeviceId = useMemo(() => generateDeviceId(), [])
+
   // Repositories (DB-backed)
   const [localRepositories, setLocalRepositories] = useState<RepositoryConnection[]>([])
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null)
@@ -146,7 +150,7 @@ export function useAutomation(enabled = true) {
       ])
       setThreads(ts)
       setProviders(ps)
-      setLocalRepositories(repos.map(dbRepoToLocal))
+      setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
@@ -230,7 +234,7 @@ export function useAutomation(enabled = true) {
         if (repo) {
           setLocalRepositories(prev => {
             if (prev.some(r => r.id === repo.id)) return prev
-            return [dbRepoToLocal(repo), ...prev]
+            return [dbRepoToLocal(repo, localDeviceId), ...prev]
           })
         }
         break
@@ -239,7 +243,7 @@ export function useAutomation(enabled = true) {
         const repo = payload.repo as AutomationRepo | undefined
         if (repo) {
           setLocalRepositories(prev =>
-            prev.map(r => r.id === repo.id ? dbRepoToLocal(repo) : r),
+            prev.map(r => r.id === repo.id ? dbRepoToLocal(repo, localDeviceId) : r),
           )
         }
         break
@@ -335,7 +339,6 @@ export function useAutomation(enabled = true) {
           const status = await gitApi.status(
             statusCwd,
             thread.branch ?? undefined,
-            selectedRepo.githubToken ? { githubToken: selectedRepo.githubToken } : undefined,
           )
           const prState: ThreadPrState = status.pr?.state ?? null
 
@@ -400,9 +403,10 @@ export function useAutomation(enabled = true) {
           name: folderName(path),
           defaultBranch: branch,
           localPath: path,
+          deviceId: localDeviceId,
         })
         // Optimistically add; WS event will deduplicate
-        const repo = dbRepoToLocal(created)
+        const repo = dbRepoToLocal(created, localDeviceId)
         setLocalRepositories((prev) => {
           if (prev.some(r => r.id === repo.id)) return prev
           return [repo, ...prev]
@@ -414,21 +418,6 @@ export function useAutomation(enabled = true) {
       }
     },
     [localRepositories],
-  )
-
-  const updateRepositoryToken = useCallback(
-    async (id: string, githubToken: string | null) => {
-      try {
-        const updated = await agentsApi.updateRepo(id, { githubToken })
-        setLocalRepositories((prev) =>
-          prev.map((r) => (r.id === id ? dbRepoToLocal(updated) : r)),
-        )
-      } catch {
-        // Optimistic fallback
-        setLocalRepositories((prev) => prev.map((r) => (r.id === id ? { ...r, githubToken } : r)))
-      }
-    },
-    [],
   )
 
   const removeRepository = useCallback(
@@ -450,8 +439,8 @@ export function useAutomation(enabled = true) {
     async (text: string, providerId: ProviderId = 'jait', model?: string | null) => {
       if (!text.trim()) return
 
-      if (selectedThread && (selectedThread.status === 'running' || selectedThread.status === 'idle')) {
-        // Follow-up turn — session is still alive ("idle" = between turns)
+      if (selectedThread && (selectedThread.status === 'running' || selectedThread.providerSessionId)) {
+        // Follow-up turn — session is still alive
         await agentsApi.sendTurn(selectedThread.id, text)
         void refresh()
       } else if (
@@ -498,17 +487,17 @@ export function useAutomation(enabled = true) {
             }
 
             const thread = await agentsApi.createThread({
-              title: `[${repo.name}] ${text.slice(0, 60)}`,
+              title: `[${repo.name}] Generating title…`,
               providerId,
               ...(model ? { model } : {}),
               workingDirectory: worktreePath ?? repo.localPath,
               branch: branchName,
             })
-            await agentsApi.startThread(thread.id, text)
-            void agentsApi.generateThreadTitle(thread.id, {
-              task: text,
-              prefix: `[${repo.name}] `,
-            }).catch(() => {})
+            await agentsApi.startThread(thread.id, {
+              message: text,
+              titleTask: text,
+              titlePrefix: `[${repo.name}] `,
+            })
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to create thread')
           }
@@ -553,7 +542,6 @@ export function useAutomation(enabled = true) {
     setFolderPickerOpen,
     handleFolderSelected,
     removeRepository,
-    updateRepositoryToken,
 
     // Threads
     threads,

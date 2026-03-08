@@ -33,7 +33,7 @@ describe("chat route auth guards", () => {
     await app.close();
   });
 
-  it("allows authenticated cancel on idle session", async () => {
+  it("allows authenticated cancel on inactive session", async () => {
     const app = await createServer(testConfig);
     const headers = await authHeaders();
 
@@ -49,7 +49,7 @@ describe("chat route auth guards", () => {
     await app.close();
   });
 
-  it("allows authenticated stream resume and returns snapshot + done for idle session", async () => {
+  it("allows authenticated stream resume and returns snapshot + done for inactive session", async () => {
     const app = await createServer(testConfig);
     const headers = await authHeaders();
 

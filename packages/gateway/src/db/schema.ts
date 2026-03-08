@@ -173,7 +173,7 @@ export const agentThreads = sqliteTable(
     runtimeMode: text("runtime_mode").notNull().default("full-access"), // "full-access" | "supervised"
     workingDirectory: text("working_directory"),
     branch: text("branch"), // Git branch name
-    status: text("status").notNull().default("idle"), // idle | running | completed | error | interrupted
+    status: text("status").notNull().default("running"), // running | completed | error | interrupted
     providerSessionId: text("provider_session_id"), // Active provider session ID
     error: text("error"),
     prUrl: text("pr_url"),
@@ -214,10 +214,10 @@ export const automationRepositories = sqliteTable(
   {
     id: text("id").primaryKey(), // UUIDv7
     userId: text("user_id"),
+    deviceId: text("device_id"), // which client device registered this repo
     name: text("name").notNull(),
     defaultBranch: text("default_branch").notNull().default("main"),
     localPath: text("local_path").notNull(),
-    githubToken: text("github_token"), // optional PAT
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

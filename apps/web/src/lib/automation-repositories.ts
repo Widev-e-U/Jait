@@ -7,7 +7,7 @@ export interface AutomationRepository {
   name: string
   defaultBranch: string
   localPath: string
-  githubToken?: string | null
+  deviceId?: string | null
   source: AutomationRepositorySource
 }
 
@@ -87,7 +87,6 @@ export function inferSharedRepositories(
       name,
       defaultBranch: 'main',
       localPath: thread.workingDirectory ?? name,
-      githubToken: null,
       source: 'shared',
     })
     seen.add(key)

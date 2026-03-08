@@ -9,7 +9,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 // ── Types ────────────────────────────────────────────────────────────
 
 export type ProviderId = 'jait' | 'codex' | 'claude-code'
-export type ThreadStatus = 'idle' | 'running' | 'completed' | 'error' | 'interrupted'
+export type ThreadStatus = 'running' | 'completed' | 'error' | 'interrupted'
 export type RuntimeMode = 'full-access' | 'supervised'
 
 export interface AgentThread {
@@ -74,15 +74,15 @@ export interface UpdateThreadRequest {
   prState?: 'open' | 'closed' | 'merged' | null
 }
 
-export interface GenerateThreadTitleRequest {
-  task: string
-  prefix?: string
+export interface StartThreadOptions {
+  message?: string
+  titlePrefix?: string
+  titleTask?: string
 }
 
 export interface CreateThreadPrRequest {
   commitMessage?: string
   baseBranch?: string
-  githubToken?: string | null
 }
 
 export interface CreateThreadPrResponse {
@@ -95,10 +95,10 @@ export interface CreateThreadPrResponse {
 export interface AutomationRepo {
   id: string
   userId: string | null
+  deviceId: string | null
   name: string
   defaultBranch: string
   localPath: string
-  githubToken: string | null
   createdAt: string
   updatedAt: string
 }
@@ -107,14 +107,13 @@ export interface CreateRepoRequest {
   name: string
   defaultBranch?: string
   localPath: string
-  githubToken?: string | null
+  deviceId?: string
 }
 
 export interface UpdateRepoRequest {
   name?: string
   defaultBranch?: string
   localPath?: string
-  githubToken?: string | null
 }
 
 // ── API Client ───────────────────────────────────────────────────────
@@ -196,16 +195,6 @@ export class AgentsApi {
     return res.json() as Promise<AgentThread>
   }
 
-  async generateThreadTitle(id: string, params: GenerateThreadTitleRequest): Promise<AgentThread> {
-    const res = await fetch(`${API_URL}/api/threads/${id}/generate-title`, {
-      method: 'POST',
-      headers: this.getHeaders(true),
-      body: JSON.stringify(params),
-    })
-    if (!res.ok) throw new Error(`Failed to generate thread title: ${res.statusText}`)
-    return res.json() as Promise<AgentThread>
-  }
-
   async deleteThread(id: string): Promise<void> {
     const res = await fetch(`${API_URL}/api/threads/${id}`, {
       method: 'DELETE',
@@ -216,11 +205,15 @@ export class AgentsApi {
 
   // ── Lifecycle ──────────────────────────────────────────────────
 
-  async startThread(id: string, message?: string): Promise<AgentThread> {
+  async startThread(id: string, options?: string | StartThreadOptions): Promise<AgentThread> {
+    // Accept plain string (message) for backwards compat, or options object
+    const body = typeof options === 'string'
+      ? { message: options }
+      : options ?? {}
     const res = await fetch(`${API_URL}/api/threads/${id}/start`, {
       method: 'POST',
       headers: this.getHeaders(true),
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(body),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({})) as Record<string, unknown>

@@ -29,8 +29,9 @@ import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
 import { GitService, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
 import {
-  fallbackThreadTitle,
-  generateThreadTitle,
+  generateTitleViaTurn,
+  generateTitleViaApi,
+  normalizeGeneratedThreadTitle,
 } from "../services/thread-title.js";
 import type { WsEventType } from "@jait/shared";
 
@@ -154,58 +155,6 @@ export function registerThreadRoutes(
     return thread;
   });
 
-  /** Generate a provider-based title for an existing thread */
-  app.post("/api/threads/:id/generate-title", async (request, reply) => {
-    const authUser = await requireAuth(request, reply, config.jwtSecret);
-    if (!authUser) return;
-    const { id } = request.params as { id: string };
-    const body = (request.body as Record<string, unknown>) ?? {};
-    const task = typeof body["task"] === "string" ? body["task"].trim() : "";
-    const prefix = typeof body["prefix"] === "string" ? body["prefix"] : "";
-
-    if (!task) {
-      return reply.status(400).send({ error: "task is required" });
-    }
-
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
-
-    const fallbackTitle = `${prefix}${fallbackThreadTitle(task)}`.trim();
-
-    try {
-      const apiKeys = deps.userService?.getSettings(authUser.id).apiKeys ?? {};
-      const generatedTitle = await generateThreadTitle({
-        providerId: thread.providerId as ProviderId,
-        task,
-        model: thread.model ?? undefined,
-        workingDirectory: thread.workingDirectory ?? undefined,
-        config,
-        apiKeys,
-      });
-      const updated = threadService.update(id, {
-        title: `${prefix}${generatedTitle}`.trim(),
-      });
-      if (!updated) return reply.status(404).send({ error: "Thread not found" });
-      broadcastThreadEvent(id, "updated", { thread: updated });
-      return updated;
-    } catch (err) {
-      app.log.warn(
-        { err, threadId: id, providerId: thread.providerId },
-        "Failed to generate provider thread title",
-      );
-
-      if (thread.title.trim() !== fallbackTitle) {
-        const updated = threadService.update(id, { title: fallbackTitle });
-        if (updated) {
-          broadcastThreadEvent(id, "updated", { thread: updated });
-          return updated;
-        }
-      }
-
-      return thread;
-    }
-  });
-
   /** Delete thread */
   app.delete("/api/threads/:id", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
@@ -243,8 +192,8 @@ export function registerThreadRoutes(
     const body = (request.body as Record<string, unknown>) ?? {};
     const thread = threadService.getById(id);
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
-    if (thread.status === "running") {
-      return reply.status(409).send({ error: "Thread is already running" });
+    if (thread.providerSessionId) {
+      return reply.status(409).send({ error: "Thread already has an active session" });
     }
 
     const providerId = thread.providerId as ProviderId;
@@ -280,9 +229,19 @@ export function registerThreadRoutes(
         threadUnsubs.delete(id);
       }
 
+      // Flag to suppress turn.completed during the title-generation turn.
+      // The title turn fires turn.completed before the real coding turn starts;
+      // without this guard the thread would flip to "completed" prematurely.
+      let suppressTurnCompleted = false;
+
       // Subscribe to provider events and log them
       const unsubscribe = provider.onEvent((event: ProviderEvent) => {
         if (!isThreadSessionEvent(event, session.id)) {
+          return;
+        }
+
+        // During the title turn we still log events but skip status changes
+        if (suppressTurnCompleted && event.type === "turn.completed") {
           return;
         }
 
@@ -303,11 +262,11 @@ export function registerThreadRoutes(
           unsubscribe();
           threadUnsubs.delete(id);
         } else if (event.type === "turn.completed") {
-          // Turn finished but session is still alive — keep the thread in an
-          // "idle" state so the frontend uses /send (not /start) for the next
-          // message, preserving conversation context.
-          threadService.markIdle(id);
-          broadcastThreadEvent(id, "status", { status: "idle" });
+          // Turn finished but session is still alive — mark thread completed
+          // while keeping providerSessionId set.  The frontend checks
+          // providerSessionId to decide between /send and /start.
+          threadService.update(id, { status: "completed", completedAt: new Date().toISOString() });
+          broadcastThreadEvent(id, "status", { status: "completed" });
         }
       });
 
@@ -318,6 +277,42 @@ export function registerThreadRoutes(
 
       // Send initial message if provided
       const message = typeof body["message"] === "string" ? body["message"] : undefined;
+      const titlePrefix = typeof body["titlePrefix"] === "string" ? body["titlePrefix"] : "";
+      const titleTask = typeof body["titleTask"] === "string" ? body["titleTask"] : message ?? "";
+
+      // ── Title generation (before coding turn) ──────────────────
+      // For CLI providers we send a quick title turn through the session.
+      // For the jait provider we use a direct API call.
+      if (titleTask.trim()) {
+        suppressTurnCompleted = true;
+        try {
+          let generatedTitle: string;
+          if (providerId === "codex" || providerId === "claude-code") {
+            const raw = await generateTitleViaTurn(provider, session.id, titleTask);
+            generatedTitle = normalizeGeneratedThreadTitle(raw, "");
+          } else {
+            const apiKeys = deps.userService?.getSettings(authUser.id).apiKeys ?? {};
+            generatedTitle = await generateTitleViaApi({
+              task: titleTask,
+              config,
+              apiKeys,
+              model: thread.model ?? undefined,
+            });
+          }
+          if (generatedTitle) {
+            const titleUpdated = threadService.update(id, {
+              title: `${titlePrefix}${generatedTitle}`.trim(),
+            });
+            if (titleUpdated) broadcastThreadEvent(id, "updated", { thread: titleUpdated });
+          }
+        } catch {
+          // Title generation failed — leave the placeholder title, don't block the task
+        } finally {
+          suppressTurnCompleted = false;
+        }
+      }
+
+      // ── Send the actual coding turn ────────────────────────────
       if (message) {
         // Log the user's prompt as an activity so it shows in the thread
         const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
@@ -345,8 +340,8 @@ export function registerThreadRoutes(
 
     const thread = threadService.getById(id);
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
-    if ((thread.status !== "running" && thread.status !== "idle") || !thread.providerSessionId) {
-      return reply.status(409).send({ error: "Thread is not running" });
+    if (!thread.providerSessionId) {
+      return reply.status(409).send({ error: "Thread has no active session — use /start instead" });
     }
 
     const provider = providerRegistry.get(thread.providerId as ProviderId);
@@ -433,7 +428,7 @@ export function registerThreadRoutes(
     const body = (request.body as Record<string, unknown>) ?? {};
     const thread = threadService.getById(id);
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
-    if (thread.status !== "completed") {
+    if (!thread.completedAt) {
       return reply.status(409).send({
         error: "Thread must be completed before creating a pull request.",
       });

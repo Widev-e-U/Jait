@@ -19,7 +19,6 @@ import type {
 // ── Types ────────────────────────────────────────────────────────────
 
 export type ThreadStatus =
-  | "idle"
   | "running"
   | "completed"
   | "error"
@@ -85,7 +84,7 @@ export class ThreadService {
         runtimeMode: params.runtimeMode ?? "full-access",
         workingDirectory: params.workingDirectory ?? null,
         branch: params.branch ?? null,
-        status: "idle",
+        status: "running",
         createdAt: now,
         updatedAt: now,
       })
@@ -157,10 +156,6 @@ export class ThreadService {
       providerSessionId,
       error: null,
     });
-  }
-
-  markIdle(id: string): ThreadRow | undefined {
-    return this.update(id, { status: "idle" });
   }
 
   markCompleted(id: string): ThreadRow | undefined {

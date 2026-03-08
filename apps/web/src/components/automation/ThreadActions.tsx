@@ -12,8 +12,6 @@ interface ThreadActionsProps {
   threadId: string
   /** Absolute path to the working directory. */
   cwd: string
-  /** Optional GitHub token for PR creation/status. */
-  githubToken?: string | null
   /** The thread's feature branch (e.g. "jait/a1b2c3d4"). */
   branch?: string | null
   /** The repository's default branch (e.g. "main"). */
@@ -30,7 +28,7 @@ interface ThreadActionsProps {
   threadStatus: ThreadStatus
 }
 
-export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, threadTitle, prUrl, prState, ghAvailable = true, threadStatus }: ThreadActionsProps) {
+export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, prUrl, prState, ghAvailable = true, threadStatus }: ThreadActionsProps) {
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
@@ -73,7 +71,6 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
       const response = await agentsApi.createPullRequest(threadId, {
         commitMessage: commitMsg,
         baseBranch,
-        ...(githubToken ? { githubToken } : {}),
       })
       const result = response.result
       const summary = summarizeGitResult(result)
@@ -100,7 +97,7 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
     } finally {
       setBusy(false)
     }
-  }, [baseBranch, githubToken, threadId, threadStatus, threadTitle, existingPrLink])
+  }, [baseBranch, threadId, threadStatus, threadTitle, existingPrLink])
 
   return (
     <>
@@ -142,7 +139,7 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
                   : 'PR ready to open'}
           </Badge>
         )}
-        {!ghAvailable && !githubToken && !existingPrLink && (
+        {!ghAvailable && !existingPrLink && (
           <span
             className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 cursor-help"
             title="GitHub CLI (gh) is not installed. Install it or configure a GitHub token to enable PR creation and status tracking."

@@ -13,17 +13,17 @@ import { uuidv7 } from "../lib/uuidv7.js";
 
 export interface CreateRepoParams {
   userId?: string;
+  deviceId?: string;
   name: string;
   defaultBranch?: string;
   localPath: string;
-  githubToken?: string | null;
 }
 
 export interface UpdateRepoParams {
   name?: string;
   defaultBranch?: string;
   localPath?: string;
-  githubToken?: string | null;
+  deviceId?: string;
 }
 
 export type RepoRow = typeof automationRepositories.$inferSelect;
@@ -41,10 +41,10 @@ export class RepositoryService {
       .values({
         id,
         userId: params.userId ?? null,
+        deviceId: params.deviceId ?? null,
         name: params.name,
         defaultBranch: params.defaultBranch ?? "main",
         localPath: params.localPath,
-        githubToken: params.githubToken ?? null,
         createdAt: now,
         updatedAt: now,
       })

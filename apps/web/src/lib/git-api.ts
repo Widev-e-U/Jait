@@ -118,11 +118,10 @@ async function gitPost<T>(path: string, body: unknown): Promise<T> {
 // ── Public API ───────────────────────────────────────────────────────
 
 export const gitApi = {
-  status(cwd: string, branch?: string, opts?: { githubToken?: string }): Promise<GitStatusResult> {
+  status(cwd: string, branch?: string): Promise<GitStatusResult> {
     return gitPost<GitStatusResult>('status', {
       cwd,
       ...(branch ? { branch } : {}),
-      ...(opts?.githubToken ? { githubToken: opts.githubToken } : {}),
     })
   },
 
@@ -137,7 +136,7 @@ export const gitApi = {
   runStackedAction(
     cwd: string,
     action: GitStackedAction,
-    opts?: { commitMessage?: string; featureBranch?: boolean; baseBranch?: string; githubToken?: string },
+    opts?: { commitMessage?: string; featureBranch?: boolean; baseBranch?: string },
   ): Promise<GitStepResult> {
     return gitPost<GitStepResult>('run-stacked-action', {
       cwd,
@@ -145,7 +144,6 @@ export const gitApi = {
       ...(opts?.commitMessage ? { commitMessage: opts.commitMessage } : {}),
       ...(opts?.featureBranch ? { featureBranch: true } : {}),
       ...(opts?.baseBranch ? { baseBranch: opts.baseBranch } : {}),
-      ...(opts?.githubToken ? { githubToken: opts.githubToken } : {}),
     })
   },
 

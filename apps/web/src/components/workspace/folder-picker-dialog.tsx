@@ -21,25 +21,9 @@ import {
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import type { FsNode, FsBrowseEntry } from '@jait/shared'
+import { detectPlatform, generateDeviceId } from '@/lib/device-id'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
-
-// ── Platform / device detection (matches useUICommands) ─────────────
-function detectPlatform(): 'electron' | 'capacitor' | 'web' {
-  if (typeof window !== 'undefined' && window.jaitDesktop) return 'electron'
-  if (typeof window !== 'undefined' && 'Capacitor' in window) return 'capacitor'
-  return 'web'
-}
-
-function generateDeviceId(): string {
-  const platform = detectPlatform()
-  const storageKey = `jait-device-id-${platform}`
-  const stored = localStorage.getItem(storageKey)
-  if (stored) return stored
-  const id = `${platform}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  localStorage.setItem(storageKey, id)
-  return id
-}
 
 /** Icon for a filesystem node based on its platform */
 function NodeIcon({ platform }: { platform: string }) {

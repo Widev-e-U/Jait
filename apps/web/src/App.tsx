@@ -8,7 +8,6 @@ import {
   Eye,
   FolderTree,
   FolderOpen,
-  Key,
   LogOut,
   MessageSquare,
   Monitor,
@@ -95,6 +94,19 @@ function applyTheme(mode: ThemeMode) {
   document.documentElement.classList.toggle('dark', dark)
 }
 
+const TITLE_PLACEHOLDER_SUFFIX = 'Generating title\u2026'
+function isTitlePending(title: string): boolean {
+  return title.replace(/^\[.*?\]\s*/, '').trim() === TITLE_PLACEHOLDER_SUFFIX
+}
+
+function TitleSkeleton({ className = '' }: { className?: string }) {
+  return (
+    <span className={`inline-block rounded bg-muted animate-pulse ${className}`}>
+      <span className="invisible">Generating title</span>
+    </span>
+  )
+}
+
 function ManagerStatusDot({ status }: { status: string }) {
   const map: Record<string, { icon: typeof Circle; color: string }> = {
     running: { icon: SpinnerIcon, color: 'text-blue-500 animate-spin' },
@@ -103,7 +115,6 @@ function ManagerStatusDot({ status }: { status: string }) {
     done: { icon: CheckCircle2, color: 'text-green-500' },
     completed: { icon: CheckCircle2, color: 'text-green-500' },
     error: { icon: XCircle, color: 'text-red-500' },
-    idle: { icon: Circle, color: 'text-muted-foreground' },
   }
   const { icon: Icon, color } = map[status] ?? { icon: AlertCircle, color: 'text-muted-foreground' }
   return <Icon className={`h-3 w-3 shrink-0 ${color}`} />
@@ -1456,9 +1467,13 @@ ${file.content.slice(0, 2000)}
                 {automation.selectedThread ? (
                   <div className="flex items-center gap-2 shrink-0">
                     <ManagerStatusDot status={automation.selectedThread.status} />
-                    <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
-                      {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
-                    </span>
+                    {isTitlePending(automation.selectedThread.title) ? (
+                      <TitleSkeleton className="text-[11px] h-3.5 w-28" />
+                    ) : (
+                      <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                        {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
+                      </span>
+                    )}
                     {automation.selectedThread.branch && (
                       <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">
                         {automation.selectedThread.branch}
@@ -1474,7 +1489,6 @@ ${file.content.slice(0, 2000)}
                         <ThreadActions
                           threadId={automation.selectedThread.id}
                           cwd={automation.selectedThread.workingDirectory ?? automation.selectedRepo.localPath}
-                          githubToken={automation.selectedRepo.githubToken}
                           branch={automation.selectedThread.branch}
                           baseBranch={automation.selectedRepo.defaultBranch}
                           threadTitle={automation.selectedThread.title}
@@ -1541,11 +1555,6 @@ ${file.content.slice(0, 2000)}
                         >
                           <FolderOpen className="h-3 w-3 shrink-0" />
                           <span className="truncate flex-1 text-left">{repo.name}</span>
-                          {repo.githubToken && (
-                            <Badge variant="outline" className="h-4 px-1.5 text-[9px] font-medium text-green-700 border-green-500/40 shrink-0">
-                              GH token
-                            </Badge>
-                          )}
                           <span
                             role="button"
                             tabIndex={0}
@@ -1554,30 +1563,6 @@ ${file.content.slice(0, 2000)}
                             onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); automation.removeRepository(repo.id) } }}
                           >
                             <Trash2 className="h-3 w-3" />
-                          </span>
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="shrink-0 opacity-0 group-hover:opacity-100 hover:text-foreground transition-opacity"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              const next = window.prompt('Set a GitHub token for this repo (leave empty to clear):', repo.githubToken ?? '')
-                              if (next === null) return
-                              const value = next.trim()
-                              automation.updateRepositoryToken(repo.id, value.length > 0 ? value : null)
-                            }}
-                            onKeyDown={(e) => {
-                              if (e.key === 'Enter') {
-                                e.stopPropagation()
-                                const next = window.prompt('Set a GitHub token for this repo (leave empty to clear):', repo.githubToken ?? '')
-                                if (next === null) return
-                                const value = next.trim()
-                                automation.updateRepositoryToken(repo.id, value.length > 0 ? value : null)
-                              }
-                            }}
-                            title="Set GitHub token"
-                          >
-                            <Key className="h-3 w-3" />
                           </span>
                         </button>
                       ))}
@@ -1610,7 +1595,11 @@ ${file.content.slice(0, 2000)}
                                 <ManagerStatusDot status={thread.status} />
                               </div>
                               <div className="min-w-0 flex-1 text-left">
-                                <span className="truncate block">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+                                {isTitlePending(thread.title) ? (
+                                  <TitleSkeleton className="h-3 w-24" />
+                                ) : (
+                                  <span className="truncate block">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+                                )}
                                 <div className="mt-0.5 flex items-center gap-1 min-w-0">
                                   {thread.branch && (
                                     <span className="truncate text-[10px] text-muted-foreground font-mono">{thread.branch}</span>
@@ -1848,7 +1837,7 @@ ${file.content.slice(0, 2000)}
                           onStop={() => { if (automation.selectedThread) void automation.handleStop(automation.selectedThread.id) }}
                           isLoading={automation.selectedThread?.status === 'running'}
                           disabled={automation.creating}
-                          placeholder={automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
+                          placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
                           viewMode={viewMode}
                           onViewModeChange={setViewMode}
                           provider={chatProvider}
@@ -1863,7 +1852,7 @@ ${file.content.slice(0, 2000)}
                           >
                             New thread
                           </button>
-                          {automation.selectedThread && automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
+                          {automation.selectedThread && automation.selectedThread.status !== 'running' && !automation.selectedThread.providerSessionId && (
                             <span className="text-[11px] text-muted-foreground truncate">
                               Thread finished — start a new one
                             </span>

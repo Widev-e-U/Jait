@@ -56,7 +56,7 @@ export function registerRepoRoutes(
       name: string;
       defaultBranch?: string;
       localPath: string;
-      githubToken?: string | null;
+      deviceId?: string;
     };
 
     if (!body.name || !body.localPath) {
@@ -66,15 +66,23 @@ export function registerRepoRoutes(
     // Prevent duplicate path for same user
     const existing = repoService.findByPath(body.localPath, user.id);
     if (existing) {
+      // If re-registered from a different device, update deviceId
+      if (body.deviceId && existing.deviceId !== body.deviceId) {
+        const updated = repoService.update(existing.id, { deviceId: body.deviceId });
+        if (updated) {
+          broadcastRepoEvent("updated", { repo: updated });
+          return { repo: updated };
+        }
+      }
       return { repo: existing };
     }
 
     const repo = repoService.create({
       userId: user.id,
+      deviceId: body.deviceId,
       name: body.name,
       defaultBranch: body.defaultBranch,
       localPath: body.localPath,
-      githubToken: body.githubToken ?? null,
     });
 
     broadcastRepoEvent("created", { repo });
@@ -91,7 +99,6 @@ export function registerRepoRoutes(
       name?: string;
       defaultBranch?: string;
       localPath?: string;
-      githubToken?: string | null;
     };
 
     const repo = repoService.update(request.params.id, body);

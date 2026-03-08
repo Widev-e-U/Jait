@@ -70,7 +70,6 @@ function saveRepos(repos: RepositoryConnection[]) {
 // ── Status helpers ───────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Circle }> = {
-  idle: { label: 'Idle', color: 'bg-gray-400', icon: Circle },
   running: { label: 'Running', color: 'bg-green-500 animate-pulse', icon: Loader2 },
   completed: { label: 'Done', color: 'bg-blue-500', icon: CheckCircle2 },
   error: { label: 'Error', color: 'bg-red-500', icon: XCircle },
@@ -78,7 +77,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
 }
 
 function StatusDot({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.idle
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.completed
   return <span className={`w-2 h-2 rounded-full shrink-0 ${cfg.color}`} title={cfg.label} />
 }
 
@@ -273,9 +272,9 @@ export function AutomationPage() {
       if (selectedThread && selectedThread.status === 'running') {
         // Already running — just send a turn
         await agentsApi.sendTurn(selectedThread.id, text)
-      } else if (selectedThread && selectedThread.status === 'idle') {
-        // Idle thread — start it with this message
-        await agentsApi.startThread(selectedThread.id, text)
+      } else if (selectedThread && selectedThread.providerSessionId) {
+        // Session still alive — send a follow-up turn
+        await agentsApi.sendTurn(selectedThread.id, text)
       } else {
         // No thread or thread is finished — create a new branch + thread
         let branchName: string | undefined
@@ -497,7 +496,7 @@ export function AutomationPage() {
                     <Square className="h-3 w-3" />
                   </Button>
                 )}
-                {selectedThread.status !== 'running' && selectedThread.status !== 'idle' && (
+                {selectedThread.status !== 'running' && !selectedThread.providerSessionId && (
                   <Button
                     variant="ghost"
                     size="sm"

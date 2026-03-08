@@ -54,7 +54,6 @@ describe('automation repositories', () => {
       name: 'Jait',
       defaultBranch: 'main',
       localPath: 'C:\\Users\\jakob\\code\\Jait',
-      githubToken: null,
       source: 'local',
     }
     const thread = makeThread({

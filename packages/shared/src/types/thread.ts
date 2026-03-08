@@ -23,7 +23,6 @@ export type RuntimeMode = "full-access" | "supervised";
 // ── Thread status ────────────────────────────────────────────────────
 
 export type ThreadStatus =
-  | "idle"
   | "running"
   | "completed"
   | "error"

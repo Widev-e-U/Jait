@@ -40,7 +40,6 @@ import {
 // ── Status helpers ───────────────────────────────────────────────────
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof Circle }> = {
-  idle: { label: 'Idle', color: 'bg-gray-400', icon: Circle },
   running: { label: 'Running', color: 'bg-green-500 animate-pulse', icon: Loader2 },
   completed: { label: 'Done', color: 'bg-blue-500', icon: CheckCircle2 },
   error: { label: 'Error', color: 'bg-red-500', icon: XCircle },
@@ -48,7 +47,7 @@ const STATUS_CONFIG: Record<string, { label: string; color: string; icon: typeof
 }
 
 function StatusPill({ status }: { status: string }) {
-  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.idle
+  const cfg = STATUS_CONFIG[status] ?? STATUS_CONFIG.completed
   const Icon = cfg.icon
   return (
     <Badge variant="outline" className="flex items-center gap-1 text-xs px-1.5 py-0.5">
@@ -350,13 +349,13 @@ export function AgentsPage() {
               </div>
               <div className="flex items-center gap-2">
                 <StatusPill status={selected.status} />
-                {selected.status === 'idle' && (
+                {selected.providerSessionId && selected.status !== 'running' && (
                   <Button
                     size="sm"
                     onClick={() => handleStart(selected.id)}
                     className="gap-1"
                   >
-                    <Play className="w-3 h-3" /> Start
+                    <Play className="w-3 h-3" /> Resume
                   </Button>
                 )}
                 {selected.status === 'running' && (
@@ -416,8 +415,8 @@ export function AgentsPage() {
               )}
             </ScrollArea>
 
-            {/* Prompt input (for running threads) */}
-            {selected.status === 'running' && (
+            {/* Prompt input (for threads with a live session) */}
+            {(selected.status === 'running' || selected.providerSessionId) && (
               <div className="p-3 border-t flex gap-2">
                 <Input
                   placeholder="Send a follow-up message..."
@@ -437,8 +436,8 @@ export function AgentsPage() {
               </div>
             )}
 
-            {/* Quick start (for idle threads) */}
-            {selected.status === 'idle' && (
+            {/* Quick start (for completed threads without a session) */}
+            {!selected.providerSessionId && selected.status !== 'running' && (
               <div className="p-3 border-t">
                 <div className="flex gap-2">
                   <Input

@@ -309,4 +309,15 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 011: Add device_id to automation repositories ──────────────
+  {
+    id: 11,
+    name: "automation_repositories_device_id",
+    run(db) {
+      try {
+        db.run(`ALTER TABLE automation_repositories ADD COLUMN device_id TEXT`);
+      } catch { /* column already exists */ }
+    },
+  },
+
 ];

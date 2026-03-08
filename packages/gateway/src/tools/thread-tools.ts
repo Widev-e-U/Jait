@@ -536,7 +536,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (input.threadId && !thread) {
               return { ok: false, message: "Thread not found." };
             }
-            if (thread && thread.status !== "completed") {
+            if (thread && !thread.completedAt) {
               return {
                 ok: false,
                 message: "Thread must be completed before creating a pull request.",
