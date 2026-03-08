@@ -133,10 +133,10 @@ export function ThreadActions({ threadId, cwd, githubToken, branch, baseBranch, 
                   : 'PR ready to open'}
           </Badge>
         )}
-        {!ghAvailable && !existingPrLink && (
+        {!ghAvailable && !githubToken && !existingPrLink && (
           <span
             className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 cursor-help"
-            title="GitHub CLI (gh) is not installed or authenticated. Install it to enable PR creation and status tracking."
+            title="GitHub CLI (gh) is not installed. Install it or configure a GitHub token to enable PR creation and status tracking."
           >
             <AlertTriangle className="h-3 w-3" />
           </span>
