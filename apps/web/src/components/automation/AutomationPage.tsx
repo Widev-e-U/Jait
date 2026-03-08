@@ -3,7 +3,9 @@
  *
  * Left panel: registered repositories and their threads (compact).
  * Center: chat input (t3code-inspired). Typing a message auto-creates a
- * thread, starts the provider, and sends the first turn — no naming needed.
+ * thread on a new feature branch, starts the provider, and sends the first
+ * turn — no naming needed. After the agent completes, a git quick-action
+ * button in the header lets you commit, push & create a PR in one click.
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
@@ -24,7 +26,6 @@ import {
   Circle,
   Pause,
   RefreshCw,
-  GitBranch,
   FolderOpen,
   AlertCircle,
   MessageSquare,
@@ -38,7 +39,7 @@ import {
 } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
-import { GitActionsControl } from './GitActionsControl'
+import { ThreadActions } from './ThreadActions'
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -88,6 +89,12 @@ function folderName(p: string): string {
   return segments[segments.length - 1] ?? p
 }
 
+/** Generate a short feature branch name: jait/<8-hex> */
+function generateBranchName(): string {
+  const hex = Math.random().toString(16).slice(2, 10)
+  return `jait/${hex}`
+}
+
 const PROVIDER_LABELS: Record<ProviderId, string> = {
   jait: 'Jait',
   codex: 'Codex',
@@ -117,9 +124,6 @@ export function AutomationPage() {
   const activityEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
-  // Tab state
-  const [activeTab, setActiveTab] = useState<'chat' | 'git'>('chat')
-
   const selectedRepo = useMemo(
     () => repositories.find((r) => r.id === selectedRepoId) ?? null,
     [repositories, selectedRepoId],
@@ -127,6 +131,17 @@ export function AutomationPage() {
   const selectedThread = useMemo(
     () => threads.find((t) => t.id === selectedThreadId) ?? null,
     [threads, selectedThreadId],
+  )
+
+  /** Whether the selected thread is done and the git action button should show */
+  const showGitActions = useMemo(
+    () =>
+      selectedThread != null &&
+      selectedRepo != null &&
+      (selectedThread.status === 'completed' ||
+        selectedThread.status === 'error' ||
+        selectedThread.status === 'interrupted'),
+    [selectedThread, selectedRepo],
   )
 
   // ── Persistence ──────────────────────────────────────────────────────
@@ -248,8 +263,8 @@ export function AutomationPage() {
   // ── Thread lifecycle ───────────────────────────────────────────────
 
   /**
-   * Send a message. If no thread is selected, create one automatically,
-   * start it, and send the first turn in one flow.
+   * Send a message. If no thread is selected, creates a new feature branch,
+   * creates a thread, starts the provider, and sends the first turn.
    */
   const handleSend = useCallback(async () => {
     const text = inputMessage.trim()
@@ -264,12 +279,19 @@ export function AutomationPage() {
         // Idle thread — start it with this message
         await agentsApi.startThread(selectedThread.id, text)
       } else {
-        // No thread or thread is completed/error — create a new one
+        // No thread or thread is finished — create a new branch + thread
+        const branchName = generateBranchName()
+        try {
+          await gitApi.createBranch(selectedRepo.localPath, branchName, selectedRepo.defaultBranch)
+        } catch {
+          // If branch creation fails (not a git repo, etc.), continue without it
+        }
+
         const thread = await agentsApi.createThread({
           title: `[${selectedRepo.name}] ${text.slice(0, 60)}`,
           providerId: selectedProvider,
           workingDirectory: selectedRepo.localPath,
-          branch: selectedRepo.defaultBranch,
+          branch: branchName,
         })
         setSelectedThreadId(thread.id)
         // Start and send the initial message
@@ -360,7 +382,7 @@ export function AutomationPage() {
               {repositories.map((repo) => (
                 <div
                   key={repo.id}
-                  className={`flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer text-sm hover:bg-accent ${
+                  className={`group flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer text-sm hover:bg-accent ${
                     selectedRepoId === repo.id ? 'bg-accent' : ''
                   }`}
                   onClick={() => {
@@ -426,6 +448,7 @@ export function AutomationPage() {
                       <p className="text-xs truncate">{thread.title.replace(/^\[.*?\]\s*/, '')}</p>
                       <p className="text-[10px] text-muted-foreground">
                         {PROVIDER_LABELS[thread.providerId as ProviderId] ?? thread.providerId}
+                        {thread.branch ? ` · ${thread.branch}` : ''}
                       </p>
                     </div>
                     <Button
@@ -449,39 +472,21 @@ export function AutomationPage() {
 
       {/* ─── Main area: centered chat ─── */}
       <div className="flex-1 flex flex-col min-h-0">
-        {/* Tab bar */}
+        {/* Header bar */}
         {selectedRepo && (
-          <div className="border-b flex items-center">
-            <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'chat'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-              onClick={() => setActiveTab('chat')}
-            >
-              <MessageSquare className="h-3.5 w-3.5 inline mr-1.5" />
-              Chat
-            </button>
-            <button
-              className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-                activeTab === 'git'
-                  ? 'border-primary text-foreground'
-                  : 'border-transparent text-muted-foreground hover:text-foreground'
-              }`}
-              onClick={() => setActiveTab('git')}
-            >
-              <GitBranch className="h-3.5 w-3.5 inline mr-1.5" />
-              Git &amp; PR
-            </button>
-
-            {/* Thread controls in header */}
-            {selectedThread && activeTab === 'chat' && (
-              <div className="ml-auto flex items-center gap-2 pr-3">
+          <div className="border-b flex items-center px-4 py-2 gap-3">
+            {/* Thread info */}
+            {selectedThread ? (
+              <>
                 <StatusDot status={selectedThread.status} />
-                <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+                <span className="text-xs text-muted-foreground truncate max-w-[250px]">
                   {selectedThread.title.replace(/^\[.*?\]\s*/, '')}
                 </span>
+                {selectedThread.branch && (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
+                    {selectedThread.branch}
+                  </Badge>
+                )}
                 {selectedThread.status === 'running' && (
                   <Button
                     variant="ghost"
@@ -502,8 +507,14 @@ export function AutomationPage() {
                     New
                   </Button>
                 )}
-              </div>
+              </>
+            ) : (
+              <span className="text-xs text-muted-foreground">
+                {selectedRepo.name} · {selectedRepo.defaultBranch}
+              </span>
             )}
+
+
           </div>
         )}
 
@@ -529,8 +540,8 @@ export function AutomationPage() {
           </div>
         )}
 
-        {/* Chat tab */}
-        {selectedRepo && activeTab === 'chat' && (
+        {/* Chat area */}
+        {selectedRepo && (
           <div className="flex-1 flex flex-col min-h-0">
             {/* Activity feed (scrollable middle area) */}
             {selectedThread && activities.length > 0 ? (
@@ -554,8 +565,10 @@ export function AutomationPage() {
                     <MessageSquare className="h-8 w-8 mb-3" />
                     <p className="text-sm mb-1">What would you like to work on?</p>
                     <p className="text-xs">
-                      Working on <span className="font-medium text-foreground">{selectedRepo.name}</span>
+                      Working on{' '}
+                      <span className="font-medium text-foreground">{selectedRepo.name}</span>
                       {' · '}
+                      a new branch will be created from{' '}
                       <span className="font-mono">{selectedRepo.defaultBranch}</span>
                     </p>
                   </>
@@ -620,15 +633,16 @@ export function AutomationPage() {
                     </Button>
                   </div>
                 </div>
+                {showGitActions && selectedRepo && selectedThread && (
+                  <ThreadActions
+                    cwd={selectedRepo.localPath}
+                    branch={selectedThread.branch}
+                    baseBranch={selectedRepo.defaultBranch}
+                    threadTitle={selectedThread.title}
+                  />
+                )}
               </div>
             </div>
-          </div>
-        )}
-
-        {/* Git tab */}
-        {selectedRepo && activeTab === 'git' && (
-          <div className="flex-1 overflow-auto p-4">
-            <GitActionsControl cwd={selectedRepo.localPath} pollInterval={5_000} />
           </div>
         )}
       </div>
@@ -650,9 +664,7 @@ function ActivityItem({ activity }: { activity: ThreadActivity }) {
   return (
     <div
       className={`rounded-lg border p-3 text-sm ${
-        isUser
-          ? 'bg-primary/5 border-primary/20 ml-12'
-          : 'bg-card mr-12'
+        isUser ? 'bg-primary/5 border-primary/20 ml-12' : 'bg-card mr-12'
       }`}
     >
       <div className="flex items-center justify-between mb-1">

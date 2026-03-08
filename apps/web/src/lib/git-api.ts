@@ -54,9 +54,25 @@ export interface GitListBranchesResult {
 
 export interface GitStepResult {
   commit: { status: 'created' | 'skipped_no_changes'; commitSha?: string; subject?: string }
-  push: { status: 'pushed' | 'skipped_not_requested' | 'skipped_up_to_date'; branch?: string; upstreamBranch?: string; setUpstream?: boolean }
+  push: { status: 'pushed' | 'skipped_not_requested' | 'skipped_up_to_date' | 'skipped_no_remote'; branch?: string; upstreamBranch?: string; setUpstream?: boolean; createPrUrl?: string }
   branch: { status: 'created' | 'skipped_not_requested'; name?: string }
-  pr: { status: 'created' | 'opened_existing' | 'skipped_not_requested'; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string }
+  pr: { status: 'created' | 'opened_existing' | 'skipped_not_requested' | 'skipped_no_remote'; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string }
+}
+
+export interface GitDiffResult {
+  diff: string
+  files: string[]
+  hasChanges: boolean
+}
+
+export interface FileDiffEntry {
+  path: string
+  /** Original (HEAD) content, empty for new files */
+  original: string
+  /** Current working-tree content, empty for deleted files */
+  modified: string
+  /** 'A' = added, 'M' = modified, 'D' = deleted, 'R' = renamed, '?' = untracked */
+  status: string
 }
 
 export interface GitPullResult {
@@ -124,8 +140,24 @@ export const gitApi = {
     return gitPost<void>('checkout', { cwd, branch })
   },
 
+  createBranch(
+    cwd: string,
+    branch: string,
+    baseBranch?: string,
+  ): Promise<{ ok: boolean; branch: string }> {
+    return gitPost<{ ok: boolean; branch: string }>('create-branch', { cwd, branch, baseBranch })
+  },
+
   init(cwd: string): Promise<void> {
     return gitPost<void>('init', { cwd })
+  },
+
+  diff(cwd: string): Promise<GitDiffResult> {
+    return gitPost<GitDiffResult>('diff', { cwd })
+  },
+
+  fileDiffs(cwd: string, baseBranch?: string): Promise<FileDiffEntry[]> {
+    return gitPost<{ files: FileDiffEntry[] }>('file-diffs', { cwd, ...(baseBranch ? { baseBranch } : {}) }).then(r => r.files)
   },
 }
 
@@ -236,6 +268,13 @@ export function buildGitActionProgressStages(input: {
 }
 
 export function summarizeGitResult(result: GitStepResult): { title: string; description?: string } {
+  if (result.push.status === 'skipped_no_remote') {
+    const sha = result.commit.commitSha?.slice(0, 7)
+    return {
+      title: sha ? `Committed ${sha}` : 'Committed changes',
+      description: 'No remote configured — push skipped. Add a remote with `git remote add origin <url>` to enable push & PR.',
+    }
+  }
   if (result.pr.status === 'created' || result.pr.status === 'opened_existing') {
     const prNumber = result.pr.number ? ` #${result.pr.number}` : ''
     const title = `${result.pr.status === 'created' ? 'Created PR' : 'Opened PR'}${prNumber}`

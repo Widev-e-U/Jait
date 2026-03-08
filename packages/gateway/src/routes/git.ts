@@ -106,6 +106,54 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig): void
     }
   });
 
+  /** Create a new branch */
+  app.post("/api/git/create-branch", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; branch?: string; baseBranch?: string };
+    if (!body.cwd || !body.branch) {
+      return reply.status(400).send({ error: "Missing cwd or branch" });
+    }
+    try {
+      // If baseBranch specified, checkout that first
+      if (body.baseBranch) {
+        await git.checkout(body.cwd, body.baseBranch);
+      }
+      await git.createBranch(body.cwd, body.branch);
+      return { ok: true, branch: body.branch };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Branch creation failed" });
+    }
+  });
+
+  /** Diff of uncommitted changes */
+  app.post("/api/git/diff", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { cwd } = request.body as { cwd: string };
+    if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const result = await git.diff(cwd);
+      return result;
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Diff failed" });
+    }
+  });
+
+  /** Per-file original/modified content for Monaco diff editor */
+  app.post("/api/git/file-diffs", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; baseBranch?: string };
+    if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const files = await git.fileDiffs(body.cwd, body.baseBranch || undefined);
+      return { files };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "File diffs failed" });
+    }
+  });
+
   /** Git init */
   app.post("/api/git/init", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

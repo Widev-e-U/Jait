@@ -40,6 +40,7 @@ export const userSettings = sqliteTable("user_settings", {
   apiKeys: text("api_keys"), // JSON object
   disabledTools: text("disabled_tools"), // JSON string[] of disabled tool names
   sttProvider: text("stt_provider").notNull().default("simulated"), // 'simulated' | 'browser'
+  chatProvider: text("chat_provider").notNull().default("jait"), // 'jait' | 'codex' | 'claude-code'
   updatedAt: text("updated_at").notNull(),
 });
 

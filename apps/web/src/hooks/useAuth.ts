@@ -4,6 +4,7 @@ const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type SttProvider = 'simulated' | 'browser'
+export type ChatProvider = 'jait' | 'codex' | 'claude-code'
 
 interface User {
   id: string
@@ -14,6 +15,7 @@ interface UserSettings {
   theme: ThemeMode
   api_keys: Record<string, string>
   stt_provider: SttProvider
+  chat_provider: ChatProvider
   updated_at: string
 }
 
@@ -33,6 +35,7 @@ const EMPTY_SETTINGS: UserSettings = {
   theme: 'system',
   api_keys: {},
   stt_provider: 'simulated',
+  chat_provider: 'jait',
   updated_at: new Date(0).toISOString(),
 }
 
@@ -155,6 +158,7 @@ export function useAuth() {
     theme?: ThemeMode
     api_keys?: Record<string, string>
     stt_provider?: SttProvider
+    chat_provider?: ChatProvider
   }) => {
     if (!state.token) throw new Error('Not authenticated')
     const response = await fetch(`${API_URL}/auth/settings`, {

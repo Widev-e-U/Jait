@@ -3,22 +3,32 @@ import {
   AlertTriangle,
   Calendar,
   Bug,
-  Bot,
   Cast,
   Code,
   Eye,
   FolderTree,
+  FolderOpen,
   LogOut,
   MessageSquare,
   Monitor,
   Moon,
   PanelLeftClose,
   PanelLeftOpen,
+  Plus,
+  RefreshCw,
   Settings,
   Sun,
+  Square,
+  Trash2,
   Terminal as TerminalIcon,
   Wifi,
   X,
+  Loader2 as SpinnerIcon,
+  Pause,
+  CheckCircle2,
+  XCircle,
+  Circle,
+  AlertCircle,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -42,7 +52,8 @@ import { ContextIndicator } from '@/components/chat/context-indicator'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
-import { AutomationPage } from '@/components/automation'
+import { ActivityItem } from '@/components/automation/ActivityItem'
+import { ThreadActions } from '@/components/automation/ThreadActions'
 import { SettingsPage } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
@@ -52,20 +63,23 @@ import { WorkspacePanel, workspaceLanguageForPath, DiffView, type WorkspaceFile,
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
-import { useAuth, type ThemeMode, type SttProvider } from '@/hooks/useAuth'
+import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
 import { useSessions } from '@/hooks/useSessions'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
+import { useAutomation } from '@/hooks/useAutomation'
+import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { WorkspaceOpenData, TerminalFocusData } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
+import { Badge } from '@/components/ui/badge'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
-type AppView = 'chat' | 'automations' | 'jobs' | 'network' | 'settings'
+type AppView = 'chat' | 'jobs' | 'network' | 'settings'
 
 const suggestions = [
   'What can you help me with?',
@@ -78,6 +92,18 @@ function applyTheme(mode: ThemeMode) {
   const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
   const dark = mode === 'dark' || (mode === 'system' && systemDark)
   document.documentElement.classList.toggle('dark', dark)
+}
+
+function ManagerStatusDot({ status }: { status: string }) {
+  const map: Record<string, { icon: typeof Circle; color: string }> = {
+    running: { icon: SpinnerIcon, color: 'text-blue-500 animate-spin' },
+    paused: { icon: Pause, color: 'text-yellow-500' },
+    done: { icon: CheckCircle2, color: 'text-green-500' },
+    error: { icon: XCircle, color: 'text-red-500' },
+    idle: { icon: Circle, color: 'text-muted-foreground' },
+  }
+  const { icon: Icon, color } = map[status] ?? { icon: AlertCircle, color: 'text-muted-foreground' }
+  return <Icon className={`h-3 w-3 shrink-0 ${color}`} />
 }
 
 function App() {
@@ -100,7 +126,10 @@ function App() {
   const screenShareDragging = useRef(false)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
-  const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(() => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || 'jait')
+  const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(
+    () => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || settings?.chat_provider || 'jait'
+  )
+  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('viewMode') as ViewMode) || 'developer')
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [registerUsername, setRegisterUsername] = useState('')
@@ -204,6 +233,9 @@ function App() {
 
   // ── Screen share (always active so Electron auto-registers) ───────
   const screenShare = useScreenShare({ token })
+
+  // ── Automation / Manager mode state ───────────────────────────────
+  const automation = useAutomation(viewMode === 'manager')
 
   // ── UI command channel (server ↔ frontend via WebSocket) ──────────
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
@@ -372,6 +404,7 @@ function App() {
     onStateSync: handleStateSync,
     onFullState: handleFullState,
     onMessageComplete: refreshMessages,
+    onThreadEvent: automation.handleThreadEvent,
     listeners: {
       'workspace.open': useCallback((data: WorkspaceOpenData) => {
         setShowWorkspace(true)
@@ -429,9 +462,25 @@ function App() {
     localStorage.setItem('chatMode', chatMode)
   }, [chatMode])
 
+  // Track whether the initial server sync has happened so we don't PATCH on mount
+  const chatProviderInitialized = useRef(false)
+
   useEffect(() => {
     localStorage.setItem('chatProvider', chatProvider)
+    // Only persist to server after the first render (user-initiated change)
+    if (!chatProviderInitialized.current) {
+      chatProviderInitialized.current = true
+      return
+    }
+    if (token) {
+      void updateSettings({ chat_provider: chatProvider as ChatProvider })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatProvider])
+
+  useEffect(() => {
+    localStorage.setItem('viewMode', viewMode)
+  }, [viewMode])
 
   // ── Synced panel controllers (local state + WS + DB) ──────────────
   // Use these instead of raw setShowX for user-initiated open/close.
@@ -581,6 +630,17 @@ function App() {
     setThemeMode(settings.theme)
   }, [settings.theme])
 
+  // Sync chat provider from server settings (e.g. on login or new device).
+  // Guard on authLoading so EMPTY_SETTINGS ('jait') doesn't override the
+  // localStorage value before the real server settings arrive.
+  useEffect(() => {
+    if (authLoading) return
+    if (settings.chat_provider && settings.chat_provider !== chatProvider) {
+      setChatProvider(settings.chat_provider as import('@/lib/agents-api').ProviderId)
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [settings.chat_provider, authLoading])
+
   useEffect(() => {
     applyTheme(themeMode)
     const media = window.matchMedia('(prefers-color-scheme: dark)')
@@ -593,7 +653,10 @@ function App() {
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
-      setShowLoginDialog(true)
+      // Defer so Radix Dialog's FocusScope mounts after the initial render
+      // cycle completes (avoids infinite setState loop in React 19 StrictMode).
+      const id = requestAnimationFrame(() => setShowLoginDialog(true))
+      return () => cancelAnimationFrame(id)
     }
   }, [authLoading, isAuthenticated])
 
@@ -602,7 +665,10 @@ function App() {
   }, [isAuthenticated, activeSessionId, bindSession])
 
   useEffect(() => {
-    if (error === 'login_required') setShowLoginDialog(true)
+    if (error === 'login_required') {
+      const id = requestAnimationFrame(() => setShowLoginDialog(true))
+      return () => cancelAnimationFrame(id)
+    }
   }, [error])
 
   useEffect(() => {
@@ -836,6 +902,9 @@ function App() {
   }, [inputValue, enqueueMessage])
 
   const handleSubmit = async (chipFiles?: ReferencedFile[]) => {
+    if (viewMode === 'manager') {
+      return handleManagerSubmit()
+    }
     if (!inputValue.trim() && (!chipFiles || chipFiles.length === 0)) return
     if (!token) {
       setShowLoginDialog(true)
@@ -891,6 +960,14 @@ ${file.content.slice(0, 2000)}
       onLoginRequired: () => setShowLoginDialog(true),
       ...(refs ? { displayContent, referencedFiles: refs } : {}),
     })
+    setInputValue('')
+  }
+
+  /** Submit for Manager mode — delegate to the automation hook. */
+  const handleManagerSubmit = async () => {
+    const text = inputValue.trim()
+    if (!text) return
+    await automation.handleSend(text, chatProvider)
     setInputValue('')
   }
 
@@ -1101,15 +1178,6 @@ ${file.content.slice(0, 2000)}
               <span className="hidden sm:inline">Chat</span>
             </Button>
             <Button
-              variant={currentView === 'automations' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-8 text-xs shrink-0 px-2 sm:px-3"
-              onClick={() => setCurrentView('automations')}
-            >
-              <Bot className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Automations</span>
-            </Button>
-            <Button
               variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
               size="sm"
               className="h-8 text-xs shrink-0 px-2 sm:px-3"
@@ -1218,6 +1286,7 @@ ${file.content.slice(0, 2000)}
         {/* Chat-specific toolbar */}
         {currentView === 'chat' && (
           <div className="flex items-center gap-1 px-2 sm:px-5 h-9 border-b shrink-0 bg-muted/30 overflow-x-auto scrollbar-none">
+            {/* Sidebar toggle — label changes per viewMode */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -1230,88 +1299,76 @@ ${file.content.slice(0, 2000)}
                     ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
                     : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
                   }
-                  Sessions
+                  {viewMode === 'manager' ? 'Threads' : 'Sessions'}
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">Toggle sessions sidebar</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showTerminal ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-6 text-[11px] px-2 shrink-0"
-                  onClick={() => { void handleToggleTerminal() }}
-                >
-                  <TerminalIcon className="h-3 w-3 mr-1" />
-                  Terminal
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
+              <TooltipContent side="bottom">{viewMode === 'manager' ? 'Toggle threads sidebar' : 'Toggle sessions sidebar'}</TooltipContent>
             </Tooltip>
 
-            {/* Workspace button with close-confirmation popover */}
-            <div className="relative flex items-center shrink-0">
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={showWorkspace ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-6 text-[11px] px-2"
-                    onClick={() => { void handleOpenWorkspace() }}
-                  >
-                    <FolderTree className="h-3 w-3 mr-1" />
-                    Workspace
-                    {showWorkspace && <X className="h-3 w-3 ml-1" />}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{showWorkspace ? 'Close workspace' : 'Open workspace'}</TooltipContent>
-              </Tooltip>
+            {/* Developer-only buttons */}
+            {viewMode === 'developer' && (
+              <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={showTerminal ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className="h-6 text-[11px] px-2 shrink-0"
+                      onClick={() => { void handleToggleTerminal() }}
+                    >
+                      <TerminalIcon className="h-3 w-3 mr-1" />
+                      Terminal
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
+                </Tooltip>
 
-              {/* Confirmation popover when closing with unsaved changes */}
-              {showCloseWorkspaceConfirm && (
-                <>
-                  {/* Backdrop to close on outside click */}
-                  <div className="fixed inset-0 z-40" onClick={() => setShowCloseWorkspaceConfirm(false)} />
-                  <div
-                    ref={closeConfirmRef}
-                    className="absolute top-full left-0 mt-1 z-50 w-64 rounded-lg border bg-background shadow-lg p-3 space-y-2"
-                  >
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                      <div className="text-xs">
-                        <p className="font-medium">Close workspace?</p>
-                        <p className="text-muted-foreground mt-0.5">
-                          You have {changedFiles.length} unsaved file {changedFiles.length === 1 ? 'change' : 'changes'} that will be discarded.
-                        </p>
+                {/* Workspace button with close-confirmation popover */}
+                <div className="relative flex items-center shrink-0">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={showWorkspace ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-6 text-[11px] px-2"
+                        onClick={() => { void handleOpenWorkspace() }}
+                      >
+                        <FolderTree className="h-3 w-3 mr-1" />
+                        Workspace
+                        {showWorkspace && <X className="h-3 w-3 ml-1" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{showWorkspace ? 'Close workspace' : 'Open workspace'}</TooltipContent>
+                  </Tooltip>
+
+                  {showCloseWorkspaceConfirm && (
+                    <>
+                      <div className="fixed inset-0 z-40" onClick={() => setShowCloseWorkspaceConfirm(false)} />
+                      <div
+                        ref={closeConfirmRef}
+                        className="absolute top-full left-0 mt-1 z-50 w-64 rounded-lg border bg-background shadow-lg p-3 space-y-2"
+                      >
+                        <div className="flex items-start gap-2">
+                          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                          <div className="text-xs">
+                            <p className="font-medium">Close workspace?</p>
+                            <p className="text-muted-foreground mt-0.5">
+                              You have {changedFiles.length} unsaved file {changedFiles.length === 1 ? 'change' : 'changes'} that will be discarded.
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button variant="ghost" size="sm" className="h-6 text-[11px] px-2" onClick={() => setShowCloseWorkspaceConfirm(false)}>Cancel</Button>
+                          <Button variant="destructive" size="sm" className="h-6 text-[11px] px-2" onClick={() => { setShowCloseWorkspaceConfirm(false); closeWorkspacePanel() }}>Discard & Close</Button>
+                        </div>
                       </div>
-                    </div>
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-6 text-[11px] px-2"
-                        onClick={() => setShowCloseWorkspaceConfirm(false)}
-                      >
-                        Cancel
-                      </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        className="h-6 text-[11px] px-2"
-                        onClick={() => {
-                          setShowCloseWorkspaceConfirm(false)
-                          closeWorkspacePanel()
-                        }}
-                      >
-                        Discard & Close
-                      </Button>
-                    </div>
-                  </div>
-                </>
-              )}
-            </div>
+                    </>
+                  )}
+                </div>
+              </>
+            )}
 
+            {/* Debug — both modes */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -1326,28 +1383,67 @@ ${file.content.slice(0, 2000)}
               </TooltipTrigger>
               <TooltipContent side="bottom">SSE debug stream</TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showScreenShare ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-6 text-[11px] px-2 shrink-0"
-                  onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
-                >
-                  <Cast className="h-3 w-3 mr-1" />
-                  Share
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Screen sharing</TooltipContent>
-            </Tooltip>
+
+            {/* Developer-only: Share */}
+            {viewMode === 'developer' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showScreenShare ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-6 text-[11px] px-2 shrink-0"
+                    onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
+                  >
+                    <Cast className="h-3 w-3 mr-1" />
+                    Share
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Screen sharing</TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Manager mode: thread info + git actions in toolbar right area */}
+            {viewMode === 'manager' && (
+              <>
+                <div className="flex-1" />
+                {automation.selectedThread ? (
+                  <div className="flex items-center gap-2 shrink-0">
+                    <ManagerStatusDot status={automation.selectedThread.status} />
+                    <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
+                      {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
+                    </span>
+                    {automation.selectedThread.branch && (
+                      <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">
+                        {automation.selectedThread.branch}
+                      </Badge>
+                    )}
+                    {automation.selectedThread.status === 'running' && (
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => void automation.handleStop(automation.selectedThread!.id)}>
+                        <Square className="h-2.5 w-2.5" />
+                      </Button>
+                    )}
+                    {automation.showGitActions && automation.selectedRepo && (
+                      <div className="ml-2 shrink-0">
+                        <ThreadActions
+                          cwd={automation.selectedRepo.localPath}
+                          branch={automation.selectedThread.branch}
+                          baseBranch={automation.selectedRepo.defaultBranch}
+                          threadTitle={automation.selectedThread.title}
+                        />
+                      </div>
+                    )}
+                  </div>
+                ) : automation.selectedRepo ? (
+                  <span className="text-[11px] text-muted-foreground shrink-0">
+                    {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
+                  </span>
+                ) : null}
+              </>
+            )}
           </div>
         )}
 
-        {currentView === 'automations' ? (
-          <div className="flex-1 overflow-hidden">
-            <AutomationPage />
-          </div>
-        ) : currentView === 'jobs' ? (
+        {currentView === 'jobs' ? (
           <div className="flex-1 overflow-y-auto">
             <JobsPage />
           </div>
@@ -1373,18 +1469,94 @@ ${file.content.slice(0, 2000)}
         ) : (
           <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
             {showSidebar && (
-              <aside className={isMobile ? 'h-52 border-b shrink-0' : 'w-56 border-r shrink-0'}>
-                <SessionSelector
-                  sessions={sessions}
-                  activeSessionId={activeSessionId}
-                  onSelect={switchSession}
-                  onCreate={() => createSession()}
-                  onArchive={archiveSession}
-                />
+              <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-56 border-r shrink-0'}`}>
+                {viewMode === 'manager' ? (
+                  <div className="h-full flex flex-col text-sm">
+                    {/* Repositories */}
+                    <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
+                      <span className="text-xs font-medium">Repositories</span>
+                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => automation.setFolderPickerOpen(true)}>
+                        <Plus className="h-3 w-3" />
+                      </Button>
+                    </div>
+                    <div className="border-b max-h-[40%] overflow-y-auto shrink-0">
+                      {automation.repositories.map(repo => (
+                        <button
+                          key={repo.id}
+                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedRepo?.id === repo.id ? 'bg-muted font-medium' : ''}`}
+                          onClick={() => automation.setSelectedRepoId(repo.id)}
+                        >
+                          <FolderOpen className="h-3 w-3 shrink-0" />
+                          <span className="truncate flex-1 text-left">{repo.name}</span>
+                          <span
+                            role="button"
+                            tabIndex={0}
+                            className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                            onClick={(e) => { e.stopPropagation(); automation.removeRepository(repo.id) }}
+                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); automation.removeRepository(repo.id) } }}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </span>
+                        </button>
+                      ))}
+                      {automation.repositories.length === 0 && (
+                        <button
+                          className="w-full px-3 py-4 text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
+                          onClick={() => automation.setFolderPickerOpen(true)}
+                        >
+                          + Add repository
+                        </button>
+                      )}
+                    </div>
+                    {/* Threads for selected repo */}
+                    {automation.selectedRepo && (
+                      <>
+                        <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
+                          <span className="text-xs font-medium">Threads</span>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => void automation.refresh()}>
+                            <RefreshCw className="h-3 w-3" />
+                          </Button>
+                        </div>
+                        <div className="flex-1 overflow-y-auto">
+                          {automation.repoThreads.map(thread => (
+                            <button
+                              key={thread.id}
+                              className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedThread?.id === thread.id ? 'bg-muted font-medium' : ''}`}
+                              onClick={() => automation.setSelectedThreadId(thread.id)}
+                            >
+                              <ManagerStatusDot status={thread.status} />
+                              <span className="truncate flex-1 text-left">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
+                                onClick={(e) => { e.stopPropagation(); void automation.handleDelete(thread.id) }}
+                                onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void automation.handleDelete(thread.id) } }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </span>
+                            </button>
+                          ))}
+                          {automation.repoThreads.length === 0 && (
+                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">No threads yet</div>
+                          )}
+                        </div>
+                      </>
+                    )}
+                  </div>
+                ) : (
+                  <SessionSelector
+                    sessions={sessions}
+                    activeSessionId={activeSessionId}
+                    onSelect={switchSession}
+                    onCreate={() => createSession()}
+                    onArchive={archiveSession}
+                  />
+                )}
               </aside>
             )}
 
-            {showDesktopWorkspace && !activeDiff && (
+            {viewMode === 'developer' && showDesktopWorkspace && !activeDiff && (
               <WorkspacePanel
                 ref={workspaceRef}
                 autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
@@ -1403,7 +1575,7 @@ ${file.content.slice(0, 2000)}
               />
             )}
 
-            {showDesktopWorkspace && activeDiff && (
+            {viewMode === 'developer' && showDesktopWorkspace && activeDiff && (
               <aside className="flex-[4] min-w-0 border-r bg-background overflow-hidden flex flex-col">
                 <DiffView
                   filePath={activeDiff.filePath}
@@ -1416,7 +1588,7 @@ ${file.content.slice(0, 2000)}
               </aside>
             )}
 
-            {showDesktopScreenShare && (
+            {viewMode === 'developer' && showDesktopScreenShare && (
               <aside className="flex-[3] min-w-0 border-r bg-background overflow-hidden flex flex-col">
                 <div className="flex items-center justify-between h-9 px-3 border-b bg-muted/30 shrink-0">
                   <span className="text-xs font-medium flex items-center gap-1.5">
@@ -1430,7 +1602,7 @@ ${file.content.slice(0, 2000)}
               </aside>
             )}
 
-            {showMobileWorkspace && !activeDiff && (showWorkspaceTree || showWorkspaceEditor) && (
+            {viewMode === 'developer' && showMobileWorkspace && !activeDiff && (showWorkspaceTree || showWorkspaceEditor) && (
               <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
                 <WorkspacePanel
                   ref={workspaceRef}
@@ -1453,7 +1625,7 @@ ${file.content.slice(0, 2000)}
             )}
 
             {/* Mobile: sticky show-panel buttons when workspace panels are hidden */}
-            {showMobileWorkspace && !activeDiff && (!showWorkspaceTree || !showWorkspaceEditor) && (
+            {viewMode === 'developer' && showMobileWorkspace && !activeDiff && (!showWorkspaceTree || !showWorkspaceEditor) && (
               <div className="flex items-center gap-1 px-2 py-1.5 border-b bg-muted/20 shrink-0">
                 {!showWorkspaceTree && (
                   <button
@@ -1478,7 +1650,7 @@ ${file.content.slice(0, 2000)}
               </div>
             )}
 
-            {showMobileWorkspace && activeDiff && (
+            {viewMode === 'developer' && showMobileWorkspace && activeDiff && (
               <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
                 <DiffView
                   filePath={activeDiff.filePath}
@@ -1491,7 +1663,7 @@ ${file.content.slice(0, 2000)}
               </section>
             )}
 
-            {showMobileScreenShare && (
+            {viewMode === 'developer' && showMobileScreenShare && (
               <section className={`shrink-0 border-b bg-background p-2 ${mobilePanelHeightClass}`}>
                 <div className="h-full rounded-lg border bg-background overflow-hidden">
                   <div className="flex items-center justify-between h-8 px-2.5 border-b bg-muted/30 shrink-0">
@@ -1507,14 +1679,105 @@ ${file.content.slice(0, 2000)}
               </section>
             )}
 
-            {showDesktopScreenShare && (
+            {viewMode === 'developer' && showDesktopScreenShare && (
               <div
                 className="w-1 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
                 onMouseDown={onScreenShareDragStart}
               />
             )}
 
-            {!hasMessages ? (
+            {viewMode === 'manager' ? (
+              /* ── Manager main content ────────────────────────────── */
+              <div className="flex-1 min-w-0 flex flex-col min-h-0">
+                {!automation.selectedRepo ? (
+                  <div className="flex-1 flex flex-col items-center justify-center px-4">
+                    <div className="w-full max-w-md text-center space-y-4">
+                      <FolderOpen className="h-10 w-10 mx-auto text-muted-foreground" />
+                      <h2 className="text-lg font-medium">Add a repository</h2>
+                      <p className="text-sm text-muted-foreground">Select a local repository to start delegating tasks to agent threads.</p>
+                      <Button variant="outline" onClick={() => automation.setFolderPickerOpen(true)}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Repository
+                      </Button>
+                    </div>
+                  </div>
+                ) : automation.selectedThread ? (
+                  <>
+                    <Conversation className="min-h-0 flex-1 border-b">
+                      <div className="space-y-2">
+                        {automation.activities.length === 0 && (
+                          <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
+                        )}
+                        {automation.activities.map(a => (
+                          <ActivityItem key={a.id} activity={a} />
+                        ))}
+                      </div>
+                    </Conversation>
+                    <div className="shrink-0 py-3 px-4">
+                      <div className="mx-auto max-w-3xl">
+                        {automation.error && (
+                          <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-2">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span className="min-w-0 break-words">{automation.error}</span>
+                          </div>
+                        )}
+                        <PromptInput
+                          ref={promptInputRef}
+                          value={inputValue}
+                          onChange={setInputValue}
+                          onSubmit={handleSubmit}
+                          onStop={() => { if (automation.selectedThread) void automation.handleStop(automation.selectedThread.id) }}
+                          isLoading={automation.selectedThread?.status === 'running'}
+                          disabled={automation.creating}
+                          placeholder={automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
+                          viewMode={viewMode}
+                          onViewModeChange={setViewMode}
+                          provider={chatProvider}
+                          onProviderChange={setChatProvider}
+                        />
+                        {automation.selectedThread && automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
+                          <div className="flex items-center gap-2 px-1 mt-1.5">
+                            <button
+                              onClick={() => automation.setSelectedThreadId(null)}
+                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                            >
+                              New task
+                            </button>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div className="flex-1 flex flex-col items-center justify-center px-4">
+                    <div className="w-full max-w-3xl space-y-8">
+                      <div className="text-center">
+                        <h2 className="text-2xl font-semibold tracking-tight">{automation.selectedRepo.name}</h2>
+                        <p className="text-sm text-muted-foreground mt-1">{automation.selectedRepo.defaultBranch} · What would you like to work on?</p>
+                      </div>
+                      {automation.error && (
+                        <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 break-words">{automation.error}</span>
+                        </div>
+                      )}
+                      <PromptInput
+                        ref={promptInputRef}
+                        value={inputValue}
+                        onChange={setInputValue}
+                        onSubmit={handleSubmit}
+                        disabled={automation.creating}
+                        placeholder="Describe what you want to do..."
+                        viewMode={viewMode}
+                        onViewModeChange={setViewMode}
+                        provider={chatProvider}
+                        onProviderChange={setChatProvider}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            ) : !hasMessages ? (
               <div className={`${showDesktopScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 flex flex-col items-center justify-center px-4 transition-all duration-300 ease-out`}
                 style={showDesktopScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
                 <div className="w-full max-w-3xl space-y-8">
@@ -1536,6 +1799,8 @@ ${file.content.slice(0, 2000)}
                     onModeChange={setChatMode}
                     provider={chatProvider}
                     onProviderChange={setChatProvider}
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
                     availableFiles={availableFilesForMention}
                     onSearchFiles={handleSearchFiles}
                     workspaceOpen={showWorkspace}
@@ -1675,6 +1940,8 @@ ${file.content.slice(0, 2000)}
                       onModeChange={setChatMode}
                       provider={chatProvider}
                       onProviderChange={setChatProvider}
+                      viewMode={viewMode}
+                      onViewModeChange={setViewMode}
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}
                       workspaceOpen={showWorkspace}
@@ -1709,7 +1976,7 @@ ${file.content.slice(0, 2000)}
           </div>
         )}
 
-        {showTerminal && currentView === 'chat' && (
+        {showTerminal && currentView === 'chat' && viewMode === 'developer' && (
           <div className="shrink-0 border-t overflow-hidden" style={{ height: terminalHeight }}>
             <div
               onMouseDown={handleDragStart}
@@ -1842,6 +2109,13 @@ ${file.content.slice(0, 2000)}
               toast.error(`Failed to open workspace: ${err instanceof Error ? err.message : 'Unknown error'}`)
             })
           }}
+        />
+
+        {/* Folder picker for automation repos */}
+        <FolderPickerDialog
+          open={automation.folderPickerOpen}
+          onOpenChange={automation.setFolderPickerOpen}
+          onSelect={(path) => { void automation.handleFolderSelected(path) }}
         />
       </div>
     </TooltipProvider>

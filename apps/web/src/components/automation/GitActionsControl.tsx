@@ -8,9 +8,7 @@
 
 import { useState, useCallback, useMemo, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { ScrollArea } from '@/components/ui/scroll-area'
 import {
   ChevronDown,
   GitCommit,
@@ -18,8 +16,7 @@ import {
   Github,
   Loader2,
   ArrowDownToLine,
-  AlertCircle,
-  RefreshCw,
+  Eye,
 } from 'lucide-react'
 import {
   gitApi,
@@ -32,12 +29,16 @@ import {
   type GitQuickAction,
 } from '@/lib/git-api'
 import { toast } from 'sonner'
+import { GitDiffViewer } from './GitDiffViewer'
 
 interface GitActionsControlProps {
   /** Absolute path to the git repo working directory */
   cwd: string
-  /** Poll interval for status refresh (ms, 0 = manual only) */
-  pollInterval?: number
+  /**
+   * When this value changes, git status is re-fetched.
+   * Pass e.g. the selected thread's status or updatedAt.
+   */
+  refreshTrigger?: unknown
 }
 
 // ── Sub-components ───────────────────────────────────────────────────
@@ -61,37 +62,33 @@ function QuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
 
 // ── Main component ───────────────────────────────────────────────────
 
-export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsControlProps) {
+export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProps) {
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isBusy, setIsBusy] = useState(false)
   const [menuOpen, setMenuOpen] = useState(false)
   const [commitDialogOpen, setCommitDialogOpen] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
-  const [error, setError] = useState<string | null>(null)
+  const [diffOpen, setDiffOpen] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
-  // ── Status polling ─────────────────────────────────────────────
+  // ── Status refresh (event-driven, no polling) ─────────────────
 
   const refreshStatus = useCallback(async () => {
     try {
       const status = await gitApi.status(cwd)
       setGitStatus(status)
-      setError(null)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Git status failed')
+    } catch {
+      // silently ignore — status just won't update
     } finally {
       setIsLoading(false)
     }
   }, [cwd])
 
+  // Fetch on mount + whenever refreshTrigger changes (e.g. thread status)
   useEffect(() => {
     refreshStatus()
-    if (pollInterval > 0) {
-      const id = setInterval(refreshStatus, pollInterval)
-      return () => clearInterval(id)
-    }
-  }, [refreshStatus, pollInterval])
+  }, [refreshStatus, refreshTrigger])
 
   // Close menu on outside click
   useEffect(() => {
@@ -146,6 +143,11 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
       if ((action === 'commit_push' || action === 'commit_push_pr') && result.pr.url) {
         toast.success('PR is ready', {
           action: { label: 'Open PR', onClick: () => window.open(result.pr.url, '_blank') },
+        })
+      } else if (result.push.status === 'pushed' && result.push.createPrUrl && result.pr.status !== 'created' && result.pr.status !== 'opened_existing') {
+        toast.info('Create a pull request for your changes', {
+          action: { label: 'Create PR', onClick: () => window.open(result.push.createPrUrl, '_blank') },
+          duration: 10000,
         })
       }
 
@@ -238,40 +240,18 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
   }
 
   return (
-    <div className="relative">
-      {/* Status summary */}
-      <div className="flex items-center gap-2 mb-2">
-        {gitStatus?.branch && (
-          <Badge variant="outline" className="text-xs">
-            {gitStatus.branch}
-          </Badge>
-        )}
-        {gitStatus?.hasWorkingTreeChanges && (
-          <Badge variant="secondary" className="text-xs">
-            {gitStatus.workingTree.files.length} changed
-          </Badge>
-        )}
-        {gitStatus?.pr && (
-          <Badge variant={gitStatus.pr.state === 'open' ? 'default' : 'secondary'} className="text-xs cursor-pointer" onClick={() => window.open(gitStatus.pr!.url, '_blank')}>
-            PR #{gitStatus.pr.number}
-          </Badge>
-        )}
-        {gitStatus?.aheadCount ? (
-          <span className="text-xs text-muted-foreground">↑{gitStatus.aheadCount}</span>
-        ) : null}
-        {gitStatus?.behindCount ? (
-          <span className="text-xs text-muted-foreground">↓{gitStatus.behindCount}</span>
-        ) : null}
-        <Button variant="ghost" size="sm" className="h-6 w-6 p-0 ml-auto" onClick={refreshStatus} disabled={isBusy}>
-          <RefreshCw className={`h-3 w-3 ${isBusy ? 'animate-spin' : ''}`} />
+    <div className="relative inline-flex items-center gap-2">
+      {/* View changes button */}
+      {gitStatus?.hasWorkingTreeChanges && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs gap-1"
+          onClick={() => setDiffOpen(true)}
+        >
+          <Eye className="h-3.5 w-3.5" />
+          View changes
         </Button>
-      </div>
-
-      {error && (
-        <div className="flex items-center gap-1.5 text-xs text-destructive mb-2">
-          <AlertCircle className="h-3 w-3" />
-          {error}
-        </div>
       )}
 
       {/* Quick action + menu */}
@@ -316,35 +296,9 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
         )}
       </div>
 
-      {/* Changed files list */}
-      {gitStatus?.hasWorkingTreeChanges && gitStatus.workingTree.files.length > 0 && (
-        <div className="mt-3 rounded-md border bg-muted/40 p-2">
-          <p className="text-xs text-muted-foreground mb-1">Changed files</p>
-          <ScrollArea className="max-h-32">
-            <div className="space-y-0.5">
-              {gitStatus.workingTree.files.map((file) => (
-                <div key={file.path} className="flex items-center justify-between text-xs font-mono px-1 py-0.5">
-                  <span className="truncate">{file.path}</span>
-                  <span className="shrink-0 ml-2">
-                    <span className="text-green-600">+{file.insertions}</span>
-                    <span className="text-muted-foreground">/</span>
-                    <span className="text-red-600">-{file.deletions}</span>
-                  </span>
-                </div>
-              ))}
-            </div>
-          </ScrollArea>
-          <div className="flex justify-end text-xs font-mono mt-1">
-            <span className="text-green-600">+{gitStatus.workingTree.insertions}</span>
-            <span className="text-muted-foreground mx-1">/</span>
-            <span className="text-red-600">-{gitStatus.workingTree.deletions}</span>
-          </div>
-        </div>
-      )}
-
-      {/* Commit dialog (inline) */}
+      {/* Commit dialog (popover-style) */}
       {commitDialogOpen && (
-        <div className="mt-3 rounded-md border bg-background p-3 space-y-2">
+        <div className="absolute top-full right-0 mt-1 z-50 w-80 rounded-md border bg-popover p-3 shadow-md space-y-2">
           <p className="text-sm font-medium">Commit changes</p>
           <p className="text-xs text-muted-foreground">Leave blank to auto-generate a commit message.</p>
           {isDefaultBranch && (
@@ -375,6 +329,11 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
             </Button>
           </div>
         </div>
+      )}
+
+      {/* Monaco diff viewer */}
+      {diffOpen && (
+        <GitDiffViewer cwd={cwd} onClose={() => setDiffOpen(false)} />
       )}
     </div>
   )
