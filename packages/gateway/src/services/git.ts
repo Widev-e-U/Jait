@@ -116,6 +116,29 @@ async function ghAvailable(cwd: string): Promise<boolean> {
   }
 }
 
+function parseGithubRemote(raw: string | null): { host: string; owner: string; repo: string } | null {
+  if (!raw) return null;
+  // Normalise to https URL
+  let url = raw.replace(/\.git$/, "");
+  url = url.replace(/^git@([^:]+):(.+)$/, "https://$1/$2");
+  url = url.replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
+
+  try {
+    const u = new URL(url);
+    const parts = u.pathname.replace(/^\/+|\/+$/g, "").split("/");
+    if (!u.hostname.includes("github") || parts.length < 2) return null;
+    const repo = parts.pop()!;
+    const owner = parts.pop()!;
+    return { host: u.hostname, owner, repo };
+  } catch {
+    return null;
+  }
+}
+
+function resolveGithubToken(explicit?: string): string | null {
+  return explicit ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_PAT ?? null;
+}
+
 // ── Service ────────────────────────────────────────────────────────
 
 export class GitService {
@@ -132,7 +155,8 @@ export class GitService {
     await gitExec(cwd, "init");
   }
 
-  async status(cwd: string, _branch?: string): Promise<GitStatusResult> {
+  async status(cwd: string, _branch?: string, githubToken?: string): Promise<GitStatusResult> {
+    const effectiveToken = resolveGithubToken(githubToken);
     const isGit = await this.isRepo(cwd);
     if (!isGit) {
       return {
@@ -224,6 +248,16 @@ export class GitService {
               };
             }
           }
+        } else {
+          if (effectiveToken) {
+            const remoteName = await this.getPreferredRemote(cwd, branch);
+            const remoteUrl = await this.getRemoteUrl(cwd, remoteName ?? "");
+            const githubRemote = parseGithubRemote(remoteUrl);
+            if (githubRemote) {
+              const apiPr = await this.fetchGithubPrByHead(githubRemote, effectiveToken, branch);
+              if (apiPr) pr = apiPr;
+            }
+          }
         }
       } catch { /* gh not available or no PR */ }
     }
@@ -305,7 +339,9 @@ export class GitService {
     commitMessage?: string,
     featureBranch?: boolean,
     baseBranch?: string,
+    githubToken?: string,
   ): Promise<GitStepResult> {
+    const effectiveToken = resolveGithubToken(githubToken);
     const result: GitStepResult = {
       commit: { status: "skipped_no_changes" },
       push: { status: "skipped_not_requested" },
@@ -390,9 +426,17 @@ export class GitService {
     if (action === "commit_push_pr" && currentBranch) {
       try {
         const hasGh = await ghAvailable(cwd);
-        if (!hasGh) {
-          result.pr = { status: "skipped_not_requested" };
-        } else {
+        const preferredRemote = await this.getPreferredRemote(cwd, currentBranch);
+        const remoteUrl = await this.getRemoteUrl(cwd, preferredRemote ?? "");
+        const githubRemote = parseGithubRemote(remoteUrl);
+
+        if (!hasGh && !effectiveToken) {
+          const manualUrl = result.push.createPrUrl ?? (preferredRemote ? await this.buildCreatePrUrl(cwd, currentBranch, preferredRemote) : undefined);
+          const hint = manualUrl ? ` Open ${manualUrl} to create the PR manually.` : "";
+          throw new Error(`Cannot create pull request automatically because GitHub CLI is not installed and no GITHUB_TOKEN is configured.${hint}`);
+        }
+
+        if (hasGh) {
           // Check if PR already exists
           try {
             const existing = await ghExec(
@@ -470,15 +514,36 @@ export class GitService {
             // Clean up temp file
             await unlink(bodyFile).catch(() => {});
           }
+        } else if (githubRemote && effectiveToken) {
+          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
+          const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
+          const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
+          const apiResult = await this.createGithubPrViaApi(githubRemote, effectiveToken, {
+            title: prTitle,
+            baseBranch: resolvedBase,
+            headBranch: currentBranch,
+            body: prBody,
+          });
+
+          result.pr = {
+            status: apiResult.status,
+            url: apiResult.url,
+            number: apiResult.number,
+            baseBranch: apiResult.baseBranch,
+            headBranch: apiResult.headBranch,
+            title: apiResult.title,
+          };
+        } else {
+          result.pr = { status: "skipped_not_requested" };
         }
       } catch (err) {
         // PR creation failed — report as error with details
         const errMsg = err instanceof Error ? err.message : String(err);
         result.pr = { status: "skipped_no_remote" };
-        if (result.push.status === "skipped_no_remote") {
-          // Neither push nor PR worked — surface the real reason
-          throw new Error(`Push failed (no remote configured) and PR creation failed: ${errMsg}`);
-        }
+        const prefix = result.push.status === "skipped_no_remote"
+          ? "Push failed (no remote configured) and PR creation failed"
+          : "Pull request creation failed";
+        throw new Error(`${prefix}: ${errMsg}`);
       }
     }
 
@@ -634,6 +699,131 @@ export class GitService {
       } catch {
         return "main";
       }
+    }
+  }
+
+  private async createGithubPrViaApi(
+    remote: { host: string; owner: string; repo: string },
+    token: string,
+    input: { title: string; baseBranch: string; headBranch: string; body: string },
+  ): Promise<{ status: "created" | "opened_existing"; url: string; number: number; baseBranch: string; headBranch: string; title: string }> {
+    const apiBase =
+      remote.host === "github.com"
+        ? "https://api.github.com"
+        : `https://${remote.host}/api/v3`;
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "jait-gateway",
+    };
+
+    // If an open PR already exists for this head branch, reuse it
+    const headParam = `${remote.owner}:${input.headBranch}`;
+    try {
+      const existingRes = await fetch(
+        `${apiBase}/repos/${remote.owner}/${remote.repo}/pulls?head=${encodeURIComponent(headParam)}&state=open`,
+        { headers },
+      );
+      if (existingRes.ok) {
+        const existing = await existingRes.json() as Array<Record<string, unknown>>;
+        const first = existing[0];
+        if (first?.html_url) {
+          return {
+            status: "opened_existing",
+            url: String(first.html_url),
+            number: Number(first.number ?? 0),
+            baseBranch: String(first.base?.ref ?? input.baseBranch),
+            headBranch: String(first.head?.ref ?? input.headBranch),
+            title: String(first.title ?? input.title),
+          };
+        }
+      }
+    } catch { /* ignore fetch errors and proceed to create */ }
+
+    const res = await fetch(
+      `${apiBase}/repos/${remote.owner}/${remote.repo}/pulls`,
+      {
+        method: "POST",
+        headers: { ...headers, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title: input.title,
+          head: headParam,
+          base: input.baseBranch,
+          body: input.body,
+        }),
+      },
+    );
+
+    if (!res.ok) {
+      const text = await res.text().catch(() => "");
+      throw new Error(`GitHub API PR create failed (${res.status}): ${text.slice(0, 400)}`);
+    }
+
+    const json = await res.json() as Record<string, unknown>;
+    return {
+      status: "created",
+      url: String(json.html_url ?? ""),
+      number: Number(json.number ?? 0),
+      baseBranch: String((json.base as { ref?: string } | undefined)?.ref ?? input.baseBranch),
+      headBranch: String((json.head as { ref?: string } | undefined)?.ref ?? input.headBranch),
+      title: String(json.title ?? input.title),
+    };
+  }
+
+  private async fetchGithubPrByHead(
+    remote: { host: string; owner: string; repo: string },
+    token: string,
+    headBranch: string,
+  ): Promise<GitStatusPr | null> {
+    const apiBase =
+      remote.host === "github.com"
+        ? "https://api.github.com"
+        : `https://${remote.host}/api/v3`;
+
+    const headers: Record<string, string> = {
+      Authorization: `Bearer ${token}`,
+      Accept: "application/vnd.github+json",
+      "User-Agent": "jait-gateway",
+    };
+    const headParam = `${remote.owner}:${headBranch}`;
+
+    try {
+      const res = await fetch(
+        `${apiBase}/repos/${remote.owner}/${remote.repo}/pulls?head=${encodeURIComponent(headParam)}&state=all`,
+        { headers },
+      );
+      if (!res.ok) return null;
+      const list = await res.json() as Array<Record<string, unknown>>;
+      if (!Array.isArray(list) || list.length === 0) return null;
+      // Prefer open PR, otherwise take the most recent
+      const prData = (list.find((p) => p?.state === "open") ?? list[0]) as {
+        number?: number;
+        title?: string;
+        html_url?: string;
+        state?: string;
+        merged_at?: string | null;
+        base?: { ref?: string };
+        head?: { ref?: string };
+      };
+      if (!prData?.html_url) return null;
+      const stateRaw = String(prData.state ?? "open").toLowerCase();
+      const mergedAt = prData.merged_at;
+      const state: GitStatusPr["state"] =
+        mergedAt ? "merged"
+          : stateRaw === "closed" ? "closed"
+            : "open";
+
+      return {
+        number: Number(prData.number ?? 0),
+        title: String(prData.title ?? ""),
+        url: String(prData.html_url ?? ""),
+        baseBranch: String((prData.base as { ref?: string } | undefined)?.ref ?? ""),
+        headBranch: String((prData.head as { ref?: string } | undefined)?.ref ?? headBranch),
+        state,
+      };
+    } catch {
+      return null;
     }
   }
 
