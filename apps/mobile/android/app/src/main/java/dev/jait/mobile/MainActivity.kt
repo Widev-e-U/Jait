@@ -1,4 +1,4 @@
-package com.jait
+package dev.jait.mobile
 
 import android.os.Build
 import android.os.Bundle

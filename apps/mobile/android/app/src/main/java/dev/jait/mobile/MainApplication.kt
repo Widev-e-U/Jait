@@ -1,4 +1,4 @@
-package com.jait
+package dev.jait.mobile
 
 import android.app.Application
 import android.content.res.Configuration
