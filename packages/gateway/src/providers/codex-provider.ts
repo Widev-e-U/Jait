@@ -331,6 +331,9 @@ export class CodexProvider implements CliProviderAdapter {
     }
 
     this.sessions.delete(sessionId);
+
+    // Emit session.completed so the onEvent handler in /start can unsubscribe
+    this.emit({ type: "session.completed", sessionId });
   }
 
   onEvent(handler: (event: ProviderEvent) => void): () => void {
@@ -542,6 +545,18 @@ export class CodexProvider implements CliProviderAdapter {
             message: output,
             callId: itemId,
           });
+        } else {
+          // Non-tool item completed (e.g. agent message) — extract text content
+          // Skip user items (already persisted by the route handler)
+          const itemRole = typeof item.role === "string" ? item.role : "";
+          const rawType = typeof item.type === "string" ? item.type : "";
+          const isUserItem = itemRole === "user" || /user/i.test(rawType);
+          if (!isUserItem) {
+            const text = extractTextContent(item);
+            if (text) {
+              this.emit({ type: "message", role: "assistant", content: text });
+            }
+          }
         }
         break;
       }
@@ -601,6 +616,18 @@ export class CodexProvider implements CliProviderAdapter {
             message: output,
             callId: itemId,
           });
+        } else {
+          // Non-tool item completed (e.g. agent message) — extract text content
+          // Skip user items (already persisted by the route handler)
+          const msgRole = typeof msg.role === "string" ? msg.role : "";
+          const rawType = typeof msg.type === "string" ? msg.type : "";
+          const isUserItem = msgRole === "user" || /user/i.test(rawType);
+          if (!isUserItem) {
+            const text = extractTextContent(msg);
+            if (text) {
+              this.emit({ type: "message", role: "assistant", content: text });
+            }
+          }
         }
         break;
       }
@@ -612,17 +639,22 @@ export class CodexProvider implements CliProviderAdapter {
       }
 
       case "turn/completed": {
-        // Mark as idle (ready for next turn) — NOT "completed" (which implies session ended)
+        // Mark as idle (ready for next turn) — the Codex app-server session is
+        // still alive and maintains the full conversation history.  We must NOT
+        // emit session.completed here because that would tear down the event
+        // listener and mark the DB thread as "completed", causing the frontend
+        // to call /start (which creates a brand-new session with no context)
+        // instead of /send.
         state.session.status = "idle";
-        state.session.completedAt = new Date().toISOString();
         const turn = params.turn as Record<string, unknown> | undefined;
         const status = typeof turn?.status === "string" ? turn.status : "";
         const errorObj = turn?.error as Record<string, unknown> | undefined;
         if (status === "failed" && errorObj?.message) {
           state.session.error = String(errorObj.message);
           this.emit({ type: "session.error", sessionId, error: state.session.error });
+        } else {
+          this.emit({ type: "turn.completed", sessionId });
         }
-        this.emit({ type: "session.completed", sessionId });
         break;
       }
 
@@ -649,14 +681,8 @@ export class CodexProvider implements CliProviderAdapter {
         break;
       }
       case "codex/event/user_message": {
-        const text =
-          typeof params.content === "string" ? params.content
-          : typeof params.text === "string" ? params.text
-          : typeof params.message === "string" ? params.message
-          : "";
-        if (text) {
-          this.emit({ type: "message", role: "user", content: text });
-        }
+        // User messages are already persisted by the route handler (/start, /send).
+        // Ignore the echo from Codex to avoid duplicates.
         break;
       }
 
@@ -815,6 +841,30 @@ function extractCodexEventItemId(params: Record<string, unknown>): string {
 /** Safely read a string */
 function asString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v : undefined;
+}
+
+/**
+ * Extract text content from a non-tool item (e.g. agent message item).
+ * Codex sends completed message items with various content field names.
+ */
+function extractTextContent(item: Record<string, unknown>): string {
+  // Direct text fields
+  if (typeof item.content === "string" && item.content.trim()) return item.content;
+  if (typeof item.text === "string" && item.text.trim()) return item.text;
+  if (typeof item.message === "string" && item.message.trim()) return item.message;
+  if (typeof item.output === "string" && item.output.trim()) return item.output;
+  if (typeof item.last_agent_message === "string" && item.last_agent_message.trim()) return item.last_agent_message;
+
+  // Content may be an array of parts (OpenAI message format)
+  if (Array.isArray(item.content)) {
+    const texts = (item.content as Array<Record<string, unknown>>)
+      .filter((p) => p.type === "text" || p.type === "output_text")
+      .map((p) => (typeof p.text === "string" ? p.text : ""))
+      .filter(Boolean);
+    if (texts.length > 0) return texts.join("\n");
+  }
+
+  return "";
 }
 
 // ── Item type classification ─────────────────────────────────────────

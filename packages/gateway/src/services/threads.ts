@@ -159,6 +159,10 @@ export class ThreadService {
     });
   }
 
+  markIdle(id: string): ThreadRow | undefined {
+    return this.update(id, { status: "idle" });
+  }
+
   markCompleted(id: string): ThreadRow | undefined {
     return this.update(id, {
       status: "completed",
@@ -268,11 +272,17 @@ export class ThreadService {
           { tool: event.tool, args: event.args, requestId: event.requestId },
         );
       case "message":
+        // User messages are already persisted by the route handler (/start, /send).
+        // Only persist assistant messages from provider events to avoid duplicates.
+        if (event.role === "user") return undefined;
         return this.addActivity(threadId, "message", event.content.slice(0, 500), {
           role: event.role,
+          content: event.content,
         });
       case "session.started":
         return this.addActivity(threadId, "session", "Session started");
+      case "turn.completed":
+        return this.addActivity(threadId, "session", "Turn completed — ready for input");
       case "session.completed":
         return this.addActivity(threadId, "session", "Session completed");
       case "session.error":

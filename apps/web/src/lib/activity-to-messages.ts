@@ -65,18 +65,20 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
       // ── User / Assistant text ───────────────────────────────────
       case 'message': {
         const role = payload.role as string | undefined
+        // Prefer full content from payload (summary is truncated to 500 chars)
+        const fullContent = typeof payload.content === 'string' ? payload.content : act.summary
         if (role === 'user') {
           flush()
           messages.push({
             id: act.id,
             role: 'user',
-            content: act.summary,
+            content: fullContent,
           })
         } else {
           // assistant text — fold into current assistant message
           const msg = ensureAssistant(act.id)
           flushToolGroup()
-          const text = act.summary ?? ''
+          const text = fullContent ?? ''
           if (text) {
             msg.content += (msg.content ? '\n' : '') + text
             currentSegments.push({ type: 'text', content: text })
@@ -89,6 +91,8 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
       case 'tool.start': {
         const msg = ensureAssistant(act.id)
         const callId = (payload.callId as string) ?? act.id
+        // Deduplicate: if we already have a tool call with this callId, skip
+        if (toolCallMap.has(callId)) break
         const tc: ToolCallInfo = {
           callId,
           tool: (payload.tool as string) ?? 'unknown',

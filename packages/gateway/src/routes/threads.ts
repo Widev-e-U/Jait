@@ -40,6 +40,9 @@ export function registerThreadRoutes(
 ): void {
   const { threadService, providerRegistry, ws } = deps;
 
+  // Track active onEvent unsubscribe functions per thread so we can clean up
+  const threadUnsubs = new Map<string, () => void>();
+
   // ── Helpers ──────────────────────────────────────────────────────
 
   /** Broadcast a thread event over WS to all clients */
@@ -189,6 +192,13 @@ export function registerThreadRoutes(
         mcpServers,
       });
 
+      // Clean up any previous listener for this thread (e.g. stop → start cycle)
+      const prevUnsub = threadUnsubs.get(id);
+      if (prevUnsub) {
+        prevUnsub();
+        threadUnsubs.delete(id);
+      }
+
       // Subscribe to provider events and log them
       const unsubscribe = provider.onEvent((event: ProviderEvent) => {
         const activity = threadService.logProviderEvent(id, event);
@@ -196,17 +206,27 @@ export function registerThreadRoutes(
           broadcastThreadEvent(id, "activity", { event, activity });
         }
 
-        // Handle session completion
+        // Handle session / turn lifecycle
         if (event.type === "session.completed") {
           threadService.markCompleted(id);
           broadcastThreadEvent(id, "status", { status: "completed" });
           unsubscribe();
+          threadUnsubs.delete(id);
         } else if (event.type === "session.error") {
           threadService.markError(id, event.error);
           broadcastThreadEvent(id, "status", { status: "error", error: event.error });
           unsubscribe();
+          threadUnsubs.delete(id);
+        } else if (event.type === "turn.completed") {
+          // Turn finished but session is still alive — keep the thread in an
+          // "idle" state so the frontend uses /send (not /start) for the next
+          // message, preserving conversation context.
+          threadService.markIdle(id);
+          broadcastThreadEvent(id, "status", { status: "idle" });
         }
       });
+
+      threadUnsubs.set(id, unsubscribe);
 
       threadService.markRunning(id, session.id);
       broadcastThreadEvent(id, "status", { status: "running" });
@@ -215,7 +235,7 @@ export function registerThreadRoutes(
       const message = typeof body["message"] === "string" ? body["message"] : undefined;
       if (message) {
         // Log the user's prompt as an activity so it shows in the thread
-        const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user" });
+        const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
         broadcastThreadEvent(id, "activity", { activity: userActivity });
         await provider.sendTurn(session.id, message);
       }
@@ -240,17 +260,18 @@ export function registerThreadRoutes(
 
     const thread = threadService.getById(id);
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
-    if (thread.status !== "running" || !thread.providerSessionId) {
+    if ((thread.status !== "running" && thread.status !== "idle") || !thread.providerSessionId) {
       return reply.status(409).send({ error: "Thread is not running" });
     }
 
     const provider = providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
-    await provider.sendTurn(thread.providerSessionId, message, attachments);
-
-    const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user" });
+    // Persist user message BEFORE sendTurn so it survives provider errors
+    const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
     broadcastThreadEvent(id, "activity", { activity: userActivity });
+
+    await provider.sendTurn(thread.providerSessionId, message, attachments);
     return reply.status(200).send({ ok: true });
   });
 

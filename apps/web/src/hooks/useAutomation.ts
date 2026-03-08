@@ -337,11 +337,9 @@ export function useAutomation(enabled = true) {
 
       setCreating(true)
       try {
-        if (selectedThread && selectedThread.status === 'running') {
-          // Follow-up turn while the agent is still working
+        if (selectedThread && (selectedThread.status === 'running' || selectedThread.status === 'idle')) {
+          // Follow-up turn — session is still alive ("idle" = between turns)
           await agentsApi.sendTurn(selectedThread.id, text)
-        } else if (selectedThread && selectedThread.status === 'idle') {
-          await agentsApi.startThread(selectedThread.id, text)
         } else if (
           selectedThread &&
           (selectedThread.status === 'completed' ||

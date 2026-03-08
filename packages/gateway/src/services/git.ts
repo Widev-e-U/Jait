@@ -7,9 +7,9 @@
  */
 
 import { exec as execCb } from "node:child_process";
-import { readFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, unlink, mkdir } from "node:fs/promises";
 import { basename, join } from "node:path";
-import { homedir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { promisify } from "node:util";
 
 const exec = promisify(execCb);
@@ -420,22 +420,55 @@ export class GitService {
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const baseFlag = baseBranch ? ` --base "${baseBranch}"` : '';
           const pushFlag = result.push.status !== "pushed" ? " --push" : "";
-          const prJson = await ghExec(
-            cwd,
-            `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body "Automated PR from Jait automation."${baseFlag}${pushFlag} --json number,url,title,baseRefName,headRefName`,
-          );
-          const parsed = JSON.parse(prJson) as Record<string, unknown>;
-          result.pr = {
-            status: "created",
-            url: String(parsed.url ?? ""),
-            number: Number(parsed.number ?? 0),
-            baseBranch: String(parsed.baseRefName ?? ""),
-            headBranch: String(parsed.headRefName ?? ""),
-            title: String(parsed.title ?? prTitle),
-          };
-          // If gh pushed the branch for us, update push status
-          if (result.push.status !== "pushed") {
-            result.push = { status: "pushed", branch: currentBranch };
+
+          // Generate PR body from diff context
+          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
+          const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
+
+          // Write body to temp file (avoids shell escaping issues with markdown)
+          const bodyFile = join(tmpdir(), `jait-pr-body-${Date.now()}.md`);
+          await writeFile(bodyFile, prBody, "utf-8");
+
+          try {
+            // gh pr create outputs the PR URL on stdout (--json is not supported)
+            const prUrl = await ghExec(
+              cwd,
+              `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}${pushFlag}`,
+              60_000,
+            );
+
+            // Fetch full PR details via gh pr view
+            let prNumber = 0;
+            let prBaseBranch = baseBranch ?? "";
+            let prHeadBranch = currentBranch;
+            let prFinalTitle = prTitle;
+            try {
+              const details = await ghExec(
+                cwd,
+                `pr view "${prUrl.trim()}" --json number,title,baseRefName,headRefName`,
+              );
+              const parsed = JSON.parse(details) as Record<string, unknown>;
+              prNumber = Number(parsed.number ?? 0);
+              prBaseBranch = String(parsed.baseRefName ?? prBaseBranch);
+              prHeadBranch = String(parsed.headRefName ?? prHeadBranch);
+              prFinalTitle = String(parsed.title ?? prTitle);
+            } catch { /* details fetch failed — use what we have */ }
+
+            result.pr = {
+              status: "created",
+              url: prUrl.trim(),
+              number: prNumber,
+              baseBranch: prBaseBranch,
+              headBranch: prHeadBranch,
+              title: prFinalTitle,
+            };
+            // If gh pushed the branch for us, update push status
+            if (result.push.status !== "pushed") {
+              result.push = { status: "pushed", branch: currentBranch };
+            }
+          } finally {
+            // Clean up temp file
+            await unlink(bodyFile).catch(() => {});
           }
         }
       } catch (err) {
@@ -576,6 +609,77 @@ export class GitService {
 
     if (remotes.includes("origin")) return "origin";
     return remotes[0] ?? null;
+  }
+
+  /**
+   * Resolve the repository's default branch (e.g. "main" or "master").
+   * Tries gh CLI first, then falls back to common defaults.
+   */
+  async resolveDefaultBranch(cwd: string): Promise<string> {
+    try {
+      const json = await ghExec(cwd, "repo view --json defaultBranchRef", 15_000);
+      const parsed = JSON.parse(json) as Record<string, unknown>;
+      const ref = parsed.defaultBranchRef as Record<string, unknown> | undefined;
+      if (ref?.name) return String(ref.name);
+    } catch { /* gh not available or not a github repo */ }
+
+    // Fallback: check if "main" or "master" branches exist
+    try {
+      await gitExec(cwd, "rev-parse --verify refs/heads/main");
+      return "main";
+    } catch {
+      try {
+        await gitExec(cwd, "rev-parse --verify refs/heads/master");
+        return "master";
+      } catch {
+        return "main";
+      }
+    }
+  }
+
+  /**
+   * Generate a pull request body from the diff between base and head.
+   * Collects commit log + diff stat and formats as markdown.
+   */
+  async generatePrBody(cwd: string, baseBranch: string, headBranch: string, prTitle: string): Promise<string> {
+    const MAX_COMMITS = 12_000;
+    const MAX_STAT = 12_000;
+
+    let commits = "";
+    try {
+      const raw = await gitExec(cwd, `log --oneline ${baseBranch}..${headBranch}`, 15_000);
+      commits = raw.length > MAX_COMMITS ? raw.slice(0, MAX_COMMITS) + "\n... (truncated)" : raw;
+    } catch { /* no common ancestor or baseBranch doesn't exist locally */ }
+
+    let diffStat = "";
+    try {
+      const raw = await gitExec(cwd, `diff --stat ${baseBranch}..${headBranch}`, 15_000);
+      diffStat = raw.length > MAX_STAT ? raw.slice(0, MAX_STAT) + "\n... (truncated)" : raw;
+    } catch { /* ignore */ }
+
+    // Build markdown body
+    const sections: string[] = [];
+
+    sections.push(`## Summary\n`);
+    sections.push(`${prTitle}\n`);
+
+    if (commits) {
+      sections.push(`## Commits\n`);
+      sections.push("```");
+      sections.push(commits);
+      sections.push("```\n");
+    }
+
+    if (diffStat) {
+      sections.push(`## Changes\n`);
+      sections.push("```");
+      sections.push(diffStat);
+      sections.push("```\n");
+    }
+
+    sections.push(`---\n*PR created by [Jait](https://github.com/JakobWl/Jait) automation.*`);
+
+    return sections.join("\n");
   }
 
   /**

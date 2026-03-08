@@ -57,6 +57,7 @@ export type ProviderEvent =
   | { type: "session.started"; sessionId: string }
   | { type: "session.completed"; sessionId: string }
   | { type: "session.error"; sessionId: string; error: string }
+  | { type: "turn.completed"; sessionId: string }
   | { type: "token"; content: string }
   | { type: "tool.start"; tool: string; args: unknown; callId?: string }
   | { type: "tool.output"; callId: string; content: string }
