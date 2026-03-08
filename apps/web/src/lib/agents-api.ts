@@ -225,8 +225,9 @@ export class AgentsApi {
 
   // ── Activities ─────────────────────────────────────────────────
 
-  async getActivities(threadId: string, limit = 100): Promise<ThreadActivity[]> {
-    const res = await fetch(`${API_URL}/api/threads/${threadId}/activities?limit=${limit}`, {
+  async getActivities(threadId: string, limit?: number): Promise<ThreadActivity[]> {
+    const params = typeof limit === 'number' ? `?limit=${limit}` : ''
+    const res = await fetch(`${API_URL}/api/threads/${threadId}/activities${params}`, {
       headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to get activities: ${res.statusText}`)

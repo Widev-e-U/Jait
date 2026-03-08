@@ -58,13 +58,13 @@ export type ProviderEvent =
   | { type: "session.completed"; sessionId: string }
   | { type: "session.error"; sessionId: string; error: string }
   | { type: "turn.completed"; sessionId: string }
-  | { type: "token"; content: string }
-  | { type: "tool.start"; tool: string; args: unknown; callId?: string }
-  | { type: "tool.output"; callId: string; content: string }
-  | { type: "tool.result"; tool: string; ok: boolean; message: string; callId?: string; data?: unknown }
-  | { type: "tool.approval-required"; tool: string; args: unknown; requestId: string }
-  | { type: "message"; role: "assistant" | "user"; content: string }
-  | { type: "activity"; kind: string; summary: string; payload?: unknown };
+  | { type: "token"; sessionId: string; content: string }
+  | { type: "tool.start"; sessionId: string; tool: string; args: unknown; callId?: string }
+  | { type: "tool.output"; sessionId: string; callId: string; content: string }
+  | { type: "tool.result"; sessionId: string; tool: string; ok: boolean; message: string; callId?: string; data?: unknown }
+  | { type: "tool.approval-required"; sessionId: string; tool: string; args: unknown; requestId: string }
+  | { type: "message"; sessionId: string; role: "assistant" | "user"; content: string }
+  | { type: "activity"; sessionId: string; kind: string; summary: string; payload?: unknown };
 
 // ── Provider interface ───────────────────────────────────────────────
 

@@ -731,6 +731,10 @@ export function registerChatRoutes(
         };
 
         const unsubscribe = cliProvider.onEvent((event: ProviderEvent) => {
+          if (event.sessionId !== providerSessionId) {
+            return;
+          }
+
           // Map provider events to SSE events the frontend understands
           switch (event.type) {
             case "token":
@@ -857,6 +861,9 @@ export function registerChatRoutes(
         // Wait for turn completion or error
         await new Promise<void>((resolve) => {
           const checkDone = cliProvider.onEvent((event: ProviderEvent) => {
+            if (event.sessionId !== providerSessionId) {
+              return;
+            }
             if (event.type === "session.completed" || event.type === "session.error") {
               // If the session errored, invalidate the cache so the next message creates a fresh one
               if (event.type === "session.error") {

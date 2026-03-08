@@ -489,7 +489,7 @@ export class CodexProvider implements CliProviderAdapter {
           : typeof params.text === "string" ? params.text
           : "";
         if (delta) {
-          this.emit({ type: "token", content: delta });
+          this.emit({ type: "token", sessionId, content: delta });
         }
         break;
       }
@@ -508,7 +508,7 @@ export class CodexProvider implements CliProviderAdapter {
         if (delta) {
           const itemId = extractItemId(params);
           if (itemId) {
-            this.emit({ type: "tool.output", callId: itemId, content: delta });
+            this.emit({ type: "tool.output", sessionId, callId: itemId, content: delta });
           }
           // Don't emit a redundant generic activity — the tool.output event
           // is already logged by logProviderEvent.
@@ -523,7 +523,7 @@ export class CodexProvider implements CliProviderAdapter {
         const itemType = normalizeItemType(typeof item.type === "string" ? item.type : "");
         if (isToolItemType(itemType)) {
           const category = mapItemTypeToCategory(itemType);
-          this.emit({ type: "tool.start", tool: category, args: buildToolArgs(item, category), callId: itemId });
+          this.emit({ type: "tool.start", sessionId, tool: category, args: buildToolArgs(item, category), callId: itemId });
         }
         break;
       }
@@ -540,6 +540,7 @@ export class CodexProvider implements CliProviderAdapter {
             : "";
           this.emit({
             type: "tool.result",
+            sessionId,
             tool: category,
             ok: status !== "error" && status !== "failed",
             message: output,
@@ -554,7 +555,7 @@ export class CodexProvider implements CliProviderAdapter {
           if (!isUserItem) {
             const text = extractTextContent(item);
             if (text) {
-              this.emit({ type: "message", role: "assistant", content: text });
+              this.emit({ type: "message", sessionId, role: "assistant", content: text });
             }
           }
         }
@@ -571,6 +572,7 @@ export class CodexProvider implements CliProviderAdapter {
               : "mcp-tool";
         this.emit({
           type: "tool.start",
+          sessionId,
           tool: toolName,
           args: params.arguments ?? params.args ?? {},
           callId: itemId,
@@ -589,7 +591,7 @@ export class CodexProvider implements CliProviderAdapter {
         );
         if (isToolItemType(itemType)) {
           const category = mapItemTypeToCategory(itemType);
-          this.emit({ type: "tool.start", tool: category, args: buildToolArgs(msg, category), callId: itemId });
+          this.emit({ type: "tool.start", sessionId, tool: category, args: buildToolArgs(msg, category), callId: itemId });
         }
         break;
       }
@@ -611,6 +613,7 @@ export class CodexProvider implements CliProviderAdapter {
             : "";
           this.emit({
             type: "tool.result",
+            sessionId,
             tool: category,
             ok: status !== "error" && status !== "failed",
             message: output,
@@ -625,7 +628,7 @@ export class CodexProvider implements CliProviderAdapter {
           if (!isUserItem) {
             const text = extractTextContent(msg);
             if (text) {
-              this.emit({ type: "message", role: "assistant", content: text });
+              this.emit({ type: "message", sessionId, role: "assistant", content: text });
             }
           }
         }
@@ -676,7 +679,7 @@ export class CodexProvider implements CliProviderAdapter {
           : typeof params.delta === "string" ? params.delta
           : "";
         if (text) {
-          this.emit({ type: "message", role: "assistant", content: text });
+          this.emit({ type: "message", sessionId, role: "assistant", content: text });
         }
         break;
       }
@@ -712,6 +715,7 @@ export class CodexProvider implements CliProviderAdapter {
       case "codex/event/agent_reasoning": {
         this.emit({
           type: "activity",
+          sessionId,
           kind: notification.method,
           summary: `Codex: ${notification.method}`,
           payload: params,
@@ -722,6 +726,7 @@ export class CodexProvider implements CliProviderAdapter {
       default:
         this.emit({
           type: "activity",
+          sessionId,
           kind: notification.method,
           summary: `Codex: ${notification.method}`,
           payload: params,
