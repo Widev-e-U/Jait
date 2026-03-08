@@ -144,7 +144,16 @@ async function main() {
   // Tool registry — Sprint 3 + Sprint 10
   const voiceService = new VoiceService();
   const screenShare = new ScreenShareService();
-  let toolRegistry = createToolRegistry(surfaceRegistry, { memoryService: memory, hooks, voiceService, screenShare });
+  let toolRegistry = createToolRegistry(surfaceRegistry, {
+    memoryService: memory,
+    hooks,
+    voiceService,
+    screenShare,
+    ws,
+    threadMcpConfig: { host: config.host, port: config.port },
+    threadService,
+    providerRegistry,
+  });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   // Consent & Trust — Sprint 4
@@ -233,6 +242,9 @@ async function main() {
     hooks,
     voiceService,
     screenShare,
+    threadMcpConfig: { host: config.host, port: config.port },
+    threadService,
+    providerRegistry,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
