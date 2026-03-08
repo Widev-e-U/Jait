@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import type { GitStepResult } from "../services/git.js";
 import { ProviderRegistry } from "../providers/registry.js";
@@ -67,6 +67,7 @@ describe("thread.control tool", () => {
         providerId: "codex",
         workingDirectory: process.cwd(),
       });
+      threadService.markCompleted(thread.id);
 
       const prUrl = "https://github.com/acme/repo/pull/42";
       const tool = createThreadControlTool({
@@ -109,6 +110,58 @@ describe("thread.control tool", () => {
       expect(updated?.prNumber).toBe(42);
       expect(updated?.prTitle).toBe("feat: implement feature");
       expect(updated?.prState).toBe("open");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("rejects PR creation until the thread is completed", async () => {
+    const { db, sqlite } = openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const threadService = new ThreadService(db);
+      const thread = threadService.create({
+        userId: "user-1",
+        title: "Implement feature",
+        providerId: "codex",
+        workingDirectory: process.cwd(),
+      });
+
+      const runStackedAction = vi.fn(async (): Promise<GitStepResult> => ({
+        commit: { status: "created", commitSha: "abc123", subject: "feat: implement feature" },
+        push: { status: "pushed", branch: "feature/awesome" },
+        branch: { status: "skipped_not_requested" },
+        pr: {
+          status: "created",
+          url: "https://github.com/acme/repo/pull/42",
+          number: 42,
+          baseBranch: "main",
+          headBranch: "feature/awesome",
+          title: "feat: implement feature",
+        },
+      }));
+
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry: new ProviderRegistry(),
+        gitService: {
+          runStackedAction,
+        },
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create_pr",
+          threadId: thread.id,
+          commitMessage: "feat: implement feature",
+          baseBranch: "main",
+        },
+        makeContext(),
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toBe("Thread must be completed before creating a pull request.");
+      expect(runStackedAction).not.toHaveBeenCalled();
     } finally {
       sqlite.close();
     }
