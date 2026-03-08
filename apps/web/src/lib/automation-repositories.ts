@@ -78,7 +78,7 @@ export function inferSharedRepositories(
 
     const name = inferThreadRepositoryName(thread)
     const key = name?.trim().toLowerCase()
-    if (!key || seen.has(key)) {
+    if (!name || !key || seen.has(key)) {
       continue
     }
 

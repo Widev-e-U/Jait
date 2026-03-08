@@ -208,6 +208,24 @@ export const agentThreadActivities = sqliteTable(
   ],
 );
 
+// ─── Automation Repositories ─────────────────────────────────────────
+export const automationRepositories = sqliteTable(
+  "automation_repositories",
+  {
+    id: text("id").primaryKey(), // UUIDv7
+    userId: text("user_id"),
+    name: text("name").notNull(),
+    defaultBranch: text("default_branch").notNull().default("main"),
+    localPath: text("local_path").notNull(),
+    githubToken: text("github_token"), // optional PAT
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_automation_repos_user").on(table.userId),
+  ],
+);
+
 // ─── Scheduled Jobs ──────────────────────────────────────────────────
 export const scheduledJobs = sqliteTable(
   "scheduled_jobs",

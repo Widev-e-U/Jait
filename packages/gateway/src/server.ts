@@ -18,6 +18,7 @@ import { registerWorkspaceRoutes } from "./routes/workspace.js";
 import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import { registerFilesystemRoutes } from "./routes/filesystem.js";
 import { registerThreadRoutes } from "./routes/threads.js";
+import { registerRepoRoutes } from "./routes/repositories.js";
 import { registerMcpRoutes } from "./routes/mcp-server.js";
 import { registerGitRoutes } from "./routes/git.js";
 import type { SessionService } from "./services/sessions.js";
@@ -38,6 +39,7 @@ import type { VoiceService } from "./voice/service.js";
 import type { ScreenShareService } from "@jait/screen-share";
 import type { SessionStateService } from "./services/session-state.js";
 import type { ThreadService } from "./services/threads.js";
+import type { RepositoryService } from "./services/repositories.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { Database } from "bun:sqlite";
 import { getSchemaVersion } from "./db/connection.js";
@@ -70,6 +72,7 @@ export interface ServerDeps {
   voiceService?: VoiceService;
   screenShare?: ScreenShareService;
   threadService?: ThreadService;
+  repoService?: RepositoryService;
   providerRegistry?: ProviderRegistry;
 }
 
@@ -164,6 +167,14 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
       userService: deps.userService,
+      ws: deps.ws,
+    });
+  }
+
+  // Automation repository routes
+  if (deps.repoService) {
+    registerRepoRoutes(app, config, {
+      repoService: deps.repoService,
       ws: deps.ws,
     });
   }

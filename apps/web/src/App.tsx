@@ -1007,8 +1007,8 @@ ${file.content.slice(0, 2000)}
   const handleManagerSubmit = async () => {
     const text = inputValue.trim()
     if (!text) return
-    await automation.handleSend(text, chatProvider, chatProvider !== 'jait' ? cliModel : undefined)
     setInputValue('')
+    await automation.handleSend(text, chatProvider, chatProvider !== 'jait' ? cliModel : undefined)
   }
 
   const handleSuggestion = async (suggestion: string) => {

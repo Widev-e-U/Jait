@@ -7,7 +7,8 @@
  */
 
 import { exec as execCb } from "node:child_process";
-import { readFile, writeFile, unlink, mkdir } from "node:fs/promises";
+import { readFile, writeFile, unlink, mkdir, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { promisify } from "node:util";
@@ -647,6 +648,30 @@ export class GitService {
   ): Promise<void> {
     const forceFlag = force ? " --force" : "";
     await gitExec(cwd, `worktree remove "${worktreePath}"${forceFlag}`, 30_000);
+  }
+
+  /**
+   * Clean up a worktree directory created for a thread.
+   * Resolves the main repo root, runs `git worktree remove --force`,
+   * and falls back to deleting the directory if that fails.
+   * No-ops silently when the path is not a worktree or doesn't exist.
+   */
+  async cleanupWorktree(worktreePath: string): Promise<void> {
+    if (!worktreePath || !existsSync(worktreePath)) return;
+    // Only act on paths that live inside the managed worktrees directory
+    const worktreeMarker = join(".jait", "worktrees");
+    if (!worktreePath.includes(worktreeMarker)) return;
+
+    try {
+      const mainRoot = await this.getMainRepoRoot(worktreePath);
+      await this.removeWorktree(mainRoot, worktreePath, true);
+    } catch {
+      // git worktree remove may fail (dirty tree, missing refs, etc.).
+      // Fall back to a plain directory removal so we don't leak disk space.
+      try {
+        await rm(worktreePath, { recursive: true, force: true });
+      } catch { /* best effort */ }
+    }
   }
 
   /** Get the top-level git directory (the main repo root, even from a worktree). */

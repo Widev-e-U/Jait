@@ -22,6 +22,7 @@ import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
 import { ThreadService } from "./services/threads.js";
+import { RepositoryService } from "./services/repositories.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { CodexProvider } from "./providers/codex-provider.js";
 import { ClaudeCodeProvider } from "./providers/claude-code-provider.js";
@@ -44,6 +45,7 @@ async function main() {
 
   // Agent threads + provider registry
   const threadService = new ThreadService(db);
+  const repoService = new RepositoryService(db);
   const providerRegistry = new ProviderRegistry();
   providerRegistry.register(new JaitProvider());
   providerRegistry.register(new CodexProvider());
@@ -308,6 +310,7 @@ async function main() {
     toolExecutor,
     screenShare,
     threadService,
+    repoService,
     providerRegistry,
   });
 

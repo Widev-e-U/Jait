@@ -426,6 +426,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               }
             }
 
+            // Clean up the worktree on disk (best effort, don't block delete)
+            if (thread.workingDirectory) {
+              const fullGitService = new GitService();
+              fullGitService.cleanupWorktree(thread.workingDirectory).catch(() => {});
+            }
+
             deps.threadService.delete(thread.id);
             broadcastThreadEvent(thread.id, "deleted", {});
             return { ok: true, message: "Thread deleted", data: { threadId: thread.id } };

@@ -288,4 +288,25 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 010: Automation repositories table ────────────────────────────
+  {
+    id: 10,
+    name: "automation_repositories_table",
+    run(db) {
+      db.run(`
+        CREATE TABLE IF NOT EXISTS automation_repositories (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          name TEXT NOT NULL,
+          default_branch TEXT NOT NULL DEFAULT 'main',
+          local_path TEXT NOT NULL,
+          github_token TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.run(`CREATE INDEX IF NOT EXISTS idx_automation_repos_user ON automation_repositories(user_id)`);
+    },
+  },
+
 ];

@@ -38,6 +38,9 @@ export type WsEventType =
   | "thread.deleted"
   | "thread.status"
   | "thread.activity"
+  | "repo.created"
+  | "repo.updated"
+  | "repo.deleted"
   | "error";
 
 export interface WsEvent<T = unknown> {

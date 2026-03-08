@@ -222,6 +222,12 @@ export function registerThreadRoutes(
       } catch { /* best effort */ }
     }
 
+    // Clean up the worktree on disk (best effort, don't block delete)
+    if (existing.workingDirectory) {
+      const fullGitService = new GitService();
+      fullGitService.cleanupWorktree(existing.workingDirectory).catch(() => {});
+    }
+
     threadService.delete(id);
     broadcastThreadEvent(id, "deleted", {});
     return reply.status(204).send();

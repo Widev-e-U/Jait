@@ -201,8 +201,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'fs.roots-request') {
         // Gateway is asking for our root directories
         void handleFsRootsRequest(msg.payload as { requestId: string })
-      } else if (msg.type.startsWith('thread.')) {
-        // Thread lifecycle events — forward to automation hook
+      } else if (msg.type.startsWith('thread.') || msg.type.startsWith('repo.')) {
+        // Thread & repo lifecycle events — forward to automation hook
         onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
       }
     } catch {

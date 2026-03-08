@@ -92,6 +92,31 @@ export interface CreateThreadPrResponse {
   thread?: AgentThread
 }
 
+export interface AutomationRepo {
+  id: string
+  userId: string | null
+  name: string
+  defaultBranch: string
+  localPath: string
+  githubToken: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateRepoRequest {
+  name: string
+  defaultBranch?: string
+  localPath: string
+  githubToken?: string | null
+}
+
+export interface UpdateRepoRequest {
+  name?: string
+  defaultBranch?: string
+  localPath?: string
+  githubToken?: string | null
+}
+
 // ── API Client ───────────────────────────────────────────────────────
 
 export class AgentsApi {
@@ -261,6 +286,47 @@ export class AgentsApi {
     if (!res.ok) throw new Error(`Failed to get activities: ${res.statusText}`)
     const data = await res.json() as { activities: ThreadActivity[] }
     return data.activities
+  }
+
+  // ── Repositories ──────────────────────────────────────────────
+
+  async listRepos(): Promise<AutomationRepo[]> {
+    const res = await fetch(`${API_URL}/api/repos`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to list repos: ${res.statusText}`)
+    const data = await res.json() as { repos: AutomationRepo[] }
+    return data.repos
+  }
+
+  async createRepo(params: CreateRepoRequest): Promise<AutomationRepo> {
+    const res = await fetch(`${API_URL}/api/repos`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to create repo: ${res.statusText}`)
+    const data = await res.json() as { repo: AutomationRepo }
+    return data.repo
+  }
+
+  async updateRepo(id: string, params: UpdateRepoRequest): Promise<AutomationRepo> {
+    const res = await fetch(`${API_URL}/api/repos/${id}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to update repo: ${res.statusText}`)
+    const data = await res.json() as { repo: AutomationRepo }
+    return data.repo
+  }
+
+  async deleteRepo(id: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/repos/${id}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to delete repo: ${res.statusText}`)
   }
 }
 
