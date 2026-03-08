@@ -223,6 +223,25 @@ export class FileSystemSurface implements Surface {
     } catch { /* ignore */ }
   }
 
+  /**
+   * Save a backup of the current file content for an external change.
+   * Used when CLI providers (e.g. Codex) modify files directly, bypassing
+   * the surface's own write/patch methods.
+   * Only saves the *first* backup — won't overwrite existing entries.
+   */
+  async saveExternalBackup(filePath: string): Promise<void> {
+    this.ensureRunning();
+    const abs = await this.guard!.validateWithSymlinkCheck(filePath);
+    if (this._backups.has(abs)) return;
+    try {
+      const original = await readFile(abs, "utf-8");
+      this._backups.set(abs, original);
+    } catch {
+      // File doesn't exist yet — backup is null (undo = delete the new file)
+      this._backups.set(abs, null);
+    }
+  }
+
   private ensureRunning() {
     if (this._state !== "running" || !this.guard) {
       throw new Error("FileSystem surface is not running");

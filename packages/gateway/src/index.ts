@@ -21,6 +21,11 @@ import { UserService } from "./services/users.js";
 import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
+import { ThreadService } from "./services/threads.js";
+import { ProviderRegistry } from "./providers/registry.js";
+import { CodexProvider } from "./providers/codex-provider.js";
+import { ClaudeCodeProvider } from "./providers/claude-code-provider.js";
+import { JaitProvider } from "./providers/jait-provider.js";
 
 async function main() {
   const config = loadConfig();
@@ -36,6 +41,14 @@ async function main() {
   const userService = new UserService(db);
   const audit = new AuditWriter(db);
   const deviceRegistry = new DeviceRegistry();
+
+  // Agent threads + provider registry
+  const threadService = new ThreadService(db);
+  const providerRegistry = new ProviderRegistry();
+  providerRegistry.register(new JaitProvider());
+  providerRegistry.register(new CodexProvider());
+  providerRegistry.register(new ClaudeCodeProvider());
+  console.log(`Providers registered: ${providerRegistry.list().map(p => p.id).join(", ")}`);
 
   // Surface registry — register all surface factories
   const surfaceRegistry = new SurfaceRegistry();
@@ -58,6 +71,7 @@ async function main() {
       const snap = surface.snapshot();
       const sid = snap.sessionId ?? "";
       const workspaceRoot = (snap.metadata as Record<string, unknown>)?.workspaceRoot ?? null;
+      const panelState = { open: true, remotePath: workspaceRoot, surfaceId: id };
       // Push a UI command to open the workspace panel
       ws.sendUICommand(
         {
@@ -69,10 +83,17 @@ async function main() {
         },
         sid,
       );
+      // Also broadcast ui.state-sync so handleStateSync fires on all clients
+      ws.broadcast(sid, {
+        type: "ui.state-sync",
+        sessionId: sid,
+        timestamp: new Date().toISOString(),
+        payload: { key: "workspace.panel", value: panelState },
+      });
       // Persist workspace state to DB so late-joining clients get it
       if (sid) {
         try {
-          sessionState.set(sid, { "workspace.panel": { open: true, remotePath: workspaceRoot, surfaceId: id } });
+          sessionState.set(sid, { "workspace.panel": panelState });
         } catch (err) {
           console.error("Failed to persist workspace state:", err);
         }
@@ -91,6 +112,13 @@ async function main() {
         },
         sid,
       );
+      // Also broadcast ui.state-sync so handleStateSync fires on all clients
+      ws.broadcast(sid, {
+        type: "ui.state-sync",
+        sessionId: sid,
+        timestamp: new Date().toISOString(),
+        payload: { key: "workspace.panel", value: null },
+      });
       // Clear workspace state from DB
       if (sid) {
         try {
@@ -267,6 +295,8 @@ async function main() {
     voiceService,
     toolExecutor,
     screenShare,
+    threadService,
+    providerRegistry,
   });
 
   // Wire terminal WS ↔ PTY

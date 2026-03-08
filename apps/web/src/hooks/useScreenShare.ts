@@ -284,6 +284,11 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
       // In Electron, the main process handles source selection via
       // setDisplayMediaRequestHandler (auto-selects primary screen).
       // In web browsers, the browser shows its native picker.
+      // On mobile (Capacitor WebView / mobile browsers), getDisplayMedia
+      // is not available — guard against it.
+      if (!navigator.mediaDevices?.getDisplayMedia) {
+        throw new Error('Screen sharing is not supported on this device. Use a desktop browser or the Electron app.')
+      }
       console.log('[screen-share] Requesting screen capture via getDisplayMedia...')
       stream = await navigator.mediaDevices.getDisplayMedia({
         video: { width: { ideal: 1920 }, height: { ideal: 1080 }, frameRate: { ideal: 15, max: 30 } },
@@ -479,45 +484,28 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                 }).catch(() => { /* best-effort */ })
               }
 
-              // Persistent Sonner toast — only dismisses on action click
+              // Single toast combining share + always-allow options
               const toastId = toast('Screen share requested', {
                 description: 'A remote device wants to view your screen.',
                 duration: Infinity,
                 action: {
-                  label: 'Share Screen',
+                  label: 'Always Allow',
                   onClick: () => {
-                    console.log('[screen-share] User accepted share request')
+                    console.log('[screen-share] User accepted + enabled always-approve')
+                    addAutoApprovedDevice('*')
                     startHosting(req.sessionId)
                     toast.dismiss(toastId)
                   },
                 },
                 cancel: {
-                  label: 'Decline',
+                  label: 'Share Once',
                   onClick: () => {
-                    console.log('[screen-share] User declined share request')
+                    console.log('[screen-share] User accepted share request (once)')
+                    startHosting(req.sessionId)
                     toast.dismiss(toastId)
                   },
                 },
               })
-
-              // Follow-up "Always Allow" toast
-              setTimeout(() => {
-                toast('Remember this choice?', {
-                  description: 'Auto-approve future share requests from all devices.',
-                  duration: Infinity,
-                  action: {
-                    label: 'Always Allow',
-                    onClick: () => {
-                      addAutoApprovedDevice('*')
-                      console.log('[screen-share] User enabled always-approve')
-                    },
-                  },
-                  cancel: {
-                    label: 'Dismiss',
-                    onClick: () => { /* just dismiss */ },
-                  },
-                })
-              }, 300)
 
             } else if (
               !req.viewerDeviceIds ||

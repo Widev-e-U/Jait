@@ -4,10 +4,6 @@
     "outDir": "dist",
     "rootDir": ".",
     "jsx": "react-jsx",
-    "types": [
-      "react",
-      "react-native"
-    ],
     "lib": [
       "ES2023",
       "DOM"

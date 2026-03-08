@@ -20,6 +20,7 @@
     "@jait/shared": "workspace:*"
   },
   "devDependencies": {
+    "@types/bun": "latest",
     "typescript": "^5.7.3"
   }
 }

@@ -137,6 +137,7 @@ export const messages = sqliteTable(
     role: text("role").notNull(), // 'user' | 'assistant'
     content: text("content").notNull(),
     toolCalls: text("tool_calls"), // JSON array of executed tool calls (nullable)
+    segments: text("segments"), // JSON array of MessageSegment for interleaved rendering (nullable)
     createdAt: text("created_at").notNull(),
   },
   (table) => [
@@ -155,6 +156,50 @@ export const sessionState = sqliteTable(
   },
   (table) => [
     index("idx_session_state_session").on(table.sessionId),
+  ],
+);
+
+// ─── Agent Threads ───────────────────────────────────────────────────
+export const agentThreads = sqliteTable(
+  "agent_threads",
+  {
+    id: text("id").primaryKey(), // UUIDv7
+    userId: text("user_id"),
+    sessionId: text("session_id"), // Links to the chat session
+    title: text("title").notNull(),
+    providerId: text("provider_id").notNull(), // "jait" | "codex" | "claude-code"
+    model: text("model"),
+    runtimeMode: text("runtime_mode").notNull().default("full-access"), // "full-access" | "supervised"
+    workingDirectory: text("working_directory"),
+    branch: text("branch"), // Git branch name
+    status: text("status").notNull().default("idle"), // idle | running | completed | error | interrupted
+    providerSessionId: text("provider_session_id"), // Active provider session ID
+    error: text("error"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    index("idx_agent_threads_user").on(table.userId),
+    index("idx_agent_threads_session").on(table.sessionId),
+    index("idx_agent_threads_status").on(table.status),
+    index("idx_agent_threads_updated").on(table.updatedAt),
+  ],
+);
+
+// ─── Agent Thread Activities ─────────────────────────────────────────
+export const agentThreadActivities = sqliteTable(
+  "agent_thread_activities",
+  {
+    id: text("id").primaryKey(),
+    threadId: text("thread_id").notNull(),
+    kind: text("kind").notNull(), // "tool.start" | "tool.result" | "message" | "error" | "activity"
+    summary: text("summary").notNull(),
+    payload: text("payload"), // JSON
+    createdAt: text("created_at").notNull(),
+  },
+  (table) => [
+    index("idx_agent_thread_activities_thread").on(table.threadId, table.createdAt),
   ],
 );
 

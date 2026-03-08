@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
+import type { MessageSegment } from '@/hooks/useChat'
 
 /** Parse "Referenced files:" block from message content and return clean text + file paths. */
 function parseReferencedFiles(content: string): { text: string; files: { path: string; name: string }[] } {
@@ -41,6 +42,8 @@ interface MessageProps {
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
+  /** Ordered interleaving of text and tool-call groups (from live streaming). */
+  segments?: MessageSegment[]
   isStreaming?: boolean
   compact?: boolean
   onOpenTerminal?: (terminalId: string | null) => void
@@ -63,6 +66,7 @@ export function Message({
   thinking,
   thinkingDuration,
   toolCalls,
+  segments,
   isStreaming,
   compact,
   onOpenTerminal,
@@ -263,9 +267,44 @@ export function Message({
           />
         )}
 
-        {toolCalls && toolCalls.length > 0 && (
-          <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} />
-        )}
+        {/* Render segments in arrival order when available (live-streamed messages) */}
+        {!isUser && segments && segments.length > 0 ? (
+          <>
+            {segments.map((seg, i) => {
+              if (seg.type === 'toolGroup') {
+                const calls = (toolCalls ?? []).filter(tc => seg.callIds.includes(tc.callId))
+                return calls.length > 0 ? (
+                  <ToolCallGroup key={`tg-${i}`} calls={calls} onOpenTerminal={onOpenTerminal} />
+                ) : null
+              }
+              // text segment
+              return seg.content.trim() ? (
+                <div key={`ts-${i}`} className={cn(
+                  'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none',
+                  compact
+                    ? 'prose-sm prose-p:leading-normal'
+                    : 'prose-base prose-p:leading-relaxed',
+                )}>
+                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{seg.content}</ReactMarkdown>
+                </div>
+              ) : null
+            })}
+            {/* Streaming dots when content hasn't started yet */}
+            {isStreaming && !content && !segments.some(s => s.type === 'text' && s.content.trim()) && (
+              <div className="flex gap-1 py-2">
+                <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:0ms]" />
+                <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:150ms]" />
+                <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:300ms]" />
+              </div>
+            )}
+            {renderActions()}
+          </>
+        ) : (
+          /* Fallback: old layout for historical messages without segments */
+          <>
+            {toolCalls && toolCalls.length > 0 && (
+              <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} />
+            )}
 
         {content ? (
           isUser && isEditing ? (
@@ -341,6 +380,8 @@ export function Message({
             <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:300ms]" />
           </div>
         ) : null}
+          </>
+        )}
       </div>
     </div>
   )

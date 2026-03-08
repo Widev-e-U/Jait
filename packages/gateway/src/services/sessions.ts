@@ -131,11 +131,12 @@ export class SessionService {
       .run();
   }
 
-  /** Update session name or metadata. */
-  update(id: string, data: { name?: string; metadata?: Record<string, unknown> }, userId?: string) {
+  /** Update session name, metadata, or workspacePath. */
+  update(id: string, data: { name?: string; metadata?: Record<string, unknown>; workspacePath?: string }, userId?: string) {
     const set: Record<string, string> = {};
     if (data.name) set["name"] = data.name;
     if (data.metadata) set["metadata"] = JSON.stringify(data.metadata);
+    if (data.workspacePath != null) set["workspacePath"] = data.workspacePath;
     if (Object.keys(set).length > 0) {
       this.db
         .update(sessions)

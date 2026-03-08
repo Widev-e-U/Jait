@@ -57,7 +57,8 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
       'alternation (|) or character classes to search for multiple potential words at once instead of ' +
       "making separate searches. For example, use `function|method|procedure` to find all of those " +
       "at once. Use `include` to search within files matching a specific glob (e.g. \"*.ts\", \"src/**\").\n\n" +
-      '**File search** (mode="files"): Find files by name pattern. Returns only file paths.\n\n' +
+      '**File search** (mode="files"): Find files by name pattern (plain substring, not globs). ' +
+      "For example, use `readme` not `*readme*`. Returns only file paths.\n\n" +
       "Use `includeIgnoredFiles: true` to search in normally-ignored directories like node_modules " +
       "or build outputs — but be aware this may be slower.\n\n" +
       "Use this tool when you want to see an overview of a file, instead of calling read many times.",
@@ -214,11 +215,19 @@ async function searchFiles(
 ): Promise<ToolResult> {
   const isWin = platform() === "win32";
   const safeDir = dir.replace(/"/g, '\\"');
-  const safePattern = pattern.replace(/"/g, '\\"');
+  // Strip glob wildcards — the LLM sometimes passes "*readme*" instead of "readme".
+  // findstr and rg treat * as regex (0+ of prev char), which breaks matching.
+  const cleanedPattern = pattern.replace(/[*?[\]]/g, "");
+  if (!cleanedPattern) {
+    return { ok: true, message: `No files matching "${pattern}" (empty after cleaning)`, data: { files: [] } };
+  }
+  const safePattern = cleanedPattern.replace(/"/g, '\\"');
 
   let cmd: string;
   if (isWin) {
-    cmd = `rg --files "${safeDir}" 2>nul | findstr /i "${safePattern}" | more +0 2>nul || dir /s /b "${safeDir}" 2>nul | findstr /i "${safePattern}"`;
+    // Try ripgrep (respects .gitignore) then fall back to dir+findstr.
+    // The `|| (...)` ensures the fallback runs when rg is not installed.
+    cmd = `(rg --files "${safeDir}" 2>nul | findstr /i "${safePattern}") || (dir /s /b "${safeDir}" 2>nul | findstr /i "${safePattern}")`;
   } else {
     cmd = `find "${safeDir}" -type f -iname "*${safePattern}*" 2>/dev/null | head -n ${limit}`;
   }

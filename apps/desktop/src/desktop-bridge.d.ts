@@ -24,9 +24,14 @@ export interface JaitDesktopBridge {
   getDesktopSources: () => Promise<DesktopSource[]>;
   notify: (opts: { title: string; body: string }) => Promise<{ ok: true }>;
   confirmShare: (opts: { title: string; message: string }) => Promise<{ accepted: boolean }>;
+  /** Browse a directory on the local filesystem (for remote fs node) */
+  browsePath: (dirPath: string) => Promise<{ path: string; parent: string | null; entries: { name: string; path: string; type: 'dir' | 'file' }[] }>;
+  /** Get root drives / home directory */
+  getRoots: () => Promise<{ roots: { name: string; path: string; type: 'dir' | 'file' }[] }>;
   onScreenShareStart: (callback: () => void) => void;
   onScreenShareStop: (callback: () => void) => void;
   platform: "electron";
+  pickDirectory: () => Promise<{ path: string } | null>;
 }
 
 declare global {

@@ -16,6 +16,7 @@ import type { ToolRegistry } from "./registry.js";
 import { validateToolInput } from "./validate.js";
 import { type ChatMode, ASK_MODE_TOOLS, MUTATING_TOOLS, type PlannedAction } from "./chat-modes.js";
 import { getReminderInstructions, type ModelEndpoint } from "./prompts/index.js";
+import { computeContextUsage, estimateTokens } from "./token-estimator.js";
 
 // ── Public types ─────────────────────────────────────────────────────
 
@@ -35,6 +36,11 @@ export interface AgentMessage {
   name?: string;
 }
 
+/** Segment for interleaved rendering of text and tool calls */
+export type MessageSegment =
+  | { type: "text"; content: string }
+  | { type: "toolGroup"; callIds: string[] };
+
 /** OpenAI function-calling tool schema */
 export interface OpenAIToolSchema {
   type: "function";
@@ -46,6 +52,8 @@ export interface LLMConfig {
   openaiApiKey: string;
   openaiBaseUrl: string;
   openaiModel: string;
+  /** Max context window in tokens */
+  contextWindow: number;
 }
 
 /** Persisted record of a tool call execution */
@@ -76,7 +84,35 @@ export type AgentLoopEvent =
   | { type: "plan_complete"; planId: string; summary: string; actions: PlannedAction[] }
   | { type: "mode_notice"; mode: ChatMode; message: string }
   | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
+  | { type: "context_usage"; system: number; history: number; toolResults: number; tools: number; total: number; limit: number; ratio: number; pruned?: boolean }
   | { type: "error"; message: string };
+
+/** Format an LLM HTTP error into a user-friendly message, similar to VS Code Copilot. */
+function formatLLMError(status: number, responseText: string): string {
+  let parsed: { error?: { message?: string; type?: string; code?: string } } | undefined;
+  try { parsed = JSON.parse(responseText); } catch { /* not JSON */ }
+  const serverMsg = parsed?.error?.message;
+  const code = parsed?.error?.code;
+
+  switch (status) {
+    case 401:
+      return "Your API key is invalid or expired. Please check your settings.";
+    case 403:
+      return "Access denied by the model provider. Please check your API key permissions.";
+    case 429:
+      if (code === "insufficient_quota" || serverMsg?.includes("quota"))
+        return "You've exceeded your API quota. Please check your plan and billing details.";
+      return `Rate limited by the model provider. Please wait a moment and try again.${serverMsg ? `\n${serverMsg}` : ""}`;
+    case 500:
+    case 502:
+    case 503:
+      return `The model provider is experiencing issues (${status}). Please try again later.`;
+    default:
+      return serverMsg
+        ? `Request failed (${status}): ${serverMsg}`
+        : `Request failed with status ${status}. Please try again.`;
+  }
+}
 
 /** Priority levels for queued tool calls */
 export enum ToolCallPriority {
@@ -131,12 +167,14 @@ export interface AgentLoopOptions {
   /** Event callback — called for every stream event */
   onEvent?: (event: AgentLoopEvent) => void;
   /** Persistence callback — called when a final assistant message should be saved */
-  onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string) => void;
+  onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string, segments?: string) => void;
 }
 
 export interface AgentLoopResult {
   content: string;
   executedToolCalls: ExecutedToolCall[];
+  /** Interleaved text/toolGroup segments for rendering */
+  segments: MessageSegment[];
   /** Total LLM rounds used */
   rounds: number;
   /** Whether the loop was stopped by abort */
@@ -637,6 +675,80 @@ const DEFAULT_MAX_RETRIES = 2;
  * tool calls (with validation, retry, parallel batching, and steering),
  * and returns the accumulated result.
  */
+
+// ── Context pruning ──────────────────────────────────────────────────
+
+/** Target ratio after pruning — leave headroom for the next LLM response */
+const PRUNE_TARGET_RATIO = 0.65;
+
+/**
+ * Prune oldest conversation turns to bring context usage below the target.
+ *
+ * Strategy (similar to Copilot):
+ *  1. Never remove the system prompt (index 0) or the last user message.
+ *  2. Remove oldest user/assistant/tool turn groups first.
+ *  3. Insert a `[conversation-summary]` placeholder so the model knows
+ *     context was trimmed.
+ *
+ * Mutates `history` in place. Returns true if anything was pruned.
+ */
+function pruneHistory(
+  history: AgentMessage[],
+  contextWindow: number,
+  toolSchemas: unknown[],
+): boolean {
+  const usage = computeContextUsage(history, toolSchemas, contextWindow);
+  const targetTokens = Math.floor(contextWindow * PRUNE_TARGET_RATIO);
+  if (usage.total <= targetTokens) return false;
+
+  let tokensToFree = usage.total - targetTokens;
+  let pruned = false;
+
+  // Find removable range: skip system messages at the start and keep
+  // the last user message + everything after it.
+  let firstRemovable = 0;
+  while (firstRemovable < history.length && history[firstRemovable]!.role === "system") {
+    firstRemovable++;
+  }
+
+  // Find last user message index
+  let lastUserIdx = history.length - 1;
+  while (lastUserIdx >= 0 && history[lastUserIdx]!.role !== "user") {
+    lastUserIdx--;
+  }
+  // Keep the last user message and everything after it
+  const safeEnd = Math.max(lastUserIdx, firstRemovable);
+
+  // Remove messages from firstRemovable forward until we've freed enough
+  const removedIndices: number[] = [];
+  for (let i = firstRemovable; i < safeEnd && tokensToFree > 0; i++) {
+    const msg = history[i]!;
+    const cost = estimateTokens(msg.content) + 4; // rough per-message estimate
+    if (msg.role === "tool" && msg.tool_calls) {
+      // tool_calls are heavier
+      try { tokensToFree -= estimateTokens(JSON.stringify(msg.tool_calls)); } catch { /* */ }
+    }
+    tokensToFree -= cost;
+    removedIndices.push(i);
+    pruned = true;
+  }
+
+  if (removedIndices.length > 0) {
+    // Remove in reverse order to keep indices stable
+    for (let i = removedIndices.length - 1; i >= 0; i--) {
+      history.splice(removedIndices[i]!, 1);
+    }
+    // Insert a summary placeholder after the system messages
+    const insertAt = firstRemovable;
+    history.splice(insertAt, 0, {
+      role: "system",
+      content: `[conversation-summary] ${removedIndices.length} earlier messages were removed to fit the context window. The conversation continues from the remaining messages below.`,
+    });
+  }
+
+  return pruned;
+}
+
 export async function runAgentLoop(
   options: AgentLoopOptions,
   executeTool: ToolExecutor,
@@ -663,6 +775,7 @@ export async function runAgentLoop(
 
   let fullContent = "";
   const executedToolCalls: ExecutedToolCall[] = [];
+  const segments: MessageSegment[] = [];
   const queue = new ToolCallQueue();
 
   // ── Plan mode state ──
@@ -690,7 +803,7 @@ export async function runAgentLoop(
     // ── Check abort ──
     if (abort.signal.aborted) {
       log.info(`Agent loop cancelled for session ${sessionId} — stopping before round ${round}`);
-      return { content: fullContent, executedToolCalls, rounds: round, aborted: true, hitMaxRounds: false };
+      return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false };
     }
 
     // ── Apply steering messages ──
@@ -709,6 +822,23 @@ export async function runAgentLoop(
       const reminder = getReminderInstructions(mode, modelEndpoint);
       if (reminder) {
         history.push({ role: "system", content: reminder });
+      }
+    }
+
+    // ── Context budget tracking & pruning ──────────────────────────────
+    const contextWindow = llm.contextWindow;
+    if (contextWindow > 0) {
+      let usage = computeContextUsage(history, activeSchemas, contextWindow);
+      onEvent?.({ type: "context_usage", ...usage });
+
+      // If context usage ≥ 85%, prune oldest conversation turns
+      if (usage.ratio >= 0.85) {
+        const pruned = pruneHistory(history, contextWindow, activeSchemas);
+        if (pruned) {
+          usage = computeContextUsage(history, activeSchemas, contextWindow);
+          onEvent?.({ type: "context_usage", ...usage, pruned: true });
+          log.info(`Context pruned: ${usage.total}/${contextWindow} tokens (${(usage.ratio * 100).toFixed(0)}%)`);
+        }
       }
     }
 
@@ -741,14 +871,15 @@ export async function runAgentLoop(
       if (!response.ok) {
         const errText = await response.text();
         log.error(`LLM error ${response.status}: ${errText}`);
-        onEvent?.({ type: "error", message: `LLM error: ${response.status}` });
-        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false, hitMaxRounds: false };
+        const friendlyMessage = formatLLMError(response.status, errText);
+        onEvent?.({ type: "error", message: friendlyMessage });
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false };
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
         onEvent?.({ type: "error", message: "No response body from LLM" });
-        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false, hitMaxRounds: false };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false };
       }
 
       const parsed = await parseOpenAIStream(reader as any, onEvent);
@@ -758,12 +889,22 @@ export async function runAgentLoop(
     } catch (fetchErr) {
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
-        return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: true, hitMaxRounds: false };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false };
       }
       throw fetchErr;
     }
 
     fullContent += contentText;
+
+    // ── Track segments for interleaved rendering ──
+    if (contentText) {
+      const last = segments[segments.length - 1];
+      if (last?.type === "text") {
+        segments[segments.length - 1] = { type: "text", content: last.content + contentText };
+      } else {
+        segments.push({ type: "text", content: contentText });
+      }
+    }
 
     // ── Model returned tool calls → queue & execute ──
     if (toolCalls.length > 0) {
@@ -784,6 +925,17 @@ export async function runAgentLoop(
       for (const tc of toolCalls) {
         const internalName = fromOpenAIName(tc.function.name);
         queue.enqueue(tc, ToolCallPriority.Normal, isParallelSafe(internalName));
+      }
+
+      // Track tool calls as a segment group for interleaved rendering
+      const callIds = toolCalls.map(tc => tc.id);
+      const lastSeg = segments[segments.length - 1];
+      if (lastSeg?.type === "toolGroup") {
+        // Extend existing group (shouldn't normally happen, but defensive)
+        const merged = new Set([...lastSeg.callIds, ...callIds]);
+        segments[segments.length - 1] = { type: "toolGroup", callIds: [...merged] };
+      } else {
+        segments.push({ type: "toolGroup", callIds });
       }
 
       // ── Plan-mode & Ask-mode interception ──
@@ -895,7 +1047,7 @@ export async function runAgentLoop(
               });
             }
           }
-          return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: true, hitMaxRounds: false };
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false };
         }
 
         const batch = queue.dequeueBatch(parallel);
@@ -977,7 +1129,8 @@ export async function runAgentLoop(
     if (contentText) {
       history.push({ role: "assistant", content: contentText });
       const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
-      onPersist?.(sessionId, "assistant", contentText, tcJson);
+      const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
+      onPersist?.(sessionId, "assistant", contentText, tcJson, segJson);
     }
 
     // ── Emit plan completion in plan mode ──
@@ -993,7 +1146,7 @@ export async function runAgentLoop(
     const planResult = mode === "plan" && plannedActions.length > 0
       ? { id: planId, summary: contentText || "Plan ready for review.", actions: plannedActions }
       : undefined;
-    return { content: fullContent, executedToolCalls, rounds: round + 1, aborted: false, hitMaxRounds: false, plan: planResult };
+    return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, plan: planResult };
   }
 
   // Hit max rounds
@@ -1005,7 +1158,7 @@ export async function runAgentLoop(
   const planResultMaxRounds = mode === "plan" && plannedActions.length > 0
     ? { id: planId, summary: fullContent, actions: plannedActions }
     : undefined;
-  return { content: fullContent, executedToolCalls, rounds: maxRounds, aborted: false, hitMaxRounds: true, plan: planResultMaxRounds };
+  return { content: fullContent, executedToolCalls, segments, rounds: maxRounds, aborted: false, hitMaxRounds: true, plan: planResultMaxRounds };
 }
 
 // ── Retry API ────────────────────────────────────────────────────────

@@ -144,6 +144,8 @@ export async function getFs(
 export function resolveWorkspaceRoot(
   registry: SurfaceRegistry,
   sessionId: string,
+  /** Optional fallback from session record before falling back to process.cwd() */
+  sessionWorkspacePath?: string | null,
 ): string {
   let best: string | null = null;
   let bestLen = -1;
@@ -157,5 +159,5 @@ export function resolveWorkspaceRoot(
       }
     }
   }
-  return best ?? process.cwd();
+  return best ?? sessionWorkspacePath?.trim() ?? process.cwd();
 }

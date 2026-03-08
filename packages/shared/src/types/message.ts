@@ -33,6 +33,11 @@ export type WsEventType =
   | "ui.command"
   | "ui.state-sync"
   | "ui.full-state"
+  | "thread.created"
+  | "thread.updated"
+  | "thread.deleted"
+  | "thread.status"
+  | "thread.activity"
   | "error";
 
 export interface WsEvent<T = unknown> {

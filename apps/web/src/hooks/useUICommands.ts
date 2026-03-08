@@ -11,6 +11,56 @@ import type {
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000'
 
+// ── Device / platform helpers (shared with useScreenShare) ──────────
+function detectPlatform(): 'electron' | 'capacitor' | 'web' {
+  if (typeof window !== 'undefined' && window.jaitDesktop) return 'electron'
+  if (typeof window !== 'undefined' && 'Capacitor' in window) return 'capacitor'
+  return 'web'
+}
+
+function generateDeviceId(): string {
+  const platform = detectPlatform()
+  const storageKey = `jait-device-id-${platform}`
+  const stored = localStorage.getItem(storageKey)
+  if (stored) return stored
+  const id = `${platform}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+  localStorage.setItem(storageKey, id)
+  return id
+}
+
+function getDeviceName(): string {
+  const platform = detectPlatform()
+  const ua = navigator.userAgent
+  if (platform === 'electron') return `Desktop (${navigator.platform})`
+  if (platform === 'capacitor') return 'Mobile'
+  if (ua.includes('Chrome')) return `Chrome (${navigator.platform})`
+  if (ua.includes('Firefox')) return `Firefox (${navigator.platform})`
+  if (ua.includes('Safari')) return `Safari (${navigator.platform})`
+  return `Browser (${navigator.platform})`
+}
+
+function detectFsNodePlatform(): string {
+  const p = detectPlatform()
+  if (p === 'capacitor') return 'android' // or ios, but we'll keep it simple
+  if (p === 'electron') {
+    const plat = navigator.platform?.toLowerCase() ?? ''
+    if (plat.includes('win')) return 'windows'
+    if (plat.includes('mac')) return 'macos'
+    return 'linux'
+  }
+  return 'web'
+}
+
+/**
+ * Whether this client can act as a filesystem node (browse local files).
+ * Browser clients served from a local dev server can't really expose files,
+ * but Electron and Capacitor can.
+ */
+function canActAsFsNode(): boolean {
+  const p = detectPlatform()
+  return p === 'electron' || p === 'capacitor'
+}
+
 // ── Listener map ────────────────────────────────────────────────────
 type CommandDataMap = {
   'workspace.open': WorkspaceOpenData
@@ -53,6 +103,8 @@ interface UseUICommandsOptions {
   onStateSync?: StateSyncHandler
   /** Called when the gateway pushes the full session state on subscribe/reconnect. */
   onFullState?: FullStateHandler
+  /** Called when the gateway broadcasts that an assistant message has completed. */
+  onMessageComplete?: () => void
 }
 
 /**
@@ -70,13 +122,15 @@ interface UseUICommandsOptions {
  * to other clients via `ui.state-sync`.
  */
 export function useUICommands(opts: UseUICommandsOptions) {
-  const { listeners, sessionId, token, onStateSync, onFullState } = opts
+  const { listeners, sessionId, token, onStateSync, onFullState, onMessageComplete } = opts
   const listenersRef = useRef(listeners)
   listenersRef.current = listeners
   const onStateSyncRef = useRef(onStateSync)
   onStateSyncRef.current = onStateSync
   const onFullStateRef = useRef(onFullState)
   onFullStateRef.current = onFullState
+  const onMessageCompleteRef = useRef(onMessageComplete)
+  onMessageCompleteRef.current = onMessageComplete
   const wsRef = useRef<WebSocket | null>(null)
   const currentSessionRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
@@ -127,11 +181,138 @@ export function useUICommands(opts: UseUICommandsOptions) {
         if (state && onFullStateRef.current) {
           onFullStateRef.current(state)
         }
+      } else if (msg.type === 'message.complete') {
+        // Assistant message finished on another device — refresh chat
+        onMessageCompleteRef.current?.()
+      } else if (msg.type === 'fs.browse-request') {
+        // Gateway is asking us to browse a local directory
+        void handleFsBrowseRequest(msg.payload as { requestId: string; path: string })
+      } else if (msg.type === 'fs.roots-request') {
+        // Gateway is asking for our root directories
+        void handleFsRootsRequest(msg.payload as { requestId: string })
       }
     } catch {
       // ignore parse errors
     }
   }, [])
+
+  // ── Filesystem node request handlers ──────────────────────────────
+
+  /** Browse a local directory using Capacitor Filesystem API */
+  const capacitorBrowse = useCallback(async (dirPath: string) => {
+    const { Filesystem, Directory } = await import('@capacitor/filesystem')
+    // Determine the base directory and relative path
+    let directory: typeof Directory[keyof typeof Directory] | undefined
+    let path = dirPath
+    if (dirPath === '~' || dirPath === '/storage' || dirPath === '/') {
+      // Root request — list the external storage root
+      directory = Directory.ExternalStorage
+      path = ''
+    } else if (dirPath.startsWith('/storage/emulated/0')) {
+      directory = Directory.ExternalStorage
+      path = dirPath.replace('/storage/emulated/0', '').replace(/^\//, '')
+    }
+    const result = await Filesystem.readdir({
+      path: path || '',
+      ...(directory ? { directory } : {}),
+    })
+    const basePath = directory === Directory.ExternalStorage
+      ? '/storage/emulated/0' + (path ? '/' + path : '')
+      : dirPath
+    const entries: { name: string; path: string; type: 'dir' | 'file' }[] = []
+    for (const f of result.files) {
+      if (f.name.startsWith('.')) continue
+      entries.push({
+        name: f.name,
+        path: basePath + '/' + f.name,
+        type: f.type === 'directory' ? 'dir' : 'file',
+      })
+    }
+    entries.sort((a, b) => {
+      if (a.type !== b.type) return a.type === 'dir' ? -1 : 1
+      return a.name.localeCompare(b.name)
+    })
+    // Compute parent
+    const parts = basePath.replace(/\/+$/, '').split('/')
+    const parent = parts.length > 3 ? parts.slice(0, -1).join('/') : null
+    return { path: basePath, parent, entries }
+  }, [])
+
+  /** Get root directories on Capacitor (Android) */
+  const capacitorRoots = useCallback(async () => {
+    return [
+      { name: 'Internal Storage', path: '/storage/emulated/0', type: 'dir' as const },
+      { name: 'Documents', path: '/storage/emulated/0/Documents', type: 'dir' as const },
+      { name: 'Downloads', path: '/storage/emulated/0/Download', type: 'dir' as const },
+      { name: 'Home', path: '/storage/emulated/0', type: 'dir' as const },
+    ]
+  }, [])
+
+  /** Respond to a remote browse request from the gateway */
+  const handleFsBrowseRequest = useCallback(async (payload: { requestId: string; path: string }) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const { requestId, path } = payload
+    try {
+      let result: { path: string; parent: string | null; entries: { name: string; path: string; type: 'dir' | 'file' }[] }
+      const platform = detectPlatform()
+      if (platform === 'electron' && window.jaitDesktop?.browsePath) {
+        result = await window.jaitDesktop.browsePath(path)
+      } else if (platform === 'capacitor') {
+        result = await capacitorBrowse(path)
+      } else {
+        throw new Error('Local filesystem browsing not supported on this platform')
+      }
+      ws.send(JSON.stringify({
+        type: 'fs.browse-response',
+        payload: {
+          requestId,
+          path: result.path,
+          parent: result.parent,
+          entries: result.entries,
+        },
+      }))
+    } catch (err) {
+      ws.send(JSON.stringify({
+        type: 'fs.browse-response',
+        payload: {
+          requestId,
+          error: err instanceof Error ? err.message : 'Browse failed',
+        },
+      }))
+    }
+  }, [capacitorBrowse])
+
+  /** Respond to a remote roots request from the gateway */
+  const handleFsRootsRequest = useCallback(async (payload: { requestId: string }) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const { requestId } = payload
+    try {
+      let roots: { name: string; path: string; type: 'dir' | 'file' }[]
+      const platform = detectPlatform()
+      if (platform === 'electron' && window.jaitDesktop?.getRoots) {
+        const result = await window.jaitDesktop.getRoots()
+        roots = result.roots
+      } else if (platform === 'capacitor') {
+        roots = await capacitorRoots()
+      } else {
+        throw new Error('Local filesystem browsing not supported on this platform')
+      }
+      ws.send(JSON.stringify({
+        type: 'fs.roots-response',
+        payload: { requestId, roots },
+      }))
+    } catch (err) {
+      ws.send(JSON.stringify({
+        type: 'fs.roots-response',
+        payload: {
+          requestId,
+          error: err instanceof Error ? err.message : 'Roots request failed',
+        },
+      }))
+    }
+  }, [capacitorRoots])
 
   // ── Single, stable WS connection — only depends on token ──────────
   // Session changes are handled by re-subscribing, NOT by reconnecting.
@@ -150,6 +331,18 @@ export function useUICommands(opts: UseUICommandsOptions) {
         if (sid) subscribeToSession(ws, sid)
         // Flush any queued outgoing messages
         flushQueue(ws)
+        // Register as a filesystem node if this client can browse files locally
+        if (canActAsFsNode()) {
+          const nodeMsg = JSON.stringify({
+            type: 'fs.register-node',
+            payload: {
+              id: generateDeviceId(),
+              name: getDeviceName(),
+              platform: detectFsNodePlatform(),
+            },
+          })
+          ws.send(nodeMsg)
+        }
       }
 
       ws.onmessage = handleMessage

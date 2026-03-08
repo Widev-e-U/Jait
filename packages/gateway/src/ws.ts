@@ -6,6 +6,8 @@ import type {
   ScreenShareAnswer,
   ScreenShareIceCandidate,
   ScreenShareSessionState,
+  FsNode,
+  FsBrowseEntry,
 } from "@jait/shared";
 import type { AppConfig } from "./config.js";
 import { nanoid } from "nanoid";
@@ -28,6 +30,15 @@ export class WsControlPlane {
   private wss: WebSocketServer | null = null;
   private clients = new Map<string, ConnectedClient>();
   private jwtSecret: Uint8Array;
+
+  /** Filesystem nodes registered by clients (keyed by node ID) */
+  private fsNodes = new Map<string, FsNode>();
+  /** Pending fs browse requests waiting for a response from a remote node */
+  private pendingFsBrowse = new Map<string, {
+    resolve: (value: { path: string; parent: string | null; entries: FsBrowseEntry[] }) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
 
   constructor(private config: AppConfig) {
     // Use the configured JWT secret, or a dev-mode fallback
@@ -297,6 +308,76 @@ export class WsControlPlane {
         }
         break;
       }
+
+      // ── Filesystem node protocol ────────────────────────────────
+      case "fs.register-node": {
+        const p = msg.payload as { id?: string; name?: string; platform?: string } | undefined;
+        if (p?.id && p.name && p.platform) {
+          const node: FsNode = {
+            id: p.id,
+            name: p.name,
+            platform: p.platform as FsNode["platform"],
+            clientId: client.id,
+            isGateway: false,
+            registeredAt: new Date().toISOString(),
+          };
+          this.fsNodes.set(node.id, node);
+          console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id}`);
+        }
+        break;
+      }
+      case "fs.browse-response": {
+        // A client responded to a fs browse request we proxied to it
+        const resp = msg.payload as {
+          requestId?: string;
+          path?: string;
+          parent?: string | null;
+          entries?: FsBrowseEntry[];
+          error?: string;
+        } | undefined;
+        if (resp?.requestId) {
+          const pending = this.pendingFsBrowse.get(resp.requestId);
+          if (pending) {
+            this.pendingFsBrowse.delete(resp.requestId);
+            clearTimeout(pending.timer);
+            if (resp.error) {
+              pending.reject(new Error(resp.error));
+            } else {
+              pending.resolve({
+                path: resp.path ?? "",
+                parent: resp.parent ?? null,
+                entries: resp.entries ?? [],
+              });
+            }
+          }
+        }
+        break;
+      }
+      case "fs.roots-response": {
+        const resp = msg.payload as {
+          requestId?: string;
+          roots?: FsBrowseEntry[];
+          error?: string;
+        } | undefined;
+        if (resp?.requestId) {
+          const pending = this.pendingFsBrowse.get(resp.requestId);
+          if (pending) {
+            this.pendingFsBrowse.delete(resp.requestId);
+            clearTimeout(pending.timer);
+            if (resp.error) {
+              pending.reject(new Error(resp.error));
+            } else {
+              pending.resolve({
+                path: "",
+                parent: null,
+                entries: resp.roots ?? [],
+              });
+            }
+          }
+        }
+        break;
+      }
+
       default: {
         this.send(client.ws, {
           type: "error",
@@ -451,6 +532,83 @@ export class WsControlPlane {
     return [...this.clients.values()]
       .filter((c) => c.deviceId && c.authenticated)
       .map((c) => c.deviceId!);
+  }
+
+  // ── Filesystem node helpers ─────────────────────────────────────
+
+  /** List all registered filesystem nodes */
+  getFsNodes(): FsNode[] {
+    // Clean up nodes whose client has disconnected
+    for (const [id, node] of this.fsNodes) {
+      if (!node.isGateway && !this.clients.has(node.clientId)) {
+        this.fsNodes.delete(id);
+      }
+    }
+    return [...this.fsNodes.values()];
+  }
+
+  /** Register the gateway itself as a filesystem node */
+  registerGatewayFsNode(node: FsNode) {
+    this.fsNodes.set(node.id, node);
+  }
+
+  /**
+   * Proxy a browse request to a remote filesystem node.
+   * Sends a WS message to the owning client and waits for a response.
+   */
+  proxyFsBrowse(nodeId: string, path: string): Promise<{ path: string; parent: string | null; entries: FsBrowseEntry[] }> {
+    const node = this.fsNodes.get(nodeId);
+    if (!node) return Promise.reject(new Error(`Unknown filesystem node: ${nodeId}`));
+    if (node.isGateway) return Promise.reject(new Error("Use local browse for gateway node"));
+    const client = this.clients.get(node.clientId);
+    if (!client || client.ws.readyState !== 1) {
+      return Promise.reject(new Error(`Node ${nodeId} is not connected`));
+    }
+    const requestId = nanoid();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFsBrowse.delete(requestId);
+        reject(new Error("Browse request timed out"));
+      }, 10000);
+      this.pendingFsBrowse.set(requestId, { resolve, reject, timer });
+      this.send(client.ws, {
+        type: "fs.browse-request" as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { requestId, path },
+      });
+    });
+  }
+
+  /**
+   * Proxy a roots request to a remote filesystem node.
+   */
+  proxyFsRoots(nodeId: string): Promise<FsBrowseEntry[]> {
+    const node = this.fsNodes.get(nodeId);
+    if (!node) return Promise.reject(new Error(`Unknown filesystem node: ${nodeId}`));
+    if (node.isGateway) return Promise.reject(new Error("Use local roots for gateway node"));
+    const client = this.clients.get(node.clientId);
+    if (!client || client.ws.readyState !== 1) {
+      return Promise.reject(new Error(`Node ${nodeId} is not connected`));
+    }
+    const requestId = nanoid();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFsBrowse.delete(requestId);
+        reject(new Error("Roots request timed out"));
+      }, 10000);
+      this.pendingFsBrowse.set(requestId, {
+        resolve: (resp) => resolve(resp.entries),
+        reject,
+        timer,
+      });
+      this.send(client.ws, {
+        type: "fs.roots-request" as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { requestId },
+      });
+    });
   }
 
   get clientCount() {

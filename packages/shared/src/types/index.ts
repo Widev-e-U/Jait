@@ -22,7 +22,7 @@ export type {
   FileHighlightData,
   ScreenShareOpenData,
 } from "./message.js";
-export type { GatewayStatus, DeviceInfo } from "./gateway.js";
+export type { GatewayStatus, DeviceInfo, FsNode, FsBrowseEntry, FsBrowseResponse, FsRootsResponse } from "./gateway.js";
 
 export type {
   NetworkHost,
@@ -46,3 +46,17 @@ export type {
   ScreenShareStartRequest,
   ScreenShareStopRequest,
 } from "./screen-share.js";
+
+export type {
+  ProviderId,
+  ProviderInfo,
+  RuntimeMode,
+  ThreadStatus,
+  ThreadInfo,
+  ThreadActivityKind,
+  ThreadActivity,
+  CreateThreadParams,
+  UpdateThreadParams,
+  ThreadWsEventType,
+  ThreadWsEvent,
+} from "./thread.js";

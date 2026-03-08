@@ -1,4 +1,4 @@
-const { allowedIpcChannels } = require("./preload-allow-list.js");
+const allowedIpcChannels = require("./preload-allow-list.cjs");
 /**
  * Jait Desktop — Preload script
  *
@@ -31,6 +31,20 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   /** Open a native directory picker and return the absolute path */
   pickDirectory: () =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[4]) as Promise<{ path: string } | null>,
+
+  /** Browse a local directory (for remote fs node protocol) */
+  browsePath: (dirPath: string) =>
+    ipcRenderer.invoke(allowedIpcChannels.invoke[6], dirPath) as Promise<{
+      path: string;
+      parent: string | null;
+      entries: { name: string; path: string; type: 'dir' | 'file' }[];
+    }>,
+
+  /** Get root drives / home directory */
+  getRoots: () =>
+    ipcRenderer.invoke(allowedIpcChannels.invoke[7]) as Promise<{
+      roots: { name: string; path: string; type: 'dir' | 'file' }[];
+    }>,
 
   /** Listen for screen-share commands from main process (tray, etc.) */
   onScreenShareStart: (callback: () => void) =>

@@ -25,8 +25,27 @@ export interface AppConfig {
   openaiApiKey: string;
   openaiModel: string;
   openaiBaseUrl: string;
+  /** Max context window tokens (auto-detected from model name if not set) */
+  contextWindow: number;
   hookSecret: string;
   heartbeatCron: string;
+}
+
+/** Infer context window size from model name. Conservative defaults. */
+export function inferContextWindow(model: string): number {
+  const m = model.toLowerCase();
+  if (m.includes("gpt-4o") || m.includes("gpt-4.1")) return 128_000;
+  if (m.includes("gpt-4-turbo")) return 128_000;
+  if (m.includes("gpt-4")) return 8_192;
+  if (m.includes("gpt-3.5")) return 16_385;
+  if (m.includes("claude-3") || m.includes("claude-4")) return 200_000;
+  if (m.includes("claude")) return 100_000;
+  if (m.includes("gemini")) return 128_000;
+  if (m.includes("o1") || m.includes("o3") || m.includes("o4")) return 200_000;
+  if (m.includes("deepseek")) return 64_000;
+  if (m.includes("mistral") || m.includes("mixtral")) return 32_000;
+  if (m.includes("llama")) return 8_192;
+  return 128_000; // safe default
 }
 
 export function loadConfig(): AppConfig {
@@ -50,6 +69,10 @@ export function loadConfig(): AppConfig {
     openaiApiKey: process.env["OPENAI_API_KEY"] ?? "",
     openaiModel: process.env["OPENAI_MODEL"] ?? "gpt-4o",
     openaiBaseUrl: process.env["OPENAI_BASE_URL"] ?? "https://api.openai.com/v1",
+    contextWindow: parseInt(
+      process.env["CONTEXT_WINDOW"] ?? "0",
+      10,
+    ) || inferContextWindow(process.env["OPENAI_MODEL"] ?? "gpt-4o"),
     hookSecret: process.env["HOOK_SECRET"] ?? "jait-hook-secret",
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
   };

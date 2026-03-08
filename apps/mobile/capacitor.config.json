@@ -3,12 +3,16 @@
   "appName": "Jait",
   "webDir": "../../apps/web/dist",
   "server": {
-    "androidScheme": "https",
+    "androidScheme": "http",
     "iosScheme": "https"
   },
   "plugins": {
     "CapacitorHttp": {
       "enabled": true
+    },
+    "Keyboard": {
+      "resize": "native",
+      "resizeOnFullScreen": true
     }
   }
 }

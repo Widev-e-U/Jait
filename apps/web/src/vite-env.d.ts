@@ -21,6 +21,16 @@ interface JaitDesktopBridge {
   notify: (opts: { title: string; body: string }) => Promise<{ ok: true }>
   confirmShare: (opts: { title: string; message: string }) => Promise<{ accepted: boolean }>
   pickDirectory: () => Promise<{ path: string } | null>
+  /** Browse a local directory (for remote fs node protocol) */
+  browsePath: (dirPath: string) => Promise<{
+    path: string
+    parent: string | null
+    entries: { name: string; path: string; type: 'dir' | 'file' }[]
+  }>
+  /** Get root drives / home directory */
+  getRoots: () => Promise<{
+    roots: { name: string; path: string; type: 'dir' | 'file' }[]
+  }>
   onScreenShareStart: (callback: () => void) => void
   onScreenShareStop: (callback: () => void) => void
   platform: 'electron'

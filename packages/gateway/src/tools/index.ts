@@ -64,6 +64,7 @@ export {
   promptRegistry,
   type ModelEndpoint,
   type IAgentPrompt,
+  type PromptContext,
 } from "./prompts/index.js";
 export {
   runAgentLoop,
@@ -137,7 +138,7 @@ import { createAgentSpawnTool } from "./agent-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
 import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import type { VoiceService } from "../voice/service.js";
-import type { AppConfig } from "../config.js";
+import { type AppConfig, inferContextWindow } from "../config.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -277,14 +278,20 @@ export function createToolRegistry(
   if (deps.config) {
     const agentDeps = {
       toolRegistry: tools,
-      getLLMConfig: (context: { apiKeys?: Record<string, string> }) => ({
-        openaiApiKey:
-          context.apiKeys?.["OPENAI_API_KEY"]?.trim() || deps.config!.openaiApiKey,
-        openaiBaseUrl:
-          context.apiKeys?.["OPENAI_BASE_URL"]?.trim() || deps.config!.openaiBaseUrl,
-        openaiModel:
-          context.apiKeys?.["OPENAI_MODEL"]?.trim() || deps.config!.openaiModel,
-      }),
+      getLLMConfig: (context: { apiKeys?: Record<string, string> }) => {
+        const effectiveModel =
+          context.apiKeys?.["OPENAI_MODEL"]?.trim() || deps.config!.openaiModel;
+        return {
+          openaiApiKey:
+            context.apiKeys?.["OPENAI_API_KEY"]?.trim() || deps.config!.openaiApiKey,
+          openaiBaseUrl:
+            context.apiKeys?.["OPENAI_BASE_URL"]?.trim() || deps.config!.openaiBaseUrl,
+          openaiModel: effectiveModel,
+          contextWindow: context.apiKeys?.["OPENAI_MODEL"]?.trim()
+            ? inferContextWindow(effectiveModel)
+            : deps.config!.contextWindow,
+        };
+      },
     };
     // Core: simplified "agent" tool
     tools.register(createAgentTool(agentDeps));

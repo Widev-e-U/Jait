@@ -1,6 +1,6 @@
 import { describe, expect, test } from "vitest";
 import { DesktopApp } from "./main.js";
-import { allowedIpcChannels } from "./preload-allow-list.js";
+import allowedIpcChannels from "./preload-allow-list.cjs";
 
 describe("sprint9 desktop app", () => {
   test("desktop app launches and connects to gateway", async () => {

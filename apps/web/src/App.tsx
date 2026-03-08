@@ -1,9 +1,12 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
+  AlertTriangle,
   Calendar,
   Bug,
   Bot,
   Cast,
+  Code,
+  Eye,
   FolderTree,
   LogOut,
   MessageSquare,
@@ -35,6 +38,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
 import { PlanReview } from '@/components/chat/plan-review'
+import { ContextIndicator } from '@/components/chat/context-indicator'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
@@ -45,6 +49,7 @@ import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
 import { WorkspacePanel, workspaceLanguageForPath, DiffView, type WorkspaceFile, type WorkspacePanelHandle } from '@/components/workspace'
+import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode, type SttProvider } from '@/hooks/useAuth'
@@ -60,7 +65,7 @@ import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
 
 const API_URL = import.meta.env.VITE_API_URL || ''
 
-type AppView = 'chat' | 'automation' | 'jobs' | 'network' | 'settings'
+type AppView = 'chat' | 'automations' | 'jobs' | 'network' | 'settings'
 
 const suggestions = [
   'What can you help me with?',
@@ -85,12 +90,17 @@ function App() {
   const [showTerminal, setShowTerminal] = useState(false)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showScreenShare, setShowScreenShare] = useState(false)
+  const [showWorkspaceTree, setShowWorkspaceTree] = useState(() => localStorage.getItem('showWorkspaceTree') !== 'false')
+  const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(() => localStorage.getItem('showWorkspaceEditor') !== 'false')
+  const [showCloseWorkspaceConfirm, setShowCloseWorkspaceConfirm] = useState(false)
+  const closeConfirmRef = useRef<HTMLDivElement>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [screenShareChatWidth, setScreenShareChatWidth] = useState<number | null>(null)
   const screenShareDragging = useRef(false)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
+  const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(() => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || 'jait')
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [registerUsername, setRegisterUsername] = useState('')
@@ -106,11 +116,13 @@ function App() {
     modifiedContent: string
     language: string
   } | null>(null)
+  const [folderPickerOpen, setFolderPickerOpen] = useState(false)
   const isDragging = useRef(false)
   const workspaceRef = useRef<WorkspacePanelHandle>(null)
   const promptInputRef = useRef<PromptInputHandle>(null)
   const isMobile = useIsMobile()
   const showDesktopWorkspace = !isMobile && showWorkspace
+  const showMobileWorkspace = isMobile && showWorkspace
 
   const onScreenShareDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
@@ -166,6 +178,7 @@ function App() {
     todoList,
     changedFiles,
     messageQueue,
+    contextUsage,
     sendMessage,
     restartFromMessage,
     cancelRequest,
@@ -175,6 +188,7 @@ function App() {
     rejectPlan,
     enqueueMessage,
     dequeueMessage,
+    updateQueueItem,
     acceptFile,
     rejectFile,
     acceptAllFiles,
@@ -183,6 +197,7 @@ function App() {
     addChangedFile,
     setChangedFiles,
     setOnChangedFilesSync,
+    refreshMessages,
   } = useChat(activeSessionId, token, onLoginRequired)
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals()
   const { provider, model } = useModelInfo()
@@ -356,14 +371,17 @@ function App() {
     token,
     onStateSync: handleStateSync,
     onFullState: handleFullState,
+    onMessageComplete: refreshMessages,
     listeners: {
       'workspace.open': useCallback((data: WorkspaceOpenData) => {
+        setShowWorkspace(true)
         setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
-        setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId })
+        const state = { open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId }
+        setSavedWorkspace(state)
       }, [setSavedWorkspace]),
       'workspace.close': useCallback(() => {
-        setActiveWorkspace(null)
         setShowWorkspace(false)
+        setActiveWorkspace(null)
         setSavedWorkspace(null)
       }, [setSavedWorkspace]),
       'terminal.focus': useCallback((data: TerminalFocusData) => {
@@ -411,6 +429,10 @@ function App() {
     localStorage.setItem('chatMode', chatMode)
   }, [chatMode])
 
+  useEffect(() => {
+    localStorage.setItem('chatProvider', chatProvider)
+  }, [chatProvider])
+
   // ── Synced panel controllers (local state + WS + DB) ──────────────
   // Use these instead of raw setShowX for user-initiated open/close.
 
@@ -445,9 +467,55 @@ function App() {
     sendUIState('workspace.panel', null, activeSessionId)
   }, [setSavedWorkspace, sendUIState, activeSessionId])
 
+  const toggleWorkspaceTree = useCallback(() => {
+    setShowWorkspaceTree(prev => {
+      const next = !prev
+      localStorage.setItem('showWorkspaceTree', String(next))
+      return next
+    })
+  }, [])
+
+  const toggleWorkspaceEditor = useCallback(() => {
+    setShowWorkspaceEditor(prev => {
+      const next = !prev
+      localStorage.setItem('showWorkspaceEditor', String(next))
+      return next
+    })
+  }, [])
+
+  const showWorkspaceTreePanel = useCallback(() => {
+    setShowWorkspaceTree(true)
+    localStorage.setItem('showWorkspaceTree', 'true')
+  }, [])
+
+  const showWorkspaceEditorPanel = useCallback(() => {
+    setShowWorkspaceEditor(true)
+    localStorage.setItem('showWorkspaceEditor', 'true')
+  }, [])
+
+  // Helper: create a filesystem surface on the gateway so ALL clients
+  // can browse the directory remotely (enables cross-device sync).
+  const openRemoteWorkspaceOnGateway = useCallback(async (dirPath: string) => {
+    const res = await fetch(`${API_URL}/api/workspace/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: dirPath, sessionId: activeSessionId }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ message: 'Unknown error' }))
+      throw new Error((err as { message?: string }).message ?? 'Failed to open workspace')
+    }
+    // The gateway broadcasts `workspace.open` via WS and persists state.
+    // All clients (including this one) will receive it and hydrate automatically.
+  }, [activeSessionId])
+
   const handleOpenWorkspace = useCallback(async () => {
     if (showWorkspace) {
-      // Already open — close it
+      // If there are unsaved changed files, ask for confirmation
+      if (changedFiles.length > 0) {
+        setShowCloseWorkspaceConfirm(true)
+        return
+      }
       closeWorkspacePanel()
       return
     }
@@ -461,62 +529,9 @@ function App() {
       return
     }
 
-    // Helper: create a filesystem surface on the gateway so ALL clients
-    // can browse the directory remotely (enables cross-device sync).
-    const openRemoteWorkspaceOnGateway = async (dirPath: string) => {
-      const res = await fetch(`${API_URL}/api/workspace/open`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: dirPath, sessionId: activeSessionId }),
-      })
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({ message: 'Unknown error' }))
-        throw new Error((err as { message?: string }).message ?? 'Failed to open workspace')
-      }
-      // The gateway broadcasts `workspace.open` via WS and persists state.
-      // All clients (including this one) will receive it and hydrate automatically.
-    }
-
-    // ── Electron: use native OS dialog → absolute path → POST to gateway ──
-    if (window.jaitDesktop?.pickDirectory) {
-      try {
-        const result = await window.jaitDesktop.pickDirectory()
-        if (!result) return // user cancelled
-        await openRemoteWorkspaceOnGateway(result.path)
-      } catch (err) {
-        console.error('Failed to open workspace via Electron picker:', err)
-      }
-      return
-    }
-
-    // ── Browser: try showDirectoryPicker for local-only fallback,
-    //    but also POST to gateway so other clients can browse remotely.
-    const w = window as Window & { showDirectoryPicker?: () => Promise<FileSystemDirectoryHandle> }
-    if (!w.showDirectoryPicker) {
-      // No directory picker available — prompt for a server-side path
-      const dirPath = window.prompt('Enter the absolute directory path on the server:')
-      if (!dirPath) return
-      try {
-        await openRemoteWorkspaceOnGateway(dirPath)
-      } catch (err) {
-        window.alert(`Failed to open workspace: ${err instanceof Error ? err.message : 'Unknown error'}`)
-      }
-      return
-    }
-
-    try {
-      const dirHandle = await w.showDirectoryPicker()
-      // Browser picker mode is local-only because no absolute server path is available.
-      setShowWorkspace(true)
-      setSavedWorkspace({ open: true, remotePath: '' })
-      sendUIState('workspace.panel', { open: true }, activeSessionId)
-      setTimeout(() => {
-        workspaceRef.current?.openDirectory(dirHandle)
-      }, 50)
-    } catch {
-      // User cancelled the picker — do nothing
-    }
-  }, [showWorkspace, activeWorkspace, closeWorkspacePanel, setSavedWorkspace, sendUIState, activeSessionId])
+    // ── Open the folder picker dialog (browses the gateway's filesystem) ──
+    setFolderPickerOpen(true)
+  }, [showWorkspace, activeWorkspace, closeWorkspacePanel, setSavedWorkspace, sendUIState, activeSessionId, openRemoteWorkspaceOnGateway, changedFiles.length])
 
   // Auto-open workspace panel when a filesystem surface starts
   useEffect(() => {
@@ -524,11 +539,43 @@ function App() {
     if (!showWorkspace) setShowWorkspace(true)
   }, [activeWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Verify workspace surface is alive; re-create if stale (e.g. after gateway restart)
+  useEffect(() => {
+    if (!activeWorkspace?.surfaceId || !activeWorkspace.workspaceRoot || !activeSessionId) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const res = await fetch(`${API_URL}/api/workspace/list?path=${encodeURIComponent(activeWorkspace.workspaceRoot)}&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`)
+        if (res.ok || cancelled) return // surface is alive
+        // Surface is stale — re-create it
+        const openRes = await fetch(`${API_URL}/api/workspace/open`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: activeWorkspace.workspaceRoot, sessionId: activeSessionId }),
+        })
+        if (!openRes.ok || cancelled) return
+        const data = (await openRes.json()) as { surfaceId: string; workspaceRoot: string }
+        if (cancelled) return
+        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
+        const state = { open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId }
+        setSavedWorkspace(state)
+        sendUIState('workspace.panel', state, activeSessionId)
+      } catch { /* network error — ignore, panel will show error naturally */ }
+    })()
+    return () => { cancelled = true }
+  }, [activeWorkspace?.surfaceId, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   // Auto-open workspace panel when the agent modifies files
   useEffect(() => {
     if (changedFiles.length === 0) return
     if (!showWorkspace) setShowWorkspace(true)
   }, [changedFiles.length]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Absolute paths of files the agent has modified (undecided only), used to auto-refresh the workspace editor
+  const changedPaths = useMemo(
+    () => changedFiles.filter((f) => f.state === 'undecided').map((f) => f.path),
+    [changedFiles],
+  )
 
   useEffect(() => {
     setThemeMode(settings.theme)
@@ -781,6 +828,13 @@ function App() {
     return workspaceRef.current?.searchFiles(query, limit, signal) ?? []
   }, [])
 
+  /** Explicitly queue a message while the agent is busy. */
+  const handleQueue = useCallback((_chipFiles?: ReferencedFile[]) => {
+    if (!inputValue.trim()) return
+    enqueueMessage(inputValue.trim())
+    setInputValue('')
+  }, [inputValue, enqueueMessage])
+
   const handleSubmit = async (chipFiles?: ReferencedFile[]) => {
     if (!inputValue.trim() && (!chipFiles || chipFiles.length === 0)) return
     if (!token) {
@@ -788,12 +842,6 @@ function App() {
       return
     }
 
-    // Steering: if the model is currently generating, queue the message
-    if (isLoading) {
-      enqueueMessage(inputValue.trim())
-      setInputValue('')
-      return
-    }
     let sid = activeSessionId
     if (!sid) {
       const session = await createSession()
@@ -839,6 +887,7 @@ ${file.content.slice(0, 2000)}
       token,
       sessionId: sid,
       mode: chatMode,
+      provider: chatProvider,
       onLoginRequired: () => setShowLoginDialog(true),
       ...(refs ? { displayContent, referencedFiles: refs } : {}),
     })
@@ -856,7 +905,7 @@ ${file.content.slice(0, 2000)}
       sid = session?.id ?? null
     }
     if (!sid) return
-    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const handleEditPreviousMessage = useCallback(async (
@@ -869,9 +918,11 @@ ${file.content.slice(0, 2000)}
     await restartFromMessage(messageId, newContent, messageIndex, messageFromEnd, {
       token,
       sessionId: activeSessionId,
+      mode: chatMode,
+      provider: chatProvider,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, restartFromMessage, token])
+  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider])
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -1031,73 +1082,83 @@ ${file.content.slice(0, 2000)}
 
   return (
     <TooltipProvider>
-      <div className="fixed inset-0 flex flex-col overflow-hidden">
-        <header className="flex items-center justify-between h-14 px-5 border-b shrink-0">
-          <div className="flex items-center gap-6">
+      <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
+        <header className="flex items-center h-14 px-2 sm:px-5 border-b shrink-0 gap-1 sm:gap-2">
+          {/* Left: Logo — always visible */}
+          <div className="flex items-center shrink-0">
             <span className="text-base font-medium tracking-tight">Jait</span>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowSidebar(s => !s)}>
-                  {showSidebar ? <PanelLeftClose className="h-3.5 w-3.5" /> : <PanelLeftOpen className="h-3.5 w-3.5" />}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Sessions</TooltipContent>
-            </Tooltip>
-            <nav className="flex items-center gap-1">
-              <Button
-                variant={currentView === 'chat' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => setCurrentView('chat')}
-              >
-                <MessageSquare className="h-3.5 w-3.5 mr-1.5" />
-                Chat
-              </Button>
-              <Button
-                variant={currentView === 'automation' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => setCurrentView('automation')}
-              >
-                <Bot className="h-3.5 w-3.5 mr-1.5" />
-                Automation
-              </Button>
-              <Button
-                variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => setCurrentView('jobs')}
-              >
-                <Calendar className="h-3.5 w-3.5 mr-1.5" />
-                Jobs
-              </Button>
-              <Button
-                variant={currentView === 'network' ? 'secondary' : 'ghost'}
-                size="sm"
-                className="h-8 text-xs"
-                onClick={() => setCurrentView('network')}
-              >
-                <Wifi className="h-3.5 w-3.5 mr-1.5" />
-                Network
-              </Button>
-
-            </nav>
           </div>
 
-          <div className="flex items-center gap-1.5">
-            {model && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <div className="flex items-center gap-1.5 mr-2 px-2 py-1 rounded-md bg-muted/50 cursor-default">
-                    <ModelIcon provider={provider ?? 'ollama'} model={model} size={16} />
-                    <span className="text-xs text-muted-foreground">{getModelDisplayName(model)}</span>
-                  </div>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">{model}</TooltipContent>
-              </Tooltip>
-            )}
+          {/* Center: Nav — scrollable on mobile */}
+          <nav className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none">
+            <Button
+              variant={currentView === 'chat' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 text-xs shrink-0 px-2 sm:px-3"
+              onClick={() => setCurrentView('chat')}
+            >
+              <MessageSquare className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Chat</span>
+            </Button>
+            <Button
+              variant={currentView === 'automations' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 text-xs shrink-0 px-2 sm:px-3"
+              onClick={() => setCurrentView('automations')}
+            >
+              <Bot className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Automations</span>
+            </Button>
+            <Button
+              variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 text-xs shrink-0 px-2 sm:px-3"
+              onClick={() => setCurrentView('jobs')}
+            >
+              <Calendar className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Jobs</span>
+            </Button>
+            <Button
+              variant={currentView === 'network' ? 'secondary' : 'ghost'}
+              size="sm"
+              className="h-8 text-xs shrink-0 px-2 sm:px-3"
+              onClick={() => setCurrentView('network')}
+            >
+              <Wifi className="h-3.5 w-3.5 sm:mr-1.5" />
+              <span className="hidden sm:inline">Network</span>
+            </Button>
+          </nav>
+
+          {/* Spacer */}
+          <div className="flex-1 min-w-0" />
+
+          {/* Right: Context + Model + Account — always visible */}
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+            <ContextIndicator usage={contextUsage} />
+            {(() => {
+              const displayProvider = chatProvider === 'codex' ? 'openai'
+                : chatProvider === 'claude-code' ? 'anthropic'
+                : provider ?? 'ollama'
+              const displayModel = chatProvider === 'codex' ? 'Codex'
+                : chatProvider === 'claude-code' ? 'Claude Code'
+                : model ? getModelDisplayName(model) : null
+              const tooltipText = chatProvider === 'codex' ? 'OpenAI Codex CLI'
+                : chatProvider === 'claude-code' ? 'Anthropic Claude Code CLI'
+                : model ?? ''
+              return displayModel ? (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="flex items-center gap-1 sm:gap-1.5 sm:mr-2 px-1.5 sm:px-2 py-1 rounded-md bg-muted/50 cursor-default">
+                      <ModelIcon provider={displayProvider} model={chatProvider === 'codex' ? 'codex' : chatProvider === 'claude-code' ? 'claude-3' : model ?? undefined} size={16} />
+                      <span className="text-xs text-muted-foreground hidden sm:inline">{displayModel}</span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">{tooltipText}</TooltipContent>
+                </Tooltip>
+              ) : null
+            })()}
             {remainingPrompts !== null && remainingPrompts <= 5 && (
-              <span className="text-xs text-muted-foreground mr-2">{remainingPrompts} remaining</span>
+              <span className="text-xs text-muted-foreground mr-1 sm:mr-2 hidden sm:inline">{remainingPrompts} remaining</span>
             )}
 
             {isAuthenticated ? (
@@ -1156,13 +1217,30 @@ ${file.content.slice(0, 2000)}
 
         {/* Chat-specific toolbar */}
         {currentView === 'chat' && (
-          <div className="flex items-center gap-1 px-5 h-9 border-b shrink-0 bg-muted/30">
+          <div className="flex items-center gap-1 px-2 sm:px-5 h-9 border-b shrink-0 bg-muted/30 overflow-x-auto scrollbar-none">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={showSidebar ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-6 text-[11px] px-2 shrink-0"
+                  onClick={() => setShowSidebar(s => !s)}
+                >
+                  {showSidebar
+                    ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
+                    : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
+                  }
+                  Sessions
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Toggle sessions sidebar</TooltipContent>
+            </Tooltip>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant={showTerminal ? 'secondary' : 'ghost'}
                   size="sm"
-                  className="h-6 text-[11px] px-2"
+                  className="h-6 text-[11px] px-2 shrink-0"
                   onClick={() => { void handleToggleTerminal() }}
                 >
                   <TerminalIcon className="h-3 w-3 mr-1" />
@@ -1171,26 +1249,75 @@ ${file.content.slice(0, 2000)}
               </TooltipTrigger>
               <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showWorkspace ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-6 text-[11px] px-2"
-                  onClick={() => { void handleOpenWorkspace() }}
-                >
-                  <FolderTree className="h-3 w-3 mr-1" />
-                  Workspace
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">Open workspace</TooltipContent>
-            </Tooltip>
+
+            {/* Workspace button with close-confirmation popover */}
+            <div className="relative flex items-center shrink-0">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showWorkspace ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-6 text-[11px] px-2"
+                    onClick={() => { void handleOpenWorkspace() }}
+                  >
+                    <FolderTree className="h-3 w-3 mr-1" />
+                    Workspace
+                    {showWorkspace && <X className="h-3 w-3 ml-1" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">{showWorkspace ? 'Close workspace' : 'Open workspace'}</TooltipContent>
+              </Tooltip>
+
+              {/* Confirmation popover when closing with unsaved changes */}
+              {showCloseWorkspaceConfirm && (
+                <>
+                  {/* Backdrop to close on outside click */}
+                  <div className="fixed inset-0 z-40" onClick={() => setShowCloseWorkspaceConfirm(false)} />
+                  <div
+                    ref={closeConfirmRef}
+                    className="absolute top-full left-0 mt-1 z-50 w-64 rounded-lg border bg-background shadow-lg p-3 space-y-2"
+                  >
+                    <div className="flex items-start gap-2">
+                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
+                      <div className="text-xs">
+                        <p className="font-medium">Close workspace?</p>
+                        <p className="text-muted-foreground mt-0.5">
+                          You have {changedFiles.length} unsaved file {changedFiles.length === 1 ? 'change' : 'changes'} that will be discarded.
+                        </p>
+                      </div>
+                    </div>
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-[11px] px-2"
+                        onClick={() => setShowCloseWorkspaceConfirm(false)}
+                      >
+                        Cancel
+                      </Button>
+                      <Button
+                        variant="destructive"
+                        size="sm"
+                        className="h-6 text-[11px] px-2"
+                        onClick={() => {
+                          setShowCloseWorkspaceConfirm(false)
+                          closeWorkspacePanel()
+                        }}
+                      >
+                        Discard & Close
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
+
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant={showDebugPanel ? 'secondary' : 'ghost'}
                   size="sm"
-                  className="h-6 text-[11px] px-2"
+                  className="h-6 text-[11px] px-2 shrink-0"
                   onClick={() => setShowDebugPanel(d => !d)}
                 >
                   <Bug className="h-3 w-3 mr-1" />
@@ -1204,7 +1331,7 @@ ${file.content.slice(0, 2000)}
                 <Button
                   variant={showScreenShare ? 'secondary' : 'ghost'}
                   size="sm"
-                  className="h-6 text-[11px] px-2"
+                  className="h-6 text-[11px] px-2 shrink-0"
                   onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                 >
                   <Cast className="h-3 w-3 mr-1" />
@@ -1216,8 +1343,8 @@ ${file.content.slice(0, 2000)}
           </div>
         )}
 
-        {currentView === 'automation' ? (
-          <div className="flex-1 overflow-y-auto">
+        {currentView === 'automations' ? (
+          <div className="flex-1 overflow-hidden">
             <AutomationPage />
           </div>
         ) : currentView === 'jobs' ? (
@@ -1261,12 +1388,18 @@ ${file.content.slice(0, 2000)}
               <WorkspacePanel
                 ref={workspaceRef}
                 autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
+                surfaceId={activeWorkspace?.surfaceId ?? null}
                 files={workspaceFiles}
                 activeFileId={activeWorkspaceFileId}
                 onActiveFileChange={setActiveWorkspaceFileId}
                 onFileDrop={(files) => { void handleFileDrop(files) }}
                 onReferenceFile={(file) => promptInputRef.current?.insertChip({ path: file.path, name: file.name })}
                 onAvailableFilesChange={setAvailableFilesForMention}
+                showTree={showWorkspaceTree}
+                showEditor={showWorkspaceEditor}
+                onToggleTree={toggleWorkspaceTree}
+                onToggleEditor={toggleWorkspaceEditor}
+                changedPaths={changedPaths}
               />
             )}
 
@@ -1295,6 +1428,67 @@ ${file.content.slice(0, 2000)}
                 </div>
                 <ScreenSharePanel screenShare={screenShare} />
               </aside>
+            )}
+
+            {showMobileWorkspace && !activeDiff && (showWorkspaceTree || showWorkspaceEditor) && (
+              <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
+                <WorkspacePanel
+                  ref={workspaceRef}
+                  autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
+                  surfaceId={activeWorkspace?.surfaceId ?? null}
+                  files={workspaceFiles}
+                  activeFileId={activeWorkspaceFileId}
+                  onActiveFileChange={setActiveWorkspaceFileId}
+                  onFileDrop={(files) => { void handleFileDrop(files) }}
+                  onReferenceFile={(file) => promptInputRef.current?.insertChip({ path: file.path, name: file.name })}
+                  onAvailableFilesChange={setAvailableFilesForMention}
+                  showTree={showWorkspaceTree}
+                  showEditor={showWorkspaceEditor}
+                  onToggleTree={toggleWorkspaceTree}
+                  onToggleEditor={toggleWorkspaceEditor}
+                  changedPaths={changedPaths}
+                  isMobile
+                />
+              </section>
+            )}
+
+            {/* Mobile: sticky show-panel buttons when workspace panels are hidden */}
+            {showMobileWorkspace && !activeDiff && (!showWorkspaceTree || !showWorkspaceEditor) && (
+              <div className="flex items-center gap-1 px-2 py-1.5 border-b bg-muted/20 shrink-0">
+                {!showWorkspaceTree && (
+                  <button
+                    onClick={showWorkspaceTreePanel}
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    <FolderTree className="h-3.5 w-3.5" />
+                    {!isMobile && 'Show Files'}
+                  </button>
+                )}
+                {!showWorkspaceEditor && (
+                  <button
+                    onClick={showWorkspaceEditorPanel}
+                    className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  >
+                    <Eye className="h-3.5 w-3.5" />
+                    <Code className="h-3.5 w-3.5" />
+                    {!isMobile && 'Show Editor'}
+                  </button>
+                )}
+              </div>
+            )}
+
+            {showMobileWorkspace && activeDiff && (
+              <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
+                <DiffView
+                  filePath={activeDiff.filePath}
+                  originalContent={activeDiff.originalContent}
+                  modifiedContent={activeDiff.modifiedContent}
+                  language={activeDiff.language}
+                  onClose={handleDiffClose}
+                  onApply={(result) => { void handleDiffApply(result) }}
+                />
+              </section>
             )}
 
             {showMobileScreenShare && (
@@ -1334,10 +1528,14 @@ ${file.content.slice(0, 2000)}
                     value={inputValue}
                     onChange={setInputValue}
                     onSubmit={handleSubmit}
+                    onStop={cancelRequest}
+                    onQueue={handleQueue}
                     isLoading={isLoading}
                     onVoiceInput={handleVoiceInput}
                     mode={chatMode}
                     onModeChange={setChatMode}
+                    provider={chatProvider}
+                    onProviderChange={setChatProvider}
                     availableFiles={availableFilesForMention}
                     onSearchFiles={handleSearchFiles}
                     workspaceOpen={showWorkspace}
@@ -1347,6 +1545,41 @@ ${file.content.slice(0, 2000)}
             ) : (
               <div className={`flex flex-col ${showDesktopScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 min-h-0 transition-all duration-300 ease-out`}
                 style={showDesktopScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
+                {/* Sticky show-panel buttons when workspace panels are hidden */}
+                {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
+                  <div className="flex items-center gap-1 px-2 py-1 border-b bg-muted/20 shrink-0">
+                    {!showWorkspaceTree && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={showWorkspaceTreePanel}
+                            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            <Eye className="h-3 w-3" />
+                            <FolderTree className="h-3 w-3" />
+                            Show Files
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">Show file tree</TooltipContent>
+                      </Tooltip>
+                    )}
+                    {!showWorkspaceEditor && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <button
+                            onClick={showWorkspaceEditorPanel}
+                            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                          >
+                            <Eye className="h-3 w-3" />
+                            <Code className="h-3 w-3" />
+                            Show Editor
+                          </button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">Show editor</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                )}
                 <Conversation className="min-h-0 flex-1 border-b" compact={showDesktopWorkspace || showDesktopScreenShare}>
                   {messages.map((msg, idx) => (
                     <Message
@@ -1361,6 +1594,7 @@ ${file.content.slice(0, 2000)}
                       thinking={msg.thinking}
                       thinkingDuration={msg.thinkingDuration}
                       toolCalls={msg.toolCalls}
+                      segments={msg.segments}
                       isStreaming={isLoading && msg === messages[messages.length - 1]}
                       compact={showWorkspace || showScreenShare}
                       onOpenTerminal={handleOpenTerminalFromToolCall}
@@ -1373,6 +1607,12 @@ ${file.content.slice(0, 2000)}
                   <div className={`mx-auto space-y-1.5 ${(showDesktopWorkspace || showDesktopScreenShare) ? 'max-w-none' : 'max-w-3xl'}`}>
                     {todoList.length > 0 && (
                       <TodoList items={todoList} />
+                    )}
+                    {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
+                      <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
+                        <AlertTriangle className="h-4 w-4 shrink-0" />
+                        <span className="min-w-0 break-words">{error}</span>
+                      </div>
                     )}
                     {hitMaxRounds && !isLoading && (
                       <div className="flex items-center justify-center gap-2 py-1.5">
@@ -1418,6 +1658,7 @@ ${file.content.slice(0, 2000)}
                       <MessageQueue
                         items={messageQueue}
                         onRemove={dequeueMessage}
+                        onEdit={updateQueueItem}
                       />
                     )}
                     <PromptInput
@@ -1426,11 +1667,14 @@ ${file.content.slice(0, 2000)}
                       onChange={setInputValue}
                       onSubmit={handleSubmit}
                       onStop={cancelRequest}
+                      onQueue={handleQueue}
                       isLoading={isLoading}
                       disabled={limitReached}
                       onVoiceInput={handleVoiceInput}
                       mode={chatMode}
                       onModeChange={setChatMode}
+                      provider={chatProvider}
+                      onProviderChange={setChatProvider}
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}
                       workspaceOpen={showWorkspace}
@@ -1588,6 +1832,17 @@ ${file.content.slice(0, 2000)}
             {authError && <p className="text-sm text-destructive">{authError}</p>}
           </DialogContent>
         </Dialog>
+
+        <FolderPickerDialog
+          open={folderPickerOpen}
+          onOpenChange={setFolderPickerOpen}
+          onSelect={(path) => {
+            void openRemoteWorkspaceOnGateway(path).catch((err) => {
+              console.error('Failed to open workspace:', err)
+              toast.error(`Failed to open workspace: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            })
+          }}
+        />
       </div>
     </TooltipProvider>
   )

@@ -1,5 +1,5 @@
 import type { FastifyInstance } from "fastify";
-import type { AppConfig } from "../config.js";
+import { type AppConfig, inferContextWindow } from "../config.js";
 import type { JaitDB } from "../db/index.js";
 import type { SessionService } from "../services/sessions.js";
 import type { UserService } from "../services/users.js";
@@ -9,8 +9,11 @@ import type { AuditWriter } from "../services/audit.js";
 import type { ToolResult } from "../tools/contracts.js";
 import type { MemoryService } from "../memory/contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
+import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
+import type { ProviderRegistry } from "../providers/registry.js";
+import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
 import { resolveWorkspaceRoot } from "../tools/core/get-fs.js";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -31,7 +34,7 @@ import {
   type PlannedAction,
   isValidChatMode,
 } from "../tools/chat-modes.js";
-import { buildSystemPrompt, type ModelEndpoint } from "../tools/prompts/index.js";
+import { buildSystemPrompt, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -42,6 +45,8 @@ interface ChatMessage {
   tool_call_id?: string;
   name?: string;
   uiToolCalls?: PersistedToolCall[];
+  /** Persisted segments for interleaved rendering */
+  segments?: unknown[];
 }
 
 /** Serialized tool call info for DB persistence */
@@ -65,6 +70,9 @@ const sessionHistory = new Map<string, ChatMessage[]>();
 const activeStreams = new Set<string>();
 const sessionAbortControllers = new Map<string, AbortController>();
 
+/** Persistent CLI provider sessions — kept alive across turns so the agent retains conversation context */
+const activeCliSessions = new Map<string, { providerId: ProviderId; providerSessionId: string }>();
+
 type StreamEvent =
   | { type: "token"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
@@ -72,6 +80,7 @@ type StreamEvent =
   | { type: "tool_output"; call_id: string; content: string }
   | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; data?: unknown }
   | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
+  | { type: "context_usage"; system: number; history: number; toolResults: number; tools: number; total: number; limit: number; ratio: number; pruned?: boolean }
   | { type: "done"; session_id: string; prompt_count: number; remaining_prompts: null }
   | { type: "error"; message: string };
 type StreamSubscriber = (event: StreamEvent) => void;
@@ -80,7 +89,7 @@ const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
 const DEFAULT_UI_MESSAGE_LIMIT = 120;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
-type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown };
+type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown; segments?: unknown };
 type VisibleHistoryMsg = UIMsg & { historyIndex: number };
 
 function parseToolArguments(raw: string): unknown {
@@ -238,6 +247,7 @@ function buildVisibleHistoryEntries(
       role: m.role as "user" | "assistant",
       content: m.content,
       toolCalls: uiToolCalls,
+      segments: m.segments,
       historyIndex: i,
     });
     visibleIndex++;
@@ -250,11 +260,12 @@ function buildVisibleHistoryMessages(
   history: ChatMessage[],
   options?: { includePendingAssistantToolCalls?: boolean },
 ): UIMsg[] {
-  return buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls }) => ({
+  return buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls, segments }) => ({
     id,
     role,
     content,
     toolCalls,
+    segments,
   }));
 }
 
@@ -288,7 +299,7 @@ const MAX_TOOL_ROUNDS = 15;
 let _dbRef: JaitDB | undefined;
 let _appRef: FastifyInstance | undefined;
 
-function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string): void {
+function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string): void {
   if (!_dbRef) return;
   try {
     _dbRef.insert(messagesTable)
@@ -298,6 +309,7 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
         role,
         content,
         toolCalls: toolCalls ?? null,
+        segments: segments ?? null,
         createdAt: new Date().toISOString(),
       })
       .run();
@@ -318,6 +330,7 @@ export interface ChatRouteDeps {
   memoryService?: MemoryService;
   ws?: WsControlPlane;
   sessionState?: SessionStateService;
+  providerRegistry?: ProviderRegistry;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -343,6 +356,7 @@ export function registerChatRoutes(
   let memoryService: MemoryService | undefined;
   let ws: WsControlPlane | undefined;
   let sessionStateService: SessionStateService | undefined;
+  let providerRegistry: ProviderRegistry | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -356,6 +370,7 @@ export function registerChatRoutes(
     memoryService = deps.memoryService;
     ws = deps.ws;
     sessionStateService = deps.sessionState;
+    providerRegistry = deps.providerRegistry;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
@@ -390,6 +405,7 @@ export function registerChatRoutes(
         { role: "system", content: SYSTEM_PROMPT },
         ...rows.map((r) => {
           let uiToolCalls: PersistedToolCall[] | undefined;
+          let segments: unknown[] | undefined;
           if (r.toolCalls) {
             try {
               const parsed = JSON.parse(r.toolCalls) as unknown;
@@ -400,17 +416,26 @@ export function registerChatRoutes(
               // Ignore malformed historical toolCalls payloads.
             }
           }
+          if (r.segments) {
+            try {
+              const parsed = JSON.parse(r.segments) as unknown;
+              if (Array.isArray(parsed)) {
+                segments = parsed;
+              }
+            } catch { /* ignore */ }
+          }
           return {
             role: r.role as ChatMessage["role"],
             content: r.content,
             uiToolCalls,
+            segments,
           };
         }),
       ]);
     }
   }
 
-  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string): void {
+  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string): void {
     if (!db) return;
     try {
       db.insert(messagesTable)
@@ -420,6 +445,7 @@ export function registerChatRoutes(
           role,
           content,
           toolCalls: toolCalls ?? null,
+          segments: segments ?? null,
           createdAt: new Date().toISOString(),
         })
         .run();
@@ -499,6 +525,9 @@ export function registerChatRoutes(
           ? (body["session_id"] as string)
           : crypto.randomUUID();
     const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
+    const requestProvider = typeof body["provider"] === "string"
+      ? (body["provider"] as ProviderId)
+      : undefined;
 
     if (!content.trim()) {
       return reply
@@ -512,10 +541,14 @@ export function registerChatRoutes(
       }
     }
     const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
+    const effectiveModel = userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
     const llmRuntime = {
       openaiApiKey: userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey,
       openaiBaseUrl: userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl,
-      openaiModel: userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel,
+      openaiModel: effectiveModel,
+      contextWindow: userApiKeys["OPENAI_MODEL"]?.trim()
+        ? inferContextWindow(effectiveModel)
+        : config.contextWindow,
     };
 
     // Set SSE headers
@@ -533,14 +566,22 @@ export function registerChatRoutes(
 
     // Build conversation history (hydrate from DB if needed)
     hydrateSession(sessionId);
+
+    // Resolve workspace root so the system prompt includes it
+    const sessionRecord = sessionService?.getById(sessionId);
+    const wsRoot = surfaceRegistry
+      ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
+      : (sessionRecord?.workspacePath?.trim() || process.cwd());
+    const promptCtx: PromptContext = { workspaceRoot: wsRoot };
+
     if (!sessionHistory.has(sessionId)) {
       sessionHistory.set(sessionId, [
-        { role: "system", content: buildSystemPrompt(chatMode, modelEndpoint) },
+        { role: "system", content: buildSystemPrompt(chatMode, modelEndpoint, promptCtx) },
       ]);
     } else {
-      // Update system prompt if mode/model changed mid-session
+      // Update system prompt if mode/model/workspace changed mid-session
       const h = sessionHistory.get(sessionId)!;
-      const modePrompt = buildSystemPrompt(chatMode, modelEndpoint);
+      const modePrompt = buildSystemPrompt(chatMode, modelEndpoint, promptCtx);
       if (h[0]?.role === "system" && h[0].content !== modePrompt) {
         h[0] = { role: "system", content: modePrompt };
       }
@@ -555,6 +596,7 @@ export function registerChatRoutes(
 
     let fullContent = "";
     let partialToolCalls: PersistedToolCall[] = [];
+    let resultSegmentsJson: string | undefined;
     let hitMaxRounds = false;
     activeStreams.add(sessionId);
 
@@ -567,14 +609,294 @@ export function registerChatRoutes(
       }
     };
 
-    const providerLabel = config.llmProvider === "openai" ? "OpenAI" : "Ollama";
+    const providerLabel = requestProvider === "codex"
+      ? "Codex"
+      : requestProvider === "claude-code"
+        ? "Claude Code"
+        : config.llmProvider === "openai" ? "OpenAI" : "Ollama";
 
     // Create steering controller for this session
     const steering = new SteeringController();
     sessionSteeringControllers.set(sessionId, steering);
 
     try {
-      if (config.llmProvider === "openai") {
+      // ══ CLI Provider path (codex / claude-code via MCP) ══════════
+      if (requestProvider && requestProvider !== "jait" && providerRegistry) {
+        const cliProvider = providerRegistry.get(requestProvider);
+        if (!cliProvider) {
+          safeWrite(`data: ${JSON.stringify({ type: "error", message: `Unknown provider: ${requestProvider}` })}\n\n`);
+          reply.raw.end();
+          return;
+        }
+
+        const available = await cliProvider.checkAvailability();
+        if (!available) {
+          safeWrite(`data: ${JSON.stringify({ type: "error", message: `Provider ${requestProvider} is not available: ${cliProvider.info.unavailableReason}` })}\n\n`);
+          reply.raw.end();
+          return;
+        }
+
+        const cliWsRoot = surfaceRegistry
+          ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
+          : (sessionRecord?.workspacePath?.trim() || process.cwd());
+
+        console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.workspacePath="${sessionRecord?.workspacePath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
+
+        // Ensure a FileSystemSurface exists for this session so we can
+        // back up files before CLI providers (Codex/Claude) write them,
+        // enabling the keep/discard (undo) flow.
+        let cliFsSurface: FileSystemSurface | null = null;
+        if (surfaceRegistry) {
+          const fsId = `fs-${sessionId}`;
+          const existing = surfaceRegistry.getSurface(fsId);
+          if (existing instanceof FileSystemSurface && existing.state === "running") {
+            cliFsSurface = existing;
+          } else {
+            try {
+              const started = await surfaceRegistry.startSurface("filesystem", fsId, {
+                sessionId,
+                workspaceRoot: cliWsRoot,
+              });
+              cliFsSurface = started as FileSystemSurface;
+            } catch { /* best effort */ }
+          }
+        }
+
+        const mcpServers = [providerRegistry.buildJaitMcpServerRef(config)];
+
+        // ── Reuse an existing CLI session if one is alive for this Jait session ──
+        const cachedCliSession = activeCliSessions.get(sessionId);
+        let providerSessionId: string;
+
+        if (cachedCliSession && cachedCliSession.providerId === requestProvider) {
+          // Existing session with the same provider — try to reuse it
+          providerSessionId = cachedCliSession.providerSessionId;
+          console.log(`[chat/cli] Reusing ${requestProvider} session ${providerSessionId} for ${sessionId}`);
+        } else {
+          // If the user switched providers, stop the old session first
+          if (cachedCliSession) {
+            const oldProvider = providerRegistry.get(cachedCliSession.providerId);
+            if (oldProvider) {
+              try { await oldProvider.stopSession(cachedCliSession.providerSessionId); } catch { /* best effort */ }
+            }
+            activeCliSessions.delete(sessionId);
+          }
+
+          const session = await cliProvider.startSession({
+            threadId: sessionId,
+            workingDirectory: cliWsRoot,
+            mode: "full-access",
+            model: typeof body["model"] === "string" ? body["model"] as string : undefined,
+            mcpServers,
+          });
+          providerSessionId = session.id;
+          activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId });
+          console.log(`[chat/cli] Started new ${requestProvider} session ${providerSessionId} for ${sessionId}`);
+        }
+
+        // Collect full content from CLI provider events
+        const contentChunks: string[] = [];
+
+        // ── Accumulate tool calls + segments for persistence ──
+        const cliToolCalls: PersistedToolCall[] = [];
+        const cliSegments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] }> = [];
+        /** Track the current pending tool-group callIds (batched between text tokens) */
+        let pendingToolGroup: string[] = [];
+        let lastSegmentWasText = false;
+
+        /** Flush any buffered text into a text segment */
+        const flushTextSegment = () => {
+          if (lastSegmentWasText) return; // already flushed
+          const text = contentChunks.join("");
+          // Only create a segment if there's new text since the last tool group
+          const prevTextLen = cliSegments
+            .filter((s): s is { type: "text"; content: string } => s.type === "text")
+            .reduce((n, s) => n + s.content.length, 0);
+          const newText = text.slice(prevTextLen);
+          if (newText) {
+            cliSegments.push({ type: "text", content: newText });
+          }
+          lastSegmentWasText = true;
+        };
+
+        /** Flush any pending tool group into a segment */
+        const flushToolGroup = () => {
+          if (pendingToolGroup.length > 0) {
+            // Before adding a tool group, flush any preceding text
+            flushTextSegment();
+            cliSegments.push({ type: "toolGroup", callIds: [...pendingToolGroup] });
+            pendingToolGroup = [];
+            lastSegmentWasText = false;
+          }
+        };
+
+        const unsubscribe = cliProvider.onEvent((event: ProviderEvent) => {
+          // Map provider events to SSE events the frontend understands
+          switch (event.type) {
+            case "token":
+              // If there's a pending tool group, flush it first
+              flushToolGroup();
+              contentChunks.push(event.content);
+              lastSegmentWasText = false; // new text arrived
+              safeWrite(`data: ${JSON.stringify({ type: "token", content: event.content })}\n\n`);
+              emitToSubscribers(sessionId, { type: "token", content: event.content } as StreamEvent);
+              break;
+            case "tool.start": {
+              const callId = event.callId ?? `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+              // Accumulate for persistence
+              cliToolCalls.push({
+                callId,
+                tool: event.tool,
+                args: event.args ?? {},
+                ok: true,
+                message: "",
+                startedAt: Date.now(),
+              });
+              pendingToolGroup.push(callId);
+
+              // Save backup of original file *before* CLI provider writes it
+              if (event.tool === "edit" && cliFsSurface) {
+                const editPath = String((event.args as Record<string, unknown>)?.path ?? "");
+                if (editPath) {
+                  cliFsSurface.saveExternalBackup(editPath).catch(() => {});
+                }
+              }
+
+              safeWrite(`data: ${JSON.stringify({ type: "tool_start", call_id: callId, tool: event.tool, args: event.args })}\n\n`);
+              emitToSubscribers(sessionId, { type: "tool_start", call_id: callId, tool: event.tool, args: event.args } as unknown as StreamEvent);
+              break;
+            }
+            case "tool.output": {
+              // Accumulate streaming output on the matching tool call
+              const tc = cliToolCalls.find(t => t.callId === event.callId);
+              if (tc) {
+                tc.message = (tc.message || "") + event.content;
+              }
+              safeWrite(`data: ${JSON.stringify({ type: "tool_output", call_id: event.callId, content: event.content })}\n\n`);
+              break;
+            }
+            case "tool.result": {
+              const resultCallId = event.callId ?? `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+              // Update the matching tool call record
+              const tc = cliToolCalls.find(t => t.callId === resultCallId);
+              if (tc) {
+                tc.ok = event.ok;
+                tc.message = event.message || tc.message;
+                tc.data = event.data;
+                tc.completedAt = Date.now();
+              }
+              safeWrite(`data: ${JSON.stringify({ type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data })}\n\n`);
+              emitToSubscribers(sessionId, { type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message } as unknown as StreamEvent);
+
+              // Emit file_changed for successful edits → drives the keep/discard UI
+              if (event.ok && event.tool === "edit") {
+                const editPath = String(tc?.args ? (tc.args as Record<string, unknown>).path ?? "" : "");
+                if (editPath) {
+                  const editName = editPath.split(/[\/\\]/).pop() ?? editPath;
+                  safeWrite(`data: ${JSON.stringify({ type: "file_changed", path: editPath, name: editName })}\n\n`);
+                  // Broadcast to other session clients
+                  if (ws) {
+                    ws.broadcast(sessionId, {
+                      type: "ui.state-sync",
+                      sessionId,
+                      timestamp: new Date().toISOString(),
+                      payload: { key: "file_changed", value: { path: editPath, name: editName } },
+                    });
+                  }
+                  // Persist cumulative changed files list
+                  if (sessionStateService) {
+                    try {
+                      const existing = sessionStateService.get(sessionId, ["changed_files"]);
+                      const files = Array.isArray(existing["changed_files"]) ? existing["changed_files"] as { path: string; name: string }[] : [];
+                      if (!files.some((f: { path: string }) => f.path === editPath)) {
+                        files.push({ path: editPath, name: editName });
+                        sessionStateService.set(sessionId, { changed_files: files });
+                      }
+                    } catch { /* ignore */ }
+                  }
+                }
+              }
+              break;
+            }
+            case "tool.approval-required":
+              safeWrite(`data: ${JSON.stringify({ type: "approval_required", tool: event.tool, args: event.args, requestId: event.requestId })}\n\n`);
+              break;
+            case "message":
+              if (event.role === "assistant") {
+                flushToolGroup();
+                contentChunks.push(event.content);
+                lastSegmentWasText = false;
+              }
+              break;
+            case "session.error":
+              safeWrite(`data: ${JSON.stringify({ type: "error", message: event.error })}\n\n`);
+              break;
+          }
+        });
+
+        // Send the turn — with recovery if the cached session died between messages
+        try {
+          await cliProvider.sendTurn(providerSessionId, content);
+        } catch (sendErr) {
+          // Session likely died (process exited) — start a fresh one
+          console.warn(`[chat/cli] sendTurn failed on cached session, recovering:`, sendErr);
+          activeCliSessions.delete(sessionId);
+          const freshSession = await cliProvider.startSession({
+            threadId: sessionId,
+            workingDirectory: cliWsRoot,
+            mode: "full-access",
+            model: typeof body["model"] === "string" ? body["model"] as string : undefined,
+            mcpServers,
+          });
+          providerSessionId = freshSession.id;
+          activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId });
+          console.log(`[chat/cli] Recovered with new session ${providerSessionId}`);
+          await cliProvider.sendTurn(providerSessionId, content);
+        }
+
+        // Wait for turn completion or error
+        await new Promise<void>((resolve) => {
+          const checkDone = cliProvider.onEvent((event: ProviderEvent) => {
+            if (event.type === "session.completed" || event.type === "session.error") {
+              // If the session errored, invalidate the cache so the next message creates a fresh one
+              if (event.type === "session.error") {
+                activeCliSessions.delete(sessionId);
+              }
+              checkDone();
+              resolve();
+            }
+          });
+
+          // Also abort if client disconnects
+          streamAbort.signal.addEventListener("abort", () => {
+            cliProvider.interruptTurn(providerSessionId).catch(() => {});
+            resolve();
+          });
+        });
+
+        unsubscribe();
+        fullContent = contentChunks.join("");
+
+        // Flush any remaining tool group / trailing text into segments
+        flushToolGroup();
+        flushTextSegment();
+
+        // Build persistence JSON
+        const cliTcJson = cliToolCalls.length > 0 ? JSON.stringify(cliToolCalls) : undefined;
+        const cliSegJson = cliSegments.length > 0 ? JSON.stringify(cliSegments) : undefined;
+
+        // Also stash on the outer scope so the done handler can emit them
+        partialToolCalls = cliToolCalls;
+        resultSegmentsJson = cliSegJson;
+
+        // Persist assistant message with tool calls and segments
+        history.push({ role: "assistant", content: fullContent, uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined });
+        persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson);
+
+        // Session stays alive for the next turn — do NOT stop it.
+        // It will be cleaned up on session error, provider switch, or server shutdown.
+
+      } else if (config.llmProvider === "openai") {
         // ══ OpenAI agentic loop (using extracted runAgentLoop) ═════
 
         // Build tiered schemas per request — respects user-disabled tools
@@ -646,7 +968,7 @@ export function registerChatRoutes(
             disabledTools,
             mode: chatMode,
             onEvent,
-            onPersist: (sid, role, content, tc) => persistMessage(sid, role, content, tc),
+            onPersist: (sid, role, content, tc, seg) => persistMessage(sid, role, content, tc, seg),
             log: app.log,
           },
           executeTool,
@@ -654,6 +976,7 @@ export function registerChatRoutes(
         );
         fullContent = result.content;
         partialToolCalls = result.executedToolCalls as unknown as PersistedToolCall[];
+        resultSegmentsJson = result.segments.length > 0 ? JSON.stringify(result.segments) : undefined;
         hitMaxRounds = result.hitMaxRounds;
         // Track executed tool calls for retry API
         sessionExecutedToolCalls.set(sessionId, result.executedToolCalls);
@@ -677,7 +1000,7 @@ export function registerChatRoutes(
       // Save partial content for real (non-cancel) errors
       if (!wasCancelled && (fullContent || partialToolCalls.length > 0)) {
         const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
-        persistMessage(sessionId, "assistant", fullContent || "", tcJson);
+        persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson);
       }
 
       const errMsg = wasCancelled
@@ -695,7 +1018,7 @@ export function registerChatRoutes(
     // between these two steps loads the cancelled tool calls from the DB.
     if (streamAbort.signal.aborted && partialToolCalls.length > 0) {
       const tcJson = JSON.stringify(partialToolCalls);
-      persistMessage(sessionId, "assistant", fullContent || "", tcJson);
+      persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson);
     }
 
     activeStreams.delete(sessionId);
@@ -738,6 +1061,16 @@ export function registerChatRoutes(
     safeWrite(`data: ${JSON.stringify(doneEvent)}\n\n`);
 
     try { reply.raw.end(); } catch { /* already closed */ }
+
+    // Notify all WS-subscribed clients that the chat is done so they can refresh.
+    if (ws) {
+      ws.broadcast(sessionId, {
+        type: "message.complete" as const,
+        sessionId,
+        timestamp: new Date().toISOString(),
+        payload: {},
+      });
+    }
   });
 
   // Cancel an active stream for a session
@@ -932,6 +1265,9 @@ export function registerChatRoutes(
           };
           if (r.toolCalls) {
             try { msg.toolCalls = JSON.parse(r.toolCalls); } catch { /* ignore */ }
+          }
+          if (r.segments) {
+            try { msg.segments = JSON.parse(r.segments); } catch { /* ignore */ }
           }
           return msg;
         });

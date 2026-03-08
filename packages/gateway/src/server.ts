@@ -16,6 +16,10 @@ import { registerNetworkRoutes } from "./routes/network.js";
 import { registerVoiceRoutes } from "./routes/voice.js";
 import { registerWorkspaceRoutes } from "./routes/workspace.js";
 import { registerScreenShareRoutes } from "./routes/screen-share.js";
+import { registerFilesystemRoutes } from "./routes/filesystem.js";
+import { registerThreadRoutes } from "./routes/threads.js";
+import { registerMcpRoutes } from "./routes/mcp-server.js";
+import { registerGitRoutes } from "./routes/git.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -33,6 +37,8 @@ import type { DeviceRegistry } from "./services/device-registry.js";
 import type { VoiceService } from "./voice/service.js";
 import type { ScreenShareService } from "@jait/screen-share";
 import type { SessionStateService } from "./services/session-state.js";
+import type { ThreadService } from "./services/threads.js";
+import type { ProviderRegistry } from "./providers/registry.js";
 import type { Database } from "bun:sqlite";
 import { getSchemaVersion } from "./db/connection.js";
 
@@ -63,6 +69,8 @@ export interface ServerDeps {
   ) => Promise<ToolResult>;
   voiceService?: VoiceService;
   screenShare?: ScreenShareService;
+  threadService?: ThreadService;
+  providerRegistry?: ProviderRegistry;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -73,7 +81,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   });
 
   await app.register(cors, {
-    origin: config.corsOrigin,
+    origin: true, // allow any origin — auth is JWT-based, not origin-based
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 
@@ -95,6 +103,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     userService: deps.userService,
     ws: deps.ws,
     sessionState: deps.sessionState,
+    providerRegistry: deps.providerRegistry,
   });
 
   if (deps.sessionService && deps.audit) {
@@ -140,8 +149,27 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     registerScreenShareRoutes(app, { screenShare: deps.screenShare, ws: deps.ws });
   }
 
+  registerFilesystemRoutes(app, deps.ws);
+
   if (deps.surfaceRegistry) {
-    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState);
+    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService);
+  }
+
+  // Git API routes
+  registerGitRoutes(app, config);
+
+  // Agent threads + provider routes
+  if (deps.threadService && deps.providerRegistry) {
+    registerThreadRoutes(app, config, {
+      threadService: deps.threadService,
+      providerRegistry: deps.providerRegistry,
+      ws: deps.ws,
+    });
+  }
+
+  // MCP SSE server for external CLI agents
+  if (deps.toolRegistry) {
+    registerMcpRoutes(app, { toolRegistry: deps.toolRegistry, config });
   }
 
   app.get("/", async () => ({

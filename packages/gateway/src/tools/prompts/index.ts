@@ -31,4 +31,6 @@ export {
   DEFAULT_REMINDER,
 } from "./prompt-registry.js";
 
+export type { PromptContext } from "./prompt-registry.js";
+
 export type { IAgentPrompt, ModelEndpoint } from "./prompt-registry.js";

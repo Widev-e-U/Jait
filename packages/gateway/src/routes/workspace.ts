@@ -10,9 +10,9 @@ import type { FastifyInstance } from "fastify";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import { PathTraversalError } from "../security/path-guard.js";
 import type { SessionStateService } from "../services/session-state.js";
+import type { SessionService } from "../services/sessions.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import { uuidv7 } from "../lib/uuidv7.js";
-import { PathTraversalError } from "../security/path-guard.js";
 
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
@@ -34,6 +34,7 @@ export function registerWorkspaceRoutes(
   app: FastifyInstance,
   surfaceRegistry: SurfaceRegistry,
   sessionState?: SessionStateService,
+  sessionService?: SessionService,
 ) {
   // GET /api/workspace/info — returns the active workspace root + surface ID
   app.get("/api/workspace/info", async (_req, reply) => {
@@ -100,6 +101,10 @@ export function registerWorkspaceRoutes(
     if (sessionState) {
       sessionState.set(sessionId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId } });
     }
+
+    // Also persist workspacePath on the session record so CLI providers
+    // can resolve it even if the filesystem surface is no longer running.
+    try { sessionService?.update(sessionId, { workspacePath }); } catch { /* best effort */ }
 
     return { surfaceId, workspaceRoot: workspacePath };
   });

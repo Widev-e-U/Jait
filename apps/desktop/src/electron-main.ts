@@ -179,6 +179,54 @@ ipcMain.handle("desktop:pick-directory", async () => {
   return { path: result.filePaths[0] };
 });
 
+// ── Filesystem browse IPC (for remote fs node protocol) ──────────────
+import { readdir } from "node:fs/promises";
+
+ipcMain.handle("desktop:browse-path", async (_event, dirPath: string) => {
+  const { resolve, dirname, join } = await import("node:path");
+  const resolved = resolve(dirPath);
+  const raw = await readdir(resolved, { withFileTypes: true });
+  const entries: { name: string; path: string; type: "dir" | "file" }[] = [];
+  for (const d of raw) {
+    if (d.name.startsWith(".")) continue;
+    if (d.isDirectory()) {
+      entries.push({ name: d.name, path: join(resolved, d.name), type: "dir" });
+    } else if (d.isFile()) {
+      entries.push({ name: d.name, path: join(resolved, d.name), type: "file" });
+    }
+  }
+  entries.sort((a, b) => {
+    if (a.type !== b.type) return a.type === "dir" ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+  return {
+    path: resolved,
+    parent: dirname(resolved) !== resolved ? dirname(resolved) : null,
+    entries,
+  };
+});
+
+ipcMain.handle("desktop:get-roots", async () => {
+  const { homedir } = await import("node:os");
+  const roots: { name: string; path: string; type: "dir" | "file" }[] = [];
+  if (process.platform === "win32") {
+    const { execSync } = await import("node:child_process");
+    try {
+      const raw = execSync("wmic logicaldisk get name", { encoding: "utf-8" });
+      const drives = raw.split("\n").map(l => l.trim()).filter(l => /^[A-Z]:$/i.test(l));
+      for (const d of drives) {
+        roots.push({ name: d, path: d + "\\", type: "dir" });
+      }
+    } catch {
+      roots.push({ name: "C:", path: "C:\\", type: "dir" });
+    }
+  } else {
+    roots.push({ name: "/", path: "/", type: "dir" });
+  }
+  roots.push({ name: "Home", path: homedir(), type: "dir" });
+  return { roots };
+});
+
 // ── App lifecycle ─────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   // Set up CSP for screen sharing

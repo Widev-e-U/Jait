@@ -32,10 +32,12 @@ const MODEL_ICONS: Record<string, React.ComponentType<{ size?: number; className
   'gpt-4': OpenAI,
   'gpt-4o': OpenAI,
   'gpt-4-turbo': OpenAI,
+  'gpt-5': OpenAI,
   'gpt-3.5-turbo': OpenAI,
   'o1': OpenAI,
   'o1-mini': OpenAI,
   'o1-preview': OpenAI,
+  'codex': OpenAI,
   
   // Anthropic models
   'claude-3': Claude,

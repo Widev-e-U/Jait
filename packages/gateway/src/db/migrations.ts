@@ -213,4 +213,13 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 006: segments column on messages ──────────────────────────────
+  {
+    id: 6,
+    name: "messages_segments_column",
+    run(db) {
+      try { db.run(`ALTER TABLE messages ADD COLUMN segments TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];

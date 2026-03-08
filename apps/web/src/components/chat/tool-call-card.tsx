@@ -48,6 +48,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'agent':           { icon: Bot,       label: 'Agent',       color: 'text-purple-500' },
   'todo':            { icon: ListTodo,  label: 'Todo',        color: 'text-orange-500' },
   'jait':            { icon: Zap,       label: 'Jait',        color: 'text-indigo-500' },
+  'mcp-tool':        { icon: Server,    label: 'MCP Tool',   color: 'text-purple-500' },
   // ── Legacy / standard tools ─────────────────────────────
   'terminal.run':    { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'terminal.stream': { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
@@ -300,9 +301,15 @@ function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (data?.output != null) return String(data.output)
   if (data?.content != null) return String(data.content)
   if (data?.entries != null) {
-    const entries = data.entries as Array<{ name: string; isDirectory: boolean }>
-    return entries
-      .map(e => `${e.isDirectory ? '📁' : '📄'} ${e.name}`)
+    const raw = data.entries as Array<string | { name: string; isDirectory?: boolean }>
+    return raw
+      .map(e => {
+        if (typeof e === 'string') {
+          const isDir = e.endsWith('/')
+          return `${isDir ? '📁' : '📄'} ${isDir ? e.slice(0, -1) : e}`
+        }
+        return `${e.isDirectory ? '📁' : '📄'} ${e.name}`
+      })
       .join('\n')
   }
   if (result.message && result.message !== 'Command executed successfully') return result.message
@@ -328,7 +335,7 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
     const query = String(args.query ?? '').trim()
     return query ? `Searching for "${query}"...` : 'Searching...'
   }
-  if (tool.startsWith('terminal.')) return 'Command is still running...'
+  if (tool.startsWith('terminal.') || tool === 'execute') return 'Command is still running...'
   return 'Tool is still running...'
 }
 
@@ -689,7 +696,7 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   const screenshotPath = normalizedTool === 'browser.screenshot' && resultData?.result && typeof resultData.result === 'object'
     ? String((resultData.result as Record<string, unknown>).path ?? '')
     : null
-  const isTerminal = normalizedTool.startsWith('terminal.')
+  const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
   const isFileEdit = normalizedTool === 'file.write' || normalizedTool === 'file.patch'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)

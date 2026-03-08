@@ -74,12 +74,25 @@ export const promptRegistry = new PromptRegistry();
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint): string {
+export interface PromptContext {
+  /** The resolved workspace root for the current session (if any) */
+  workspaceRoot?: string;
+}
+
+export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?: PromptContext): string {
   const resolver = promptRegistry.resolve(endpoint);
   const identity = resolver.resolveIdentityRules?.(endpoint) ?? DEFAULT_IDENTITY;
   const safety = resolver.resolveSafetyRules?.(endpoint) ?? DEFAULT_SAFETY;
   const systemPrompt = resolver.resolveSystemPrompt(mode, endpoint);
-  return `${identity}\n\n${safety}\n\n${systemPrompt}`;
+
+  let prompt = `${identity}\n\n${safety}\n\n${systemPrompt}`;
+
+  // Inject workspace context so the agent knows its working directory
+  if (ctx?.workspaceRoot) {
+    prompt += `\n\n<workspaceContext>\nYou are working in the workspace: ${ctx.workspaceRoot}\nAll relative file paths and searches default to this directory. Use relative paths when possible. Do not search from the drive root — scope operations to this workspace.\n</workspaceContext>`;
+  }
+
+  return prompt;
 }
 
 export function getReminderInstructions(mode: ChatMode, endpoint: ModelEndpoint): string | null {

@@ -1,9 +1,17 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
-import { ArrowUp, Mic, Square } from 'lucide-react'
+import { ArrowUp, ChevronDown, ListPlus, Mic, Square } from 'lucide-react'
 import { getIconForFile, DEFAULT_FILE } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
+import { ProviderSelector } from '@/components/chat/provider-selector'
+import type { ProviderId } from '@/lib/agents-api'
 import { FileIcon } from '@/components/icons/file-icons'
 import { cn } from '@/lib/utils'
 
@@ -19,6 +27,8 @@ interface PromptInputProps {
   onChange: (value: string) => void
   onSubmit: (chipFiles?: ReferencedFile[]) => void
   onStop?: () => void
+  /** Queue a message while the agent is busy (shown as dropdown option). */
+  onQueue?: (chipFiles?: ReferencedFile[]) => void
   isLoading?: boolean
   disabled?: boolean
   placeholder?: string
@@ -26,6 +36,8 @@ interface PromptInputProps {
   onVoiceInput?: () => void
   mode?: ChatMode
   onModeChange?: (mode: ChatMode) => void
+  provider?: ProviderId
+  onProviderChange?: (provider: ProviderId) => void
   /** All files available for @ mention (pre-loaded from visible tree) */
   availableFiles?: ReferencedFile[]
   /** Lazy search across the entire workspace directory */
@@ -151,6 +163,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onChange,
   onSubmit,
   onStop,
+  onQueue,
   isLoading,
   disabled,
   placeholder = 'Ask anything...',
@@ -158,6 +171,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onVoiceInput,
   mode,
   onModeChange,
+  provider,
+  onProviderChange,
   availableFiles = [],
   onSearchFiles,
   workspaceOpen = false,
@@ -647,12 +662,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
       <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
         <div className="flex items-center gap-1">
-          {mode && onModeChange && (
+          {provider && onProviderChange && (
+            <ProviderSelector provider={provider} onChange={onProviderChange} disabled={disabled || isLoading} />
+          )}
+          {mode && onModeChange && (!provider || provider === 'jait') && (
             <ModeSelector mode={mode} onChange={onModeChange} disabled={disabled || isLoading} />
           )}
         </div>
         <div className="flex items-center gap-1.5">
-          {onVoiceInput && (
+          {onVoiceInput && !isLoading && (
             <Button
               type="button"
               size="icon"
@@ -664,17 +682,73 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               <Mic className="h-4 w-4" />
             </Button>
           )}
-          {isLoading ? (
+          {isLoading && (
             <Button
               type="button"
               size="icon"
               variant="outline"
               className="h-8 w-8 shrink-0 rounded-lg"
               onClick={onStop}
+              title="Stop generating"
             >
               <Square className="h-3.5 w-3.5 fill-current" />
             </Button>
-          ) : (
+          )}
+          {/* Split send button: primary action + dropdown with Send / Queue */}
+          {isLoading && onQueue ? (
+            <div className="flex items-center">
+              <Button
+                type="button"
+                size="icon"
+                className="h-8 w-8 shrink-0 rounded-lg rounded-r-none border-r-0"
+                disabled={isEmpty || disabled}
+                title="Queue message"
+                onClick={() => {
+                  const el = editableRef.current
+                  const chips = el ? getChipFiles(el) : []
+                  onQueue(chips)
+                }}
+              >
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    size="icon"
+                    className="h-8 w-5 shrink-0 rounded-lg rounded-l-none px-0"
+                    disabled={isEmpty || disabled}
+                  >
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" side="top" className="min-w-[160px]">
+                  <DropdownMenuItem
+                    disabled={isEmpty || disabled}
+                    onSelect={() => {
+                      const el = editableRef.current
+                      const chips = el ? getChipFiles(el) : []
+                      onSubmit(chips)
+                    }}
+                  >
+                    <ArrowUp className="h-3.5 w-3.5 mr-2" />
+                    Send now
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    disabled={isEmpty || disabled}
+                    onSelect={() => {
+                      const el = editableRef.current
+                      const chips = el ? getChipFiles(el) : []
+                      onQueue(chips)
+                    }}
+                  >
+                    <ListPlus className="h-3.5 w-3.5 mr-2" />
+                    Add to queue
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          ) : !isLoading ? (
             <Button
               type="button"
               size="icon"
@@ -688,7 +762,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             >
               <ArrowUp className="h-4 w-4" />
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
     </div>

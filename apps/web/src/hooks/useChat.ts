@@ -14,6 +14,14 @@ function authHeaders(token?: string | null): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
+/**
+ * A segment in the ordered response stream. Consecutive tool calls
+ * are grouped; text between tool-call groups forms its own segment.
+ */
+export type MessageSegment =
+  | { type: 'text'; content: string }
+  | { type: 'toolGroup'; callIds: string[] }
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -25,6 +33,12 @@ export interface ChatMessage {
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
+  /**
+   * Ordered interleaving of text and tool-call groups.
+   * Present on messages built from a live stream; absent on
+   * historical snapshots (renderer falls back to old layout).
+   */
+  segments?: MessageSegment[]
 }
 
 interface ChatState {
@@ -39,6 +53,18 @@ interface ChatState {
 }
 
 export type ChatMode = 'ask' | 'agent' | 'plan'
+
+/** Context window usage breakdown from the gateway */
+export interface ContextUsage {
+  system: number
+  history: number
+  toolResults: number
+  tools: number
+  total: number
+  limit: number
+  ratio: number
+  pruned?: boolean
+}
 
 export interface PlanAction {
   id: string
@@ -61,6 +87,8 @@ interface SendMessageOptions {
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
   onLoginRequired?: () => void
   mode?: ChatMode
+  /** CLI provider to use for this message (jait, codex, claude-code) */
+  provider?: string
   /** Clean display text for user message (without file contents appended) */
   displayContent?: string
   /** File references to attach as metadata on the user message */
@@ -89,6 +117,7 @@ export function useChat(
   const [todoList, setTodoList] = useState<TodoItem[]>([])
   const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([])
   const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([])
+  const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const processingQueueRef = useRef(false)
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -96,6 +125,7 @@ export function useChat(
   const streamAbortRef = useRef<AbortController | null>(null)
   const requestVersionRef = useRef(0)
   const restartInFlightRef = useRef(false)
+  const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   // When sessionId changes, load history / resume active stream via SSE
   useEffect(() => {
@@ -117,11 +147,13 @@ export function useChat(
       setTodoList([])
       setChangedFiles([])
       setMessageQueue([])
+      setContextUsage(null)
       return
     }
 
     let cancelled = false
     setState(prev => ({ ...prev, messages: [], isLoading: false, isLoadingHistory: true, error: null }))
+    setContextUsage(null)
 
     // Connect to the stream-resume SSE endpoint.
     // It returns a snapshot of current messages, then live tokens if still streaming.
@@ -150,6 +182,32 @@ export function useChat(
         let lineBuffer = ''
         let assistantId: string | null = null
 
+        /** Immutably append a text chunk to a message's segments array */
+        const withTextSegment = (segs: MessageSegment[] | undefined, text: string): MessageSegment[] => {
+          const arr = segs ? [...segs] : []
+          const last = arr[arr.length - 1]
+          if (last?.type === 'text') {
+            arr[arr.length - 1] = { type: 'text', content: last.content + text }
+          } else {
+            arr.push({ type: 'text', content: text })
+          }
+          return arr
+        }
+
+        /** Immutably append a tool callId to a message's segments array */
+        const withToolSegment = (segs: MessageSegment[] | undefined, callId: string): MessageSegment[] => {
+          const arr = segs ? [...segs] : []
+          const last = arr[arr.length - 1]
+          if (last?.type === 'toolGroup') {
+            if (!last.callIds.includes(callId)) {
+              arr[arr.length - 1] = { type: 'toolGroup', callIds: [...last.callIds, callId] }
+            }
+          } else {
+            arr.push({ type: 'toolGroup', callIds: [callId] })
+          }
+          return arr
+        }
+
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -170,6 +228,7 @@ export function useChat(
                   id: string;
                   role: 'user' | 'assistant';
                   content: string;
+                  segments?: MessageSegment[];
                   toolCalls?: Array<{
                     callId: string;
                     tool: string;
@@ -187,6 +246,9 @@ export function useChat(
                 const snapshotStreaming = data.streaming as boolean
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
                   const msg: ChatMessage = { id: m.id, role: m.role, content: m.content }
+                  if (m.segments && m.segments.length > 0) {
+                    msg.segments = m.segments
+                  }
                   if (m.toolCalls && m.toolCalls.length > 0) {
                     msg.toolCalls = m.toolCalls.map(tc => {
                       // Streaming snapshots may provide explicit running status.
@@ -233,7 +295,9 @@ export function useChat(
                 setState(prev => ({
                   ...prev,
                   messages: prev.messages.map(m =>
-                    m.id === assistantId ? { ...m, content: m.content + token } : m
+                    m.id === assistantId
+                      ? { ...m, content: m.content + token, segments: withTextSegment(m.segments, token) }
+                      : m
                   ),
                 }))
               } else if (data.type === 'tool_call_delta' && assistantId) {
@@ -272,7 +336,7 @@ export function useChat(
                     ...prev,
                     messages: prev.messages.map(m =>
                       m.id === assistantId
-                        ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo] }
+                        ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: withToolSegment(m.segments, callId) }
                         : m
                     ),
                   }
@@ -311,7 +375,7 @@ export function useChat(
                     ...prev,
                     messages: prev.messages.map(m =>
                       m.id === assistantId
-                        ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo] }
+                        ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: withToolSegment(m.segments, callId) }
                         : m
                     ),
                   }
@@ -374,6 +438,8 @@ export function useChat(
                 // AI updated the task list
                 const items = data.items as TodoItem[]
                 setTodoList(items)
+              } else if (data.type === 'context_usage') {
+                setContextUsage(data as unknown as ContextUsage)
               } else if (data.type === 'file_changed') {
                 // AI reported a file change
                 const filePath = data.path as string
@@ -411,8 +477,9 @@ export function useChat(
                   error: data.message as string,
                 }))
               }
-            } catch {
-              // incomplete JSON chunk
+            } catch (parseErr) {
+              if (!(parseErr instanceof SyntaxError)) throw parseErr
+              // incomplete JSON chunk — wait for next line
             }
           }
         }
@@ -428,7 +495,15 @@ export function useChat(
       // Reset so React strict-mode re-mount can re-run the effect
       prevSessionIdRef.current = null
     }
-  }, [authToken, onLoginRequired, sessionId])
+  }, [authToken, onLoginRequired, sessionId, refreshTrigger])
+
+  /** Force-reload messages from the server (used by cross-client WS refresh). */
+  const refreshMessages = useCallback(() => {
+    // Skip if no active session or already loading / streaming
+    if (!sessionId || state.isLoading) return
+    prevSessionIdRef.current = null
+    setRefreshTrigger(n => n + 1)
+  }, [sessionId, state.isLoading])
 
   const sendMessage = useCallback(async (
     content: string,
@@ -473,7 +548,7 @@ export function useChat(
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
 
-      const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}) }
+      const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}), ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}) }
       pushSSEDebugEvent('request', JSON.stringify(requestBody))
 
       const response = await fetch(`${API_URL}/api/chat`, {
@@ -510,7 +585,28 @@ export function useChat(
       let thinkingStart: number | null = null
       let thinkingDuration: number | undefined
       const toolCalls: ToolCallInfo[] = []
+      const segments: MessageSegment[] = []
       let lineBuffer = ''
+
+      /** Push or extend a text segment at the end of the segments list */
+      const appendTextSegment = (text: string) => {
+        const last = segments[segments.length - 1]
+        if (last?.type === 'text') {
+          last.content += text
+        } else {
+          segments.push({ type: 'text', content: text })
+        }
+      }
+
+      /** Push a tool callId into the current trailing tool-group, or start a new one */
+      const appendToolSegment = (callId: string) => {
+        const last = segments[segments.length - 1]
+        if (last?.type === 'toolGroup') {
+          if (!last.callIds.includes(callId)) last.callIds.push(callId)
+        } else {
+          segments.push({ type: 'toolGroup', callIds: [callId] })
+        }
+      }
 
       const updateMessage = (updates: Partial<ChatMessage>) => {
         if (isStale()) return
@@ -547,7 +643,8 @@ export function useChat(
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
               }
               assistantContent += data.content
-              updateMessage({ content: assistantContent, thinkingDuration })
+              appendTextSegment(data.content as string)
+              updateMessage({ content: assistantContent, thinkingDuration, segments: [...segments] })
             } else if (data.type === 'tool_call_delta') {
               const callId = data.call_id as string
               const nameDelta = (data.name_delta as string) || ''
@@ -568,8 +665,9 @@ export function useChat(
                   streamingArgs: argsDelta,
                   startedAt: Date.now(),
                 })
+                appendToolSegment(callId)
               }
-              updateMessage({ toolCalls: [...toolCalls] })
+              updateMessage({ toolCalls: [...toolCalls], segments: [...segments] })
             } else if (data.type === 'tool_start') {
               const callId = data.call_id as string
               const idx = toolCalls.findIndex(tc => tc.callId === callId)
@@ -590,8 +688,9 @@ export function useChat(
                   status: 'running',
                   startedAt: Date.now(),
                 })
+                appendToolSegment(callId)
               }
-              updateMessage({ toolCalls: [...toolCalls] })
+              updateMessage({ toolCalls: [...toolCalls], segments: [...segments] })
             } else if (data.type === 'tool_output') {
               const idx = toolCalls.findIndex(tc => tc.callId === (data.call_id as string))
               if (idx !== -1) {
@@ -638,12 +737,16 @@ export function useChat(
               setPendingPlan(plan)
             } else if (data.type === 'mode_notice') {
               // Mode notice — append as assistant content
-              assistantContent += `\n\n*${data.message as string}*`
-              updateMessage({ content: assistantContent })
+              const notice = `\n\n*${data.message as string}*`
+              assistantContent += notice
+              appendTextSegment(notice)
+              updateMessage({ content: assistantContent, segments: [...segments] })
             } else if (data.type === 'todo_list') {
               // AI updated the task list
               const items = data.items as TodoItem[]
               setTodoList(items)
+            } else if (data.type === 'context_usage') {
+              setContextUsage(data as unknown as ContextUsage)
             } else if (data.type === 'file_changed') {
               // AI reported a file change
               const filePath = data.path as string
@@ -675,6 +778,7 @@ export function useChat(
                               thinking: thinkingContent || undefined,
                               thinkingDuration,
                               toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+                              segments: segments.length > 0 ? segments : undefined,
                             }
                           : m
                       ),
@@ -683,8 +787,9 @@ export function useChat(
             } else if (data.type === 'error') {
               throw new Error(data.message)
             }
-          } catch {
-            // incomplete chunk
+          } catch (parseErr) {
+            if (!(parseErr instanceof SyntaxError)) throw parseErr
+            // incomplete JSON chunk — wait for next line
           }
         }
       }
@@ -738,6 +843,11 @@ export function useChat(
 
   const dequeueMessage = useCallback((id: string) => {
     setMessageQueue(prev => prev.filter(q => q.id !== id))
+  }, [])
+
+  /** Update the content of a queued message (inline edit). */
+  const updateQueueItem = useCallback((id: string, content: string) => {
+    setMessageQueue(prev => prev.map(q => q.id === id ? { ...q, content } : q))
   }, [])
 
   // Process the next queued message when the model finishes
@@ -950,7 +1060,7 @@ export function useChat(
       abortControllerRef.current?.abort()
       streamAbortRef.current?.abort()
       streamAbortRef.current = null
-      await fetch(`${API_URL}/api/sessions/${requestSessionId}/cancel`, { method: 'POST', headers }).catch(() => null)
+      await fetch(`${API_URL}/api/sessions/${requestSessionId}/cancel`, { method: 'POST', headers: authHeaders(effectiveToken) }).catch(() => null)
       await waitForStreamingToStop()
 
       let res = await postRestart()
@@ -982,6 +1092,8 @@ export function useChat(
       await sendMessage(editedContent.trim(), {
         token: effectiveToken,
         sessionId: requestSessionId,
+        mode: options.mode,
+        provider: options.provider,
         onLoginRequired: notifyLoginRequired,
       })
     } catch (error) {
@@ -1097,6 +1209,7 @@ export function useChat(
     todoList,
     changedFiles,
     messageQueue,
+    contextUsage,
     sendMessage,
     restartFromMessage,
     cancelRequest,
@@ -1106,6 +1219,7 @@ export function useChat(
     rejectPlan,
     enqueueMessage,
     dequeueMessage,
+    updateQueueItem,
     acceptFile,
     rejectFile,
     acceptAllFiles,
@@ -1114,5 +1228,6 @@ export function useChat(
     addChangedFile,
     setChangedFiles,
     setOnChangedFilesSync,
+    refreshMessages,
   }
 }

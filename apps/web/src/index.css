@@ -28,6 +28,12 @@
     --scrollbar-track: 210 18% 88%;
     --scrollbar-thumb: 210 10% 62%;
     --scrollbar-thumb-hover: 210 12% 50%;
+
+    /* Context indicator category colors */
+    --ctx-system: #6366f1;
+    --ctx-history: #3b82f6;
+    --ctx-tool-results: #d97706;
+    --ctx-tools: #8b5cf6;
   }
 
   .dark {
@@ -54,6 +60,12 @@
     --scrollbar-track: 0 0% 17%;
     --scrollbar-thumb: 0 0% 36%;
     --scrollbar-thumb-hover: 0 0% 48%;
+
+    /* Context indicator category colors — brighter for dark bg */
+    --ctx-system: #818cf8;
+    --ctx-history: #60a5fa;
+    --ctx-tool-results: #fbbf24;
+    --ctx-tools: #a78bfa;
   }
 }
 
@@ -89,5 +101,28 @@
 
   body {
     @apply bg-background text-foreground;
+  }
+
+  /* Safe-area inset utilities for devices with camera cutouts / notches */
+  .safe-top {
+    padding-top: env(safe-area-inset-top, 0px);
+  }
+  .safe-bottom {
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+  .safe-left {
+    padding-left: env(safe-area-inset-left, 0px);
+  }
+  .safe-right {
+    padding-right: env(safe-area-inset-right, 0px);
+  }
+
+  /* Hide scrollbar while keeping scroll functionality */
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
   }
 }
