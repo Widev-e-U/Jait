@@ -54,9 +54,15 @@ export interface GitListBranchesResult {
 
 export interface GitStepResult {
   commit: { status: 'created' | 'skipped_no_changes'; commitSha?: string; subject?: string }
-  push: { status: 'pushed' | 'skipped_not_requested' | 'skipped_up_to_date'; branch?: string; upstreamBranch?: string; setUpstream?: boolean }
+  push: { status: 'pushed' | 'skipped_not_requested' | 'skipped_up_to_date' | 'skipped_no_remote'; branch?: string; upstreamBranch?: string; setUpstream?: boolean }
   branch: { status: 'created' | 'skipped_not_requested'; name?: string }
-  pr: { status: 'created' | 'opened_existing' | 'skipped_not_requested'; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string }
+  pr: { status: 'created' | 'opened_existing' | 'skipped_not_requested' | 'skipped_no_remote'; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string }
+}
+
+export interface GitDiffResult {
+  diff: string
+  files: string[]
+  hasChanges: boolean
 }
 
 export interface GitPullResult {
@@ -134,6 +140,10 @@ export const gitApi = {
 
   init(cwd: string): Promise<void> {
     return gitPost<void>('init', { cwd })
+  },
+
+  diff(cwd: string): Promise<GitDiffResult> {
+    return gitPost<GitDiffResult>('diff', { cwd })
   },
 }
 
@@ -244,6 +254,13 @@ export function buildGitActionProgressStages(input: {
 }
 
 export function summarizeGitResult(result: GitStepResult): { title: string; description?: string } {
+  if (result.push.status === 'skipped_no_remote') {
+    const sha = result.commit.commitSha?.slice(0, 7)
+    return {
+      title: sha ? `Committed ${sha}` : 'Committed changes',
+      description: 'No remote configured — push skipped. Add a remote with `git remote add origin <url>` to enable push & PR.',
+    }
+  }
   if (result.pr.status === 'created' || result.pr.status === 'opened_existing') {
     const prNumber = result.pr.number ? ` #${result.pr.number}` : ''
     const title = `${result.pr.status === 'created' ? 'Created PR' : 'Opened PR'}${prNumber}`

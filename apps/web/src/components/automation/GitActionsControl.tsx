@@ -16,6 +16,8 @@ import {
   Github,
   Loader2,
   ArrowDownToLine,
+  Eye,
+  X,
 } from 'lucide-react'
 import {
   gitApi,
@@ -26,6 +28,7 @@ import {
   type GitStackedAction,
   type GitActionMenuItem,
   type GitQuickAction,
+  type GitDiffResult,
 } from '@/lib/git-api'
 import { toast } from 'sonner'
 
@@ -64,6 +67,9 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
   const [menuOpen, setMenuOpen] = useState(false)
   const [commitDialogOpen, setCommitDialogOpen] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
+  const [diffOpen, setDiffOpen] = useState(false)
+  const [diffResult, setDiffResult] = useState<GitDiffResult | null>(null)
+  const [diffLoading, setDiffLoading] = useState(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // ── Status polling ─────────────────────────────────────────────
@@ -225,6 +231,20 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
     runStackedAction('commit', { commitMessage: msg || undefined, featureBranch: true })
   }, [commitMessage, runStackedAction])
 
+  const openDiff = useCallback(async () => {
+    setDiffLoading(true)
+    setDiffOpen(true)
+    try {
+      const result = await gitApi.diff(cwd)
+      setDiffResult(result)
+    } catch (err) {
+      toast.error('Failed to load diff', { description: err instanceof Error ? err.message : 'Unknown error' })
+      setDiffOpen(false)
+    } finally {
+      setDiffLoading(false)
+    }
+  }, [cwd])
+
   // ── Render ─────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -233,6 +253,20 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
 
   return (
     <div className="relative inline-flex items-center gap-2">
+      {/* View changes button */}
+      {gitStatus?.hasWorkingTreeChanges && (
+        <Button
+          variant="ghost"
+          size="sm"
+          className="text-xs gap-1"
+          disabled={diffLoading}
+          onClick={openDiff}
+        >
+          {diffLoading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Eye className="h-3.5 w-3.5" />}
+          View changes
+        </Button>
+      )}
+
       {/* Quick action + menu */}
       <div className="flex items-center gap-0.5" ref={menuRef}>
         <Button
@@ -306,6 +340,61 @@ export function GitActionsControl({ cwd, pollInterval = 15_000 }: GitActionsCont
             <Button size="sm" onClick={submitCommit}>
               Commit
             </Button>
+          </div>
+        </div>
+      )}
+
+      {/* Diff view dialog (full-screen overlay) */}
+      {diffOpen && (
+        <div className="fixed inset-0 z-[100] bg-background/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-popover border rounded-lg shadow-xl w-full max-w-4xl max-h-[80vh] flex flex-col">
+            <div className="flex items-center justify-between px-4 py-3 border-b">
+              <div className="flex items-center gap-2">
+                <Eye className="h-4 w-4 text-muted-foreground" />
+                <h3 className="text-sm font-medium">Changes</h3>
+                {diffResult && (
+                  <span className="text-xs text-muted-foreground">
+                    {diffResult.files.length} file{diffResult.files.length !== 1 ? 's' : ''} changed
+                  </span>
+                )}
+              </div>
+              <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => setDiffOpen(false)}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            {diffLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : diffResult && !diffResult.hasChanges ? (
+              <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
+                No changes detected.
+              </div>
+            ) : diffResult ? (
+              <div className="flex-1 overflow-auto">
+                {/* File list */}
+                <div className="px-4 py-2 border-b bg-muted/30">
+                  <div className="flex flex-wrap gap-1">
+                    {diffResult.files.map((f) => (
+                      <span key={f} className="text-xs px-1.5 py-0.5 rounded bg-muted font-mono">{f}</span>
+                    ))}
+                  </div>
+                </div>
+                {/* Diff content */}
+                <pre className="p-4 text-xs font-mono leading-5 overflow-x-auto whitespace-pre">
+                  {diffResult.diff.split('\n').map((line, i) => {
+                    let cls = 'text-foreground'
+                    if (line.startsWith('+') && !line.startsWith('+++')) cls = 'text-green-600 dark:text-green-400'
+                    else if (line.startsWith('-') && !line.startsWith('---')) cls = 'text-red-600 dark:text-red-400'
+                    else if (line.startsWith('@@')) cls = 'text-blue-600 dark:text-blue-400'
+                    else if (line.startsWith('diff ') || line.startsWith('index ')) cls = 'text-muted-foreground font-semibold'
+                    else if (line.startsWith('#')) cls = 'text-muted-foreground italic'
+                    return <span key={i} className={cls}>{line}{'\n'}</span>
+                  })}
+                </pre>
+              </div>
+            ) : null}
           </div>
         </div>
       )}

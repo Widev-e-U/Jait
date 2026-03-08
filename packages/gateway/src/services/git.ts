@@ -60,9 +60,15 @@ export interface GitListBranchesResult {
 
 export interface GitStepResult {
   commit: { status: "created" | "skipped_no_changes"; commitSha?: string; subject?: string };
-  push: { status: "pushed" | "skipped_not_requested" | "skipped_up_to_date"; branch?: string; upstreamBranch?: string; setUpstream?: boolean };
+  push: { status: "pushed" | "skipped_not_requested" | "skipped_up_to_date" | "skipped_no_remote"; branch?: string; upstreamBranch?: string; setUpstream?: boolean };
   branch: { status: "created" | "skipped_not_requested"; name?: string };
-  pr: { status: "created" | "opened_existing" | "skipped_not_requested"; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string };
+  pr: { status: "created" | "opened_existing" | "skipped_not_requested" | "skipped_no_remote"; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string };
+}
+
+export interface GitDiffResult {
+  diff: string;
+  files: string[];
+  hasChanges: boolean;
 }
 
 export interface GitPullResult {
@@ -324,6 +330,16 @@ export class GitService {
           await gitExec(cwd, "push");
           result.push = { status: "pushed", branch: currentBranch };
         } else {
+          // Check if origin remote exists before trying to set upstream
+          const hasOrigin = await this.hasRemote(cwd, "origin");
+          if (!hasOrigin) {
+            result.push = { status: "skipped_no_remote", branch: currentBranch };
+            // Also skip PR if no remote
+            if (action === "commit_push_pr") {
+              result.pr = { status: "skipped_no_remote" };
+            }
+            return result;
+          }
           await gitExec(cwd, `push --set-upstream origin "${currentBranch}"`);
           result.push = { status: "pushed", branch: currentBranch, setUpstream: true };
         }
@@ -391,5 +407,54 @@ export class GitService {
 
   async createBranch(cwd: string, branch: string): Promise<void> {
     await gitExec(cwd, `checkout -b "${branch}"`);
+  }
+
+  /** Check whether a named remote (e.g. "origin") exists. */
+  async hasRemote(cwd: string, name: string): Promise<boolean> {
+    try {
+      await gitExec(cwd, `remote get-url ${name}`);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** Return the diff of uncommitted changes (staged + unstaged). */
+  async diff(cwd: string): Promise<GitDiffResult> {
+    const isGit = await this.isRepo(cwd);
+    if (!isGit) return { diff: "", files: [], hasChanges: false };
+
+    // Combine staged and unstaged diff
+    let diffText = "";
+    try {
+      const staged = await gitExec(cwd, "diff --cached").catch(() => "");
+      const unstaged = await gitExec(cwd, "diff").catch(() => "");
+      diffText = [staged, unstaged].filter(Boolean).join("\n");
+    } catch { /* ignore */ }
+
+    // Also include untracked files as a summary
+    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+    const untrackedFiles = porcelain
+      .split("\n")
+      .filter((l) => l.startsWith("??"))
+      .map((l) => l.slice(3).trim())
+      .filter(Boolean);
+
+    if (untrackedFiles.length > 0) {
+      const untrackedSection = untrackedFiles.map((f) => `+++ new file: ${f}`).join("\n");
+      diffText = diffText ? `${diffText}\n\n# Untracked files:\n${untrackedSection}` : `# Untracked files:\n${untrackedSection}`;
+    }
+
+    const files = porcelain
+      .split("\n")
+      .filter(Boolean)
+      .map((l) => l.slice(3).trim())
+      .filter(Boolean);
+
+    return {
+      diff: diffText,
+      files,
+      hasChanges: files.length > 0,
+    };
   }
 }

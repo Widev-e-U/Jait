@@ -10,12 +10,17 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
+import { ViewModeSelector } from '@/components/chat/view-mode-selector'
+import type { ViewMode } from '@/components/chat/view-mode-selector'
 import { ProviderSelector } from '@/components/chat/provider-selector'
 import type { ProviderId } from '@/lib/agents-api'
 import { FileIcon } from '@/components/icons/file-icons'
 import { cn } from '@/lib/utils'
 
 const ICON_CDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@12.9.0/icons/'
+
+/** Stable empty array so the default prop doesn't create a new reference each render. */
+const EMPTY_FILES: ReferencedFile[] = []
 
 export interface ReferencedFile {
   path: string
@@ -34,6 +39,8 @@ interface PromptInputProps {
   placeholder?: string
   className?: string
   onVoiceInput?: () => void
+  viewMode?: ViewMode
+  onViewModeChange?: (viewMode: ViewMode) => void
   mode?: ChatMode
   onModeChange?: (mode: ChatMode) => void
   provider?: ProviderId
@@ -169,11 +176,13 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   placeholder = 'Ask anything...',
   className,
   onVoiceInput,
+  viewMode,
+  onViewModeChange,
   mode,
   onModeChange,
   provider,
   onProviderChange,
-  availableFiles = [],
+  availableFiles = EMPTY_FILES,
   onSearchFiles,
   workspaceOpen = false,
 }: PromptInputProps, ref) {
@@ -241,7 +250,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   // Debounced search when mention query changes
   useEffect(() => {
     if (!mentionOpen) {
-      setSearchResults([])
+      // Functional updater: skip re-render when already empty
+      setSearchResults(prev => prev.length === 0 ? prev : EMPTY_FILES)
       return
     }
 
@@ -252,9 +262,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       editableRef.current ? getChipPaths(editableRef.current) : []
     )
 
+    // Read from ref so availableFiles isn't in the deps array
+    const currentFiles = availableFilesRef.current
+
     // For empty query, show pre-loaded files (top-level from tree)
     if (!mentionQuery) {
-      const quick = availableFiles
+      const quick = currentFiles
         .filter((f) => !alreadyReferenced.has(f.path))
         .slice(0, 15)
       setSearchResults(quick)
@@ -263,7 +276,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
 
     // First show instant results from already-loaded list
-    const instant = availableFiles
+    const instant = currentFiles
       .filter((f) => {
         if (alreadyReferenced.has(f.path)) return false
         const q = mentionQuery.toLowerCase()
@@ -314,7 +327,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       clearTimeout(timer)
       controller.abort()
     }
-  }, [mentionOpen, mentionQuery, availableFiles])
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mentionOpen, mentionQuery])
 
   // Sync external value → contentEditable (only when value changes externally, e.g. cleared on submit)
   useEffect(() => {
@@ -662,10 +676,13 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
       <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
         <div className="flex items-center gap-1">
+          {viewMode && onViewModeChange && (
+            <ViewModeSelector mode={viewMode} onChange={onViewModeChange} disabled={disabled || isLoading} />
+          )}
           {provider && onProviderChange && (
             <ProviderSelector provider={provider} onChange={onProviderChange} disabled={disabled || isLoading} />
           )}
-          {mode && onModeChange && (!provider || provider === 'jait') && (
+          {mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager' && (
             <ModeSelector mode={mode} onChange={onModeChange} disabled={disabled || isLoading} />
           )}
         </div>
