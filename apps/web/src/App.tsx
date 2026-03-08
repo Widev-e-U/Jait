@@ -1856,16 +1856,19 @@ ${file.content.slice(0, 2000)}
                           cliModel={cliModel}
                           onCliModelChange={setCliModel}
                         />
-                        {automation.selectedThread && automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
-                          <div className="flex items-center gap-2 px-1 mt-1.5">
-                            <button
-                              onClick={() => automation.setSelectedThreadId(null)}
-                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                            >
-                              New task
-                            </button>
-                          </div>
-                        )}
+                        <div className="flex items-center gap-2 px-1 mt-1.5">
+                          <button
+                            onClick={() => { automation.setSelectedThreadId(null); setInputValue('') }}
+                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                          >
+                            New thread
+                          </button>
+                          {automation.selectedThread && automation.selectedThread.status !== 'running' && automation.selectedThread.status !== 'idle' && (
+                            <span className="text-[11px] text-muted-foreground truncate">
+                              Thread finished — start a new one
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   </>
