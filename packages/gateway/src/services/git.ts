@@ -132,7 +132,7 @@ export class GitService {
     await gitExec(cwd, "init");
   }
 
-  async status(cwd: string): Promise<GitStatusResult> {
+  async status(cwd: string, _branch?: string): Promise<GitStatusResult> {
     const isGit = await this.isRepo(cwd);
     if (!isGit) {
       return {
@@ -246,8 +246,11 @@ export class GitService {
     try {
       const raw = await gitExec(cwd, "branch -a --format='%(HEAD) %(refname:short) %(upstream:short) %(worktreepath)'");
       const branches: GitBranch[] = [];
-      const defaultBranch = await gitExec(cwd, "symbolic-ref refs/remotes/origin/HEAD 2>/dev/null || echo main")
-        .then((r) => r.replace("refs/remotes/origin/", "").trim())
+      const remotes = await this.listRemotes(cwd);
+      const remoteSet = new Set(remotes);
+      const preferredRemote = await this.getPreferredRemote(cwd);
+      const defaultBranch = await gitExec(cwd, `symbolic-ref refs/remotes/${preferredRemote ?? "origin"}/HEAD 2>/dev/null || echo main`)
+        .then((r) => r.replace(`refs/remotes/${preferredRemote ?? "origin"}/`, "").trim())
         .catch(() => "main");
 
       for (const line of raw.split("\n").filter(Boolean)) {
@@ -255,14 +258,19 @@ export class GitService {
         const current = clean.startsWith("*");
         const parts = clean.replace(/^\*?\s*/, "").split(/\s+/);
         const name = parts[0] ?? "";
-        const isRemote = name.startsWith("origin/");
+        const slashIndex = name.indexOf("/");
+        const remoteName = slashIndex > 0 ? name.slice(0, slashIndex) : "";
+        const isRemote = !!remoteName && remoteSet.has(remoteName);
+        const branchName = isRemote ? name.slice(slashIndex + 1) : name;
         const worktreePath = parts.length > 2 ? parts.slice(2).join(" ") || null : null;
-        if (!name || name === "origin/HEAD") continue;
+        if (!name || (isRemote && branchName === "HEAD")) continue;
         branches.push({
-          name: isRemote ? name.replace(/^origin\//, "") : name,
+          name: branchName,
           isRemote,
           current,
-          isDefault: name === defaultBranch || name === `origin/${defaultBranch}`,
+          isDefault:
+            branchName === defaultBranch ||
+            (isRemote && remoteName === preferredRemote && name === `${preferredRemote}/${defaultBranch}`),
           worktreePath,
         });
       }
@@ -340,18 +348,18 @@ export class GitService {
     if (action === "commit_push" || action === "commit_push_pr") {
       if (currentBranch) {
         let hasUpstream = false;
+        let upstreamBranch: string | undefined;
         try {
-          await gitExec(cwd, `rev-parse --abbrev-ref ${currentBranch}@{upstream}`);
+          upstreamBranch = await gitExec(cwd, `rev-parse --abbrev-ref ${currentBranch}@{upstream}`);
           hasUpstream = true;
         } catch { /* no upstream */ }
 
         if (hasUpstream) {
           await gitExec(cwd, "push");
-          result.push = { status: "pushed", branch: currentBranch };
+          result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
         } else {
-          // Check if origin remote exists before trying to set upstream
-          const hasOrigin = await this.hasRemote(cwd, "origin");
-          if (!hasOrigin) {
+          const remoteName = await this.getPreferredRemote(cwd, currentBranch);
+          if (!remoteName) {
             result.push = { status: "skipped_no_remote", branch: currentBranch };
             // Also skip PR if no remote
             if (action === "commit_push_pr") {
@@ -359,14 +367,20 @@ export class GitService {
             }
             return result;
           }
-          await gitExec(cwd, `push --set-upstream origin "${currentBranch}"`);
-          result.push = { status: "pushed", branch: currentBranch, setUpstream: true };
+          await gitExec(cwd, `push --set-upstream "${remoteName}" "${currentBranch}"`);
+          result.push = {
+            status: "pushed",
+            branch: currentBranch,
+            upstreamBranch: `${remoteName}/${currentBranch}`,
+            setUpstream: true,
+          };
         }
       }
 
       // Attach a "create PR" URL so the frontend can link to it
       if (result.push.status === "pushed" && currentBranch) {
-        result.push.createPrUrl = await this.buildCreatePrUrl(cwd, currentBranch);
+        const upstreamRemote = result.push.upstreamBranch?.split("/")[0];
+        result.push.createPrUrl = await this.buildCreatePrUrl(cwd, currentBranch, upstreamRemote);
       }
     }
 
@@ -512,12 +526,42 @@ export class GitService {
     }
   }
 
+  /** List configured remote names. */
+  async listRemotes(cwd: string): Promise<string[]> {
+    const raw = await gitExec(cwd, "remote").catch(() => "");
+    return raw
+      .split("\n")
+      .map((r) => r.trim())
+      .filter(Boolean);
+  }
+
+  /**
+   * Resolve the best remote for push/PR operations.
+   * Priority: branch-specific remote -> origin -> first configured remote.
+   */
+  async getPreferredRemote(cwd: string, branch?: string): Promise<string | null> {
+    const remotes = await this.listRemotes(cwd);
+    if (remotes.length === 0) return null;
+
+    if (branch) {
+      const configuredRemote = await gitExec(cwd, `config --get branch.${branch}.remote`).catch(() => "");
+      if (configuredRemote && remotes.includes(configuredRemote)) {
+        return configuredRemote;
+      }
+    }
+
+    if (remotes.includes("origin")) return "origin";
+    return remotes[0] ?? null;
+  }
+
   /**
    * Build a URL to create a new pull request on the hosting provider.
    * Supports GitHub, GitLab, Bitbucket, and Azure DevOps remote URLs.
    */
-  async buildCreatePrUrl(cwd: string, branch: string): Promise<string | undefined> {
-    const raw = await this.getRemoteUrl(cwd, "origin");
+  async buildCreatePrUrl(cwd: string, branch: string, remoteName?: string): Promise<string | undefined> {
+    const preferredRemote = remoteName ?? await this.getPreferredRemote(cwd, branch);
+    if (!preferredRemote) return undefined;
+    const raw = await this.getRemoteUrl(cwd, preferredRemote);
     if (!raw) return undefined;
 
     // Normalise SSH / HTTPS remote URL → "https://host/owner/repo"

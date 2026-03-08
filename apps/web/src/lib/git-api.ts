@@ -291,7 +291,7 @@ export function summarizeGitResult(result: GitStepResult): { title: string; desc
     const sha = result.commit.commitSha?.slice(0, 7)
     return {
       title: sha ? `Committed ${sha}` : 'Committed changes',
-      description: 'No remote configured — push skipped. Add a remote with `git remote add origin <url>` to enable push & PR.',
+      description: 'No remote configured — push skipped. Add a remote with `git remote add <name> <url>` to enable push & PR.',
     }
   }
   if (result.pr.status === 'created' || result.pr.status === 'opened_existing') {
