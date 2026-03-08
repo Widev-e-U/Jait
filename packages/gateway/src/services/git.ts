@@ -111,7 +111,7 @@ async function ghExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Pro
 
 async function ghAvailable(cwd: string): Promise<boolean> {
   try {
-    await exec("gh auth status", { cwd, timeout: 10_000 });
+    await exec("gh --version", { cwd, timeout: 5_000 });
     return true;
   } catch {
     return false;
@@ -234,7 +234,7 @@ export class GitService {
     let totalDeletions = 0;
     if (hasChanges) {
       try {
-        const diffStat = await gitExec(cwd, "diff --numstat HEAD 2>/dev/null || git diff --numstat");
+        const diffStat = await gitExec(cwd, "diff --numstat HEAD").catch(() => gitExec(cwd, "diff --numstat"));
         for (const line of diffStat.split("\n").filter(Boolean)) {
           const [ins, del, filePath] = line.split("\t");
           const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
@@ -281,7 +281,7 @@ export class GitService {
         if (hasGh) {
           const json = await ghExec(
             cwd,
-            `pr view --head "${branch}" --json number,title,url,state,baseRefName,headRefName 2>/dev/null`,
+            `pr view --head "${branch}" --json number,title,url,state,baseRefName,headRefName`,
           );
           if (json) {
             const parsed = JSON.parse(json) as Record<string, unknown>;
@@ -333,7 +333,7 @@ export class GitService {
       const remotes = await this.listRemotes(cwd);
       const remoteSet = new Set(remotes);
       const preferredRemote = await this.getPreferredRemote(cwd);
-      const defaultBranch = await gitExec(cwd, `symbolic-ref refs/remotes/${preferredRemote ?? "origin"}/HEAD 2>/dev/null || echo main`)
+      const defaultBranch = await gitExec(cwd, `symbolic-ref refs/remotes/${preferredRemote ?? "origin"}/HEAD`)
         .then((r) => r.replace(`refs/remotes/${preferredRemote ?? "origin"}/`, "").trim())
         .catch(() => "main");
 
