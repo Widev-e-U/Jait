@@ -22,8 +22,9 @@ import {
 import { cn } from '@/lib/utils'
 import type { FsNode, FsBrowseEntry } from '@jait/shared'
 import { detectPlatform, generateDeviceId } from '@/lib/device-id'
+import { getApiUrl } from '@/lib/gateway-url'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = getApiUrl()
 
 /** Icon for a filesystem node based on its platform */
 function NodeIcon({ platform }: { platform: string }) {

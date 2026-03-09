@@ -3,9 +3,10 @@ import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
+import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 
-const GATEWAY = import.meta.env.VITE_GATEWAY_URL ?? 'http://localhost:8000'
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000'
+const GATEWAY = getApiUrl()
+const WS_URL = getWsUrl()
 
 export interface TerminalInfo {
   id: string

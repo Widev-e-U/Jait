@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Shield, ShieldAlert, ShieldCheck, ShieldX, Clock, Terminal, FileText, Info } from 'lucide-react'
+import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 
-const GATEWAY = import.meta.env.VITE_GATEWAY_URL ?? 'http://localhost:8000'
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000'
+const GATEWAY = getApiUrl()
+const WS_URL = getWsUrl()
 
 // ── Types ────────────────────────────────────────────────────────────
 

@@ -2,7 +2,9 @@
  * API client for scheduled jobs
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { getApiUrl } from '@/lib/gateway-url'
+
+const API_URL = getApiUrl()
 
 export interface ScheduledJob {
   id: string

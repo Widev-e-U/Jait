@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
+import { getApiUrl } from '@/lib/gateway-url'
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = getApiUrl()
 
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type SttProvider = 'simulated' | 'browser'

@@ -5,8 +5,9 @@ import type { TodoItem } from '@/components/chat/todo-list'
 import type { ChangedFile, FileChangeState } from '@/components/chat/files-changed'
 import type { QueuedMessage } from '@/components/chat/message-queue'
 import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
+import { getApiUrl } from '@/lib/gateway-url'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = getApiUrl()
 const STREAM_SNAPSHOT_LIMIT = 120
 
 function authHeaders(token?: string | null): Record<string, string> {

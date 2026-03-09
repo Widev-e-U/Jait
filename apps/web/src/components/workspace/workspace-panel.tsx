@@ -137,8 +137,9 @@ async function readFileHandle(handle: FileSystemFileHandle): Promise<string> {
 /* ------------------------------------------------------------------ */
 /*  Remote (server-backed) workspace helpers                           */
 /* ------------------------------------------------------------------ */
+import { getApiUrl } from '@/lib/gateway-url'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = getApiUrl()
 
 async function remoteScanDir(dirPath: string, surfaceId?: string | null): Promise<LazyNode[]> {
   let url = `${API_URL}/api/workspace/list?path=${encodeURIComponent(dirPath)}`

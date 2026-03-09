@@ -2,9 +2,68 @@
 
 > Just Another Intelligent Tool — for Developers.
 
-Jait is a Bun/TypeScript monorepo for a local-first developer agent that can execute tools (terminal/files/browser/network), stream activity, and run with human-in-the-loop controls.
+Jait is a local-first AI developer agent that can execute tools (terminal/files/browser/network), stream activity, and run with human-in-the-loop controls.
 
-## Current Repository Layout
+**[Download & Install](https://jait-ai.github.io/jait/)** · [Releases](https://github.com/jait-ai/jait/releases)
+
+---
+
+## Install
+
+### Option 1: npm (recommended)
+
+```bash
+npm install -g @jait/gateway
+jait start
+```
+
+### Option 2: Docker
+
+```bash
+docker run -d -p 8000:8000 -v jait-data:/data ghcr.io/jait-ai/jait-gateway
+```
+
+Or with docker compose:
+
+```bash
+curl -O https://raw.githubusercontent.com/jait-ai/jait/main/docker-compose.yml
+docker compose up -d
+```
+
+### Option 3: From source (for development)
+
+```bash
+git clone https://github.com/jait-ai/jait
+cd jait
+bun install --frozen-lockfile
+cp .env.example .env
+bun run dev
+```
+
+## Downloads
+
+| Platform | Download |
+|----------|----------|
+| Windows  | [Jait-Setup-x64.exe](https://github.com/jait-ai/jait/releases/latest/download/Jait-Setup-x64.exe) |
+| macOS    | [Jait-universal.dmg](https://github.com/jait-ai/jait/releases/latest/download/Jait-universal.dmg) |
+| Linux    | [Jait-x86_64.AppImage](https://github.com/jait-ai/jait/releases/latest/download/Jait-x86_64.AppImage) |
+| Android  | [jait-arm64-v8a.apk](https://github.com/jait-ai/jait/releases/latest/download/jait-arm64-v8a.apk) |
+| Web      | [app.jait.dev](https://app.jait.dev) |
+
+## Connecting a client to your gateway
+
+Every client (web, desktop, mobile) can configure its gateway URL:
+
+1. Open the app
+2. Go to **Settings → Gateway connection**
+3. Enter your gateway's IP or domain (e.g. `http://192.168.1.100:8000`)
+4. Click **Test & save**
+
+The setting is stored locally per device. Leave it empty to use the default (`http://localhost:8000`).
+
+---
+
+## Repository Layout
 
 - `packages/gateway` — Fastify gateway, tools, surfaces, scheduler, security, memory, DB
 - `packages/shared` — shared schemas, constants, domain types
@@ -13,30 +72,6 @@ Jait is a Bun/TypeScript monorepo for a local-first developer agent that can exe
 - `apps/desktop` / `apps/mobile` — device clients
 - `e2e` — Playwright tests
 - `docker` + `docker-compose.yml` — container stack
-
-## Quick Start
-
-### 1) Install dependencies
-
-```bash
-bun install --frozen-lockfile
-```
-
-### 2) Configure environment
-
-```bash
-cp .env.example .env
-```
-
-Notes:
-- Jait defaults to local-first behavior.
-- Cloud providers (OpenAI/Google OAuth/etc.) are optional integrations.
-
-### 3) Run development
-
-```bash
-bun run dev
-```
 
 ## Core Commands
 

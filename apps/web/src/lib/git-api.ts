@@ -4,7 +4,9 @@
  * Mirrors the t3code gitReactQuery pattern but uses HTTP instead of IPC.
  */
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+import { getApiUrl } from '@/lib/gateway-url'
+
+const API_URL = getApiUrl()
 
 // ── Types (matching gateway GitService) ──────────────────────────────
 

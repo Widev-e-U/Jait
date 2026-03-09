@@ -76,8 +76,9 @@ import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
 import { Badge } from '@/components/ui/badge'
+import { getApiUrl } from '@/lib/gateway-url'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = getApiUrl()
 
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
 

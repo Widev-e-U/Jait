@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Eye, EyeOff, Key } from 'lucide-react'
+import { Eye, EyeOff, Key, Globe, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { ActivityFeed } from '@/components/activity'
 import type { ActivityEvent } from '@jait/ui-shared'
 import type { SttProvider } from '@/hooks/useAuth'
+import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl } from '@/lib/gateway-url'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -63,7 +64,7 @@ function isSecretField(field: string): boolean {
   return field.endsWith('_KEY') || field.endsWith('_URL')
 }
 
-const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+const API_URL = getApiUrl()
 
 interface SettingsPageProps {
   username: string
@@ -93,6 +94,33 @@ export function SettingsPage({
   const [error, setError] = useState<string | null>(null)
   const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
   const [visible, setVisible] = useState<Record<string, boolean>>({})
+
+  // ── Gateway URL state ────────────────────────────────────────────
+  const [gwDraft, setGwDraft] = useState(getStoredGatewayUrl() ?? '')
+  const [gwStatus, setGwStatus] = useState<'idle' | 'testing' | 'ok' | 'error'>('idle')
+  const [gwError, setGwError] = useState<string | null>(null)
+
+  const testGatewayUrl = useCallback(async (url: string) => {
+    if (!url.trim()) {
+      // Reset to default
+      setStoredGatewayUrl(null)
+      setGwStatus('ok')
+      setGwError(null)
+      return
+    }
+    setGwStatus('testing')
+    setGwError(null)
+    try {
+      const target = url.replace(/\/$/, '')
+      const res = await fetch(`${target}/health`, { signal: AbortSignal.timeout(5000) })
+      if (!res.ok) throw new Error(`HTTP ${res.status}`)
+      setStoredGatewayUrl(target)
+      setGwStatus('ok')
+    } catch (err) {
+      setGwStatus('error')
+      setGwError(err instanceof Error ? err.message : 'Connection failed')
+    }
+  }, [])
 
   useEffect(() => {
     setDraft(apiKeys)
@@ -171,6 +199,65 @@ export function SettingsPage({
           Signed in as <span className="font-medium text-foreground">{username}</span>
         </p>
       </div>
+
+      <Card className="p-5 space-y-4">
+        <div>
+          <h2 className="text-base font-medium flex items-center gap-2">
+            <Globe className="h-4 w-4" />
+            Gateway connection
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Configure the IP address or domain of your Jait gateway. Leave empty to use the default.
+          </p>
+        </div>
+        <div className="max-w-md space-y-2">
+          <Label htmlFor="gateway-url" className="mb-1.5 block">Gateway URL</Label>
+          <div className="flex gap-2">
+            <Input
+              id="gateway-url"
+              type="url"
+              value={gwDraft}
+              onChange={(e) => { setGwDraft(e.target.value); setGwStatus('idle') }}
+              placeholder={getApiUrl()}
+              className="font-mono text-sm"
+            />
+            <Button
+              variant="outline"
+              onClick={() => { void testGatewayUrl(gwDraft) }}
+              disabled={gwStatus === 'testing'}
+              className="shrink-0"
+            >
+              {gwStatus === 'testing' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : 'Test & save'}
+            </Button>
+          </div>
+          {gwStatus === 'ok' && (
+            <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" />
+              {gwDraft.trim() ? 'Connected — gateway URL saved.' : 'Reset to default.'}
+            </p>
+          )}
+          {gwStatus === 'error' && gwError && (
+            <p className="text-sm text-destructive flex items-center gap-1">
+              <AlertCircle className="h-3.5 w-3.5" />
+              {gwError}
+            </p>
+          )}
+          <p className="text-xs text-muted-foreground">
+            Current: <code className="bg-muted px-1 py-0.5 rounded text-[11px]">{getApiUrl()}</code>
+            {getStoredGatewayUrl() && (
+              <button
+                type="button"
+                className="ml-2 text-xs underline text-muted-foreground hover:text-foreground"
+                onClick={() => { setGwDraft(''); setStoredGatewayUrl(null); setGwStatus('idle') }}
+              >
+                Reset to default
+              </button>
+            )}
+          </p>
+        </div>
+      </Card>
 
       <Card className="p-5 space-y-4">
         <div>

@@ -1,0 +1,167 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch: {}
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  # ── Build & push Docker images ──────────────────────────────────────
+  docker:
+    name: Docker Images
+    runs-on: ubuntu-latest
+    env:
+      REGISTRY_HOST: ghcr.io
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Set image owner
+        run: echo "IMAGE_OWNER=${GITHUB_REPOSITORY_OWNER,,}" >> $GITHUB_ENV
+
+      - uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY_HOST }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=$(jq -r '.version' package.json)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build & push gateway
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.gateway
+          push: true
+          tags: |
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-gateway:latest
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-gateway:${{ steps.version.outputs.version }}
+
+      - name: Build & push web
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: docker/Dockerfile.web
+          push: true
+          tags: |
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-web:latest
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-web:${{ steps.version.outputs.version }}
+
+  # ── Build desktop apps (Electron) ──────────────────────────────────
+  desktop-windows:
+    name: Desktop — Windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Build Electron (Windows)
+        working-directory: apps/desktop
+        run: bun run build:win
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: apps/desktop/dist/*.exe
+
+  desktop-macos:
+    name: Desktop — macOS
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Build Electron (macOS)
+        working-directory: apps/desktop
+        run: bun run build:mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          path: apps/desktop/dist/*.dmg
+
+  desktop-linux:
+    name: Desktop — Linux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Build Electron (Linux)
+        working-directory: apps/desktop
+        run: bun run build:linux
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-linux
+          path: apps/desktop/dist/*.AppImage
+
+  # ── Build Android APK ──────────────────────────────────────────────
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+      - name: Build APK
+        working-directory: apps/mobile/android
+        run: ./gradlew assembleRelease
+      - uses: actions/upload-artifact@v4
+        with:
+          name: android-apk
+          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+
+  # ── Publish npm package ────────────────────────────────────────────
+  npm-publish:
+    name: Publish @jait/gateway to npm
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Publish gateway
+        working-directory: packages/gateway
+        run: npm publish --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # ── Create GitHub Release with all assets ──────────────────────────
+  release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [docker, desktop-windows, desktop-macos, desktop-linux, android, npm-publish]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: Extract version
+        id: version
+        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Jait v${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: release-assets/**/*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

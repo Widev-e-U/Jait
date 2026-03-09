@@ -9,7 +9,9 @@ import type {
   FileHighlightData,
 } from '@jait/shared'
 
-const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:8000'
+import { getWsUrl } from '@/lib/gateway-url'
+
+const WS_URL = getWsUrl()
 
 // ── Device / platform helpers (shared with useScreenShare) ──────────
 function detectPlatform(): 'electron' | 'capacitor' | 'web' {

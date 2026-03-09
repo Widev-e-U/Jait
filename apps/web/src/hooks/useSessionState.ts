@@ -9,8 +9,9 @@
  * - Pass `null` to delete the key
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
+import { getApiUrl } from '@/lib/gateway-url'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
+const API_URL = getApiUrl()
 
 function authHeaders(token?: string | null): Record<string, string> {
   const h: Record<string, string> = { 'Content-Type': 'application/json' }

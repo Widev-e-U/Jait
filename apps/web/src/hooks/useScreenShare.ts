@@ -25,8 +25,10 @@ import type {
   ScreenShareSessionState,
 } from '@jait/shared'
 
-const API_URL = import.meta.env.VITE_API_URL || ''
-const WS_URL = import.meta.env.VITE_WS_URL || 'ws://localhost:8000'
+import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
+
+const API_URL = getApiUrl()
+const WS_URL = getWsUrl()
 
 // ── Auto-approve helpers ──────────────────────────────────────────────
 
