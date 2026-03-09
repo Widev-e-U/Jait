@@ -1,3 +1,11 @@
+import { webcrypto } from "node:crypto";
+
+// Polyfill globalThis.crypto for Node.js < 19 (needed by jose v6 / Web Crypto API consumers)
+if (typeof globalThis.crypto === "undefined") {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  (globalThis as any).crypto = webcrypto;
+}
+
 import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
 import { WsControlPlane } from "./ws.js";
