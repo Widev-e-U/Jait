@@ -1,0 +1,957 @@
+/**
+ * Server-side git operations service.
+ *
+ * Executes git and `gh` CLI commands in the requested working directory.
+ * Adapted from the t3code GitService/GitManager pattern but running
+ * directly through child_process on the gateway.
+ */
+import { exec as execCb } from "node:child_process";
+import { readFile, writeFile, unlink, mkdir, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
+import { basename, join } from "node:path";
+import { homedir, tmpdir } from "node:os";
+import { promisify } from "node:util";
+const exec = promisify(execCb);
+const DEFAULT_TIMEOUT = 30_000;
+// ── Helpers ────────────────────────────────────────────────────────
+async function gitExec(cwd, args, timeout = DEFAULT_TIMEOUT) {
+    const { stdout } = await exec(`git ${args}`, { cwd, timeout });
+    return stdout.trim();
+}
+async function ghExec(cwd, args, timeout = DEFAULT_TIMEOUT) {
+    const { stdout } = await exec(`gh ${args}`, { cwd, timeout });
+    return stdout.trim();
+}
+async function ghAvailable(cwd) {
+    try {
+        await exec("gh --version", { cwd, timeout: 5_000 });
+        return true;
+    }
+    catch {
+        return false;
+    }
+}
+function parseGithubRemote(raw) {
+    if (!raw)
+        return null;
+    // Normalise to https URL
+    let url = raw.replace(/\.git$/, "");
+    url = url.replace(/^git@([^:]+):(.+)$/, "https://$1/$2");
+    url = url.replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
+    try {
+        const u = new URL(url);
+        const parts = u.pathname.replace(/^\/+|\/+$/g, "").split("/");
+        if (!u.hostname.includes("github") || parts.length < 2)
+            return null;
+        const repo = parts.pop();
+        const owner = parts.pop();
+        return { host: u.hostname, owner, repo };
+    }
+    catch {
+        return null;
+    }
+}
+function resolveGithubToken(explicit) {
+    return explicit ?? process.env.GITHUB_TOKEN ?? process.env.GH_TOKEN ?? process.env.GITHUB_PAT ?? null;
+}
+/** Cache for git credential manager token (avoids shelling out every request). */
+let _gitCredentialToken;
+let _gitCredentialExpiry = 0;
+/**
+ * Attempt to extract a GitHub token from git's credential manager.
+ * Returns null if git credential fill fails or isn't configured.
+ * Caches the result for 5 minutes to avoid repeated subprocess calls.
+ */
+async function resolveGitCredentialToken() {
+    if (_gitCredentialToken !== undefined && Date.now() < _gitCredentialExpiry) {
+        return _gitCredentialToken;
+    }
+    try {
+        const { spawn } = await import("node:child_process");
+        const token = await new Promise((resolve) => {
+            const proc = spawn("git", ["credential", "fill"], { timeout: 5_000 });
+            let out = "";
+            proc.stdout.on("data", (d) => { out += d.toString(); });
+            proc.on("close", () => {
+                const match = out.match(/^password=(.+)$/m);
+                resolve(match?.[1]?.trim() ?? null);
+            });
+            proc.on("error", () => resolve(null));
+            proc.stdin.write("protocol=https\nhost=github.com\n\n");
+            proc.stdin.end();
+        });
+        _gitCredentialToken = token;
+    }
+    catch {
+        _gitCredentialToken = null;
+    }
+    _gitCredentialExpiry = Date.now() + 5 * 60 * 1000;
+    return _gitCredentialToken;
+}
+/**
+ * Resolve a usable GitHub token — explicit > env > git credential manager.
+ */
+async function resolveGithubTokenWithFallback(explicit) {
+    const quick = resolveGithubToken(explicit);
+    if (quick)
+        return quick;
+    return resolveGitCredentialToken();
+}
+// ── Service ────────────────────────────────────────────────────────
+export class GitService {
+    async isRepo(cwd) {
+        try {
+            await gitExec(cwd, "rev-parse --is-inside-work-tree");
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    async init(cwd) {
+        await gitExec(cwd, "init");
+    }
+    async status(cwd, _branch, githubToken) {
+        const effectiveToken = await resolveGithubTokenWithFallback(githubToken);
+        const isGit = await this.isRepo(cwd);
+        if (!isGit) {
+            return {
+                branch: null,
+                hasWorkingTreeChanges: false,
+                workingTree: { files: [], insertions: 0, deletions: 0 },
+                hasUpstream: false,
+                aheadCount: 0,
+                behindCount: 0,
+                pr: null,
+                ghAvailable: false,
+            };
+        }
+        // Branch
+        let branch = null;
+        try {
+            branch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD");
+            if (branch === "HEAD")
+                branch = null;
+        }
+        catch { /* detached HEAD */ }
+        // Status summary
+        const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+        const hasChanges = porcelain.length > 0;
+        // Diff stats for changed files
+        const files = [];
+        let totalInsertions = 0;
+        let totalDeletions = 0;
+        if (hasChanges) {
+            try {
+                const diffStat = await gitExec(cwd, "diff --numstat HEAD").catch(() => gitExec(cwd, "diff --numstat"));
+                for (const line of diffStat.split("\n").filter(Boolean)) {
+                    const [ins, del, filePath] = line.split("\t");
+                    const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
+                    const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
+                    if (filePath) {
+                        files.push({ path: filePath, insertions, deletions });
+                        totalInsertions += insertions;
+                        totalDeletions += deletions;
+                    }
+                }
+                // Also count untracked files
+                const untracked = porcelain.split("\n").filter((l) => l.startsWith("??"));
+                for (const line of untracked) {
+                    const filePath = line.slice(3).trim();
+                    if (filePath && !files.some((f) => f.path === filePath)) {
+                        files.push({ path: filePath, insertions: 0, deletions: 0 });
+                    }
+                }
+            }
+            catch { /* ignore diff failures */ }
+        }
+        // Upstream tracking
+        let hasUpstream = false;
+        let aheadCount = 0;
+        let behindCount = 0;
+        if (branch) {
+            try {
+                const upstream = await gitExec(cwd, `rev-parse --abbrev-ref ${branch}@{upstream}`);
+                hasUpstream = !!upstream;
+                const counts = await gitExec(cwd, `rev-list --left-right --count ${branch}...${branch}@{upstream}`);
+                const [ahead, behind] = counts.split("\t").map(Number);
+                aheadCount = ahead ?? 0;
+                behindCount = behind ?? 0;
+            }
+            catch { /* no upstream */ }
+        }
+        // PR status (via gh cli)
+        let pr = null;
+        let ghIsAvailable = false;
+        if (branch) {
+            try {
+                const hasGh = await ghAvailable(cwd);
+                ghIsAvailable = hasGh;
+                if (hasGh) {
+                    const json = await ghExec(cwd, `pr view --head "${branch}" --json number,title,url,state,baseRefName,headRefName`);
+                    if (json) {
+                        const parsed = JSON.parse(json);
+                        if (parsed.number) {
+                            const state = String(parsed.state ?? "OPEN").toUpperCase();
+                            pr = {
+                                number: Number(parsed.number),
+                                title: String(parsed.title ?? ""),
+                                url: String(parsed.url ?? ""),
+                                baseBranch: String(parsed.baseRefName ?? ""),
+                                headBranch: String(parsed.headRefName ?? ""),
+                                state: state === "MERGED" ? "merged" : state === "CLOSED" ? "closed" : "open",
+                            };
+                        }
+                    }
+                }
+                else {
+                    if (effectiveToken) {
+                        const remoteName = await this.getPreferredRemote(cwd, branch);
+                        const remoteUrl = await this.getRemoteUrl(cwd, remoteName ?? "");
+                        const githubRemote = parseGithubRemote(remoteUrl);
+                        if (githubRemote) {
+                            const apiPr = await this.fetchGithubPrByHead(githubRemote, effectiveToken, branch);
+                            if (apiPr)
+                                pr = apiPr;
+                        }
+                    }
+                }
+            }
+            catch { /* gh not available or no PR */ }
+        }
+        return {
+            branch,
+            hasWorkingTreeChanges: hasChanges,
+            workingTree: { files, insertions: totalInsertions, deletions: totalDeletions },
+            hasUpstream,
+            aheadCount,
+            behindCount,
+            pr,
+            ghAvailable: ghIsAvailable,
+        };
+    }
+    async listBranches(cwd) {
+        const isGit = await this.isRepo(cwd);
+        if (!isGit)
+            return { branches: [], isRepo: false };
+        try {
+            const raw = await gitExec(cwd, "branch -a --format='%(HEAD) %(refname:short) %(upstream:short) %(worktreepath)'");
+            const branches = [];
+            const remotes = await this.listRemotes(cwd);
+            const remoteSet = new Set(remotes);
+            const preferredRemote = await this.getPreferredRemote(cwd);
+            const defaultBranch = await gitExec(cwd, `symbolic-ref refs/remotes/${preferredRemote ?? "origin"}/HEAD`)
+                .then((r) => r.replace(`refs/remotes/${preferredRemote ?? "origin"}/`, "").trim())
+                .catch(() => "main");
+            for (const line of raw.split("\n").filter(Boolean)) {
+                const clean = line.replace(/^'|'$/g, "").trim();
+                const current = clean.startsWith("*");
+                const parts = clean.replace(/^\*?\s*/, "").split(/\s+/);
+                const name = parts[0] ?? "";
+                const slashIndex = name.indexOf("/");
+                const remoteName = slashIndex > 0 ? name.slice(0, slashIndex) : "";
+                const isRemote = !!remoteName && remoteSet.has(remoteName);
+                const branchName = isRemote ? name.slice(slashIndex + 1) : name;
+                const worktreePath = parts.length > 2 ? parts.slice(2).join(" ") || null : null;
+                if (!name || (isRemote && branchName === "HEAD"))
+                    continue;
+                branches.push({
+                    name: branchName,
+                    isRemote,
+                    current,
+                    isDefault: branchName === defaultBranch ||
+                        (isRemote && remoteName === preferredRemote && name === `${preferredRemote}/${defaultBranch}`),
+                    worktreePath,
+                });
+            }
+            return { branches, isRepo: true };
+        }
+        catch {
+            return { branches: [], isRepo: true };
+        }
+    }
+    async pull(cwd) {
+        const branch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD");
+        let upstream = null;
+        try {
+            upstream = await gitExec(cwd, `rev-parse --abbrev-ref ${branch}@{upstream}`);
+        }
+        catch { /* no upstream */ }
+        const before = await gitExec(cwd, "rev-parse HEAD");
+        await gitExec(cwd, "pull --rebase");
+        const after = await gitExec(cwd, "rev-parse HEAD");
+        return {
+            status: before === after ? "skipped_up_to_date" : "pulled",
+            branch,
+            upstreamBranch: upstream,
+        };
+    }
+    async runStackedAction(cwd, action, commitMessage, featureBranch, baseBranch, githubToken) {
+        const effectiveToken = await resolveGithubTokenWithFallback(githubToken);
+        const result = {
+            commit: { status: "skipped_no_changes" },
+            push: { status: "skipped_not_requested" },
+            branch: { status: "skipped_not_requested" },
+            pr: { status: "skipped_not_requested" },
+        };
+        // Optionally create a feature branch
+        if (featureBranch) {
+            const timestamp = Date.now().toString(36);
+            const branchName = `feature/auto-${timestamp}`;
+            await gitExec(cwd, `checkout -b "${branchName}"`);
+            result.branch = { status: "created", name: branchName };
+        }
+        const currentBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
+        // Commit step
+        const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+        if (porcelain.length > 0) {
+            await gitExec(cwd, "add -A");
+            let msg = commitMessage?.trim();
+            if (!msg) {
+                // Auto-generate a commit message from the diff summary
+                try {
+                    const diffSummary = await gitExec(cwd, "diff --cached --stat");
+                    msg = `chore: auto-commit ${diffSummary.split("\n").length} file(s) changed`;
+                }
+                catch {
+                    msg = "chore: auto-commit changes";
+                }
+            }
+            await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}"`);
+            const sha = await gitExec(cwd, "rev-parse HEAD");
+            result.commit = { status: "created", commitSha: sha, subject: msg };
+        }
+        // Push step
+        if (action === "commit_push" || action === "commit_push_pr") {
+            if (currentBranch) {
+                let hasUpstream = false;
+                let upstreamBranch;
+                try {
+                    upstreamBranch = await gitExec(cwd, `rev-parse --abbrev-ref ${currentBranch}@{upstream}`);
+                    hasUpstream = true;
+                }
+                catch { /* no upstream */ }
+                if (hasUpstream) {
+                    try {
+                        await gitExec(cwd, "push");
+                        result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+                    }
+                    catch {
+                        // Already up-to-date or push failed — still proceed to PR
+                        result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+                    }
+                }
+                else {
+                    const remoteName = await this.getPreferredRemote(cwd, currentBranch);
+                    if (!remoteName) {
+                        result.push = { status: "skipped_no_remote", branch: currentBranch };
+                        // Don't return early — still try PR via gh CLI which may work
+                    }
+                    else {
+                        await gitExec(cwd, `push --set-upstream "${remoteName}" "${currentBranch}"`);
+                        result.push = {
+                            status: "pushed",
+                            branch: currentBranch,
+                            upstreamBranch: `${remoteName}/${currentBranch}`,
+                            setUpstream: true,
+                        };
+                    }
+                }
+            }
+            // Attach a "create PR" URL so the frontend can link to it
+            if (result.push.status === "pushed" && currentBranch) {
+                const upstreamRemote = result.push.upstreamBranch?.split("/")[0];
+                result.push.createPrUrl = await this.buildCreatePrUrl(cwd, currentBranch, upstreamRemote);
+            }
+        }
+        // PR creation step — try even if push was skipped (gh CLI can push internally)
+        if (action === "commit_push_pr" && currentBranch) {
+            try {
+                const hasGh = await ghAvailable(cwd);
+                const preferredRemote = await this.getPreferredRemote(cwd, currentBranch);
+                const remoteUrl = await this.getRemoteUrl(cwd, preferredRemote ?? "");
+                const githubRemote = parseGithubRemote(remoteUrl);
+                if (!hasGh && !effectiveToken) {
+                    const manualUrl = result.push.createPrUrl ?? (preferredRemote ? await this.buildCreatePrUrl(cwd, currentBranch, preferredRemote) : undefined);
+                    const hint = manualUrl ? ` Open ${manualUrl} to create the PR manually.` : "";
+                    throw new Error(`Cannot create pull request automatically because GitHub CLI is not installed and no GITHUB_TOKEN is configured.${hint}`);
+                }
+                if (hasGh) {
+                    // Check if PR already exists
+                    try {
+                        const existing = await ghExec(cwd, `pr view --head "${currentBranch}" --json number,url,title,state,baseRefName,headRefName`);
+                        const parsed = JSON.parse(existing);
+                        if (parsed.number) {
+                            const state = String(parsed.state ?? "OPEN").toUpperCase();
+                            if (state === "OPEN") {
+                                result.pr = {
+                                    status: "opened_existing",
+                                    url: String(parsed.url ?? ""),
+                                    number: Number(parsed.number),
+                                    baseBranch: String(parsed.baseRefName ?? ""),
+                                    headBranch: String(parsed.headRefName ?? ""),
+                                    title: String(parsed.title ?? ""),
+                                };
+                                return result;
+                            }
+                        }
+                    }
+                    catch { /* no existing PR */ }
+                    // Create new PR — use --push if branch wasn't pushed yet
+                    const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
+                    const baseFlag = baseBranch ? ` --base "${baseBranch}"` : '';
+                    const pushFlag = result.push.status !== "pushed" ? " --push" : "";
+                    // Generate PR body from diff context
+                    const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
+                    const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
+                    // Write body to temp file (avoids shell escaping issues with markdown)
+                    const bodyFile = join(tmpdir(), `jait-pr-body-${Date.now()}.md`);
+                    await writeFile(bodyFile, prBody, "utf-8");
+                    try {
+                        // gh pr create outputs the PR URL on stdout (--json is not supported)
+                        const prUrl = await ghExec(cwd, `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}${pushFlag}`, 60_000);
+                        // Fetch full PR details via gh pr view
+                        let prNumber = 0;
+                        let prBaseBranch = baseBranch ?? "";
+                        let prHeadBranch = currentBranch;
+                        let prFinalTitle = prTitle;
+                        try {
+                            const details = await ghExec(cwd, `pr view "${prUrl.trim()}" --json number,title,baseRefName,headRefName`);
+                            const parsed = JSON.parse(details);
+                            prNumber = Number(parsed.number ?? 0);
+                            prBaseBranch = String(parsed.baseRefName ?? prBaseBranch);
+                            prHeadBranch = String(parsed.headRefName ?? prHeadBranch);
+                            prFinalTitle = String(parsed.title ?? prTitle);
+                        }
+                        catch { /* details fetch failed — use what we have */ }
+                        result.pr = {
+                            status: "created",
+                            url: prUrl.trim(),
+                            number: prNumber,
+                            baseBranch: prBaseBranch,
+                            headBranch: prHeadBranch,
+                            title: prFinalTitle,
+                        };
+                        // If gh pushed the branch for us, update push status
+                        if (result.push.status !== "pushed") {
+                            result.push = { status: "pushed", branch: currentBranch };
+                        }
+                    }
+                    finally {
+                        // Clean up temp file
+                        await unlink(bodyFile).catch(() => { });
+                    }
+                }
+                else if (githubRemote && effectiveToken) {
+                    const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
+                    const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
+                    const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
+                    const apiResult = await this.createGithubPrViaApi(githubRemote, effectiveToken, {
+                        title: prTitle,
+                        baseBranch: resolvedBase,
+                        headBranch: currentBranch,
+                        body: prBody,
+                    });
+                    result.pr = {
+                        status: apiResult.status,
+                        url: apiResult.url,
+                        number: apiResult.number,
+                        baseBranch: apiResult.baseBranch,
+                        headBranch: apiResult.headBranch,
+                        title: apiResult.title,
+                    };
+                }
+                else {
+                    result.pr = { status: "skipped_not_requested" };
+                }
+            }
+            catch (err) {
+                // PR creation failed — report as error with details
+                const errMsg = err instanceof Error ? err.message : String(err);
+                result.pr = { status: "skipped_no_remote" };
+                const prefix = result.push.status === "skipped_no_remote"
+                    ? "Push failed (no remote configured) and PR creation failed"
+                    : "Pull request creation failed";
+                throw new Error(`${prefix}: ${errMsg}`);
+            }
+        }
+        return result;
+    }
+    async checkout(cwd, branch) {
+        await gitExec(cwd, `checkout "${branch}"`);
+    }
+    async createBranch(cwd, branch) {
+        await gitExec(cwd, `checkout -b "${branch}"`);
+    }
+    // ── Worktree operations ───────────────────────────────────────
+    /**
+     * Create a git worktree for a new branch.
+     * Worktrees live under ~/.jait/worktrees/{repoName}/{sanitizedBranch}.
+     * Uses `git worktree add -b <newBranch> <path> <baseBranch>`.
+     */
+    async createWorktree(cwd, baseBranch, newBranch, customPath) {
+        const sanitized = newBranch.replace(/\//g, "-");
+        const repoName = basename(cwd);
+        const worktreePath = customPath ??
+            join(homedir(), ".jait", "worktrees", repoName, sanitized);
+        // Ensure parent directory exists
+        await mkdir(join(worktreePath, ".."), { recursive: true });
+        await gitExec(cwd, `worktree add -b "${newBranch}" "${worktreePath}" "${baseBranch}"`, 60_000);
+        return { path: worktreePath, branch: newBranch };
+    }
+    /** Remove a git worktree. */
+    async removeWorktree(cwd, worktreePath, force = false) {
+        const forceFlag = force ? " --force" : "";
+        await gitExec(cwd, `worktree remove "${worktreePath}"${forceFlag}`, 30_000);
+    }
+    /**
+     * Clean up a worktree directory created for a thread.
+     * Resolves the main repo root, runs `git worktree remove --force`,
+     * and falls back to deleting the directory if that fails.
+     * No-ops silently when the path is not a worktree or doesn't exist.
+     */
+    async cleanupWorktree(worktreePath) {
+        if (!worktreePath || !existsSync(worktreePath))
+            return;
+        // Only act on paths that live inside the managed worktrees directory
+        const worktreeMarker = join(".jait", "worktrees");
+        if (!worktreePath.includes(worktreeMarker))
+            return;
+        try {
+            const mainRoot = await this.getMainRepoRoot(worktreePath);
+            await this.removeWorktree(mainRoot, worktreePath, true);
+        }
+        catch {
+            // git worktree remove may fail (dirty tree, missing refs, etc.).
+            // Fall back to a plain directory removal so we don't leak disk space.
+            try {
+                await rm(worktreePath, { recursive: true, force: true });
+            }
+            catch { /* best effort */ }
+        }
+    }
+    /** Get the top-level git directory (the main repo root, even from a worktree). */
+    async getMainRepoRoot(cwd) {
+        // In a worktree, --git-common-dir points to the main repo's .git
+        // and --show-toplevel gives the worktree root. We need the main root.
+        try {
+            const commonDir = await gitExec(cwd, "rev-parse --git-common-dir");
+            // commonDir is like /path/to/main-repo/.git
+            // We want /path/to/main-repo
+            if (commonDir.endsWith("/.git") || commonDir.endsWith("\\.git")) {
+                return commonDir.slice(0, -5);
+            }
+            // Fallback: it's a regular repo
+            return gitExec(cwd, "rev-parse --show-toplevel");
+        }
+        catch {
+            return gitExec(cwd, "rev-parse --show-toplevel");
+        }
+    }
+    /** Check whether a named remote (e.g. "origin") exists. */
+    async hasRemote(cwd, name) {
+        try {
+            await gitExec(cwd, `remote get-url ${name}`);
+            return true;
+        }
+        catch {
+            return false;
+        }
+    }
+    /** Get the remote URL for a named remote, or null if not set. */
+    async getRemoteUrl(cwd, name) {
+        try {
+            return (await gitExec(cwd, `remote get-url ${name}`)).trim() || null;
+        }
+        catch {
+            return null;
+        }
+    }
+    /** List configured remote names. */
+    async listRemotes(cwd) {
+        const raw = await gitExec(cwd, "remote").catch(() => "");
+        return raw
+            .split("\n")
+            .map((r) => r.trim())
+            .filter(Boolean);
+    }
+    /**
+     * Resolve the best remote for push/PR operations.
+     * Priority: branch-specific remote -> origin -> first configured remote.
+     * Falls back to main repo root remotes for worktrees.
+     */
+    async getPreferredRemote(cwd, branch) {
+        let remotes = await this.listRemotes(cwd);
+        // If no remotes found and we're in a worktree, try the main repo root
+        if (remotes.length === 0) {
+            try {
+                const mainRoot = await this.getMainRepoRoot(cwd);
+                if (mainRoot && mainRoot !== cwd) {
+                    remotes = await this.listRemotes(mainRoot);
+                }
+            }
+            catch { /* ignore */ }
+        }
+        if (remotes.length === 0)
+            return null;
+        if (branch) {
+            const configuredRemote = await gitExec(cwd, `config --get branch.${branch}.remote`).catch(() => "");
+            if (configuredRemote && remotes.includes(configuredRemote)) {
+                return configuredRemote;
+            }
+        }
+        if (remotes.includes("origin"))
+            return "origin";
+        return remotes[0] ?? null;
+    }
+    /**
+     * Resolve the repository's default branch (e.g. "main" or "master").
+     * Tries gh CLI first, then falls back to common defaults.
+     */
+    async resolveDefaultBranch(cwd) {
+        try {
+            const json = await ghExec(cwd, "repo view --json defaultBranchRef", 15_000);
+            const parsed = JSON.parse(json);
+            const ref = parsed.defaultBranchRef;
+            if (ref?.name)
+                return String(ref.name);
+        }
+        catch { /* gh not available or not a github repo */ }
+        // Fallback: check if "main" or "master" branches exist
+        try {
+            await gitExec(cwd, "rev-parse --verify refs/heads/main");
+            return "main";
+        }
+        catch {
+            try {
+                await gitExec(cwd, "rev-parse --verify refs/heads/master");
+                return "master";
+            }
+            catch {
+                return "main";
+            }
+        }
+    }
+    async createGithubPrViaApi(remote, token, input) {
+        const apiBase = remote.host === "github.com"
+            ? "https://api.github.com"
+            : `https://${remote.host}/api/v3`;
+        const headers = {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "User-Agent": "jait-gateway",
+        };
+        // If an open PR already exists for this head branch, reuse it
+        const headParam = `${remote.owner}:${input.headBranch}`;
+        try {
+            const existingRes = await fetch(`${apiBase}/repos/${remote.owner}/${remote.repo}/pulls?head=${encodeURIComponent(headParam)}&state=open`, { headers });
+            if (existingRes.ok) {
+                const existing = await existingRes.json();
+                const first = existing[0];
+                if (first?.html_url) {
+                    return {
+                        status: "opened_existing",
+                        url: String(first.html_url),
+                        number: Number(first.number ?? 0),
+                        baseBranch: String(first.base?.ref ?? input.baseBranch),
+                        headBranch: String(first.head?.ref ?? input.headBranch),
+                        title: String(first.title ?? input.title),
+                    };
+                }
+            }
+        }
+        catch { /* ignore fetch errors and proceed to create */ }
+        const res = await fetch(`${apiBase}/repos/${remote.owner}/${remote.repo}/pulls`, {
+            method: "POST",
+            headers: { ...headers, "Content-Type": "application/json" },
+            body: JSON.stringify({
+                title: input.title,
+                head: headParam,
+                base: input.baseBranch,
+                body: input.body,
+            }),
+        });
+        if (!res.ok) {
+            const text = await res.text().catch(() => "");
+            throw new Error(`GitHub API PR create failed (${res.status}): ${text.slice(0, 400)}`);
+        }
+        const json = await res.json();
+        return {
+            status: "created",
+            url: String(json.html_url ?? ""),
+            number: Number(json.number ?? 0),
+            baseBranch: String(json.base?.ref ?? input.baseBranch),
+            headBranch: String(json.head?.ref ?? input.headBranch),
+            title: String(json.title ?? input.title),
+        };
+    }
+    async fetchGithubPrByHead(remote, token, headBranch) {
+        const apiBase = remote.host === "github.com"
+            ? "https://api.github.com"
+            : `https://${remote.host}/api/v3`;
+        const headers = {
+            Authorization: `Bearer ${token}`,
+            Accept: "application/vnd.github+json",
+            "User-Agent": "jait-gateway",
+        };
+        const headParam = `${remote.owner}:${headBranch}`;
+        try {
+            const res = await fetch(`${apiBase}/repos/${remote.owner}/${remote.repo}/pulls?head=${encodeURIComponent(headParam)}&state=all`, { headers });
+            if (!res.ok)
+                return null;
+            const list = await res.json();
+            if (!Array.isArray(list) || list.length === 0)
+                return null;
+            // Prefer open PR, otherwise take the most recent
+            const prData = (list.find((p) => p?.state === "open") ?? list[0]);
+            if (!prData?.html_url)
+                return null;
+            const stateRaw = String(prData.state ?? "open").toLowerCase();
+            const mergedAt = prData.merged_at;
+            const state = mergedAt ? "merged"
+                : stateRaw === "closed" ? "closed"
+                    : "open";
+            return {
+                number: Number(prData.number ?? 0),
+                title: String(prData.title ?? ""),
+                url: String(prData.html_url ?? ""),
+                baseBranch: String(prData.base?.ref ?? ""),
+                headBranch: String(prData.head?.ref ?? headBranch),
+                state,
+            };
+        }
+        catch {
+            return null;
+        }
+    }
+    /**
+     * Generate a pull request body from the diff between base and head.
+     * Collects commit log + diff stat and formats as markdown.
+     */
+    async generatePrBody(cwd, baseBranch, headBranch, prTitle) {
+        const MAX_COMMITS = 12_000;
+        const MAX_STAT = 12_000;
+        let commits = "";
+        try {
+            const raw = await gitExec(cwd, `log --oneline ${baseBranch}..${headBranch}`, 15_000);
+            commits = raw.length > MAX_COMMITS ? raw.slice(0, MAX_COMMITS) + "\n... (truncated)" : raw;
+        }
+        catch { /* no common ancestor or baseBranch doesn't exist locally */ }
+        let diffStat = "";
+        try {
+            const raw = await gitExec(cwd, `diff --stat ${baseBranch}..${headBranch}`, 15_000);
+            diffStat = raw.length > MAX_STAT ? raw.slice(0, MAX_STAT) + "\n... (truncated)" : raw;
+        }
+        catch { /* ignore */ }
+        // Build markdown body
+        const sections = [];
+        sections.push(`## Summary\n`);
+        sections.push(`${prTitle}\n`);
+        if (commits) {
+            sections.push(`## Commits\n`);
+            sections.push("```");
+            sections.push(commits);
+            sections.push("```\n");
+        }
+        if (diffStat) {
+            sections.push(`## Changes\n`);
+            sections.push("```");
+            sections.push(diffStat);
+            sections.push("```\n");
+        }
+        sections.push(`---\n*PR created by [Jait](https://github.com/JakobWl/Jait) automation.*`);
+        return sections.join("\n");
+    }
+    /**
+     * Build a URL to create a new pull request on the hosting provider.
+     * Supports GitHub, GitLab, Bitbucket, and Azure DevOps remote URLs.
+     */
+    async buildCreatePrUrl(cwd, branch, remoteName) {
+        const preferredRemote = remoteName ?? await this.getPreferredRemote(cwd, branch);
+        if (!preferredRemote)
+            return undefined;
+        const raw = await this.getRemoteUrl(cwd, preferredRemote);
+        if (!raw)
+            return undefined;
+        // Normalise SSH / HTTPS remote URL → "https://host/owner/repo"
+        let url = raw
+            .replace(/\.git$/, "")
+            .replace(/^git@([^:]+):(.+)$/, "https://$1/$2")
+            .replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
+        // GitHub
+        if (url.includes("github.com")) {
+            return `${url}/compare/${encodeURIComponent(branch)}?expand=1`;
+        }
+        // GitLab
+        if (url.includes("gitlab")) {
+            return `${url}/-/merge_requests/new?merge_request[source_branch]=${encodeURIComponent(branch)}`;
+        }
+        // Bitbucket
+        if (url.includes("bitbucket")) {
+            return `${url}/pull-requests/new?source=${encodeURIComponent(branch)}`;
+        }
+        // Azure DevOps
+        if (url.includes("dev.azure.com") || url.includes("visualstudio.com")) {
+            return `${url}/pullrequestcreate?sourceRef=${encodeURIComponent(branch)}`;
+        }
+        return undefined;
+    }
+    /** Return the diff of uncommitted changes (staged + unstaged). */
+    async diff(cwd) {
+        const isGit = await this.isRepo(cwd);
+        if (!isGit)
+            return { diff: "", files: [], hasChanges: false };
+        // Combine staged and unstaged diff
+        let diffText = "";
+        try {
+            const staged = await gitExec(cwd, "diff --cached").catch(() => "");
+            const unstaged = await gitExec(cwd, "diff").catch(() => "");
+            diffText = [staged, unstaged].filter(Boolean).join("\n");
+        }
+        catch { /* ignore */ }
+        // Also include untracked files as a summary
+        const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+        const untrackedFiles = porcelain
+            .split("\n")
+            .filter((l) => l.startsWith("??"))
+            .map((l) => l.slice(3).trim())
+            .filter(Boolean);
+        if (untrackedFiles.length > 0) {
+            const untrackedSection = untrackedFiles.map((f) => `+++ new file: ${f}`).join("\n");
+            diffText = diffText ? `${diffText}\n\n# Untracked files:\n${untrackedSection}` : `# Untracked files:\n${untrackedSection}`;
+        }
+        const files = porcelain
+            .split("\n")
+            .filter(Boolean)
+            .map((l) => l.slice(3).trim())
+            .filter(Boolean);
+        return {
+            diff: diffText,
+            files,
+            hasChanges: files.length > 0,
+        };
+    }
+    /**
+     * Return per-file original and modified content so the frontend can
+     * render a Monaco diff editor.
+     *
+     * @param baseBranch — when given, diff working tree against that branch
+     *   (shows all thread changes: committed + uncommitted). When omitted,
+     *   only uncommitted working-tree changes are returned (original = HEAD).
+     */
+    async fileDiffs(cwd, baseBranch) {
+        const isGit = await this.isRepo(cwd);
+        if (!isGit)
+            return [];
+        if (baseBranch) {
+            return this.fileDiffsBranch(cwd, baseBranch);
+        }
+        const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+        const lines = porcelain.split("\n").filter(Boolean);
+        const entries = [];
+        for (const line of lines) {
+            const xy = line.slice(0, 2);
+            let filePath = line.slice(3).trim();
+            // Handle renames: "R  old -> new"
+            if (filePath.includes(" -> ")) {
+                filePath = filePath.split(" -> ").pop().trim();
+            }
+            // Determine status code
+            let status = "M";
+            if (xy.includes("?"))
+                status = "?";
+            else if (xy.includes("A"))
+                status = "A";
+            else if (xy.includes("D"))
+                status = "D";
+            else if (xy.includes("R"))
+                status = "R";
+            // Get original from HEAD
+            let original = "";
+            if (status !== "A" && status !== "?") {
+                try {
+                    original = await gitExec(cwd, `show HEAD:${JSON.stringify(filePath)}`);
+                }
+                catch {
+                    original = "";
+                }
+            }
+            // Get current working tree content
+            let modified = "";
+            if (status !== "D") {
+                try {
+                    modified = await readFile(join(cwd, filePath), "utf-8");
+                }
+                catch {
+                    modified = "";
+                }
+            }
+            entries.push({ path: filePath, original, modified, status });
+        }
+        return entries;
+    }
+    /**
+     * Diff working tree against a base branch (shows all committed + uncommitted changes).
+     */
+    async fileDiffsBranch(cwd, baseBranch) {
+        // Get list of files that differ between baseBranch and working tree
+        const nameStatus = await gitExec(cwd, `diff --name-status ${baseBranch}`).catch(() => "");
+        const lines = nameStatus.split("\n").filter(Boolean);
+        const entries = [];
+        const seen = new Set();
+        for (const line of lines) {
+            const parts = line.split("\t");
+            const statusCode = parts[0]?.trim() ?? "M";
+            let filePath = parts[parts.length - 1]?.trim() ?? "";
+            let status = "M";
+            if (statusCode.startsWith("A"))
+                status = "A";
+            else if (statusCode.startsWith("D"))
+                status = "D";
+            else if (statusCode.startsWith("R")) {
+                status = "R";
+                filePath = parts[2]?.trim() ?? filePath;
+            }
+            if (!filePath || seen.has(filePath))
+                continue;
+            seen.add(filePath);
+            let original = "";
+            if (status !== "A") {
+                try {
+                    original = await gitExec(cwd, `show ${baseBranch}:${JSON.stringify(filePath)}`);
+                }
+                catch {
+                    original = "";
+                }
+            }
+            let modified = "";
+            if (status !== "D") {
+                try {
+                    modified = await readFile(join(cwd, filePath), "utf-8");
+                }
+                catch {
+                    modified = "";
+                }
+            }
+            entries.push({ path: filePath, original, modified, status });
+        }
+        // Also include untracked files that aren't already listed
+        const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+        for (const pl of porcelain.split("\n").filter(Boolean)) {
+            if (!pl.startsWith("??"))
+                continue;
+            const fp = pl.slice(3).trim();
+            if (!fp || seen.has(fp))
+                continue;
+            seen.add(fp);
+            let modified = "";
+            try {
+                modified = await readFile(join(cwd, fp), "utf-8");
+            }
+            catch { /* skip */ }
+            entries.push({ path: fp, original: "", modified, status: "?" });
+        }
+        return entries;
+    }
+}
+//# sourceMappingURL=git.js.map

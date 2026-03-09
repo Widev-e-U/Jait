@@ -1,0 +1,39 @@
+export function createGatewayStatusTool(deps) {
+    return {
+        name: "gateway.status",
+        description: "Return gateway runtime health information",
+        tier: "standard",
+        category: "gateway",
+        source: "builtin",
+        parameters: { type: "object", properties: {} },
+        execute: async () => {
+            const sessions = deps.sessionService.list("active").length;
+            const surfaces = deps.surfaceRegistry.listSurfaces().length;
+            const devices = deps.ws.clientCount;
+            const jobs = deps.scheduler?.list() ?? [];
+            const enabledJobs = jobs.filter((job) => job.enabled).length;
+            const hookEventTypes = deps.hooks?.registeredEventTypes() ?? [];
+            return {
+                ok: true,
+                message: "Gateway status",
+                data: {
+                    healthy: true,
+                    uptime: Math.floor((Date.now() - deps.startedAt) / 1000),
+                    sessions,
+                    surfaces,
+                    devices,
+                    activeServices: ["ws-control-plane", "scheduler", "consent-manager", "hooks"],
+                    scheduler: {
+                        totalJobs: jobs.length,
+                        enabledJobs,
+                    },
+                    hooks: {
+                        registeredEventTypes: hookEventTypes,
+                        listeners: deps.hooks?.listenerCount() ?? 0,
+                    },
+                },
+            };
+        },
+    };
+}
+//# sourceMappingURL=gateway-tools.js.map

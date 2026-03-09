@@ -1,0 +1,54 @@
+import Fastify from "fastify";
+import type { AppConfig } from "./config.js";
+import type { SessionService } from "./services/sessions.js";
+import type { AuditWriter } from "./services/audit.js";
+import type { SurfaceRegistry } from "./surfaces/index.js";
+import type { ToolRegistry } from "./tools/registry.js";
+import type { ToolContext, ToolResult } from "./tools/contracts.js";
+import type { ConsentManager } from "./security/consent-manager.js";
+import type { TrustEngine } from "./security/trust-engine.js";
+import type { JaitDB } from "./db/index.js";
+import type { WsControlPlane } from "./ws.js";
+import type { HookBus } from "./scheduler/hooks.js";
+import type { SchedulerService } from "./scheduler/service.js";
+import type { MemoryService } from "./memory/contracts.js";
+import type { UserService } from "./services/users.js";
+import type { DeviceRegistry } from "./services/device-registry.js";
+import type { VoiceService } from "./voice/service.js";
+import type { ScreenShareService } from "@jait/screen-share";
+import type { SessionStateService } from "./services/session-state.js";
+import type { ThreadService } from "./services/threads.js";
+import type { RepositoryService } from "./services/repositories.js";
+import type { ProviderRegistry } from "./providers/registry.js";
+import type Database from "better-sqlite3";
+export interface ServerDeps {
+    db?: JaitDB;
+    sqlite?: Database.Database;
+    sessionService?: SessionService;
+    userService?: UserService;
+    audit?: AuditWriter;
+    surfaceRegistry?: SurfaceRegistry;
+    toolRegistry?: ToolRegistry;
+    consentManager?: ConsentManager;
+    trustEngine?: TrustEngine;
+    ws?: WsControlPlane;
+    hooks?: HookBus;
+    scheduler?: SchedulerService;
+    hookSecret?: string;
+    onWakeHook?: () => Promise<unknown>;
+    onAgentHook?: (payload: unknown) => Promise<unknown>;
+    memoryService?: MemoryService;
+    deviceRegistry?: DeviceRegistry;
+    sessionState?: SessionStateService;
+    toolExecutor?: (toolName: string, input: unknown, context: ToolContext, options?: {
+        dryRun?: boolean;
+        consentTimeoutMs?: number;
+    }) => Promise<ToolResult>;
+    voiceService?: VoiceService;
+    screenShare?: ScreenShareService;
+    threadService?: ThreadService;
+    repoService?: RepositoryService;
+    providerRegistry?: ProviderRegistry;
+}
+export declare function createServer(config: AppConfig, deps?: ServerDeps): Promise<Fastify.FastifyInstance<import("node:http").Server<typeof import("node:http").IncomingMessage, typeof import("node:http").ServerResponse>, import("node:http").IncomingMessage, import("node:http").ServerResponse<import("node:http").IncomingMessage>, Fastify.FastifyBaseLogger, Fastify.FastifyTypeProviderDefault>>;
+//# sourceMappingURL=server.d.ts.map

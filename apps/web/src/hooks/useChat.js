@@ -1,0 +1,1083 @@
+import { useState, useCallback, useRef, useEffect } from 'react';
+import { flushSync } from 'react-dom';
+import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel';
+import { getApiUrl } from '@/lib/gateway-url';
+const API_URL = getApiUrl();
+const STREAM_SNAPSHOT_LIMIT = 120;
+function authHeaders(token) {
+    if (!token)
+        return {};
+    return { Authorization: `Bearer ${token}` };
+}
+/**
+ * @param sessionId - externally managed session ID (from useSessions)
+ */
+export function useChat(sessionId, authToken, onLoginRequired) {
+    const [state, setState] = useState({
+        messages: [],
+        isLoading: false,
+        isLoadingHistory: false,
+        promptCount: 0,
+        remainingPrompts: null,
+        error: null,
+        hitMaxRounds: false,
+    });
+    const [pendingPlan, setPendingPlan] = useState(null);
+    const [todoList, setTodoList] = useState([]);
+    const [changedFiles, setChangedFiles] = useState([]);
+    const [messageQueue, setMessageQueue] = useState([]);
+    const [contextUsage, setContextUsage] = useState(null);
+    const processingQueueRef = useRef(false);
+    const abortControllerRef = useRef(null);
+    const prevSessionIdRef = useRef(null);
+    const streamAbortRef = useRef(null);
+    const requestVersionRef = useRef(0);
+    const restartInFlightRef = useRef(false);
+    const [refreshTrigger, setRefreshTrigger] = useState(0);
+    // When sessionId changes, load history / resume active stream via SSE
+    useEffect(() => {
+        if (sessionId === prevSessionIdRef.current)
+            return;
+        requestVersionRef.current += 1;
+        prevSessionIdRef.current = sessionId;
+        // Don't abort the in-flight chat request — let the gateway finish processing.
+        abortControllerRef.current = null;
+        // Abort any previous stream-resume connection
+        if (streamAbortRef.current) {
+            streamAbortRef.current.abort();
+            streamAbortRef.current = null;
+        }
+        if (!sessionId) {
+            setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, hitMaxRounds: false, error: null });
+            setTodoList([]);
+            setChangedFiles([]);
+            setMessageQueue([]);
+            setContextUsage(null);
+            return;
+        }
+        let cancelled = false;
+        setState(prev => ({ ...prev, messages: [], isLoading: false, isLoadingHistory: true, error: null }));
+        setContextUsage(null);
+        // Connect to the stream-resume SSE endpoint.
+        // It returns a snapshot of current messages, then live tokens if still streaming.
+        const streamController = new AbortController();
+        streamAbortRef.current = streamController;
+        (async () => {
+            try {
+                const res = await fetch(`${API_URL}/api/sessions/${sessionId}/stream?limit=${STREAM_SNAPSHOT_LIMIT}`, {
+                    signal: streamController.signal,
+                    headers: authHeaders(authToken),
+                });
+                if (res.status === 401) {
+                    onLoginRequired?.();
+                    setState(prev => ({ ...prev, isLoadingHistory: false }));
+                    return;
+                }
+                if (!res.ok || cancelled)
+                    return;
+                const reader = res.body?.getReader();
+                if (!reader)
+                    return;
+                const decoder = new TextDecoder();
+                let lineBuffer = '';
+                let assistantId = null;
+                /** Immutably append a text chunk to a message's segments array */
+                const withTextSegment = (segs, text) => {
+                    const arr = segs ? [...segs] : [];
+                    const last = arr[arr.length - 1];
+                    if (last?.type === 'text') {
+                        arr[arr.length - 1] = { type: 'text', content: last.content + text };
+                    }
+                    else {
+                        arr.push({ type: 'text', content: text });
+                    }
+                    return arr;
+                };
+                /** Immutably append a tool callId to a message's segments array */
+                const withToolSegment = (segs, callId) => {
+                    const arr = segs ? [...segs] : [];
+                    const last = arr[arr.length - 1];
+                    if (last?.type === 'toolGroup') {
+                        if (!last.callIds.includes(callId)) {
+                            arr[arr.length - 1] = { type: 'toolGroup', callIds: [...last.callIds, callId] };
+                        }
+                    }
+                    else {
+                        arr.push({ type: 'toolGroup', callIds: [callId] });
+                    }
+                    return arr;
+                };
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done)
+                        break;
+                    if (cancelled) {
+                        reader.cancel();
+                        break;
+                    }
+                    lineBuffer += decoder.decode(value, { stream: true });
+                    const lines = lineBuffer.split('\n');
+                    lineBuffer = lines.pop() || '';
+                    for (const line of lines) {
+                        if (!line.startsWith('data: '))
+                            continue;
+                        try {
+                            const data = JSON.parse(line.slice(6));
+                            pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6));
+                            if (data.type === 'snapshot') {
+                                const rawMsgs = data.messages;
+                                const snapshotStreaming = data.streaming;
+                                const msgs = rawMsgs.map(m => {
+                                    const msg = { id: m.id, role: m.role, content: m.content };
+                                    if (m.segments && m.segments.length > 0) {
+                                        msg.segments = m.segments;
+                                    }
+                                    if (m.toolCalls && m.toolCalls.length > 0) {
+                                        msg.toolCalls = m.toolCalls.map(tc => {
+                                            // Streaming snapshots may provide explicit running status.
+                                            // Persisted DB snapshots provide ok/message for completed calls.
+                                            let status = tc.status ?? (tc.ok ? 'success' : 'error');
+                                            // Safety net: if the server says streaming is done, no tool
+                                            // call should remain in 'running' or 'pending' state (handles race conditions).
+                                            if ((status === 'running' || status === 'pending') && !snapshotStreaming)
+                                                status = 'error';
+                                            return {
+                                                callId: tc.callId,
+                                                tool: tc.tool,
+                                                args: tc.args ?? {},
+                                                status,
+                                                result: status === 'running'
+                                                    ? undefined
+                                                    : {
+                                                        ok: !!tc.ok,
+                                                        message: tc.message ?? 'Cancelled',
+                                                        // Prefer full data object (new format); fall back to
+                                                        // { output } wrapper for old persisted rows.
+                                                        data: tc.data ?? (tc.output != null ? { output: tc.output } : undefined),
+                                                    },
+                                                streamingOutput: tc.streamingOutput,
+                                                startedAt: tc.startedAt ?? 0,
+                                                completedAt: tc.completedAt ?? 0,
+                                            };
+                                        });
+                                    }
+                                    return msg;
+                                });
+                                // Track the last assistant message for token updates
+                                const lastMsg = msgs[msgs.length - 1];
+                                if (lastMsg?.role === 'assistant')
+                                    assistantId = lastMsg.id;
+                                setState(prev => ({
+                                    ...prev,
+                                    messages: msgs,
+                                    isLoadingHistory: false,
+                                    isLoading: snapshotStreaming,
+                                }));
+                            }
+                            else if (data.type === 'token' && assistantId) {
+                                // Append token to the tracked assistant message
+                                const token = data.content;
+                                setState(prev => ({
+                                    ...prev,
+                                    messages: prev.messages.map(m => m.id === assistantId
+                                        ? { ...m, content: m.content + token, segments: withTextSegment(m.segments, token) }
+                                        : m),
+                                }));
+                            }
+                            else if (data.type === 'tool_call_delta' && assistantId) {
+                                const callId = data.call_id;
+                                const nameDelta = data.name_delta || '';
+                                const argsDelta = data.args_delta || '';
+                                setState(prev => {
+                                    const msg = prev.messages.find(m => m.id === assistantId);
+                                    const existing = msg?.toolCalls?.find(tc => tc.callId === callId);
+                                    if (existing) {
+                                        return {
+                                            ...prev,
+                                            messages: prev.messages.map(m => m.id === assistantId
+                                                ? {
+                                                    ...m,
+                                                    toolCalls: m.toolCalls?.map(tc => tc.callId === callId
+                                                        ? { ...tc, tool: tc.tool + nameDelta, streamingArgs: (tc.streamingArgs ?? '') + argsDelta }
+                                                        : tc),
+                                                }
+                                                : m),
+                                        };
+                                    }
+                                    const callInfo = {
+                                        callId,
+                                        tool: nameDelta,
+                                        args: {},
+                                        status: 'pending',
+                                        streamingArgs: argsDelta,
+                                        startedAt: Date.now(),
+                                    };
+                                    return {
+                                        ...prev,
+                                        messages: prev.messages.map(m => m.id === assistantId
+                                            ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: withToolSegment(m.segments, callId) }
+                                            : m),
+                                    };
+                                });
+                            }
+                            else if (data.type === 'tool_start' && assistantId) {
+                                const callId = data.call_id;
+                                setState(prev => {
+                                    const msg = prev.messages.find(m => m.id === assistantId);
+                                    const existing = msg?.toolCalls?.find(tc => tc.callId === callId);
+                                    if (existing) {
+                                        // Upgrade pending → running, fill in final args
+                                        return {
+                                            ...prev,
+                                            messages: prev.messages.map(m => m.id === assistantId
+                                                ? {
+                                                    ...m,
+                                                    toolCalls: m.toolCalls?.map(tc => tc.callId === callId
+                                                        ? { ...tc, tool: data.tool, args: data.args ?? {}, status: 'running', streamingArgs: undefined }
+                                                        : tc),
+                                                }
+                                                : m),
+                                        };
+                                    }
+                                    const callInfo = {
+                                        callId,
+                                        tool: data.tool,
+                                        args: data.args ?? {},
+                                        status: 'running',
+                                        startedAt: Date.now(),
+                                    };
+                                    return {
+                                        ...prev,
+                                        messages: prev.messages.map(m => m.id === assistantId
+                                            ? { ...m, toolCalls: [...(m.toolCalls ?? []), callInfo], segments: withToolSegment(m.segments, callId) }
+                                            : m),
+                                    };
+                                });
+                            }
+                            else if (data.type === 'tool_output' && assistantId) {
+                                setState(prev => ({
+                                    ...prev,
+                                    messages: prev.messages.map(m => {
+                                        if (m.id !== assistantId)
+                                            return m;
+                                        return {
+                                            ...m,
+                                            toolCalls: m.toolCalls?.map(tc => tc.callId === data.call_id
+                                                ? { ...tc, streamingOutput: (tc.streamingOutput ?? '') + data.content }
+                                                : tc),
+                                        };
+                                    }),
+                                }));
+                            }
+                            else if (data.type === 'tool_result' && assistantId) {
+                                setState(prev => ({
+                                    ...prev,
+                                    messages: prev.messages.map(m => {
+                                        if (m.id !== assistantId)
+                                            return m;
+                                        return {
+                                            ...m,
+                                            toolCalls: m.toolCalls?.map(tc => tc.callId === data.call_id
+                                                ? {
+                                                    ...tc,
+                                                    status: data.ok ? 'success' : 'error',
+                                                    result: { ok: data.ok, message: data.message, data: data.data },
+                                                    completedAt: Date.now(),
+                                                }
+                                                : tc),
+                                        };
+                                    }),
+                                }));
+                                // Auto-track file edits in changedFiles (stream-resume path)
+                                if (data.ok) {
+                                    const msg = state.messages.find(m => m.id === assistantId);
+                                    const tc = msg?.toolCalls?.find(t => t.callId === data.call_id);
+                                    if (tc) {
+                                        const toolName = tc.tool.replace('_', '.');
+                                        if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
+                                            const filePath = String(tc.args?.path ?? '');
+                                            if (filePath) {
+                                                const fileName = filePath.split('/').pop() ?? filePath;
+                                                setChangedFiles(prev => {
+                                                    if (prev.some(f => f.path === filePath))
+                                                        return prev;
+                                                    return [...prev, { path: filePath, name: fileName, state: 'undecided' }];
+                                                });
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                            else if (data.type === 'todo_list') {
+                                // AI updated the task list
+                                const items = data.items;
+                                setTodoList(items);
+                            }
+                            else if (data.type === 'context_usage') {
+                                setContextUsage(data);
+                            }
+                            else if (data.type === 'file_changed') {
+                                // AI reported a file change
+                                const filePath = data.path;
+                                const fileName = data.name;
+                                setChangedFiles(prev => {
+                                    const existing = prev.find(f => f.path === filePath);
+                                    if (existing)
+                                        return prev; // don't reset state if already tracked
+                                    return [...prev, { path: filePath, name: fileName, state: 'undecided' }];
+                                });
+                            }
+                            else if (data.type === 'done') {
+                                setState(prev => ({
+                                    ...prev,
+                                    isLoading: false,
+                                    promptCount: data.prompt_count ?? prev.promptCount,
+                                    remainingPrompts: data.remaining_prompts ?? prev.remainingPrompts,
+                                    // Mark any tool calls still stuck in 'running' as cancelled
+                                    // (can happen if reload snapshot races with cancel processing)
+                                    messages: prev.messages.map(m => m.toolCalls?.some(tc => tc.status === 'running')
+                                        ? {
+                                            ...m,
+                                            toolCalls: m.toolCalls.map(tc => tc.status === 'running'
+                                                ? { ...tc, status: 'error', result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
+                                                : tc),
+                                        }
+                                        : m),
+                                }));
+                            }
+                            else if (data.type === 'error') {
+                                setState(prev => ({
+                                    ...prev,
+                                    isLoading: false,
+                                    error: data.message,
+                                }));
+                            }
+                        }
+                        catch (parseErr) {
+                            if (!(parseErr instanceof SyntaxError))
+                                throw parseErr;
+                            // incomplete JSON chunk — wait for next line
+                        }
+                    }
+                }
+            }
+            catch (err) {
+                if (err instanceof Error && err.name === 'AbortError')
+                    return;
+                if (!cancelled)
+                    setState(prev => ({ ...prev, isLoadingHistory: false }));
+            }
+        })();
+        return () => {
+            cancelled = true;
+            streamController.abort();
+            // Reset so React strict-mode re-mount can re-run the effect
+            prevSessionIdRef.current = null;
+        };
+    }, [authToken, onLoginRequired, sessionId, refreshTrigger]);
+    /** Force-reload messages from the server (used by cross-client WS refresh). */
+    const refreshMessages = useCallback(() => {
+        // Skip if no active session or already loading / streaming
+        if (!sessionId || state.isLoading)
+            return;
+        prevSessionIdRef.current = null;
+        setRefreshTrigger(n => n + 1);
+    }, [sessionId, state.isLoading]);
+    const sendMessage = useCallback(async (content, options = {}) => {
+        const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired } = options;
+        const effectiveToken = token ?? authToken;
+        const notifyLoginRequired = requestLoginRequired ?? onLoginRequired;
+        const requestSessionId = explicitSessionId ?? sessionId; // prefer explicit override
+        const assistantId = `assistant-${Date.now()}`;
+        const userMessage = {
+            id: `user-${Date.now()}`,
+            role: 'user',
+            content,
+            ...(options.displayContent ? { displayContent: options.displayContent } : {}),
+            ...(options.referencedFiles?.length ? { referencedFiles: options.referencedFiles } : {}),
+        };
+        setState(prev => ({
+            ...prev,
+            messages: [...prev.messages, userMessage, { id: assistantId, role: 'assistant', content: '' }],
+            isLoading: true,
+            error: null,
+            hitMaxRounds: false,
+        }));
+        // Clear the todo list and changed files for the new turn — the agent
+        // will push a fresh list if it uses the todo tool again.
+        setTodoList([]);
+        setChangedFiles([]);
+        const controller = new AbortController();
+        abortControllerRef.current = controller;
+        const requestVersion = ++requestVersionRef.current;
+        // Guard: only update state if we're still on the same session
+        const isStale = () => prevSessionIdRef.current !== requestSessionId || requestVersionRef.current !== requestVersion;
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (effectiveToken)
+                headers['Authorization'] = `Bearer ${effectiveToken}`;
+            const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}), ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}), ...(options.model ? { model: options.model } : {}) };
+            pushSSEDebugEvent('request', JSON.stringify(requestBody));
+            const response = await fetch(`${API_URL}/api/chat`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(requestBody),
+                signal: controller.signal,
+            });
+            if (response.status === 401) {
+                const data = await response.json();
+                if (data.detail === 'login_required' || data.detail === 'limit_reached') {
+                    setState(prev => ({
+                        ...prev,
+                        isLoading: false,
+                        error: data.detail,
+                        messages: prev.messages.filter(m => !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))),
+                    }));
+                    if (data.detail === 'login_required')
+                        notifyLoginRequired?.();
+                    return;
+                }
+            }
+            if (!response.ok)
+                throw new Error(`HTTP ${response.status}`);
+            const reader = response.body?.getReader();
+            if (!reader)
+                throw new Error('No response body');
+            const decoder = new TextDecoder();
+            let assistantContent = '';
+            let thinkingContent = '';
+            let thinkingStart = null;
+            let thinkingDuration;
+            const toolCalls = [];
+            const segments = [];
+            let lineBuffer = '';
+            /** Push or extend a text segment at the end of the segments list */
+            const appendTextSegment = (text) => {
+                const last = segments[segments.length - 1];
+                if (last?.type === 'text') {
+                    last.content += text;
+                }
+                else {
+                    segments.push({ type: 'text', content: text });
+                }
+            };
+            /** Push a tool callId into the current trailing tool-group, or start a new one */
+            const appendToolSegment = (callId) => {
+                const last = segments[segments.length - 1];
+                if (last?.type === 'toolGroup') {
+                    if (!last.callIds.includes(callId))
+                        last.callIds.push(callId);
+                }
+                else {
+                    segments.push({ type: 'toolGroup', callIds: [callId] });
+                }
+            };
+            const updateMessage = (updates) => {
+                if (isStale())
+                    return;
+                flushSync(() => {
+                    setState(prev => ({
+                        ...prev,
+                        messages: prev.messages.map(m => m.id === assistantId ? { ...m, ...updates } : m),
+                    }));
+                });
+            };
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done)
+                    break;
+                lineBuffer += decoder.decode(value, { stream: true });
+                const lines = lineBuffer.split('\n');
+                lineBuffer = lines.pop() || '';
+                for (const line of lines) {
+                    if (!line.startsWith('data: '))
+                        continue;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        pushSSEDebugEvent(String(data.type ?? 'unknown'), line.slice(6));
+                        if (data.type === 'thinking') {
+                            if (!thinkingStart)
+                                thinkingStart = Date.now();
+                            thinkingContent += data.content;
+                            updateMessage({ thinking: thinkingContent });
+                        }
+                        else if (data.type === 'token') {
+                            if (thinkingStart && !thinkingDuration) {
+                                thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000);
+                            }
+                            assistantContent += data.content;
+                            appendTextSegment(data.content);
+                            updateMessage({ content: assistantContent, thinkingDuration, segments: [...segments] });
+                        }
+                        else if (data.type === 'tool_call_delta') {
+                            const callId = data.call_id;
+                            const nameDelta = data.name_delta || '';
+                            const argsDelta = data.args_delta || '';
+                            const idx = toolCalls.findIndex(tc => tc.callId === callId);
+                            if (idx !== -1) {
+                                toolCalls[idx] = {
+                                    ...toolCalls[idx],
+                                    tool: toolCalls[idx].tool + nameDelta,
+                                    streamingArgs: (toolCalls[idx].streamingArgs ?? '') + argsDelta,
+                                };
+                            }
+                            else {
+                                toolCalls.push({
+                                    callId,
+                                    tool: nameDelta,
+                                    args: {},
+                                    status: 'pending',
+                                    streamingArgs: argsDelta,
+                                    startedAt: Date.now(),
+                                });
+                                appendToolSegment(callId);
+                            }
+                            updateMessage({ toolCalls: [...toolCalls], segments: [...segments] });
+                        }
+                        else if (data.type === 'tool_start') {
+                            const callId = data.call_id;
+                            const idx = toolCalls.findIndex(tc => tc.callId === callId);
+                            if (idx !== -1) {
+                                // Upgrade pending → running with final args
+                                toolCalls[idx] = {
+                                    ...toolCalls[idx],
+                                    tool: data.tool,
+                                    args: data.args ?? {},
+                                    status: 'running',
+                                    streamingArgs: undefined,
+                                };
+                            }
+                            else {
+                                toolCalls.push({
+                                    callId,
+                                    tool: data.tool,
+                                    args: data.args ?? {},
+                                    status: 'running',
+                                    startedAt: Date.now(),
+                                });
+                                appendToolSegment(callId);
+                            }
+                            updateMessage({ toolCalls: [...toolCalls], segments: [...segments] });
+                        }
+                        else if (data.type === 'tool_output') {
+                            const idx = toolCalls.findIndex(tc => tc.callId === data.call_id);
+                            if (idx !== -1) {
+                                toolCalls[idx] = {
+                                    ...toolCalls[idx],
+                                    streamingOutput: (toolCalls[idx].streamingOutput ?? '') + data.content,
+                                };
+                                updateMessage({ toolCalls: [...toolCalls] });
+                            }
+                        }
+                        else if (data.type === 'tool_result') {
+                            const idx = toolCalls.findIndex(tc => tc.callId === data.call_id);
+                            if (idx !== -1) {
+                                toolCalls[idx] = {
+                                    ...toolCalls[idx],
+                                    status: data.ok ? 'success' : 'error',
+                                    result: { ok: data.ok, message: data.message, data: data.data },
+                                    completedAt: Date.now(),
+                                };
+                                updateMessage({ toolCalls: [...toolCalls] });
+                                // Auto-track file edits in changedFiles
+                                if (data.ok) {
+                                    const tc = toolCalls[idx];
+                                    const toolName = tc.tool.replace('_', '.');
+                                    if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
+                                        const filePath = String(tc.args?.path ?? '');
+                                        if (filePath) {
+                                            const fileName = filePath.split('/').pop() ?? filePath;
+                                            setChangedFiles(prev => {
+                                                if (prev.some(f => f.path === filePath))
+                                                    return prev;
+                                                return [...prev, { path: filePath, name: fileName, state: 'undecided' }];
+                                            });
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                        else if (data.type === 'plan_complete') {
+                            // Plan mode completed — store the plan for review
+                            const plan = {
+                                plan_id: data.plan_id,
+                                summary: data.summary,
+                                actions: data.actions ?? [],
+                            };
+                            setPendingPlan(plan);
+                        }
+                        else if (data.type === 'mode_notice') {
+                            // Mode notice — append as assistant content
+                            const notice = `\n\n*${data.message}*`;
+                            assistantContent += notice;
+                            appendTextSegment(notice);
+                            updateMessage({ content: assistantContent, segments: [...segments] });
+                        }
+                        else if (data.type === 'todo_list') {
+                            // AI updated the task list
+                            const items = data.items;
+                            setTodoList(items);
+                        }
+                        else if (data.type === 'context_usage') {
+                            setContextUsage(data);
+                        }
+                        else if (data.type === 'file_changed') {
+                            // AI reported a file change
+                            const filePath = data.path;
+                            const fileName = data.name;
+                            setChangedFiles(prev => {
+                                const existing = prev.find(f => f.path === filePath);
+                                if (existing)
+                                    return prev;
+                                return [...prev, { path: filePath, name: fileName, state: 'undecided' }];
+                            });
+                        }
+                        else if (data.type === 'done') {
+                            if (thinkingStart && !thinkingDuration) {
+                                thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000);
+                            }
+                            if (!isStale()) {
+                                const isEmptyAssistant = assistantContent.length === 0 && thinkingContent.length === 0 && toolCalls.length === 0;
+                                setState(prev => ({
+                                    ...prev,
+                                    promptCount: data.prompt_count,
+                                    remainingPrompts: data.remaining_prompts,
+                                    isLoading: false,
+                                    hitMaxRounds: !!(data.hit_max_rounds),
+                                    messages: isEmptyAssistant
+                                        ? prev.messages.filter(m => m.id !== assistantId)
+                                        : prev.messages.map(m => m.id === assistantId
+                                            ? {
+                                                ...m,
+                                                content: assistantContent,
+                                                thinking: thinkingContent || undefined,
+                                                thinkingDuration,
+                                                toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+                                                segments: segments.length > 0 ? segments : undefined,
+                                            }
+                                            : m),
+                                }));
+                            }
+                        }
+                        else if (data.type === 'error') {
+                            throw new Error(data.message);
+                        }
+                    }
+                    catch (parseErr) {
+                        if (!(parseErr instanceof SyntaxError))
+                            throw parseErr;
+                        // incomplete JSON chunk — wait for next line
+                    }
+                }
+            }
+        }
+        catch (error) {
+            if (error instanceof Error && error.name === 'AbortError') {
+                if (!isStale()) {
+                    setState(prev => ({
+                        ...prev,
+                        isLoading: false,
+                        messages: prev.messages
+                            .filter(m => !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0)))
+                            .map(m => {
+                            if (!m.toolCalls?.some(tc => tc.status === 'running'))
+                                return m;
+                            return {
+                                ...m,
+                                toolCalls: m.toolCalls.map(tc => tc.status === 'running'
+                                    ? { ...tc, status: 'error', result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
+                                    : tc),
+                            };
+                        }),
+                    }));
+                }
+                return;
+            }
+            if (!isStale()) {
+                setState(prev => ({
+                    ...prev,
+                    isLoading: false,
+                    error: error instanceof Error ? error.message : 'An error occurred',
+                    messages: prev.messages.filter(m => !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))),
+                }));
+            }
+        }
+    }, [authToken, onLoginRequired, sessionId]);
+    // --- Message queue (queueing & steering) ---
+    const enqueueMessage = useCallback((content) => {
+        const item = {
+            id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+            content,
+            queuedAt: Date.now(),
+        };
+        setMessageQueue(prev => [...prev, item]);
+    }, []);
+    const dequeueMessage = useCallback((id) => {
+        setMessageQueue(prev => prev.filter(q => q.id !== id));
+    }, []);
+    /** Update the content of a queued message (inline edit). */
+    const updateQueueItem = useCallback((id, content) => {
+        setMessageQueue(prev => prev.map(q => q.id === id ? { ...q, content } : q));
+    }, []);
+    // Process the next queued message when the model finishes
+    const processQueue = useCallback(async (options = {}) => {
+        if (processingQueueRef.current)
+            return;
+        processingQueueRef.current = true;
+        // Drain one item at a time
+        setMessageQueue(prev => {
+            if (prev.length === 0) {
+                processingQueueRef.current = false;
+                return prev;
+            }
+            const [next, ...rest] = prev;
+            // Send the message (fire-and-forget; sendMessage sets isLoading)
+            sendMessage(next.content, options);
+            return rest;
+        });
+        processingQueueRef.current = false;
+    }, [sendMessage]);
+    // Auto-process queue when model finishes and queue is non-empty
+    const prevIsLoadingRef = useRef(false);
+    useEffect(() => {
+        const wasLoading = prevIsLoadingRef.current;
+        prevIsLoadingRef.current = state.isLoading;
+        // Only trigger when transitioning from loading → not loading
+        if (wasLoading && !state.isLoading && messageQueue.length > 0) {
+            const sid = prevSessionIdRef.current;
+            processQueue({
+                token: authToken,
+                sessionId: sid,
+                onLoginRequired,
+            });
+        }
+    }, [state.isLoading, messageQueue.length, processQueue, authToken, onLoginRequired]);
+    // --- File change callbacks ---
+    // Ref for broadcasting changed files to other clients
+    const onChangedFilesSyncRef = useRef(null);
+    /** Register an external callback for broadcasting file state changes to other clients. */
+    const setOnChangedFilesSync = useCallback((cb) => {
+        onChangedFilesSyncRef.current = cb;
+    }, []);
+    /** Helper to update + broadcast changed files in one step. */
+    const updateAndBroadcastFiles = useCallback((updater) => {
+        setChangedFiles(prev => {
+            const next = updater(prev);
+            // Fire the sync callback with the new state
+            onChangedFilesSyncRef.current?.(next);
+            return next;
+        });
+    }, []);
+    const acceptFile = useCallback(async (path) => {
+        updateAndBroadcastFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'accepted' } : f));
+        // Clear the server-side backup since the user accepted the changes
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (authToken)
+                headers['Authorization'] = `Bearer ${authToken}`;
+            await fetch(`${API_URL}/api/workspace/apply-diff`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ path, content: null }), // null content = just clear backup
+            });
+        }
+        catch { /* ignore */ }
+    }, [authToken, updateAndBroadcastFiles]);
+    const rejectFile = useCallback(async (path) => {
+        // Call undo endpoint to restore the original file
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (authToken)
+                headers['Authorization'] = `Bearer ${authToken}`;
+            await fetch(`${API_URL}/api/workspace/undo`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ path }),
+            });
+        }
+        catch {
+            // Silently ignore — we still mark it rejected visually
+        }
+        updateAndBroadcastFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'rejected' } : f));
+    }, [authToken, updateAndBroadcastFiles]);
+    const acceptAllFiles = useCallback(() => {
+        updateAndBroadcastFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'accepted' } : f));
+    }, [updateAndBroadcastFiles]);
+    const rejectAllFiles = useCallback(async () => {
+        // Collect all undecided file paths and undo them in batch
+        const undecidedPaths = changedFiles.filter(f => f.state === 'undecided').map(f => f.path);
+        if (undecidedPaths.length > 0) {
+            try {
+                const headers = { 'Content-Type': 'application/json' };
+                if (authToken)
+                    headers['Authorization'] = `Bearer ${authToken}`;
+                await fetch(`${API_URL}/api/workspace/undo-all`, {
+                    method: 'POST',
+                    headers,
+                    body: JSON.stringify({ paths: undecidedPaths }),
+                });
+            }
+            catch {
+                // Silently ignore
+            }
+        }
+        updateAndBroadcastFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'rejected' } : f));
+    }, [authToken, changedFiles, updateAndBroadcastFiles]);
+    // Auto-hide the files-changed list once every file has been decided
+    useEffect(() => {
+        if (changedFiles.length === 0)
+            return;
+        const allDecided = changedFiles.every(f => f.state !== 'undecided');
+        if (!allDecided)
+            return;
+        const timer = setTimeout(() => setChangedFiles([]), 1200);
+        return () => clearTimeout(timer);
+    }, [changedFiles]);
+    const cancelRequest = useCallback(() => {
+        requestVersionRef.current += 1;
+        // 1. Tell the gateway to abort the Ollama stream
+        const sid = prevSessionIdRef.current;
+        if (sid) {
+            fetch(`${API_URL}/api/sessions/${sid}/cancel`, {
+                method: 'POST',
+                headers: authHeaders(authToken),
+            }).catch(() => { });
+        }
+        // 2. Abort the direct chat POST (if we're the originating tab)
+        abortControllerRef.current?.abort();
+        // 3. Abort the stream-resume SSE connection
+        streamAbortRef.current?.abort();
+        streamAbortRef.current = null;
+        // 4. Update UI — mark any in-flight tool calls as cancelled so spinners stop
+        setState(prev => ({
+            ...prev,
+            isLoading: false,
+            messages: prev.messages.map(m => {
+                if (!m.toolCalls?.some(tc => tc.status === 'running'))
+                    return m;
+                return {
+                    ...m,
+                    toolCalls: m.toolCalls.map(tc => tc.status === 'running'
+                        ? { ...tc, status: 'error', result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
+                        : tc),
+                };
+            }),
+        }));
+    }, [authToken]);
+    const clearMessages = useCallback(() => {
+        setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null, hitMaxRounds: false });
+        setTodoList([]);
+        setChangedFiles([]);
+        setMessageQueue([]);
+    }, []);
+    /** Send "Continue" to resume the agent after hitting max tool rounds */
+    const continueChat = useCallback((options = {}) => {
+        setState(prev => ({ ...prev, hitMaxRounds: false }));
+        return sendMessage('Continue from where you left off.', options);
+    }, [sendMessage]);
+    const restartFromMessage = useCallback(async (messageId, editedContent, messageIndex, messageFromEnd, options = {}) => {
+        const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired } = options;
+        const effectiveToken = token ?? authToken;
+        const notifyLoginRequired = requestLoginRequired ?? onLoginRequired;
+        const requestSessionId = explicitSessionId ?? sessionId;
+        if (!requestSessionId || !editedContent.trim() || restartInFlightRef.current)
+            return;
+        restartInFlightRef.current = true;
+        try {
+            const headers = { 'Content-Type': 'application/json' };
+            if (effectiveToken)
+                headers['Authorization'] = `Bearer ${effectiveToken}`;
+            const postRestart = () => fetch(`${API_URL}/api/sessions/${requestSessionId}/restart-from`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify({ messageId, messageIndex, messageFromEnd }),
+            });
+            const wait = (ms) => new Promise((resolve) => window.setTimeout(resolve, ms));
+            const waitForStreamingToStop = async () => {
+                for (let attempt = 0; attempt < 32; attempt += 1) {
+                    const statusRes = await fetch(`${API_URL}/api/sessions/${requestSessionId}/messages?limit=1`, { headers }).catch(() => null);
+                    if (statusRes?.ok) {
+                        const statusData = await statusRes.json().catch(() => ({}));
+                        if (!statusData.streaming)
+                            return true;
+                    }
+                    await wait(250);
+                }
+                return false;
+            };
+            // Invalidate in-flight local stream updates from the current run,
+            // then proactively cancel server-side stream before restart.
+            // This avoids a common race where restart is sent before the backend
+            // has finished clearing active stream state.
+            requestVersionRef.current += 1;
+            abortControllerRef.current?.abort();
+            streamAbortRef.current?.abort();
+            streamAbortRef.current = null;
+            await fetch(`${API_URL}/api/sessions/${requestSessionId}/cancel`, { method: 'POST', headers: authHeaders(effectiveToken) }).catch(() => null);
+            await waitForStreamingToStop();
+            let res = await postRestart();
+            if (res.status === 409) {
+                // Fallback: one more wait cycle, then a final restart attempt.
+                await waitForStreamingToStop();
+                res = await postRestart();
+            }
+            if (res.status === 401) {
+                const data = await res.json().catch(() => ({}));
+                if (data.detail === 'login_required')
+                    notifyLoginRequired?.();
+                return;
+            }
+            if (!res.ok) {
+                const errText = await res.text().catch(() => '');
+                throw new Error(errText || `HTTP ${res.status}`);
+            }
+            const data = await res.json();
+            setState(prev => ({
+                ...prev,
+                messages: data.messages ?? [],
+                isLoading: false,
+                error: null,
+            }));
+            await sendMessage(editedContent.trim(), {
+                token: effectiveToken,
+                sessionId: requestSessionId,
+                mode: options.mode,
+                provider: options.provider,
+                onLoginRequired: notifyLoginRequired,
+            });
+        }
+        catch (error) {
+            setState(prev => ({
+                ...prev,
+                isLoading: false,
+                error: error instanceof Error ? error.message : 'Failed to restart from message',
+            }));
+        }
+        finally {
+            restartInFlightRef.current = false;
+        }
+    }, [authToken, onLoginRequired, sessionId, sendMessage]);
+    const executePlan = useCallback(async (actionIds) => {
+        const sid = prevSessionIdRef.current;
+        if (!sid || !pendingPlan)
+            return;
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken)
+            headers['Authorization'] = `Bearer ${authToken}`;
+        try {
+            const res = await fetch(`${API_URL}/api/sessions/${sid}/plan/execute`, {
+                method: 'POST',
+                headers,
+                body: JSON.stringify(actionIds ? { action_ids: actionIds } : {}),
+            });
+            if (!res.ok)
+                throw new Error(`HTTP ${res.status}`);
+            const reader = res.body?.getReader();
+            if (!reader)
+                throw new Error('No response body');
+            const decoder = new TextDecoder();
+            let lineBuffer = '';
+            while (true) {
+                const { done, value } = await reader.read();
+                if (done)
+                    break;
+                lineBuffer += decoder.decode(value, { stream: true });
+                const lines = lineBuffer.split('\n');
+                lineBuffer = lines.pop() || '';
+                for (const line of lines) {
+                    if (!line.startsWith('data: '))
+                        continue;
+                    try {
+                        const data = JSON.parse(line.slice(6));
+                        if (data.type === 'plan_action_start') {
+                            setPendingPlan(prev => prev ? {
+                                ...prev,
+                                actions: prev.actions.map(a => a.id === data.action_id ? { ...a, status: 'approved' } : a),
+                            } : null);
+                        }
+                        else if (data.type === 'plan_action_result') {
+                            setPendingPlan(prev => prev ? {
+                                ...prev,
+                                actions: prev.actions.map(a => a.id === data.action_id ? {
+                                    ...a,
+                                    status: (data.ok ? 'executed' : 'failed'),
+                                    result: { ok: data.ok, message: data.message, data: data.data },
+                                } : a),
+                            } : null);
+                        }
+                        else if (data.type === 'plan_execution_complete') {
+                            // Plan execution complete — clear plan after a brief delay so user sees final state
+                            setTimeout(() => setPendingPlan(null), 2000);
+                        }
+                    }
+                    catch { /* incomplete JSON */ }
+                }
+            }
+        }
+        catch (err) {
+            setState(prev => ({
+                ...prev,
+                error: err instanceof Error ? err.message : 'Plan execution failed',
+            }));
+        }
+    }, [authToken, pendingPlan]);
+    const rejectPlan = useCallback(async () => {
+        const sid = prevSessionIdRef.current;
+        if (!sid || !pendingPlan)
+            return;
+        const headers = { 'Content-Type': 'application/json' };
+        if (authToken)
+            headers['Authorization'] = `Bearer ${authToken}`;
+        try {
+            await fetch(`${API_URL}/api/sessions/${sid}/plan/reject`, {
+                method: 'POST',
+                headers,
+            });
+            setPendingPlan(null);
+        }
+        catch {
+            setPendingPlan(null);
+        }
+    }, [authToken, pendingPlan]);
+    /** Add a changed file from an external source (e.g. cross-client WS sync). Deduplicates by path. */
+    const addChangedFile = useCallback((path, name) => {
+        setChangedFiles(prev => {
+            if (prev.some(f => f.path === path))
+                return prev;
+            return [...prev, { path, name, state: 'undecided' }];
+        });
+    }, []);
+    return {
+        messages: state.messages,
+        isLoading: state.isLoading,
+        isLoadingHistory: state.isLoadingHistory,
+        remainingPrompts: state.remainingPrompts,
+        error: state.error,
+        hitMaxRounds: state.hitMaxRounds,
+        pendingPlan,
+        todoList,
+        changedFiles,
+        messageQueue,
+        contextUsage,
+        sendMessage,
+        restartFromMessage,
+        cancelRequest,
+        clearMessages,
+        continueChat,
+        executePlan,
+        rejectPlan,
+        enqueueMessage,
+        dequeueMessage,
+        updateQueueItem,
+        acceptFile,
+        rejectFile,
+        acceptAllFiles,
+        rejectAllFiles,
+        setTodoList,
+        addChangedFile,
+        setChangedFiles,
+        setOnChangedFilesSync,
+        refreshMessages,
+    };
+}
+//# sourceMappingURL=useChat.js.map

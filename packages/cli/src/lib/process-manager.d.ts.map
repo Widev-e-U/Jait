@@ -1,0 +1,1 @@
+{"version":3,"file":"process-manager.d.ts","sourceRoot":"","sources":["process-manager.ts"],"names":[],"mappings":"AACA,OAAO,KAAK,EAAE,UAAU,EAAE,SAAS,EAAE,aAAa,EAAE,MAAM,aAAa,CAAC;AAsBxE,eAAO,MAAM,aAAa,GAAU,QAAQ,UAAU,KAAG,OAAO,CAAC,SAAS,CAmBzE,CAAC;AAEF,eAAO,MAAM,YAAY,QAAa,OAAO,CAAC,SAAS,CAYtD,CAAC;AAEF,eAAO,MAAM,aAAa,QAAa,OAAO,CAAC,aAAa,EAAE,CAc7D,CAAC"}

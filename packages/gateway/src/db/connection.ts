@@ -1,18 +1,18 @@
 /**
- * SQLite connection via bun:sqlite + Drizzle ORM.
+ * SQLite connection via better-sqlite3 + Drizzle ORM.
  *
  * Database lives at ~/.jait/data/jait.db (created automatically).
  * For tests, pass ":memory:" as dbPath.
  */
-import { Database } from "bun:sqlite";
-import { drizzle, type BunSQLiteDatabase } from "drizzle-orm/bun-sqlite";
+import Database from "better-sqlite3";
+import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
 import * as schema from "./schema.js";
 import { migrations } from "./migrations.js";
 import { mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-export type JaitDB = BunSQLiteDatabase<typeof schema>;
+export type JaitDB = BetterSQLite3Database<typeof schema>;
 
 /** Resolve the default DB path: ~/.jait/data/jait.db */
 export function defaultDbPath(): string {
@@ -23,9 +23,9 @@ export function defaultDbPath(): string {
  * Open (or create) the SQLite database and run table creation.
  *
  * @param dbPath  File path for the SQLite DB, or ":memory:" for tests.
- * @returns { db, sqlite } — drizzle instance + raw bun:sqlite handle
+ * @returns { db, sqlite } — drizzle instance + raw better-sqlite3 handle
  */
-export function openDatabase(dbPath?: string) {
+export function openDatabase(dbPath?: string): { db: JaitDB; sqlite: Database.Database } {
   const resolvedPath = dbPath ?? defaultDbPath();
 
   // Ensure the directory exists (no-op for :memory:)
@@ -39,8 +39,8 @@ export function openDatabase(dbPath?: string) {
   const sqlite = new Database(resolvedPath);
 
   // Enable WAL mode for better concurrent read performance
-  sqlite.run("PRAGMA journal_mode = WAL");
-  sqlite.run("PRAGMA foreign_keys = ON");
+  sqlite.pragma("journal_mode = WAL");
+  sqlite.pragma("foreign_keys = ON");
 
   const db = drizzle(sqlite, { schema });
 
@@ -54,9 +54,9 @@ export function openDatabase(dbPath?: string) {
  * Migrations are numbered and tracked in a `_migrations` table.
  * Only new (un-applied) migrations run on each startup — safe for updates.
  */
-export function migrateDatabase(sqlite: Database) {
+export function migrateDatabase(sqlite: Database.Database) {
   // Ensure the migrations tracking table exists
-  sqlite.run(`
+  sqlite.exec(`
     CREATE TABLE IF NOT EXISTS _migrations (
       id INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
@@ -66,7 +66,7 @@ export function migrateDatabase(sqlite: Database) {
 
   // Load which migrations have already been applied
   const applied = new Set(
-    (sqlite.query("SELECT id FROM _migrations").all() as { id: number }[])
+    (sqlite.prepare("SELECT id FROM _migrations").all() as { id: number }[])
       .map((r) => r.id),
   );
 
@@ -78,10 +78,9 @@ export function migrateDatabase(sqlite: Database) {
     migration.run(sqlite);
 
     // Record that this migration has been applied
-    sqlite.run(
-      "INSERT INTO _migrations (id, name, applied_at) VALUES (?, ?, ?)",
-      [migration.id, migration.name, new Date().toISOString()],
-    );
+    sqlite.prepare(
+      "INSERT INTO _migrations (id, name, applied_at) VALUES (?, ?, ?)"
+    ).run(migration.id, migration.name, new Date().toISOString());
     ran++;
   }
 
@@ -93,9 +92,9 @@ export function migrateDatabase(sqlite: Database) {
 /**
  * Get the current schema version (highest applied migration ID).
  */
-export function getSchemaVersion(sqlite: Database): number {
+export function getSchemaVersion(sqlite: Database.Database): number {
   try {
-    const row = sqlite.query("SELECT MAX(id) as v FROM _migrations").get() as { v: number | null } | null;
+    const row = sqlite.prepare("SELECT MAX(id) as v FROM _migrations").get() as { v: number | null } | null;
     return row?.v ?? 0;
   } catch {
     return 0;

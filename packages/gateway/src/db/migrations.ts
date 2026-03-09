@@ -14,12 +14,12 @@
  *   - Use `CREATE TABLE IF NOT EXISTS` and try/catch `ALTER TABLE` for safety.
  *   - Give each migration a short human-readable `name`.
  */
-import type { Database } from "bun:sqlite";
+import type Database from "better-sqlite3";
 
 export interface Migration {
   id: number;
   name: string;
-  run: (db: Database) => void;
+  run: (db: Database.Database) => void;
 }
 
 export const migrations: Migration[] = [
@@ -28,7 +28,7 @@ export const migrations: Migration[] = [
     id: 1,
     name: "baseline_schema",
     run(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS sessions (
           id TEXT PRIMARY KEY,
           user_id TEXT,
@@ -40,9 +40,9 @@ export const migrations: Migration[] = [
           metadata TEXT
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status, last_active_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status, last_active_at DESC)`);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
           username TEXT NOT NULL UNIQUE,
@@ -51,9 +51,9 @@ export const migrations: Migration[] = [
           updated_at TEXT NOT NULL
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_users_username ON users(username)`);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS user_settings (
           user_id TEXT PRIMARY KEY,
           theme TEXT NOT NULL DEFAULT 'system',
@@ -63,7 +63,7 @@ export const migrations: Migration[] = [
         )
       `);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS audit_log (
           id TEXT PRIMARY KEY,
           timestamp TEXT NOT NULL,
@@ -82,12 +82,12 @@ export const migrations: Migration[] = [
           consent_method TEXT
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_audit_action_id ON audit_log(action_id)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_log(session_id, timestamp DESC)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_audit_surface ON audit_log(surface_type, timestamp DESC)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_log(device_id, timestamp DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_action_id ON audit_log(action_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_session ON audit_log(session_id, timestamp DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_surface ON audit_log(surface_type, timestamp DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_audit_device ON audit_log(device_id, timestamp DESC)`);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS trust_levels (
           action_type TEXT PRIMARY KEY,
           approved_count INTEGER DEFAULT 0,
@@ -96,7 +96,7 @@ export const migrations: Migration[] = [
         )
       `);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS consent_log (
           id TEXT PRIMARY KEY,
           action_id TEXT NOT NULL,
@@ -107,7 +107,7 @@ export const migrations: Migration[] = [
         )
       `);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS consent_session_approvals (
           session_id TEXT PRIMARY KEY,
           approve_all INTEGER NOT NULL DEFAULT 1,
@@ -115,7 +115,7 @@ export const migrations: Migration[] = [
         )
       `);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS memories (
           id TEXT PRIMARY KEY,
           scope TEXT NOT NULL,
@@ -129,10 +129,10 @@ export const migrations: Migration[] = [
           expires_at TEXT
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, created_at)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_memories_expires ON memories(expires_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, created_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_memories_expires ON memories(expires_at)`);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY,
           session_id TEXT NOT NULL,
@@ -142,9 +142,9 @@ export const migrations: Migration[] = [
           created_at TEXT NOT NULL
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_messages_session ON messages(session_id, created_at)`);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS scheduled_jobs (
           id TEXT PRIMARY KEY,
           user_id TEXT,
@@ -160,9 +160,9 @@ export const migrations: Migration[] = [
           updated_at TEXT NOT NULL
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_updated ON scheduled_jobs(updated_at DESC)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_user_updated ON scheduled_jobs(user_id, updated_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_enabled ON scheduled_jobs(enabled)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_updated ON scheduled_jobs(updated_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_scheduled_jobs_user_updated ON scheduled_jobs(user_id, updated_at DESC)`);
     },
   },
 
@@ -172,9 +172,9 @@ export const migrations: Migration[] = [
     name: "legacy_column_additions",
     run(db) {
       // These were the old try/catch ALTER TABLEs — now tracked properly
-      try { db.run(`ALTER TABLE sessions ADD COLUMN user_id TEXT`); } catch { /* exists */ }
-      try { db.run(`ALTER TABLE scheduled_jobs ADD COLUMN user_id TEXT`); } catch { /* exists */ }
-      try { db.run(`ALTER TABLE messages ADD COLUMN tool_calls TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE sessions ADD COLUMN user_id TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE scheduled_jobs ADD COLUMN user_id TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE messages ADD COLUMN tool_calls TEXT`); } catch { /* exists */ }
     },
   },
 
@@ -183,7 +183,7 @@ export const migrations: Migration[] = [
     id: 3,
     name: "user_settings_disabled_tools",
     run(db) {
-      try { db.run(`ALTER TABLE user_settings ADD COLUMN disabled_tools TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN disabled_tools TEXT`); } catch { /* exists */ }
     },
   },
 
@@ -192,7 +192,7 @@ export const migrations: Migration[] = [
     id: 4,
     name: "session_state_table",
     run(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS session_state (
           session_id TEXT NOT NULL,
           key TEXT NOT NULL,
@@ -201,7 +201,7 @@ export const migrations: Migration[] = [
           PRIMARY KEY (session_id, key)
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_session_state_session ON session_state(session_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_session_state_session ON session_state(session_id)`);
     },
   },
   // ─── 005: stt_provider in user_settings ────────────────────────────
@@ -209,7 +209,7 @@ export const migrations: Migration[] = [
     id: 5,
     name: "user_settings_stt_provider",
     run(db) {
-      try { db.run(`ALTER TABLE user_settings ADD COLUMN stt_provider TEXT NOT NULL DEFAULT 'simulated'`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN stt_provider TEXT NOT NULL DEFAULT 'simulated'`); } catch { /* exists */ }
     },
   },
 
@@ -218,7 +218,7 @@ export const migrations: Migration[] = [
     id: 6,
     name: "messages_segments_column",
     run(db) {
-      try { db.run(`ALTER TABLE messages ADD COLUMN segments TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE messages ADD COLUMN segments TEXT`); } catch { /* exists */ }
     },
   },
 
@@ -227,7 +227,7 @@ export const migrations: Migration[] = [
     id: 7,
     name: "agent_threads_tables",
     run(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS agent_threads (
           id TEXT PRIMARY KEY,
           user_id TEXT,
@@ -246,12 +246,12 @@ export const migrations: Migration[] = [
           completed_at TEXT
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_threads_user ON agent_threads(user_id)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_threads_session ON agent_threads(session_id)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_threads_status ON agent_threads(status)`);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_threads_updated ON agent_threads(updated_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_threads_user ON agent_threads(user_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_threads_session ON agent_threads(session_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_threads_status ON agent_threads(status)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_threads_updated ON agent_threads(updated_at)`);
 
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS agent_thread_activities (
           id TEXT PRIMARY KEY,
           thread_id TEXT NOT NULL,
@@ -261,7 +261,7 @@ export const migrations: Migration[] = [
           created_at TEXT NOT NULL
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_agent_thread_activities_thread ON agent_thread_activities(thread_id, created_at)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_agent_thread_activities_thread ON agent_thread_activities(thread_id, created_at)`);
     },
   },
 
@@ -271,7 +271,7 @@ export const migrations: Migration[] = [
     name: "user_settings_chat_provider",
     run(db) {
       try {
-        db.run(`ALTER TABLE user_settings ADD COLUMN chat_provider TEXT NOT NULL DEFAULT 'jait'`);
+        db.exec(`ALTER TABLE user_settings ADD COLUMN chat_provider TEXT NOT NULL DEFAULT 'jait'`);
       } catch { /* column already exists */ }
     },
   },
@@ -281,10 +281,10 @@ export const migrations: Migration[] = [
     id: 9,
     name: "agent_threads_pr_metadata",
     run(db) {
-      try { db.run(`ALTER TABLE agent_threads ADD COLUMN pr_url TEXT`); } catch { /* exists */ }
-      try { db.run(`ALTER TABLE agent_threads ADD COLUMN pr_number INTEGER`); } catch { /* exists */ }
-      try { db.run(`ALTER TABLE agent_threads ADD COLUMN pr_title TEXT`); } catch { /* exists */ }
-      try { db.run(`ALTER TABLE agent_threads ADD COLUMN pr_state TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN pr_url TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN pr_number INTEGER`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN pr_title TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN pr_state TEXT`); } catch { /* exists */ }
     },
   },
 
@@ -293,7 +293,7 @@ export const migrations: Migration[] = [
     id: 10,
     name: "automation_repositories_table",
     run(db) {
-      db.run(`
+      db.exec(`
         CREATE TABLE IF NOT EXISTS automation_repositories (
           id TEXT PRIMARY KEY,
           user_id TEXT,
@@ -305,7 +305,7 @@ export const migrations: Migration[] = [
           updated_at TEXT NOT NULL
         )
       `);
-      db.run(`CREATE INDEX IF NOT EXISTS idx_automation_repos_user ON automation_repositories(user_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_automation_repos_user ON automation_repositories(user_id)`);
     },
   },
 
@@ -315,7 +315,7 @@ export const migrations: Migration[] = [
     name: "automation_repositories_device_id",
     run(db) {
       try {
-        db.run(`ALTER TABLE automation_repositories ADD COLUMN device_id TEXT`);
+        db.exec(`ALTER TABLE automation_repositories ADD COLUMN device_id TEXT`);
       } catch { /* column already exists */ }
     },
   },

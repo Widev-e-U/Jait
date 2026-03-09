@@ -48,12 +48,12 @@ import type { SessionStateService } from "./services/session-state.js";
 import type { ThreadService } from "./services/threads.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { ProviderRegistry } from "./providers/registry.js";
-import type { Database } from "bun:sqlite";
+import type Database from "better-sqlite3";
 import { getSchemaVersion } from "./db/connection.js";
 
 export interface ServerDeps {
   db?: JaitDB;
-  sqlite?: Database;
+  sqlite?: Database.Database;
   sessionService?: SessionService;
   userService?: UserService;
   audit?: AuditWriter;

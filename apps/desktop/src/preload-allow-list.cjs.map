@@ -1,0 +1,1 @@
+{"version":3,"file":"preload-allow-list.cjs","sourceRoot":"","sources":["preload-allow-list.cts"],"names":[],"mappings":";;AAAA,MAAM,kBAAkB,GAAG;IACzB,MAAM,EAAE;QACN,kBAAkB;QAClB,qBAAqB;QACrB,gBAAgB;QAChB,uBAAuB;QACvB,wBAAwB;QACxB,gBAAgB;QAChB,qBAAqB;QACrB,mBAAmB;KACpB;IACD,EAAE,EAAE,CAAC,oBAAoB,EAAE,mBAAmB,EAAE,eAAe,CAAC;CACjE,CAAC;AAEF,MAAM,CAAC,OAAO,GAAG,kBAAkB,CAAC"}
