@@ -183,7 +183,10 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # 3. Publish @jait/web (pre-built frontend static files)
+      # 3. Publish @jait/web (pre-built frontend static files — strip deps, everything is bundled by Vite)
+      - name: Strip deps from @jait/web (static files only)
+        working-directory: apps/web
+        run: jq '.dependencies = {} | .devDependencies = {}' package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/web
         working-directory: apps/web
         run: |
