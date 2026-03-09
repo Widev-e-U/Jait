@@ -47,6 +47,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-gateway:latest
             ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-gateway:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-api:latest
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-api:${{ steps.version.outputs.version }}
 
       - name: Build & push web
         uses: docker/build-push-action@v5
@@ -57,6 +59,8 @@ jobs:
           tags: |
             ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-web:latest
             ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-web:${{ steps.version.outputs.version }}
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-ui:latest
+            ${{ env.REGISTRY_HOST }}/${{ env.IMAGE_OWNER }}/jait-ui:${{ steps.version.outputs.version }}
 
   # ── Build desktop apps (Electron) ──────────────────────────────────
   desktop-windows:
