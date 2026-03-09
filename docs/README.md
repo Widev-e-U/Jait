@@ -4,7 +4,7 @@
 
 Jait is a local-first AI developer agent that can execute tools (terminal/files/browser/network), stream activity, and run with human-in-the-loop controls.
 
-**[Download & Install](https://jait-ai.github.io/jait/)** · [Releases](https://github.com/jait-ai/jait/releases)
+**[Download & Install](https://jait.dev)** · [Releases](https://github.com/jait-ai/jait/releases)
 
 ---
 
