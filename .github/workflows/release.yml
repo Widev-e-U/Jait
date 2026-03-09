@@ -9,6 +9,7 @@ on:
 permissions:
   contents: write
   packages: write
+  id-token: write
 
 jobs:
   # ── Build & push Docker images ──────────────────────────────────────
@@ -133,6 +134,10 @@ jobs:
   npm-publish:
     name: Publish npm packages
     runs-on: ubuntu-latest
+    environment: npm
+    permissions:
+      contents: read
+      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -146,7 +151,7 @@ jobs:
       # 1. Publish @jait/shared (no workspace deps)
       - name: Publish @jait/shared
         working-directory: packages/shared
-        run: npm publish --access public || echo "Already published"
+        run: npm publish --provenance --access public || echo "Already published"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -158,14 +163,14 @@ jobs:
           jq --arg v "^$VERSION" '.dependencies["@jait/shared"] = $v' package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/screen-share
         working-directory: packages/screen-share
-        run: npm publish --access public || echo "Already published"
+        run: npm publish --provenance --access public || echo "Already published"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # 3. Publish @jait/web (pre-built frontend static files)
       - name: Publish @jait/web
         working-directory: apps/web
-        run: npm publish --access public || echo "Already published"
+        run: npm publish --provenance --access public || echo "Already published"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -181,7 +186,7 @@ jobs:
             package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/gateway
         working-directory: packages/gateway
-        run: npm publish --access public || echo "Already published"
+        run: npm publish --provenance --access public || echo "Already published"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
