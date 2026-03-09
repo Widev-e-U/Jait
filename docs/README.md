@@ -14,8 +14,10 @@ Jait is a local-first AI developer agent that can execute tools (terminal/files/
 
 ```bash
 npm install -g @jait/gateway
-jait start
+jait
 ```
+
+Use `jait --port 9000` or `jait --help` for options.
 
 ### Option 2: Docker
 

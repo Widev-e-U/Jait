@@ -1,16 +1,31 @@
 {
   "name": "@jait/gateway",
   "version": "0.1.0",
-  "private": true,
+  "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "bin": {
+    "jait": "./bin/jait.mjs"
+  },
+  "files": [
+    "dist",
+    "bin"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "bun --watch src/index.ts",
     "start": "bun dist/index.js",
     "typecheck": "tsc --noEmit"
   },
+  "keywords": ["ai", "agent", "coding", "gateway", "terminal", "local-first"],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JakobWl/Jait.git",
+    "directory": "packages/gateway"
+  },
+  "homepage": "https://jait.dev",
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.0.0",

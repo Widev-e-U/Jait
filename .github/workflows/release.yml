@@ -124,18 +124,51 @@ jobs:
           name: android-apk
           path: apps/mobile/android/app/build/outputs/apk/release/*.apk
 
-  # ── Publish npm package ────────────────────────────────────────────
+  # ── Publish npm packages (in dependency order) ─────────────────────
   npm-publish:
-    name: Publish @jait/gateway to npm
+    name: Publish npm packages
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          registry-url: https://registry.npmjs.org
       - run: bun install --frozen-lockfile
       - run: bun run build
-      - name: Publish gateway
+
+      # 1. Publish @jait/shared (no workspace deps)
+      - name: Publish @jait/shared
+        working-directory: packages/shared
+        run: npm publish --access public || echo "Already published"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 2. Publish @jait/screen-share (depends on shared)
+      - name: Resolve workspace deps (screen-share)
+        working-directory: packages/screen-share
+        run: |
+          VERSION=$(jq -r '.version' ../shared/package.json)
+          jq --arg v "^$VERSION" '.dependencies["@jait/shared"] = $v' package.json > tmp.json && mv tmp.json package.json
+      - name: Publish @jait/screen-share
+        working-directory: packages/screen-share
+        run: npm publish --access public || echo "Already published"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 3. Publish @jait/gateway (depends on shared + screen-share)
+      - name: Resolve workspace deps (gateway)
         working-directory: packages/gateway
-        run: npm publish --access public
+        run: |
+          SHARED_V=$(jq -r '.version' ../shared/package.json)
+          SCREEN_V=$(jq -r '.version' ../screen-share/package.json)
+          jq --arg sv "^$SHARED_V" --arg scv "^$SCREEN_V" \
+            '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv' \
+            package.json > tmp.json && mv tmp.json package.json
+      - name: Publish @jait/gateway
+        working-directory: packages/gateway
+        run: npm publish --access public || echo "Already published"
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 

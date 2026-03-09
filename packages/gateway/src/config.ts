@@ -1,10 +1,24 @@
 import { config } from "dotenv";
-import { resolve, dirname } from "path";
+import { resolve, dirname, join } from "path";
 import { fileURLToPath } from "url";
+import { existsSync } from "fs";
+import { homedir } from "os";
 
-// Load .env from monorepo root (3 levels up from src/config.ts)
-const __dirname = dirname(fileURLToPath(import.meta.url));
-config({ path: resolve(__dirname, "../../../.env") });
+// Skip dotenv loading if already handled by CLI entry (bin/jait.mjs)
+if (!process.env["__JAIT_CLI"]) {
+  const __dirname = dirname(fileURLToPath(import.meta.url));
+  // Try .env locations in priority order:
+  //   1. CWD/.env  (user project)
+  //   2. ~/.jait/.env  (global config)
+  //   3. Monorepo root (dev; 3 levels up from src/config.ts)
+  const candidates = [
+    resolve(process.cwd(), ".env"),
+    join(homedir(), ".jait", ".env"),
+    resolve(__dirname, "../../../.env"),
+  ];
+  const envPath = candidates.find((p) => existsSync(p));
+  if (envPath) config({ path: envPath });
+}
 
 export type LlmProvider = "ollama" | "openai";
 

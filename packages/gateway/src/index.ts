@@ -431,7 +431,12 @@ async function main() {
   });
 }
 
-main().catch((err) => {
-  console.error("Fatal error:", err);
-  process.exit(1);
-});
+export { main };
+
+// Auto-run when invoked directly (not via CLI bin entry)
+if (!process.env["__JAIT_CLI"]) {
+  main().catch((err) => {
+    console.error("Fatal error:", err);
+    process.exit(1);
+  });
+}
