@@ -9,7 +9,6 @@ on:
 permissions:
   contents: write
   packages: write
-  id-token: write
 
 jobs:
   # ── Build & push Docker images ──────────────────────────────────────
@@ -137,7 +136,6 @@ jobs:
     environment: npm
     permissions:
       contents: read
-      id-token: write
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -152,7 +150,7 @@ jobs:
       - name: Publish @jait/shared
         working-directory: packages/shared
         run: |
-          npm publish --provenance --access public 2>&1 | tee /tmp/npm-out.log
+          npm publish --access public 2>&1 | tee /tmp/npm-out.log
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
             if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
@@ -173,7 +171,7 @@ jobs:
       - name: Publish @jait/screen-share
         working-directory: packages/screen-share
         run: |
-          npm publish --provenance --access public 2>&1 | tee /tmp/npm-out.log
+          npm publish --access public 2>&1 | tee /tmp/npm-out.log
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
             if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
@@ -189,7 +187,7 @@ jobs:
       - name: Publish @jait/web
         working-directory: apps/web
         run: |
-          npm publish --provenance --access public 2>&1 | tee /tmp/npm-out.log
+          npm publish --access public 2>&1 | tee /tmp/npm-out.log
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
             if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
@@ -214,7 +212,7 @@ jobs:
       - name: Publish @jait/gateway
         working-directory: packages/gateway
         run: |
-          npm publish --provenance --access public 2>&1 | tee /tmp/npm-out.log
+          npm publish --access public 2>&1 | tee /tmp/npm-out.log
           status=${PIPESTATUS[0]}
           if [ $status -ne 0 ]; then
             if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
