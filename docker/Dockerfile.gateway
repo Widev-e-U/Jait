@@ -1,4 +1,11 @@
-FROM oven/bun:1 AS base
+FROM node:22-bookworm-slim AS base
+RUN apt-get update \
+ && apt-get install -y --no-install-recommends python3 make g++ curl unzip ca-certificates \
+ && curl -fsSL https://github.com/oven-sh/bun/releases/latest/download/bun-linux-x64.zip -o /tmp/bun.zip \
+ && unzip /tmp/bun.zip -d /tmp/bun-install \
+ && mv /tmp/bun-install/bun-linux-x64/bun /usr/local/bin/bun \
+ && chmod +x /usr/local/bin/bun \
+ && rm -rf /tmp/bun.zip /tmp/bun-install /var/lib/apt/lists/*
 WORKDIR /app
 
 FROM base AS deps
@@ -15,12 +22,7 @@ COPY apps/mobile/package.json apps/mobile/
 RUN bun install --frozen-lockfile
 
 FROM base AS build
-COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY --from=deps /app/packages/api-client/node_modules ./packages/api-client/node_modules
-COPY --from=deps /app/packages/screen-share/node_modules ./packages/screen-share/node_modules
-COPY --from=deps /app/packages/gateway/node_modules ./packages/gateway/node_modules
-COPY --from=deps /app/apps/web/node_modules ./apps/web/node_modules
+COPY --from=deps /app ./
 COPY . .
 RUN bun run --filter '@jait/shared' build \
  && bun run --filter '@jait/api-client' build \
@@ -28,19 +30,18 @@ RUN bun run --filter '@jait/shared' build \
  && bun run --filter '@jait/gateway' build \
  && bun run --filter '@jait/web' build
 
-FROM base AS runtime
+FROM node:22-bookworm-slim AS runtime
 ENV NODE_ENV=production
+WORKDIR /app
 COPY --from=build /app/packages/shared/dist ./packages/shared/dist
 COPY --from=build /app/packages/shared/package.json ./packages/shared/
 COPY --from=build /app/packages/screen-share/dist ./packages/screen-share/dist
 COPY --from=build /app/packages/screen-share/package.json ./packages/screen-share/
 COPY --from=build /app/packages/gateway/dist ./packages/gateway/dist
 COPY --from=build /app/packages/gateway/package.json ./packages/gateway/
-# Bundle the web frontend into the gateway image so it can serve it
 COPY --from=build /app/apps/web/dist ./apps/web/dist
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/packages/gateway/node_modules ./packages/gateway/node_modules
 COPY package.json ./
 
 EXPOSE 8000
-CMD ["bun", "packages/gateway/dist/index.js"]
+CMD ["node", "packages/gateway/dist/index.js"]
