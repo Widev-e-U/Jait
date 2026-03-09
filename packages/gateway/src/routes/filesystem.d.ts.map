@@ -1,1 +1,0 @@
-{"version":3,"file":"filesystem.d.ts","sourceRoot":"","sources":["filesystem.ts"],"names":[],"mappings":"AAAA;;;;;;;GAOG;AAEH,OAAO,KAAK,EAAE,eAAe,EAAE,MAAM,SAAS,CAAC;AAI/C,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,UAAU,CAAC;AAC/C,OAAO,KAAK,EAAE,aAAa,EAAU,MAAM,cAAc,CAAC;AAS1D,MAAM,MAAM,WAAW,GAAG,aAAa,CAAC;AAWxC,wBAAgB,wBAAwB,CAAC,GAAG,EAAE,eAAe,EAAE,EAAE,CAAC,EAAE,cAAc,QAkIjF"}

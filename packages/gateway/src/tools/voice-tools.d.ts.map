@@ -1,1 +1,0 @@
-{"version":3,"file":"voice-tools.d.ts","sourceRoot":"","sources":["voice-tools.ts"],"names":[],"mappings":"AAAA,OAAO,KAAK,EAAE,cAAc,EAAE,MAAM,gBAAgB,CAAC;AACrD,OAAO,KAAK,EAAE,YAAY,EAAE,MAAM,qBAAqB,CAAC;AAExD,UAAU,UAAU;IAClB,IAAI,EAAE,MAAM,CAAC;CACd;AAED,wBAAgB,oBAAoB,CAAC,YAAY,EAAE,YAAY,GAAG,cAAc,CAAC,UAAU,CAAC,CA8B3F"}

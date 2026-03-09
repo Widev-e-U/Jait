@@ -14,6 +14,13 @@ venv/
 dist/
 build/
 *.egg-info/
+*.tsbuildinfo
+
+# TypeScript compiled output (emitted alongside .ts sources)
+packages/*/src/**/*.js
+packages/*/src/**/*.js.map
+packages/*/src/**/*.d.ts
+packages/*/src/**/*.d.ts.map
 
 # IDE
 .idea/
