@@ -13,7 +13,6 @@
 
 const STORAGE_KEY = 'jait-gateway-url'
 const DEFAULT_HTTP = 'http://localhost:8000'
-const DEFAULT_WS = 'ws://localhost:8000'
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
