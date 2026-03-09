@@ -1,4 +1,4 @@
-export const VERSION = "0.1.4";
+export const VERSION = "0.1.5";
 
 export const DEFAULT_PORT = 8000;
 export const DEFAULT_WS_PORT = 18789;

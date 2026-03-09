@@ -5,6 +5,7 @@ import { existsSync } from "node:fs";
 import { join, dirname } from "node:path";
 import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
+import { createRequire } from "node:module";
 import type { AppConfig } from "./config.js";
 import { VERSION } from "@jait/shared";
 
@@ -237,11 +238,13 @@ function resolveWebDir(): string | null {
     join(__dirname, "../../web/dist"),
     // If @jait/web is hoisted into top-level node_modules
     join(__dirname, "../../../@jait/web/dist"),
-    // Try require.resolve to find @jait/web regardless of hoist layout
+    // Nested node_modules (npm global install typical layout)
+    join(__dirname, "../node_modules/@jait/web/dist"),
+    // Use createRequire to find @jait/web regardless of hoist layout (ESM-safe)
     (() => {
       try {
-        // Resolve @jait/web package.json, then look for dist/ next to it
-        const webPkg = require.resolve("@jait/web/package.json", { paths: [__dirname, process.cwd()] });
+        const require = createRequire(import.meta.url);
+        const webPkg = require.resolve("@jait/web/package.json");
         return join(dirname(webPkg), "dist");
       } catch { return null; }
     })(),
