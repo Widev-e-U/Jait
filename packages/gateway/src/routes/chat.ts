@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { FastifyInstance } from "fastify";
 import { type AppConfig, inferContextWindow } from "../config.js";
 import type { JaitDB } from "../db/index.js";
@@ -304,7 +305,7 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
   try {
     _dbRef.insert(messagesTable)
       .values({
-        id: crypto.randomUUID(),
+        id: randomUUID(),
         sessionId,
         role,
         content,
@@ -440,7 +441,7 @@ export function registerChatRoutes(
     try {
       db.insert(messagesTable)
         .values({
-          id: crypto.randomUUID(),
+          id: randomUUID(),
           sessionId,
           role,
           content,
@@ -523,7 +524,7 @@ export function registerChatRoutes(
         ? body["sessionId"]
         : typeof body["session_id"] === "string"
           ? (body["session_id"] as string)
-          : crypto.randomUUID();
+          : randomUUID();
     const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
     const requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)

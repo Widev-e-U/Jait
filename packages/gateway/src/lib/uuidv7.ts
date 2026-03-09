@@ -1,3 +1,7 @@
+import { webcrypto } from "node:crypto";
+
+const _crypto = (globalThis.crypto as Crypto) ?? (webcrypto as unknown as Crypto);
+
 /**
  * UUIDv7 — time-sortable unique identifiers.
  *
@@ -9,7 +13,7 @@ export function uuidv7(): string {
   const bytes = new Uint8Array(16);
 
   // Fill with random bytes first
-  crypto.getRandomValues(bytes);
+  _crypto.getRandomValues(bytes);
 
   // Timestamp: first 48 bits (6 bytes)
   bytes[0] = (now / 2 ** 40) & 0xff;
