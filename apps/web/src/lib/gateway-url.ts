@@ -5,14 +5,25 @@
  *   1. User override stored in localStorage (`jait-gateway-url`)
  *   2. Electron bridge value (`window.jaitDesktop?.getInfo()?.gatewayUrl`)
  *   3. Build-time env var (`VITE_API_URL`)
- *   4. Fallback: `http://localhost:8000`
+ *   4. Fallback: `window.location.origin` (same-origin) or `http://localhost:8000`
  *
  * All modules should import `getApiUrl()` / `getWsUrl()` from here instead
  * of reading `import.meta.env.VITE_API_URL` directly.
  */
 
 const STORAGE_KEY = 'jait-gateway-url'
-const DEFAULT_HTTP = 'http://localhost:8000'
+
+/**
+ * When the web UI is served by the gateway itself (same origin),
+ * use the page origin so it works behind reverse proxies / HTTPS.
+ * Falls back to localhost:8000 for standalone dev or SSR.
+ */
+function getDefaultHttp(): string {
+  if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
+    return window.location.origin
+  }
+  return 'http://localhost:8000'
+}
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -66,7 +77,7 @@ export function getApiUrl(): string {
   const env = import.meta.env.VITE_API_URL as string | undefined
   if (env) return stripTrailingSlash(env)
 
-  return DEFAULT_HTTP
+  return getDefaultHttp()
 }
 
 /**

@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "type": "module",
   "main": "dist/index.js",
@@ -18,7 +18,14 @@
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
-  "keywords": ["ai", "agent", "coding", "gateway", "terminal", "local-first"],
+  "keywords": [
+    "ai",
+    "agent",
+    "coding",
+    "gateway",
+    "terminal",
+    "local-first"
+  ],
   "license": "MIT",
   "repository": {
     "type": "git",
