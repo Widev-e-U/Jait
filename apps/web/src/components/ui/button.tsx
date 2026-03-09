@@ -42,17 +42,9 @@ export interface ButtonProps
 }
 
 function Button({ className, variant, size, asChild = false, ref, ...props }: ButtonProps) {
-  if (asChild) {
-    return (
-      <Slot
-        className={cn(buttonVariants({ variant, size, className }))}
-        ref={ref as React.Ref<HTMLElement>}
-        {...(props as React.HTMLAttributes<HTMLElement>)}
-      />
-    )
-  }
+  const Comp = asChild ? (Slot as React.ComponentType<React.ComponentPropsWithRef<"button">>) : "button"
   return (
-    <button
+    <Comp
       className={cn(buttonVariants({ variant, size, className }))}
       ref={ref}
       {...props}
