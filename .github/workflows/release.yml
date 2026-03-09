@@ -151,7 +151,16 @@ jobs:
       # 1. Publish @jait/shared (no workspace deps)
       - name: Publish @jait/shared
         working-directory: packages/shared
-        run: npm publish --provenance --access public || echo "Already published"
+        run: |
+          npm publish --provenance --access public 2>&1 | tee /tmp/npm-out.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
+              echo "⏭ Already published — skipping"
+            else
+              cat /tmp/npm-out.log; exit $status
+            fi
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -163,14 +172,32 @@ jobs:
           jq --arg v "^$VERSION" '.dependencies["@jait/shared"] = $v' package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/screen-share
         working-directory: packages/screen-share
-        run: npm publish --provenance --access public || echo "Already published"
+        run: |
+          npm publish --provenance --access public 2>&1 | tee /tmp/npm-out.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
+              echo "⏭ Already published — skipping"
+            else
+              cat /tmp/npm-out.log; exit $status
+            fi
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
       # 3. Publish @jait/web (pre-built frontend static files)
       - name: Publish @jait/web
         working-directory: apps/web
-        run: npm publish --provenance --access public || echo "Already published"
+        run: |
+          npm publish --provenance --access public 2>&1 | tee /tmp/npm-out.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
+              echo "⏭ Already published — skipping"
+            else
+              cat /tmp/npm-out.log; exit $status
+            fi
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
@@ -186,7 +213,16 @@ jobs:
             package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/gateway
         working-directory: packages/gateway
-        run: npm publish --provenance --access public || echo "Already published"
+        run: |
+          npm publish --provenance --access public 2>&1 | tee /tmp/npm-out.log
+          status=${PIPESTATUS[0]}
+          if [ $status -ne 0 ]; then
+            if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
+              echo "⏭ Already published — skipping"
+            else
+              cat /tmp/npm-out.log; exit $status
+            fi
+          fi
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
