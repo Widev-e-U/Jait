@@ -4,7 +4,7 @@
 
 Jait is a local-first AI developer agent that can execute tools (terminal/files/browser/network), stream activity, and run with human-in-the-loop controls.
 
-**[Download & Install](https://jait.dev)** · [Releases](https://github.com/jait-ai/jait/releases)
+**[Download & Install](https://jait.dev)** · [Releases](https://github.com/JakobWl/Jait/releases)
 
 ---
 
@@ -20,20 +20,20 @@ jait start
 ### Option 2: Docker
 
 ```bash
-docker run -d -p 8000:8000 -v jait-data:/data ghcr.io/jait-ai/jait-gateway
+docker run -d -p 8000:8000 -v jait-data:/data ghcr.io/jakobwl/jait-gateway
 ```
 
 Or with docker compose:
 
 ```bash
-curl -O https://raw.githubusercontent.com/jait-ai/jait/main/docker-compose.yml
+curl -O https://raw.githubusercontent.com/JakobWl/Jait/main/docker-compose.yml
 docker compose up -d
 ```
 
 ### Option 3: From source (for development)
 
 ```bash
-git clone https://github.com/jait-ai/jait
+git clone https://github.com/JakobWl/Jait
 cd jait
 bun install --frozen-lockfile
 cp .env.example .env
@@ -44,10 +44,10 @@ bun run dev
 
 | Platform | Download |
 |----------|----------|
-| Windows  | [Jait-Setup-x64.exe](https://github.com/jait-ai/jait/releases/latest/download/Jait-Setup-x64.exe) |
-| macOS    | [Jait-universal.dmg](https://github.com/jait-ai/jait/releases/latest/download/Jait-universal.dmg) |
-| Linux    | [Jait-x86_64.AppImage](https://github.com/jait-ai/jait/releases/latest/download/Jait-x86_64.AppImage) |
-| Android  | [jait-arm64-v8a.apk](https://github.com/jait-ai/jait/releases/latest/download/jait-arm64-v8a.apk) |
+| Windows  | [Jait-Setup-x64.exe](https://github.com/JakobWl/Jait/releases/latest/download/Jait-Setup-x64.exe) |
+| macOS    | [Jait-universal.dmg](https://github.com/JakobWl/Jait/releases/latest/download/Jait-universal.dmg) |
+| Linux    | [Jait-x86_64.AppImage](https://github.com/JakobWl/Jait/releases/latest/download/Jait-x86_64.AppImage) |
+| Android  | [jait-arm64-v8a.apk](https://github.com/JakobWl/Jait/releases/latest/download/jait-arm64-v8a.apk) |
 | Web      | [app.jait.dev](https://app.jait.dev) |
 
 ## Connecting a client to your gateway

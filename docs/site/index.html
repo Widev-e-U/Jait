@@ -242,7 +242,7 @@
       <p>Just Another Intelligent Tool — a local-first AI developer agent with tools, streaming, and human-in-the-loop controls.</p>
       <div class="hero-buttons">
         <a href="#install" class="btn btn-primary">Get started</a>
-        <a href="https://github.com/jait-ai/jait" class="btn btn-outline">
+        <a href="https://github.com/JakobWl/Jait" class="btn btn-outline">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
           GitHub
         </a>
@@ -280,14 +280,14 @@ jait start</code></pre>
           <p>Run the full stack in containers.</p>
           <pre><code>docker compose up -d</code></pre>
           <p style="font-size: 0.8rem;">
-            Images published to <code>ghcr.io/jait-ai/jait-gateway</code>
+            Images published to <code>ghcr.io/jakobwl/jait-gateway</code>
           </p>
         </div>
 
         <div class="method-card">
           <h3>From source</h3>
           <p>Clone and build for development.</p>
-          <pre><code>git clone https://github.com/jait-ai/jait
+          <pre><code>git clone https://github.com/JakobWl/Jait
 cd jait
 bun install --frozen-lockfile
 bun run dev</code></pre>
@@ -298,7 +298,7 @@ bun run dev</code></pre>
           <p>Run the gateway without cloning.</p>
           <pre><code>docker run -d -p 8000:8000 \
   -v jait-data:/data \
-  ghcr.io/jait-ai/jait-gateway</code></pre>
+  ghcr.io/jakobwl/jait-gateway</code></pre>
         </div>
       </div>
     </section>
@@ -313,7 +313,7 @@ bun run dev</code></pre>
           <span class="platform">Windows</span>
           <h3>Desktop App</h3>
           <p>Installer for Windows 10/11 (x64)</p>
-          <a href="https://github.com/jait-ai/jait/releases/latest/download/Jait-Setup-x64.exe" class="btn btn-outline">
+          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-Setup-x64.exe" class="btn btn-outline">
             Download .exe
           </a>
         </div>
@@ -322,7 +322,7 @@ bun run dev</code></pre>
           <span class="platform">macOS</span>
           <h3>Desktop App</h3>
           <p>Universal binary (Intel + Apple Silicon)</p>
-          <a href="https://github.com/jait-ai/jait/releases/latest/download/Jait-universal.dmg" class="btn btn-outline">
+          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-universal.dmg" class="btn btn-outline">
             Download .dmg
           </a>
         </div>
@@ -331,7 +331,7 @@ bun run dev</code></pre>
           <span class="platform">Linux</span>
           <h3>Desktop App</h3>
           <p>AppImage for any Linux distribution</p>
-          <a href="https://github.com/jait-ai/jait/releases/latest/download/Jait-x86_64.AppImage" class="btn btn-outline">
+          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-x86_64.AppImage" class="btn btn-outline">
             Download .AppImage
           </a>
         </div>
@@ -340,7 +340,7 @@ bun run dev</code></pre>
           <span class="platform">Android</span>
           <h3>Mobile App</h3>
           <p>APK for Android 10+ (arm64)</p>
-          <a href="https://github.com/jait-ai/jait/releases/latest/download/jait-arm64-v8a.apk" class="btn btn-outline">
+          <a href="https://github.com/JakobWl/Jait/releases/latest/download/jait-arm64-v8a.apk" class="btn btn-outline">
             Download .apk
           </a>
         </div>
@@ -365,7 +365,7 @@ bun run dev</code></pre>
       </div>
 
       <p style="margin-top: 16px; font-size: 0.85rem;">
-        All releases: <a href="https://github.com/jait-ai/jait/releases">github.com/jait-ai/jait/releases</a>
+        All releases: <a href="https://github.com/JakobWl/Jait/releases">github.com/JakobWl/Jait/releases</a>
       </p>
     </section>
 
@@ -402,7 +402,7 @@ bun run dev</code></pre>
       <h3>docker-compose.yml</h3>
       <pre><code>services:
   gateway:
-    image: ghcr.io/jait-ai/jait-gateway:latest
+    image: ghcr.io/jakobwl/jait-gateway:latest
     ports:
       - "8000:8000"
     volumes:
@@ -412,7 +412,7 @@ bun run dev</code></pre>
     restart: unless-stopped
 
   web:
-    image: ghcr.io/jait-ai/jait-web:latest
+    image: ghcr.io/jakobwl/jait-web:latest
     ports:
       - "3000:3000"
     depends_on:
@@ -433,7 +433,7 @@ volumes:
 
   <footer>
     <div class="container">
-      <p>Jait &mdash; Just Another Intelligent Tool &middot; <a href="https://github.com/jait-ai/jait">GitHub</a> &middot; <a href="https://github.com/jait-ai/jait/blob/main/LICENSE">MIT License</a></p>
+      <p>Jait &mdash; Just Another Intelligent Tool &middot; <a href="https://github.com/JakobWl/Jait">GitHub</a> &middot; <a href="https://github.com/JakobWl/Jait/blob/main/LICENSE">MIT License</a></p>
     </div>
   </footer>
 
