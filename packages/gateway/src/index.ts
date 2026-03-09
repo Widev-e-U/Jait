@@ -235,6 +235,10 @@ async function main() {
   });
 
   // Rebuild tool registry with Sprint 7 scheduler + gateway status tools.
+  // shutdown ref is assigned after server.listen — use late-bound wrapper
+  let shutdownFn: (() => Promise<void>) | undefined;
+  const shutdownRef = async () => { if (shutdownFn) await shutdownFn(); else process.exit(0); };
+
   toolRegistry = createToolRegistry(surfaceRegistry, {
     scheduler,
     sessionService,
@@ -247,6 +251,8 @@ async function main() {
     threadMcpConfig: { host: config.host, port: config.port },
     threadService,
     providerRegistry,
+    config,
+    shutdown: shutdownRef,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -418,6 +424,8 @@ async function main() {
     sqlite.close();
     process.exit(0);
   };
+  // Wire shutdown into redeploy tool's late-bound reference
+  shutdownFn = shutdown;
 
   process.on("SIGINT", () => void shutdown());
   process.on("SIGTERM", () => void shutdown());

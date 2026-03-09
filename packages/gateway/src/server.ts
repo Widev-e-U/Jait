@@ -1,7 +1,14 @@
 import Fastify from "fastify";
 import cors from "@fastify/cors";
+import fastifyStatic from "@fastify/static";
+import { existsSync } from "node:fs";
+import { join, dirname } from "node:path";
+import { readFile } from "node:fs/promises";
+import { fileURLToPath } from "node:url";
 import type { AppConfig } from "./config.js";
 import { VERSION } from "@jait/shared";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 import { registerChatRoutes } from "./routes/chat.js";
 import { registerHealthRoutes } from "./routes/health.js";
 import { registerSessionRoutes } from "./routes/sessions.js";
@@ -184,11 +191,67 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     registerMcpRoutes(app, { toolRegistry: deps.toolRegistry, config });
   }
 
-  app.get("/", async () => ({
-    name: "jait-gateway",
-    version: VERSION,
-    status: "ok",
-  }));
+  // ── Serve the web frontend (SPA) if the built files exist ────────
+  // Probe paths in order: JAIT_WEB_DIR env, co-located ../web/dist
+  // (npm global install or Docker), monorepo apps/web/dist (dev)
+  const webDir = resolveWebDir();
+  if (webDir) {
+    await app.register(fastifyStatic, {
+      root: webDir,
+      prefix: "/",
+      decorateReply: false,
+      // Don't serve index.html for API routes
+    });
+
+    // SPA fallback — serve index.html for any non-API, non-file GET
+    app.setNotFoundHandler(async (request, reply) => {
+      if (request.method === "GET" && !request.url.startsWith("/api") && !request.url.startsWith("/health")) {
+        const indexPath = join(webDir, "index.html");
+        const html = await readFile(indexPath, "utf8");
+        return reply.type("text/html").send(html);
+      }
+      return reply.status(404).send({ error: "Not Found" });
+    });
+
+    console.log(`Serving web UI from ${webDir}`);
+  } else {
+    app.get("/", async () => ({
+      name: "jait-gateway",
+      version: VERSION,
+      status: "ok",
+    }));
+  }
 
   return app;
+}
+
+/** Resolve the directory containing the built web frontend. */
+function resolveWebDir(): string | null {
+  // 1. Explicit env override
+  if (process.env["JAIT_WEB_DIR"] && existsSync(process.env["JAIT_WEB_DIR"])) {
+    return process.env["JAIT_WEB_DIR"];
+  }
+  // 2. Probe known locations for @jait/web/dist
+  const candidates = [
+    // npm global install: node_modules/@jait/web/dist (relative to gateway dist/)
+    join(__dirname, "../../web/dist"),
+    // If @jait/web is hoisted into top-level node_modules
+    join(__dirname, "../../../@jait/web/dist"),
+    // Try require.resolve to find @jait/web regardless of hoist layout
+    (() => {
+      try {
+        // Resolve @jait/web package.json, then look for dist/ next to it
+        const webPkg = require.resolve("@jait/web/package.json", { paths: [__dirname, process.cwd()] });
+        return join(dirname(webPkg), "dist");
+      } catch { return null; }
+    })(),
+    // Monorepo dev layout
+    join(__dirname, "../../../../apps/web/dist"),
+    // Manual placement in CWD
+    join(process.cwd(), "web-dist"),
+  ].filter((c): c is string => c !== null);
+  for (const dir of candidates) {
+    if (existsSync(join(dir, "index.html"))) return dir;
+  }
+  return null;
 }

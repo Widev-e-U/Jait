@@ -45,6 +45,7 @@ export { createVoiceSpeakTool } from "./voice-tools.js";
 export { createAgentSpawnTool } from "./agent-tools.js";
 export { createThreadControlTool } from "./thread-tools.js";
 export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
+export { createRedeployTool } from "./redeploy-tools.js";
 export { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 export { McpManager, wrapMcpTool, registerMcpTools, unregisterMcpTools, type McpServerConfig, type McpConnection } from "./mcp-bridge.js";
 export { ToolName, type ToolNameValue } from "./tool-names.js";
@@ -138,6 +139,7 @@ import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
 import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
+import { createRedeployTool } from "./redeploy-tools.js";
 import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import type { VoiceService } from "../voice/service.js";
 import { type AppConfig, inferContextWindow } from "../config.js";
@@ -169,6 +171,8 @@ export interface ToolRegistryDeps {
   threadMcpConfig?: { host: string; port: number };
   threadService?: ThreadService;
   providerRegistry?: ProviderRegistry;
+  /** Graceful shutdown callback — needed by the redeploy tool */
+  shutdown?: () => Promise<void>;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -241,6 +245,16 @@ export function createToolRegistry(
         startedAt: deps.startedAt ?? Date.now(),
         scheduler: deps.scheduler,
         hooks: deps.hooks,
+      }),
+    );
+  }
+
+  // Self-update / redeploy tool
+  if (deps.config && deps.shutdown) {
+    tools.register(
+      createRedeployTool({
+        port: deps.config.port,
+        shutdown: deps.shutdown,
       }),
     );
   }

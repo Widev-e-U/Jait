@@ -157,14 +157,22 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # 3. Publish @jait/gateway (depends on shared + screen-share)
+      # 3. Publish @jait/web (pre-built frontend static files)
+      - name: Publish @jait/web
+        working-directory: apps/web
+        run: npm publish --access public || echo "Already published"
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      # 4. Publish @jait/gateway (depends on shared + screen-share + web)
       - name: Resolve workspace deps (gateway)
         working-directory: packages/gateway
         run: |
           SHARED_V=$(jq -r '.version' ../shared/package.json)
           SCREEN_V=$(jq -r '.version' ../screen-share/package.json)
-          jq --arg sv "^$SHARED_V" --arg scv "^$SCREEN_V" \
-            '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv' \
+          WEB_V=$(jq -r '.version' ../../apps/web/package.json)
+          jq --arg sv "^$SHARED_V" --arg scv "^$SCREEN_V" --arg wv "^$WEB_V" \
+            '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv | .dependencies["@jait/web"] = $wv' \
             package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/gateway
         working-directory: packages/gateway
