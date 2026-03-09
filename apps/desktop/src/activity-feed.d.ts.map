@@ -1,1 +1,0 @@
-{"version":3,"file":"activity-feed.d.ts","sourceRoot":"","sources":["activity-feed.ts"],"names":[],"mappings":"AAAA,OAAO,EAAuB,KAAK,aAAa,EAAE,KAAK,mBAAmB,EAAE,MAAM,iBAAiB,CAAC;AAEpG,qBAAa,mBAAmB;IAC9B,OAAO,CAAC,QAAQ,CAAC,MAAM,CAAuB;IAE9C,MAAM,CAAC,MAAM,EAAE,mBAAmB,EAAE,KAAK,EAAE,MAAM,EAAE,MAAM,EAAE,MAAM,GAAG,aAAa;IAMjF,IAAI,CAAC,KAAK,SAAM,GAAG,aAAa,EAAE;CAGnC"}
