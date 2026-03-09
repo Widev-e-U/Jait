@@ -7,7 +7,11 @@ COPY packages/shared/package.json packages/shared/
 COPY packages/api-client/package.json packages/api-client/
 COPY packages/screen-share/package.json packages/screen-share/
 COPY packages/gateway/package.json packages/gateway/
+COPY packages/cli/package.json packages/cli/
+COPY packages/ui-shared/package.json packages/ui-shared/
 COPY apps/web/package.json apps/web/
+COPY apps/desktop/package.json apps/desktop/
+COPY apps/mobile/package.json apps/mobile/
 RUN bun install --frozen-lockfile
 
 FROM base AS build
