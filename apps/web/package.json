@@ -1,6 +1,6 @@
 {
   "name": "@jait/web",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Jait web frontend — pre-built static files served by @jait/gateway",
   "type": "module",
   "files": [
@@ -14,7 +14,7 @@
   },
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit"
   },
