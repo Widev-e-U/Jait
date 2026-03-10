@@ -1,6 +1,9 @@
 import type { FastifyInstance } from "fastify";
-import { VERSION } from "@jait/shared";
+import { createRequire } from "node:module";
 import type { AppConfig } from "../config.js";
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require("../../package.json") as { version: string };
 
 const startedAt = Date.now();
 
@@ -10,7 +13,7 @@ export function registerHealthRoutes(
   deps?: { getDeviceCount?: () => number; getSchemaVersion?: () => number },
 ) {
   app.get("/health", async () => ({
-    version: VERSION,
+    version: PKG_VERSION,
     schemaVersion: deps?.getSchemaVersion?.() ?? 0,
     uptime: Math.floor((Date.now() - startedAt) / 1000),
     sessions: 0,

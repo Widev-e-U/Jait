@@ -7,7 +7,9 @@ import { readFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import type { AppConfig } from "./config.js";
-import { VERSION } from "@jait/shared";
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require("../package.json") as { version: string };
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import { registerChatRoutes } from "./routes/chat.js";
@@ -218,7 +220,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   } else {
     app.get("/", async () => ({
       name: "jait-gateway",
-      version: VERSION,
+      version: PKG_VERSION,
       status: "ok",
     }));
   }
