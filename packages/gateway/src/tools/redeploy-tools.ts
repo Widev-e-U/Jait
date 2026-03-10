@@ -8,13 +8,9 @@
  *   4. If healthy → spawn a fresh gateway on the original port (detached),
  *      kill the canary, then gracefully shut down the current process
  *   5. If unhealthy → kill the canary, report failure, stay running
- *
- * For Docker Swarm the tool triggers `docker service update --image ...`
- * which uses the stack's start-first rolling update policy.
  */
 
 import { execSync, spawn } from "node:child_process";
-import { existsSync } from "node:fs";
 import type { ToolDefinition, ToolResult, ToolContext } from "./contracts.js";
 
 interface RedeployInput {
@@ -60,12 +56,6 @@ export function createRedeployTool(deps: RedeployDeps): ToolDefinition<RedeployI
       const tag = input.version ?? "latest";
       const log = context.onOutputChunk ?? console.log;
 
-      // ── Detect runtime mode ─────────────────────────────────────
-      const isDocker = existsSync("/.dockerenv") || existsSync("/run/.containerenv");
-
-      if (isDocker) {
-        return dockerRedeploy(tag, log);
-      }
       return npmRedeploy(tag, input.skipCanary ?? false, deps, log);
     },
   };
@@ -176,44 +166,6 @@ async function npmRedeploy(
     ok: true,
     message: `Gateway updated ${oldVersion} → ${newVersion}. New process (PID ${fresh.pid}) is starting on port ${deps.port}. This instance is shutting down.`,
     data: { oldVersion, newVersion, pid: fresh.pid },
-  };
-}
-
-// ── Docker Swarm redeploy ────────────────────────────────────────────
-
-async function dockerRedeploy(
-  tag: string,
-  log: (msg: string) => void,
-): Promise<ToolResult> {
-  // Detect the service name from Docker labels or hostname
-  let serviceName = "jait_gateway";
-  try {
-    const hostname = execSync("hostname", { encoding: "utf8" }).trim();
-    // In Docker Swarm the hostname is usually the task slot ID,
-    // but DOCKER_SERVICE_NAME env or container labels may be present
-    serviceName = process.env["DOCKER_SERVICE_NAME"] ?? serviceName;
-    log(`Docker service: ${serviceName} (host: ${hostname})\n`);
-  } catch { /* ignore */ }
-
-  const image = `ghcr.io/jakobwl/jait-gateway:${tag}`;
-  log(`🐳 Triggering rolling update to ${image}...\n`);
-
-  try {
-    // The stack's update_config has order: start-first, so Docker will
-    // start the new container, health-check it, then stop the old one
-    execSync(
-      `docker service update --image ${image} --with-registry-auth ${serviceName}`,
-      { encoding: "utf8", timeout: 300_000, stdio: "pipe" },
-    );
-  } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
-    return { ok: false, message: `Docker service update failed: ${msg}` };
-  }
-
-  return {
-    ok: true,
-    message: `Rolling update to ${image} triggered. Docker Swarm will start-first, health-check, then drain the old container.`,
-    data: { image, serviceName },
   };
 }
 

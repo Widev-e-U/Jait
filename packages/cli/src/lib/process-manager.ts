@@ -21,11 +21,7 @@ const startDetached = (command: string, args: string[]): ChildProcess =>
     shell: false,
   });
 
-export const startServices = async (config: JaitConfig): Promise<JaitState> => {
-  if (config.serviceMode === "docker") {
-    throw new Error("Docker mode is not yet supported by start; use generated compose template.");
-  }
-
+export const startServices = async (_config: JaitConfig): Promise<JaitState> => {
   const gateway = startDetached("bun", ["run", "--filter", "@jait/gateway", "dev"]);
   gateway.unref();
 

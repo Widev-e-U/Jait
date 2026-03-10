@@ -1,7 +1,0 @@
-node_modules
-dist
-.git
-.env
-*.log
-src/backend/__pycache__
-src/backend/.venv

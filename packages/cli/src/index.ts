@@ -18,7 +18,6 @@ program
   .description("Interactive setup wizard")
   .option("--non-interactive", "Skip prompts and use defaults/options")
   .option("--llm-provider <provider>", "openai|ollama")
-  .option("--service-mode <mode>", "process|docker")
   .option("--gateway-port <port>")
   .option("--web-port <port>")
   .option("--ws-port <port>")

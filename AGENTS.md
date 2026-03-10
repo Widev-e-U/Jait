@@ -7,7 +7,6 @@ Jait is a Bun/TypeScript monorepo.
 - `packages/api-client`: typed client used by apps.
 - `apps/web`: Vite + React frontend.
 - `e2e`: Playwright end-to-end tests.
-- `docker/` + `docker-compose.yml`: container builds and local stack.
 
 Prefer placing new domain logic in `packages/*/src` and keeping UI concerns in `apps/web/src`.
 
@@ -39,7 +38,7 @@ Run from repository root unless noted.
 - Follow Conventional Commit style seen in history: `feat: ...`, `fix(gateway): ...`, `chore: ...`.
 - Keep commits focused and small; avoid mixing refactors with feature changes.
 - PRs should include: concise summary, linked issue (if any), test evidence, and screenshots/GIFs for UI changes.
-- Call out config or migration impacts explicitly (env vars, DB schema, Docker changes).
+- Call out config or migration impacts explicitly (env vars, DB schema changes).
 
 ## Security & Configuration Tips
 - Copy `.env.example` for local setup; never commit secrets.

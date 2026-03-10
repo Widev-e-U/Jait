@@ -9,6 +9,5 @@ export const createDefaultConfig = (): JaitConfig => ({
   turnEnabled: false,
   turnPort: 3478,
   dataDir: `${getJaitHome()}/data`,
-  serviceMode: "process",
   createdAt: new Date().toISOString(),
 });

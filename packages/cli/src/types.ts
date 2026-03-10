@@ -1,5 +1,3 @@
-export type ServiceMode = "process" | "docker";
-
 export interface JaitConfig {
   llmProvider: "openai" | "ollama";
   gatewayPort: number;
@@ -8,7 +6,6 @@ export interface JaitConfig {
   turnEnabled: boolean;
   turnPort: number;
   dataDir: string;
-  serviceMode: ServiceMode;
   createdAt: string;
 }
 

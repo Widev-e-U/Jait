@@ -194,7 +194,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   // ── Serve the web frontend (SPA) if the built files exist ────────
   // Probe paths in order: JAIT_WEB_DIR env, co-located ../web/dist
-  // (npm global install or Docker), monorepo apps/web/dist (dev)
+  // (npm global install), monorepo apps/web/dist (dev)
   const webDir = resolveWebDir();
   if (webDir) {
     await app.register(fastifyStatic, {

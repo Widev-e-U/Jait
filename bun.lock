@@ -13,7 +13,7 @@
     },
     "apps/desktop": {
       "name": "@jait/desktop",
-      "version": "0.1.1",
+      "version": "0.1.5",
       "dependencies": {
         "@jait/api-client": "workspace:*",
         "@jait/shared": "workspace:*",
@@ -28,7 +28,7 @@
     },
     "apps/mobile": {
       "name": "@jait/mobile",
-      "version": "0.1.1",
+      "version": "0.1.5",
       "dependencies": {
         "@capacitor/core": "^6.2.0",
         "@capacitor/filesystem": "^6.0.0",
@@ -58,7 +58,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.1",
+      "version": "0.1.7",
       "dependencies": {
         "@capacitor/filesystem": "^6.0.0",
         "@jait/api-client": "workspace:*",
@@ -110,7 +110,7 @@
     },
     "packages/api-client": {
       "name": "@jait/api-client",
-      "version": "0.1.1",
+      "version": "0.1.5",
       "dependencies": {
         "@jait/shared": "workspace:*",
       },
@@ -120,7 +120,7 @@
     },
     "packages/cli": {
       "name": "@jait/cli",
-      "version": "0.1.1",
+      "version": "0.1.5",
       "bin": {
         "jait": "dist/index.js",
       },
@@ -134,7 +134,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.1",
+      "version": "0.1.7",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -146,7 +146,7 @@
         "@jait/screen-share": "workspace:*",
         "@jait/shared": "workspace:*",
         "@jait/web": "workspace:*",
-        "better-sqlite3": "^11.0.0",
+        "better-sqlite3": "^12.6.2",
         "dotenv": "^16.4.0",
         "drizzle-orm": "^0.45.1",
         "fastify": "^5.2.0",
@@ -166,7 +166,7 @@
     },
     "packages/screen-share": {
       "name": "@jait/screen-share",
-      "version": "0.1.1",
+      "version": "0.1.7",
       "dependencies": {
         "@jait/shared": "workspace:*",
       },
@@ -177,7 +177,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.1",
+      "version": "0.1.7",
       "dependencies": {
         "zod": "^3.24.0",
       },
@@ -187,7 +187,7 @@
     },
     "packages/ui-shared": {
       "name": "@jait/ui-shared",
-      "version": "0.1.0",
+      "version": "0.1.5",
       "devDependencies": {
         "typescript": "^5.7.3",
       },
@@ -3749,8 +3749,6 @@
     "@isaacs/cliui/strip-ansi": ["strip-ansi@7.2.0", "", { "dependencies": { "ansi-regex": "^6.2.2" } }, "sha512-yDPMNjp4WyfYBkHnjIRLfca1i6KMyGCtsVgoKe/z1+6vukgaENdgGBZt+ZmKPc4gavvEZ5OgHfHdrazhgNyG7w=="],
 
     "@isaacs/cliui/wrap-ansi": ["wrap-ansi@8.1.0", "", { "dependencies": { "ansi-styles": "^6.1.0", "string-width": "^5.0.1", "strip-ansi": "^7.0.1" } }, "sha512-si7QWI6zUMq56bESFvagtmzMdGOtoxfR+Sez11Mobfc7tm+VkUckk9bW2UeffTGVUbOksxmSw0AA2gs8g71NCQ=="],
-
-    "@jait/gateway/better-sqlite3": ["better-sqlite3@11.10.0", "", { "dependencies": { "bindings": "^1.5.0", "prebuild-install": "^7.1.1" } }, "sha512-EwhOpyXiOEL/lKzHz9AW1msWFNzGc/z+LzeB3/jnFJpxu+th2yqvzsSWas1v9jgs9+xiXJcD5A8CJxAG2TaghQ=="],
 
     "@jait/screen-share/@types/bun": ["@types/bun@1.3.10", "", { "dependencies": { "bun-types": "1.3.10" } }, "sha512-0+rlrUrOrTSskibryHbvQkDOWRJwJZqZlxrUs1u4oOoTln8+WIXBPmAuCF35SWB2z4Zl3E84Nl/D0P7803nigQ=="],
 

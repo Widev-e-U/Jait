@@ -41,7 +41,7 @@
     "@jait/screen-share": "workspace:*",
     "@jait/shared": "workspace:*",
     "@jait/web": "workspace:*",
-    "better-sqlite3": "^11.0.0",
+    "better-sqlite3": "^12.6.2",
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.45.1",
     "fastify": "^5.2.0",
