@@ -15,6 +15,9 @@
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { existsSync, readFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join } from "node:path";
 import readline from "node:readline";
 import { uuidv7 } from "../lib/uuidv7.js";
 import type {
@@ -84,21 +87,60 @@ export class CodexProvider implements CliProviderAdapter {
 
   async checkAvailability(): Promise<boolean> {
     try {
+      // ── Step 1: Check if binary is installed ──
       const paths = ["codex", "npx codex"];
+      let found = false;
       for (const cmd of paths) {
         const available = await this.testCommand(cmd);
         if (available) {
           this.codexPath = cmd;
-          this.info.available = true;
-          return true;
+          found = true;
+          break;
         }
       }
-      this.info.available = false;
-      this.info.unavailableReason = "Codex CLI not found. Install with: npm install -g @openai/codex";
-      return false;
+      if (!found) {
+        this.info.available = false;
+        this.info.unavailableReason = "Codex CLI not installed. Install with: npm install -g @openai/codex";
+        return false;
+      }
+
+      // ── Step 2: Check if authenticated ──
+      const hasApiKey = !!process.env.OPENAI_API_KEY;
+      const hasOAuthTokens = this.checkCodexAuthFile();
+      if (!hasApiKey && !hasOAuthTokens) {
+        this.info.available = false;
+        this.info.unavailableReason = "Codex not authenticated. Run: codex login";
+        return false;
+      }
+
+      this.info.available = true;
+      this.info.unavailableReason = undefined;
+      return true;
     } catch {
       this.info.available = false;
       this.info.unavailableReason = "Failed to check Codex CLI availability";
+      return false;
+    }
+  }
+
+  /**
+   * Check if ~/.codex/auth.json (or CODEX_HOME/auth.json) contains OAuth tokens.
+   */
+  private checkCodexAuthFile(): boolean {
+    try {
+      const codexHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
+      const authPath = join(codexHome, "auth.json");
+      if (!existsSync(authPath)) return false;
+      const raw = readFileSync(authPath, "utf-8");
+      const auth = JSON.parse(raw) as {
+        OPENAI_API_KEY?: string | null;
+        tokens?: { access_token?: string | null };
+      };
+      // Has an API key stored in auth.json, or has OAuth tokens
+      if (auth.OPENAI_API_KEY) return true;
+      if (auth.tokens?.access_token) return true;
+      return false;
+    } catch {
       return false;
     }
   }
