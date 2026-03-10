@@ -45,9 +45,11 @@ interface FolderPickerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
   onSelect: (path: string) => void
+  /** When true, only browse the gateway's filesystem (no device selector). */
+  gatewayOnly?: boolean
 }
 
-export function FolderPickerDialog({ open, onOpenChange, onSelect }: FolderPickerDialogProps) {
+export function FolderPickerDialog({ open, onOpenChange, onSelect, gatewayOnly }: FolderPickerDialogProps) {
   const [currentPath, setCurrentPath] = useState<string | null>(null)
   const [parentPath, setParentPath] = useState<string | null>(null)
   const [entries, setEntries] = useState<FsBrowseEntry[]>([])
@@ -64,8 +66,14 @@ export function FolderPickerDialog({ open, onOpenChange, onSelect }: FolderPicke
   // Load nodes + roots on first open
   useEffect(() => {
     if (!open) return
+    if (gatewayOnly) {
+      // Skip node discovery — go straight to gateway roots
+      setSelectedNodeId('gateway')
+      void loadRoots('gateway')
+      return
+    }
     void loadNodes()
-  }, [open])
+  }, [open, gatewayOnly])
 
   const loadNodes = useCallback(async () => {
     try {
@@ -174,7 +182,7 @@ export function FolderPickerDialog({ open, onOpenChange, onSelect }: FolderPicke
         </DialogHeader>
 
         {/* Device / node selector */}
-        {nodes.length > 1 && (
+        {!gatewayOnly && nodes.length > 1 && (
           <div className="flex items-center gap-1 px-3 py-1.5 border-b bg-muted/20 overflow-x-auto">
             {nodes.map(node => (
               <button

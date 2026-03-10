@@ -29,6 +29,7 @@ import {
   XCircle,
   Circle,
   AlertCircle,
+  Server,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -76,7 +77,7 @@ import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
 import { Badge } from '@/components/ui/badge'
-import { getApiUrl } from '@/lib/gateway-url'
+import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 
 const API_URL = getApiUrl()
 
@@ -175,6 +176,13 @@ function App() {
   const [registerPassword, setRegisterPassword] = useState('')
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
+  const [gatewayUrlInput, setGatewayUrlInput] = useState(() => getStoredGatewayUrl() ?? '')
+  const isStandaloneApp = !!(window as any).jaitDesktop || !!(window as any).Capacitor
+  const [gatewayStep, setGatewayStep] = useState<'url' | 'auth'>(() =>
+    isStandaloneApp && !isGatewayConfigured() ? 'url' : 'auth'
+  )
+  const [gatewayChecking, setGatewayChecking] = useState(false)
+  const [gatewayError, setGatewayError] = useState<string | null>(null)
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
   const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
   const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string }[]>([])
@@ -1094,6 +1102,37 @@ ${file.content.slice(0, 2000)}
       setAuthError(err instanceof Error ? err.message : 'Registration failed')
     }
   }
+
+  const checkGatewayHealth = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault()
+    const url = gatewayUrlInput.trim()
+    if (!url) { setGatewayError('Please enter a gateway URL'); return }
+    setGatewayChecking(true)
+    setGatewayError(null)
+    try {
+      const clean = url.replace(/\/+$/, '')
+      const res = await fetch(`${clean}/health`, { signal: AbortSignal.timeout(5000) })
+      if (!res.ok) throw new Error(`Server returned ${res.status}`)
+      const currentUrl = getApiUrl()
+      setStoredGatewayUrl(clean)
+      if (clean !== currentUrl) {
+        // URL changed — reload so all modules pick up the new gateway
+        window.location.reload()
+        return
+      }
+      setGatewayStep('auth')
+    } catch (err) {
+      setGatewayError(
+        err instanceof Error
+          ? err.name === 'TimeoutError' || err.name === 'AbortError'
+            ? 'Connection timed out'
+            : err.message
+          : 'Failed to connect',
+      )
+    } finally {
+      setGatewayChecking(false)
+    }
+  }, [gatewayUrlInput])
 
   const handleLogout = () => {
     logout()
@@ -2156,88 +2195,147 @@ ${file.content.slice(0, 2000)}
 
         <Dialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
           <DialogContent className="sm:max-w-md">
-            <DialogHeader>
-              <DialogTitle>Account</DialogTitle>
-              <DialogDescription>
-                Sign in with a username and password.
-              </DialogDescription>
-            </DialogHeader>
-            <Tabs value={authTab} onValueChange={(value) => setAuthTab(value as 'login' | 'register')}>
-              <TabsList className="grid grid-cols-2 w-full">
-                <TabsTrigger value="login">Login</TabsTrigger>
-                <TabsTrigger value="register">Register</TabsTrigger>
-              </TabsList>
-              <TabsContent value="login" className="pt-4">
-                <form className="space-y-4" onSubmit={handleLogin}>
+            {gatewayStep === 'url' ? (
+              <>
+                <DialogHeader>
+                  <DialogTitle className="flex items-center gap-2">
+                    <Server className="h-5 w-5" />
+                    Connect to Gateway
+                  </DialogTitle>
+                  <DialogDescription>
+                    Enter your Jait gateway URL to get started.
+                  </DialogDescription>
+                </DialogHeader>
+                <form onSubmit={checkGatewayHealth} className="space-y-4 pt-2">
                   <div className="space-y-1.5">
-                    <Label htmlFor="login-username">Username</Label>
+                    <Label htmlFor="gateway-url">Gateway URL</Label>
                     <Input
-                      id="login-username"
-                      value={loginUsername}
-                      onChange={(event) => setLoginUsername(event.target.value)}
-                      autoComplete="username"
-                      required
+                      id="gateway-url"
+                      placeholder="https://jait.example.com"
+                      value={gatewayUrlInput}
+                      onChange={(e) => { setGatewayUrlInput(e.target.value); setGatewayError(null) }}
+                      autoFocus
                     />
                   </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="login-password">Password</Label>
-                    <Input
-                      id="login-password"
-                      type="password"
-                      value={loginPassword}
-                      onChange={(event) => setLoginPassword(event.target.value)}
-                      autoComplete="current-password"
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full">Login</Button>
+                  {gatewayError && (
+                    <div className="flex items-center gap-2 text-sm text-destructive">
+                      <XCircle className="h-4 w-4 shrink-0" />
+                      {gatewayError}
+                    </div>
+                  )}
+                  <Button type="submit" className="w-full" disabled={gatewayChecking}>
+                    {gatewayChecking ? (
+                      <>
+                        <SpinnerIcon className="h-4 w-4 mr-2 animate-spin" />
+                        Connecting…
+                      </>
+                    ) : (
+                      'Connect'
+                    )}
+                  </Button>
                 </form>
-              </TabsContent>
-              <TabsContent value="register" className="pt-4">
-                <form className="space-y-4" onSubmit={handleRegister}>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="register-username">Username</Label>
-                    <Input
-                      id="register-username"
-                      value={registerUsername}
-                      onChange={(event) => setRegisterUsername(event.target.value)}
-                      autoComplete="username"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="register-password">Password</Label>
-                    <Input
-                      id="register-password"
-                      type="password"
-                      value={registerPassword}
-                      onChange={(event) => setRegisterPassword(event.target.value)}
-                      autoComplete="new-password"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-1.5">
-                    <Label htmlFor="register-password-confirm">Confirm password</Label>
-                    <Input
-                      id="register-password-confirm"
-                      type="password"
-                      value={registerPasswordConfirm}
-                      onChange={(event) => setRegisterPasswordConfirm(event.target.value)}
-                      autoComplete="new-password"
-                      required
-                    />
-                  </div>
-                  <Button type="submit" className="w-full">Create account</Button>
-                </form>
-              </TabsContent>
-            </Tabs>
-            {authError && <p className="text-sm text-destructive">{authError}</p>}
+              </>
+            ) : (
+              <>
+                <DialogHeader>
+                  <DialogTitle>Account</DialogTitle>
+                  <DialogDescription asChild>
+                    {isStandaloneApp ? (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <Server className="h-3 w-3 text-green-500" />
+                        <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{API_URL}</code>
+                        <button
+                          type="button"
+                          className="text-xs text-primary underline underline-offset-2 hover:opacity-80"
+                          onClick={() => setGatewayStep('url')}
+                        >
+                          Change
+                        </button>
+                      </div>
+                    ) : (
+                      <p>Sign in with a username and password.</p>
+                    )}
+                  </DialogDescription>
+                </DialogHeader>
+                <Tabs value={authTab} onValueChange={(value) => setAuthTab(value as 'login' | 'register')}>
+                  <TabsList className="grid grid-cols-2 w-full">
+                    <TabsTrigger value="login">Login</TabsTrigger>
+                    <TabsTrigger value="register">Register</TabsTrigger>
+                  </TabsList>
+                  <TabsContent value="login" className="pt-4">
+                    <form className="space-y-4" onSubmit={handleLogin}>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="login-username">Username</Label>
+                        <Input
+                          id="login-username"
+                          value={loginUsername}
+                          onChange={(event) => setLoginUsername(event.target.value)}
+                          autoComplete="username"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="login-password">Password</Label>
+                        <Input
+                          id="login-password"
+                          type="password"
+                          value={loginPassword}
+                          onChange={(event) => setLoginPassword(event.target.value)}
+                          autoComplete="current-password"
+                          required
+                        />
+                      </div>
+                      <Button type="submit" className="w-full">Login</Button>
+                    </form>
+                  </TabsContent>
+                  <TabsContent value="register" className="pt-4">
+                    <form className="space-y-4" onSubmit={handleRegister}>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="register-username">Username</Label>
+                        <Input
+                          id="register-username"
+                          value={registerUsername}
+                          onChange={(event) => setRegisterUsername(event.target.value)}
+                          autoComplete="username"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="register-password">Password</Label>
+                        <Input
+                          id="register-password"
+                          type="password"
+                          value={registerPassword}
+                          onChange={(event) => setRegisterPassword(event.target.value)}
+                          autoComplete="new-password"
+                          required
+                        />
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label htmlFor="register-password-confirm">Confirm password</Label>
+                        <Input
+                          id="register-password-confirm"
+                          type="password"
+                          value={registerPasswordConfirm}
+                          onChange={(event) => setRegisterPasswordConfirm(event.target.value)}
+                          autoComplete="new-password"
+                          required
+                        />
+                      </div>
+                      <Button type="submit" className="w-full">Create account</Button>
+                    </form>
+                  </TabsContent>
+                </Tabs>
+                {authError && <p className="text-sm text-destructive">{authError}</p>}
+              </>
+            )}
           </DialogContent>
         </Dialog>
 
         <FolderPickerDialog
           open={folderPickerOpen}
           onOpenChange={setFolderPickerOpen}
+          gatewayOnly
           onSelect={(path) => {
             void openRemoteWorkspaceOnGateway(path).catch((err) => {
               console.error('Failed to open workspace:', err)
@@ -2250,6 +2348,7 @@ ${file.content.slice(0, 2000)}
         <FolderPickerDialog
           open={automation.folderPickerOpen}
           onOpenChange={automation.setFolderPickerOpen}
+          gatewayOnly
           onSelect={(path) => { void automation.handleFolderSelected(path) }}
         />
       </div>

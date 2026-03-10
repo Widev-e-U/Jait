@@ -12,9 +12,17 @@ const allowedIpcChannels = require("./preload-allow-list.cjs");
 import electron = require("electron");
 const { contextBridge, ipcRenderer } = electron;
 
+// Read gateway URL synchronously from the main process command-line args.
+// electron-main.ts passes it as --gateway-url=<url> for synchronous access.
+const gatewayUrlArg = process.argv.find((a: string) => a.startsWith("--gateway-url="));
+const syncGatewayUrl = gatewayUrlArg ? gatewayUrlArg.split("=").slice(1).join("=") : undefined;
+
 // Expose safe API to the renderer process
 contextBridge.exposeInMainWorld("jaitDesktop", {
-  /** Get desktop info (platform, arch, gateway URL) */
+  /** Synchronous gateway URL — available immediately at page load */
+  gatewayUrl: syncGatewayUrl,
+
+  /** Get desktop info (platform, arch, gateway URL) — async */
   getInfo: () => ipcRenderer.invoke(allowedIpcChannels.invoke[0]),
 
   /** Get available screen/window sources for screen sharing */

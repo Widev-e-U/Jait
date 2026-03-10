@@ -258,6 +258,12 @@ export class CodexProvider implements CliProviderAdapter {
 
     const rl = readline.createInterface({ input: child.stdout! });
 
+    // Collect stderr for diagnostics if startup fails
+    const stderrChunks: string[] = [];
+    child.stderr?.on("data", (data: Buffer) => {
+      stderrChunks.push(data.toString());
+    });
+
     const session: ProviderSession = {
       id: sessionId,
       providerId: "codex",
@@ -281,11 +287,11 @@ export class CodexProvider implements CliProviderAdapter {
     this.attachListeners(state);
 
     try {
-      // ── Step 1: initialize handshake ──
+      // ── Step 1: initialize handshake (45s — codex can be slow to start) ──
       await this.sendRequest(state, "initialize", {
         clientInfo: { name: "jait", title: "Jait Gateway", version: "1.0.0" },
         capabilities: { experimentalApi: true },
-      });
+      }, 45_000);
 
       // ── Step 2: initialized notification (no response expected) ──
       this.writeMessage(state, { method: "initialized" });
@@ -310,7 +316,12 @@ export class CodexProvider implements CliProviderAdapter {
       return session;
     } catch (error) {
       state.session.status = "error";
-      state.session.error = error instanceof Error ? error.message : "Failed to start Codex session";
+      const baseMsg = error instanceof Error ? error.message : "Failed to start Codex session";
+      const stderr = stderrChunks.join("").trim();
+      state.session.error = stderr
+        ? `${baseMsg}\n--- stderr ---\n${stderr.slice(0, 2000)}`
+        : baseMsg;
+      console.error(`[codex:${sessionId}] startSession failed: ${state.session.error}`);
       this.emit({ type: "session.error", sessionId, error: state.session.error });
       this.stopSession(sessionId);
       throw error;

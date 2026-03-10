@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { getApiUrl } from '@/lib/gateway-url'
 
 interface ModelInfo {
   provider: string | null
@@ -15,7 +16,7 @@ export function useModelInfo(): ModelInfo {
 
   useEffect(() => {
     let cancelled = false
-    fetch('/health')
+    fetch(`${getApiUrl()}/health`)
       .then(res => res.json())
       .then(data => {
         if (cancelled) return

@@ -69,8 +69,8 @@ export function getApiUrl(): string {
   const stored = getStoredGatewayUrl()
   if (stored) return stripTrailingSlash(stored)
 
-  // Electron desktop bridge
-  const desktop = (window as any).jaitDesktop?.getInfo?.()?.gatewayUrl as string | undefined
+  // Electron desktop bridge — synchronous property set by preload
+  const desktop = (window as any).jaitDesktop?.gatewayUrl as string | undefined
   if (desktop) return stripTrailingSlash(desktop)
 
   // Build-time env (Vite)
@@ -92,6 +92,21 @@ export function getWsUrl(): string {
 
   const apiUrl = getApiUrl()
   return stripTrailingSlash(httpToWs(apiUrl))
+}
+
+// ── State helpers ────────────────────────────────────────────────────
+
+/**
+ * Returns true when the gateway URL has been explicitly configured
+ * (via localStorage, Electron bridge, or build-time env).
+ * When false, the URL is just a fallback guess (e.g. window.location.origin)
+ * and API calls should be deferred until the user sets a URL.
+ */
+export function isGatewayConfigured(): boolean {
+  if (getStoredGatewayUrl()) return true
+  if ((window as any).jaitDesktop?.gatewayUrl) return true
+  if (import.meta.env.VITE_API_URL) return true
+  return false
 }
 
 // ── Convenience constants (snapshot at import time — prefer getters) ─
