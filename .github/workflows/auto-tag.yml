@@ -1,0 +1,56 @@
+name: Auto-tag on version bump
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - packages/gateway/package.json
+
+jobs:
+  tag:
+    name: Create git tag if version changed
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2          # need previous commit for diff
+
+      - name: Detect version change
+        id: version
+        run: |
+          NEW_VERSION=$(jq -r '.version' packages/gateway/package.json)
+          OLD_VERSION=$(git show HEAD~1:packages/gateway/package.json 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
+
+          echo "old=$OLD_VERSION"
+          echo "new=$NEW_VERSION"
+
+          if [ "$NEW_VERSION" != "$OLD_VERSION" ] && [ -n "$NEW_VERSION" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check tag doesn't already exist
+        if: steps.version.outputs.changed == 'true'
+        id: check
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists — skipping"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push tag
+        if: steps.version.outputs.changed == 'true' && steps.check.outputs.exists == 'false'
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "✅ Tagged $TAG — this will trigger the Release workflow"
