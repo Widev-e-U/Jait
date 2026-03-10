@@ -139,6 +139,17 @@ function buildUnit({ port, host, envPath } = {}) {
 
   const execStart = execArgs.join(" ");
 
+  // Build a PATH that includes common global-bin locations so that
+  // redeploy can find npm/node/jait, and codex can be discovered.
+  const home = homedir();
+  const extraPaths = [
+    join(home, ".local", "bin"),
+    join(home, ".npm-global", "bin"),
+    "/usr/local/bin",
+    "/usr/bin",
+    "/bin",
+  ].join(":");
+
   return `[Unit]
 Description=Jait AI Gateway
 After=network-online.target
@@ -146,6 +157,8 @@ Wants=network-online.target
 
 [Service]
 ExecStart=${execStart}
+Environment=PATH=${extraPaths}
+Environment=JAIT_UNIT=${SERVICE_NAME}
 Restart=always
 RestartSec=5
 KillMode=process

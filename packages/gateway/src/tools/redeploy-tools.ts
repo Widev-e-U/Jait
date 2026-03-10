@@ -1,13 +1,21 @@
 /**
  * gateway.redeploy — Self-update tool for the Jait gateway.
  *
- * Flow (blue-green for bare process, i.e. `npm install -g @jait/gateway`):
- *   1. Pull the latest version:  npm install -g @jait/gateway@latest
- *   2. Spawn a canary on PORT+1 to verify the new code boots correctly
- *   3. Health-check the canary
- *   4. If healthy → spawn a fresh gateway on the original port (detached),
- *      kill the canary, then gracefully shut down the current process
- *   5. If unhealthy → kill the canary, report failure, stay running
+ * Detects the runtime environment and uses the appropriate strategy:
+ *
+ * **systemd** (detected when INVOCATION_ID is set):
+ *   1. npm install -g @jait/gateway@latest
+ *   2. Spawn canary on PORT+1, health-check it
+ *   3. If healthy → kill canary, exit process.
+ *      systemd's Restart=always automatically brings up the new version.
+ *   4. If unhealthy → kill canary, report failure, stay running.
+ *
+ * **Bare process** (no service manager):
+ *   1. npm install -g @jait/gateway@latest
+ *   2. Spawn canary on PORT+1, health-check it
+ *   3. If healthy → spawn fresh gateway on original port (detached),
+ *      kill canary, then gracefully shut down current process.
+ *   4. If unhealthy → kill canary, report failure, stay running.
  */
 
 import { execSync, spawn } from "node:child_process";
@@ -33,7 +41,8 @@ export function createRedeployTool(deps: RedeployDeps): ToolDefinition<RedeployI
     description:
       "Self-update the Jait gateway. Pulls the latest version via npm, " +
       "verifies it in a canary process, then performs a zero-downtime " +
-      "switchover. The current process shuts down after the new one is confirmed healthy. " +
+      "switchover. Under systemd, uses `systemctl restart` for a clean " +
+      "handoff. Otherwise spawns a detached replacement process. " +
       "This tool requires human consent.",
     tier: "standard",
     category: "gateway",
@@ -61,7 +70,20 @@ export function createRedeployTool(deps: RedeployDeps): ToolDefinition<RedeployI
   };
 }
 
-// ── npm (bare process) redeploy ──────────────────────────────────────
+// ── Environment detection ────────────────────────────────────────────
+
+/** Returns true when the current process was started by systemd. */
+function isSystemd(): boolean {
+  return !!process.env.INVOCATION_ID;
+}
+
+/** Try to resolve the systemd unit name that manages us. */
+function systemdUnit(): string {
+  // The daemon installer writes this, but fall back to the well-known name.
+  return process.env.JAIT_UNIT ?? "jait-gateway";
+}
+
+// ── Core redeploy logic ─────────────────────────────────────────────
 
 async function npmRedeploy(
   tag: string,
@@ -71,21 +93,18 @@ async function npmRedeploy(
 ): Promise<ToolResult> {
   const pkg = `@jait/gateway@${tag}`;
 
-  // 1. Get current version before updating
+  // ── 1. Capture current version ────────────────────────────────────
   let oldVersion = "unknown";
   try {
-    const pkgJson = JSON.parse(
-      execSync("node -e \"process.stdout.write(require('@jait/gateway/package.json').version)\"", {
-        encoding: "utf8",
-        timeout: 10_000,
-      }),
+    oldVersion = execSync(
+      "node -e \"process.stdout.write(require('@jait/gateway/package.json').version)\"",
+      { encoding: "utf8", timeout: 10_000 },
     );
-    oldVersion = pkgJson;
   } catch {
     // non-critical
   }
 
-  // 2. Install the latest version
+  // ── 2. Install the new version ────────────────────────────────────
   log(`⬇ Installing ${pkg}...\n`);
   try {
     execSync(`npm install -g ${pkg}`, {
@@ -98,7 +117,7 @@ async function npmRedeploy(
     return { ok: false, message: `npm install failed: ${msg}` };
   }
 
-  // 3. Read new version
+  // ── 3. Read new version ───────────────────────────────────────────
   let newVersion = "unknown";
   try {
     newVersion = execSync(
@@ -111,8 +130,8 @@ async function npmRedeploy(
 
   log(`✓ Installed @jait/gateway ${newVersion} (was ${oldVersion})\n`);
 
+  // ── 4. Canary health check ────────────────────────────────────────
   if (!skipCanary) {
-    // 4. Canary — start the new version on PORT+1
     const canaryPort = deps.port + 1;
     log(`🐤 Starting canary on port ${canaryPort}...\n`);
 
@@ -123,28 +142,89 @@ async function npmRedeploy(
     });
     canary.unref();
 
-    // 5. Wait for canary health (up to 30s)
     const healthy = await waitForHealth(`http://127.0.0.1:${canaryPort}`, 30_000);
 
     if (!healthy) {
-      // Kill canary and abort
       try { process.kill(-canary.pid!, "SIGTERM"); } catch { /* ignore */ }
       return {
         ok: false,
-        message: `Canary failed health check on port ${canaryPort}. Update installed but NOT activated. Current gateway is still running.`,
+        message:
+          `Canary failed health check on port ${canaryPort}. ` +
+          `Update installed but NOT activated. Current gateway is still running.`,
         data: { oldVersion, newVersion, canaryPort },
       };
     }
 
     log(`✓ Canary healthy on port ${canaryPort}\n`);
-
-    // 6. Kill the canary (it was just a test)
     try { process.kill(-canary.pid!, "SIGTERM"); } catch { /* ignore */ }
-    // Brief wait for port release
     await sleep(1_000);
   }
 
-  // 7. Spawn the new gateway on the original port (detached, survives parent exit)
+  // ── 5. Switchover ─────────────────────────────────────────────────
+
+  if (isSystemd()) {
+    return systemdSwitchover(oldVersion, newVersion, deps, log);
+  }
+  return bareProcessSwitchover(oldVersion, newVersion, deps, log);
+}
+
+// ── systemd switchover ──────────────────────────────────────────────
+
+/**
+ * Under systemd: we just exit and let Restart=always bring the new
+ * binary back up automatically.  A `systemctl restart` is cleaner
+ * because it waits for the old process to fully stop before starting
+ * the new one — no port conflicts.
+ */
+async function systemdSwitchover(
+  oldVersion: string,
+  newVersion: string,
+  deps: RedeployDeps,
+  log: (msg: string) => void,
+): Promise<ToolResult> {
+  const unit = systemdUnit();
+  log(`🔄 Restarting via systemd (${unit})...\n`);
+
+  // Schedule the restart *after* we return the tool result, so the
+  // HTTP response has time to flush.
+  setTimeout(() => {
+    try {
+      // `systemctl --user restart` replaces the process; exec in
+      // background because we're the process being restarted.
+      const child = spawn("systemctl", ["--user", "restart", unit], {
+        stdio: "ignore",
+        detached: true,
+      });
+      child.unref();
+    } catch {
+      // If systemctl fails, fall back to a plain exit so Restart=always
+      // can still pick us up.
+      deps.shutdown().catch(() => process.exit(0));
+    }
+  }, 500);
+
+  return {
+    ok: true,
+    message:
+      `Gateway updated ${oldVersion} → ${newVersion}. ` +
+      `Restarting via systemd unit "${unit}". ` +
+      `The new version will be live in a few seconds.`,
+    data: { oldVersion, newVersion, strategy: "systemd", unit },
+  };
+}
+
+// ── Bare-process switchover ─────────────────────────────────────────
+
+/**
+ * Without a service manager: spawn a fresh `jait` process on the
+ * original port (detached so it survives), then shut ourselves down.
+ */
+async function bareProcessSwitchover(
+  oldVersion: string,
+  newVersion: string,
+  deps: RedeployDeps,
+  log: (msg: string) => void,
+): Promise<ToolResult> {
   log(`🔄 Spawning new gateway on port ${deps.port}...\n`);
 
   const fresh = spawn("jait", ["--port", String(deps.port)], {
@@ -154,7 +234,6 @@ async function npmRedeploy(
   });
   fresh.unref();
 
-  // 8. Shut down the current process
   log(`✓ New gateway spawned (PID ${fresh.pid}). Shutting down current process...\n`);
 
   // Give the response time to be sent before shutdown
@@ -164,8 +243,11 @@ async function npmRedeploy(
 
   return {
     ok: true,
-    message: `Gateway updated ${oldVersion} → ${newVersion}. New process (PID ${fresh.pid}) is starting on port ${deps.port}. This instance is shutting down.`,
-    data: { oldVersion, newVersion, pid: fresh.pid },
+    message:
+      `Gateway updated ${oldVersion} → ${newVersion}. ` +
+      `New process (PID ${fresh.pid}) is starting on port ${deps.port}. ` +
+      `This instance is shutting down.`,
+    data: { oldVersion, newVersion, pid: fresh.pid, strategy: "bare" },
   };
 }
 
