@@ -552,11 +552,14 @@ export function registerChatRoutes(
         : config.contextWindow,
     };
 
-    // Set SSE headers
+    // Set SSE headers (include CORS — reply.raw bypasses @fastify/cors)
+    const reqOrigin = request.headers.origin ?? "*";
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      "Access-Control-Allow-Origin": reqOrigin,
+      "Access-Control-Allow-Credentials": "true",
     });
 
     // Build model endpoint for prompt resolution
@@ -1241,10 +1244,13 @@ export function registerChatRoutes(
     const query = request.query as { limit?: number | string };
     const limit = parseMessageLimit(query?.limit);
 
+    const reqOrigin = request.headers.origin ?? "*";
     reply.raw.writeHead(200, {
       "Content-Type": "text/event-stream",
       "Cache-Control": "no-cache",
       Connection: "keep-alive",
+      "Access-Control-Allow-Origin": reqOrigin,
+      "Access-Control-Allow-Credentials": "true",
     });
 
     hydrateSession(sessionId);
