@@ -41,14 +41,18 @@ Run from repository root unless noted.
 - Call out config or migration impacts explicitly (env vars, DB schema changes).
 
 ## Release & Deployment
-The monorepo uses an automated release pipeline driven by a single version bump:
-1. Bump `"version"` in `packages/gateway/package.json` and push to `main`.
-2. `.github/workflows/auto-tag.yml` detects the change and creates a `v<version>` git tag.
-3. `.github/workflows/release.yml` triggers on the `v*` tag and runs:
+The monorepo uses an automated release pipeline driven by a single version bump.
+Everything lives in `.github/workflows/release.yml`:
+
+1. Bump `"version"` in `packages/gateway/package.json` (and sub-packages if their code changed) and push to `main`.
+2. The `auto-tag` job in `release.yml` detects the version change and creates a `v<version>` git tag.
+3. In the same workflow run, downstream jobs execute:
    - npm publish for `@jait/shared`, `@jait/screen-share`, `@jait/web`, `@jait/gateway` (in dependency order, skipping already-published versions).
    - Desktop builds (Windows, macOS, Linux) and Android APK.
    - GitHub Release with all artifacts attached.
 4. `.github/workflows/ci.yml` runs lint, typecheck, test, and Docker builds on every push/PR.
+
+The workflow can also be triggered by pushing a `v*` tag directly or via `workflow_dispatch`.
 
 **No manual `git tag` or `npm publish` is needed.** The gateway `package.json` version is the single source of truth for release versions.
 

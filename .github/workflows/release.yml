@@ -1,7 +1,36 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Release workflow — auto-tag + publish + build
+# ──────────────────────────────────────────────────────────────────────────────
+# HOW IT WORKS:
+#   1. On every push to main that touches packages/gateway/package.json,
+#      the "auto-tag" job checks if the version field changed.
+#   2. If it changed, a v<version> git tag is created.
+#   3. All downstream jobs (npm publish, desktop builds, Android APK,
+#      GitHub Release) run only when a new tag was created.
+#   4. Can also be triggered manually or by pushing a v* tag directly.
+#
+# TO RELEASE A NEW VERSION:
+#   1. Bump "version" in packages/gateway/package.json (and optionally
+#      the other sub-packages if their code changed).
+#   2. Commit and push to main.
+#   3. This workflow handles everything: tag → npm publish → builds → release.
+#
+# NOTES:
+#   - No manual `git tag` or `npm publish` is needed.
+#   - The gateway version in packages/gateway/package.json is the single
+#     source of truth for monorepo release versions.
+#   - If a tag already exists, the auto-tag step is a no-op.
+#   - workflow_dispatch and v* tag pushes skip the auto-tag job and go
+#     straight to publish/build.
+# ──────────────────────────────────────────────────────────────────────────────
+
 name: Release
 
 on:
   push:
+    branches: [main]
+    paths:
+      - packages/gateway/package.json
     tags:
       - 'v*'
   workflow_dispatch: {}
@@ -11,10 +40,70 @@ permissions:
   packages: write
 
 jobs:
+  # ── Auto-tag on version bump (only on branch push, not tag push) ───
+  auto-tag:
+    name: Auto-tag if version changed
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    permissions:
+      contents: write
+    outputs:
+      tagged: ${{ steps.push-tag.outputs.tagged || 'false' }}
+      version: ${{ steps.version.outputs.version || '' }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Detect version change
+        id: version
+        run: |
+          NEW_VERSION=$(jq -r '.version' packages/gateway/package.json)
+          OLD_VERSION=$(git show HEAD~1:packages/gateway/package.json 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
+          echo "old=$OLD_VERSION"
+          echo "new=$NEW_VERSION"
+          if [ "$NEW_VERSION" != "$OLD_VERSION" ] && [ -n "$NEW_VERSION" ]; then
+            echo "changed=true" >> $GITHUB_OUTPUT
+            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+          else
+            echo "changed=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Check tag doesn't already exist
+        if: steps.version.outputs.changed == 'true'
+        id: check
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          if git ls-remote --tags origin "$TAG" | grep -q "$TAG"; then
+            echo "Tag $TAG already exists — skipping"
+            echo "exists=true" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Create and push tag
+        id: push-tag
+        if: steps.version.outputs.changed == 'true' && steps.check.outputs.exists == 'false'
+        run: |
+          TAG="v${{ steps.version.outputs.version }}"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git tag "$TAG"
+          git push origin "$TAG"
+          echo "tagged=true" >> $GITHUB_OUTPUT
+          echo "✅ Tagged $TAG"
+
   # ── Build desktop apps (Electron) ──────────────────────────────────
   desktop-windows:
     name: Desktop — Windows
     runs-on: windows-latest
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -32,6 +121,13 @@ jobs:
   desktop-macos:
     name: Desktop — macOS
     runs-on: macos-latest
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -49,6 +145,13 @@ jobs:
   desktop-linux:
     name: Desktop — Linux
     runs-on: ubuntu-latest
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -67,6 +170,13 @@ jobs:
   android:
     name: Android APK
     runs-on: ubuntu-latest
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
     continue-on-error: true
     steps:
       - uses: actions/checkout@v4
@@ -86,6 +196,13 @@ jobs:
   npm-publish:
     name: Publish npm packages
     runs-on: ubuntu-latest
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
     environment: npm
     permissions:
       contents: read
@@ -136,7 +253,7 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # 3. Publish @jait/web (pre-built frontend static files — strip deps, everything is bundled by Vite)
+      # 3. Publish @jait/web (pre-built frontend — strip deps, everything bundled by Vite)
       - name: Strip deps from @jait/web (static files only)
         working-directory: apps/web
         run: jq '.dependencies = {} | .devDependencies = {}' package.json > tmp.json && mv tmp.json package.json
@@ -184,8 +301,13 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: ubuntu-latest
-    needs: [npm-publish]
-    if: startsWith(github.ref, 'refs/tags/v') && always() && needs.npm-publish.result == 'success'
+    needs: [auto-tag, npm-publish]
+    if: |
+      always() && needs.npm-publish.result == 'success' && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
     steps:
       - uses: actions/checkout@v4
 
@@ -196,11 +318,20 @@ jobs:
 
       - name: Extract version
         id: version
-        run: echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+        run: |
+          # Prefer auto-tag output, fall back to tag ref or package.json
+          if [ -n "${{ needs.auto-tag.outputs.version }}" ]; then
+            echo "version=${{ needs.auto-tag.outputs.version }}" >> $GITHUB_OUTPUT
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            echo "version=${GITHUB_REF_NAME#v}" >> $GITHUB_OUTPUT
+          else
+            echo "version=$(jq -r '.version' packages/gateway/package.json)" >> $GITHUB_OUTPUT
+          fi
 
       - name: Create release
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: v${{ steps.version.outputs.version }}
           name: Jait v${{ steps.version.outputs.version }}
           generate_release_notes: true
           files: release-assets/**/*
