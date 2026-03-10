@@ -36,6 +36,7 @@ const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
  */
 export async function openRawSqlite(path: string): Promise<SqliteDatabase> {
   if (isBun) {
+    // @ts-ignore — bun:sqlite only exists at runtime under Bun
     const { Database } = await import("bun:sqlite");
     return new Database(path) as unknown as SqliteDatabase;
   } else {
@@ -56,7 +57,9 @@ type SchemaType = typeof schema;
 export async function createDrizzle(rawDb: SqliteDatabase) {
   if (isBun) {
     const { drizzle } = await import("drizzle-orm/bun-sqlite");
-    return drizzle(rawDb as never, { schema }) as DrizzleDB;
+    // BunSQLiteDatabase and BetterSQLite3Database differ in RunResult type
+    // but are structurally compatible for all query-builder operations.
+    return drizzle(rawDb as never, { schema }) as unknown as DrizzleDB;
   } else {
     const { drizzle } = await import("drizzle-orm/better-sqlite3");
     return drizzle(rawDb as never, { schema }) as DrizzleDB;
