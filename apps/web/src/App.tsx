@@ -608,11 +608,11 @@ function App() {
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
-  const openRemoteWorkspaceOnGateway = useCallback(async (dirPath: string) => {
+  const openRemoteWorkspaceOnGateway = useCallback(async (dirPath: string, nodeId?: string) => {
     const res = await fetch(`${API_URL}/api/workspace/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: dirPath, sessionId: activeSessionId }),
+      body: JSON.stringify({ path: dirPath, sessionId: activeSessionId, nodeId: nodeId || 'gateway' }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Unknown error' }))
@@ -2335,9 +2335,8 @@ ${file.content.slice(0, 2000)}
         <FolderPickerDialog
           open={folderPickerOpen}
           onOpenChange={setFolderPickerOpen}
-          gatewayOnly
-          onSelect={(path) => {
-            void openRemoteWorkspaceOnGateway(path).catch((err) => {
+          onSelect={(path, nodeId) => {
+            void openRemoteWorkspaceOnGateway(path, nodeId).catch((err) => {
               console.error('Failed to open workspace:', err)
               toast.error(`Failed to open workspace: ${err instanceof Error ? err.message : 'Unknown error'}`)
             })
@@ -2348,8 +2347,7 @@ ${file.content.slice(0, 2000)}
         <FolderPickerDialog
           open={automation.folderPickerOpen}
           onOpenChange={automation.setFolderPickerOpen}
-          gatewayOnly
-          onSelect={(path) => { void automation.handleFolderSelected(path) }}
+          onSelect={(path, _nodeId) => { void automation.handleFolderSelected(path) }}
         />
       </div>
     </TooltipProvider>

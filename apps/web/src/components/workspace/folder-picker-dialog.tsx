@@ -44,7 +44,7 @@ function NodeIcon({ platform }: { platform: string }) {
 interface FolderPickerDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onSelect: (path: string) => void
+  onSelect: (path: string, nodeId: string) => void
   /** When true, only browse the gateway's filesystem (no device selector). */
   gatewayOnly?: boolean
 }
@@ -156,10 +156,10 @@ export function FolderPickerDialog({ open, onOpenChange, onSelect, gatewayOnly }
 
   const handleSelect = useCallback(() => {
     if (currentPath) {
-      onSelect(currentPath)
+      onSelect(currentPath, selectedNodeId)
       onOpenChange(false)
     }
-  }, [currentPath, onSelect, onOpenChange])
+  }, [currentPath, selectedNodeId, onSelect, onOpenChange])
 
   const handleManualGo = useCallback(() => {
     if (manualPath.trim()) {

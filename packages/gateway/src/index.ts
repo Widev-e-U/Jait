@@ -8,7 +8,7 @@ import { openDatabase, migrateDatabase } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
 import { SessionStateService } from "./services/session-state.js";
 import { AuditWriter } from "./services/audit.js";
-import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, BrowserSurfaceFactory } from "./surfaces/index.js";
+import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory } from "./surfaces/index.js";
 import { createToolRegistry } from "./tools/index.js";
 import { SchedulerService } from "./scheduler/service.js";
 import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
@@ -60,10 +60,13 @@ async function main() {
   surfaceRegistry.register(new TerminalSurfaceFactory());
   surfaceRegistry.register(new FileSystemSurfaceFactory());
   surfaceRegistry.register(new BrowserSurfaceFactory());
-  console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
 
   // WebSocket control plane (created early so consent callbacks can reference it)
   const ws = new WsControlPlane(config);
+
+  // Register remote-filesystem factory (needs ws reference for proxying ops to nodes)
+  surfaceRegistry.register(new RemoteFileSystemSurfaceFactory(ws));
+  console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
 
   // Auto-wire terminal output → WebSocket for ALL terminals (REST, tool, etc.)
   // Also broadcast workspace activation for filesystem surfaces.
@@ -72,7 +75,7 @@ async function main() {
       (surface as import("./surfaces/terminal.js").TerminalSurface).onOutput = (data) =>
         ws.broadcastTerminalOutput(id, data);
     }
-    if (surface.type === "filesystem") {
+    if (surface.type === "filesystem" || surface.type === "remote-filesystem") {
       const snap = surface.snapshot();
       const sid = snap.sessionId ?? "";
       const workspaceRoot = (snap.metadata as Record<string, unknown>)?.workspaceRoot ?? null;
@@ -107,7 +110,7 @@ async function main() {
   };
 
   surfaceRegistry.onSurfaceStopped = (id, surface) => {
-    if (surface.type === "filesystem") {
+    if (surface.type === "filesystem" || surface.type === "remote-filesystem") {
       const snap = surface.snapshot();
       const sid = snap.sessionId ?? "";
       ws.sendUICommand(

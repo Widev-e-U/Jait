@@ -40,6 +40,14 @@ export class WsControlPlane {
     timer: ReturnType<typeof setTimeout>;
   }>();
 
+  /** Generic pending fs operations (stat, read, write, list) waiting for remote node response */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private pendingFsOps = new Map<string, {
+    resolve: (value: any) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
+
   constructor(private config: AppConfig) {
     // Use the configured JWT secret, or a dev-mode fallback
     const secret = config.jwtSecret || "jait-dev-secret-change-in-production";
@@ -378,6 +386,28 @@ export class WsControlPlane {
         break;
       }
 
+      // ── Generic fs operation responses (stat, read, write, list) ──
+      case "fs.op-response": {
+        const resp = msg.payload as {
+          requestId?: string;
+          result?: unknown;
+          error?: string;
+        } | undefined;
+        if (resp?.requestId) {
+          const pending = this.pendingFsOps.get(resp.requestId);
+          if (pending) {
+            this.pendingFsOps.delete(resp.requestId);
+            clearTimeout(pending.timer);
+            if (resp.error) {
+              pending.reject(new Error(resp.error));
+            } else {
+              pending.resolve(resp.result);
+            }
+          }
+        }
+        break;
+      }
+
       default: {
         this.send(client.ws, {
           type: "error",
@@ -609,6 +639,43 @@ export class WsControlPlane {
         payload: { requestId },
       });
     });
+  }
+
+  // ── Generic fs operation proxy ──────────────────────────────────────
+
+  /**
+   * Send a filesystem operation request to a remote node and wait for the response.
+   * Used for stat, read, write, list, exists, readdir, mkdir, etc.
+   */
+  proxyFsOp<T = unknown>(nodeId: string, op: string, params: Record<string, unknown>, timeoutMs = 30000): Promise<T> {
+    const node = this.fsNodes.get(nodeId);
+    if (!node) return Promise.reject(new Error(`Unknown filesystem node: ${nodeId}`));
+    if (node.isGateway) return Promise.reject(new Error("Use local operations for gateway node"));
+    const client = this.clients.get(node.clientId);
+    if (!client || client.ws.readyState !== 1) {
+      return Promise.reject(new Error(`Node ${nodeId} is not connected`));
+    }
+    const requestId = nanoid();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingFsOps.delete(requestId);
+        reject(new Error(`Fs operation '${op}' timed out on node ${nodeId}`));
+      }, timeoutMs);
+      this.pendingFsOps.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer });
+      this.send(client.ws, {
+        type: "fs.op-request" as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { requestId, op, ...params },
+      });
+    });
+  }
+
+  /** Check if a node ID refers to a remote (non-gateway) node */
+  isRemoteNode(nodeId: string): boolean {
+    if (!nodeId || nodeId === "gateway") return false;
+    const node = this.fsNodes.get(nodeId);
+    return !!node && !node.isGateway;
   }
 
   get clientCount() {

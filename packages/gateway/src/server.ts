@@ -165,7 +165,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerFilesystemRoutes(app, deps.ws);
 
   if (deps.surfaceRegistry) {
-    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService);
+    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws);
   }
 
   // Git API routes

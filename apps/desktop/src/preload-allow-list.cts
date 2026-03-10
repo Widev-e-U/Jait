@@ -8,6 +8,7 @@ const allowedIpcChannels = {
     "terminal:start",
     "desktop:browse-path",
     "desktop:get-roots",
+    "desktop:fs-op",
   ],
   on: ["screen-share:start", "screen-share:stop", "gateway:event"],
 };

@@ -181,7 +181,7 @@ ipcMain.handle("desktop:pick-directory", async () => {
 });
 
 // ── Filesystem browse IPC (for remote fs node protocol) ──────────────
-import { readdir } from "node:fs/promises";
+import { readdir, readFile, writeFile, stat as fsStat, mkdir, access } from "node:fs/promises";
 
 ipcMain.handle("desktop:browse-path", async (_event, dirPath: string) => {
   const { resolve, dirname, join } = await import("node:path");
@@ -226,6 +226,66 @@ ipcMain.handle("desktop:get-roots", async () => {
   }
   roots.push({ name: "Home", path: homedir(), type: "dir" });
   return { roots };
+});
+
+// ── Generic filesystem operation handler (for remote workspace ops) ──────────
+ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string, unknown>) => {
+  const { resolve, dirname, join } = await import("node:path");
+
+  switch (op) {
+    case "stat": {
+      const filePath = resolve(params.path as string);
+      const info = await fsStat(filePath);
+      return {
+        size: info.size,
+        isDirectory: info.isDirectory(),
+        modified: info.mtime.toISOString(),
+      };
+    }
+    case "read": {
+      const filePath = resolve(params.path as string);
+      const content = await readFile(filePath, "utf-8");
+      return { content, size: content.length };
+    }
+    case "write": {
+      const filePath = resolve(params.path as string);
+      const content = params.content as string;
+      // Ensure parent directory exists
+      await mkdir(dirname(filePath), { recursive: true });
+      await writeFile(filePath, content, "utf-8");
+      return { ok: true, size: content.length };
+    }
+    case "list": {
+      const dirPath = resolve(params.path as string);
+      const entries = await readdir(dirPath, { withFileTypes: true });
+      return entries.map((e) => (e.isDirectory() ? e.name + "/" : e.name));
+    }
+    case "exists": {
+      const filePath = resolve(params.path as string);
+      try {
+        await access(filePath);
+        return true;
+      } catch {
+        return false;
+      }
+    }
+    case "mkdir": {
+      const dirPath = resolve(params.path as string);
+      await mkdir(dirPath, { recursive: true });
+      return { ok: true };
+    }
+    case "readdir": {
+      const dirPath = resolve(params.path as string);
+      const raw = await readdir(dirPath, { withFileTypes: true });
+      return raw.map((d) => ({
+        name: d.name,
+        path: join(dirPath, d.name),
+        type: d.isDirectory() ? "dir" : "file",
+      }));
+    }
+    default:
+      throw new Error(`Unknown filesystem operation: ${op}`);
+  }
 });
 
 // ── App lifecycle ─────────────────────────────────────────────────────

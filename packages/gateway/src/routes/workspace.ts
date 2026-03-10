@@ -12,20 +12,24 @@ import { PathTraversalError } from "../security/path-guard.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { SessionService } from "../services/sessions.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
+import { RemoteFileSystemSurface } from "../surfaces/remote-filesystem.js";
+import type { WsControlPlane } from "../ws.js";
 import { uuidv7 } from "../lib/uuidv7.js";
+
+type AnyFsSurface = FileSystemSurface | RemoteFileSystemSurface;
 
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
  */
-function findFsSurface(registry: SurfaceRegistry, surfaceId?: string): FileSystemSurface | null {
+function findFsSurface(registry: SurfaceRegistry, surfaceId?: string): AnyFsSurface | null {
   if (surfaceId) {
     const s = registry.getSurface(surfaceId);
-    if (s && s instanceof FileSystemSurface && s.state === "running") return s;
+    if (s && (s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running") return s;
     return null;
   }
   // Find the first running filesystem surface
   for (const s of registry.listSurfaces()) {
-    if (s instanceof FileSystemSurface && s.state === "running") return s;
+    if ((s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running") return s;
   }
   return null;
 }
@@ -35,6 +39,7 @@ export function registerWorkspaceRoutes(
   surfaceRegistry: SurfaceRegistry,
   sessionState?: SessionStateService,
   sessionService?: SessionService,
+  ws?: WsControlPlane,
 ) {
   // GET /api/workspace/info — returns the active workspace root + surface ID
   app.get("/api/workspace/info", async (_req, reply) => {
@@ -54,9 +59,10 @@ export function registerWorkspaceRoutes(
   // This is called when a client picks a directory (e.g. Electron native dialog)
   // so that ALL clients on the session can browse files via the gateway REST API.
   app.post("/api/workspace/open", async (req, reply) => {
-    const body = req.body as { path?: string; sessionId?: string } | null;
+    const body = req.body as { path?: string; sessionId?: string; nodeId?: string } | null;
     const workspacePath = body?.path;
     const sessionId = body?.sessionId;
+    const nodeId = body?.nodeId || "gateway";
 
     if (!workspacePath) {
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
@@ -65,31 +71,53 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "sessionId is required" });
     }
 
-    // Verify the path exists on the filesystem
-    const { stat } = await import("node:fs/promises");
-    try {
-      const info = await stat(workspacePath);
-      if (!info.isDirectory()) {
-        return reply.status(400).send({ error: "NOT_A_DIRECTORY", message: "The specified path is not a directory" });
+    const isRemote = ws?.isRemoteNode(nodeId) ?? false;
+
+    if (isRemote) {
+      // Remote node — verify path exists via WS proxy
+      try {
+        const info = await ws!.proxyFsOp<{ isDirectory: boolean }>(nodeId, "stat", { path: workspacePath });
+        if (!info.isDirectory) {
+          return reply.status(400).send({ error: "NOT_A_DIRECTORY", message: "The specified path is not a directory" });
+        }
+      } catch {
+        return reply.status(400).send({ error: "PATH_NOT_FOUND", message: "The specified path does not exist on the remote node" });
       }
-    } catch {
-      return reply.status(400).send({ error: "PATH_NOT_FOUND", message: "The specified path does not exist" });
+    } else {
+      // Local gateway — verify the path exists on the local filesystem
+      const { stat } = await import("node:fs/promises");
+      try {
+        const info = await stat(workspacePath);
+        if (!info.isDirectory()) {
+          return reply.status(400).send({ error: "NOT_A_DIRECTORY", message: "The specified path is not a directory" });
+        }
+      } catch {
+        return reply.status(400).send({ error: "PATH_NOT_FOUND", message: "The specified path does not exist" });
+      }
     }
 
     // Stop any existing filesystem surface for this session
     const existing = surfaceRegistry.getBySession(sessionId)
-      .filter((s) => s instanceof FileSystemSurface && s.state === "running");
+      .filter((s) => (s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running");
     for (const s of existing) {
       await surfaceRegistry.stopSurface(s.snapshot().id, "replaced");
     }
 
-    // Create a new filesystem surface
+    // Create a new filesystem surface (local or remote)
     const surfaceId = `filesystem-${uuidv7()}`;
     try {
-      await surfaceRegistry.startSurface("filesystem", surfaceId, {
-        sessionId,
-        workspaceRoot: workspacePath,
-      });
+      if (isRemote) {
+        await surfaceRegistry.startSurface("remote-filesystem", surfaceId, {
+          sessionId,
+          workspaceRoot: workspacePath,
+          nodeId,
+        });
+      } else {
+        await surfaceRegistry.startSurface("filesystem", surfaceId, {
+          sessionId,
+          workspaceRoot: workspacePath,
+        });
+      }
     } catch (err) {
       return reply.status(500).send({
         error: "SURFACE_START_FAILED",

@@ -54,6 +54,10 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
       roots: { name: string; path: string; type: 'dir' | 'file' }[];
     }>,
 
+  /** Execute a filesystem operation (stat, read, write, list, exists, mkdir, readdir) */
+  fsOp: (op: string, params: Record<string, unknown>) =>
+    ipcRenderer.invoke(allowedIpcChannels.invoke[8], op, params) as Promise<unknown>,
+
   /** Listen for screen-share commands from main process (tray, etc.) */
   onScreenShareStart: (callback: () => void) =>
     ipcRenderer.on(allowedIpcChannels.on[0], callback),

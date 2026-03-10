@@ -203,6 +203,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'fs.roots-request') {
         // Gateway is asking for our root directories
         void handleFsRootsRequest(msg.payload as { requestId: string })
+      } else if (msg.type === 'fs.op-request') {
+        // Gateway is asking us to perform a filesystem operation (stat, read, write, list, etc.)
+        void handleFsOpRequest(msg.payload as { requestId: string; op: string; [key: string]: unknown })
       } else if (msg.type.startsWith('thread.') || msg.type.startsWith('repo.')) {
         // Thread & repo lifecycle events — forward to automation hook
         onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
@@ -329,6 +332,40 @@ export function useUICommands(opts: UseUICommandsOptions) {
       }))
     }
   }, [capacitorRoots])
+
+  /**
+   * Handle a generic filesystem operation request from the gateway.
+   * Operations: stat, read, write, list, exists, mkdir, readdir
+   * Each is dispatched to the Electron IPC bridge (or Capacitor on mobile).
+   */
+  const handleFsOpRequest = useCallback(async (payload: { requestId: string; op: string; [key: string]: unknown }) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const { requestId, op, ...params } = payload
+    try {
+      const platform = detectPlatform()
+      if (platform === 'electron' && window.jaitDesktop?.fsOp) {
+        const result = await window.jaitDesktop.fsOp(op, params)
+        ws.send(JSON.stringify({
+          type: 'fs.op-response',
+          payload: { requestId, result },
+        }))
+      } else if (platform === 'capacitor') {
+        // For now, capacitor doesn't support full fs operations
+        throw new Error('Full filesystem operations not yet supported on mobile')
+      } else {
+        throw new Error('Filesystem operations not supported on this platform')
+      }
+    } catch (err) {
+      ws.send(JSON.stringify({
+        type: 'fs.op-response',
+        payload: {
+          requestId,
+          error: err instanceof Error ? err.message : 'Filesystem operation failed',
+        },
+      }))
+    }
+  }, [])
 
   // ── Single, stable WS connection — only depends on token ──────────
   // Session changes are handled by re-subscribing, NOT by reconnecting.

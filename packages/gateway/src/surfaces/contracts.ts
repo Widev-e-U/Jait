@@ -3,6 +3,10 @@ export type SurfaceState = "idle" | "starting" | "running" | "stopping" | "stopp
 export interface SurfaceStartInput {
   sessionId: string;
   workspaceRoot: string;
+  /** Node ID for remote filesystem surfaces (proxied via WS) */
+  nodeId?: string;
+  /** Allow additional properties for surface-specific configuration */
+  [key: string]: unknown;
 }
 
 export interface SurfaceStopInput {

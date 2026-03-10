@@ -9,6 +9,7 @@ export type {
 export { SurfaceRegistry } from "./registry.js";
 export { TerminalSurface, TerminalSurfaceFactory } from "./terminal.js";
 export { FileSystemSurface, FileSystemSurfaceFactory } from "./filesystem.js";
+export { RemoteFileSystemSurface, RemoteFileSystemSurfaceFactory } from "./remote-filesystem.js";
 export {
   BrowserSurface,
   BrowserSurfaceFactory,
