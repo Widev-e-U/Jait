@@ -1,3 +1,26 @@
+# ──────────────────────────────────────────────────────────────────────
+# Auto-tag on version bump
+# ──────────────────────────────────────────────────────────────────────
+# HOW IT WORKS:
+#   When `packages/gateway/package.json` is pushed to main with a changed
+#   "version" field, this workflow creates a git tag `v<version>` and pushes
+#   it. That tag then triggers the Release workflow (.github/workflows/release.yml)
+#   which builds desktop/Android, publishes all npm packages, and creates a
+#   GitHub Release.
+#
+# TO RELEASE A NEW VERSION:
+#   1. Bump "version" in packages/gateway/package.json (e.g. "0.1.14" → "0.1.15")
+#   2. Commit and push to main
+#   3. This workflow auto-creates the v0.1.15 tag
+#   4. release.yml triggers: npm publish → desktop builds → GitHub Release
+#
+# NOTES:
+#   - No manual `git tag` or `npm publish` is needed.
+#   - If the tag already exists (e.g. from a manual push), this is a no-op.
+#   - Only watches packages/gateway/package.json — the gateway version is the
+#     single source of truth for the monorepo release version.
+# ──────────────────────────────────────────────────────────────────────
+
 name: Auto-tag on version bump
 
 on:
@@ -15,7 +38,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 2          # need previous commit for diff
+          fetch-depth: 2          # need previous commit to diff the version
 
       - name: Detect version change
         id: version

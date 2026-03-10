@@ -40,6 +40,20 @@ Run from repository root unless noted.
 - PRs should include: concise summary, linked issue (if any), test evidence, and screenshots/GIFs for UI changes.
 - Call out config or migration impacts explicitly (env vars, DB schema changes).
 
+## Release & Deployment
+The monorepo uses an automated release pipeline driven by a single version bump:
+1. Bump `"version"` in `packages/gateway/package.json` and push to `main`.
+2. `.github/workflows/auto-tag.yml` detects the change and creates a `v<version>` git tag.
+3. `.github/workflows/release.yml` triggers on the `v*` tag and runs:
+   - npm publish for `@jait/shared`, `@jait/screen-share`, `@jait/web`, `@jait/gateway` (in dependency order, skipping already-published versions).
+   - Desktop builds (Windows, macOS, Linux) and Android APK.
+   - GitHub Release with all artifacts attached.
+4. `.github/workflows/ci.yml` runs lint, typecheck, test, and Docker builds on every push/PR.
+
+**No manual `git tag` or `npm publish` is needed.** The gateway `package.json` version is the single source of truth for release versions.
+
+To deploy to a server after publish: `npm install -g @jait/gateway@<version>` and restart the service.
+
 ## Security & Configuration Tips
 - Copy `.env.example` for local setup; never commit secrets.
 - Treat high-impact tools (terminal, file writes, OS/service control) as consent-sensitive paths.
