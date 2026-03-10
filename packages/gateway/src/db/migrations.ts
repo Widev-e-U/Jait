@@ -14,12 +14,12 @@
  *   - Use `CREATE TABLE IF NOT EXISTS` and try/catch `ALTER TABLE` for safety.
  *   - Give each migration a short human-readable `name`.
  */
-import type Database from "better-sqlite3";
+import type { SqliteDatabase } from "./sqlite-shim.js";
 
 export interface Migration {
   id: number;
   name: string;
-  run: (db: Database.Database) => void;
+  run: (db: SqliteDatabase) => void;
 }
 
 export const migrations: Migration[] = [

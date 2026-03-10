@@ -35,7 +35,7 @@ async function main() {
   const config = loadConfig();
 
   // Initialize SQLite database
-  const { db, sqlite } = openDatabase();
+  const { db, sqlite } = await openDatabase();
   migrateDatabase(sqlite);
   console.log("Database initialized at ~/.jait/data/jait.db");
 

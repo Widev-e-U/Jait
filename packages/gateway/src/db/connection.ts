@@ -1,18 +1,18 @@
 /**
- * SQLite connection via better-sqlite3 + Drizzle ORM.
+ * SQLite connection — runtime-agnostic (bun:sqlite under Bun, better-sqlite3 under Node).
  *
  * Database lives at ~/.jait/data/jait.db (created automatically).
  * For tests, pass ":memory:" as dbPath.
  */
-import Database from "better-sqlite3";
-import { drizzle, type BetterSQLite3Database } from "drizzle-orm/better-sqlite3";
-import * as schema from "./schema.js";
+import type { SqliteDatabase, DrizzleDB } from "./sqlite-shim.js";
+import { openRawSqlite, createDrizzle } from "./sqlite-shim.js";
 import { migrations } from "./migrations.js";
 import { mkdirSync, existsSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { homedir } from "node:os";
 
-export type JaitDB = BetterSQLite3Database<typeof schema>;
+export type { SqliteDatabase } from "./sqlite-shim.js";
+export type JaitDB = DrizzleDB;
 
 /** Resolve the default DB path: ~/.jait/data/jait.db */
 export function defaultDbPath(): string {
@@ -23,9 +23,9 @@ export function defaultDbPath(): string {
  * Open (or create) the SQLite database and run table creation.
  *
  * @param dbPath  File path for the SQLite DB, or ":memory:" for tests.
- * @returns { db, sqlite } — drizzle instance + raw better-sqlite3 handle
+ * @returns { db, sqlite } — drizzle instance + raw SQLite handle
  */
-export function openDatabase(dbPath?: string): { db: JaitDB; sqlite: Database.Database } {
+export async function openDatabase(dbPath?: string): Promise<{ db: JaitDB; sqlite: SqliteDatabase }> {
   const resolvedPath = dbPath ?? defaultDbPath();
 
   // Ensure the directory exists (no-op for :memory:)
@@ -36,13 +36,13 @@ export function openDatabase(dbPath?: string): { db: JaitDB; sqlite: Database.Da
     }
   }
 
-  const sqlite = new Database(resolvedPath);
+  const sqlite = await openRawSqlite(resolvedPath);
 
   // Enable WAL mode for better concurrent read performance
-  sqlite.pragma("journal_mode = WAL");
-  sqlite.pragma("foreign_keys = ON");
+  sqlite.exec("PRAGMA journal_mode = WAL");
+  sqlite.exec("PRAGMA foreign_keys = ON");
 
-  const db = drizzle(sqlite, { schema });
+  const db = await createDrizzle(sqlite);
 
   return { db, sqlite };
 }
@@ -54,7 +54,7 @@ export function openDatabase(dbPath?: string): { db: JaitDB; sqlite: Database.Da
  * Migrations are numbered and tracked in a `_migrations` table.
  * Only new (un-applied) migrations run on each startup — safe for updates.
  */
-export function migrateDatabase(sqlite: Database.Database) {
+export function migrateDatabase(sqlite: SqliteDatabase) {
   // Ensure the migrations tracking table exists
   sqlite.exec(`
     CREATE TABLE IF NOT EXISTS _migrations (
@@ -92,7 +92,7 @@ export function migrateDatabase(sqlite: Database.Database) {
 /**
  * Get the current schema version (highest applied migration ID).
  */
-export function getSchemaVersion(sqlite: Database.Database): number {
+export function getSchemaVersion(sqlite: SqliteDatabase): number {
   try {
     const row = sqlite.prepare("SELECT MAX(id) as v FROM _migrations").get() as { v: number | null } | null;
     return row?.v ?? 0;

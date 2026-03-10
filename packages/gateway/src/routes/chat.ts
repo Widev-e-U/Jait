@@ -649,6 +649,7 @@ export function registerChatRoutes(
         // Ensure a FileSystemSurface exists for this session so we can
         // back up files before CLI providers (Codex/Claude) write them,
         // enabling the keep/discard (undo) flow.
+        // Use _skipBroadcast so the UI doesn't open the workspace panel.
         let cliFsSurface: FileSystemSurface | null = null;
         if (surfaceRegistry) {
           const fsId = `fs-${sessionId}`;
@@ -657,10 +658,13 @@ export function registerChatRoutes(
             cliFsSurface = existing;
           } else {
             try {
+              const prevHandler = surfaceRegistry.onSurfaceStarted;
+              surfaceRegistry.onSurfaceStarted = null as any;
               const started = await surfaceRegistry.startSurface("filesystem", fsId, {
                 sessionId,
                 workspaceRoot: cliWsRoot,
               });
+              surfaceRegistry.onSurfaceStarted = prevHandler;
               cliFsSurface = started as FileSystemSurface;
             } catch { /* best effort */ }
           }
@@ -700,6 +704,9 @@ export function registerChatRoutes(
 
         // Collect full content from CLI provider events
         const contentChunks: string[] = [];
+        /** Bytes received via streaming `token` events for the current message block.
+         *  Reset when a tool starts so we can correctly detect the next message block. */
+        let tokenBytesThisBlock = 0;
 
         // ── Accumulate tool calls + segments for persistence ──
         const cliToolCalls: PersistedToolCall[] = [];
@@ -745,11 +752,16 @@ export function registerChatRoutes(
               // If there's a pending tool group, flush it first
               flushToolGroup();
               contentChunks.push(event.content);
+              tokenBytesThisBlock += event.content.length;
               lastSegmentWasText = false; // new text arrived
               safeWrite(`data: ${JSON.stringify({ type: "token", content: event.content })}\n\n`);
               emitToSubscribers(sessionId, { type: "token", content: event.content } as StreamEvent);
               break;
             case "tool.start": {
+              // Reset token counter — any subsequent message event for a NEW
+              // agent response (after tools run) should be emitted if no
+              // tokens were streamed for it.
+              tokenBytesThisBlock = 0;
               const callId = event.callId ?? `cli-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
               // Accumulate for persistence
               cliToolCalls.push({
@@ -830,9 +842,17 @@ export function registerChatRoutes(
               safeWrite(`data: ${JSON.stringify({ type: "approval_required", tool: event.tool, args: event.args, requestId: event.requestId })}\n\n`);
               break;
             case "message":
-              if (event.role === "assistant") {
+              if (event.role === "assistant" && event.content) {
                 flushToolGroup();
-                contentChunks.push(event.content);
+                // `message` events carry the *complete* text of an agent message.
+                // If token deltas already streamed this content, skip to avoid
+                // doubling the persisted text. Only use as fallback when Codex
+                // sends a complete message without preceding token deltas.
+                if (tokenBytesThisBlock === 0) {
+                  contentChunks.push(event.content);
+                  safeWrite(`data: ${JSON.stringify({ type: "token", content: event.content })}\n\n`);
+                  emitToSubscribers(sessionId, { type: "token", content: event.content } as StreamEvent);
+                }
                 lastSegmentWasText = false;
               }
               break;
@@ -868,7 +888,7 @@ export function registerChatRoutes(
             if (event.sessionId !== providerSessionId) {
               return;
             }
-            if (event.type === "session.completed" || event.type === "session.error") {
+            if (event.type === "session.completed" || event.type === "session.error" || event.type === "turn.completed") {
               // If the session errored, invalidate the cache so the next message creates a fresh one
               if (event.type === "session.error") {
                 activeCliSessions.delete(sessionId);
