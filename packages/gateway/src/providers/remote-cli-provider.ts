@@ -21,6 +21,7 @@ import type {
 } from "./contracts.js";
 import type { WsControlPlane } from "../ws.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import { mapCodexNotification } from "./codex-event-mapper.js";
 
 export class RemoteCliProvider implements CliProviderAdapter {
   readonly id: ProviderId;
@@ -175,7 +176,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
 
   /**
    * Handle a remote event relayed from the client via WS.
-   * Translates raw JSON-RPC notifications from the child process into ProviderEvents.
+   * Uses the shared codex event mapper to translate raw JSON-RPC notifications.
    */
   private handleRemoteEvent(sessionId: string, event: unknown): void {
     if (!this.sessions.has(sessionId)) return;
@@ -183,56 +184,14 @@ export class RemoteCliProvider implements CliProviderAdapter {
     const e = event as { method?: string; params?: Record<string, unknown> };
     if (!e.method) return;
 
-    switch (e.method) {
-      case "session/completed":
-        this.emit({ type: "session.completed", sessionId });
+    const params = (e.params ?? {}) as Record<string, unknown>;
+    const events = mapCodexNotification(e.method, params, sessionId);
+
+    for (const evt of events) {
+      this.emit(evt);
+      if (evt.type === "session.completed") {
         this.sessions.delete(sessionId);
-        break;
-      case "item/agentMessage/delta":
-        // Token streaming from codex
-        if (e.params && typeof (e.params as { delta?: string }).delta === "string") {
-          this.emit({ type: "token", sessionId, content: (e.params as { delta: string }).delta });
-        }
-        break;
-      case "turn/completed":
-        this.emit({ type: "turn.completed", sessionId });
-        break;
-      case "item/toolCall/start":
-        this.emit({
-          type: "tool.start",
-          sessionId,
-          tool: (e.params as { name?: string })?.name ?? "unknown",
-          args: (e.params as { args?: unknown })?.args,
-          callId: (e.params as { callId?: string })?.callId,
-        });
-        break;
-      case "item/toolCall/output":
-        this.emit({
-          type: "tool.output",
-          sessionId,
-          callId: (e.params as { callId?: string })?.callId ?? "",
-          content: (e.params as { output?: string })?.output ?? "",
-        });
-        break;
-      case "item/toolCall/completed":
-        this.emit({
-          type: "tool.result",
-          sessionId,
-          tool: (e.params as { name?: string })?.name ?? "unknown",
-          ok: true,
-          message: "",
-          callId: (e.params as { callId?: string })?.callId,
-        });
-        break;
-      default:
-        // Forward unknown notifications as activity events
-        this.emit({
-          type: "activity",
-          sessionId,
-          kind: e.method,
-          summary: e.method,
-          payload: e.params,
-        });
+      }
     }
   }
 }

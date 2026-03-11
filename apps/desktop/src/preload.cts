@@ -17,6 +17,10 @@ const { contextBridge, ipcRenderer } = electron;
 const gatewayUrlArg = process.argv.find((a: string) => a.startsWith("--gateway-url="));
 const syncGatewayUrl = gatewayUrlArg ? gatewayUrlArg.split("=").slice(1).join("=") : undefined;
 
+// Stored IPC listener ref — contextBridge wraps callbacks so we must track the
+// real reference ourselves to make removeListener work.
+let _gatewayEventCb: ((...args: unknown[]) => void) | null = null;
+
 // Expose safe API to the renderer process
 contextBridge.exposeInMainWorld("jaitDesktop", {
   /** Synchronous gateway URL — available immediately at page load */
@@ -73,10 +77,20 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
     ipcRenderer.on(allowedIpcChannels.on[1], callback),
 
   /** Listen for gateway events from main process (provider child events, etc.) */
-  onGatewayEvent: (callback: (_event: unknown, data: unknown) => void) =>
-    ipcRenderer.on(allowedIpcChannels.on[2], callback as (...args: unknown[]) => void),
-  removeGatewayEventListener: (callback: (_event: unknown, data: unknown) => void) =>
-    ipcRenderer.removeListener(allowedIpcChannels.on[2], callback as (...args: unknown[]) => void),
+  // contextBridge wraps each callback independently, so the reference passed to
+  // removeListener never matches the one passed to on(). We store the real ref
+  // in the preload scope and always remove the previous listener first.
+  onGatewayEvent: (callback: (_event: unknown, data: unknown) => void) => {
+    if (_gatewayEventCb) ipcRenderer.removeListener(allowedIpcChannels.on[2], _gatewayEventCb);
+    _gatewayEventCb = callback as (...args: unknown[]) => void;
+    ipcRenderer.on(allowedIpcChannels.on[2], _gatewayEventCb);
+  },
+  removeGatewayEventListener: () => {
+    if (_gatewayEventCb) {
+      ipcRenderer.removeListener(allowedIpcChannels.on[2], _gatewayEventCb);
+      _gatewayEventCb = null;
+    }
+  },
 
   /** Platform identifier */
   platform: "electron" as const,

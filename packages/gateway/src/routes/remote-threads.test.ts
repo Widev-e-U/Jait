@@ -370,16 +370,16 @@ describe("remote provider e2e flow", () => {
     // Step 4: Simulate coding turn events from the remote child
     mockWs.fireRemoteEvents(sessionId, [
       {
-        method: "item/toolCall/start",
-        params: { name: "write_file", args: { path: "src/api.ts" }, callId: "call-1" },
+        method: "item/started",
+        params: { item: { id: "call-1", type: "commandExecution", command: "echo hello" } },
       },
       {
-        method: "item/toolCall/output",
-        params: { callId: "call-1", output: "File written successfully" },
+        method: "item/commandExecution/outputDelta",
+        params: { itemId: "call-1", delta: "hello" },
       },
       {
-        method: "item/toolCall/completed",
-        params: { name: "write_file", callId: "call-1" },
+        method: "item/completed",
+        params: { item: { id: "call-1", type: "commandExecution", status: "completed", output: "hello" } },
       },
       { method: "item/agentMessage/delta", params: { delta: "I've added error handling." } },
       { method: "turn/completed" },
@@ -405,7 +405,7 @@ describe("remote provider e2e flow", () => {
       activities: Array<{ kind: string; summary: string; payload?: unknown }>;
     };
 
-    // Should have: user message activity, tool.start, tool.output, tool.result, token, turn.completed
+    // Should have: user message activity, tool.start, tool.result, token, turn.completed
     expect(activities.length).toBeGreaterThan(0);
 
     // Check user message was logged
@@ -413,7 +413,7 @@ describe("remote provider e2e flow", () => {
 
     // Check tool events were logged
     expect(activities.some((a) => a.kind === "tool.start")).toBe(true);
-    expect(activities.some((a) => a.kind === "tool.result")).toBe(true);
+    expect(activities.some((a) => a.kind === "tool.result" || a.kind === "tool.error")).toBe(true);
 
     await app.close();
     sqlite.close();

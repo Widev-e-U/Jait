@@ -485,7 +485,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       if (reconnectTimer) clearTimeout(reconnectTimer)
       // Clean up Electron IPC listener
       if (detectPlatform() === 'electron' && window.jaitDesktop?.removeGatewayEventListener) {
-        window.jaitDesktop.removeGatewayEventListener(gatewayEventHandler)
+        window.jaitDesktop.removeGatewayEventListener()
       }
       const ws = wsRef.current
       if (ws) {
