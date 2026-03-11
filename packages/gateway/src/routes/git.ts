@@ -131,6 +131,11 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
     const { cwd } = request.body as { cwd: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      if (remoteNodeId && ws) {
+        const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args: "pull --rebase" }, 60_000);
+        return { ok: true, output: r.stdout.trim() };
+      }
       const result = await git.pull(cwd);
       return result;
     } catch (err) {
@@ -192,6 +197,11 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       return reply.status(400).send({ error: "Missing cwd or branch" });
     }
     try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      if (remoteNodeId && ws) {
+        await ws.proxyFsOp(remoteNodeId, "git", { cwd: body.cwd, args: `checkout "${body.branch}"` }, 15_000);
+        return { ok: true };
+      }
       await git.checkout(body.cwd, body.branch);
       return { ok: true };
     } catch (err) {
@@ -208,6 +218,18 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       return reply.status(400).send({ error: "Missing cwd or branch" });
     }
     try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      if (remoteNodeId && ws) {
+        const gitProxy = async (args: string) => {
+          const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
+          return r.stdout.trim();
+        };
+        if (body.baseBranch) {
+          await gitProxy(`checkout "${body.baseBranch}"`);
+        }
+        await gitProxy(`checkout -b "${body.branch}"`);
+        return { ok: true, branch: body.branch };
+      }
       // If baseBranch specified, checkout that first
       if (body.baseBranch) {
         await git.checkout(body.cwd, body.baseBranch);
@@ -292,6 +314,16 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       return reply.status(400).send({ error: "Missing cwd, baseBranch, or newBranch" });
     }
     try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      if (remoteNodeId && ws) {
+        // Proxy worktree creation to the remote node
+        const result = await ws.proxyFsOp<{ path: string; branch: string }>(remoteNodeId, "git-create-worktree", {
+          cwd: body.cwd,
+          baseBranch: body.baseBranch,
+          newBranch: body.newBranch,
+        }, 60_000);
+        return result;
+      }
       const result = await git.createWorktree(body.cwd, body.baseBranch, body.newBranch, body.path || undefined);
       return result;
     } catch (err) {

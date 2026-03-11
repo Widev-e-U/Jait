@@ -369,6 +369,10 @@ export class WsControlPlane {
         // A remote node is forwarding a provider event (token, tool.start, etc.)
         const evtPayload = msg.payload as { sessionId?: string; event?: unknown } | undefined;
         if (evtPayload?.sessionId && evtPayload.event && this.onRemoteProviderEvent) {
+          const evtMethod = (evtPayload.event as { method?: string })?.method;
+          if (evtMethod && evtMethod !== "item/agentMessage/delta") {
+            console.log(`[remote-event] session=${evtPayload.sessionId.slice(0, 8)} method=${evtMethod}`);
+          }
           this.onRemoteProviderEvent(evtPayload.sessionId, evtPayload.event);
         }
         break;

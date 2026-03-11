@@ -301,8 +301,8 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         rpcNotify(sess, "initialized");
 
         // Start thread
-        const approvalPolicy = mode === "supervised" ? "on-failure" : "unless-allow-listed";
-        const sandbox = mode === "supervised" ? "permissive" : "none";
+        const approvalPolicy = mode === "supervised" ? "on-failure" : "never";
+        const sandbox = mode === "supervised" ? "workspace-write" : "danger-full-access";
         const threadResult = await rpcSend(sess, "thread/start", {
           model: model ?? null,
           cwd: workingDirectory,
@@ -796,6 +796,34 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       }
 
       return result;
+    }
+    case "git-create-worktree": {
+      // Compound operation: create a git worktree for branch isolation
+      const cwd = resolve(params.cwd as string);
+      const baseBranchW = params.baseBranch as string;
+      const newBranchW = params.newBranch as string;
+      const { exec: execAsyncW } = await import("node:child_process");
+      const { promisify: promisifyW } = await import("node:util");
+      const { homedir: homedirW } = await import("node:os");
+      const { basename: basenameW, join: joinW } = await import("node:path");
+      const { mkdir: mkdirW } = await import("node:fs/promises");
+      const execW = promisifyW(execAsyncW);
+
+      const sanitized = newBranchW.replace(/\//g, "-");
+      const repoName = basenameW(cwd);
+      const worktreePath = joinW(homedirW(), ".jait", "worktrees", repoName, sanitized);
+
+      // Ensure parent directory exists
+      await mkdirW(joinW(worktreePath, ".."), { recursive: true });
+
+      await execW(`git worktree add -b "${newBranchW}" "${worktreePath}" "${baseBranchW}"`, {
+        cwd,
+        timeout: 60_000,
+        maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      });
+
+      return { path: worktreePath, branch: newBranchW };
     }
     default:
       throw new Error(`Unknown filesystem operation: ${op}`);

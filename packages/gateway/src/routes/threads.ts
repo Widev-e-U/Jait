@@ -65,6 +65,10 @@ export function registerThreadRoutes(
   // Track active onEvent unsubscribe functions per thread so we can clean up
   const threadUnsubs = new Map<string, () => void>();
 
+  // Track RemoteCliProvider instances per thread so /send, /stop, /interrupt
+  // can access them (they're not in the global providerRegistry)
+  const remoteProviders = new Map<string, RemoteCliProvider>();
+
   // ── Helpers ──────────────────────────────────────────────────────
 
   /** Broadcast a thread event over WS to all clients */
@@ -206,6 +210,7 @@ export function registerThreadRoutes(
     }
 
     threadService.delete(id);
+    remoteProviders.delete(id);
     broadcastThreadEvent(id, "deleted", {});
     return reply.status(204).send();
   });
@@ -265,6 +270,11 @@ export function registerThreadRoutes(
     // Build MCP server references so CLI agents can call Jait's tools
     const mcpServers = isRemote ? [] : [providerRegistry.buildJaitMcpServerRef(config)];
 
+    // Store remote provider for /send, /stop, /interrupt access
+    if (isRemote && provider instanceof RemoteCliProvider) {
+      remoteProviders.set(id, provider);
+    }
+
     try {
       const session = await provider.startSession({
         threadId: id,
@@ -308,11 +318,13 @@ export function registerThreadRoutes(
           broadcastThreadEvent(id, "status", { status: "completed" });
           unsubscribe();
           threadUnsubs.delete(id);
+          remoteProviders.delete(id);
         } else if (event.type === "session.error") {
           threadService.markError(id, event.error);
           broadcastThreadEvent(id, "status", { status: "error", error: event.error });
           unsubscribe();
           threadUnsubs.delete(id);
+          remoteProviders.delete(id);
         } else if (event.type === "turn.completed") {
           // Turn finished but session is still alive — mark thread completed
           // while keeping providerSessionId set.  The frontend checks
@@ -406,7 +418,7 @@ export function registerThreadRoutes(
       return reply.status(409).send({ error: "Thread has no active session — use /start instead" });
     }
 
-    const provider = providerRegistry.get(thread.providerId as ProviderId);
+    const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
     // Persist user message BEFORE sendTurn so it survives provider errors
@@ -429,12 +441,13 @@ export function registerThreadRoutes(
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
 
     if (thread.providerSessionId) {
-      const provider = providerRegistry.get(thread.providerId as ProviderId);
+      const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
       if (provider) {
         try {
           await provider.stopSession(thread.providerSessionId);
         } catch { /* best effort */ }
       }
+      remoteProviders.delete(id);
     }
 
     threadService.markInterrupted(id);
@@ -453,7 +466,7 @@ export function registerThreadRoutes(
       return reply.status(409).send({ error: "Thread has no active session" });
     }
 
-    const provider = providerRegistry.get(thread.providerId as ProviderId);
+    const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
     await provider.interruptTurn(thread.providerSessionId);
