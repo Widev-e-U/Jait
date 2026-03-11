@@ -125,7 +125,6 @@ export function useAutomation(enabled = true) {
     () =>
       selectedThread != null &&
       selectedRepo != null &&
-      selectedRepo.source === 'local' &&
       (selectedThread.status === 'completed' || Boolean(selectedThread.prUrl)),
     [selectedThread, selectedRepo],
   )
