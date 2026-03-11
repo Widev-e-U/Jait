@@ -472,10 +472,6 @@ export function useAutomation(enabled = true) {
         void refresh()
       } else {
         if (!selectedRepo) return
-        if (selectedRepo.source !== 'local') {
-          setError('Add this repository locally on this device to start a new thread. Existing threads stay shared across clients.')
-          return
-        }
 
         // Deselect so the user gets a fresh input immediately
         setSelectedThreadId(null)

@@ -448,9 +448,7 @@ function App() {
   const managerComposerDisabled = automation.creating || !managerCanCreateThread
   const managerPlaceholder = !automation.selectedRepo
     ? 'Select a repository to start a thread...'
-    : automation.selectedRepo.source !== 'local'
-      ? 'Add this repository locally on this device to start a thread...'
-      : 'Describe what you want to do...'
+    : 'Describe what you want to do...'
 
   // ── UI command channel (server ↔ frontend via WebSocket) ──────────
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
