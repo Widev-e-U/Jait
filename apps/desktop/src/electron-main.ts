@@ -496,6 +496,307 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         type: d.isDirectory() ? "dir" : "file",
       }));
     }
+    case "git": {
+      // Run a git command in a given cwd — used by the gateway to proxy git ops
+      const cwd = resolve(params.cwd as string);
+      const args = params.args as string;
+      if (!args || typeof args !== "string") throw new Error("Missing git args");
+      const { exec: execAsync } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execP = promisify(execAsync);
+      const { stdout, stderr } = await execP(`git ${args}`, {
+        cwd,
+        timeout: 60_000,
+        maxBuffer: 10 * 1024 * 1024,
+        env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+      });
+      return { stdout, stderr };
+    }
+    case "gh": {
+      // Run a gh CLI command in a given cwd — used by the gateway to proxy gh operations
+      const cwd = resolve(params.cwd as string);
+      const args = params.args as string;
+      if (!args || typeof args !== "string") throw new Error("Missing gh args");
+      const { exec: execAsync } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execP = promisify(execAsync);
+      const { stdout, stderr } = await execP(`gh ${args}`, {
+        cwd,
+        timeout: 60_000,
+        maxBuffer: 10 * 1024 * 1024,
+      });
+      return { stdout, stderr };
+    }
+    case "git-file-read": {
+      // Read a file from disk (for diff original/modified content)
+      const filePath = resolve(params.path as string);
+      const content = await readFile(filePath, "utf-8");
+      return { content };
+    }
+    case "git-file-diffs": {
+      // Compound operation: return per-file original/modified content for Monaco diff
+      const cwd = resolve(params.cwd as string);
+      const baseBranch = params.baseBranch as string | undefined;
+      const { exec: execAsync } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execP = promisify(execAsync);
+
+      const gitExecLocal = async (args: string) => {
+        const { stdout } = await execP(`git ${args}`, {
+          cwd, timeout: 30_000, maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        });
+        return stdout.trimEnd();
+      };
+
+      // Check if repo
+      try { await gitExecLocal("rev-parse --is-inside-work-tree"); } catch { return []; }
+
+      const entries: Array<{ path: string; original: string; modified: string; status: string }> = [];
+      const seen = new Set<string>();
+
+      if (baseBranch) {
+        // Diff working tree against base branch (committed + uncommitted changes)
+        const nameStatus = await gitExecLocal(`diff --name-status ${baseBranch}`).catch(() => "");
+        for (const line of nameStatus.split("\n").filter(Boolean)) {
+          const parts = line.split("\t");
+          const statusCode = parts[0]?.trim() ?? "M";
+          let filePath = parts[parts.length - 1]?.trim() ?? "";
+          let status = "M";
+          if (statusCode.startsWith("A")) status = "A";
+          else if (statusCode.startsWith("D")) status = "D";
+          else if (statusCode.startsWith("R")) {
+            status = "R";
+            filePath = parts[2]?.trim() ?? filePath;
+          }
+          if (!filePath || seen.has(filePath)) continue;
+          seen.add(filePath);
+
+          let original = "";
+          if (status !== "A") {
+            try { original = await gitExecLocal(`show ${baseBranch}:${JSON.stringify(filePath)}`); } catch { /* new file */ }
+          }
+          let modified = "";
+          if (status !== "D") {
+            try { modified = await readFile(join(cwd, filePath), "utf-8"); } catch { /* deleted */ }
+          }
+          entries.push({ path: filePath, original, modified, status });
+        }
+      } else {
+        // Diff working tree against HEAD (uncommitted changes only)
+        const porcelain = await gitExecLocal("status --porcelain").catch(() => "");
+        for (const line of porcelain.split("\n").filter(Boolean)) {
+          const xy = line.slice(0, 2);
+          let filePath = line.slice(3).trim();
+          if (filePath.includes(" -> ")) filePath = filePath.split(" -> ").pop()!.trim();
+
+          let status = "M";
+          if (xy.includes("?")) status = "?";
+          else if (xy.includes("A")) status = "A";
+          else if (xy.includes("D")) status = "D";
+          else if (xy.includes("R")) status = "R";
+          if (seen.has(filePath)) continue;
+          seen.add(filePath);
+
+          let original = "";
+          if (status !== "A" && status !== "?") {
+            try { original = await gitExecLocal(`show HEAD:${JSON.stringify(filePath)}`); } catch { /* */ }
+          }
+          let modified = "";
+          if (status !== "D") {
+            try { modified = await readFile(join(cwd, filePath), "utf-8"); } catch { /* */ }
+          }
+          entries.push({ path: filePath, original, modified, status });
+        }
+      }
+
+      // Include untracked files not already listed
+      const porcelainAll = await gitExecLocal("status --porcelain").catch(() => "");
+      for (const pl of porcelainAll.split("\n").filter(Boolean)) {
+        if (!pl.startsWith("??")) continue;
+        const fp = pl.slice(3).trim();
+        if (!fp || seen.has(fp)) continue;
+        seen.add(fp);
+        let modified = "";
+        try { modified = await readFile(join(cwd, fp), "utf-8"); } catch { /* */ }
+        entries.push({ path: fp, original: "", modified, status: "?" });
+      }
+
+      return entries;
+    }
+    case "git-stacked-action": {
+      // Compound operation: commit → push → create PR, matching GitStepResult format
+      const cwd = resolve(params.cwd as string);
+      const action = params.action as string; // "commit" | "commit_push" | "commit_push_pr"
+      const commitMessage = params.commitMessage as string | undefined;
+      const featureBranch = params.featureBranch as boolean | undefined;
+      const baseBranch = params.baseBranch as string | undefined;
+      const { exec: execAsync } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const { tmpdir } = await import("node:os");
+      const { writeFile: writeTmpFile, unlink: unlinkTmp } = await import("node:fs/promises");
+      const execP = promisify(execAsync);
+
+      const gitExecLocal = async (args: string, timeout = 30_000) => {
+        const { stdout } = await execP(`git ${args}`, {
+          cwd, timeout, maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        });
+        return stdout.trim();
+      };
+
+      const ghExecLocal = async (args: string, timeout = 60_000) => {
+        const { stdout } = await execP(`gh ${args}`, {
+          cwd, timeout, maxBuffer: 10 * 1024 * 1024,
+        });
+        return stdout.trim();
+      };
+
+      const ghIsAvailable = async () => {
+        try { await execP("gh --version", { cwd, timeout: 5_000 }); return true; } catch { return false; }
+      };
+
+      const result: Record<string, unknown> = {
+        commit: { status: "skipped_no_changes" },
+        push: { status: "skipped_not_requested" },
+        branch: { status: "skipped_not_requested" },
+        pr: { status: "skipped_not_requested" },
+      };
+
+      // Optionally create a feature branch
+      if (featureBranch) {
+        const timestamp = Date.now().toString(36);
+        const branchName = `feature/auto-${timestamp}`;
+        await gitExecLocal(`checkout -b "${branchName}"`);
+        result.branch = { status: "created", name: branchName };
+      }
+
+      const currentBranch = await gitExecLocal("rev-parse --abbrev-ref HEAD").catch(() => null);
+
+      // Commit step
+      const porcelain = await gitExecLocal("status --porcelain").catch(() => "");
+      if (porcelain.length > 0) {
+        await gitExecLocal("add -A");
+        let msg = commitMessage?.trim();
+        if (!msg) {
+          try {
+            const diffSummary = await gitExecLocal("diff --cached --stat");
+            msg = `chore: auto-commit ${diffSummary.split("\n").length} file(s) changed`;
+          } catch { msg = "chore: auto-commit changes"; }
+        }
+        await gitExecLocal(`commit -m "${msg.replace(/"/g, '\\"')}"`);
+        const sha = await gitExecLocal("rev-parse HEAD");
+        result.commit = { status: "created", commitSha: sha, subject: msg };
+      }
+
+      // Push step
+      if ((action === "commit_push" || action === "commit_push_pr") && currentBranch) {
+        let hasUpstream = false;
+        let upstreamBranch: string | undefined;
+        try {
+          upstreamBranch = await gitExecLocal(`rev-parse --abbrev-ref ${currentBranch}@{upstream}`);
+          hasUpstream = true;
+        } catch { /* no upstream */ }
+
+        if (hasUpstream) {
+          try {
+            await gitExecLocal("push", 60_000);
+            result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+          } catch {
+            result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+          }
+        } else {
+          // Try to find a remote to set upstream
+          const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
+          const remote = remotes.includes("origin") ? "origin" : remotes[0];
+          if (remote) {
+            await gitExecLocal(`push --set-upstream "${remote}" "${currentBranch}"`, 60_000);
+            result.push = { status: "pushed", branch: currentBranch, upstreamBranch: `${remote}/${currentBranch}`, setUpstream: true };
+          } else {
+            result.push = { status: "skipped_no_remote", branch: currentBranch };
+          }
+        }
+      }
+
+      // PR creation step
+      if (action === "commit_push_pr" && currentBranch) {
+        try {
+          const hasGh = await ghIsAvailable();
+          if (hasGh) {
+            // Check if PR already exists
+            try {
+              const existing = await ghExecLocal(`pr view --head "${currentBranch}" --json number,url,title,state,baseRefName,headRefName`);
+              const parsed = JSON.parse(existing);
+              if (parsed.number && String(parsed.state ?? "OPEN").toUpperCase() === "OPEN") {
+                result.pr = {
+                  status: "opened_existing",
+                  url: String(parsed.url ?? ""),
+                  number: Number(parsed.number),
+                  baseBranch: String(parsed.baseRefName ?? ""),
+                  headBranch: String(parsed.headRefName ?? ""),
+                  title: String(parsed.title ?? ""),
+                };
+                return result;
+              }
+            } catch { /* no existing PR */ }
+
+            // Generate PR body
+            const resolvedBase = baseBranch || await gitExecLocal("symbolic-ref refs/remotes/origin/HEAD").then(r => r.replace("refs/remotes/origin/", "").trim()).catch(() => "main");
+            const prTitle = (result.commit as Record<string, unknown>).subject as string ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
+            let prBody = `## Summary\n\n${prTitle}\n`;
+            try {
+              const commits = await gitExecLocal(`log --oneline ${resolvedBase}..${currentBranch}`, 15_000);
+              if (commits) prBody += `\n## Commits\n\n\`\`\`\n${commits.slice(0, 12000)}\n\`\`\`\n`;
+            } catch { /* */ }
+            try {
+              const diffStat = await gitExecLocal(`diff --stat ${resolvedBase}..${currentBranch}`, 15_000);
+              if (diffStat) prBody += `\n## Changes\n\n\`\`\`\n${diffStat.slice(0, 12000)}\n\`\`\`\n`;
+            } catch { /* */ }
+            prBody += `\n---\n*PR created by [Jait](https://github.com/JakobWl/Jait) automation.*`;
+
+            // Write body to temp file to avoid shell escaping issues
+            const bodyFile = join(tmpdir(), `jait-pr-body-${Date.now()}.md`);
+            await writeTmpFile(bodyFile, prBody, "utf-8");
+            try {
+              const baseFlag = baseBranch ? ` --base "${baseBranch}"` : "";
+              const pushFlag = (result.push as Record<string, unknown>).status !== "pushed" ? " --push" : "";
+              const prUrl = await ghExecLocal(
+                `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}${pushFlag}`,
+                60_000,
+              );
+
+              // Fetch PR details
+              let prNumber = 0;
+              let prBaseBranch = baseBranch ?? "";
+              let prHeadBranch = currentBranch;
+              let prFinalTitle = prTitle;
+              try {
+                const details = await ghExecLocal(`pr view "${prUrl.trim()}" --json number,title,baseRefName,headRefName`);
+                const parsed = JSON.parse(details);
+                prNumber = Number(parsed.number ?? 0);
+                prBaseBranch = String(parsed.baseRefName ?? prBaseBranch);
+                prHeadBranch = String(parsed.headRefName ?? prHeadBranch);
+                prFinalTitle = String(parsed.title ?? prTitle);
+              } catch { /* */ }
+
+              result.pr = { status: "created", url: prUrl.trim(), number: prNumber, baseBranch: prBaseBranch, headBranch: prHeadBranch, title: prFinalTitle };
+              if ((result.push as Record<string, unknown>).status !== "pushed") {
+                result.push = { status: "pushed", branch: currentBranch };
+              }
+            } finally {
+              await unlinkTmp(bodyFile).catch(() => {});
+            }
+          } else {
+            result.pr = { status: "skipped_no_remote" };
+          }
+        } catch (err) {
+          result.pr = { status: "skipped_no_remote" };
+          throw new Error(`PR creation failed: ${err instanceof Error ? err.message : String(err)}`);
+        }
+      }
+
+      return result;
+    }
     default:
       throw new Error(`Unknown filesystem operation: ${op}`);
   }

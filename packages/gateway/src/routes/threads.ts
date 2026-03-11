@@ -507,14 +507,43 @@ export function registerThreadRoutes(
     const githubToken = typeof body["githubToken"] === "string" ? body["githubToken"] : undefined;
 
     try {
-      const result = await gitService.runStackedAction(
-        thread.workingDirectory,
-        "commit_push_pr",
-        commitMessage,
-        false,
-        baseBranch,
-        githubToken,
-      );
+      let result: GitStepResult;
+      const cwd = thread.workingDirectory;
+
+      // Check if the working directory is on a remote node
+      const isRemotePath = !existsSync(cwd);
+      if (isRemotePath && ws) {
+        // Find the remote node that owns this path
+        const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(cwd);
+        const expectedPlatform = isWindowsPath ? "windows" : null;
+        let remoteNodeId: string | null = null;
+        for (const node of ws.getFsNodes()) {
+          if (node.isGateway) continue;
+          if (expectedPlatform && node.platform !== expectedPlatform) continue;
+          remoteNodeId = node.id;
+          break;
+        }
+        if (!remoteNodeId) {
+          return reply.status(502).send({ error: "No remote node connected to run git operations on this path." });
+        }
+        result = await ws.proxyFsOp<GitStepResult>(remoteNodeId, "git-stacked-action", {
+          cwd,
+          action: "commit_push_pr",
+          commitMessage,
+          featureBranch: false,
+          baseBranch,
+          githubToken,
+        }, 120_000);
+      } else {
+        result = await gitService.runStackedAction(
+          cwd,
+          "commit_push_pr",
+          commitMessage,
+          false,
+          baseBranch,
+          githubToken,
+        );
+      }
 
       const prUrl = result.pr.url ?? result.push.createPrUrl;
       const updatedThread = threadService.update(thread.id, {

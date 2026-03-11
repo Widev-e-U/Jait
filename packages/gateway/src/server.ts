@@ -169,7 +169,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
 
   // Git API routes
-  registerGitRoutes(app, config);
+  registerGitRoutes(app, config, deps.ws);
 
   // Agent threads + provider routes
   if (deps.threadService && deps.providerRegistry) {
