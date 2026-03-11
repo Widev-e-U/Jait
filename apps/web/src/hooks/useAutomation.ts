@@ -115,6 +115,11 @@ export function useAutomation(enabled = true) {
     () => threads.find((t) => t.id === selectedThreadId) ?? null,
     [threads, selectedThreadId],
   )
+  const getRepositoryForThread = useCallback(
+    (thread: Pick<AgentThread, 'title' | 'workingDirectory'>) =>
+      repositories.find((repository) => threadBelongsToRepository(thread, repository)) ?? null,
+    [repositories],
+  )
 
   const showGitActions = useMemo(
     () =>
@@ -136,6 +141,14 @@ export function useAutomation(enabled = true) {
       setSelectedRepoId(repositories[0]?.id ?? null)
     }
   }, [repositories, selectedRepoId, enabled])
+
+  useEffect(() => {
+    if (!enabled || !selectedThread) return
+    const repository = getRepositoryForThread(selectedThread)
+    if (repository && repository.id !== selectedRepoId) {
+      setSelectedRepoId(repository.id)
+    }
+  }, [enabled, getRepositoryForThread, selectedRepoId, selectedThread])
 
   // ── Data fetching ──────────────────────────────────────────────
 
@@ -554,6 +567,7 @@ export function useAutomation(enabled = true) {
     selectedThreadId,
     setSelectedThreadId,
     selectedThread,
+    getRepositoryForThread,
     threadPrStates,
     ghAvailable,
     activities,

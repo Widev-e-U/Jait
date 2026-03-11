@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef } from 'react'
+import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef, type ReactNode } from 'react'
 import { ArrowUp, ChevronDown, ListPlus, Mic, Square } from 'lucide-react'
 import { getIconForFile, DEFAULT_FILE } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
@@ -37,8 +37,10 @@ interface PromptInputProps {
   onQueue?: (chipFiles?: ReferencedFile[]) => void
   isLoading?: boolean
   disabled?: boolean
+  controlsDisabled?: boolean
   placeholder?: string
   className?: string
+  footerLeadingContent?: ReactNode
   onVoiceInput?: () => void
   viewMode?: ViewMode
   onViewModeChange?: (viewMode: ViewMode) => void
@@ -177,8 +179,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onQueue,
   isLoading,
   disabled,
+  controlsDisabled,
   placeholder = 'Ask anything...',
   className,
+  footerLeadingContent,
   onVoiceInput,
   viewMode,
   onViewModeChange,
@@ -220,6 +224,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const [searchResults, setSearchResults] = useState<ReferencedFile[]>([])
   const [searchLoading, setSearchLoading] = useState(false)
   const searchAbort = useRef<AbortController | null>(null)
+  const composerDisabled = Boolean(disabled)
+  const selectorsDisabled = Boolean(controlsDisabled ?? disabled ?? false) || Boolean(isLoading)
 
   // Track whether we're doing a controlled sync to avoid loops
   const isSyncing = useRef(false)
@@ -629,7 +635,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         )}
         <div
           ref={editableRef}
-          contentEditable={!disabled}
+          contentEditable={!composerDisabled}
           role="textbox"
           aria-multiline
           suppressContentEditableWarning
@@ -638,7 +644,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           className={cn(
             'min-h-[40px] max-h-[200px] overflow-y-auto text-base leading-relaxed outline-none py-2 px-2',
             'whitespace-pre-wrap break-words',
-            disabled && 'cursor-not-allowed opacity-50',
+            composerDisabled && 'cursor-not-allowed opacity-50',
           )}
           style={{ wordBreak: 'break-word' }}
         />
@@ -682,17 +688,18 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
       <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
         <div className="flex items-center gap-1">
+          {footerLeadingContent}
           {viewMode && onViewModeChange && (
-            <ViewModeSelector mode={viewMode} onChange={onViewModeChange} disabled={disabled || isLoading} />
+            <ViewModeSelector mode={viewMode} onChange={onViewModeChange} disabled={selectorsDisabled} />
           )}
           {provider && onProviderChange && (
-            <ProviderSelector provider={provider} onChange={onProviderChange} disabled={disabled || isLoading} />
+            <ProviderSelector provider={provider} onChange={onProviderChange} disabled={selectorsDisabled} />
           )}
           {provider && provider !== 'jait' && onCliModelChange && (
-            <CliModelSelector provider={provider} model={cliModel ?? null} onChange={onCliModelChange} disabled={disabled || isLoading} />
+            <CliModelSelector provider={provider} model={cliModel ?? null} onChange={onCliModelChange} disabled={selectorsDisabled} />
           )}
           {mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager' && (
-            <ModeSelector mode={mode} onChange={onModeChange} disabled={disabled || isLoading} />
+            <ModeSelector mode={mode} onChange={onModeChange} disabled={selectorsDisabled} />
           )}
         </div>
         <div className="flex items-center gap-1.5">
@@ -727,7 +734,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 type="button"
                 size="icon"
                 className="h-8 w-8 shrink-0 rounded-lg rounded-r-none border-r-0"
-                disabled={isEmpty || disabled}
+                disabled={isEmpty || composerDisabled}
                 title="Queue message"
                 onClick={() => {
                   const el = editableRef.current
@@ -743,14 +750,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                     type="button"
                     size="icon"
                     className="h-8 w-5 shrink-0 rounded-lg rounded-l-none px-0"
-                    disabled={isEmpty || disabled}
+                    disabled={isEmpty || composerDisabled}
                   >
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" side="top" className="min-w-[160px]">
                   <DropdownMenuItem
-                    disabled={isEmpty || disabled}
+                    disabled={isEmpty || composerDisabled}
                     onSelect={() => {
                       const el = editableRef.current
                       const chips = el ? getChipFiles(el) : []
@@ -761,7 +768,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                     Send now
                   </DropdownMenuItem>
                   <DropdownMenuItem
-                    disabled={isEmpty || disabled}
+                    disabled={isEmpty || composerDisabled}
                     onSelect={() => {
                       const el = editableRef.current
                       const chips = el ? getChipFiles(el) : []
@@ -779,7 +786,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               type="button"
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg"
-              disabled={isEmpty || disabled}
+              disabled={isEmpty || composerDisabled}
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []
