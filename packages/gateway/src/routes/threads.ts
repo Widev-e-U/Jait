@@ -29,7 +29,9 @@ import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
 import { GitService, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
 import {
+  generateTitleViaTurn,
   generateTitleViaApi,
+  normalizeGeneratedThreadTitle,
 } from "../services/thread-title.js";
 import type { WsEventType } from "@jait/shared";
 
@@ -227,9 +229,19 @@ export function registerThreadRoutes(
         threadUnsubs.delete(id);
       }
 
+      // Flag to suppress turn.completed during the title-generation turn.
+      // The title turn fires turn.completed before the real coding turn starts;
+      // without this guard the thread would flip to "completed" prematurely.
+      let suppressTurnCompleted = false;
+
       // Subscribe to provider events and log them
       const unsubscribe = provider.onEvent((event: ProviderEvent) => {
         if (!isThreadSessionEvent(event, session.id)) {
+          return;
+        }
+
+        // During the title turn we still log events but skip status changes
+        if (suppressTurnCompleted && event.type === "turn.completed") {
           return;
         }
 
@@ -268,40 +280,57 @@ export function registerThreadRoutes(
       const titlePrefix = typeof body["titlePrefix"] === "string" ? body["titlePrefix"] : "";
       const titleTask = typeof body["titleTask"] === "string" ? body["titleTask"] : message ?? "";
 
-      // ── Send the actual coding turn immediately ────────────────
-      if (message) {
-        // Log the user's prompt as an activity so it shows in the thread
-        const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
-        broadcastThreadEvent(id, "activity", { activity: userActivity });
-        await provider.sendTurn(session.id, message);
-      }
-
-      // ── Title generation (async, non-blocking) ─────────────────
-      // Generate title in the background so the /start response returns
-      // quickly and the coding turn begins without delay.
-      if (titleTask.trim()) {
-        const apiKeys = deps.userService?.getSettings(authUser.id).apiKeys ?? {};
-        void (async () => {
-          try {
-            const generatedTitle = await generateTitleViaApi({
-              task: titleTask,
-              config,
-              apiKeys,
-              model: thread.model ?? undefined,
-            });
-            if (generatedTitle) {
-              const titleUpdated = threadService.update(id, {
-                title: `${titlePrefix}${generatedTitle}`.trim(),
-              });
-              if (titleUpdated) broadcastThreadEvent(id, "updated", { thread: titleUpdated });
-            }
-          } catch {
-            // Title generation failed — leave the placeholder title
-          }
-        })();
-      }
-
+      // ── Return response immediately — run title + coding turn in background ──
+      // The session is alive and marked running. The frontend gets a fast
+      // response; title generation and the coding turn happen asynchronously
+      // with progress pushed via WS events.
       const updated = threadService.getById(id);
+
+      void (async () => {
+        try {
+          // ── Title generation (via Codex turn) ─────────────────
+          if (titleTask.trim()) {
+            suppressTurnCompleted = true;
+            try {
+              let generatedTitle: string;
+              if (providerId === "codex" || providerId === "claude-code") {
+                const raw = await generateTitleViaTurn(provider, session.id, titleTask);
+                generatedTitle = normalizeGeneratedThreadTitle(raw, "");
+              } else {
+                const apiKeys = deps.userService?.getSettings(authUser.id).apiKeys ?? {};
+                generatedTitle = await generateTitleViaApi({
+                  task: titleTask,
+                  config,
+                  apiKeys,
+                  model: thread.model ?? undefined,
+                });
+              }
+              if (generatedTitle) {
+                const titleUpdated = threadService.update(id, {
+                  title: `${titlePrefix}${generatedTitle}`.trim(),
+                });
+                if (titleUpdated) broadcastThreadEvent(id, "updated", { thread: titleUpdated });
+              }
+            } catch {
+              // Title generation failed — leave the placeholder title
+            } finally {
+              suppressTurnCompleted = false;
+            }
+          }
+
+          // ── Send the actual coding turn ────────────────────────
+          if (message) {
+            const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
+            broadcastThreadEvent(id, "activity", { activity: userActivity });
+            await provider.sendTurn(session.id, message);
+          }
+        } catch (err) {
+          const errorMsg = err instanceof Error ? err.message : String(err);
+          threadService.markError(id, errorMsg);
+          broadcastThreadEvent(id, "status", { status: "error", error: errorMsg });
+        }
+      })();
+
       return reply.status(200).send(updated);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
