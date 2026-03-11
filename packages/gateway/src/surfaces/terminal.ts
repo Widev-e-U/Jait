@@ -38,6 +38,8 @@ interface PTYInstance {
   kill(signal?: string): void;
 }
 
+declare const Bun: unknown;
+
 function spawnPty(shell: string, shellArgs: string[], opts: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string | undefined> }): PTYInstance {
   // Bun runtime path
   if (typeof Bun !== "undefined") {

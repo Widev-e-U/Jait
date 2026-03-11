@@ -1,6 +1,10 @@
 import { webcrypto } from "node:crypto";
 
-const _crypto = (globalThis.crypto as Crypto) ?? (webcrypto as unknown as Crypto);
+interface WebCrypto {
+  getRandomValues<T extends ArrayBufferView | null>(array: T): T;
+}
+
+const _crypto = (globalThis.crypto as WebCrypto) ?? (webcrypto as unknown as WebCrypto);
 
 /**
  * UUIDv7 — time-sortable unique identifiers.
