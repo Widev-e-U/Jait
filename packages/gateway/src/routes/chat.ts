@@ -18,7 +18,7 @@ import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
 import { resolveWorkspaceRoot } from "../tools/core/get-fs.js";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import { requireAuth } from "../security/http-auth.js";
 import {
   runAgentLoop,

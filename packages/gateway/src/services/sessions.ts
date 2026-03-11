@@ -4,7 +4,7 @@
 import { and, eq, desc } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { sessions } from "../db/schema.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 
 export interface CreateSessionParams {
   userId?: string;

@@ -14,7 +14,7 @@ import type { SessionService } from "../services/sessions.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import { RemoteFileSystemSurface } from "../surfaces/remote-filesystem.js";
 import type { WsControlPlane } from "../ws.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 
 type AnyFsSurface = FileSystemSurface | RemoteFileSystemSurface;
 

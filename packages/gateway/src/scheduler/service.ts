@@ -1,7 +1,7 @@
 import { eq, desc } from "drizzle-orm";
 import type { JaitDB } from "../db/index.js";
 import { scheduledJobs } from "../db/schema.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import type { ToolResult } from "../tools/contracts.js";
 
 export interface SchedulerToolExecution {

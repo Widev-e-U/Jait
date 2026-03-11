@@ -9,7 +9,7 @@
 import { and, eq, desc, gt } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { agentThreads, agentThreadActivities } from "../db/schema.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import type {
   ProviderId,
   RuntimeMode,

@@ -58,7 +58,7 @@ export function createSurfacesStartTool(registry: SurfaceRegistry): ToolDefiniti
     },
     async execute(input: SurfaceStartInput, context: ToolContext): Promise<ToolResult> {
       try {
-        const { uuidv7 } = await import("../lib/uuidv7.js");
+        const { uuidv7 } = await import("../db/uuidv7.js");
         const surfaceId = `${input.type}-${uuidv7()}`;
         const surface = await registry.startSurface(input.type, surfaceId, {
           sessionId: input.sessionId ?? context.sessionId,

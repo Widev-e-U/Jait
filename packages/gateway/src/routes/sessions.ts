@@ -13,7 +13,7 @@ import type { AppConfig } from "../config.js";
 import type { SessionService } from "../services/sessions.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { AuditWriter } from "../services/audit.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import type { HookBus } from "../scheduler/hooks.js";
 import { requireAuth } from "../security/http-auth.js";
 

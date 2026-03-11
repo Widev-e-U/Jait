@@ -23,7 +23,7 @@ import {
   type AgentLoopEvent,
 } from "./agent-loop.js";
 import { ToolName } from "./tool-names.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 
 // ── Input type ───────────────────────────────────────────────────────
 

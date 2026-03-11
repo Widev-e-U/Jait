@@ -15,7 +15,7 @@
 
 import type { ToolDefinition, ToolContext, ToolResult } from "./contracts.js";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import type { TerminalSurface } from "../surfaces/terminal.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import type { WsControlPlane } from "../ws.js";

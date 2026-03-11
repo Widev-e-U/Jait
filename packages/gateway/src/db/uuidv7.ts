@@ -1,23 +1,17 @@
-import { webcrypto } from "node:crypto";
-
-interface WebCrypto {
-  getRandomValues<T extends ArrayBufferView | null>(array: T): T;
-}
-
-const _crypto = (globalThis.crypto as WebCrypto) ?? (webcrypto as unknown as WebCrypto);
-
 /**
  * UUIDv7 — time-sortable unique identifiers.
  *
  * Format: 48-bit ms timestamp + 4-bit version (7) + 12-bit rand + 2-bit variant + 62-bit rand
  * Total: 128 bits, lexicographically sortable by creation time.
+ *
+ * Uses globalThis.crypto (available natively in Bun and Node 19+).
  */
 export function uuidv7(): string {
   const now = Date.now();
   const bytes = new Uint8Array(16);
 
   // Fill with random bytes first
-  _crypto.getRandomValues(bytes);
+  crypto.getRandomValues(bytes);
 
   // Timestamp: first 48 bits (6 bytes)
   bytes[0] = (now / 2 ** 40) & 0xff;

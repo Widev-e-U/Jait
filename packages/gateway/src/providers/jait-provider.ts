@@ -7,7 +7,7 @@
  */
 
 import { EventEmitter } from "node:events";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,

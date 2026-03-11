@@ -7,7 +7,7 @@
 import type { FastifyInstance } from "fastify";
 import type { ConsentManager } from "../security/consent-manager.js";
 import type { AuditWriter } from "../services/audit.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 
 export function registerConsentRoutes(
   app: FastifyInstance,

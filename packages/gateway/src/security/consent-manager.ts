@@ -8,7 +8,7 @@
 
 import type { JaitDB } from "../db/connection.js";
 import { consentLog, consentSessionApprovals } from "../db/schema.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import { eq } from "drizzle-orm";
 
 // ── Types ────────────────────────────────────────────────────────────

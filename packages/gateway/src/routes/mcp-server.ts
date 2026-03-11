@@ -16,7 +16,7 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext } from "../tools/contracts.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 
 interface McpDeps {
   toolRegistry: ToolRegistry;

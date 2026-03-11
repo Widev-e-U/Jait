@@ -4,7 +4,7 @@
 import { describe, it, expect, beforeEach, afterEach, beforeAll } from "vitest";
 import { SessionService } from "./services/sessions.js";
 import { AuditWriter } from "./services/audit.js";
-import { uuidv7 } from "./lib/uuidv7.js";
+import { uuidv7 } from "./db/uuidv7.js";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 

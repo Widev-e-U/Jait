@@ -16,7 +16,7 @@ import { EventEmitter } from "node:events";
 import { writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,

@@ -7,7 +7,7 @@
 
 import type { ToolDefinition, ToolContext, ToolResult, ToolTier, ToolCategory } from "./contracts.js";
 import type { AuditWriter } from "../services/audit.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import { validateToolInput } from "./validate.js";
 
 /** Summary of a tool for the settings UI and discovery endpoints */

@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { randomBytes, scryptSync, timingSafeEqual } from "node:crypto";
 import type { JaitDB } from "../db/connection.js";
 import { messages, sessions, userSettings, users } from "../db/schema.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type SttProvider = "simulated" | "browser";

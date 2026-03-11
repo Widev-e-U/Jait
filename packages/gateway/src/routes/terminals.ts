@@ -10,7 +10,7 @@ import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import { TerminalSurface } from "../surfaces/terminal.js";
-import { uuidv7 } from "../lib/uuidv7.js";
+import { uuidv7 } from "../db/uuidv7.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
