@@ -329,7 +329,7 @@ export function registerThreadRoutes(
           // Turn finished but session is still alive — mark thread completed
           // while keeping providerSessionId set.  The frontend checks
           // providerSessionId to decide between /send and /start.
-          threadService.update(id, { status: "completed", completedAt: new Date().toISOString() });
+          threadService.update(id, { status: "completed", error: null, completedAt: new Date().toISOString() });
           broadcastThreadEvent(id, "status", { status: "completed" });
         }
       });

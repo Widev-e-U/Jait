@@ -825,6 +825,66 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
       return { path: worktreePath, branch: newBranchW };
     }
+    case "gh-check": {
+      // Check whether GitHub CLI is installed and authenticated
+      const { exec: execGhCheck } = await import("node:child_process");
+      const { promisify: promisifyGhCheck } = await import("node:util");
+      const execGhC = promisifyGhCheck(execGhCheck);
+
+      let installed = false;
+      let authenticated = false;
+      let username: string | null = null;
+
+      try {
+        await execGhC("gh --version", { timeout: 5_000 });
+        installed = true;
+      } catch { /* not installed */ }
+
+      if (installed) {
+        try {
+          const { stdout } = await execGhC("gh auth status 2>&1", { timeout: 10_000 });
+          const out = stdout.toString();
+          if (out.includes("Logged in")) {
+            authenticated = true;
+            const match = out.match(/Logged in to .+ account (\S+)/);
+            if (match?.[1]) username = match[1];
+          }
+        } catch (err) {
+          // gh auth status exits non-zero when not authenticated — check stderr
+          const msg = err instanceof Error ? (err as { stderr?: string }).stderr ?? err.message : "";
+          if (msg.includes("Logged in")) {
+            authenticated = true;
+            const match = msg.match(/Logged in to .+ account (\S+)/);
+            if (match?.[1]) username = match[1];
+          }
+        }
+      }
+
+      return { installed, authenticated, username };
+    }
+    case "gh-auth-token": {
+      // Authenticate gh CLI using a personal access token
+      const token = params.token as string;
+      if (!token || typeof token !== "string") throw new Error("Missing token parameter");
+
+      const { exec: execGhAuth } = await import("node:child_process");
+      const { promisify: promisifyGhAuth } = await import("node:util");
+      const execGhA = promisifyGhAuth(execGhAuth);
+
+      // Pipe token into gh auth login --with-token
+      await execGhA(`echo ${token} | gh auth login --with-token`, {
+        timeout: 30_000,
+      });
+
+      // Verify authentication
+      let username: string | null = null;
+      try {
+        const { stdout } = await execGhA("gh api user --jq .login", { timeout: 10_000 });
+        username = stdout.trim() || null;
+      } catch { /* verification failed but auth might still be ok */ }
+
+      return { ok: true, username };
+    }
     default:
       throw new Error(`Unknown filesystem operation: ${op}`);
   }

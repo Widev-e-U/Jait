@@ -90,6 +90,17 @@ export interface GitWorktreeResult {
   branch: string
 }
 
+export interface GhStatusResult {
+  installed: boolean
+  authenticated: boolean
+  username: string | null
+}
+
+export interface GhAuthResult {
+  ok: boolean
+  username: string | null
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function getToken(): string | null {
@@ -184,6 +195,14 @@ export const gitApi = {
 
   removeWorktree(cwd: string, path: string, force = false): Promise<void> {
     return gitPost<void>('remove-worktree', { cwd, path, force })
+  },
+
+  ghStatus(cwd?: string): Promise<GhStatusResult> {
+    return gitPost<GhStatusResult>('gh-status', { ...(cwd ? { cwd } : {}) })
+  },
+
+  ghAuth(token: string, cwd?: string): Promise<GhAuthResult> {
+    return gitPost<GhAuthResult>('gh-auth', { token, ...(cwd ? { cwd } : {}) })
   },
 }
 

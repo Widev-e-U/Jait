@@ -72,6 +72,12 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
             }
           } catch { /* */ }
         }
+        // Check gh availability on the remote node
+        let ghAvailable = false;
+        try {
+          const ghCheck = await ws.proxyFsOp<{ installed: boolean; authenticated: boolean }>(remoteNodeId, "gh-check", {}, 10_000);
+          ghAvailable = ghCheck.installed && ghCheck.authenticated;
+        } catch { /* fallback to false */ }
         return {
           branch: currentBranch,
           hasWorkingTreeChanges: hasChanges,
@@ -80,7 +86,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
           aheadCount: 0,
           behindCount: 0,
           pr: null,
-          ghAvailable: false,
+          ghAvailable,
         };
       }
       const status = await git.status(cwd, branch, githubToken);
@@ -344,6 +350,98 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       return { ok: true };
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Worktree removal failed" });
+    }
+  });
+
+  /** Check if GitHub CLI is installed and authenticated */
+  app.post("/api/git/gh-status", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string };
+    const cwd = body.cwd ?? "";
+
+    try {
+      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : null;
+      if (remoteNodeId && ws) {
+        const result = await ws.proxyFsOp<{ installed: boolean; authenticated: boolean; username: string | null }>(
+          remoteNodeId, "gh-check", {}, 15_000,
+        );
+        return result;
+      }
+      // Local check
+      const { exec: execCmd } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execP = promisify(execCmd);
+
+      let installed = false;
+      let authenticated = false;
+      let username: string | null = null;
+
+      try {
+        await execP("gh --version", { timeout: 5_000 });
+        installed = true;
+      } catch { /* not installed */ }
+
+      if (installed) {
+        try {
+          const { stdout, stderr } = await execP("gh auth status 2>&1", { timeout: 10_000 });
+          const out = (stdout ?? "") + (stderr ?? "");
+          if (out.includes("Logged in")) {
+            authenticated = true;
+            const match = out.match(/Logged in to .+ account (\S+)/);
+            if (match?.[1]) username = match[1];
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? (err as { stderr?: string }).stderr ?? err.message : "";
+          if (msg.includes("Logged in")) {
+            authenticated = true;
+            const match = msg.match(/Logged in to .+ account (\S+)/);
+            if (match?.[1]) username = match[1];
+          }
+        }
+      }
+
+      return { installed, authenticated, username };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "gh status check failed" });
+    }
+  });
+
+  /** Authenticate GitHub CLI with a token */
+  app.post("/api/git/gh-auth", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; token?: string };
+    const cwd = body.cwd ?? "";
+    const token = body.token;
+    if (!token || typeof token !== "string") {
+      return reply.status(400).send({ error: "Missing token" });
+    }
+
+    try {
+      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : null;
+      if (remoteNodeId && ws) {
+        const result = await ws.proxyFsOp<{ ok: boolean; username: string | null }>(
+          remoteNodeId, "gh-auth-token", { token }, 30_000,
+        );
+        return result;
+      }
+      // Local auth
+      const { exec: execCmd } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execP = promisify(execCmd);
+
+      await execP(`echo ${token} | gh auth login --with-token`, { timeout: 30_000 });
+
+      let username: string | null = null;
+      try {
+        const { stdout } = await execP("gh api user --jq .login", { timeout: 10_000 });
+        username = stdout.trim() || null;
+      } catch { /* */ }
+
+      return { ok: true, username };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "gh auth failed" });
     }
   });
 

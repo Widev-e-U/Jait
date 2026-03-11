@@ -30,6 +30,7 @@ import {
 } from '@/lib/git-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
+import { GhSetupDialog } from './GhSetupDialog'
 
 interface GitActionsControlProps {
   /** Absolute path to the git repo working directory */
@@ -70,6 +71,8 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
   const [commitDialogOpen, setCommitDialogOpen] = useState(false)
   const [commitMessage, setCommitMessage] = useState('')
   const [diffOpen, setDiffOpen] = useState(false)
+  const [ghSetupOpen, setGhSetupOpen] = useState(false)
+  const pendingPrAction = useRef<{ action: GitStackedAction; opts?: { commitMessage?: string; featureBranch?: boolean; forcePushOnly?: boolean } } | null>(null)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // ── Status refresh (event-driven, no polling) ─────────────────
@@ -119,6 +122,20 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
     action: GitStackedAction,
     opts?: { commitMessage?: string; featureBranch?: boolean; forcePushOnly?: boolean },
   ) => {
+    // Pre-check gh for PR actions
+    if (action === 'commit_push_pr') {
+      try {
+        const ghStatus = await gitApi.ghStatus(cwd)
+        if (!ghStatus.installed || !ghStatus.authenticated) {
+          pendingPrAction.current = { action, opts }
+          setGhSetupOpen(true)
+          return
+        }
+      } catch {
+        // If check fails, proceed anyway
+      }
+    }
+
     setIsBusy(true)
     setMenuOpen(false)
     const toastId = toast.loading(
@@ -233,6 +250,14 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
     runStackedAction('commit', { commitMessage: msg || undefined, featureBranch: true })
   }, [commitMessage, runStackedAction])
 
+  const handleGhReady = useCallback(() => {
+    if (pendingPrAction.current) {
+      const { action, opts } = pendingPrAction.current
+      pendingPrAction.current = null
+      runStackedAction(action, opts)
+    }
+  }, [runStackedAction])
+
   // ── Render ─────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -241,6 +266,12 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
 
   return (
     <div className="relative inline-flex items-center gap-2">
+      <GhSetupDialog
+        open={ghSetupOpen}
+        onOpenChange={setGhSetupOpen}
+        cwd={cwd}
+        onReady={handleGhReady}
+      />
       {/* View changes button */}
       {gitStatus?.hasWorkingTreeChanges && (
         <Button

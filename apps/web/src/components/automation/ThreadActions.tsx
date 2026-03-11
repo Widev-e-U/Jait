@@ -1,11 +1,12 @@
-import { useState, useCallback, useEffect } from 'react'
+import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Eye, GitPullRequest, Loader2, AlertTriangle } from 'lucide-react'
-import { summarizeGitResult } from '@/lib/git-api'
+import { summarizeGitResult, gitApi } from '@/lib/git-api'
 import { agentsApi, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
+import { GhSetupDialog } from './GhSetupDialog'
 
 interface ThreadActionsProps {
   /** Thread id to persist PR metadata after creation/open. */
@@ -31,6 +32,8 @@ interface ThreadActionsProps {
 export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, prUrl, prState, ghAvailable = true, threadStatus }: ThreadActionsProps) {
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
+  const [ghSetupOpen, setGhSetupOpen] = useState(false)
+  const pendingPrAction = useRef(false)
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
     prUrl ? { url: prUrl, kind: 'created' } : null,
   )
@@ -64,7 +67,20 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, 
       return
     }
 
+    // Pre-check gh availability before attempting PR creation
     setBusy(true)
+    try {
+      const ghStatus = await gitApi.ghStatus(cwd)
+      if (!ghStatus.installed || !ghStatus.authenticated) {
+        setBusy(false)
+        pendingPrAction.current = true
+        setGhSetupOpen(true)
+        return
+      }
+    } catch {
+      // If check fails, proceed anyway — the PR creation will give a specific error
+    }
+
     const toastId = toast.loading('Creating pull request…')
     try {
       const commitMsg = threadTitle.replace(/^\[.*?\]\s*/, '')
@@ -97,10 +113,23 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, 
     } finally {
       setBusy(false)
     }
-  }, [baseBranch, threadId, threadStatus, threadTitle, existingPrLink])
+  }, [baseBranch, cwd, threadId, threadStatus, threadTitle, existingPrLink])
+
+  const handleGhReady = useCallback(() => {
+    if (pendingPrAction.current) {
+      pendingPrAction.current = false
+      handlePushAndPR()
+    }
+  }, [handlePushAndPR])
 
   return (
     <>
+      <GhSetupDialog
+        open={ghSetupOpen}
+        onOpenChange={setGhSetupOpen}
+        cwd={cwd}
+        onReady={handleGhReady}
+      />
       <div className="inline-flex items-center gap-1">
         <Button variant="ghost" size="sm" className="h-5 text-[10px] gap-1" onClick={() => setDiffOpen(true)}>
           <Eye className="h-3 w-3" />

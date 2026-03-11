@@ -206,7 +206,10 @@ export function useAutomation(enabled = true) {
               ? {
                   ...t,
                   status: status as AgentThread['status'],
-                  error: (payload.error as string) ?? t.error,
+                  // Clear stale error when transitioning to running/completed
+                  error: status === 'running' || status === 'completed'
+                    ? (payload.error as string) ?? null
+                    : (payload.error as string) ?? t.error,
                 }
               : t,
           ))
@@ -450,7 +453,9 @@ export function useAutomation(enabled = true) {
           selectedThread.status === 'interrupted')
       ) {
         // Re-start the existing thread (worktree is still available)
-        await agentsApi.startThread(selectedThread.id, text)
+        const updated = await agentsApi.startThread(selectedThread.id, text)
+        // Immediately reflect the running status without waiting for WS
+        setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
         void refresh()
       } else {
         if (!selectedRepo) return

@@ -162,6 +162,7 @@ export class ThreadService {
     return this.update(id, {
       status: "completed",
       providerSessionId: null,
+      error: null,
       completedAt: new Date().toISOString(),
     });
   }
