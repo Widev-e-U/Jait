@@ -48,6 +48,21 @@ async function main() {
 
   // Agent threads + provider registry
   const threadService = new ThreadService(db);
+
+  // ── Recover threads stuck in "running" from a previous crash/restart ──
+  const staleThreads = threadService.listRunning();
+  if (staleThreads.length > 0) {
+    for (const t of staleThreads) {
+      threadService.update(t.id, {
+        status: "interrupted",
+        providerSessionId: null,
+        error: "Gateway restarted — session was lost. You can restart this thread.",
+      });
+      threadService.addActivity(t.id, "session", "Gateway restarted — agent session was lost");
+    }
+    console.log(`Recovered ${staleThreads.length} stale thread(s) from previous run`);
+  }
+
   const repoService = new RepositoryService(db);
   const providerRegistry = new ProviderRegistry();
   providerRegistry.register(new JaitProvider());
