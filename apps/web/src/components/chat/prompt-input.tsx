@@ -688,10 +688,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
       <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
         <div className="flex items-center gap-1">
-          {footerLeadingContent}
           {viewMode && onViewModeChange && (
             <ViewModeSelector mode={viewMode} onChange={onViewModeChange} disabled={selectorsDisabled} />
           )}
+          {footerLeadingContent}
           {provider && onProviderChange && (
             <ProviderSelector provider={provider} onChange={onProviderChange} disabled={selectorsDisabled} />
           )}

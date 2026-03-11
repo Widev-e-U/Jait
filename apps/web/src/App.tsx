@@ -223,7 +223,7 @@ function ManagerThreadListItem({
     <div
       role="button"
       tabIndex={0}
-      className="group flex w-full items-start gap-3 rounded-xl border bg-card px-3 py-3 text-left transition-colors hover:bg-muted/40"
+      className="group relative grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-5 border-b px-3 py-3.5 text-sm transition-colors hover:bg-muted/40"
       onClick={onOpen}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return
@@ -233,24 +233,34 @@ function ManagerThreadListItem({
         }
       }}
     >
-      <div className="pt-0.5">
-        <ManagerStatusDot status={thread.status} />
-      </div>
-      <div className="min-w-0 flex-1">
-        {isTitlePending(thread.title) ? (
-          <TitleSkeleton className="h-3.5 w-28" />
-        ) : (
-          <div className="truncate text-sm font-medium">{thread.title.replace(/^\[.*?\]\s*/, '')}</div>
-        )}
-        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
-          <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[10px] font-normal">
-            {repoName}
-          </Badge>
-          {thread.branch && <span className="font-mono">{thread.branch}</span>}
-          <ThreadPrBadge prState={prState} />
+      <div className="flex flex-col gap-0.5">
+        <div className="flex w-full min-w-0 items-center gap-1.5">
+          <ManagerStatusDot status={thread.status} />
+          <div className="flex-1 truncate font-medium">
+            {isTitlePending(thread.title) ? (
+              <TitleSkeleton className="h-3.5 w-28" />
+            ) : (
+              <span>{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
+            )}
+          </div>
+        </div>
+        <div className="flex gap-1 text-xs text-muted-foreground pl-[calc(0.75rem+6px)]">
+          <span className="truncate">{repoName}</span>
+          {thread.branch && (
+            <>
+              <span>·</span>
+              <span className="truncate font-mono">{thread.branch}</span>
+            </>
+          )}
+          {prState && (
+            <>
+              <span>·</span>
+              <ThreadPrBadge prState={prState} />
+            </>
+          )}
         </div>
       </div>
-      <div className="ml-auto flex items-center gap-1">
+      <div className="flex items-center gap-1">
         {thread.status === 'running' && (
           <Button
             variant="ghost"
@@ -288,6 +298,7 @@ function App() {
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
+  const [showManagerRepos, setShowManagerRepos] = useState(false)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(() => localStorage.getItem('showWorkspaceTree') !== 'false')
@@ -307,6 +318,9 @@ function App() {
     () => localStorage.getItem('cliModel') || null
   )
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('viewMode') as ViewMode) || 'developer')
+  const [managerAnimPhase, setManagerAnimPhase] = useState<'idle' | 'center' | 'top'>('idle')
+  const [developerAnimPhase, setDeveloperAnimPhase] = useState<'idle' | 'animating'>('idle')
+  const prevViewModeRef = useRef<ViewMode>(viewMode)
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
   const [registerUsername, setRegisterUsername] = useState('')
@@ -430,7 +444,7 @@ function App() {
     () => [...automation.threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [automation.threads],
   )
-  const managerCanCreateThread = automation.selectedRepo?.source === 'local'
+  const managerCanCreateThread = automation.selectedRepo != null
   const managerComposerDisabled = automation.creating || !managerCanCreateThread
   const managerPlaceholder = !automation.selectedRepo
     ? 'Select a repository to start a thread...'
@@ -686,6 +700,21 @@ function App() {
 
   useEffect(() => {
     localStorage.setItem('viewMode', viewMode)
+  }, [viewMode])
+
+  useEffect(() => {
+    if (prevViewModeRef.current !== 'manager' && viewMode === 'manager') {
+      setManagerAnimPhase('center')
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => setManagerAnimPhase('top'))
+      })
+    } else if (prevViewModeRef.current === 'manager' && viewMode === 'developer') {
+      setDeveloperAnimPhase('animating')
+      setManagerAnimPhase('idle')
+    } else {
+      setManagerAnimPhase('idle')
+    }
+    prevViewModeRef.current = viewMode
   }, [viewMode])
 
   useEffect(() => {
@@ -1670,9 +1699,26 @@ ${file.content.slice(0, 2000)}
               </Tooltip>
             )}
 
-            {/* Manager mode: thread info + git actions in toolbar right area */}
+            {/* Manager mode: repos toggle + thread info */}
             {viewMode === 'manager' && (
               <>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant={showManagerRepos ? 'secondary' : 'ghost'}
+                      size="sm"
+                      className="h-6 text-[11px] px-2 shrink-0"
+                      onClick={() => setShowManagerRepos(s => !s)}
+                    >
+                      {showManagerRepos
+                        ? <PanelLeftClose className="h-3 w-3 mr-1" />
+                        : <PanelLeftOpen className="h-3 w-3 mr-1" />
+                      }
+                      Repositories
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="bottom">Toggle repositories sidebar</TooltipContent>
+                </Tooltip>
                 <div className="flex-1" />
                 {automation.selectedThread ? (
                   <div className="flex items-center gap-2 shrink-0">
@@ -1710,10 +1756,6 @@ ${file.content.slice(0, 2000)}
                       </div>
                     )}
                   </div>
-                ) : automation.selectedRepo ? (
-                  <span className="text-[11px] text-muted-foreground shrink-0">
-                    {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
-                  </span>
                 ) : null}
               </>
             )}
@@ -1967,140 +2009,134 @@ ${file.content.slice(0, 2000)}
                     </div>
                   </>
                 ) : (
-                  <div className="flex-1 overflow-y-auto px-4 py-6">
-                    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
-                      <div className="space-y-4">
-                        {automation.error && (
-                          <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400">
-                            <AlertTriangle className="h-4 w-4 shrink-0" />
-                            <span className="min-w-0 break-words">{automation.error}</span>
-                          </div>
-                        )}
-                        <PromptInput
-                          ref={promptInputRef}
-                          value={inputValue}
-                          onChange={setInputValue}
-                          onSubmit={handleSubmit}
-                          disabled={managerComposerDisabled}
-                          controlsDisabled={automation.creating}
-                          placeholder={managerPlaceholder}
-                          viewMode={viewMode}
-                          onViewModeChange={setViewMode}
-                          provider={chatProvider}
-                          onProviderChange={setChatProvider}
-                          cliModel={cliModel}
-                          onCliModelChange={setCliModel}
-                          footerLeadingContent={(
-                            <ManagerRepoPicker
-                              repositories={automation.repositories}
-                              selectedRepo={automation.selectedRepo}
-                              disabled={automation.creating}
-                              onSelect={automation.setSelectedRepoId}
-                              onAddRepository={() => automation.setFolderPickerOpen(true)}
-                            />
-                          )}
-                        />
-                        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="h-7 gap-1.5 px-2 text-xs"
-                              onClick={() => automation.setFolderPickerOpen(true)}
-                            >
-                              <Plus className="h-3.5 w-3.5" />
-                              Add repository
-                            </Button>
-                            <span className="text-xs text-muted-foreground">
-                              {!automation.selectedRepo
-                                ? 'Choose a repository to enable the manager input.'
-                                : automation.selectedRepo.source !== 'local'
-                                  ? 'This repository is shared. Add it locally on this device to start a new thread.'
-                                  : `${automation.selectedRepo.name} · ${automation.selectedRepo.defaultBranch}`}
-                            </span>
-                          </div>
+                  <div className="flex-1 flex min-h-0">
+                    {/* Collapsible repos sidebar */}
+                    {showManagerRepos && (
+                      <div className="w-56 shrink-0 border-r flex flex-col overflow-y-auto">
+                        <div className="flex items-center justify-between px-3 py-2 border-b">
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-7 gap-1.5 px-2 text-xs"
-                            onClick={() => void automation.refresh()}
+                            className="h-6 gap-1.5 text-[11px] px-2"
+                            onClick={() => automation.setFolderPickerOpen(true)}
                           >
-                            <RefreshCw className="h-3.5 w-3.5" />
-                            Refresh
+                            <Plus className="h-3 w-3" />
+                            Add repository
                           </Button>
                         </div>
-                        {automation.repositories.length > 0 && (
-                          <div className="rounded-2xl border bg-card p-3">
-                            <div className="mb-2 flex items-center justify-between">
-                              <span className="text-xs font-medium text-muted-foreground">Repositories</span>
-                            </div>
-                            <div className="flex flex-wrap gap-2">
-                              {automation.repositories.map((repo) => (
-                                <div
-                                  key={repo.id}
-                                  className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-xs ${
-                                    automation.selectedRepo?.id === repo.id ? 'border-primary/40 bg-primary/5' : 'bg-background'
-                                  }`}
+                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
+                          {automation.repositories.map((repo) => (
+                            <button
+                              key={repo.id}
+                              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left transition-colors ${
+                                automation.selectedRepo?.id === repo.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+                              }`}
+                              onClick={() => automation.setSelectedRepoId(repo.id)}
+                            >
+                              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                              <div className="min-w-0 flex-1">
+                                <div className="truncate font-medium">{repo.name}</div>
+                                <div className="text-[10px] text-muted-foreground">{repo.defaultBranch}</div>
+                              </div>
+                              {repo.source === 'shared' && (
+                                <Badge variant="outline" className="h-4 px-1 py-0 text-[9px] shrink-0">Shared</Badge>
+                              )}
+                              {repo.source === 'local' && (
+                                <button
+                                  className="rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive shrink-0"
+                                  onClick={(e) => { e.stopPropagation(); void automation.removeRepository(repo.id) }}
                                 >
-                                  <button
-                                    className="flex items-center gap-1.5"
-                                    onClick={() => automation.setSelectedRepoId(repo.id)}
-                                  >
-                                    <FolderOpen className="h-3.5 w-3.5" />
-                                    <span>{repo.name}</span>
-                                    <span className="text-muted-foreground">{repo.defaultBranch}</span>
-                                  </button>
-                                  {repo.source === 'shared' ? (
-                                    <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
-                                      Shared
-                                    </Badge>
-                                  ) : (
-                                    <button
-                                      className="rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
-                                      onClick={() => { void automation.removeRepository(repo.id) }}
-                                    >
-                                      <Trash2 className="h-3 w-3" />
-                                    </button>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                      <div className="rounded-2xl border bg-card">
-                        <div className="flex items-center justify-between border-b px-4 py-3">
-                          <div>
-                            <h2 className="text-sm font-medium">Threads</h2>
-                            <p className="text-xs text-muted-foreground">
-                              {managerThreads.length === 0 ? 'No threads yet.' : 'Open a thread or start a new one above.'}
-                            </p>
-                          </div>
-                          <Badge variant="secondary" className="h-6 rounded-md px-2 text-xs">
-                            {managerThreads.length}
-                          </Badge>
+                                  <Trash2 className="h-3 w-3" />
+                                </button>
+                              )}
+                            </button>
+                          ))}
                         </div>
-                        <div className="space-y-2 p-3">
+                      </div>
+                    )}
+                    {/* Main content */}
+                    <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+                      {/* Title + composer */}
+                      <div
+                        className="flex flex-col items-center px-4 pb-2 pt-4 will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
+                        style={managerAnimPhase === 'center' ? { transform: 'translateY(calc(50vh - 200px))' } : { transform: 'translateY(0)' }}
+                        onTransitionEnd={() => { if (managerAnimPhase === 'top') setManagerAnimPhase('idle') }}
+                      >
+                        <div className="w-full max-w-3xl">
+                          <h1 className="mb-4 text-center text-2xl font-semibold tracking-tight">What do you want to build?</h1>
+                          {automation.error && (
+                            <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-3">
+                              <AlertTriangle className="h-4 w-4 shrink-0" />
+                              <span className="min-w-0 break-words">{automation.error}</span>
+                            </div>
+                          )}
+                          <PromptInput
+                            ref={promptInputRef}
+                            value={inputValue}
+                            onChange={setInputValue}
+                            onSubmit={handleSubmit}
+                            disabled={managerComposerDisabled}
+                            controlsDisabled={automation.creating}
+                            placeholder={managerPlaceholder}
+                            viewMode={viewMode}
+                            onViewModeChange={setViewMode}
+                            provider={chatProvider}
+                            onProviderChange={setChatProvider}
+                            cliModel={cliModel}
+                            onCliModelChange={setCliModel}
+                            footerLeadingContent={(
+                              <ManagerRepoPicker
+                                repositories={automation.repositories}
+                                selectedRepo={automation.selectedRepo}
+                                disabled={automation.creating}
+                                onSelect={automation.setSelectedRepoId}
+                                onAddRepository={() => automation.setFolderPickerOpen(true)}
+                              />
+                            )}
+                          />
+                        </div>
+                      </div>
+                      {/* Thread list header + threads */}
+                      <div className="flex-1 overflow-y-auto">
+                        <div className="mx-auto w-full max-w-3xl">
+                          <div className="flex items-center justify-between border-b px-3 py-2">
+                            <div className="flex items-center gap-3">
+                              <span className="text-sm font-medium">Threads</span>
+                              <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[10px]">
+                                {managerThreads.length}
+                              </Badge>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7"
+                              onClick={() => void automation.refresh()}
+                            >
+                              <RefreshCw className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
                           {managerThreads.length === 0 ? (
-                            <div className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
                               No threads yet
                             </div>
                           ) : (
-                            managerThreads.map((thread) => {
-                              const threadRepo = automation.getRepositoryForThread(thread)
-                              const repoName = threadRepo?.name ?? inferThreadRepositoryName(thread) ?? 'Unknown repo'
-                              return (
-                                <ManagerThreadListItem
-                                  key={thread.id}
-                                  thread={thread}
-                                  repoName={repoName}
-                                  prState={thread.prState ?? automation.threadPrStates[thread.id]}
-                                  onOpen={() => automation.setSelectedThreadId(thread.id)}
-                                  onStop={() => { void automation.handleStop(thread.id) }}
-                                  onDelete={() => { void automation.handleDelete(thread.id) }}
-                                />
-                              )
-                            })
+                            <div className="flex flex-col">
+                              {managerThreads.map((thread) => {
+                                const threadRepo = automation.getRepositoryForThread(thread)
+                                const repoName = threadRepo?.name ?? inferThreadRepositoryName(thread) ?? 'Unknown repo'
+                                return (
+                                  <ManagerThreadListItem
+                                    key={thread.id}
+                                    thread={thread}
+                                    repoName={repoName}
+                                    prState={thread.prState ?? automation.threadPrStates[thread.id]}
+                                    onOpen={() => automation.setSelectedThreadId(thread.id)}
+                                    onStop={() => { void automation.handleStop(thread.id) }}
+                                    onDelete={() => { void automation.handleDelete(thread.id) }}
+                                  />
+                                )
+                              })}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -2109,8 +2145,10 @@ ${file.content.slice(0, 2000)}
                 )}
               </div>
             ) : !hasMessages ? (
-              <div className={`${showDesktopScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 flex flex-col items-center justify-center px-4 transition-all duration-300 ease-out`}
-                style={showDesktopScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
+              <div className={`${showDesktopScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
+                style={showDesktopScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}
+                onAnimationEnd={() => setDeveloperAnimPhase('idle')}
+              >
                 <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
