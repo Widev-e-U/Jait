@@ -2,8 +2,9 @@
 # Release workflow — auto-tag + publish + build
 # ──────────────────────────────────────────────────────────────────────────────
 # HOW IT WORKS:
-#   1. On every push to main that touches packages/gateway/package.json,
-#      the "auto-tag" job checks if the version field changed.
+#   1. On every push to main that touches any watched package.json
+#      (gateway, shared, web), the "auto-tag" job checks if any version
+#      field changed.
 #   2. If it changed, a v<version> git tag is created.
 #   3. All downstream jobs (npm publish, desktop builds, Android APK,
 #      GitHub Release) run only when a new tag was created.
@@ -31,6 +32,8 @@ on:
     branches: [main]
     paths:
       - packages/gateway/package.json
+      - packages/shared/package.json
+      - apps/web/package.json
     tags:
       - 'v*'
   workflow_dispatch: {}
@@ -58,13 +61,24 @@ jobs:
       - name: Detect version change
         id: version
         run: |
-          NEW_VERSION=$(jq -r '.version' packages/gateway/package.json)
-          OLD_VERSION=$(git show HEAD~1:packages/gateway/package.json 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
-          echo "old=$OLD_VERSION"
-          echo "new=$NEW_VERSION"
-          if [ "$NEW_VERSION" != "$OLD_VERSION" ] && [ -n "$NEW_VERSION" ]; then
+          # Gateway version is always the tag source
+          GW_VERSION=$(jq -r '.version' packages/gateway/package.json)
+          echo "gateway=$GW_VERSION"
+
+          # Check if ANY watched package.json version changed
+          CHANGED=false
+          for PKG in packages/gateway/package.json packages/shared/package.json apps/web/package.json; do
+            NEW=$(jq -r '.version' "$PKG" 2>/dev/null || echo "")
+            OLD=$(git show HEAD~1:"$PKG" 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
+            if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
+              echo "$PKG changed: $OLD → $NEW"
+              CHANGED=true
+            fi
+          done
+
+          if [ "$CHANGED" = "true" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
-            echo "version=$NEW_VERSION" >> $GITHUB_OUTPUT
+            echo "version=$GW_VERSION" >> $GITHUB_OUTPUT
           else
             echo "changed=false" >> $GITHUB_OUTPUT
           fi
