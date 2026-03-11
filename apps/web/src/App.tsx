@@ -1,9 +1,11 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
+  ArrowLeft,
   AlertTriangle,
   Calendar,
   Bug,
   Cast,
+  ChevronDown,
   Code,
   Eye,
   FolderTree,
@@ -78,6 +80,8 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
+import { inferThreadRepositoryName, type AutomationRepository } from '@/lib/automation-repositories'
+import type { AgentThread } from '@/lib/agents-api'
 
 const API_URL = getApiUrl()
 
@@ -140,6 +144,139 @@ function ThreadPrBadge({ prState }: { prState: 'open' | 'closed' | 'merged' | nu
     <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 ${className}`}>
       {label}
     </Badge>
+  )
+}
+
+interface ManagerRepoPickerProps {
+  repositories: AutomationRepository[]
+  selectedRepo: AutomationRepository | null
+  disabled?: boolean
+  onSelect: (repoId: string) => void
+  onAddRepository: () => void
+}
+
+function ManagerRepoPicker({
+  repositories,
+  selectedRepo,
+  disabled = false,
+  onSelect,
+  onAddRepository,
+}: ManagerRepoPickerProps) {
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-lg px-2 text-xs" disabled={disabled}>
+          <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+          <span className="max-w-[140px] truncate">
+            {selectedRepo ? selectedRepo.name : 'Select repository'}
+          </span>
+          <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="start" side="top" className="w-64">
+        <DropdownMenuLabel>Repository</DropdownMenuLabel>
+        {repositories.map((repo) => (
+          <DropdownMenuItem key={repo.id} onSelect={() => onSelect(repo.id)}>
+            <div className="flex min-w-0 items-center gap-2">
+              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{repo.name}</span>
+              <span className="text-[10px] text-muted-foreground">{repo.defaultBranch}</span>
+              {repo.source === 'shared' && (
+                <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
+                  Shared
+                </Badge>
+              )}
+            </div>
+          </DropdownMenuItem>
+        ))}
+        {repositories.length === 0 && (
+          <div className="px-2 py-2 text-xs text-muted-foreground">No repositories yet.</div>
+        )}
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onAddRepository}>
+          <Plus className="mr-2 h-3.5 w-3.5" />
+          Add repository
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+interface ManagerThreadListItemProps {
+  thread: AgentThread
+  repoName: string
+  prState: 'open' | 'closed' | 'merged' | null | undefined
+  onOpen: () => void
+  onStop: () => void
+  onDelete: () => void
+}
+
+function ManagerThreadListItem({
+  thread,
+  repoName,
+  prState,
+  onOpen,
+  onStop,
+  onDelete,
+}: ManagerThreadListItemProps) {
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className="group flex w-full items-start gap-3 rounded-xl border bg-card px-3 py-3 text-left transition-colors hover:bg-muted/40"
+      onClick={onOpen}
+      onKeyDown={(event) => {
+        if (event.target !== event.currentTarget) return
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          onOpen()
+        }
+      }}
+    >
+      <div className="pt-0.5">
+        <ManagerStatusDot status={thread.status} />
+      </div>
+      <div className="min-w-0 flex-1">
+        {isTitlePending(thread.title) ? (
+          <TitleSkeleton className="h-3.5 w-28" />
+        ) : (
+          <div className="truncate text-sm font-medium">{thread.title.replace(/^\[.*?\]\s*/, '')}</div>
+        )}
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-muted-foreground">
+          <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[10px] font-normal">
+            {repoName}
+          </Badge>
+          {thread.branch && <span className="font-mono">{thread.branch}</span>}
+          <ThreadPrBadge prState={prState} />
+        </div>
+      </div>
+      <div className="ml-auto flex items-center gap-1">
+        {thread.status === 'running' && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 rounded-lg"
+            onClick={(event) => {
+              event.stopPropagation()
+              onStop()
+            }}
+          >
+            <Square className="h-3 w-3" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete()
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -289,6 +426,17 @@ function App() {
     () => activitiesToMessages(automation.activities),
     [automation.activities],
   )
+  const managerThreads = useMemo(
+    () => [...automation.threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
+    [automation.threads],
+  )
+  const managerCanCreateThread = automation.selectedRepo?.source === 'local'
+  const managerComposerDisabled = automation.creating || !managerCanCreateThread
+  const managerPlaceholder = !automation.selectedRepo
+    ? 'Select a repository to start a thread...'
+    : automation.selectedRepo.source !== 'local'
+      ? 'Add this repository locally on this device to start a thread...'
+      : 'Describe what you want to do...'
 
   // ── UI command channel (server ↔ frontend via WebSocket) ──────────
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
@@ -1046,7 +1194,7 @@ ${file.content.slice(0, 2000)}
   /** Submit for Manager mode — delegate to the automation hook. */
   const handleManagerSubmit = async () => {
     const text = inputValue.trim()
-    if (!text) return
+    if (!text || managerComposerDisabled) return
     setInputValue('')
     await automation.handleSend(text, chatProvider, chatProvider !== 'jait' ? cliModel : undefined)
   }
@@ -1404,24 +1552,25 @@ ${file.content.slice(0, 2000)}
         {/* Chat-specific toolbar */}
         {currentView === 'chat' && (
           <div className="flex items-center gap-1 px-2 sm:px-5 h-9 border-b shrink-0 bg-muted/30 overflow-x-auto scrollbar-none">
-            {/* Sidebar toggle — label changes per viewMode */}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant={showSidebar ? 'secondary' : 'ghost'}
-                  size="sm"
-                  className="h-6 text-[11px] px-2 shrink-0"
-                  onClick={() => setShowSidebar(s => !s)}
-                >
-                  {showSidebar
-                    ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
-                    : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
-                  }
-                  {viewMode === 'manager' ? 'Threads' : 'Sessions'}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{viewMode === 'manager' ? 'Toggle threads sidebar' : 'Toggle sessions sidebar'}</TooltipContent>
-            </Tooltip>
+            {viewMode === 'developer' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showSidebar ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-6 text-[11px] px-2 shrink-0"
+                    onClick={() => setShowSidebar(s => !s)}
+                  >
+                    {showSidebar
+                      ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
+                      : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
+                    }
+                    Sessions
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Toggle sessions sidebar</TooltipContent>
+              </Tooltip>
+            )}
 
             {/* Developer-only buttons */}
             {viewMode === 'developer' && (
@@ -1596,123 +1745,15 @@ ${file.content.slice(0, 2000)}
           </div>
         ) : (
           <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
-            {showSidebar && (
+            {viewMode === 'developer' && showSidebar && (
               <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-56 border-r shrink-0'}`}>
-                {viewMode === 'manager' ? (
-                  <div className="h-full flex flex-col text-sm">
-                    {/* Repositories */}
-                    <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
-                      <span className="text-xs font-medium">Repositories</span>
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => automation.setFolderPickerOpen(true)}>
-                        <Plus className="h-3 w-3" />
-                      </Button>
-                    </div>
-                    <div className="border-b max-h-[40%] overflow-y-auto shrink-0">
-                      {automation.repositories.map(repo => (
-                        <button
-                          key={repo.id}
-                          className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedRepo?.id === repo.id ? 'bg-muted font-medium' : ''}`}
-                          onClick={() => automation.setSelectedRepoId(repo.id)}
-                        >
-                          <FolderOpen className="h-3 w-3 shrink-0" />
-                          <span className="truncate flex-1 text-left">{repo.name}</span>
-                          <span
-                            role="button"
-                            tabIndex={0}
-                            className="ml-auto shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                            onClick={(e) => { e.stopPropagation(); automation.removeRepository(repo.id) }}
-                            onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); automation.removeRepository(repo.id) } }}
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </span>
-                        </button>
-                      ))}
-                      {automation.repositories.length === 0 && (
-                        <button
-                          className="w-full px-3 py-4 text-center text-xs text-muted-foreground hover:text-foreground transition-colors"
-                          onClick={() => automation.setFolderPickerOpen(true)}
-                        >
-                          + Add repository
-                        </button>
-                      )}
-                    </div>
-                    {/* Threads for selected repo */}
-                    {automation.selectedRepo && (
-                      <>
-                        <div className="flex items-center justify-between px-3 py-2 border-b shrink-0">
-                          <span className="text-xs font-medium">Threads</span>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => void automation.refresh()}>
-                            <RefreshCw className="h-3 w-3" />
-                          </Button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto">
-                          {automation.repoThreads.map(thread => (
-                            <button
-                              key={thread.id}
-                              className={`w-full flex items-center gap-2 px-3 py-1.5 text-xs hover:bg-muted transition-colors group ${automation.selectedThread?.id === thread.id ? 'bg-muted font-medium' : ''}`}
-                              onClick={() => automation.setSelectedThreadId(thread.id)}
-                            >
-                              <div className="pt-0.5">
-                                <ManagerStatusDot status={thread.status} />
-                              </div>
-                              <div className="min-w-0 flex-1 text-left">
-                                {isTitlePending(thread.title) ? (
-                                  <TitleSkeleton className="h-3 w-24" />
-                                ) : (
-                                  <span className="truncate block">{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
-                                )}
-                                <div className="mt-0.5 flex items-center gap-1 min-w-0">
-                                  {thread.branch && (
-                                    <span className="truncate text-[10px] text-muted-foreground font-mono">{thread.branch}</span>
-                                  )}
-                                  <ThreadPrBadge prState={thread.prState} />
-                                </div>
-                              </div>
-                              <div className="ml-auto flex items-center gap-1 shrink-0">
-                                {thread.status === 'running' && (
-                                  <span
-                                    role="button"
-                                    tabIndex={0}
-                                    className="shrink-0 hover:text-foreground transition-colors"
-                                    onClick={(e) => { e.stopPropagation(); void automation.handleStop(thread.id) }}
-                                    onKeyDown={(e) => {
-                                      if (e.key === 'Enter') {
-                                        e.stopPropagation()
-                                        void automation.handleStop(thread.id)
-                                      }
-                                    }}
-                                  >
-                                    <Square className="h-3 w-3" />
-                                  </span>
-                                )}
-                                <span
-                                  role="button"
-                                  tabIndex={0}
-                                  className="shrink-0 opacity-0 group-hover:opacity-100 hover:text-destructive transition-opacity"
-                                  onClick={(e) => { e.stopPropagation(); void automation.handleDelete(thread.id) }}
-                                  onKeyDown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); void automation.handleDelete(thread.id) } }}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </span>
-                              </div>
-                            </button>
-                          ))}
-                          {automation.repoThreads.length === 0 && (
-                            <div className="px-3 py-4 text-center text-xs text-muted-foreground">No threads yet</div>
-                          )}
-                        </div>
-                      </>
-                    )}
-                  </div>
-                ) : (
-                  <SessionSelector
-                    sessions={sessions}
-                    activeSessionId={activeSessionId}
-                    onSelect={switchSession}
-                    onCreate={() => createSession()}
-                    onArchive={archiveSession}
-                  />
-                )}
+                <SessionSelector
+                  sessions={sessions}
+                  activeSessionId={activeSessionId}
+                  onSelect={switchSession}
+                  onCreate={() => createSession()}
+                  onArchive={archiveSession}
+                />
               </aside>
             )}
 
@@ -1849,20 +1890,29 @@ ${file.content.slice(0, 2000)}
             {viewMode === 'manager' ? (
               /* ── Manager main content ────────────────────────────── */
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
-                {!automation.selectedRepo ? (
-                  <div className="flex-1 flex flex-col items-center justify-center px-4">
-                    <div className="w-full max-w-md text-center space-y-4">
-                      <FolderOpen className="h-10 w-10 mx-auto text-muted-foreground" />
-                      <h2 className="text-lg font-medium">Add a repository</h2>
-                      <p className="text-sm text-muted-foreground">Select a local repository to start delegating tasks to agent threads.</p>
-                      <Button variant="outline" onClick={() => automation.setFolderPickerOpen(true)}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Add Repository
-                      </Button>
-                    </div>
-                  </div>
-                ) : automation.selectedThread ? (
+                {automation.selectedThread ? (
                   <>
+                    <div className="border-b px-4 py-2">
+                      <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 gap-1.5 px-2 text-xs"
+                          onClick={() => {
+                            automation.setSelectedThreadId(null)
+                            setInputValue('')
+                          }}
+                        >
+                          <ArrowLeft className="h-3.5 w-3.5" />
+                          Back
+                        </Button>
+                        {automation.selectedRepo && (
+                          <span className="truncate text-xs text-muted-foreground">
+                            {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
+                          </span>
+                        )}
+                      </div>
+                    </div>
                     <Conversation className="min-h-0 flex-1 border-b" compact>
                       {automationMessages.length === 0 && (
                         <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
@@ -1907,12 +1957,6 @@ ${file.content.slice(0, 2000)}
                           onCliModelChange={setCliModel}
                         />
                         <div className="flex items-center gap-2 px-1 mt-1.5">
-                          <button
-                            onClick={() => { automation.setSelectedThreadId(null); setInputValue('') }}
-                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                          >
-                            New thread
-                          </button>
                           {automation.selectedThread && automation.selectedThread.status !== 'running' && !automation.selectedThread.providerSessionId && (
                             <span className="text-[11px] text-muted-foreground truncate">
                               Thread finished — start a new one
@@ -1923,32 +1967,143 @@ ${file.content.slice(0, 2000)}
                     </div>
                   </>
                 ) : (
-                  <div className="flex-1 flex flex-col items-center justify-center px-4">
-                    <div className="w-full max-w-3xl space-y-8">
-                      <div className="text-center">
-                        <h2 className="text-2xl font-semibold tracking-tight">{automation.selectedRepo.name}</h2>
-                        <p className="text-sm text-muted-foreground mt-1">{automation.selectedRepo.defaultBranch} · What would you like to work on?</p>
-                      </div>
-                      {automation.error && (
-                        <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400">
-                          <AlertTriangle className="h-4 w-4 shrink-0" />
-                          <span className="min-w-0 break-words">{automation.error}</span>
+                  <div className="flex-1 overflow-y-auto px-4 py-6">
+                    <div className="mx-auto flex w-full max-w-4xl flex-col gap-4">
+                      <div className="space-y-4">
+                        {automation.error && (
+                          <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400">
+                            <AlertTriangle className="h-4 w-4 shrink-0" />
+                            <span className="min-w-0 break-words">{automation.error}</span>
+                          </div>
+                        )}
+                        <PromptInput
+                          ref={promptInputRef}
+                          value={inputValue}
+                          onChange={setInputValue}
+                          onSubmit={handleSubmit}
+                          disabled={managerComposerDisabled}
+                          controlsDisabled={automation.creating}
+                          placeholder={managerPlaceholder}
+                          viewMode={viewMode}
+                          onViewModeChange={setViewMode}
+                          provider={chatProvider}
+                          onProviderChange={setChatProvider}
+                          cliModel={cliModel}
+                          onCliModelChange={setCliModel}
+                          footerLeadingContent={(
+                            <ManagerRepoPicker
+                              repositories={automation.repositories}
+                              selectedRepo={automation.selectedRepo}
+                              disabled={automation.creating}
+                              onSelect={automation.setSelectedRepoId}
+                              onAddRepository={() => automation.setFolderPickerOpen(true)}
+                            />
+                          )}
+                        />
+                        <div className="flex flex-wrap items-center justify-between gap-2 px-1">
+                          <div className="flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-7 gap-1.5 px-2 text-xs"
+                              onClick={() => automation.setFolderPickerOpen(true)}
+                            >
+                              <Plus className="h-3.5 w-3.5" />
+                              Add repository
+                            </Button>
+                            <span className="text-xs text-muted-foreground">
+                              {!automation.selectedRepo
+                                ? 'Choose a repository to enable the manager input.'
+                                : automation.selectedRepo.source !== 'local'
+                                  ? 'This repository is shared. Add it locally on this device to start a new thread.'
+                                  : `${automation.selectedRepo.name} · ${automation.selectedRepo.defaultBranch}`}
+                            </span>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 gap-1.5 px-2 text-xs"
+                            onClick={() => void automation.refresh()}
+                          >
+                            <RefreshCw className="h-3.5 w-3.5" />
+                            Refresh
+                          </Button>
                         </div>
-                      )}
-                      <PromptInput
-                        ref={promptInputRef}
-                        value={inputValue}
-                        onChange={setInputValue}
-                        onSubmit={handleSubmit}
-                        disabled={automation.creating}
-                        placeholder="Describe what you want to do..."
-                        viewMode={viewMode}
-                        onViewModeChange={setViewMode}
-                        provider={chatProvider}
-                        onProviderChange={setChatProvider}
-                        cliModel={cliModel}
-                        onCliModelChange={setCliModel}
-                      />
+                        {automation.repositories.length > 0 && (
+                          <div className="rounded-2xl border bg-card p-3">
+                            <div className="mb-2 flex items-center justify-between">
+                              <span className="text-xs font-medium text-muted-foreground">Repositories</span>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                              {automation.repositories.map((repo) => (
+                                <div
+                                  key={repo.id}
+                                  className={`flex items-center gap-1 rounded-lg border px-2 py-1 text-xs ${
+                                    automation.selectedRepo?.id === repo.id ? 'border-primary/40 bg-primary/5' : 'bg-background'
+                                  }`}
+                                >
+                                  <button
+                                    className="flex items-center gap-1.5"
+                                    onClick={() => automation.setSelectedRepoId(repo.id)}
+                                  >
+                                    <FolderOpen className="h-3.5 w-3.5" />
+                                    <span>{repo.name}</span>
+                                    <span className="text-muted-foreground">{repo.defaultBranch}</span>
+                                  </button>
+                                  {repo.source === 'shared' ? (
+                                    <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
+                                      Shared
+                                    </Badge>
+                                  ) : (
+                                    <button
+                                      className="rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
+                                      onClick={() => { void automation.removeRepository(repo.id) }}
+                                    >
+                                      <Trash2 className="h-3 w-3" />
+                                    </button>
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                      <div className="rounded-2xl border bg-card">
+                        <div className="flex items-center justify-between border-b px-4 py-3">
+                          <div>
+                            <h2 className="text-sm font-medium">Threads</h2>
+                            <p className="text-xs text-muted-foreground">
+                              {managerThreads.length === 0 ? 'No threads yet.' : 'Open a thread or start a new one above.'}
+                            </p>
+                          </div>
+                          <Badge variant="secondary" className="h-6 rounded-md px-2 text-xs">
+                            {managerThreads.length}
+                          </Badge>
+                        </div>
+                        <div className="space-y-2 p-3">
+                          {managerThreads.length === 0 ? (
+                            <div className="rounded-xl border border-dashed px-4 py-8 text-center text-sm text-muted-foreground">
+                              No threads yet
+                            </div>
+                          ) : (
+                            managerThreads.map((thread) => {
+                              const threadRepo = automation.getRepositoryForThread(thread)
+                              const repoName = threadRepo?.name ?? inferThreadRepositoryName(thread) ?? 'Unknown repo'
+                              return (
+                                <ManagerThreadListItem
+                                  key={thread.id}
+                                  thread={thread}
+                                  repoName={repoName}
+                                  prState={thread.prState ?? automation.threadPrStates[thread.id]}
+                                  onOpen={() => automation.setSelectedThreadId(thread.id)}
+                                  onStop={() => { void automation.handleStop(thread.id) }}
+                                  onDelete={() => { void automation.handleDelete(thread.id) }}
+                                />
+                              )
+                            })
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
                 )}
