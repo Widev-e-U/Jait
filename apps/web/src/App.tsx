@@ -720,6 +720,20 @@ function App() {
       // Defer so Radix Dialog's FocusScope mounts after the initial render
       // cycle completes (avoids infinite setState loop in React 19 StrictMode).
       const id = requestAnimationFrame(() => setShowLoginDialog(true))
+
+      // If the gateway is supposedly configured but unreachable, send the user
+      // back to the URL step so they can correct it instead of being stuck
+      // on an auth form that can't reach the server.
+      if (isStandaloneApp && isGatewayConfigured()) {
+        fetch(`${getApiUrl()}/health`, { signal: AbortSignal.timeout(4000) })
+          .then((r) => { if (!r.ok) throw new Error('unhealthy') })
+          .catch(() => {
+            setGatewayStep('url')
+            setGatewayError('Gateway is unreachable. Check the URL or try a different one.')
+            setGatewayUrlInput(getStoredGatewayUrl() ?? '')
+          })
+      }
+
       return () => cancelAnimationFrame(id)
     }
   }, [authLoading, isAuthenticated])
