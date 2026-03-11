@@ -206,6 +206,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'fs.op-request') {
         // Gateway is asking us to perform a filesystem operation (stat, read, write, list, etc.)
         void handleFsOpRequest(msg.payload as { requestId: string; op: string; [key: string]: unknown })
+      } else if (msg.type === 'provider.op-request') {
+        // Gateway is asking us to run a provider operation (start-session, send-turn, etc.)
+        void handleProviderOpRequest(msg.payload as { requestId: string; op: string; [key: string]: unknown })
       } else if (msg.type.startsWith('thread.') || msg.type.startsWith('repo.')) {
         // Thread & repo lifecycle events — forward to automation hook
         onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
@@ -367,6 +370,37 @@ export function useUICommands(opts: UseUICommandsOptions) {
     }
   }, [])
 
+  /**
+   * Handle a provider operation request from the gateway.
+   * Operations: start-session, send-turn, stop-session, list-models
+   * Dispatches to the Electron IPC bridge.
+   */
+  const handleProviderOpRequest = useCallback(async (payload: { requestId: string; op: string; [key: string]: unknown }) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const { requestId, op, ...params } = payload
+    try {
+      const platform = detectPlatform()
+      if (platform === 'electron' && window.jaitDesktop?.providerOp) {
+        const result = await window.jaitDesktop.providerOp(op, params)
+        ws.send(JSON.stringify({
+          type: 'provider.op-response',
+          payload: { requestId, result },
+        }))
+      } else {
+        throw new Error('Provider operations not supported on this platform')
+      }
+    } catch (err) {
+      ws.send(JSON.stringify({
+        type: 'provider.op-response',
+        payload: {
+          requestId,
+          error: err instanceof Error ? err.message : 'Provider operation failed',
+        },
+      }))
+    }
+  }, [])
+
   // ── Single, stable WS connection — only depends on token ──────────
   // Session changes are handled by re-subscribing, NOT by reconnecting.
   useEffect(() => {
@@ -386,15 +420,25 @@ export function useUICommands(opts: UseUICommandsOptions) {
         flushQueue(ws)
         // Register as a filesystem node if this client can browse files locally
         if (canActAsFsNode()) {
-          const nodeMsg = JSON.stringify({
-            type: 'fs.register-node',
-            payload: {
-              id: generateDeviceId(),
-              name: getDeviceName(),
-              platform: detectFsNodePlatform(),
-            },
+          // Detect locally installed CLI providers (codex, claude-code)
+          const detectProviders = async (): Promise<string[]> => {
+            if (detectPlatform() === 'electron' && window.jaitDesktop?.detectProviders) {
+              try { return await window.jaitDesktop.detectProviders() } catch { return [] }
+            }
+            return []
+          }
+          void detectProviders().then((providers) => {
+            const nodeMsg = JSON.stringify({
+              type: 'fs.register-node',
+              payload: {
+                id: generateDeviceId(),
+                name: getDeviceName(),
+                platform: detectFsNodePlatform(),
+                providers,
+              },
+            })
+            if (ws.readyState === WebSocket.OPEN) ws.send(nodeMsg)
           })
-          ws.send(nodeMsg)
         }
       }
 
@@ -416,9 +460,33 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
     connect()
 
+    // Set up Electron IPC listener for provider events from child processes
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const gatewayEventHandler = (_event: unknown, data: any) => {
+      if (data?.type === 'provider.event-from-child') {
+        const ws = wsRef.current
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({
+            type: 'provider.event',
+            payload: {
+              sessionId: data.sessionId,
+              event: data.notification,
+            },
+          }))
+        }
+      }
+    }
+    if (detectPlatform() === 'electron' && window.jaitDesktop?.onGatewayEvent) {
+      window.jaitDesktop.onGatewayEvent(gatewayEventHandler)
+    }
+
     return () => {
       mountedRef.current = false
       if (reconnectTimer) clearTimeout(reconnectTimer)
+      // Clean up Electron IPC listener
+      if (detectPlatform() === 'electron' && window.jaitDesktop?.removeGatewayEventListener) {
+        window.jaitDesktop.removeGatewayEventListener(gatewayEventHandler)
+      }
       const ws = wsRef.current
       if (ws) {
         ws.onclose = null // prevent reconnect on intentional close

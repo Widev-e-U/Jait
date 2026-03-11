@@ -29,6 +29,8 @@ export interface FsNode {
   clientId: string;
   /** Whether this is the gateway server itself (uses local fs, no WS proxy needed) */
   isGateway: boolean;
+  /** CLI providers available on this node (e.g. ["codex", "claude-code"]) */
+  providers?: string[];
   registeredAt: string;
 }
 

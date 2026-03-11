@@ -182,6 +182,219 @@ ipcMain.handle("desktop:pick-directory", async () => {
 
 // ── Filesystem browse IPC (for remote fs node protocol) ──────────────
 import { readdir, readFile, writeFile, stat as fsStat, mkdir, access } from "node:fs/promises";
+import { execSync, spawn, type ChildProcess } from "node:child_process";
+import { createInterface } from "node:readline";
+
+// ── Provider detection ───────────────────────────────────────────────
+function detectCliProviders(): string[] {
+  const providers: string[] = [];
+  const cmd = process.platform === "win32" ? "where" : "which";
+  for (const bin of ["codex", "claude"]) {
+    try {
+      execSync(`${cmd} ${bin}`, { stdio: "pipe", timeout: 5000 });
+      providers.push(bin === "claude" ? "claude-code" : bin);
+    } catch { /* not installed */ }
+  }
+  return providers;
+}
+
+ipcMain.handle("desktop:detect-providers", () => detectCliProviders());
+
+// ── Remote provider runner ───────────────────────────────────────────
+// Manages codex/claude-code child processes on behalf of the gateway.
+// Each session spawns a child process and streams JSON-RPC events back.
+
+interface RemoteProviderSession {
+  child: ChildProcess;
+  pendingRpc: Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>;
+  nextRpcId: number;
+  sessionId: string;
+}
+
+const remoteProviderSessions = new Map<string, RemoteProviderSession>();
+
+function rpcSend(session: RemoteProviderSession, method: string, params?: unknown, timeoutMs = 60_000): Promise<unknown> {
+  const id = session.nextRpcId++;
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      session.pendingRpc.delete(id);
+      reject(new Error(`Timed out waiting for ${method}`));
+    }, timeoutMs);
+    session.pendingRpc.set(id, { resolve, reject, timer });
+    const msg = JSON.stringify({ method, id, params }) + "\n";
+    session.child.stdin?.write(msg);
+  });
+}
+
+function rpcNotify(session: RemoteProviderSession, method: string, params?: unknown) {
+  const msg = JSON.stringify({ method, params }) + "\n";
+  session.child.stdin?.write(msg);
+}
+
+ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<string, unknown>) => {
+  switch (op) {
+    case "start-session": {
+      const { sessionId, providerId, workingDirectory, mode, model, env: extraEnv } = params as {
+        sessionId: string; providerId: string; workingDirectory: string;
+        mode: string; model?: string; env?: Record<string, string>;
+      };
+
+      const cmd = providerId === "claude-code" ? "claude" : "codex";
+      const args = providerId === "claude-code" ? ["--json"] : ["app-server"];
+
+      const child = spawn(cmd, args, {
+        cwd: workingDirectory,
+        env: { ...process.env, ...extraEnv } as Record<string, string>,
+        stdio: ["pipe", "pipe", "pipe"],
+        shell: true,
+      });
+
+      const sess: RemoteProviderSession = {
+        child,
+        pendingRpc: new Map(),
+        nextRpcId: 1,
+        sessionId,
+      };
+      remoteProviderSessions.set(sessionId, sess);
+
+      // Parse NDJSON from stdout
+      const rl = createInterface({ input: child.stdout! });
+      rl.on("line", (line) => {
+        try {
+          const msg = JSON.parse(line);
+          // RPC response
+          if (msg.id != null) {
+            const pending = sess.pendingRpc.get(msg.id);
+            if (pending) {
+              sess.pendingRpc.delete(msg.id);
+              clearTimeout(pending.timer);
+              if (msg.error) pending.reject(new Error(msg.error.message ?? "RPC error"));
+              else pending.resolve(msg.result);
+            }
+          }
+          // Notification (provider event) — relay to renderer for WS forwarding
+          if (msg.method && !msg.id) {
+            mainWindow?.webContents.send("gateway:event", {
+              type: "provider.event-from-child",
+              sessionId,
+              notification: msg,
+            });
+          }
+        } catch { /* non-JSON */ }
+      });
+
+      child.on("exit", () => {
+        remoteProviderSessions.delete(sessionId);
+        mainWindow?.webContents.send("gateway:event", {
+          type: "provider.event-from-child",
+          sessionId,
+          notification: { method: "session/completed" },
+        });
+      });
+
+      // Initialize handshake
+      try {
+        const initResult = await rpcSend(sess, "initialize", {
+          clientInfo: { name: "jait-remote", title: "Jait Remote Provider", version: "1.0.0" },
+          capabilities: { experimentalApi: true },
+        }, 45_000);
+        rpcNotify(sess, "initialized");
+
+        // Start thread
+        const approvalPolicy = mode === "supervised" ? "on-failure" : "unless-allow-listed";
+        const sandbox = mode === "supervised" ? "permissive" : "none";
+        const threadResult = await rpcSend(sess, "thread/start", {
+          model: model ?? null,
+          cwd: workingDirectory,
+          approvalPolicy,
+          sandbox,
+          experimentalRawEvents: false,
+        }) as { thread?: { id?: string }; threadId?: string };
+
+        const providerThreadId = threadResult?.thread?.id ?? threadResult?.threadId;
+        return { ok: true, initResult, providerThreadId };
+      } catch (err) {
+        child.kill();
+        remoteProviderSessions.delete(sessionId);
+        throw err;
+      }
+    }
+    case "send-turn": {
+      const { sessionId, message, providerThreadId } = params as {
+        sessionId: string; message: string; providerThreadId: string;
+      };
+      const sess = remoteProviderSessions.get(sessionId);
+      if (!sess) throw new Error("Session not found");
+      await rpcSend(sess, "turn/start", {
+        threadId: providerThreadId,
+        input: [{ type: "text", text: message, text_elements: [] }],
+      });
+      return { ok: true };
+    }
+    case "stop-session": {
+      const { sessionId } = params as { sessionId: string };
+      const sess = remoteProviderSessions.get(sessionId);
+      if (sess) {
+        sess.child.kill("SIGTERM");
+        for (const p of sess.pendingRpc.values()) {
+          clearTimeout(p.timer);
+          p.reject(new Error("Session stopped"));
+        }
+        remoteProviderSessions.delete(sessionId);
+      }
+      return { ok: true };
+    }
+    case "list-models": {
+      const { providerId } = params as { providerId: string };
+      const cmd = providerId === "claude-code" ? "claude" : "codex";
+      const args = providerId === "claude-code" ? ["--json"] : ["app-server"];
+
+      const child = spawn(cmd, args, {
+        cwd: process.cwd(),
+        env: process.env as Record<string, string>,
+        stdio: ["pipe", "pipe", "pipe"],
+        shell: true,
+      });
+
+      const tmpSess: RemoteProviderSession = {
+        child,
+        pendingRpc: new Map(),
+        nextRpcId: 1,
+        sessionId: "tmp-model-list",
+      };
+
+      const rl = createInterface({ input: child.stdout! });
+      rl.on("line", (line) => {
+        try {
+          const msg = JSON.parse(line);
+          if (msg.id != null) {
+            const pending = tmpSess.pendingRpc.get(msg.id);
+            if (pending) {
+              tmpSess.pendingRpc.delete(msg.id);
+              clearTimeout(pending.timer);
+              if (msg.error) pending.reject(new Error(msg.error.message ?? "RPC error"));
+              else pending.resolve(msg.result);
+            }
+          }
+        } catch { /* non-JSON */ }
+      });
+
+      try {
+        await rpcSend(tmpSess, "initialize", {
+          clientInfo: { name: "jait-remote", title: "Jait Remote Provider", version: "1.0.0" },
+          capabilities: { experimentalApi: true },
+        }, 15_000);
+        rpcNotify(tmpSess, "initialized");
+        const result = await rpcSend(tmpSess, "model/list", {}, 15_000);
+        return result;
+      } finally {
+        child.kill("SIGTERM");
+      }
+    }
+    default:
+      throw new Error(`Unknown provider operation: ${op}`);
+  }
+});
 
 ipcMain.handle("desktop:browse-path", async (_event, dirPath: string) => {
   const { resolve, dirname, join } = await import("node:path");

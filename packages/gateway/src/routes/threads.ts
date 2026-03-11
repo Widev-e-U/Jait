@@ -26,6 +26,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
+import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { GitService, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
 import { existsSync } from "node:fs";
@@ -83,6 +84,32 @@ export function registerThreadRoutes(
 
   function isThreadSessionEvent(event: ProviderEvent, sessionId: string): boolean {
     return event.sessionId === sessionId;
+  }
+
+  /**
+   * Find a connected remote node that can run a provider for a given path.
+   * Matches the path's platform format (e.g. Windows drive letter) to a
+   * connected FsNode's platform, and checks that the node has the provider.
+   */
+  function findRemoteNodeForPath(
+    wsPlane: WsControlPlane,
+    dirPath: string,
+    provId: ProviderId,
+  ) {
+    // Detect path platform: drive letter (C:\) or backslash → windows
+    const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(dirPath);
+    const expectedPlatform = isWindowsPath ? "windows" : null;
+
+    for (const node of wsPlane.getFsNodes()) {
+      if (node.isGateway) continue;
+      // Match platform if we can detect it from the path
+      if (expectedPlatform && node.platform !== expectedPlatform) continue;
+      // If we can't detect platform from path, accept any remote node
+      // Check that the node has the requested provider
+      if (!node.providers?.includes(provId === "claude-code" ? "claude-code" : provId)) continue;
+      return node;
+    }
+    return null;
   }
 
   // ── CRUD Routes ──────────────────────────────────────────────────
@@ -198,9 +225,33 @@ export function registerThreadRoutes(
     }
 
     const providerId = thread.providerId as ProviderId;
-    const provider = providerRegistry.get(providerId);
+
+    // Resolve working directory — the stored path may come from a
+    // different device/OS (e.g. Windows path on a Linux gateway).
+    let workingDirectory = thread.workingDirectory ?? process.cwd();
+    const pathExistsLocally = existsSync(workingDirectory);
+
+    // Determine if we need a remote provider:
+    // If the path doesn't exist locally, look for a connected remote node
+    // that matches the path's platform and has the requested provider.
+    let provider = providerRegistry.get(providerId);
+    let isRemote = false;
+
+    if (!pathExistsLocally && ws && providerId !== "jait") {
+      const remoteNode = findRemoteNodeForPath(ws, workingDirectory, providerId);
+      if (remoteNode) {
+        provider = new RemoteCliProvider(ws, remoteNode.id, providerId);
+        isRemote = true;
+      }
+    }
+
     if (!provider) {
       return reply.status(400).send({ error: `Provider '${providerId}' not registered` });
+    }
+
+    // Fall back to cwd only for local providers with non-existent paths
+    if (!pathExistsLocally && !isRemote) {
+      workingDirectory = process.cwd();
     }
 
     // Check availability
@@ -212,16 +263,9 @@ export function registerThreadRoutes(
     }
 
     // Build MCP server references so CLI agents can call Jait's tools
-    const mcpServers = [providerRegistry.buildJaitMcpServerRef(config)];
+    const mcpServers = isRemote ? [] : [providerRegistry.buildJaitMcpServerRef(config)];
 
     try {
-      // Resolve working directory — the stored path may come from a
-      // different device/OS (e.g. Windows path on a Linux gateway).
-      let workingDirectory = thread.workingDirectory ?? process.cwd();
-      if (!existsSync(workingDirectory)) {
-        workingDirectory = process.cwd();
-      }
-
       const session = await provider.startSession({
         threadId: id,
         workingDirectory,
@@ -539,7 +583,7 @@ export function registerThreadRoutes(
 
   // ── Provider info ────────────────────────────────────────────────
 
-  /** List available providers */
+  /** List available providers (local + remote) */
   app.get("/api/providers", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
@@ -550,6 +594,20 @@ export function registerThreadRoutes(
       providers.map((p) => p.checkAvailability().catch(() => false)),
     );
 
+    // Collect remote provider info from connected filesystem nodes
+    const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[] }[] = [];
+    if (ws) {
+      for (const node of ws.getFsNodes()) {
+        if (node.isGateway || !node.providers?.length) continue;
+        remoteProviders.push({
+          nodeId: node.id,
+          nodeName: node.name,
+          platform: node.platform,
+          providers: node.providers,
+        });
+      }
+    }
+
     return {
       providers: providers.map((p) => ({
         id: p.id,
@@ -559,6 +617,7 @@ export function registerThreadRoutes(
         unavailableReason: p.info.unavailableReason,
         modes: p.info.modes,
       })),
+      remoteProviders,
     };
   });
 

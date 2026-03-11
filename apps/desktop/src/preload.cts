@@ -58,11 +58,25 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   fsOp: (op: string, params: Record<string, unknown>) =>
     ipcRenderer.invoke(allowedIpcChannels.invoke[8], op, params) as Promise<unknown>,
 
+  /** Detect locally installed CLI providers (codex, claude-code) */
+  detectProviders: () =>
+    ipcRenderer.invoke(allowedIpcChannels.invoke[9]) as Promise<string[]>,
+
+  /** Execute a provider operation (start-session, send-turn, stop-session, etc.) */
+  providerOp: (op: string, params: Record<string, unknown>) =>
+    ipcRenderer.invoke(allowedIpcChannels.invoke[10], op, params) as Promise<unknown>,
+
   /** Listen for screen-share commands from main process (tray, etc.) */
   onScreenShareStart: (callback: () => void) =>
     ipcRenderer.on(allowedIpcChannels.on[0], callback),
   onScreenShareStop: (callback: () => void) =>
     ipcRenderer.on(allowedIpcChannels.on[1], callback),
+
+  /** Listen for gateway events from main process (provider child events, etc.) */
+  onGatewayEvent: (callback: (_event: unknown, data: unknown) => void) =>
+    ipcRenderer.on(allowedIpcChannels.on[2], callback as (...args: unknown[]) => void),
+  removeGatewayEventListener: (callback: (_event: unknown, data: unknown) => void) =>
+    ipcRenderer.removeListener(allowedIpcChannels.on[2], callback as (...args: unknown[]) => void),
 
   /** Platform identifier */
   platform: "electron" as const,

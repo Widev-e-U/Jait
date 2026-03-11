@@ -14,7 +14,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
-import { agentsApi, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
+import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 
 interface ProviderSelectorProps {
   provider: ProviderId
@@ -63,13 +63,15 @@ function summariseReason(reason: string): string {
 
 export function ProviderSelector({ provider, onChange, disabled, className }: ProviderSelectorProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
+  const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
 
   useEffect(() => {
     agentsApi.listProviders()
-      .then((providers) => {
+      .then(({ providers, remoteProviders: remote }) => {
         const map: Record<string, ProviderInfo> = {}
         for (const p of providers) map[p.id] = p
         setProviderStatus(map)
+        setRemoteProviders(remote)
       })
       .catch(() => {/* ignore */})
   }, [])
@@ -101,8 +103,13 @@ export function ProviderSelector({ provider, onChange, disabled, className }: Pr
           const Icon = p.icon
           const isActive = provider === p.value
           const status = providerStatus[p.value]
-          const isAvailable = status?.available !== false // default to available if not fetched
+          const isLocallyAvailable = status?.available !== false // default to available if not fetched
           const reason = status?.unavailableReason
+          // Check if available on a remote node
+          const remoteNode = !isLocallyAvailable
+            ? remoteProviders.find((r) => r.providers.includes(p.value))
+            : undefined
+          const isAvailable = isLocallyAvailable || !!remoteNode
           return (
             <DropdownMenuItem
               key={p.value}
@@ -114,6 +121,11 @@ export function ProviderSelector({ provider, onChange, disabled, className }: Pr
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium flex items-center gap-1.5">
                   {p.label}
+                  {!isLocallyAvailable && remoteNode && (
+                    <span className="text-[10px] text-blue-500 flex items-center gap-0.5">
+                      remote · {remoteNode.nodeName}
+                    </span>
+                  )}
                   {!isAvailable && (
                     <span className="text-[10px] text-destructive/80 flex items-center gap-0.5">
                       <AlertTriangle className="h-3 w-3" />

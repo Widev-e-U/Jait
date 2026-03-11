@@ -161,9 +161,9 @@ export function AutomationPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [ts, ps] = await Promise.all([agentsApi.listThreads(), agentsApi.listProviders()])
+      const [ts, provResult] = await Promise.all([agentsApi.listThreads(), agentsApi.listProviders()])
       setThreads(ts)
-      setProviders(ps)
+      setProviders(provResult.providers)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
     } finally {

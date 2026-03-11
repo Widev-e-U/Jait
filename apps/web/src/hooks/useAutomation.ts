@@ -143,13 +143,13 @@ export function useAutomation(enabled = true) {
     if (!localStorage.getItem('token')) return // skip when not authenticated
     setLoading(true)
     try {
-      const [ts, ps, repos] = await Promise.all([
+      const [ts, provResult, repos] = await Promise.all([
         agentsApi.listThreads(),
         agentsApi.listProviders(),
         agentsApi.listRepos(),
       ])
       setThreads(ts)
-      setProviders(ps)
+      setProviders(provResult.providers)
       setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
       setError(null)
     } catch (err) {

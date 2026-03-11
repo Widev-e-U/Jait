@@ -90,12 +90,12 @@ export function AgentsPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [threadList, providerList] = await Promise.all([
+      const [threadList, providerResult] = await Promise.all([
         agentsApi.listThreads(),
-        agentsApi.listProviders().catch(() => []),
+        agentsApi.listProviders().catch(() => ({ providers: [], remoteProviders: [] })),
       ])
       setThreads(threadList)
-      setProviders(providerList)
+      setProviders(providerResult.providers)
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load')

@@ -48,6 +48,14 @@ export class WsControlPlane {
     timer: ReturnType<typeof setTimeout>;
   }>();
 
+  /** Pending remote provider operation requests */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private pendingProviderOps = new Map<string, {
+    resolve: (value: any) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
+
   constructor(private config: AppConfig) {
     // Use the configured JWT secret, or a dev-mode fallback
     const secret = config.jwtSecret || "jait-dev-secret-change-in-production";
@@ -319,7 +327,7 @@ export class WsControlPlane {
 
       // ── Filesystem node protocol ────────────────────────────────
       case "fs.register-node": {
-        const p = msg.payload as { id?: string; name?: string; platform?: string } | undefined;
+        const p = msg.payload as { id?: string; name?: string; platform?: string; providers?: string[] } | undefined;
         if (p?.id && p.name && p.platform) {
           const node: FsNode = {
             id: p.id,
@@ -327,10 +335,41 @@ export class WsControlPlane {
             platform: p.platform as FsNode["platform"],
             clientId: client.id,
             isGateway: false,
+            providers: Array.isArray(p.providers) ? p.providers : undefined,
             registeredAt: new Date().toISOString(),
           };
           this.fsNodes.set(node.id, node);
-          console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id}`);
+          console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id} — providers: ${node.providers?.join(", ") ?? "none"}`);
+        }
+        break;
+      }
+
+      // ── Remote provider operation responses ──────────────────────
+      case "provider.op-response": {
+        const resp = msg.payload as {
+          requestId?: string;
+          result?: unknown;
+          error?: string;
+        } | undefined;
+        if (resp?.requestId) {
+          const pending = this.pendingProviderOps.get(resp.requestId);
+          if (pending) {
+            this.pendingProviderOps.delete(resp.requestId);
+            clearTimeout(pending.timer);
+            if (resp.error) {
+              pending.reject(new Error(resp.error));
+            } else {
+              pending.resolve(resp.result);
+            }
+          }
+        }
+        break;
+      }
+      case "provider.event": {
+        // A remote node is forwarding a provider event (token, tool.start, etc.)
+        const evtPayload = msg.payload as { sessionId?: string; event?: unknown } | undefined;
+        if (evtPayload?.sessionId && evtPayload.event && this.onRemoteProviderEvent) {
+          this.onRemoteProviderEvent(evtPayload.sessionId, evtPayload.event);
         }
         break;
       }
@@ -506,6 +545,8 @@ export class WsControlPlane {
   onScreenShareStart?: (hostDeviceId: string, viewerDeviceIds?: string[]) => void;
   /** Callback when a screen-share stop is requested via WS */
   onScreenShareStop?: (sessionId: string) => void;
+  /** Callback when a remote node sends a provider event (token, tool.start, etc.) */
+  onRemoteProviderEvent?: (sessionId: string, event: unknown) => void;
 
   // ── Screen sharing helpers ────────────────────────────────────────
 
@@ -676,6 +717,52 @@ export class WsControlPlane {
     if (!nodeId || nodeId === "gateway") return false;
     const node = this.fsNodes.get(nodeId);
     return !!node && !node.isGateway;
+  }
+
+  /**
+   * Find the remote node whose device ID matches a given filesystem path's origin.
+   * Used to route provider operations to the device that owns a repo.
+   * Returns undefined if the path belongs to the gateway or no matching node is found.
+   */
+  findNodeByDeviceId(deviceId: string): FsNode | undefined {
+    // Clean up disconnected nodes first
+    for (const [id, node] of this.fsNodes) {
+      if (!node.isGateway && !this.clients.has(node.clientId)) {
+        this.fsNodes.delete(id);
+      }
+    }
+    for (const node of this.fsNodes.values()) {
+      if (node.id === deviceId && !node.isGateway) return node;
+    }
+    return undefined;
+  }
+
+  /**
+   * Send a provider operation request to a remote node and wait for the response.
+   * Used by RemoteCliProvider to proxy session lifecycle and turn operations.
+   */
+  proxyProviderOp<T = unknown>(nodeId: string, op: string, params: Record<string, unknown>, timeoutMs = 60_000): Promise<T> {
+    const node = this.fsNodes.get(nodeId);
+    if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
+    if (node.isGateway) return Promise.reject(new Error("Use local provider for gateway node"));
+    const client = this.clients.get(node.clientId);
+    if (!client || client.ws.readyState !== 1) {
+      return Promise.reject(new Error(`Node ${nodeId} is not connected`));
+    }
+    const requestId = nanoid();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingProviderOps.delete(requestId);
+        reject(new Error(`Provider operation '${op}' timed out on node ${nodeId}`));
+      }, timeoutMs);
+      this.pendingProviderOps.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer });
+      this.send(client.ws, {
+        type: "provider.op-request" as WsEvent["type"],
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { requestId, op, ...params },
+      });
+    });
   }
 
   get clientCount() {

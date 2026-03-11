@@ -53,6 +53,13 @@ export interface ProviderInfo {
   modes: RuntimeMode[]
 }
 
+export interface RemoteProviderInfo {
+  nodeId: string
+  nodeName: string
+  platform: string
+  providers: string[]
+}
+
 export interface CreateThreadRequest {
   sessionId?: string
   title: string
@@ -138,13 +145,13 @@ export class AgentsApi {
 
   // ── Providers ──────────────────────────────────────────────────
 
-  async listProviders(): Promise<ProviderInfo[]> {
+  async listProviders(): Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> {
     const res = await fetch(`${API_URL}/api/providers`, {
       headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to list providers: ${res.statusText}`)
-    const data = await res.json() as { providers: ProviderInfo[] }
-    return data.providers
+    const data = await res.json() as { providers: ProviderInfo[]; remoteProviders?: RemoteProviderInfo[] }
+    return { providers: data.providers, remoteProviders: data.remoteProviders ?? [] }
   }
 
   async listProviderModels(providerId: ProviderId): Promise<{ id: string; name: string; description?: string; isDefault?: boolean }[]> {
