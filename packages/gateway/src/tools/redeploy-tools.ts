@@ -179,7 +179,7 @@ async function npmRedeploy(
 async function systemdSwitchover(
   oldVersion: string,
   newVersion: string,
-  deps: RedeployDeps,
+  _deps: RedeployDeps,
   log: (msg: string) => void,
 ): Promise<ToolResult> {
   const unit = systemdUnit();
@@ -187,20 +187,24 @@ async function systemdSwitchover(
 
   // Schedule the restart *after* we return the tool result, so the
   // HTTP response has time to flush.
+  //
+  // IMPORTANT: We must forcefully exit after spawning `systemctl restart`.
+  // If we wait for a graceful shutdown, open handles (Codex child processes,
+  // active HTTP connections) prevent the event loop from draining, and
+  // systemd sits in `deactivating (stop-sigterm)` until TimeoutStopSec.
   setTimeout(() => {
     try {
-      // `systemctl --user restart` replaces the process; exec in
-      // background because we're the process being restarted.
       const child = spawn("systemctl", ["--user", "restart", unit], {
         stdio: "ignore",
         detached: true,
       });
       child.unref();
     } catch {
-      // If systemctl fails, fall back to a plain exit so Restart=always
-      // can still pick us up.
-      deps.shutdown().catch(() => process.exit(0));
+      // systemctl spawn failed — fall through to process.exit below
     }
+    // Give systemctl a moment to register, then force-exit so the
+    // restart isn't blocked by lingering handles in this process.
+    setTimeout(() => process.exit(0), 1_000);
   }, 500);
 
   return {
