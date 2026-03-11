@@ -28,6 +28,7 @@ import { requireAuth } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
 import { GitService, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
+import { existsSync } from "node:fs";
 import {
   generateTitleViaTurn,
   generateTitleViaApi,
@@ -214,9 +215,16 @@ export function registerThreadRoutes(
     const mcpServers = [providerRegistry.buildJaitMcpServerRef(config)];
 
     try {
+      // Resolve working directory — the stored path may come from a
+      // different device/OS (e.g. Windows path on a Linux gateway).
+      let workingDirectory = thread.workingDirectory ?? process.cwd();
+      if (!existsSync(workingDirectory)) {
+        workingDirectory = process.cwd();
+      }
+
       const session = await provider.startSession({
         threadId: id,
-        workingDirectory: thread.workingDirectory ?? process.cwd(),
+        workingDirectory,
         mode: (thread.runtimeMode as "full-access" | "supervised") ?? "full-access",
         model: thread.model ?? undefined,
         mcpServers,
