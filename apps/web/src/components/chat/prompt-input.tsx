@@ -624,7 +624,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   return (
     <div
       className={cn(
-        'relative flex flex-col rounded-2xl border bg-background shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+        'relative flex flex-col rounded-2xl border bg-background dark:bg-card shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
       )}
@@ -649,11 +649,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           className={cn(
-            'min-h-[40px] max-h-[200px] overflow-y-auto text-base leading-relaxed outline-none py-2 px-2',
+            'min-h-[40px] max-h-[200px] overflow-y-auto text-base leading-relaxed outline-none py-2 px-2 text-foreground',
             'whitespace-pre-wrap break-words',
             composerDisabled && 'cursor-not-allowed opacity-50',
           )}
-          style={{ wordBreak: 'break-word', color: 'hsl(0 0% 95%)' }}
+          style={{ wordBreak: 'break-word' }}
         />
       </div>
 
