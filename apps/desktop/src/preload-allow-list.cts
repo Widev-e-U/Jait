@@ -11,8 +11,13 @@ const allowedIpcChannels = {
     "desktop:fs-op",
     "desktop:detect-providers",
     "desktop:provider-op",
+    "window:minimize",
+    "window:maximize",
+    "window:close",
+    "window:is-maximized",
+    "window:set-title-bar-overlay",
   ],
-  on: ["screen-share:start", "screen-share:stop", "gateway:event"],
+  on: ["screen-share:start", "screen-share:stop", "gateway:event", "window:maximized-change"],
 };
 
 module.exports = allowedIpcChannels;

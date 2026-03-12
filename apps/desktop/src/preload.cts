@@ -94,4 +94,16 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
 
   /** Platform identifier */
   platform: "electron" as const,
+
+  /** Window control functions (for custom titlebar) */
+  windowMinimize: () => ipcRenderer.invoke("window:minimize"),
+  windowMaximize: () => ipcRenderer.invoke("window:maximize"),
+  windowClose: () => ipcRenderer.invoke("window:close"),
+  windowIsMaximized: () => ipcRenderer.invoke("window:is-maximized") as Promise<boolean>,
+  onMaximizedChange: (callback: (_event: unknown, maximized: boolean) => void) => {
+    ipcRenderer.on("window:maximized-change", callback);
+    return () => { ipcRenderer.removeListener("window:maximized-change", callback); };
+  },
+  setTitleBarOverlay: (opts: { color?: string; symbolColor?: string; height?: number }) =>
+    ipcRenderer.invoke("window:set-title-bar-overlay", opts),
 });

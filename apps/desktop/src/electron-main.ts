@@ -24,6 +24,9 @@ let tray: Tray | null = null;
 
 // ── Window creation ───────────────────────────────────────────────────
 function createMainWindow(): BrowserWindow {
+  const isMac = process.platform === "darwin";
+  const isWindows = process.platform === "win32";
+
   const win = new BrowserWindow({
     width: 1280,
     height: 860,
@@ -38,8 +41,18 @@ function createMainWindow(): BrowserWindow {
       sandbox: false,
       additionalArguments: [`--gateway-url=${GATEWAY_URL}`],
     },
-    titleBarStyle: process.platform === "darwin" ? "hiddenInset" : "default",
-    backgroundColor: "#09090b",
+    titleBarStyle: isMac ? "hiddenInset" : "hidden",
+    ...(isMac ? {} : { frame: false }),
+    ...(isWindows
+      ? {
+          titleBarOverlay: {
+            height: 39,
+            color: "#202020",
+            symbolColor: "#f2f2f2",
+          },
+        }
+      : {}),
+    backgroundColor: "#202020",
     show: false,
   });
 
@@ -52,6 +65,10 @@ function createMainWindow(): BrowserWindow {
   win.on("closed", () => {
     mainWindow = null;
   });
+
+  // Notify renderer when maximize state changes (for window control icons)
+  win.on("maximize", () => win.webContents.send("window:maximized-change", true));
+  win.on("unmaximize", () => win.webContents.send("window:maximized-change", false));
 
   return win;
 }
@@ -110,6 +127,18 @@ function createTray(): void {
 }
 
 // ── IPC handlers ──────────────────────────────────────────────────────
+
+// ── Window control IPC (for custom titlebar) ──────────────────────────
+ipcMain.handle("window:minimize", () => mainWindow?.minimize());
+ipcMain.handle("window:maximize", () => {
+  if (mainWindow?.isMaximized()) mainWindow.unmaximize();
+  else mainWindow?.maximize();
+});
+ipcMain.handle("window:close", () => mainWindow?.close());
+ipcMain.handle("window:is-maximized", () => mainWindow?.isMaximized() ?? false);
+ipcMain.handle("window:set-title-bar-overlay", (_event, opts: { color?: string; symbolColor?: string; height?: number }) => {
+  mainWindow?.setTitleBarOverlay(opts);
+});
 
 // Expose device info to the renderer
 ipcMain.handle("desktop:get-info", () => ({

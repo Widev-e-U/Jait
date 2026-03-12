@@ -26,6 +26,7 @@ import {
   Wifi,
   X,
   Loader2 as SpinnerIcon,
+  Minus,
   Pause,
   CheckCircle2,
   XCircle,
@@ -363,33 +364,7 @@ function ManagerThreadListItem({
           )}
         </div>
       </div>
-      <div className="flex flex-col items-end gap-1">
-        <div className="flex items-center gap-1">
-          {thread.status === 'running' && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7 rounded-lg"
-              onClick={(event) => {
-                event.stopPropagation()
-                onStop()
-              }}
-            >
-              <Square className="h-3 w-3" />
-            </Button>
-          )}
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 rounded-lg opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
-            onClick={(event) => {
-              event.stopPropagation()
-              onDelete()
-            }}
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
+      <div className="flex items-center gap-1">
         {showThreadActions && repo && (
           <div
             className="shrink-0"
@@ -411,6 +386,30 @@ function ManagerThreadListItem({
             />
           </div>
         )}
+        {thread.status === 'running' && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7 rounded-lg"
+            onClick={(event) => {
+              event.stopPropagation()
+              onStop()
+            }}
+          >
+            <Square className="h-3 w-3" />
+          </Button>
+        )}
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7 rounded-lg opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+          onClick={(event) => {
+            event.stopPropagation()
+            onDelete()
+          }}
+        >
+          <Trash2 className="h-3.5 w-3.5" />
+        </Button>
       </div>
     </div>
   )
@@ -455,6 +454,9 @@ function App() {
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
   const [gatewayUrlInput, setGatewayUrlInput] = useState(() => getStoredGatewayUrl() ?? '')
   const isStandaloneApp = !!(window as any).jaitDesktop || !!(window as any).Capacitor
+  const isElectron = !!(window as any).jaitDesktop
+  const [desktopPlatform, setDesktopPlatform] = useState<string | null>(null)
+  const [isMaximized, setIsMaximized] = useState(false)
   const [gatewayStep, setGatewayStep] = useState<'url' | 'auth'>(() =>
     isStandaloneApp && !isGatewayConfigured() ? 'url' : 'auth'
   )
@@ -581,6 +583,16 @@ function App() {
 
   // ── UI command channel (server ↔ frontend via WebSocket) ──────────
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
+
+  // Detect Electron platform and listen for maximize/unmaximize (custom titlebar)
+  useEffect(() => {
+    const desktop = (window as any).jaitDesktop
+    if (!desktop) return
+    desktop.getInfo?.().then((info: any) => setDesktopPlatform(info.platform))
+    desktop.windowIsMaximized?.().then((max: boolean) => setIsMaximized(max))
+    const cleanup = desktop.onMaximizedChange?.((_: unknown, maximized: boolean) => setIsMaximized(maximized))
+    return () => { cleanup?.() }
+  }, [])
 
   // Track whether the WS has delivered an authoritative full-state push.
   // When true, the REST-based restore effects are skipped to avoid races.
@@ -1018,13 +1030,30 @@ function App() {
 
   useEffect(() => {
     applyTheme(themeMode)
+    // Sync Windows titlebar overlay color with theme
+    if (isElectron && desktopPlatform === 'win32') {
+      const dark = themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
+      ;(window as any).jaitDesktop?.setTitleBarOverlay?.({
+        color: dark ? '#202020' : '#e8ecf1',
+        symbolColor: dark ? '#f2f2f2' : '#0a0a0a',
+        height: 39,
+      })
+    }
     const media = window.matchMedia('(prefers-color-scheme: dark)')
     const onSystemThemeChanged = () => {
       if (themeMode === 'system') applyTheme('system')
+      if (isElectron && desktopPlatform === 'win32') {
+        const dark = media.matches
+        ;(window as any).jaitDesktop?.setTitleBarOverlay?.({
+          color: dark ? '#202020' : '#e8ecf1',
+          symbolColor: dark ? '#f2f2f2' : '#0a0a0a',
+          height: 39,
+        })
+      }
     }
     media.addEventListener('change', onSystemThemeChanged)
     return () => media.removeEventListener('change', onSystemThemeChanged)
-  }, [themeMode])
+  }, [themeMode, desktopPlatform])
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -1583,20 +1612,26 @@ ${file.content.slice(0, 2000)}
   return (
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
-        <header className="flex items-center h-14 px-2 sm:px-5 border-b shrink-0 gap-1 sm:gap-2">
+        <header
+          className={`flex items-center px-2 sm:px-5 border-b shrink-0 gap-1 sm:gap-2 ${isElectron ? 'h-10' : 'h-14'}`}
+          style={isElectron ? {
+            WebkitAppRegion: 'drag',
+            paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
+            paddingRight: desktopPlatform === 'win32' ? 140 : undefined,
+          } as React.CSSProperties : undefined}
+        >
           {/* Left: Logo — always visible */}
-          <div className="flex items-center shrink-0 gap-1.5">
-            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 1024 1024" className="shrink-0">
+          <div className="flex items-center shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 1024 1024" className="shrink-0">
               <path d="M318 372 L430 486 L318 600"
                     fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round"/>
               <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715"
                     fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
-            <span className="text-base font-medium tracking-tight">Jait</span>
           </div>
 
           {/* Center: Nav — scrollable on mobile */}
-          <nav className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none">
+          <nav className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <Button
               variant={currentView === 'chat' ? 'secondary' : 'ghost'}
               size="sm"
@@ -1630,7 +1665,7 @@ ${file.content.slice(0, 2000)}
           <div className="flex-1 min-w-0" />
 
           {/* Right: Context + Model + Account — always visible */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <ContextIndicator usage={contextUsage} />
             {(() => {
               const displayProvider = chatProvider === 'codex' ? 'openai'
@@ -1708,6 +1743,33 @@ ${file.content.slice(0, 2000)}
               <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setShowLoginDialog(true)}>
                 Sign in
               </Button>
+            )}
+
+            {/* Linux custom window controls (Windows uses native titleBarOverlay, macOS uses traffic lights) */}
+            {isElectron && desktopPlatform === 'linux' && (
+              <div className="flex items-center ml-2 -mr-2">
+                <button
+                  onClick={() => (window as any).jaitDesktop.windowMinimize()}
+                  className="flex items-center justify-center h-9 w-11 hover:bg-muted/80 transition-colors"
+                >
+                  <Minus className="h-4 w-4" />
+                </button>
+                <button
+                  onClick={() => (window as any).jaitDesktop.windowMaximize()}
+                  className="flex items-center justify-center h-9 w-11 hover:bg-muted/80 transition-colors"
+                >
+                  {isMaximized
+                    ? <svg width="10" height="10" viewBox="0 0 10 10" className="fill-current"><path d="M2 0v2H0v8h8V8h2V0zm5 7H1V3h6zM9 1v6H8V2H3V1z"/></svg>
+                    : <Square className="h-3 w-3" />
+                  }
+                </button>
+                <button
+                  onClick={() => (window as any).jaitDesktop.windowClose()}
+                  className="flex items-center justify-center h-9 w-11 hover:bg-red-600 hover:text-white transition-colors"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
             )}
           </div>
         </header>
@@ -1833,26 +1895,41 @@ ${file.content.slice(0, 2000)}
               </Tooltip>
             )}
 
-            {/* Manager mode: repos toggle + thread info */}
+            {/* Manager mode: repos toggle (list view) / back button (thread view) + thread info */}
             {viewMode === 'manager' && (
               <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={showManagerRepos ? 'secondary' : 'ghost'}
-                      size="sm"
-                      className="h-6 text-[11px] px-2 shrink-0"
-                      onClick={() => setShowManagerRepos(s => !s)}
-                    >
-                      {showManagerRepos
-                        ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
-                        : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
-                      }
-                      Repositories
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Toggle repositories panel</TooltipContent>
-                </Tooltip>
+                {automation.selectedThread ? (
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="h-6 text-[11px] px-2 shrink-0"
+                    onClick={() => {
+                      automation.setSelectedThreadId(null)
+                      setInputValue('')
+                    }}
+                  >
+                    <ArrowLeft className="h-3 w-3 mr-1" />
+                    Back
+                  </Button>
+                ) : (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={showManagerRepos ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-6 text-[11px] px-2 shrink-0"
+                        onClick={() => setShowManagerRepos(s => !s)}
+                      >
+                        {showManagerRepos
+                          ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
+                          : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
+                        }
+                        Repositories
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Toggle repositories panel</TooltipContent>
+                  </Tooltip>
+                )}
                 <div className="flex-1" />
                 {automation.selectedThread ? (
                   <div className="flex items-center gap-2 shrink-0">
@@ -1862,6 +1939,11 @@ ${file.content.slice(0, 2000)}
                     ) : (
                       <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
                         {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
+                      </span>
+                    )}
+                    {automation.selectedRepo && (
+                      <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
+                        {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
                       </span>
                     )}
                     {automation.selectedThread.branch && (
@@ -2069,27 +2151,6 @@ ${file.content.slice(0, 2000)}
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
                 {automation.selectedThread ? (
                   <>
-                    <div className="border-b px-4 py-2">
-                      <div className="mx-auto flex w-full max-w-3xl items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 gap-1.5 px-2 text-xs"
-                          onClick={() => {
-                            automation.setSelectedThreadId(null)
-                            setInputValue('')
-                          }}
-                        >
-                          <ArrowLeft className="h-3.5 w-3.5" />
-                          Back
-                        </Button>
-                        {automation.selectedRepo && (
-                          <span className="truncate text-xs text-muted-foreground">
-                            {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
-                          </span>
-                        )}
-                      </div>
-                    </div>
                     <Conversation className="min-h-0 flex-1 border-b" compact>
                       {automationMessages.length === 0 && (
                         <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
