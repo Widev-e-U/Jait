@@ -86,7 +86,7 @@ function testConfig() {
 }
 
 async function setupThreadApp() {
-  const { db, sqlite } = openDatabase(":memory:");
+  const { db, sqlite } = await openDatabase(":memory:");
   migrateDatabase(sqlite);
 
   const provider = new MockThreadProvider();

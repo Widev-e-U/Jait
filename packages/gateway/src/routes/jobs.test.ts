@@ -13,7 +13,7 @@ async function authHeader(jwtSecret: string, userId: string) {
 
 describe("job routes", () => {
   it("creates and triggers agent_task automations via agent.spawn", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const executeTool = vi.fn(async () => ({ ok: true, data: { content: "done" } }));
@@ -66,7 +66,7 @@ describe("job routes", () => {
   });
 
   it("rejects agent_task automations without prompt", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const executeTool = vi.fn(async () => ({ ok: true, data: { handled: true } }));
@@ -97,7 +97,7 @@ describe("job routes", () => {
   });
 
   it("creates, triggers and lists runs for authenticated automation jobs", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const executeTool = vi.fn(async () => ({ ok: true, data: { handled: true } }));
@@ -151,7 +151,7 @@ describe("job routes", () => {
   });
 
   it("does not allow one user to trigger another user's job", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const executeTool = vi.fn(async () => ({ ok: true, data: { handled: true } }));

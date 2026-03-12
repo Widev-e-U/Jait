@@ -79,7 +79,7 @@ class MockThreadProvider implements CliProviderAdapter {
 
 describe("thread routes", () => {
   it("rejects create-pr while a thread is not completed", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const app = Fastify();
@@ -124,7 +124,7 @@ describe("thread routes", () => {
   });
 
   it("creates a PR for a completed thread and updates thread metadata", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const app = Fastify();
@@ -192,7 +192,7 @@ describe("thread routes", () => {
   });
 
   it("broadcasts the full thread row with running status updates", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const app = Fastify();

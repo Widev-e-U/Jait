@@ -32,7 +32,7 @@ describe("POST /api/workspace/open", () => {
 
   beforeAll(async () => {
     const config = loadConfig();
-    const { db, sqlite } = openDatabase();
+    const { db, sqlite } = await openDatabase();
     migrateDatabase(sqlite);
 
     const sessions = new SessionService(db);
