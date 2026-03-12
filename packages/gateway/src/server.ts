@@ -234,13 +234,9 @@ function resolveWebDir(): string | null {
   if (process.env["JAIT_WEB_DIR"] && existsSync(process.env["JAIT_WEB_DIR"])) {
     return process.env["JAIT_WEB_DIR"];
   }
-  // 2. Probe known locations for @jait/web/dist
+  // 2. Probe known locations for @jait/web/dist (prefer nested dependency first)
   const candidates = [
-    // npm global install: node_modules/@jait/web/dist (relative to gateway dist/)
-    join(__dirname, "../../web/dist"),
-    // If @jait/web is hoisted into top-level node_modules
-    join(__dirname, "../../../@jait/web/dist"),
-    // Nested node_modules (npm global install typical layout)
+    // Nested node_modules (npm global install typical layout — most reliable)
     join(__dirname, "../node_modules/@jait/web/dist"),
     // Use createRequire to find @jait/web regardless of hoist layout (ESM-safe)
     (() => {
@@ -250,6 +246,10 @@ function resolveWebDir(): string | null {
         return join(dirname(webPkg), "dist");
       } catch { return null; }
     })(),
+    // npm global install: node_modules/@jait/web/dist (relative to gateway dist/)
+    join(__dirname, "../../web/dist"),
+    // If @jait/web is hoisted into top-level node_modules
+    join(__dirname, "../../../@jait/web/dist"),
     // Monorepo dev layout
     join(__dirname, "../../../../apps/web/dist"),
     // Manual placement in CWD
