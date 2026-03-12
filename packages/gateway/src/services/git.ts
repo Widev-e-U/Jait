@@ -282,7 +282,7 @@ export class GitService {
         if (hasGh) {
           const json = await ghExec(
             cwd,
-            `pr view --head "${branch}" --json number,title,url,state,baseRefName,headRefName`,
+            `pr view "${branch}" --json number,title,url,state,baseRefName,headRefName`,
           );
           if (json) {
             const parsed = JSON.parse(json) as Record<string, unknown>;

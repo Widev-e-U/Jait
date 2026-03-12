@@ -725,7 +725,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
           if (hasGh) {
             // Check if PR already exists
             try {
-              const existing = await ghExecLocal(`pr view --head "${currentBranch}" --json number,url,title,state,baseRefName,headRefName`);
+              const existing = await ghExecLocal(`pr view "${currentBranch}" --json number,url,title,state,baseRefName,headRefName`);
               const parsed = JSON.parse(existing);
               if (parsed.number && String(parsed.state ?? "OPEN").toUpperCase() === "OPEN") {
                 result.pr = {
@@ -914,7 +914,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
       try {
         const { stdout } = await execGhP(
-          `gh pr view --head "${prBranch}" --json number,title,url,state,baseRefName,headRefName`,
+          `gh pr view "${prBranch}" --json number,title,url,state,baseRefName,headRefName`,
           { cwd: prCwd, timeout: 15_000 },
         );
         const parsed = JSON.parse(stdout.trim()) as Record<string, unknown>;
