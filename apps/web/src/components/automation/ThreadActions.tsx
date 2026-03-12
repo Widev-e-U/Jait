@@ -7,6 +7,7 @@ import { agentsApi, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 interface ThreadActionsProps {
   /** Thread id to persist PR metadata after creation/open. */
@@ -27,9 +28,23 @@ interface ThreadActionsProps {
   ghAvailable?: boolean
   /** Current thread lifecycle status. */
   threadStatus: ThreadStatus
+  /** Whether to render the PR status badge next to the buttons. */
+  showStatusBadge?: boolean
 }
 
-export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, prUrl, prState, ghAvailable = true, threadStatus }: ThreadActionsProps) {
+export function ThreadActions({
+  threadId,
+  cwd,
+  branch,
+  baseBranch,
+  threadTitle,
+  prUrl,
+  prState,
+  ghAvailable = true,
+  threadStatus,
+  showStatusBadge = true,
+}: ThreadActionsProps) {
+  const isMobile = useIsMobile()
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
@@ -54,6 +69,7 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, 
       ? 'Open PR'
       : 'Open PR Page'
     : 'Create Pull Request'
+  const prButtonTitle = existingPrLink ? buttonLabel : 'Create pull request'
   const canCreatePr = existingPrLink != null || threadStatus === 'completed'
 
   const handlePushAndPR = useCallback(async () => {
@@ -117,22 +133,30 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, 
         onReady={handleGhReady}
       />
       <div className="inline-flex items-center gap-1">
-        <Button variant="ghost" size="sm" className="h-5 text-[10px] gap-1" onClick={() => setDiffOpen(true)}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={`h-5 text-[10px] gap-1 ${isMobile ? 'px-1.5' : ''}`}
+          onClick={() => setDiffOpen(true)}
+          title="Changes"
+          aria-label="Changes"
+        >
           <Eye className="h-3 w-3" />
-          Changes
+          {!isMobile && 'Changes'}
         </Button>
         <Button
           variant="ghost"
           size="sm"
-          className="h-5 text-[10px] gap-1"
+          className={`h-5 text-[10px] gap-1 ${isMobile ? 'px-1.5' : ''}`}
           disabled={busy || !canCreatePr}
           onClick={handlePushAndPR}
-          title={!existingPrLink && threadStatus !== 'completed' ? 'Finish the thread before creating a pull request.' : undefined}
+          title={!existingPrLink && threadStatus !== 'completed' ? 'Finish the thread before creating a pull request.' : prButtonTitle}
+          aria-label={prButtonTitle}
         >
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitPullRequest className="h-3 w-3" />}
-          {buttonLabel}
+          {!isMobile && buttonLabel}
         </Button>
-        {existingPrLink && (
+        {showStatusBadge && existingPrLink && (
           <Badge
             variant="outline"
             className={`h-5 px-1.5 text-[10px] font-medium ${

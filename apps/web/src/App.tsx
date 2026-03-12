@@ -407,6 +407,7 @@ function ManagerThreadListItem({
               prUrl={thread.prUrl}
               prState={prState}
               ghAvailable={ghAvailable}
+              showStatusBadge={false}
             />
           </div>
         )}

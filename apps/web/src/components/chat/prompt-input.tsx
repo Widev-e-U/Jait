@@ -702,7 +702,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               )}
               {footerLeadingContent}
               {showProviderSelector && (
-                <ProviderSelector provider={provider!} onChange={onProviderChange!} disabled={selectorsDisabled} />
+                <ProviderSelector
+                  provider={provider!}
+                  onChange={onProviderChange!}
+                  disabled={selectorsDisabled}
+                  iconOnly
+                />
               )}
               {showCliModelSelector && (
                 <CliModelSelector provider={provider!} model={cliModel ?? null} onChange={onCliModelChange!} disabled={selectorsDisabled} />
