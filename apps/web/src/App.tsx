@@ -790,7 +790,11 @@ function App() {
   useEffect(() => {
     if (prevViewModeRef.current !== 'manager' && viewMode === 'manager') {
       setManagerAnimPhase('center')
+      // Force browser to paint 'center' position before transitioning to 'top'.
+      // Double-rAF + forced reflow ensures the initial transform is committed.
       requestAnimationFrame(() => {
+        // Force a layout/reflow so the browser commits the 'center' style
+        document.body.offsetHeight          // eslint-disable-line no-unused-expressions
         requestAnimationFrame(() => setManagerAnimPhase('top'))
       })
     } else if (prevViewModeRef.current === 'manager' && viewMode === 'developer') {
@@ -2111,8 +2115,8 @@ ${file.content.slice(0, 2000)}
                     <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
                       {/* Title + composer */}
                       <div
-                        className="flex flex-col items-center px-4 pb-2 pt-4 will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]"
-                        style={managerAnimPhase === 'center' ? { transform: 'translateY(calc(50vh - 200px))' } : { transform: 'translateY(0)' }}
+                        className={`flex flex-col items-center px-4 pb-2 pt-4${managerAnimPhase !== 'idle' ? ' will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]' : ''}`}
+                        style={managerAnimPhase === 'center' ? { transform: 'translateY(calc(50vh - 200px))' } : managerAnimPhase === 'top' ? { transform: 'translateY(0)' } : undefined}
                         onTransitionEnd={() => { if (managerAnimPhase === 'top') setManagerAnimPhase('idle') }}
                       >
                         <div className="w-full max-w-3xl">
