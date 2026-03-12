@@ -693,10 +693,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </div>
       )}
 
-      <div className={cn('px-3 pb-2.5 pt-0.5', isMobile ? 'space-y-2' : 'flex items-center gap-2')}>
+      <div className="flex min-w-0 items-center gap-2 px-3 pb-2.5 pt-0.5">
         {hasFooterControls && (
-          <div className={cn(isMobile ? 'max-w-full' : 'min-w-0 flex-1 overflow-x-auto scrollbar-none')}>
-            <div className={cn(isMobile ? 'flex flex-wrap items-center gap-1' : 'flex min-w-max items-center gap-1 pr-1')}>
+          <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
+            <div className="flex min-w-max items-center gap-1 pr-1">
               {showViewModeSelector && (
                 <ViewModeSelector mode={viewMode!} onChange={onViewModeChange!} disabled={selectorsDisabled} compact={isMobile} />
               )}
@@ -713,7 +713,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </div>
           </div>
         )}
-        <div className={cn('flex shrink-0 items-center gap-1.5', isMobile ? 'justify-end' : 'pl-1')}>
+        <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterControls ? 'pl-1' : 'ml-auto')}>
           {onVoiceInput && !isLoading && (
             <Button
               type="button"
