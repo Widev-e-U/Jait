@@ -303,10 +303,11 @@ export function registerThreadRoutes(
         threadUnsubs.delete(id);
       }
 
-      // Flag to suppress turn.completed during the title-generation turn.
-      // The title turn fires turn.completed before the real coding turn starts;
-      // without this guard the thread would flip to "completed" prematurely.
-      let suppressTurnCompleted = false;
+      // Counter to suppress turn.completed / turn.started events during
+      // the title-generation turn.  The title turn fires these before the
+      // real coding turn starts; without this guard the thread would flip
+      // to "completed" prematurely.
+      let suppressTitleTurnEvents = 0;
 
       // Subscribe to provider events and log them
       const unsubscribe = provider.onEvent((event: ProviderEvent) => {
@@ -315,8 +316,15 @@ export function registerThreadRoutes(
         }
 
         // During the title turn we still log events but skip status changes
-        if (suppressTurnCompleted && event.type === "turn.completed") {
-          return;
+        if (suppressTitleTurnEvents > 0) {
+          if (event.type === "turn.completed") {
+            suppressTitleTurnEvents--;
+            return;
+          }
+          // Also suppress turn.started during title gen to avoid redundant broadcasts
+          if (event.type === "turn.started") {
+            return;
+          }
         }
 
         const activity = threadService.logProviderEvent(id, event);
@@ -337,6 +345,15 @@ export function registerThreadRoutes(
           unsubscribe();
           threadUnsubs.delete(id);
           remoteProviders.delete(id);
+        } else if (event.type === "turn.started") {
+          // A new turn began — make sure the thread is marked running.
+          // This acts as a safety net: if a previous turn.completed leaked
+          // (e.g. race between title-gen and suppression), this corrects it.
+          const cur = threadService.getById(id);
+          if (cur && cur.status !== "running") {
+            threadService.update(id, { status: "running", error: null });
+            broadcastThreadStatus(id, "running");
+          }
         } else if (event.type === "turn.completed") {
           // Turn finished but session is still alive — mark thread completed
           // while keeping providerSessionId set.  The frontend checks
@@ -366,7 +383,7 @@ export function registerThreadRoutes(
         try {
           // ── Title generation (via Codex turn) ─────────────────
           if (titleTask.trim()) {
-            suppressTurnCompleted = true;
+            suppressTitleTurnEvents = 1;
             try {
               let generatedTitle: string;
               if (providerId === "codex" || providerId === "claude-code") {
@@ -389,8 +406,6 @@ export function registerThreadRoutes(
               }
             } catch {
               // Title generation failed — leave the placeholder title
-            } finally {
-              suppressTurnCompleted = false;
             }
           }
 

@@ -161,6 +161,13 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           deps.threadService.markError(thread.id, event.error);
           broadcastThreadEvent(thread.id, "status", { status: "error", error: event.error });
           unsubscribe();
+        } else if (event.type === "turn.started") {
+          // Re-assert running when a new turn begins
+          const cur = deps.threadService.getById(thread.id);
+          if (cur && cur.status !== "running") {
+            deps.threadService.update(thread.id, { status: "running", error: null });
+            broadcastThreadEvent(thread.id, "status", { status: "running" });
+          }
         }
       });
 

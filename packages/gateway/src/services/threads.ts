@@ -245,6 +245,9 @@ export class ThreadService {
       case "token":
         // Don't log individual tokens — too noisy
         return undefined;
+      case "turn.started":
+        // Don't log turn.started — it's handled by the route for status transitions
+        return undefined;
       case "tool.start":
         return this.addActivity(threadId, "tool.start", `Using ${event.tool}`, {
           tool: event.tool,

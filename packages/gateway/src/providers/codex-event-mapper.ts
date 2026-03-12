@@ -146,7 +146,7 @@ export function mapCodexNotification(
 
     // ── Turn lifecycle ──
     case "turn/started":
-      return [];
+      return [{ type: "turn.started", sessionId }];
 
     case "turn/completed": {
       const turn = params.turn as Record<string, unknown> | undefined;
@@ -201,7 +201,13 @@ export function mapCodexNotification(
     case "skills/changed":
     case "codex/event/mcp_startup_complete":
     case "codex/event/skills_update_available":
+      return [{ type: "activity", sessionId, kind: method, summary: `Codex: ${method}`, payload: params }];
+
     case "codex/event/task_started":
+      return [
+        { type: "turn.started", sessionId },
+        { type: "activity", sessionId, kind: method, summary: `Codex: ${method}`, payload: params },
+      ];
     case "codex/event/task_complete":
     case "codex/event/agent_reasoning":
       return [{ type: "activity", sessionId, kind: method, summary: `Codex: ${method}`, payload: params }];
