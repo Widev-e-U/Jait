@@ -862,6 +862,36 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
       return { installed, authenticated, username };
     }
+    case "gh-pr-view": {
+      // Check PR status for a given branch via gh cli
+      const prBranch = params.branch as string;
+      if (!prBranch) throw new Error("Missing branch parameter");
+
+      const { exec: execGhPr } = await import("node:child_process");
+      const { promisify: promisifyGhPr } = await import("node:util");
+      const execGhP = promisifyGhPr(execGhPr);
+      const prCwd = (params.cwd as string) || process.cwd();
+
+      try {
+        const { stdout } = await execGhP(
+          `gh pr view --head "${prBranch}" --json number,title,url,state,baseRefName,headRefName`,
+          { cwd: prCwd, timeout: 15_000 },
+        );
+        const parsed = JSON.parse(stdout.trim()) as Record<string, unknown>;
+        if (parsed.number) {
+          const state = String(parsed.state ?? "OPEN").toUpperCase();
+          return {
+            number: Number(parsed.number),
+            title: String(parsed.title ?? ""),
+            url: String(parsed.url ?? ""),
+            baseBranch: String(parsed.baseRefName ?? ""),
+            headBranch: String(parsed.headRefName ?? ""),
+            state: state === "MERGED" ? "merged" : state === "CLOSED" ? "closed" : "open",
+          };
+        }
+      } catch { /* no PR found or gh error */ }
+      return null;
+    }
     case "gh-auth-token": {
       // Authenticate gh CLI using a personal access token
       const token = params.token as string;

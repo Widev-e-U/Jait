@@ -78,6 +78,16 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
           const ghCheck = await ws.proxyFsOp<{ installed: boolean; authenticated: boolean }>(remoteNodeId, "gh-check", {}, 10_000);
           ghAvailable = ghCheck.installed && ghCheck.authenticated;
         } catch { /* fallback to false */ }
+        // Check PR status via remote node's gh cli
+        let pr: { number: number; title: string; url: string; baseBranch: string; headBranch: string; state: "open" | "closed" | "merged" } | null = null;
+        if (ghAvailable && currentBranch) {
+          try {
+            const prResult = await ws.proxyFsOp<{ number: number; title: string; url: string; baseBranch: string; headBranch: string; state: "open" | "closed" | "merged" } | null>(
+              remoteNodeId, "gh-pr-view", { branch: currentBranch, cwd }, 15_000,
+            );
+            if (prResult) pr = prResult;
+          } catch { /* no PR or gh error */ }
+        }
         return {
           branch: currentBranch,
           hasWorkingTreeChanges: hasChanges,
@@ -85,7 +95,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
           hasUpstream: false,
           aheadCount: 0,
           behindCount: 0,
-          pr: null,
+          pr,
           ghAvailable,
         };
       }
