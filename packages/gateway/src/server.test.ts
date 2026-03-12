@@ -36,7 +36,7 @@ describe("@jait/gateway health", () => {
     await app.close();
   });
 
-  it("GET / returns gateway info", async () => {
+  it("GET / returns web UI or gateway info", async () => {
     const app = await createServer(testConfig);
     const response = await app.inject({
       method: "GET",
@@ -44,10 +44,17 @@ describe("@jait/gateway health", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    const body = JSON.parse(response.body);
-    expect(body.name).toBe("jait-gateway");
-    expect(body.status).toBe("ok");
-    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
+    const contentType = response.headers["content-type"] ?? "";
+    if (String(contentType).includes("text/html")) {
+      // Web dist is present — SPA is served
+      expect(response.body).toContain("<!DOCTYPE");
+    } else {
+      // No web dist — JSON fallback
+      const body = JSON.parse(response.body);
+      expect(body.name).toBe("jait-gateway");
+      expect(body.status).toBe("ok");
+      expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
+    }
     await app.close();
   });
 
