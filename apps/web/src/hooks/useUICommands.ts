@@ -7,6 +7,7 @@ import type {
   WorkspaceCloseData,
   TerminalFocusData,
   FileHighlightData,
+  FsChangesPayload,
 } from '@jait/shared'
 
 import { getWsUrl } from '@/lib/gateway-url'
@@ -116,6 +117,8 @@ interface UseUICommandsOptions {
   onMessageComplete?: () => void
   /** Called when the gateway broadcasts a thread lifecycle event. */
   onThreadEvent?: ThreadEventHandler
+  /** Called when the gateway pushes native filesystem change events. */
+  onFsChanges?: (payload: FsChangesPayload) => void
 }
 
 /**
@@ -133,7 +136,7 @@ interface UseUICommandsOptions {
  * to other clients via `ui.state-sync`.
  */
 export function useUICommands(opts: UseUICommandsOptions) {
-  const { listeners, sessionId, token, onStateSync, onFullState, onMessageComplete, onThreadEvent } = opts
+  const { listeners, sessionId, token, onStateSync, onFullState, onMessageComplete, onThreadEvent, onFsChanges } = opts
   const listenersRef = useRef(listeners)
   listenersRef.current = listeners
   const onStateSyncRef = useRef(onStateSync)
@@ -144,6 +147,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onMessageCompleteRef.current = onMessageComplete
   const onThreadEventRef = useRef(onThreadEvent)
   onThreadEventRef.current = onThreadEvent
+  const onFsChangesRef = useRef(onFsChanges)
+  onFsChangesRef.current = onFsChanges
   const wsRef = useRef<WebSocket | null>(null)
   const currentSessionRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
@@ -197,6 +202,10 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'message.complete') {
         // Assistant message finished on another device — refresh chat
         onMessageCompleteRef.current?.()
+      } else if (msg.type === 'fs.changes') {
+        // Native filesystem change events from the workspace watcher
+        const payload = msg.payload as FsChangesPayload
+        onFsChangesRef.current?.(payload)
       } else if (msg.type === 'fs.browse-request') {
         // Gateway is asking us to browse a local directory
         void handleFsBrowseRequest(msg.payload as { requestId: string; path: string })

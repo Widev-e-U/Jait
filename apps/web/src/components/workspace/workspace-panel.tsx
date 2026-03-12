@@ -41,6 +41,8 @@ interface WorkspacePanelProps {
   onToggleEditor?: () => void
   /** Absolute paths of files recently changed by an agent (used to auto-refresh the editor) */
   changedPaths?: string[]
+  /** Incremented by the server's native file watcher to signal external FS changes */
+  fsWatcherVersion?: number
 }
 
 export interface WorkspacePanelHandle {
@@ -249,6 +251,7 @@ function TreeNodeRow({
   onToggleDir,
   onSelectFile,
   onContextFile,
+  isMobile,
 }: {
   node: LazyNode
   depth: number
@@ -257,8 +260,9 @@ function TreeNodeRow({
   onToggleDir: (node: LazyDir) => void
   onSelectFile: (node: LazyFile) => void
   onContextFile: (node: LazyFile) => void
+  isMobile?: boolean
 }) {
-  const paddingLeft = 8 + depth * 14
+  const paddingLeft = isMobile ? 6 + depth * 12 : 8 + depth * 14
 
   if (node.kind === 'dir') {
     const expanded = expandedDirs.has(node.path)
@@ -266,18 +270,20 @@ function TreeNodeRow({
     return (
       <>
         <div
-          className="group flex items-center gap-1 rounded px-1 py-1 cursor-pointer text-xs hover:bg-muted"
+          className={`group flex items-center gap-1.5 rounded px-1 cursor-pointer hover:bg-muted active:bg-muted ${
+            isMobile ? 'py-2 text-sm' : 'py-1 text-xs'
+          }`}
           style={{ paddingLeft }}
           onClick={() => onToggleDir(node)}
         >
           {loading ? (
-            <Loader2 className="h-3 w-3 shrink-0 text-muted-foreground animate-spin" />
+            <Loader2 className={`${isMobile ? 'h-4 w-4' : 'h-3 w-3'} shrink-0 text-muted-foreground animate-spin`} />
           ) : (
             <ChevronRight
-              className={`h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
+              className={`${isMobile ? 'h-4 w-4' : 'h-3 w-3'} shrink-0 text-muted-foreground transition-transform duration-150 ${expanded ? 'rotate-90' : ''}`}
             />
           )}
-          <FolderIcon name={node.name} open={expanded} className="h-3.5 w-3.5 shrink-0" />
+          <FolderIcon name={node.name} open={expanded} className={`${isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
           <span className="truncate flex-1">{node.name}</span>
         </div>
         {expanded && node.children?.map((child) => (
@@ -290,6 +296,7 @@ function TreeNodeRow({
             onToggleDir={onToggleDir}
             onSelectFile={onSelectFile}
             onContextFile={onContextFile}
+            isMobile={isMobile}
           />
         ))}
       </>
@@ -299,10 +306,12 @@ function TreeNodeRow({
   const isActive = activeFilePath === node.path
   return (
     <div
-      className={`group flex items-center gap-1 rounded px-1 py-1 cursor-pointer text-xs ${
-        isActive ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
+      className={`group flex items-center gap-1.5 rounded px-1 cursor-pointer ${
+        isMobile ? 'py-2 text-sm' : 'py-1 text-xs'
+      } ${
+        isActive ? 'bg-primary/15 text-foreground' : 'hover:bg-muted active:bg-muted'
       }`}
-      style={{ paddingLeft: paddingLeft + 14 }}
+      style={{ paddingLeft: paddingLeft + (isMobile ? 12 : 14) }}
       onClick={() => onSelectFile(node)}
       onContextMenu={(e) => { e.preventDefault(); onContextFile(node) }}
       draggable
@@ -311,15 +320,17 @@ function TreeNodeRow({
         e.dataTransfer.effectAllowed = 'copy'
       }}
     >
-      <FileIcon filename={node.name} className="h-3.5 w-3.5" />
+      <FileIcon filename={node.name} className={`${isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5'}`} />
       <span className="truncate flex-1" title={node.path}>{node.name}</span>
       <button
         type="button"
-        className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background"
+        className={`${
+          isMobile ? 'opacity-100 p-1.5' : 'opacity-0 group-hover:opacity-100 p-0.5'
+        } rounded hover:bg-background`}
         onClick={(e) => { e.stopPropagation(); onContextFile(node) }}
         title="Add to chat"
       >
-        <Send className="h-3 w-3" />
+        <Send className={`${isMobile ? 'h-3.5 w-3.5' : 'h-3 w-3'}`} />
       </button>
     </div>
   )
@@ -344,6 +355,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onToggleTree,
   onToggleEditor,
   changedPaths,
+  fsWatcherVersion,
 }, ref) {
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
   /** When non-null, we're in remote (server-backed) mode */
@@ -381,6 +393,67 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     bumpTree()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [changedPaths])
+
+  // Bump the tree when the server's native file watcher detects external changes
+  const prevWatcherVersionRef = useRef(fsWatcherVersion ?? 0)
+  useEffect(() => {
+    if (fsWatcherVersion == null) return
+    if (fsWatcherVersion === prevWatcherVersionRef.current) return
+    prevWatcherVersionRef.current = fsWatcherVersion
+
+    // Invalidate cached children for all expanded directories so the next
+    // render re-fetches their contents (revealing new/deleted files).
+    const invalidateTree = (nodes: LazyNode[]) => {
+      for (const node of nodes) {
+        if (node.kind === 'dir' && node.children) {
+          if (expandedDirs.has(node.path)) {
+            node.children = null // force re-fetch on next expand/render
+          }
+          // Don't recurse into collapsed dirs — they have no cached children anyway
+        }
+      }
+    }
+    invalidateTree(lazyTree)
+
+    // Re-expand all currently expanded dirs (which now have null children)
+    // by triggering a fresh tree render.
+    bumpTree()
+
+    // Re-fetch children for currently expanded directories
+    const refetchExpanded = async () => {
+      const toRefetch = [...expandedDirs]
+      for (const dirPath of toRefetch) {
+        // Find the dir node in the lazy tree
+        const findDir = (nodes: LazyNode[]): LazyDir | null => {
+          for (const n of nodes) {
+            if (n.kind === 'dir' && n.path === dirPath) return n
+            if (n.kind === 'dir' && n.children) {
+              const found = findDir(n.children)
+              if (found) return found
+            }
+          }
+          return null
+        }
+        const dirNode = findDir(lazyTree)
+        if (dirNode && dirNode.children === null) {
+          const children = dirNode.handle
+            ? await scanDir(dirNode.handle, dirNode.path)
+            : await remoteScanDir(dirNode.path, surfaceId)
+          dirNode.children = children
+        }
+      }
+      bumpTree()
+    }
+    refetchExpanded().catch(() => { /* best effort */ })
+
+    // Also re-fetch the currently open file in case it was modified externally
+    if (activeNativePath && remoteRoot) {
+      remoteReadFile(activeNativePath, surfaceId).then(
+        (content) => setPreviewContent(content),
+      ).catch(() => { /* keep stale content */ })
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fsWatcherVersion])
 
   // ── File watcher: poll the open file's mtime and re-fetch on change ──
   const lastMtimeRef = useRef<string | null>(null)
@@ -758,13 +831,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   onToggleDir={handleToggleDir}
                   onSelectFile={handleSelectNativeFileMobile}
                   onContextFile={handleContextNativeFile}
+                  isMobile
                 />
               ))}
 
               {hasExtFiles && (
                 <>
                   {hasNativeTree && (
-                    <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pt-3 pb-1 font-medium">
+                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground px-2 pt-3 pb-1 font-medium">
                       Dropped files
                     </div>
                   )}
@@ -772,12 +846,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     <div
                       key={file.id}
                       onClick={() => handleSelectExtFileMobile(file.id)}
-                      className={`group flex items-center gap-1 rounded px-1 py-1.5 cursor-pointer text-xs ${
+                      className={`group flex items-center gap-1.5 rounded px-1 py-2 cursor-pointer text-sm ${
                         !activeNativePath && activeFileId === file.id ? 'bg-primary/15 text-foreground' : 'hover:bg-muted active:bg-muted'
                       }`}
-                      style={{ paddingLeft: 22 }}
+                      style={{ paddingLeft: 18 }}
                     >
-                      <FileIcon filename={file.name} className="h-3.5 w-3.5" />
+                      <FileIcon filename={file.name} className="h-4 w-4" />
                       <span className="truncate flex-1" title={file.path}>{file.path}</span>
                     </div>
                   ))}
@@ -785,7 +859,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )}
 
               {!hasNativeTree && !hasExtFiles && (
-                <div className="text-xs text-muted-foreground p-3 text-center">
+                <div className="text-sm text-muted-foreground p-4 text-center">
                   No files loaded yet. The workspace opens automatically when the agent works with files.
                 </div>
               )}

@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.41",
+  "version": "0.1.42",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "type": "module",
   "main": "dist/index.js",
@@ -41,6 +41,7 @@
     "@jait/screen-share": "workspace:*",
     "@jait/shared": "workspace:*",
     "@jait/web": "workspace:*",
+    "@parcel/watcher": "^2.5.6",
     "better-sqlite3": "^12.6.2",
     "dotenv": "^16.4.0",
     "drizzle-orm": "^0.45.1",

@@ -41,6 +41,7 @@ export type WsEventType =
   | "repo.created"
   | "repo.updated"
   | "repo.deleted"
+  | "fs.changes"
   | "error";
 
 export interface WsEvent<T = unknown> {
@@ -88,6 +89,20 @@ export interface FileHighlightData {
 export interface ScreenShareOpenData {
   sessionId: string;
   targetDeviceId: string;
+}
+
+// ── Filesystem change events (server → client) ──────────────────────
+export type FsChangeType = "created" | "updated" | "deleted";
+
+export interface FsChangeEvent {
+  /** Workspace-relative path (forward slashes) */
+  path: string;
+  type: FsChangeType;
+}
+
+export interface FsChangesPayload {
+  surfaceId: string;
+  changes: FsChangeEvent[];
 }
 
 // ── UI state sync (client → server → other clients) ─────────────────

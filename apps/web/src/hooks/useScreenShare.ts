@@ -415,179 +415,208 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     try { return await window.jaitDesktop.getDesktopSources() } catch { return [] }
   }, [])
 
-  // ── WebSocket signaling ───────────────────────────────────────────
+  // ── WebSocket signaling (with auto-reconnect) ──────────────────────
   useEffect(() => {
-    const wsUrl = `${WS_URL}${token ? `?token=${token}` : ''}`
+    let mounted = true
+    let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
-    const ws = new WebSocket(wsUrl)
-    wsRef.current = ws
+    const connect = () => {
+      if (!mounted) return
+      const wsUrl = `${WS_URL}${token ? `?token=${token}` : ''}`
+      const ws = new WebSocket(wsUrl)
+      wsRef.current = ws
 
-    ws.onopen = () => {
-      ws.send(JSON.stringify({ type: 'subscribe', deviceId: deviceIdRef.current }))
-    }
+      ws.onopen = () => {
+        console.log('[screen-share] WS connected')
+        ws.send(JSON.stringify({ type: 'subscribe', deviceId: deviceIdRef.current }))
+      }
 
-    ws.onmessage = (event) => {
-      try {
-        const msg = JSON.parse(event.data) as { type: string; payload: unknown }
+      ws.onmessage = (event) => {
+        try {
+          const msg = JSON.parse(event.data) as { type: string; payload: unknown }
 
-        switch (msg.type) {
-          case 'screen-share:state-update': {
-            const session = msg.payload as ScreenShareSessionState
-            if (session.status === 'idle') {
-              // Session ended remotely — full cleanup
-              localStreamRef.current?.getTracks().forEach(t => t.stop())
-              localStreamRef.current = null
-              remoteStreamRef.current = null
-              pcRef.current?.close()
-              pcRef.current = null
-              setState(prev => ({
-                ...prev,
-                session: null,
-                isHost: false,
-                isViewer: false,
-                isActive: false,
-                connectedDeviceId: null,
-                pendingShareRequest: null,
-              }))
-            } else {
-              // Session metadata update — DON'T override isHost/isViewer
-              // Those flags are set by local user actions (startHosting / requestRemoteShare)
-              setState(prev => ({ ...prev, session, isActive: session.status === 'sharing' }))
-            }
-            break
-          }
-
-          // A viewer wants this device to start sharing its screen,
-          // OR this device should set itself up as a viewer.
-          case 'screen-share:start-request': {
-            const req = msg.payload as {
-              sessionId: string
-              hostDeviceId: string
-              viewerDeviceIds?: string[]
+          switch (msg.type) {
+            case 'screen-share:state-update': {
+              const session = msg.payload as ScreenShareSessionState
+              if (session.status === 'idle') {
+                // Session ended remotely — full cleanup
+                localStreamRef.current?.getTracks().forEach(t => t.stop())
+                localStreamRef.current = null
+                remoteStreamRef.current = null
+                pcRef.current?.close()
+                pcRef.current = null
+                setState(prev => ({
+                  ...prev,
+                  session: null,
+                  isHost: false,
+                  isViewer: false,
+                  isActive: false,
+                  connectedDeviceId: null,
+                  pendingShareRequest: null,
+                }))
+              } else {
+                // Session metadata update — DON'T override isHost/isViewer
+                setState(prev => ({ ...prev, session, isActive: session.status === 'sharing' }))
+              }
+              break
             }
 
-            if (req.hostDeviceId === deviceIdRef.current) {
-              // ── HOST side: we're being asked to share our screen ────
-              const viewerId = req.viewerDeviceIds?.[0] ?? 'unknown'
-              const autoApproved = getAutoApprovedDevices()
-
-              if (autoApproved.has(viewerId) || autoApproved.has('*')) {
-                console.log('[screen-share] Auto-approved share request from', viewerId)
-                startHosting(req.sessionId)
-                break
+            // A viewer wants this device to start sharing its screen,
+            // OR this device should set itself up as a viewer.
+            case 'screen-share:start-request': {
+              const req = msg.payload as {
+                sessionId: string
+                hostDeviceId: string
+                viewerDeviceIds?: string[]
               }
 
-              const platform = detectPlatform()
+              if (req.hostDeviceId === deviceIdRef.current) {
+                // ── HOST side: we're being asked to share our screen ────
+                const viewerId = req.viewerDeviceIds?.[0] ?? 'unknown'
+                const autoApproved = getAutoApprovedDevices()
 
-              if (platform === 'electron') {
-                window.jaitDesktop?.notify({
-                  title: 'Screen Share Request',
-                  body: 'A remote device wants to view your screen.',
-                }).catch(() => { /* best-effort */ })
-              }
+                if (autoApproved.has(viewerId) || autoApproved.has('*')) {
+                  console.log('[screen-share] Auto-approved share request from', viewerId)
+                  startHosting(req.sessionId)
+                  break
+                }
 
-              // Single toast combining share + always-allow options
-              const toastId = toast('Screen share requested', {
-                description: 'A remote device wants to view your screen.',
-                duration: Infinity,
-                action: {
-                  label: 'Always Allow',
-                  onClick: () => {
-                    console.log('[screen-share] User accepted + enabled always-approve')
-                    addAutoApprovedDevice('*')
-                    startHosting(req.sessionId)
-                    toast.dismiss(toastId)
-                  },
-                },
-                cancel: {
-                  label: 'Share Once',
-                  onClick: () => {
-                    console.log('[screen-share] User accepted share request (once)')
-                    startHosting(req.sessionId)
-                    toast.dismiss(toastId)
-                  },
-                },
-              })
+                const platform = detectPlatform()
 
-            } else if (
-              !req.viewerDeviceIds ||
-              req.viewerDeviceIds.length === 0 ||
-              req.viewerDeviceIds.includes(deviceIdRef.current)
-            ) {
-              // ── VIEWER side: set up WebRTC to receive the host's stream ─
-              console.log('[screen-share] Setting up as viewer for session:', req.sessionId, 'host:', req.hostDeviceId)
-              setState(prev => ({
-                ...prev,
-                isViewer: true,
-                isActive: true,
-                connectedDeviceId: req.hostDeviceId,
-              }))
-              setupPeerConnection(null, false, req.sessionId)
-            }
+                if (platform === 'electron') {
+                  window.jaitDesktop?.notify({
+                    title: 'Screen Share Request',
+                    body: 'A remote device wants to view your screen.',
+                  }).catch(() => { /* best-effort */ })
+                }
 
-            break
-          }
-
-          case 'screen-share:offer': {
-            const offer = msg.payload as { sdp: string; hostDeviceId: string; sessionId: string }
-            if (offer.hostDeviceId === deviceIdRef.current) break
-            console.log('[screen-share] Received offer from host:', offer.hostDeviceId)
-            const pc = pcRef.current
-            if (pc) {
-              pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offer.sdp }))
-                .then(() => pc.createAnswer())
-                .then(answer => {
-                  pc.setLocalDescription(answer)
-                  console.log('[screen-share] Sending answer')
-                  ws.send(JSON.stringify({
-                    type: 'screen-share:answer',
-                    payload: {
-                      sessionId: offer.sessionId,
-                      viewerDeviceId: deviceIdRef.current,
-                      sdp: answer.sdp,
+                // Single toast combining share + always-allow options
+                const toastId = toast('Screen share requested', {
+                  description: 'A remote device wants to view your screen.',
+                  duration: Infinity,
+                  action: {
+                    label: 'Always Allow',
+                    onClick: () => {
+                      console.log('[screen-share] User accepted + enabled always-approve')
+                      addAutoApprovedDevice('*')
+                      startHosting(req.sessionId)
+                      toast.dismiss(toastId)
                     },
-                  }))
+                  },
+                  cancel: {
+                    label: 'Share Once',
+                    onClick: () => {
+                      console.log('[screen-share] User accepted share request (once)')
+                      startHosting(req.sessionId)
+                      toast.dismiss(toastId)
+                    },
+                  },
                 })
-                .catch(err => console.error('[screen-share] Offer handling failed:', err))
-            } else {
-              // PC not ready yet (viewer still in requestRemoteShare) — queue the offer
-              console.log('[screen-share] PC not ready, queuing offer')
-              pendingOfferRef.current = offer
-            }
-            break
-          }
 
-          case 'screen-share:answer': {
-            const answer = msg.payload as { sdp: string; viewerDeviceId: string }
-            if (answer.viewerDeviceId === deviceIdRef.current) break
-            pcRef.current?.setRemoteDescription(
-              new RTCSessionDescription({ type: 'answer', sdp: answer.sdp })
-            )
-            break
-          }
+              } else if (
+                !req.viewerDeviceIds ||
+                req.viewerDeviceIds.length === 0 ||
+                req.viewerDeviceIds.includes(deviceIdRef.current)
+              ) {
+                // ── VIEWER side: set up WebRTC to receive the host's stream ─
+                // Skip if we already initiated via requestRemoteShare (PC already created)
+                if (pcRef.current) {
+                  console.log('[screen-share] Viewer PC already set up, skipping duplicate start-request')
+                  break
+                }
+                console.log('[screen-share] Setting up as viewer for session:', req.sessionId, 'host:', req.hostDeviceId)
+                setState(prev => ({
+                  ...prev,
+                  isViewer: true,
+                  isActive: true,
+                  connectedDeviceId: req.hostDeviceId,
+                }))
+                setupPeerConnection(null, false, req.sessionId)
+              }
 
-          case 'screen-share:ice-candidate': {
-            const ice = msg.payload as {
-              candidate: string
-              sdpMid: string | null
-              sdpMLineIndex: number | null
-              fromDeviceId: string
+              break
             }
-            if (ice.fromDeviceId === deviceIdRef.current) break
-            pcRef.current?.addIceCandidate(new RTCIceCandidate({
-              candidate: ice.candidate,
-              sdpMid: ice.sdpMid,
-              sdpMLineIndex: ice.sdpMLineIndex,
-            }))
-            break
+
+            case 'screen-share:offer': {
+              const offer = msg.payload as { sdp: string; hostDeviceId: string; sessionId: string }
+              if (offer.hostDeviceId === deviceIdRef.current) break
+              console.log('[screen-share] Received offer from host:', offer.hostDeviceId)
+              const pc = pcRef.current
+              if (pc) {
+                pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offer.sdp }))
+                  .then(() => pc.createAnswer())
+                  .then(answer => {
+                    pc.setLocalDescription(answer)
+                    console.log('[screen-share] Sending answer')
+                    wsRef.current?.send(JSON.stringify({
+                      type: 'screen-share:answer',
+                      payload: {
+                        sessionId: offer.sessionId,
+                        viewerDeviceId: deviceIdRef.current,
+                        sdp: answer.sdp,
+                      },
+                    }))
+                  })
+                  .catch(err => console.error('[screen-share] Offer handling failed:', err))
+              } else {
+                // PC not ready yet (viewer still in requestRemoteShare) — queue the offer
+                console.log('[screen-share] PC not ready, queuing offer')
+                pendingOfferRef.current = offer
+              }
+              break
+            }
+
+            case 'screen-share:answer': {
+              const answer = msg.payload as { sdp: string; viewerDeviceId: string }
+              if (answer.viewerDeviceId === deviceIdRef.current) break
+              pcRef.current?.setRemoteDescription(
+                new RTCSessionDescription({ type: 'answer', sdp: answer.sdp })
+              )
+              break
+            }
+
+            case 'screen-share:ice-candidate': {
+              const ice = msg.payload as {
+                candidate: string
+                sdpMid: string | null
+                sdpMLineIndex: number | null
+                fromDeviceId: string
+              }
+              if (ice.fromDeviceId === deviceIdRef.current) break
+              pcRef.current?.addIceCandidate(new RTCIceCandidate({
+                candidate: ice.candidate,
+                sdpMid: ice.sdpMid,
+                sdpMLineIndex: ice.sdpMLineIndex,
+              }))
+              break
+            }
           }
+        } catch {
+          // Ignore non-screen-share messages
         }
-      } catch {
-        // Ignore non-screen-share messages
+      }
+
+      ws.onclose = () => {
+        wsRef.current = null
+        // Auto-reconnect after 2s
+        if (mounted) {
+          reconnectTimer = setTimeout(connect, 2000)
+        }
+      }
+
+      ws.onerror = () => {
+        // onclose fires after onerror, so reconnection is handled there
       }
     }
 
-    return () => { ws.close(); wsRef.current = null }
+    connect()
+
+    return () => {
+      mounted = false
+      if (reconnectTimer) clearTimeout(reconnectTimer)
+      wsRef.current?.close()
+      wsRef.current = null
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token])
 

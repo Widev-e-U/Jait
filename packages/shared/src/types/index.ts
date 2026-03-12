@@ -21,6 +21,9 @@ export type {
   TerminalFocusData,
   FileHighlightData,
   ScreenShareOpenData,
+  FsChangeType,
+  FsChangeEvent,
+  FsChangesPayload,
 } from "./message.js";
 export type { GatewayStatus, DeviceInfo, FsNode, FsBrowseEntry, FsBrowseResponse, FsRootsResponse } from "./gateway.js";
 

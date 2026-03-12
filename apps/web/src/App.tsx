@@ -74,7 +74,7 @@ import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useAutomation } from '@/hooks/useAutomation'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
-import type { WorkspaceOpenData, TerminalFocusData } from '@jait/shared'
+import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
@@ -474,6 +474,9 @@ function App() {
   const workspaceRef = useRef<WorkspacePanelHandle>(null)
   const promptInputRef = useRef<PromptInputHandle>(null)
   const isMobile = useIsMobile()
+
+  // Native filesystem watcher — incremented whenever the server pushes fs.changes
+  const [fsWatcherVersion, setFsWatcherVersion] = useState(0)
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
 
@@ -744,6 +747,9 @@ function App() {
     onFullState: handleFullState,
     onMessageComplete: refreshMessages,
     onThreadEvent: automation.handleThreadEvent,
+    onFsChanges: useCallback((_payload: FsChangesPayload) => {
+      setFsWatcherVersion(v => v + 1)
+    }, []),
     listeners: {
       'workspace.open': useCallback((data: WorkspaceOpenData) => {
         setShowWorkspace(true)
@@ -1943,6 +1949,7 @@ ${file.content.slice(0, 2000)}
                 onToggleTree={toggleWorkspaceTree}
                 onToggleEditor={toggleWorkspaceEditor}
                 changedPaths={changedPaths}
+                fsWatcherVersion={fsWatcherVersion}
               />
             )}
 

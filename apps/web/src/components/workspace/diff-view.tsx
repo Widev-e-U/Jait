@@ -1,6 +1,6 @@
 import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { DiffEditor } from '@monaco-editor/react'
-import { Check, ChevronLeft, ChevronRight, Undo2, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -229,6 +229,14 @@ export function DiffView({
     setActiveIndex(prev => Math.max(prev - 1, 0))
   }, [])
 
+  const goNextUndecided = useCallback(() => {
+    const next = hunks.findIndex((h, i) => i > activeIndex && h.state === 'undecided')
+    if (next >= 0) { setActiveIndex(next); return }
+    // Wrap around from beginning
+    const wrap = hunks.findIndex(h => h.state === 'undecided')
+    if (wrap >= 0) setActiveIndex(wrap)
+  }, [hunks, activeIndex])
+
   /* ---- Derived state ---- */
   const undecidedCount = useMemo(() => hunks.filter(h => h.state === 'undecided').length, [hunks])
   const allDecided = hunks.length > 0 && undecidedCount === 0
@@ -300,8 +308,8 @@ export function DiffView({
         </div>
       </div>
 
-      {/* Monaco DiffEditor — inline mode */}
-      <div className="flex-1 min-h-0">
+      {/* Monaco DiffEditor — inline mode with floating nav */}
+      <div className="flex-1 min-h-0 relative">
         <DiffEditor
           original={originalContent}
           modified={modifiedContent}
@@ -319,41 +327,80 @@ export function DiffView({
             ignoreTrimWhitespace: false,
           }}
         />
+
+        {/* Floating navigation buttons overlaying the editor */}
+        {hunks.length > 1 && (
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex flex-col gap-1.5 z-10">
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 w-9 p-0 rounded-full shadow-lg border bg-background/90 backdrop-blur-sm hover:bg-background"
+              onClick={goPrev}
+              disabled={activeIndex === 0}
+              title="Previous change"
+            >
+              <ChevronUp className="h-5 w-5" />
+            </Button>
+            <span className="text-[10px] text-center text-muted-foreground font-medium tabular-nums">
+              {activeIndex + 1}/{hunks.length}
+            </span>
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-9 w-9 p-0 rounded-full shadow-lg border bg-background/90 backdrop-blur-sm hover:bg-background"
+              onClick={goNext}
+              disabled={activeIndex === hunks.length - 1}
+              title="Next change"
+            >
+              <ChevronDown className="h-5 w-5" />
+            </Button>
+          </div>
+        )}
       </div>
 
       {/* Bottom hunk navigation bar */}
       {hunks.length > 0 && (
-        <div className="flex items-center justify-between h-9 px-3 border-t bg-muted/20 shrink-0">
+        <div className="flex items-center justify-between h-11 px-3 border-t bg-muted/20 shrink-0 gap-2">
           {/* Hunk counter & navigation */}
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1.5">
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 w-6 p-0"
+              className="h-8 w-8 p-0"
               onClick={goPrev}
               disabled={activeIndex === 0}
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-[11px] text-muted-foreground min-w-[60px] text-center">
+            <span className="text-xs text-muted-foreground min-w-[70px] text-center tabular-nums">
               Change {activeIndex + 1} of {hunks.length}
             </span>
             <Button
               size="sm"
               variant="ghost"
-              className="h-6 w-6 p-0"
+              className="h-8 w-8 p-0"
               onClick={goNext}
               disabled={activeIndex === hunks.length - 1}
             >
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className="h-4 w-4" />
             </Button>
+            {undecidedCount > 0 && undecidedCount < hunks.length && (
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 px-2 text-[11px] text-amber-500 border-amber-500/30 hover:bg-amber-500/10 ml-1"
+                onClick={goNextUndecided}
+              >
+                Next pending
+              </Button>
+            )}
           </div>
 
           {/* Status & per-hunk actions */}
           <div className="flex items-center gap-2">
             {activeHunk && activeHunk.state !== 'undecided' && (
               <span className={cn(
-                'text-[10px] font-medium',
+                'text-xs font-medium',
                 activeHunk.state === 'accepted' ? 'text-green-500' : 'text-red-500',
               )}>
                 {activeHunk.state === 'accepted' ? 'Kept' : 'Reverted'}
@@ -364,19 +411,19 @@ export function DiffView({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 px-2 text-[11px] text-green-600 hover:text-green-500 hover:bg-green-500/10"
+                  className="h-8 px-3 text-xs text-green-600 hover:text-green-500 hover:bg-green-500/10"
                   onClick={acceptHunk}
                 >
-                  <Check className="h-3 w-3 mr-1" />
+                  <Check className="h-3.5 w-3.5 mr-1" />
                   Keep
                 </Button>
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 px-2 text-[11px] text-red-600 hover:text-red-500 hover:bg-red-500/10"
+                  className="h-8 px-3 text-xs text-red-600 hover:text-red-500 hover:bg-red-500/10"
                   onClick={rejectHunk}
                 >
-                  <Undo2 className="h-3 w-3 mr-1" />
+                  <Undo2 className="h-3.5 w-3.5 mr-1" />
                   Undo
                 </Button>
               </>
@@ -388,7 +435,7 @@ export function DiffView({
             <Button
               size="sm"
               variant="default"
-              className="h-6 px-3 text-[11px]"
+              className="h-8 px-4 text-xs"
               onClick={handleApply}
             >
               Apply

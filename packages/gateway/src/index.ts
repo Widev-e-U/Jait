@@ -30,6 +30,8 @@ import { ProviderRegistry } from "./providers/registry.js";
 import { CodexProvider } from "./providers/codex-provider.js";
 import { ClaudeCodeProvider } from "./providers/claude-code-provider.js";
 import { JaitProvider } from "./providers/jait-provider.js";
+import { WorkspaceWatcher } from "./services/workspace-watcher.js";
+import type { FileChangeEvent } from "./services/workspace-watcher.js";
 
 async function main() {
   const config = loadConfig();
@@ -79,6 +81,27 @@ async function main() {
   // WebSocket control plane (created early so consent callbacks can reference it)
   const ws = new WsControlPlane(config);
 
+  // Workspace file watcher — uses @parcel/watcher (same as VS Code) for
+  // native recursive watching with event coalescing.
+  const workspaceWatcher = new WorkspaceWatcher();
+  /** Active session ID for the current workspace watcher */
+  let watcherSessionId = "";
+  /** Active surface ID for the current workspace watcher */
+  let watcherSurfaceId = "";
+
+  workspaceWatcher.on("changes", (changes: FileChangeEvent[]) => {
+    if (!watcherSessionId) return;
+    ws.broadcast(watcherSessionId, {
+      type: "fs.changes" as any,
+      sessionId: watcherSessionId,
+      timestamp: new Date().toISOString(),
+      payload: { surfaceId: watcherSurfaceId, changes },
+    });
+  });
+  workspaceWatcher.on("error", (err: Error) => {
+    console.error("Workspace watcher error:", err.message);
+  });
+
   // Register remote-filesystem factory (needs ws reference for proxying ops to nodes)
   surfaceRegistry.register(new RemoteFileSystemSurfaceFactory(ws));
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
@@ -95,6 +118,16 @@ async function main() {
       const sid = snap.sessionId ?? "";
       const workspaceRoot = (snap.metadata as Record<string, unknown>)?.workspaceRoot ?? null;
       const panelState = { open: true, remotePath: workspaceRoot, surfaceId: id };
+
+      // Start native file watcher for local filesystems
+      if (surface.type === "filesystem" && typeof workspaceRoot === "string") {
+        watcherSessionId = sid;
+        watcherSurfaceId = id;
+        workspaceWatcher.watch(workspaceRoot).catch((err) =>
+          console.error("Failed to start workspace watcher:", err.message),
+        );
+      }
+
       // Push a UI command to open the workspace panel
       ws.sendUICommand(
         {
@@ -126,6 +159,15 @@ async function main() {
 
   surfaceRegistry.onSurfaceStopped = (id, surface) => {
     if (surface.type === "filesystem" || surface.type === "remote-filesystem") {
+      // Stop the file watcher if it was watching this surface
+      if (watcherSurfaceId === id) {
+        workspaceWatcher.stop().catch((err) =>
+          console.error("Failed to stop workspace watcher:", err.message),
+        );
+        watcherSessionId = "";
+        watcherSurfaceId = "";
+      }
+
       const snap = surface.snapshot();
       const sid = snap.sessionId ?? "";
       ws.sendUICommand(
