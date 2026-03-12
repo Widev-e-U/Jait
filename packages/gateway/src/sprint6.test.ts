@@ -12,7 +12,7 @@ import { createMemorySaveTool, createMemorySearchTool, createMemoryForgetTool } 
 
 describe("MemoryEngine (Sprint 6)", () => {
   it("saves and retrieves relevant memories with scope filtering", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const memory = new MemoryEngine({ backend: new SqliteMemoryBackend(db) });
@@ -41,7 +41,7 @@ describe("MemoryEngine (Sprint 6)", () => {
   });
 
   it("forgets expired entries and supports explicit forget", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const memory = new MemoryEngine({ backend: new SqliteMemoryBackend(db) });
@@ -70,7 +70,7 @@ describe("MemoryEngine (Sprint 6)", () => {
   });
 
   it("writes daily memory log and curated MEMORY.md", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const root = mkdtempSync(join(tmpdir(), "jait-memory-"));
@@ -96,7 +96,7 @@ describe("MemoryEngine (Sprint 6)", () => {
 
 
   it("flushes snippets before compaction for later retrieval", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const memory = new MemoryEngine({ backend: new SqliteMemoryBackend(db) });
@@ -117,7 +117,7 @@ describe("MemoryEngine (Sprint 6)", () => {
   });
 
   it("exposes memory.save/search/forget tools", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const memory = new MemoryEngine({ backend: new SqliteMemoryBackend(db) });

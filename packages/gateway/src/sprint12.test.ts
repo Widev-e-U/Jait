@@ -62,7 +62,7 @@ describe("Sprint 12 — mobile gateway flows", () => {
   });
 
   it("lists sessions for mobile os-tool endpoint", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     const sessionService = new SessionService(db);
     sessionService.create({ name: "Mobile Control Session" });

@@ -16,7 +16,7 @@ import { tmpdir } from "node:os";
 
 describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
   it("creates/lists/updates/removes cron jobs and persists across service instances", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const executeTool = vi.fn(async () => ({ ok: true, data: { ran: true } }));
@@ -50,7 +50,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
   });
 
   it("runs matching cron jobs on tick and emits execution callback", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const executeTool = vi.fn(async () => ({ ok: true, data: { ran: true } }));
@@ -78,7 +78,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
   });
 
   it("matches zero-padded cron fields and avoids duplicate execution within one minute", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const executeTool = vi.fn(async () => ({ ok: true, data: { ran: true } }));
@@ -135,7 +135,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
   });
 
   it("accepts authorized webhook posts for /hooks/wake and /hooks/agent", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const hooks = new HookBus();
@@ -175,7 +175,7 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
   });
 
   it("registers gateway.status and cron tools in tool registry", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     const sessionService = new SessionService(db);
     sessionService.create({ name: "Active Session" });

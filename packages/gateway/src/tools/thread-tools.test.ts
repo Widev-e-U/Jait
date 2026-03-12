@@ -19,7 +19,7 @@ function makeContext(userId = "user-1") {
 
 describe("thread.control tool", () => {
   it("creates multiple threads in one call", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
       const tool = createThreadControlTool({
@@ -57,7 +57,7 @@ describe("thread.control tool", () => {
   });
 
   it("creates a PR and returns a direct link while updating thread metadata", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
       const threadService = new ThreadService(db);
@@ -116,7 +116,7 @@ describe("thread.control tool", () => {
   });
 
   it("rejects PR creation until the thread is completed", async () => {
-    const { db, sqlite } = openDatabase(":memory:");
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
       const threadService = new ThreadService(db);
@@ -167,8 +167,8 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("is registered in the tool registry when thread deps are provided", () => {
-    const { db, sqlite } = openDatabase(":memory:");
+  it("is registered in the tool registry when thread deps are provided", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
       const tools = createToolRegistry(new SurfaceRegistry(), {

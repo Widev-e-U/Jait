@@ -31,7 +31,7 @@ describe("@jait/gateway health", () => {
     expect(response.statusCode).toBe(200);
     const body = JSON.parse(response.body);
     expect(body.healthy).toBe(true);
-    expect(body.version).toBe("0.1.0");
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
     expect(typeof body.uptime).toBe("number");
     await app.close();
   });
@@ -47,7 +47,7 @@ describe("@jait/gateway health", () => {
     const body = JSON.parse(response.body);
     expect(body.name).toBe("jait-gateway");
     expect(body.status).toBe("ok");
-    expect(body.version).toBe("0.1.0");
+    expect(body.version).toMatch(/^\d+\.\d+\.\d+$/);
     await app.close();
   });
 

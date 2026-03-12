@@ -147,8 +147,8 @@ describe("ConsentManager", () => {
     expect(cm.isApproveAllEnabledForSession("s1")).toBe(false);
   });
 
-  it("persists approve-all mode in DB across manager instances", () => {
-    const { db, sqlite } = openDatabase(":memory:");
+  it("persists approve-all mode in DB across manager instances", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
     const cm1 = new ConsentManager({ db });

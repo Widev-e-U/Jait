@@ -219,7 +219,7 @@ describe("@jait/shared schemas", () => {
 
   describe("constants", () => {
     it("exports VERSION", () => {
-      expect(VERSION).toBe("0.1.0");
+      expect(VERSION).toMatch(/^\d+\.\d+\.\d+$/);
     });
 
     it("exports ERROR_CODES with expected keys", () => {

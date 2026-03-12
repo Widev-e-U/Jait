@@ -16,8 +16,12 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
     "baseUrl": ".",
+    "types": ["vite/client"],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@jait/shared": ["../../packages/shared/src/index.ts"],
+      "@jait/api-client": ["../../packages/api-client/src/index.ts"],
+      "@jait/ui-shared": ["../../packages/ui-shared/src/index.ts"]
     }
   },
   "include": ["src"],

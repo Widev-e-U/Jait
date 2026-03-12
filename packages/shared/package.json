@@ -4,26 +4,26 @@
   "description": "Shared schemas, constants, and domain types for Jait",
   "type": "module",
   "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "types": "src/index.ts",
   "files": [
     "dist"
   ],
   "exports": {
     ".": {
       "import": "./dist/index.js",
-      "types": "./dist/index.d.ts"
+      "types": "./src/index.ts"
     },
     "./schemas": {
       "import": "./dist/schemas/index.js",
-      "types": "./dist/schemas/index.d.ts"
+      "types": "./src/schemas/index.ts"
     },
     "./types": {
       "import": "./dist/types/index.js",
-      "types": "./dist/types/index.d.ts"
+      "types": "./src/types/index.ts"
     },
     "./constants": {
       "import": "./dist/constants/index.js",
-      "types": "./dist/constants/index.d.ts"
+      "types": "./src/constants/index.ts"
     }
   },
   "license": "MIT",
