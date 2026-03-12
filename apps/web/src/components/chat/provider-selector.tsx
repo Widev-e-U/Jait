@@ -85,7 +85,7 @@ export function ProviderSelector({ provider, onChange, disabled, className }: Pr
         <button
           type="button"
           className={cn(
-            'flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground',
+            'flex h-8 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground',
             'hover:text-foreground hover:bg-muted/60 transition-colors',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
             'disabled:pointer-events-none disabled:opacity-50',
