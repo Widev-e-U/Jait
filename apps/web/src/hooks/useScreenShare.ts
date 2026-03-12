@@ -358,7 +358,13 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
       // Set up WebRTC as viewer (receive-only) — the REST route already
       // sends a WS start-request to the host device, so we just need to
       // be ready to receive the offer.
-      setupPeerConnection(null, false, session.id)
+      // Guard: the WS start-request handler may have already created
+      // the peer connection while we were awaiting the HTTP response.
+      // Re-creating it would destroy the active connection and cause
+      // a black screen (dead stream still in remoteStreamRef).
+      if (!pcRef.current) {
+        setupPeerConnection(null, false, session.id)
+      }
     } catch (err) {
       setState(prev => ({
         ...prev,
