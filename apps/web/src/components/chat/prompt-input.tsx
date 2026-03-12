@@ -16,6 +16,7 @@ import { ProviderSelector } from '@/components/chat/provider-selector'
 import { CliModelSelector } from '@/components/chat/cli-model-selector'
 import type { ProviderId } from '@/lib/agents-api'
 import { FileIcon } from '@/components/icons/file-icons'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
 
 const ICON_CDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@12.9.0/icons/'
@@ -198,6 +199,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 }: PromptInputProps, ref) {
   const editableRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
+  const isMobile = useIsMobile()
 
   const [dragging, setDragging] = useState(false)
   const dragCounter = useRef(0)
@@ -226,6 +228,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const searchAbort = useRef<AbortController | null>(null)
   const composerDisabled = Boolean(disabled)
   const selectorsDisabled = Boolean(controlsDisabled ?? disabled ?? false) || Boolean(isLoading)
+  const showViewModeSelector = Boolean(viewMode && onViewModeChange)
+  const showProviderSelector = Boolean(provider && onProviderChange)
+  const showCliModelSelector = Boolean(provider && provider !== 'jait' && onCliModelChange)
+  const showModeSelector = Boolean(mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager')
+  const hasFooterControls = showViewModeSelector || showProviderSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
 
   // Track whether we're doing a controlled sync to avoid loops
   const isSyncing = useRef(false)
@@ -686,25 +693,27 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </div>
       )}
 
-      <div className="flex items-center gap-2 px-3 pb-2.5 pt-0.5">
-        <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
-          <div className="flex min-w-max items-center gap-1 pr-1">
-            {viewMode && onViewModeChange && (
-              <ViewModeSelector mode={viewMode} onChange={onViewModeChange} disabled={selectorsDisabled} />
-            )}
-            {footerLeadingContent}
-            {provider && onProviderChange && (
-              <ProviderSelector provider={provider} onChange={onProviderChange} disabled={selectorsDisabled} />
-            )}
-            {provider && provider !== 'jait' && onCliModelChange && (
-              <CliModelSelector provider={provider} model={cliModel ?? null} onChange={onCliModelChange} disabled={selectorsDisabled} />
-            )}
-            {mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager' && (
-              <ModeSelector mode={mode} onChange={onModeChange} disabled={selectorsDisabled} />
-            )}
+      <div className={cn('px-3 pb-2.5 pt-0.5', isMobile ? 'space-y-2' : 'flex items-center gap-2')}>
+        {hasFooterControls && (
+          <div className={cn(isMobile ? 'max-w-full' : 'min-w-0 flex-1 overflow-x-auto scrollbar-none')}>
+            <div className={cn(isMobile ? 'flex flex-wrap items-center gap-1' : 'flex min-w-max items-center gap-1 pr-1')}>
+              {showViewModeSelector && (
+                <ViewModeSelector mode={viewMode!} onChange={onViewModeChange!} disabled={selectorsDisabled} compact={isMobile} />
+              )}
+              {footerLeadingContent}
+              {showProviderSelector && (
+                <ProviderSelector provider={provider!} onChange={onProviderChange!} disabled={selectorsDisabled} />
+              )}
+              {showCliModelSelector && (
+                <CliModelSelector provider={provider!} model={cliModel ?? null} onChange={onCliModelChange!} disabled={selectorsDisabled} />
+              )}
+              {showModeSelector && (
+                <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} />
+              )}
+            </div>
           </div>
-        </div>
-        <div className="flex shrink-0 items-center gap-1.5 pl-1">
+        )}
+        <div className={cn('flex shrink-0 items-center gap-1.5', isMobile ? 'justify-end' : 'pl-1')}>
           {onVoiceInput && !isLoading && (
             <Button
               type="button"
