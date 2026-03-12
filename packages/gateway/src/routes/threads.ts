@@ -86,6 +86,19 @@ export function registerThreadRoutes(
     });
   }
 
+  function broadcastThreadStatus(
+    threadId: string,
+    status: "running" | "completed" | "error" | "interrupted",
+    error?: string,
+  ): void {
+    const thread = threadService.getById(threadId);
+    broadcastThreadEvent(threadId, "status", {
+      status,
+      ...(thread ? { thread } : {}),
+      ...(error ? { error } : {}),
+    });
+  }
+
   function isThreadSessionEvent(event: ProviderEvent, sessionId: string): boolean {
     return event.sessionId === sessionId;
   }
@@ -315,13 +328,13 @@ export function registerThreadRoutes(
         // Handle session / turn lifecycle
         if (event.type === "session.completed") {
           threadService.markCompleted(id);
-          broadcastThreadEvent(id, "status", { status: "completed" });
+          broadcastThreadStatus(id, "completed");
           unsubscribe();
           threadUnsubs.delete(id);
           remoteProviders.delete(id);
         } else if (event.type === "session.error") {
           threadService.markError(id, event.error);
-          broadcastThreadEvent(id, "status", { status: "error", error: event.error });
+          broadcastThreadStatus(id, "error", event.error);
           unsubscribe();
           threadUnsubs.delete(id);
           remoteProviders.delete(id);
@@ -330,14 +343,14 @@ export function registerThreadRoutes(
           // while keeping providerSessionId set.  The frontend checks
           // providerSessionId to decide between /send and /start.
           threadService.update(id, { status: "completed", error: null, completedAt: new Date().toISOString() });
-          broadcastThreadEvent(id, "status", { status: "completed" });
+          broadcastThreadStatus(id, "completed");
         }
       });
 
       threadUnsubs.set(id, unsubscribe);
 
       threadService.markRunning(id, session.id);
-      broadcastThreadEvent(id, "status", { status: "running" });
+      broadcastThreadStatus(id, "running");
 
       // Send initial message if provided
       const message = typeof body["message"] === "string" ? body["message"] : undefined;
@@ -391,7 +404,7 @@ export function registerThreadRoutes(
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           threadService.markError(id, errorMsg);
-          broadcastThreadEvent(id, "status", { status: "error", error: errorMsg });
+          broadcastThreadStatus(id, "error", errorMsg);
         }
       })();
 
@@ -426,7 +439,7 @@ export function registerThreadRoutes(
     broadcastThreadEvent(id, "activity", { activity: userActivity });
 
     threadService.update(id, { status: "running", error: null });
-    broadcastThreadEvent(id, "status", { status: "running" });
+    broadcastThreadStatus(id, "running");
 
     await provider.sendTurn(thread.providerSessionId, message, attachments);
     return reply.status(200).send({ ok: true });
@@ -451,7 +464,7 @@ export function registerThreadRoutes(
     }
 
     threadService.markInterrupted(id);
-    broadcastThreadEvent(id, "status", { status: "interrupted" });
+    broadcastThreadStatus(id, "interrupted");
     return reply.status(200).send({ ok: true });
   });
 

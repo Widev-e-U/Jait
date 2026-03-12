@@ -1,16 +1,80 @@
 import Fastify from "fastify";
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config.js";
 import { migrateDatabase, openDatabase } from "../db/index.js";
+import type {
+  CliProviderAdapter,
+  ProviderEvent,
+  ProviderInfo,
+  ProviderSession,
+  StartSessionOptions,
+} from "../providers/contracts.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
 import type { GitStepResult } from "../services/git.js";
 import { ThreadService } from "../services/threads.js";
 import { registerThreadRoutes } from "./threads.js";
+import type { WsControlPlane } from "../ws.js";
 
 async function authHeader(jwtSecret: string, userId: string) {
   const token = await signAuthToken({ id: userId, username: `${userId}-name` }, jwtSecret);
   return { authorization: `Bearer ${token}` };
+}
+
+class MockThreadProvider implements CliProviderAdapter {
+  readonly id = "codex" as const;
+  readonly info: ProviderInfo = {
+    id: "codex",
+    name: "Mock Codex",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    const sessionId = "mock-session-1";
+    this.emit({ type: "session.started", sessionId });
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  }
+
+  async sendTurn(): Promise<void> {
+    return;
+  }
+
+  async interruptTurn(): Promise<void> {
+    return;
+  }
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  async stopSession(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+
+  private emit(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
 }
 
 describe("thread routes", () => {
@@ -122,6 +186,64 @@ describe("thread routes", () => {
     expect(updated?.prNumber).toBe(42);
     expect(updated?.prTitle).toBe("feat: implement feature");
     expect(updated?.prState).toBe("open");
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("broadcasts the full thread row with running status updates", async () => {
+    const { db, sqlite } = openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider());
+    const broadcastAll = vi.fn();
+    const ws = {
+      broadcastAll,
+    } as unknown as WsControlPlane;
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      ws,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "Implement feature",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+    });
+    threadService.markInterrupted(thread.id);
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const statusCall = broadcastAll.mock.calls.find(
+      ([event]) => (event as { type?: string }).type === "thread.status",
+    );
+    expect(statusCall).toBeTruthy();
+    expect(statusCall?.[0]).toMatchObject({
+      type: "thread.status",
+      payload: {
+        threadId: thread.id,
+        status: "running",
+        thread: expect.objectContaining({
+          id: thread.id,
+          status: "running",
+          providerSessionId: "mock-session-1",
+        }),
+      },
+    });
 
     await app.close();
     sqlite.close();
