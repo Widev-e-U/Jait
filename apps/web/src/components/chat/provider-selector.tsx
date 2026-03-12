@@ -21,6 +21,7 @@ interface ProviderSelectorProps {
   onChange: (provider: ProviderId) => void
   disabled?: boolean
   className?: string
+  iconOnly?: boolean
 }
 
 /** Wrap @lobehub/icons so they conform to the same {className} interface as lucide icons. */
@@ -61,7 +62,7 @@ function summariseReason(reason: string): string {
   return 'unavailable'
 }
 
-export function ProviderSelector({ provider, onChange, disabled, className }: ProviderSelectorProps) {
+export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false }: ProviderSelectorProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
 
@@ -92,9 +93,10 @@ export function ProviderSelector({ provider, onChange, disabled, className }: Pr
             className,
           )}
           title={`Provider: ${current.label}`}
+          aria-label={`Provider: ${current.label}`}
         >
           <CurrentIcon className="h-4 w-4" />
-          <span>{current.label}</span>
+          {!iconOnly && <span>{current.label}</span>}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </DropdownMenuTrigger>
