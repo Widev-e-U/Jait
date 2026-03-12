@@ -402,7 +402,7 @@ function ManagerThreadListItem({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 rounded-lg opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
+          className="h-7 w-7 rounded-lg opacity-100 transition-opacity"
           onClick={(event) => {
             event.stopPropagation()
             onDelete()
@@ -1613,7 +1613,7 @@ ${file.content.slice(0, 2000)}
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
         <header
-          className={`flex items-center px-2 sm:px-5 border-b shrink-0 gap-1 sm:gap-2 ${isElectron ? 'h-10' : 'h-14'}`}
+          className={`flex items-center px-2 sm:px-5 border-b shrink-0 gap-1 sm:gap-2 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
           style={isElectron ? {
             WebkitAppRegion: 'drag',
             paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
