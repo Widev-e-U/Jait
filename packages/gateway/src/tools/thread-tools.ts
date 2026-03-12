@@ -1,7 +1,7 @@
 import type { WsEventType } from "@jait/shared";
 import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
 import type { ProviderRegistry } from "../providers/registry.js";
-import { GitService, type GitStackedAction, type GitStepResult } from "../services/git.js";
+import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { ThreadRow, ThreadService } from "../services/threads.js";
 import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
@@ -428,8 +428,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
             // Clean up the worktree on disk (best effort, don't block delete)
             if (thread.workingDirectory) {
-              const fullGitService = new GitService();
-              fullGitService.cleanupWorktree(thread.workingDirectory).catch(() => {});
+              cleanupWorktreeRemoteAware(thread.workingDirectory, deps.ws).catch(() => {});
             }
 
             deps.threadService.delete(thread.id);

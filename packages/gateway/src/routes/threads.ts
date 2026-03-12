@@ -27,7 +27,7 @@ import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
-import { GitService, type GitStackedAction, type GitStepResult } from "../services/git.js";
+import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
 import { existsSync } from "node:fs";
 import {
@@ -218,8 +218,7 @@ export function registerThreadRoutes(
 
     // Clean up the worktree on disk (best effort, don't block delete)
     if (existing.workingDirectory) {
-      const fullGitService = new GitService();
-      fullGitService.cleanupWorktree(existing.workingDirectory).catch(() => {});
+      cleanupWorktreeRemoteAware(existing.workingDirectory, ws).catch(() => {});
     }
 
     threadService.delete(id);

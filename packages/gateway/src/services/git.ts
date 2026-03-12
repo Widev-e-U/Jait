@@ -1142,3 +1142,36 @@ export class GitService {
     return entries;
   }
 }
+
+/**
+ * Clean up a worktree, proxying to a remote FsNode when the path
+ * doesn't exist locally (e.g. a Windows worktree on a Linux gateway).
+ */
+export async function cleanupWorktreeRemoteAware(
+  worktreePath: string,
+  ws?: { proxyFsOp<T = unknown>(nodeId: string, op: string, params: Record<string, unknown>, timeout: number): Promise<T>; getFsNodes(): { id: string; isGateway?: boolean; platform?: string }[] },
+): Promise<void> {
+  if (!worktreePath) return;
+
+  // If path exists locally, use local cleanup
+  if (existsSync(worktreePath)) {
+    const svc = new GitService();
+    await svc.cleanupWorktree(worktreePath);
+    return;
+  }
+
+  // Path doesn't exist locally — try to find a remote node
+  if (!ws) return;
+  const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(worktreePath);
+  const expectedPlatform = isWindowsPath ? "windows" : null;
+  let remoteNodeId: string | null = null;
+  for (const node of ws.getFsNodes()) {
+    if (node.isGateway) continue;
+    if (expectedPlatform && node.platform !== expectedPlatform) continue;
+    remoteNodeId = node.id;
+    break;
+  }
+  if (!remoteNodeId) return;
+
+  await ws.proxyFsOp(remoteNodeId, "git-remove-worktree", { path: worktreePath }, 30_000);
+}

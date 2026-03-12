@@ -825,6 +825,46 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
       return { path: worktreePath, branch: newBranchW };
     }
+    case "git-remove-worktree": {
+      // Remove a git worktree (cleanup for completed/deleted threads)
+      const worktreePath = resolve(params.path as string);
+      const { exec: execRmW } = await import("node:child_process");
+      const { promisify: promisifyRmW } = await import("node:util");
+      const execRW = promisifyRmW(execRmW);
+
+      // Find the main repo root from the worktree
+      let mainRoot: string;
+      try {
+        const { stdout: commonDir } = await execRW("git rev-parse --git-common-dir", {
+          cwd: worktreePath, timeout: 10_000,
+        });
+        const trimmed = commonDir.trim();
+        if (trimmed.endsWith("/.git") || trimmed.endsWith("\\.git")) {
+          mainRoot = trimmed.slice(0, -5);
+        } else {
+          const { stdout: toplevel } = await execRW("git rev-parse --show-toplevel", {
+            cwd: worktreePath, timeout: 10_000,
+          });
+          mainRoot = toplevel.trim();
+        }
+      } catch {
+        // If we can't find the root, try removing the directory directly
+        const { rm } = await import("node:fs/promises");
+        await rm(worktreePath, { recursive: true, force: true });
+        return { ok: true };
+      }
+
+      try {
+        await execRW(`git worktree remove "${worktreePath}" --force`, {
+          cwd: mainRoot, timeout: 30_000,
+        });
+      } catch {
+        // Fallback: remove directory directly
+        const { rm } = await import("node:fs/promises");
+        await rm(worktreePath, { recursive: true, force: true });
+      }
+      return { ok: true };
+    }
     case "gh-check": {
       // Check whether GitHub CLI is installed and authenticated
       const { exec: execGhCheck } = await import("node:child_process");

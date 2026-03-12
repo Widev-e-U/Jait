@@ -356,6 +356,11 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       return reply.status(400).send({ error: "Missing cwd or path" });
     }
     try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.path);
+      if (remoteNodeId && ws) {
+        await ws.proxyFsOp(remoteNodeId, "git-remove-worktree", { path: body.path }, 30_000);
+        return { ok: true };
+      }
       await git.removeWorktree(body.cwd, body.path, body.force ?? false);
       return { ok: true };
     } catch (err) {
