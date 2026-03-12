@@ -624,7 +624,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   return (
     <div
       className={cn(
-        'relative flex flex-col rounded-2xl border bg-background dark:bg-card shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+        'relative z-10 flex flex-col rounded-2xl border bg-background dark:bg-card shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
       )}

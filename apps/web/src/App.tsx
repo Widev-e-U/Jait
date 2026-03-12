@@ -2223,7 +2223,7 @@ ${file.content.slice(0, 2000)}
                     <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
                       {/* Title + composer */}
                       <div
-                        className={`flex flex-col items-center px-4 pb-2 pt-4${managerAnimPhase !== 'idle' ? ' will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]' : ''}`}
+                        className={`relative z-10 flex flex-col items-center px-4 pb-2 pt-4${managerAnimPhase !== 'idle' ? ' will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]' : ''}`}
                         style={managerAnimPhase === 'center' ? { transform: 'translateY(calc(50vh - 200px))' } : managerAnimPhase === 'top' ? { transform: 'translateY(0)' } : undefined}
                         onTransitionEnd={() => { if (managerAnimPhase === 'top') setManagerAnimPhase('idle') }}
                       >
