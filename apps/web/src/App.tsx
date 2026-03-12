@@ -205,6 +205,7 @@ function ManagerRepoPicker({
 interface ManagerRepositoryPanelProps {
   repositories: AutomationRepository[]
   selectedRepoId: string | null
+  isMobile?: boolean
   onSelect: (repoId: string) => void
   onAddRepository: () => void
   onRemoveRepository: (repoId: string) => void
@@ -213,6 +214,7 @@ interface ManagerRepositoryPanelProps {
 function ManagerRepositoryPanel({
   repositories,
   selectedRepoId,
+  isMobile = false,
   onSelect,
   onAddRepository,
   onRemoveRepository,
@@ -233,7 +235,7 @@ function ManagerRepositoryPanel({
           Add
         </Button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+      <div className={isMobile ? 'flex-1 overflow-y-auto p-1.5 space-y-0.5' : 'flex-1 overflow-y-auto p-2 space-y-1'}>
         {repositories.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted-foreground">
             No repositories yet.
@@ -248,8 +250,16 @@ function ManagerRepositoryPanel({
               role="button"
               tabIndex={0}
               key={repo.id}
-              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors ${
-                selectedRepoId === repo.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+              className={`flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors ${
+                isMobile ? 'cursor-pointer rounded-md text-sm' : 'rounded-lg text-xs'
+              } ${
+                selectedRepoId === repo.id
+                  ? isMobile
+                    ? 'bg-secondary text-secondary-foreground'
+                    : 'bg-primary/10 text-primary'
+                  : isMobile
+                    ? 'hover:bg-muted/50'
+                    : 'hover:bg-muted'
               }`}
               onClick={() => onSelect(repo.id)}
               onKeyDown={(event) => {
@@ -261,7 +271,7 @@ function ManagerRepositoryPanel({
             >
               <FolderOpen className="h-3.5 w-3.5 shrink-0" />
               <div className="min-w-0 flex-1">
-                <div className="truncate font-medium">{repo.name}</div>
+                <div className={isMobile ? 'truncate text-xs font-medium' : 'truncate font-medium'}>{repo.name}</div>
                 <div className="text-[10px] text-muted-foreground">{repo.defaultBranch}</div>
               </div>
               {repo.source === 'shared' && (
@@ -1800,8 +1810,8 @@ ${file.content.slice(0, 2000)}
                       onClick={() => setShowManagerRepos(s => !s)}
                     >
                       {showManagerRepos
-                        ? <PanelLeftClose className="h-3 w-3 mr-1" />
-                        : <PanelLeftOpen className="h-3 w-3 mr-1" />
+                        ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
+                        : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
                       }
                       Repositories
                     </Button>
@@ -2105,6 +2115,7 @@ ${file.content.slice(0, 2000)}
                         <ManagerRepositoryPanel
                           repositories={automation.repositories}
                           selectedRepoId={automation.selectedRepo?.id ?? null}
+                          isMobile={isMobile}
                           onSelect={automation.setSelectedRepoId}
                           onAddRepository={() => automation.setFolderPickerOpen(true)}
                           onRemoveRepository={(repoId) => { void automation.removeRepository(repoId) }}
