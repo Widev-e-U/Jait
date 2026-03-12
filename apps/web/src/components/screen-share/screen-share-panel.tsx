@@ -132,6 +132,7 @@ function RemoteScreen({
   const [isFullscreen, setIsFullscreen] = useState(false)
 
   useEffect(() => {
+    console.log(`[screen-share] RemoteScreen: stream=${!!stream} tracks=${stream?.getTracks().map(t => `${t.kind}:${t.readyState}`).join(',')} videoRef=${!!videoRef.current}`)
     if (videoRef.current && stream) {
       videoRef.current.srcObject = stream
     }
@@ -193,6 +194,8 @@ function RemoteScreen({
 export function ScreenSharePanel({ screenShare }: ScreenSharePanelProps) {
   const session = screenShare.session
   const isConnected = screenShare.isViewer || screenShare.isHost
+
+  console.log(`[screen-share] Panel render: isHost=${screenShare.isHost} isViewer=${screenShare.isViewer} isConnected=${isConnected} remoteStream=${!!screenShare.remoteStream} localStream=${!!screenShare.localStream}`)
 
   // Remote devices = all devices except this one
   const remoteDevices = screenShare.devices.filter(d => d.id !== screenShare.localDeviceId)

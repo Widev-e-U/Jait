@@ -199,6 +199,7 @@ export class WsControlPlane {
         }
         client.sessionId = msg.sessionId ?? null;
         client.deviceId = msg.deviceId ?? null;
+        console.log(`[screen-share] subscribe: clientId=${client.id} deviceId=${client.deviceId} sessionId=${client.sessionId}`);
         this.send(client.ws, {
           type: "session.created",
           sessionId: client.sessionId ?? "",
@@ -286,24 +287,48 @@ export class WsControlPlane {
       // ── Screen sharing signaling ────────────────────────────────
       case "screen-share:offer": {
         const offer = msg.payload as ScreenShareOffer | undefined;
-        if (offer) this.relayToDevice(offer.hostDeviceId, client.deviceId, msg);
+        if (offer) {
+          console.log(`[screen-share] WS offer from client.device=${client.deviceId} host=${offer.hostDeviceId}`);
+          // Offer is sent BY the host; relay to all viewers (everyone except the host)
+          for (const c of this.clients.values()) {
+            if (c.deviceId === client.deviceId) continue;
+            if (c.ws.readyState !== 1) continue;
+            console.log(`[screen-share]   → relaying offer to device=${c.deviceId}`);
+            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
+          }
+        }
         break;
       }
       case "screen-share:answer": {
         const answer = msg.payload as ScreenShareAnswer | undefined;
-        if (answer) this.relayToDevice(answer.viewerDeviceId, client.deviceId, msg);
+        if (answer) {
+          console.log(`[screen-share] WS answer from client.device=${client.deviceId} viewer=${answer.viewerDeviceId}`);
+          // Answer is sent BY the viewer; relay to all non-sender (host)
+          for (const c of this.clients.values()) {
+            if (c.deviceId === client.deviceId) continue;
+            if (c.ws.readyState !== 1) continue;
+            console.log(`[screen-share]   → relaying answer to device=${c.deviceId}`);
+            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
+          }
+        }
         break;
       }
       case "screen-share:ice-candidate": {
         const ice = msg.payload as ScreenShareIceCandidate | undefined;
-        if (ice) this.relayToDevice(ice.fromDeviceId, client.deviceId, msg);
+        if (ice) {
+          // Relay ICE to all non-sender
+          for (const c of this.clients.values()) {
+            if (c.deviceId === client.deviceId) continue;
+            if (c.ws.readyState !== 1) continue;
+            this.send(c.ws, { type: msg.type as WsEvent["type"], sessionId: "", timestamp: new Date().toISOString(), payload: msg.payload });
+          }
+        }
         break;
       }
       case "screen-share:start-request": {
-        // Relay the start-request to all other connected clients so
-        // the target host device receives it and begins screen capture.
         const startReq = msg.payload as { hostDeviceId: string; sessionId?: string; viewerDeviceIds?: string[] } | undefined;
         if (startReq) {
+          console.log(`[screen-share] WS start-request relay from device=${client.deviceId} → host=${startReq.hostDeviceId}`);
           this.relayToDevice(startReq.hostDeviceId, client.deviceId, msg);
         }
         break;
@@ -556,22 +581,27 @@ export class WsControlPlane {
 
   /** Relay a signaling message to a specific device ID */
   private relayToDevice(
-    _targetDeviceId: string,
+    targetDeviceId: string,
     fromDeviceId: string | null,
     msg: { type: string; payload?: unknown },
   ) {
-    // Broadcast to all clients except the sender.
-    // A production implementation would look up targetDeviceId,
-    // but for LAN-first P2P, broadcasting to all authenticated clients works.
+    let sent = false;
     for (const client of this.clients.values()) {
       if (client.deviceId === fromDeviceId) continue;
       if (client.ws.readyState !== 1) continue;
+      if (client.deviceId !== targetDeviceId) continue;
+      console.log(`[screen-share] relayToDevice: ${msg.type} from=${fromDeviceId} → ${targetDeviceId}`);
       this.send(client.ws, {
         type: msg.type as WsEvent["type"],
         sessionId: "",
         timestamp: new Date().toISOString(),
         payload: msg.payload,
       });
+      sent = true;
+    }
+    if (!sent) {
+      const ids = [...this.clients.values()].map(c => c.deviceId).filter(Boolean);
+      console.warn(`[screen-share] relayToDevice: target ${targetDeviceId} NOT FOUND, connected=[${ids.join(',')}]`);
     }
   }
 
@@ -586,13 +616,20 @@ export class WsControlPlane {
   }
 
   /**
-   * Programmatically send a screen-share start-request to all connected clients.
+   * Send a screen-share start-request to the host and viewer devices only.
    * Used by tools/routes when the session is created server-side and the host
-   * device needs to be told to begin capture.
+   * device needs to be told to begin capture (and viewers to prepare).
    */
   sendScreenShareStartRequest(sessionId: string, hostDeviceId: string, viewerDeviceIds?: string[]) {
+    const targets = new Set<string>([hostDeviceId, ...(viewerDeviceIds ?? [])]);
+    const allDeviceIds = [...this.clients.values()].map(c => c.deviceId).filter(Boolean);
+    console.log(`[screen-share] sendScreenShareStartRequest: session=${sessionId.slice(0, 8)} host=${hostDeviceId} viewers=[${(viewerDeviceIds ?? []).join(',')}] connected=[${allDeviceIds.join(',')}]`);
+    let sentCount = 0;
     for (const client of this.clients.values()) {
       if (client.ws.readyState !== 1) continue;
+      if (!client.deviceId || !targets.has(client.deviceId)) continue;
+      console.log(`[screen-share]   → start-request to device=${client.deviceId}`);
+      sentCount++;
       this.send(client.ws, {
         type: "screen-share:start-request" as WsEvent["type"],
         sessionId: "",
@@ -600,6 +637,7 @@ export class WsControlPlane {
         payload: { sessionId, hostDeviceId, viewerDeviceIds },
       });
     }
+    console.log(`[screen-share]   sent to ${sentCount} client(s)`);
   }
 
   /** Find all connected device IDs */

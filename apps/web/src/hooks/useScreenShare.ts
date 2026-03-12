@@ -202,19 +202,24 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
   // ── WebRTC setup ──────────────────────────────────────────────────
   const setupPeerConnection = useCallback((stream: MediaStream | null, isHost: boolean, sessionId: string) => {
+    console.log(`[screen-share] setupPeerConnection: isHost=${isHost} session=${sessionId.slice(0, 8)} prevPC=${!!pcRef.current} stream=${!!stream} device=${deviceIdRef.current}`)
     pcRef.current?.close()
 
     const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS })
     pcRef.current = pc
 
     if (isHost && stream) {
-      stream.getTracks().forEach(track => pc.addTrack(track, stream))
+      const tracks = stream.getTracks()
+      console.log(`[screen-share] Adding ${tracks.length} track(s):`, tracks.map(t => `${t.kind}:${t.label}:${t.readyState}`))
+      tracks.forEach(track => pc.addTrack(track, stream))
     }
 
     pc.ontrack = (event) => {
       const [remoteStream] = event.streams
+      console.log(`[screen-share] ontrack: streams=${event.streams.length} tracks=${remoteStream?.getTracks().map(t => `${t.kind}:${t.readyState}`).join(',')}`)
       if (remoteStream) {
         remoteStreamRef.current = remoteStream
+        console.log(`[screen-share] remoteStreamRef set, triggering re-render`)
         setState(prev => ({ ...prev }))
       }
     }
@@ -316,7 +321,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
         setState(prev => ({ ...prev, session: data.session }))
       }
 
-      setState(prev => ({ ...prev, isHost: true, isActive: true, loading: false }))
+      setState(prev => ({ ...prev, isHost: true, isViewer: false, isActive: true, loading: false }))
       console.log('[screen-share] Host capturing — setting up peer connection for session:', sessionId)
       setupPeerConnection(stream, true, sessionId ?? '')
     } catch (err) {
@@ -362,8 +367,12 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
       // the peer connection while we were awaiting the HTTP response.
       // Re-creating it would destroy the active connection and cause
       // a black screen (dead stream still in remoteStreamRef).
+      console.log(`[screen-share] requestRemoteShare: HTTP done, session=${session.id.slice(0, 8)} pcRef=${!!pcRef.current}`)
       if (!pcRef.current) {
+        console.log('[screen-share] requestRemoteShare: creating viewer PC (no WS-created PC yet)')
         setupPeerConnection(null, false, session.id)
+      } else {
+        console.log('[screen-share] requestRemoteShare: PC already exists, skipping creation')
       }
     } catch (err) {
       setState(prev => ({
@@ -440,6 +449,9 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
       ws.onmessage = (event) => {
         try {
           const msg = JSON.parse(event.data) as { type: string; payload: unknown }
+          if (msg.type.startsWith('screen-share:')) {
+            console.log(`[screen-share] WS recv: ${msg.type}`, JSON.stringify(msg.payload).slice(0, 300))
+          }
 
           switch (msg.type) {
             case 'screen-share:state-update': {
@@ -475,6 +487,8 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                 hostDeviceId: string
                 viewerDeviceIds?: string[]
               }
+
+              console.log(`[screen-share] start-request: host=${req.hostDeviceId} local=${deviceIdRef.current} viewers=[${req.viewerDeviceIds?.join(',')}] isHostMatch=${req.hostDeviceId === deviceIdRef.current} pcRef=${!!pcRef.current}`)
 
               if (req.hostDeviceId === deviceIdRef.current) {
                 // ── HOST side: we're being asked to share our screen ────
@@ -530,10 +544,16 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                   console.log('[screen-share] Viewer PC already set up, skipping duplicate start-request')
                   break
                 }
+                // Stop any local capture if we were previously hosting
+                if (localStreamRef.current) {
+                  localStreamRef.current.getTracks().forEach(t => t.stop())
+                  localStreamRef.current = null
+                }
                 console.log('[screen-share] Setting up as viewer for session:', req.sessionId, 'host:', req.hostDeviceId)
                 setState(prev => ({
                   ...prev,
                   isViewer: true,
+                  isHost: false,
                   isActive: true,
                   connectedDeviceId: req.hostDeviceId,
                 }))
@@ -545,8 +565,11 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
             case 'screen-share:offer': {
               const offer = msg.payload as { sdp: string; hostDeviceId: string; sessionId: string }
-              if (offer.hostDeviceId === deviceIdRef.current) break
-              console.log('[screen-share] Received offer from host:', offer.hostDeviceId)
+              if (offer.hostDeviceId === deviceIdRef.current) {
+                console.log('[screen-share] Ignoring own offer (we are the host)')
+                break
+              }
+              console.log(`[screen-share] Received offer from host=${offer.hostDeviceId} pcRef=${!!pcRef.current}`)
               const pc = pcRef.current
               if (pc) {
                 pc.setRemoteDescription(new RTCSessionDescription({ type: 'offer', sdp: offer.sdp }))
@@ -574,7 +597,11 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
             case 'screen-share:answer': {
               const answer = msg.payload as { sdp: string; viewerDeviceId: string }
-              if (answer.viewerDeviceId === deviceIdRef.current) break
+              if (answer.viewerDeviceId === deviceIdRef.current) {
+                console.log('[screen-share] Ignoring own answer (we are the viewer)')
+                break
+              }
+              console.log(`[screen-share] Received answer from viewer=${answer.viewerDeviceId}`)
               pcRef.current?.setRemoteDescription(
                 new RTCSessionDescription({ type: 'answer', sdp: answer.sdp })
               )
@@ -589,6 +616,7 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
                 fromDeviceId: string
               }
               if (ice.fromDeviceId === deviceIdRef.current) break
+              console.log(`[screen-share] ICE candidate from=${ice.fromDeviceId} pcRef=${!!pcRef.current}`)
               pcRef.current?.addIceCandidate(new RTCIceCandidate({
                 candidate: ice.candidate,
                 sdpMid: ice.sdpMid,
