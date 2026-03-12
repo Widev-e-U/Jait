@@ -1689,6 +1689,12 @@ ${file.content.slice(0, 2000)}
 
           {/* Right: Context + Model + Account — always visible */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            {screenShare.isActive && (
+              <span className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 shrink-0">
+                <Cast className="h-3 w-3 text-green-500 animate-pulse" />
+                <span className="hidden sm:inline">Sharing</span>
+              </span>
+            )}
             <ContextIndicator usage={contextUsage} />
             {(() => {
               const displayProvider = chatProvider === 'codex' ? 'openai'
@@ -2710,8 +2716,8 @@ ${file.content.slice(0, 2000)}
           onSelect={(path, _nodeId) => { void automation.handleFolderSelected(path) }}
         />
 
-        {/* Floating screen share window */}
-        {showScreenShare && (
+        {/* Floating screen share window — only on host/viewer devices */}
+        {showScreenShare && (screenShare.isHost || screenShare.isViewer) && (
           <div
             className="fixed z-50 bg-background border rounded-lg shadow-2xl overflow-hidden flex flex-col"
             style={{
