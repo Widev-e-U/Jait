@@ -686,23 +686,25 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </div>
       )}
 
-      <div className="flex items-center justify-between px-3 pb-2.5 pt-0.5">
-        <div className="flex items-center gap-1">
-          {viewMode && onViewModeChange && (
-            <ViewModeSelector mode={viewMode} onChange={onViewModeChange} disabled={selectorsDisabled} />
-          )}
-          {footerLeadingContent}
-          {provider && onProviderChange && (
-            <ProviderSelector provider={provider} onChange={onProviderChange} disabled={selectorsDisabled} />
-          )}
-          {provider && provider !== 'jait' && onCliModelChange && (
-            <CliModelSelector provider={provider} model={cliModel ?? null} onChange={onCliModelChange} disabled={selectorsDisabled} />
-          )}
-          {mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager' && (
-            <ModeSelector mode={mode} onChange={onModeChange} disabled={selectorsDisabled} />
-          )}
+      <div className="flex items-center gap-2 px-3 pb-2.5 pt-0.5">
+        <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
+          <div className="flex min-w-max items-center gap-1 pr-1">
+            {viewMode && onViewModeChange && (
+              <ViewModeSelector mode={viewMode} onChange={onViewModeChange} disabled={selectorsDisabled} />
+            )}
+            {footerLeadingContent}
+            {provider && onProviderChange && (
+              <ProviderSelector provider={provider} onChange={onProviderChange} disabled={selectorsDisabled} />
+            )}
+            {provider && provider !== 'jait' && onCliModelChange && (
+              <CliModelSelector provider={provider} model={cliModel ?? null} onChange={onCliModelChange} disabled={selectorsDisabled} />
+            )}
+            {mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager' && (
+              <ModeSelector mode={mode} onChange={onModeChange} disabled={selectorsDisabled} />
+            )}
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        <div className="flex shrink-0 items-center gap-1.5 pl-1">
           {onVoiceInput && !isLoading && (
             <Button
               type="button"

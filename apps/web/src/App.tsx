@@ -202,6 +202,93 @@ function ManagerRepoPicker({
   )
 }
 
+interface ManagerRepositoryPanelProps {
+  repositories: AutomationRepository[]
+  selectedRepoId: string | null
+  onSelect: (repoId: string) => void
+  onAddRepository: () => void
+  onRemoveRepository: (repoId: string) => void
+}
+
+function ManagerRepositoryPanel({
+  repositories,
+  selectedRepoId,
+  onSelect,
+  onAddRepository,
+  onRemoveRepository,
+}: ManagerRepositoryPanelProps) {
+  return (
+    <div className="flex h-full flex-col">
+      <div className="flex items-center justify-between border-b px-3 py-2">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
+          Repositories
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1.5 px-2 text-[11px]"
+          onClick={onAddRepository}
+        >
+          <Plus className="h-3 w-3" />
+          Add
+        </Button>
+      </div>
+      <div className="flex-1 overflow-y-auto p-2 space-y-1">
+        {repositories.length === 0 ? (
+          <p className="py-4 text-center text-xs text-muted-foreground">
+            No repositories yet.
+            <br />
+            <button type="button" onClick={onAddRepository} className="mt-1 inline-block underline underline-offset-2 hover:text-foreground">
+              Add one
+            </button>
+          </p>
+        ) : (
+          repositories.map((repo) => (
+            <div
+              role="button"
+              tabIndex={0}
+              key={repo.id}
+              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs transition-colors ${
+                selectedRepoId === repo.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
+              }`}
+              onClick={() => onSelect(repo.id)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  onSelect(repo.id)
+                }
+              }}
+            >
+              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="truncate font-medium">{repo.name}</div>
+                <div className="text-[10px] text-muted-foreground">{repo.defaultBranch}</div>
+              </div>
+              {repo.source === 'shared' && (
+                <Badge variant="outline" className="h-4 shrink-0 px-1 py-0 text-[9px]">
+                  Shared
+                </Badge>
+              )}
+              {repo.source === 'local' && (
+                <button
+                  type="button"
+                  className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
+                  onClick={(event) => {
+                    event.stopPropagation()
+                    onRemoveRepository(repo.id)
+                  }}
+                >
+                  <Trash2 className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+          ))
+        )}
+      </div>
+    </div>
+  )
+}
+
 interface ManagerThreadListItemProps {
   thread: AgentThread
   repoName: string
@@ -1715,7 +1802,7 @@ ${file.content.slice(0, 2000)}
                       Repositories
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="bottom">Toggle repositories sidebar</TooltipContent>
+                  <TooltipContent side="bottom">Toggle repositories panel</TooltipContent>
                 </Tooltip>
                 <div className="flex-1" />
                 {automation.selectedThread ? (
@@ -2007,49 +2094,17 @@ ${file.content.slice(0, 2000)}
                     </div>
                   </>
                 ) : (
-                  <div className="flex-1 flex min-h-0">
-                    {/* Collapsible repos sidebar */}
+                  <div className={`flex flex-1 min-h-0 ${isMobile ? 'flex-col' : ''}`}>
+                    {/* Collapsible repos panel */}
                     {showManagerRepos && (
-                      <div className="w-56 shrink-0 border-r flex flex-col overflow-y-auto">
-                        <div className="flex items-center justify-between px-3 py-2 border-b">
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-6 gap-1.5 text-[11px] px-2"
-                            onClick={() => automation.setFolderPickerOpen(true)}
-                          >
-                            <Plus className="h-3 w-3" />
-                            Add repository
-                          </Button>
-                        </div>
-                        <div className="flex-1 overflow-y-auto p-2 space-y-1">
-                          {automation.repositories.map((repo) => (
-                            <button
-                              key={repo.id}
-                              className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-xs text-left transition-colors ${
-                                automation.selectedRepo?.id === repo.id ? 'bg-primary/10 text-primary' : 'hover:bg-muted'
-                              }`}
-                              onClick={() => automation.setSelectedRepoId(repo.id)}
-                            >
-                              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                              <div className="min-w-0 flex-1">
-                                <div className="truncate font-medium">{repo.name}</div>
-                                <div className="text-[10px] text-muted-foreground">{repo.defaultBranch}</div>
-                              </div>
-                              {repo.source === 'shared' && (
-                                <Badge variant="outline" className="h-4 px-1 py-0 text-[9px] shrink-0">Shared</Badge>
-                              )}
-                              {repo.source === 'local' && (
-                                <button
-                                  className="rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive shrink-0"
-                                  onClick={(e) => { e.stopPropagation(); void automation.removeRepository(repo.id) }}
-                                >
-                                  <Trash2 className="h-3 w-3" />
-                                </button>
-                              )}
-                            </button>
-                          ))}
-                        </div>
+                      <div className={`overflow-hidden ${isMobile ? 'h-52 shrink-0 border-b' : 'w-56 shrink-0 border-r'}`}>
+                        <ManagerRepositoryPanel
+                          repositories={automation.repositories}
+                          selectedRepoId={automation.selectedRepo?.id ?? null}
+                          onSelect={automation.setSelectedRepoId}
+                          onAddRepository={() => automation.setFolderPickerOpen(true)}
+                          onRemoveRepository={(repoId) => { void automation.removeRepository(repoId) }}
+                        />
                       </div>
                     )}
                     {/* Main content */}
