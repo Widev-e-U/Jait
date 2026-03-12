@@ -14,8 +14,10 @@ import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ProviderRegistry } from "../providers/registry.js";
-import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
+import type { ProviderId, ProviderEvent, CliProviderAdapter } from "../providers/contracts.js";
+import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveWorkspaceRoot } from "../tools/core/get-fs.js";
+import { existsSync } from "node:fs";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -72,7 +74,7 @@ const activeStreams = new Set<string>();
 const sessionAbortControllers = new Map<string, AbortController>();
 
 /** Persistent CLI provider sessions — kept alive across turns so the agent retains conversation context */
-const activeCliSessions = new Map<string, { providerId: ProviderId; providerSessionId: string }>();
+const activeCliSessions = new Map<string, { providerId: ProviderId; providerSessionId: string; provider: CliProviderAdapter }>();
 
 type StreamEvent =
   | { type: "token"; content: string }
@@ -626,7 +628,36 @@ export function registerChatRoutes(
     try {
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {
-        const cliProvider = providerRegistry.get(requestProvider);
+        const cliWsRoot = surfaceRegistry
+          ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
+          : (sessionRecord?.workspacePath?.trim() || process.cwd());
+
+        // Detect if the workspace lives on a remote node (e.g. Windows
+        // desktop) and route the CLI provider session there instead of
+        // trying to spawn codex/claude-code locally on the gateway.
+        const pathExistsLocally = existsSync(cliWsRoot);
+        let cliProvider: CliProviderAdapter | null = null;
+        let isRemote = false;
+
+        if (!pathExistsLocally && ws) {
+          // Match path platform to connected FsNodes
+          const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(cliWsRoot);
+          const expectedPlatform = isWindowsPath ? "windows" : null;
+          for (const node of ws.getFsNodes()) {
+            if (node.isGateway) continue;
+            if (expectedPlatform && node.platform !== expectedPlatform) continue;
+            if (!node.providers?.includes(requestProvider)) continue;
+            cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
+            isRemote = true;
+            break;
+          }
+        }
+
+        // Fall back to the local provider if path exists on the gateway
+        if (!cliProvider) {
+          cliProvider = providerRegistry.get(requestProvider) ?? null;
+        }
+
         if (!cliProvider) {
           safeWrite(`data: ${JSON.stringify({ type: "error", message: `Unknown provider: ${requestProvider}` })}\n\n`);
           reply.raw.end();
@@ -635,14 +666,10 @@ export function registerChatRoutes(
 
         const available = await cliProvider.checkAvailability();
         if (!available) {
-          safeWrite(`data: ${JSON.stringify({ type: "error", message: `Provider ${requestProvider} is not available: ${cliProvider.info.unavailableReason}` })}\n\n`);
+          safeWrite(`data: ${JSON.stringify({ type: "error", message: `Provider ${requestProvider} is not available${isRemote ? " on the remote node" : ""}: ${cliProvider.info.unavailableReason ?? "CLI not found"}` })}\n\n`);
           reply.raw.end();
           return;
         }
-
-        const cliWsRoot = surfaceRegistry
-          ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
-          : (sessionRecord?.workspacePath?.trim() || process.cwd());
 
         console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.workspacePath="${sessionRecord?.workspacePath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
 
@@ -670,7 +697,8 @@ export function registerChatRoutes(
           }
         }
 
-        const mcpServers = [providerRegistry.buildJaitMcpServerRef(config)];
+        // Remote providers can't reach the gateway's MCP endpoint
+        const mcpServers = isRemote ? [] : [providerRegistry.buildJaitMcpServerRef(config)];
 
         // ── Reuse an existing CLI session if one is alive for this Jait session ──
         const cachedCliSession = activeCliSessions.get(sessionId);
@@ -679,14 +707,12 @@ export function registerChatRoutes(
         if (cachedCliSession && cachedCliSession.providerId === requestProvider) {
           // Existing session with the same provider — try to reuse it
           providerSessionId = cachedCliSession.providerSessionId;
+          cliProvider = cachedCliSession.provider;
           console.log(`[chat/cli] Reusing ${requestProvider} session ${providerSessionId} for ${sessionId}`);
         } else {
           // If the user switched providers, stop the old session first
           if (cachedCliSession) {
-            const oldProvider = providerRegistry.get(cachedCliSession.providerId);
-            if (oldProvider) {
-              try { await oldProvider.stopSession(cachedCliSession.providerSessionId); } catch { /* best effort */ }
-            }
+            try { await cachedCliSession.provider.stopSession(cachedCliSession.providerSessionId); } catch { /* best effort */ }
             activeCliSessions.delete(sessionId);
           }
 
@@ -698,8 +724,8 @@ export function registerChatRoutes(
             mcpServers,
           });
           providerSessionId = session.id;
-          activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId });
-          console.log(`[chat/cli] Started new ${requestProvider} session ${providerSessionId} for ${sessionId}`);
+          activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId, provider: cliProvider });
+          console.log(`[chat/cli] Started new ${requestProvider}${isRemote ? " (remote)" : ""} session ${providerSessionId} for ${sessionId}`);
         }
 
         // Collect full content from CLI provider events
@@ -877,7 +903,7 @@ export function registerChatRoutes(
             mcpServers,
           });
           providerSessionId = freshSession.id;
-          activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId });
+          activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId, provider: cliProvider });
           console.log(`[chat/cli] Recovered with new session ${providerSessionId}`);
           await cliProvider.sendTurn(providerSessionId, content);
         }
