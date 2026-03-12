@@ -1,6 +1,6 @@
 {
   "name": "@jait/web",
-  "version": "0.1.7",
+  "version": "0.1.29",
   "description": "Jait web frontend — pre-built static files served by @jait/gateway",
   "type": "module",
   "files": [

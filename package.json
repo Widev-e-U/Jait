@@ -1,6 +1,6 @@
 {
   "name": "jait",
-  "version": "0.1.6",
+  "version": "0.1.47",
   "private": true,
   "type": "module",
   "description": "Just Another Intelligent Tool — for Developers",
@@ -17,9 +17,7 @@
     "test:watch": "vitest",
     "lint": "oxlint .",
     "typecheck": "bun run --filter '*' typecheck",
-    "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache",
-    "version:sync": "bun scripts/version-sync.ts",
-    "release": "bun scripts/release.ts"
+    "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

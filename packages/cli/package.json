@@ -1,6 +1,6 @@
 {
   "name": "@jait/cli",
-  "version": "0.1.6",
+  "version": "0.1.5",
   "private": true,
   "type": "module",
   "bin": {
