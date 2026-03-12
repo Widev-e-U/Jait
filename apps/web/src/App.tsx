@@ -2110,7 +2110,7 @@ ${file.content.slice(0, 2000)}
                               className="h-7 w-7"
                               onClick={() => void automation.refresh()}
                             >
-                              <RefreshCw className="h-3.5 w-3.5" />
+                              <RefreshCw className={`h-3.5 w-3.5 ${automation.loading ? 'animate-spin' : ''}`} />
                             </Button>
                           </div>
                           {managerThreads.length === 0 ? (
