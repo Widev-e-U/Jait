@@ -78,7 +78,7 @@ import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { getScreenShareLayoutState } from '@/lib/screen-share-layout'
+
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import { inferThreadRepositoryName, type AutomationRepository } from '@/lib/automation-repositories'
@@ -432,8 +432,10 @@ function App() {
   const closeConfirmRef = useRef<HTMLDivElement>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [terminalHeight, setTerminalHeight] = useState(280)
-  const [screenShareChatWidth, setScreenShareChatWidth] = useState<number | null>(null)
-  const screenShareDragging = useRef(false)
+  const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
+  const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
+  const floatingDragRef = useRef<{ startX: number; startY: number; posX: number; posY: number } | null>(null)
+  const floatingResizeRef = useRef<{ startX: number; startY: number; w: number; h: number } | null>(null)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
   const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(
@@ -482,29 +484,58 @@ function App() {
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
 
-  const onScreenShareDragStart = useCallback((e: React.MouseEvent) => {
+  const getDefaultFloatingPos = useCallback(() => ({
+    x: window.innerWidth - floatingSSSize.w - 16,
+    y: window.innerHeight - floatingSSSize.h - 16,
+  }), [floatingSSSize])
+
+  const onFloatingDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
-    screenShareDragging.current = true
-    const startX = e.clientX
-    const startWidth = screenShareChatWidth
+    const pos = floatingSSPos.x < 0 ? getDefaultFloatingPos() : floatingSSPos
+    floatingDragRef.current = { startX: e.clientX, startY: e.clientY, posX: pos.x, posY: pos.y }
     const onMove = (ev: MouseEvent) => {
-      if (!screenShareDragging.current) return
-      // Dragging the handle LEFT makes chat wider, RIGHT makes it narrower
-      const delta = startX - ev.clientX
-      setScreenShareChatWidth(Math.min(800, Math.max(240, (startWidth ?? 320) + delta)))
+      if (!floatingDragRef.current) return
+      setFloatingSSPos({
+        x: Math.max(0, Math.min(window.innerWidth - 100, floatingDragRef.current.posX + ev.clientX - floatingDragRef.current.startX)),
+        y: Math.max(0, Math.min(window.innerHeight - 40, floatingDragRef.current.posY + ev.clientY - floatingDragRef.current.startY)),
+      })
     }
     const onUp = () => {
-      screenShareDragging.current = false
+      floatingDragRef.current = null
       document.removeEventListener('mousemove', onMove)
       document.removeEventListener('mouseup', onUp)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-    document.body.style.cursor = 'col-resize'
+    document.body.style.cursor = 'move'
     document.body.style.userSelect = 'none'
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
-  }, [screenShareChatWidth])
+  }, [floatingSSPos, getDefaultFloatingPos])
+
+  const onFloatingResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    floatingResizeRef.current = { startX: e.clientX, startY: e.clientY, w: floatingSSSize.w, h: floatingSSSize.h }
+    const onMove = (ev: MouseEvent) => {
+      if (!floatingResizeRef.current) return
+      setFloatingSSSize({
+        w: Math.max(280, Math.min(window.innerWidth - 40, floatingResizeRef.current.w + ev.clientX - floatingResizeRef.current.startX)),
+        h: Math.max(200, Math.min(window.innerHeight - 40, floatingResizeRef.current.h + ev.clientY - floatingResizeRef.current.startY)),
+      })
+    }
+    const onUp = () => {
+      floatingResizeRef.current = null
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'nwse-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', onUp)
+  }, [floatingSSSize])
 
   const {
     user,
@@ -1584,15 +1615,7 @@ ${file.content.slice(0, 2000)}
 
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0
-  const {
-    showDesktopScreenShare,
-    showMobileScreenShare,
-    mobilePanelHeightClass,
-  } = getScreenShareLayoutState({
-    isMobile,
-    showScreenShare,
-    hasMessages,
-  })
+
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
   const activityEvents: ActivityEvent[] = [
     ...messages.slice(-10).map((msg) => createActivityEvent({
@@ -2048,19 +2071,7 @@ ${file.content.slice(0, 2000)}
               </aside>
             )}
 
-            {viewMode === 'developer' && showDesktopScreenShare && (
-              <aside className="flex-[3] min-w-0 border-r bg-background overflow-hidden flex flex-col">
-                <div className="flex items-center justify-between h-9 px-3 border-b bg-muted/30 shrink-0">
-                  <span className="text-xs font-medium flex items-center gap-1.5">
-                    <Cast className="h-3 w-3" /> Screen Share
-                  </span>
-                  <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closeScreenSharePanel}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
-                <ScreenSharePanel screenShare={screenShare} />
-              </aside>
-            )}
+
 
             {viewMode === 'developer' && showMobileWorkspace && !activeDiff && (showWorkspaceTree || showWorkspaceEditor) && (
               <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
@@ -2121,29 +2132,6 @@ ${file.content.slice(0, 2000)}
                   onApply={(result) => { void handleDiffApply(result) }}
                 />
               </section>
-            )}
-
-            {viewMode === 'developer' && showMobileScreenShare && (
-              <section className={`shrink-0 border-b bg-background p-2 ${mobilePanelHeightClass}`}>
-                <div className="h-full rounded-lg border bg-background overflow-hidden">
-                  <div className="flex items-center justify-between h-8 px-2.5 border-b bg-muted/30 shrink-0">
-                    <span className="text-[11px] font-medium flex items-center gap-1.5">
-                      <Cast className="h-3 w-3" /> Screen Share
-                    </span>
-                    <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closeScreenSharePanel}>
-                      <X className="h-3 w-3" />
-                    </Button>
-                  </div>
-                  <ScreenSharePanel screenShare={screenShare} />
-                </div>
-              </section>
-            )}
-
-            {viewMode === 'developer' && showDesktopScreenShare && (
-              <div
-                className="w-1 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
-                onMouseDown={onScreenShareDragStart}
-              />
             )}
 
             {viewMode === 'manager' ? (
@@ -2312,8 +2300,7 @@ ${file.content.slice(0, 2000)}
                 )}
               </div>
             ) : !hasMessages ? (
-              <div className={`${showDesktopScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
-                style={showDesktopScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}
+              <div className={`flex-1 min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
                 onAnimationEnd={() => setDeveloperAnimPhase('idle')}
               >
                 <div className="w-full max-w-3xl space-y-8">
@@ -2346,8 +2333,7 @@ ${file.content.slice(0, 2000)}
                 </div>
               </div>
             ) : (
-              <div className={`flex flex-col ${showDesktopScreenShare ? (screenShareChatWidth == null ? 'flex-[2]' : '') : 'flex-1'} min-w-0 min-h-0 transition-all duration-300 ease-out`}
-                style={showDesktopScreenShare && screenShareChatWidth != null ? { width: screenShareChatWidth, flexShrink: 0 } : undefined}>
+              <div className="flex flex-col flex-1 min-w-0 min-h-0 transition-all duration-300 ease-out">
                 {/* Sticky show-panel buttons when workspace panels are hidden */}
                 {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
                   <div className="flex items-center gap-1 px-2 py-1 border-b bg-muted/20 shrink-0">
@@ -2383,7 +2369,7 @@ ${file.content.slice(0, 2000)}
                     )}
                   </div>
                 )}
-                <Conversation className="min-h-0 flex-1 border-b" compact={showDesktopWorkspace || showDesktopScreenShare}>
+                <Conversation className="min-h-0 flex-1 border-b" compact={showDesktopWorkspace}>
                   {messages.map((msg, idx) => (
                     <Message
                       key={msg.id}
@@ -2406,8 +2392,8 @@ ${file.content.slice(0, 2000)}
                   ))}
                 </Conversation>
 
-                <div className={`shrink-0 py-3 ${(showDesktopWorkspace || showDesktopScreenShare) ? 'px-3' : 'px-4'}`}>
-                  <div className={`mx-auto space-y-1.5 ${(showDesktopWorkspace || showDesktopScreenShare) ? 'max-w-none' : 'max-w-3xl'}`}>
+                <div className={`shrink-0 py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}>
+                  <div className={`mx-auto space-y-1.5 ${showDesktopWorkspace ? 'max-w-none' : 'max-w-3xl'}`}>
                     {todoList.length > 0 && (
                       <TodoList items={todoList} />
                     )}
@@ -2723,6 +2709,43 @@ ${file.content.slice(0, 2000)}
           onOpenChange={automation.setFolderPickerOpen}
           onSelect={(path, _nodeId) => { void automation.handleFolderSelected(path) }}
         />
+
+        {/* Floating screen share window */}
+        {showScreenShare && (
+          <div
+            className="fixed z-50 bg-background border rounded-lg shadow-2xl overflow-hidden flex flex-col"
+            style={{
+              left: floatingSSPos.x < 0 ? undefined : floatingSSPos.x,
+              top: floatingSSPos.y < 0 ? undefined : floatingSSPos.y,
+              right: floatingSSPos.x < 0 ? 16 : undefined,
+              bottom: floatingSSPos.y < 0 ? 16 : undefined,
+              width: floatingSSSize.w,
+              height: floatingSSSize.h,
+            }}
+          >
+            <div
+              className="flex items-center justify-between h-8 px-3 border-b bg-muted/30 shrink-0 cursor-move select-none"
+              onMouseDown={onFloatingDragStart}
+            >
+              <span className="text-xs font-medium flex items-center gap-1.5">
+                <Cast className="h-3 w-3" /> Screen Share
+              </span>
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closeScreenSharePanel}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            <ScreenSharePanel screenShare={screenShare} />
+            {/* Resize handle */}
+            <div
+              className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize opacity-50 hover:opacity-100"
+              onMouseDown={onFloatingResizeStart}
+            >
+              <svg width="12" height="12" viewBox="0 0 12 12" className="text-muted-foreground">
+                <path d="M10 2L2 10M10 6L6 10M10 10L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+              </svg>
+            </div>
+          </div>
+        )}
       </div>
     </TooltipProvider>
   )
