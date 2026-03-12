@@ -212,19 +212,28 @@ export function useAutomation(enabled = true) {
       case 'thread.status': {
         const threadId = payload.threadId as string | undefined
         const status = payload.status as string | undefined
+        const thread = payload.thread as AgentThread | undefined
         if (threadId && status) {
-          setThreads(prev => prev.map(t =>
-            t.id === threadId
-              ? {
-                  ...t,
-                  status: status as AgentThread['status'],
-                  // Clear stale error when transitioning to running/completed
-                  error: status === 'running' || status === 'completed'
-                    ? (payload.error as string) ?? null
-                    : (payload.error as string) ?? t.error,
-                }
-              : t,
-          ))
+          setThreads(prev => {
+            if (thread) {
+              const exists = prev.some(t => t.id === threadId)
+              return exists
+                ? prev.map(t => t.id === threadId ? thread : t)
+                : [thread, ...prev]
+            }
+            return prev.map(t =>
+              t.id === threadId
+                ? {
+                    ...t,
+                    status: status as AgentThread['status'],
+                    // Clear stale error when transitioning to running/completed
+                    error: status === 'running' || status === 'completed'
+                      ? (payload.error as string) ?? null
+                      : (payload.error as string) ?? t.error,
+                  }
+                : t,
+            )
+          })
         }
         break
       }
