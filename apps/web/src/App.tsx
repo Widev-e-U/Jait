@@ -364,7 +364,7 @@ function ManagerThreadListItem({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 rounded-lg opacity-0 transition-opacity group-hover:opacity-100"
+          className="h-7 w-7 rounded-lg opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
           onClick={(event) => {
             event.stopPropagation()
             onDelete()
