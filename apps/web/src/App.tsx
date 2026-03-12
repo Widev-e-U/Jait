@@ -291,8 +291,10 @@ function ManagerRepositoryPanel({
 
 interface ManagerThreadListItemProps {
   thread: AgentThread
+  repo: AutomationRepository | null
   repoName: string
   prState: 'open' | 'closed' | 'merged' | null | undefined
+  ghAvailable: boolean
   onOpen: () => void
   onStop: () => void
   onDelete: () => void
@@ -300,12 +302,16 @@ interface ManagerThreadListItemProps {
 
 function ManagerThreadListItem({
   thread,
+  repo,
   repoName,
   prState,
+  ghAvailable,
   onOpen,
   onStop,
   onDelete,
 }: ManagerThreadListItemProps) {
+  const showThreadActions = repo != null && (thread.status === 'completed' || Boolean(thread.prUrl))
+
   return (
     <div
       role="button"
@@ -347,31 +353,53 @@ function ManagerThreadListItem({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-1">
-        {thread.status === 'running' && (
+      <div className="flex flex-col items-end gap-1">
+        <div className="flex items-center gap-1">
+          {thread.status === 'running' && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-7 w-7 rounded-lg"
+              onClick={(event) => {
+                event.stopPropagation()
+                onStop()
+              }}
+            >
+              <Square className="h-3 w-3" />
+            </Button>
+          )}
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 rounded-lg"
+            className="h-7 w-7 rounded-lg opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
             onClick={(event) => {
               event.stopPropagation()
-              onStop()
+              onDelete()
             }}
           >
-            <Square className="h-3 w-3" />
+            <Trash2 className="h-3.5 w-3.5" />
           </Button>
+        </div>
+        {showThreadActions && repo && (
+          <div
+            className="shrink-0"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <ThreadActions
+              threadId={thread.id}
+              cwd={thread.workingDirectory ?? repo.localPath}
+              branch={thread.branch}
+              baseBranch={repo.defaultBranch}
+              threadTitle={thread.title}
+              threadStatus={thread.status}
+              prUrl={thread.prUrl}
+              prState={prState}
+              ghAvailable={ghAvailable}
+            />
+          </div>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-7 w-7 rounded-lg opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100"
-          onClick={(event) => {
-            event.stopPropagation()
-            onDelete()
-          }}
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </Button>
       </div>
     </div>
   )
@@ -2185,8 +2213,10 @@ ${file.content.slice(0, 2000)}
                                   <ManagerThreadListItem
                                     key={thread.id}
                                     thread={thread}
+                                    repo={threadRepo}
                                     repoName={repoName}
                                     prState={thread.prState ?? automation.threadPrStates[thread.id]}
+                                    ghAvailable={automation.ghAvailable}
                                     onOpen={() => automation.setSelectedThreadId(thread.id)}
                                     onStop={() => { void automation.handleStop(thread.id) }}
                                     onDelete={() => { void automation.handleDelete(thread.id) }}

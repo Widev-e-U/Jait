@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Eye, GitPullRequest, Loader2, AlertTriangle } from 'lucide-react'
-import { summarizeGitResult, gitApi } from '@/lib/git-api'
+import { gitApi } from '@/lib/git-api'
 import { agentsApi, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
@@ -81,7 +81,6 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, 
       // If check fails, proceed anyway — the PR creation will give a specific error
     }
 
-    const toastId = toast.loading('Creating pull request…')
     try {
       const commitMsg = threadTitle.replace(/^\[.*?\]\s*/, '')
       const response = await agentsApi.createPullRequest(threadId, {
@@ -89,27 +88,14 @@ export function ThreadActions({ threadId, cwd, branch, baseBranch, threadTitle, 
         baseBranch,
       })
       const result = response.result
-      const summary = summarizeGitResult(result)
-      toast.success(summary.title, { id: toastId, description: summary.description })
 
       if (result.pr.url) {
         setPrLink({ url: result.pr.url, kind: 'created' })
-        try {
-          await agentsApi.updateThread(threadId, {
-            prUrl: result.pr.url,
-            prNumber: result.pr.number ?? null,
-            prTitle: result.pr.title ?? null,
-            prState: 'open',
-          })
-        } catch {
-          // PR creation succeeded; sidebar metadata sync can fail independently.
-        }
-        window.open(result.pr.url, '_blank')
       } else if (result.push.createPrUrl) {
         setPrLink({ url: result.push.createPrUrl, kind: 'create' })
       }
     } catch (err) {
-      toast.error('Failed', { id: toastId, description: err instanceof Error ? err.message : 'Unknown error' })
+      toast.error('Failed', { description: err instanceof Error ? err.message : 'Unknown error' })
     } finally {
       setBusy(false)
     }

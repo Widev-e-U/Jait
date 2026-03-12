@@ -22,7 +22,6 @@ import {
   gitApi,
   buildMenuItems,
   resolveQuickAction,
-  summarizeGitResult,
   type GitStatusResult,
   type GitStackedAction,
   type GitActionMenuItem,
@@ -138,39 +137,14 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
 
     setIsBusy(true)
     setMenuOpen(false)
-    const toastId = toast.loading(
-      action === 'commit' ? 'Committing...' :
-      action === 'commit_push' ? (opts?.forcePushOnly ? 'Pushing...' : 'Committing & pushing...') :
-      'Committing, pushing & creating PR...',
-    )
     try {
-      const result = await gitApi.runStackedAction(cwd, action, {
+      await gitApi.runStackedAction(cwd, action, {
         commitMessage: opts?.commitMessage,
         featureBranch: opts?.featureBranch,
       })
-      const summary = summarizeGitResult(result)
-      toast.success(summary.title, { id: toastId, description: summary.description })
-
-      // Offer follow-up actions
-      if (action === 'commit' && result.commit.status === 'created') {
-        toast.info('Changes committed. Push when ready.', {
-          action: { label: 'Push', onClick: () => runStackedAction('commit_push', { forcePushOnly: true }) },
-        })
-      }
-      if ((action === 'commit_push' || action === 'commit_push_pr') && result.pr.url) {
-        toast.success('PR is ready', {
-          action: { label: 'Open PR', onClick: () => window.open(result.pr.url, '_blank') },
-        })
-      } else if (result.push.status === 'pushed' && result.push.createPrUrl && result.pr.status !== 'created' && result.pr.status !== 'opened_existing') {
-        toast.info('Create a pull request for your changes', {
-          action: { label: 'Create PR', onClick: () => window.open(result.push.createPrUrl, '_blank') },
-          duration: 10000,
-        })
-      }
-
       await refreshStatus()
     } catch (err) {
-      toast.error('Action failed', { id: toastId, description: err instanceof Error ? err.message : 'Unknown error' })
+      toast.error('Action failed', { description: err instanceof Error ? err.message : 'Unknown error' })
     } finally {
       setIsBusy(false)
     }
@@ -178,18 +152,11 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
 
   const runPull = useCallback(async () => {
     setIsBusy(true)
-    const toastId = toast.loading('Pulling...')
     try {
-      const result = await gitApi.pull(cwd)
-      toast.success(result.status === 'pulled' ? 'Pulled' : 'Already up to date', {
-        id: toastId,
-        description: result.status === 'pulled'
-          ? `Updated ${result.branch} from ${result.upstreamBranch ?? 'upstream'}`
-          : `${result.branch} is already synchronized.`,
-      })
+      await gitApi.pull(cwd)
       await refreshStatus()
     } catch (err) {
-      toast.error('Pull failed', { id: toastId, description: err instanceof Error ? err.message : 'Unknown error' })
+      toast.error('Pull failed', { description: err instanceof Error ? err.message : 'Unknown error' })
     } finally {
       setIsBusy(false)
     }
@@ -205,7 +172,6 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
       return
     }
     if (quickAction.kind === 'show_hint') {
-      toast.info(quickAction.label, { description: quickAction.hint })
       return
     }
     if (quickAction.action) {

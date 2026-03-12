@@ -103,6 +103,24 @@
     @apply bg-background text-foreground;
   }
 
+  [data-sonner-toaster] {
+    --normal-bg: hsl(var(--popover));
+    --normal-border: hsl(var(--border));
+    --normal-text: hsl(var(--popover-foreground));
+    --success-bg: hsl(var(--popover));
+    --success-border: hsl(var(--border));
+    --success-text: hsl(var(--popover-foreground));
+    --info-bg: hsl(var(--popover));
+    --info-border: hsl(var(--border));
+    --info-text: hsl(var(--popover-foreground));
+    --warning-bg: hsl(var(--popover));
+    --warning-border: hsl(var(--border));
+    --warning-text: hsl(var(--popover-foreground));
+    --error-bg: hsl(var(--popover));
+    --error-border: hsl(var(--destructive) / 0.45);
+    --error-text: hsl(var(--popover-foreground));
+  }
+
   /* Safe-area inset utilities for devices with camera cutouts / notches */
   .safe-top {
     padding-top: env(safe-area-inset-top, 0px);
