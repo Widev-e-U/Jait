@@ -21,6 +21,7 @@ interface ViewModeSelectorProps {
   onChange: (mode: ViewMode) => void
   disabled?: boolean
   className?: string
+  compact?: boolean
 }
 
 const MODES: Array<{
@@ -43,7 +44,7 @@ const MODES: Array<{
   },
 ]
 
-export function ViewModeSelector({ mode, onChange, disabled, className }: ViewModeSelectorProps) {
+export function ViewModeSelector({ mode, onChange, disabled, className, compact = false }: ViewModeSelectorProps) {
   const current = MODES.find((m) => m.value === mode) ?? MODES[0]
   const CurrentIcon = current.icon
 
@@ -60,9 +61,10 @@ export function ViewModeSelector({ mode, onChange, disabled, className }: ViewMo
             className,
           )}
           title={`Mode: ${current.label}`}
+          aria-label={`Mode: ${current.label}`}
         >
           <CurrentIcon className="h-4 w-4" />
-          <span>{current.label}</span>
+          {!compact && <span>{current.label}</span>}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </DropdownMenuTrigger>
