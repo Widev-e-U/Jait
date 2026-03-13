@@ -82,7 +82,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
-import { inferThreadRepositoryName, type AutomationRepository } from '@/lib/automation-repositories'
+import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import type { AgentThread } from '@/lib/agents-api'
 
 const API_URL = getApiUrl()
@@ -149,10 +149,47 @@ function ThreadPrBadge({ prState }: { prState: 'open' | 'closed' | 'merged' | nu
   )
 }
 
+const REPO_RUNTIME_PROVIDER_LABELS: Record<'codex' | 'claude-code', string> = {
+  codex: 'Codex',
+  'claude-code': 'Claude',
+}
+
+function ManagerRepoRuntimeMeta({
+  runtime,
+  className = '',
+}: {
+  runtime: RepositoryRuntimeInfo
+  className?: string
+}) {
+  const cliProviders = runtime.availableProviders.filter(
+    (provider): provider is 'codex' | 'claude-code' => provider === 'codex' || provider === 'claude-code',
+  )
+
+  return (
+    <div className={`flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground ${className}`.trim()}>
+      <span>{runtime.locationLabel}</span>
+      {!runtime.online && (
+        <Badge
+          variant="outline"
+          className="h-4 border-amber-500/30 bg-amber-500/10 px-1 py-0 text-[9px] text-amber-700 dark:text-amber-300"
+        >
+          Offline
+        </Badge>
+      )}
+      {cliProviders.map((provider) => (
+        <Badge key={provider} variant="outline" className="h-4 px-1 py-0 text-[9px]">
+          {REPO_RUNTIME_PROVIDER_LABELS[provider]}
+        </Badge>
+      ))}
+    </div>
+  )
+}
+
 interface ManagerRepoPickerProps {
   repositories: AutomationRepository[]
   selectedRepo: AutomationRepository | null
   disabled?: boolean
+  getRuntimeInfo: (repo: AutomationRepository) => RepositoryRuntimeInfo
   onSelect: (repoId: string) => void
   onAddRepository: () => void
 }
@@ -161,6 +198,7 @@ function ManagerRepoPicker({
   repositories,
   selectedRepo,
   disabled = false,
+  getRuntimeInfo,
   onSelect,
   onAddRepository,
 }: ManagerRepoPickerProps) {
@@ -177,20 +215,28 @@ function ManagerRepoPicker({
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-64">
         <DropdownMenuLabel>Repository</DropdownMenuLabel>
-        {repositories.map((repo) => (
-          <DropdownMenuItem key={repo.id} onSelect={() => onSelect(repo.id)}>
-            <div className="flex min-w-0 items-center gap-2">
-              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-              <span className="truncate">{repo.name}</span>
-              <span className="text-[10px] text-muted-foreground">{repo.defaultBranch}</span>
-              {repo.source === 'shared' && (
-                <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
-                  Shared
-                </Badge>
-              )}
-            </div>
-          </DropdownMenuItem>
-        ))}
+        {repositories.map((repo) => {
+          const runtime = getRuntimeInfo(repo)
+          return (
+            <DropdownMenuItem key={repo.id} onSelect={() => onSelect(repo.id)}>
+              <div className="flex min-w-0 items-start gap-2">
+                <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{repo.name}</span>
+                    <span className="text-[10px] text-muted-foreground">{repo.defaultBranch}</span>
+                    {repo.source === 'shared' && (
+                      <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
+                        Shared
+                      </Badge>
+                    )}
+                  </div>
+                  <ManagerRepoRuntimeMeta runtime={runtime} className="mt-1" />
+                </div>
+              </div>
+            </DropdownMenuItem>
+          )
+        })}
         {repositories.length === 0 && (
           <div className="px-2 py-2 text-xs text-muted-foreground">No repositories yet.</div>
         )}
@@ -208,6 +254,7 @@ interface ManagerRepositoryPanelProps {
   repositories: AutomationRepository[]
   selectedRepoId: string | null
   isMobile?: boolean
+  getRuntimeInfo: (repo: AutomationRepository) => RepositoryRuntimeInfo
   onSelect: (repoId: string) => void
   onAddRepository: () => void
   onRemoveRepository: (repoId: string) => void
@@ -217,6 +264,7 @@ function ManagerRepositoryPanel({
   repositories,
   selectedRepoId,
   isMobile = false,
+  getRuntimeInfo,
   onSelect,
   onAddRepository,
   onRemoveRepository,
@@ -247,54 +295,60 @@ function ManagerRepositoryPanel({
             </button>
           </p>
         ) : (
-          repositories.map((repo) => (
-            <div
-              role="button"
-              tabIndex={0}
-              key={repo.id}
-              className={`flex w-full items-center gap-2 px-2 py-1.5 text-left transition-colors ${
-                isMobile ? 'cursor-pointer rounded-md text-sm' : 'rounded-lg text-xs'
-              } ${
-                selectedRepoId === repo.id
-                  ? isMobile
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'bg-primary/10 text-primary'
-                  : isMobile
-                    ? 'hover:bg-muted/50'
-                    : 'hover:bg-muted'
-              }`}
-              onClick={() => onSelect(repo.id)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' || event.key === ' ') {
-                  event.preventDefault()
-                  onSelect(repo.id)
-                }
-              }}
-            >
-              <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-              <div className="min-w-0 flex-1">
-                <div className={isMobile ? 'truncate text-xs font-medium' : 'truncate font-medium'}>{repo.name}</div>
-                <div className="text-[10px] text-muted-foreground">{repo.defaultBranch}</div>
+          repositories.map((repo) => {
+            const runtime = getRuntimeInfo(repo)
+            return (
+              <div
+                role="button"
+                tabIndex={0}
+                key={repo.id}
+                className={`flex w-full items-start gap-2 px-2 py-1.5 text-left transition-colors ${
+                  isMobile ? 'cursor-pointer rounded-md text-sm' : 'rounded-lg text-xs'
+                } ${
+                  selectedRepoId === repo.id
+                    ? isMobile
+                      ? 'bg-secondary text-secondary-foreground'
+                      : 'bg-primary/10 text-primary'
+                    : isMobile
+                      ? 'hover:bg-muted/50'
+                      : 'hover:bg-muted'
+                }`}
+                onClick={() => onSelect(repo.id)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter' || event.key === ' ') {
+                    event.preventDefault()
+                    onSelect(repo.id)
+                  }
+                }}
+              >
+                <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                <div className="min-w-0 flex-1">
+                  <div className={isMobile ? 'truncate text-xs font-medium' : 'truncate font-medium'}>{repo.name}</div>
+                  <div className="mt-0.5 flex flex-wrap items-center gap-1">
+                    <span className="text-[10px] text-muted-foreground">{repo.defaultBranch}</span>
+                    {repo.source === 'shared' && (
+                      <Badge variant="outline" className="h-4 shrink-0 px-1 py-0 text-[9px]">
+                        Shared
+                      </Badge>
+                    )}
+                  </div>
+                  <ManagerRepoRuntimeMeta runtime={runtime} className="mt-1" />
+                </div>
+                {repo.source === 'local' && (
+                  <button
+                    type="button"
+                    className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onRemoveRepository(repo.id)
+                    }}
+                  >
+                    <Trash2 className="h-3 w-3" />
+                  </button>
+                )}
               </div>
-              {repo.source === 'shared' && (
-                <Badge variant="outline" className="h-4 shrink-0 px-1 py-0 text-[9px]">
-                  Shared
-                </Badge>
-              )}
-              {repo.source === 'local' && (
-                <button
-                  type="button"
-                  className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
-                  onClick={(event) => {
-                    event.stopPropagation()
-                    onRemoveRepository(repo.id)
-                  }}
-                >
-                  <Trash2 className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-          ))
+            )
+          })
         )}
       </div>
     </div>
@@ -587,6 +641,8 @@ function App() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateApplying, setUpdateApplying] = useState(false)
+  const pendingGatewayRestartVersionRef = useRef<string | null>(null)
+  const gatewayRestartSawDisconnectRef = useRef(false)
   const [desktopPlatform, setDesktopPlatform] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
   const [gatewayStep, setGatewayStep] = useState<'url' | 'auth'>(() =>
@@ -706,6 +762,8 @@ function App() {
         body: JSON.stringify({ version: updateInfo.latestVersion }),
       })
       if (res.ok) {
+        pendingGatewayRestartVersionRef.current = updateInfo.latestVersion
+        gatewayRestartSawDisconnectRef.current = false
         toast.success(`Updated to v${updateInfo.latestVersion}. Gateway is restarting...`)
       } else {
         const data = await res.json().catch(() => ({}))
@@ -714,6 +772,23 @@ function App() {
     } catch { toast.error('Update request failed') }
     setUpdateApplying(false)
   }, [token, updateInfo])
+
+  const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
+    if (!connected) {
+      if (pendingGatewayRestartVersionRef.current) {
+        gatewayRestartSawDisconnectRef.current = true
+      }
+      return
+    }
+
+    if (reconnected && pendingGatewayRestartVersionRef.current && gatewayRestartSawDisconnectRef.current) {
+      const version = pendingGatewayRestartVersionRef.current
+      pendingGatewayRestartVersionRef.current = null
+      gatewayRestartSawDisconnectRef.current = false
+      toast.success(`Gateway restarted on v${version}.`)
+      void handleCheckUpdate()
+    }
+  }, [handleCheckUpdate])
 
   // Auto-check for updates on mount (once authenticated)
   useEffect(() => {
@@ -774,6 +849,18 @@ function App() {
   const managerThreads = useMemo(
     () => [...automation.threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [automation.threads],
+  )
+  const selectedRepoRuntime = useMemo(
+    () => (automation.selectedRepo ? automation.getRuntimeInfoForRepository(automation.selectedRepo) : null),
+    [automation.getRuntimeInfoForRepository, automation.selectedRepo],
+  )
+  const selectedThreadRepo = useMemo(
+    () => (automation.selectedThread ? automation.getRepositoryForThread(automation.selectedThread) : null),
+    [automation.getRepositoryForThread, automation.selectedThread],
+  )
+  const selectedThreadRepoRuntime = useMemo(
+    () => (selectedThreadRepo ? automation.getRuntimeInfoForRepository(selectedThreadRepo) : null),
+    [automation.getRuntimeInfoForRepository, selectedThreadRepo],
   )
   const activeManagerThreads = useMemo(
     () => managerThreads.filter((thread) => thread.status === 'running'),
@@ -963,6 +1050,7 @@ function App() {
     onFullState: handleFullState,
     onMessageComplete: refreshMessages,
     onThreadEvent: automation.handleThreadEvent,
+    onConnectionStateChange: handleUiConnectionStateChange,
     onFsChanges: useCallback((_payload: FsChangesPayload) => {
       setFsWatcherVersion(v => v + 1)
     }, []),
@@ -1726,17 +1814,37 @@ ${file.content.slice(0, 2000)}
     }
   }, [activeSessionId])
 
-  const handleVoiceInput = useCallback(async () => {
-    if (!token) {
-      setShowLoginDialog(true)
+  const submitVoiceTranscript = useCallback(async (transcript: string) => {
+    if (!transcript) return
+
+    if (viewMode === 'manager') {
+      await automation.handleSend(
+        transcript,
+        chatProvider,
+        chatProvider !== 'jait' ? cliModel : undefined,
+      )
       return
     }
+
     let sid = activeSessionId
     if (!sid) {
       const session = await createSession()
       sid = session?.id ?? null
     }
-    if (!sid) return
+    if (!sid || !token) return
+
+    sendMessage(transcript, {
+      token,
+      sessionId: sid,
+      onLoginRequired: () => setShowLoginDialog(true),
+    })
+  }, [activeSessionId, automation.handleSend, chatProvider, cliModel, createSession, sendMessage, token, viewMode])
+
+  const handleVoiceInput = useCallback(async () => {
+    if (!token) {
+      setShowLoginDialog(true)
+      return
+    }
 
     let transcript = ''
     if (settings.stt_provider === 'browser') {
@@ -1775,16 +1883,16 @@ ${file.content.slice(0, 2000)}
       const res = await fetch(`${API_URL}/api/voice/transcribe`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: sid, transcript }),
+        body: JSON.stringify({ sessionId: activeSessionId ?? 'voice-input', transcript }),
       })
       const data = (await res.json()) as { text?: string }
       if (data.text) {
-        sendMessage(data.text, { token, sessionId: sid, onLoginRequired: () => setShowLoginDialog(true) })
+        await submitVoiceTranscript(data.text)
       }
     } catch {
       // noop
     }
-  }, [token, activeSessionId, createSession, sendMessage, settings.stt_provider])
+  }, [activeSessionId, settings.stt_provider, submitVoiceTranscript, token])
 
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0
@@ -2399,6 +2507,7 @@ ${file.content.slice(0, 2000)}
                           isLoading={automation.selectedThread?.status === 'running'}
                           disabled={automation.creating}
                           placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
+                          onVoiceInput={handleVoiceInput}
                           viewMode={viewMode}
                           onViewModeChange={setViewMode}
                           provider={chatProvider}
@@ -2407,6 +2516,9 @@ ${file.content.slice(0, 2000)}
                           onCliModelChange={setCliModel}
                         />
                         <div className="flex items-center gap-2 px-1 mt-1.5">
+                          {selectedThreadRepoRuntime && (
+                            <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />
+                          )}
                           {automation.selectedThread && automation.selectedThread.status !== 'running' && !automation.selectedThread.providerSessionId && (
                             <span className="text-[11px] text-muted-foreground truncate">
                               Thread finished — start a new one
@@ -2425,6 +2537,7 @@ ${file.content.slice(0, 2000)}
                           repositories={automation.repositories}
                           selectedRepoId={automation.selectedRepo?.id ?? null}
                           isMobile={isMobile}
+                          getRuntimeInfo={automation.getRuntimeInfoForRepository}
                           onSelect={automation.setSelectedRepoId}
                           onAddRepository={() => automation.setFolderPickerOpen(true)}
                           onRemoveRepository={(repoId) => { void automation.removeRepository(repoId) }}
@@ -2455,6 +2568,7 @@ ${file.content.slice(0, 2000)}
                             disabled={managerComposerDisabled}
                             controlsDisabled={automation.creating}
                             placeholder={managerPlaceholder}
+                            onVoiceInput={handleVoiceInput}
                             viewMode={viewMode}
                             onViewModeChange={setViewMode}
                             provider={chatProvider}
@@ -2466,11 +2580,15 @@ ${file.content.slice(0, 2000)}
                                 repositories={automation.repositories}
                                 selectedRepo={automation.selectedRepo}
                                 disabled={automation.creating}
+                                getRuntimeInfo={automation.getRuntimeInfoForRepository}
                                 onSelect={automation.setSelectedRepoId}
                                 onAddRepository={() => automation.setFolderPickerOpen(true)}
                               />
                             )}
                           />
+                          {selectedRepoRuntime && (
+                            <ManagerRepoRuntimeMeta runtime={selectedRepoRuntime} className="mt-1 px-1" />
+                          )}
                         </div>
                       </div>
                       {/* Thread list header + threads */}

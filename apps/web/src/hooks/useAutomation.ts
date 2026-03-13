@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
+  type RemoteProviderInfo,
   agentsApi,
   type AgentThread,
   type ThreadActivity,
@@ -16,6 +17,8 @@ import {
   type AutomationRepo,
 } from '@/lib/agents-api'
 import {
+  buildRepositoryFallbackUnavailableMessage,
+  getRepositoryRuntimeInfo,
   inferSharedRepositories,
   threadBelongsToRepository,
   type AutomationRepository,
@@ -92,6 +95,7 @@ export function useAutomation(enabled = true) {
   const [threadPrStates, setThreadPrStates] = useState<Record<string, ThreadPrState>>({})
   const [ghAvailable, setGhAvailable] = useState(true)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
+  const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -163,6 +167,7 @@ export function useAutomation(enabled = true) {
       ])
       setThreads(ts)
       setProviders(provResult.providers)
+      setRemoteProviders(provResult.remoteProviders)
       setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
       setError(null)
     } catch (err) {
@@ -170,7 +175,16 @@ export function useAutomation(enabled = true) {
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [localDeviceId])
+
+  const getRuntimeInfoForRepository = useCallback(
+    (repository: RepositoryConnection) => getRepositoryRuntimeInfo(repository, {
+      localDeviceId,
+      localProviders: providers,
+      remoteProviders,
+    }),
+    [localDeviceId, providers, remoteProviders],
+  )
 
   // Fetch threads + providers once on mount (no polling — WS pushes updates)
   useEffect(() => {
@@ -497,7 +511,7 @@ export function useAutomation(enabled = true) {
               setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
               void refresh()
             } else if (!githubUrl) {
-              setError('Desktop app is offline and no GitHub URL is configured for this repo.')
+              setError(buildRepositoryFallbackUnavailableMessage(selectedRepo, getRuntimeInfoForRepository(selectedRepo)))
             }
           } else {
             throw startErr
@@ -562,7 +576,7 @@ export function useAutomation(enabled = true) {
                     repoUrl: githubUrl,
                   })
                 } else if (!githubUrl) {
-                  setError('Desktop app is offline and no GitHub URL is configured for this repo. Open the desktop app first.')
+                  setError(buildRepositoryFallbackUnavailableMessage(repo, getRuntimeInfoForRepository(repo)))
                 }
                 // If user cancelled the confirm, just leave the thread idle
                 return
@@ -575,7 +589,7 @@ export function useAutomation(enabled = true) {
         })()
       }
     },
-    [selectedRepo, selectedThread, refresh],
+    [getRuntimeInfoForRepository, refresh, selectedRepo, selectedThread],
   )
 
   const handleStop = useCallback(
@@ -626,11 +640,13 @@ export function useAutomation(enabled = true) {
     activities,
     activityEndRef,
     providers,
+    remoteProviders,
     loading,
     error,
     setError,
     creating: false as const,
     showGitActions,
+    getRuntimeInfoForRepository,
 
     // Actions
     refresh,
