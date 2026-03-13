@@ -1,4 +1,4 @@
-import type { AgentThread } from './agents-api'
+import type { AgentThread, ProviderId, ProviderInfo, RemoteProviderInfo } from './agents-api'
 
 export type AutomationRepositorySource = 'local' | 'shared'
 
@@ -10,6 +10,13 @@ export interface AutomationRepository {
   deviceId?: string | null
   githubUrl?: string | null
   source: AutomationRepositorySource
+}
+
+export interface RepositoryRuntimeInfo {
+  hostType: 'gateway' | 'device'
+  locationLabel: string
+  online: boolean
+  availableProviders: ProviderId[]
 }
 
 function normalizePath(path: string): string {
@@ -94,4 +101,72 @@ export function inferSharedRepositories(
   }
 
   return sharedRepositories
+}
+
+function toProviderId(value: string): ProviderId | null {
+  if (value === 'jait' || value === 'codex' || value === 'claude-code') {
+    return value
+  }
+  return null
+}
+
+function dedupeProviders(values: Iterable<string>): ProviderId[] {
+  const seen = new Set<ProviderId>()
+  for (const value of values) {
+    const providerId = toProviderId(value)
+    if (providerId) {
+      seen.add(providerId)
+    }
+  }
+  return [...seen]
+}
+
+export function getRepositoryRuntimeInfo(
+  repository: Pick<AutomationRepository, 'deviceId'>,
+  options: {
+    localDeviceId: string
+    localProviders: ProviderInfo[]
+    remoteProviders: RemoteProviderInfo[]
+  },
+): RepositoryRuntimeInfo {
+  const { localDeviceId, localProviders, remoteProviders } = options
+
+  if (!repository.deviceId) {
+    return {
+      hostType: 'gateway',
+      locationLabel: 'Gateway',
+      online: true,
+      availableProviders: localProviders.filter((provider) => provider.available).map((provider) => provider.id),
+    }
+  }
+
+  const remoteNode = remoteProviders.find((node) => node.nodeId === repository.deviceId)
+  const locationLabel = repository.deviceId === localDeviceId
+    ? 'This device'
+    : remoteNode?.nodeName ?? 'Desktop app'
+
+  return {
+    hostType: 'device',
+    locationLabel,
+    online: Boolean(remoteNode),
+    availableProviders: dedupeProviders(remoteNode?.providers ?? []),
+  }
+}
+
+export function buildRepositoryFallbackUnavailableMessage(
+  repository: Pick<AutomationRepository, 'githubUrl'>,
+  runtime: RepositoryRuntimeInfo,
+): string {
+  if (repository.githubUrl) {
+    return `Couldn't reach ${runtime.locationLabel}.`
+  }
+
+  if (runtime.hostType === 'device' && !runtime.online) {
+    const host = runtime.locationLabel === 'This device'
+      ? 'This desktop app'
+      : runtime.locationLabel
+    return `${host} is offline and no GitHub URL is configured for gateway fallback. Reconnect it or pick a connected repo/device.`
+  }
+
+  return 'No GitHub URL is configured for this repo, so the gateway cannot clone it as a fallback.'
 }

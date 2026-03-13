@@ -101,6 +101,7 @@ export type FullStateHandler = (state: Record<string, unknown>) => void
  * `payload` is the event payload (e.g. { threadId, thread }).
  */
 export type ThreadEventHandler = (eventType: string, payload: Record<string, unknown>) => void
+export type UICommandsConnectionStateHandler = (state: { connected: boolean; reconnected: boolean }) => void
 
 interface UseUICommandsOptions {
   /** Listeners for UI commands pushed by the gateway (server → client). */
@@ -119,6 +120,8 @@ interface UseUICommandsOptions {
   onThreadEvent?: ThreadEventHandler
   /** Called when the gateway pushes native filesystem change events. */
   onFsChanges?: (payload: FsChangesPayload) => void
+  /** Called when the UI command WebSocket connects, disconnects, or reconnects. */
+  onConnectionStateChange?: UICommandsConnectionStateHandler
 }
 
 /**
@@ -136,7 +139,17 @@ interface UseUICommandsOptions {
  * to other clients via `ui.state-sync`.
  */
 export function useUICommands(opts: UseUICommandsOptions) {
-  const { listeners, sessionId, token, onStateSync, onFullState, onMessageComplete, onThreadEvent, onFsChanges } = opts
+  const {
+    listeners,
+    sessionId,
+    token,
+    onStateSync,
+    onFullState,
+    onMessageComplete,
+    onThreadEvent,
+    onFsChanges,
+    onConnectionStateChange,
+  } = opts
   const listenersRef = useRef(listeners)
   listenersRef.current = listeners
   const onStateSyncRef = useRef(onStateSync)
@@ -149,9 +162,12 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onThreadEventRef.current = onThreadEvent
   const onFsChangesRef = useRef(onFsChanges)
   onFsChangesRef.current = onFsChanges
+  const onConnectionStateChangeRef = useRef(onConnectionStateChange)
+  onConnectionStateChangeRef.current = onConnectionStateChange
   const wsRef = useRef<WebSocket | null>(null)
   const currentSessionRef = useRef<string | null>(null)
   const mountedRef = useRef(true)
+  const hasConnectedRef = useRef(false)
   const tokenRef = useRef(token)
   tokenRef.current = token
   const sessionIdRef = useRef(sessionId)
@@ -422,6 +438,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
       wsRef.current = ws
 
       ws.onopen = () => {
+        const reconnected = hasConnectedRef.current
+        hasConnectedRef.current = true
+        onConnectionStateChangeRef.current?.({ connected: true, reconnected })
         // Subscribe to current session on connect
         const sid = sessionIdRef.current
         if (sid) subscribeToSession(ws, sid)
@@ -456,6 +475,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
       ws.onclose = () => {
         wsRef.current = null
         currentSessionRef.current = null
+        onConnectionStateChangeRef.current?.({ connected: false, reconnected: false })
         // Auto-reconnect after 1s
         if (mountedRef.current) {
           reconnectTimer = setTimeout(connect, 1000)
