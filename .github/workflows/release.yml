@@ -364,20 +364,13 @@ jobs:
             echo "version=$(jq -r '.version' packages/gateway/package.json)" >> $GITHUB_OUTPUT
           fi
 
-      - name: Delete existing release assets
+      - name: Delete existing release and recreate
         run: |
           TAG="v${{ steps.version.outputs.version }}"
-          # Get release ID for this tag
-          RELEASE_ID=$(gh api repos/${{ github.repository }}/releases/tags/$TAG --jq '.id' 2>/dev/null || echo "")
-          if [ -n "$RELEASE_ID" ]; then
-            echo "Deleting old assets from release $TAG (ID: $RELEASE_ID)"
-            gh api repos/${{ github.repository }}/releases/$RELEASE_ID/assets --jq '.[].id' | while read ASSET_ID; do
-              gh api -X DELETE repos/${{ github.repository }}/releases/assets/$ASSET_ID
-              echo "  Deleted asset $ASSET_ID"
-            done
-          fi
+          # Delete the existing release (if any) so we start fresh
+          gh release delete "$TAG" --yes --cleanup-tag=false 2>/dev/null || echo "No existing release for $TAG"
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Create release
         uses: softprops/action-gh-release@v2
