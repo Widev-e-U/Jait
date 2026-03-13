@@ -19,8 +19,24 @@
     }
   ],
   "win": {
-    "target": ["nsis", "portable"],
+    "target": [
+      {
+        "target": "nsis",
+        "arch": ["x64"]
+      },
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ]
+  },
+  "nsis": {
+    "oneClick": true,
+    "perMachine": false,
     "artifactName": "Jait-${version}-${arch}-setup.${ext}"
+  },
+  "portable": {
+    "artifactName": "Jait-${version}-${arch}-portable.${ext}"
   },
   "mac": {
     "target": ["dmg"],

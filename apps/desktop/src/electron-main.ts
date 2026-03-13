@@ -89,8 +89,8 @@ async function loadApp(win: BrowserWindow): Promise<void> {
       );
     }
   } else {
-    // In production, load the built web app
-    const indexPath = path.join(__dirname, "..", "..", "web", "dist", "index.html");
+    // In production, load the built web app from extraResources
+    const indexPath = path.join(process.resourcesPath, "web", "index.html");
     await win.loadFile(indexPath);
   }
 }
