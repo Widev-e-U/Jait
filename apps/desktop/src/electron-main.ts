@@ -5,7 +5,7 @@
  * inside an Electron BrowserWindow. Shares the exact same UI as @jait/web.
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -59,6 +59,7 @@ function createMainWindow(): BrowserWindow {
   // Graceful show once ready
   win.once("ready-to-show", () => {
     win.show();
+    win.focus();
     if (IS_DEV) win.webContents.openDevTools({ mode: "bottom" });
   });
 
@@ -69,6 +70,15 @@ function createMainWindow(): BrowserWindow {
   // Notify renderer when maximize state changes (for window control icons)
   win.on("maximize", () => win.webContents.send("window:maximized-change", true));
   win.on("unmaximize", () => win.webContents.send("window:maximized-change", false));
+
+  // Open external URLs (http/https) in the system default browser
+  win.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith("http://") || url.startsWith("https://")) {
+      shell.openExternal(url);
+      return { action: "deny" };
+    }
+    return { action: "allow" };
+  });
 
   return win;
 }
@@ -474,6 +484,12 @@ ipcMain.handle("desktop:get-roots", async () => {
 ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string, unknown>) => {
   const { resolve, dirname, join } = await import("node:path");
 
+  /** Build a clean env with GH_TOKEN/GITHUB_TOKEN removed so gh uses stored keyring credentials. */
+  const ghCleanEnv = (): NodeJS.ProcessEnv => {
+    const { GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
+    return rest;
+  };
+
   switch (op) {
     case "stat": {
       const filePath = resolve(params.path as string);
@@ -553,6 +569,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         cwd,
         timeout: 60_000,
         maxBuffer: 10 * 1024 * 1024,
+        env: ghCleanEnv(),
       });
       return { stdout, stderr };
     }
@@ -677,12 +694,13 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const ghExecLocal = async (args: string, timeout = 60_000) => {
         const { stdout } = await execP(`gh ${args}`, {
           cwd, timeout, maxBuffer: 10 * 1024 * 1024,
+          env: ghCleanEnv(),
         });
         return stdout.trim();
       };
 
       const ghIsAvailable = async () => {
-        try { await execP("gh --version", { cwd, timeout: 5_000 }); return true; } catch { return false; }
+        try { await execP("gh --version", { cwd, timeout: 5_000, env: ghCleanEnv() }); return true; } catch { return false; }
       };
 
       const result: Record<string, unknown> = {
@@ -899,7 +917,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const { exec: execGhCheck } = await import("node:child_process");
       const { promisify: promisifyGhCheck } = await import("node:util");
       const execGhC = promisifyGhCheck(execGhCheck);
-      const ghCheckEnv = { ...process.env, GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
+      const ghCheckEnv = ghCleanEnv();
 
       let installed = false;
       let authenticated = false;
@@ -968,7 +986,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       if (!token || typeof token !== "string") throw new Error("Missing token parameter");
 
       const { execSync: execGhSync } = await import("node:child_process");
-      const cleanEnv = { ...process.env, GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
+      const cleanEnv = ghCleanEnv();
 
       execGhSync("gh auth login --with-token", {
         input: token,

@@ -107,14 +107,19 @@ async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Pr
   return stdout.trim();
 }
 
+function ghCleanEnv(): NodeJS.ProcessEnv {
+  const { GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
+  return rest;
+}
+
 async function ghExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
-  const { stdout } = await exec(`gh ${args}`, { cwd, timeout });
+  const { stdout } = await exec(`gh ${args}`, { cwd, timeout, env: ghCleanEnv() });
   return stdout.trim();
 }
 
 async function ghAvailable(cwd: string): Promise<boolean> {
   try {
-    await exec("gh --version", { cwd, timeout: 5_000 });
+    await exec("gh --version", { cwd, timeout: 5_000, env: ghCleanEnv() });
     return true;
   } catch {
     return false;

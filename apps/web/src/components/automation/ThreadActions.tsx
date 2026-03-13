@@ -49,6 +49,7 @@ export function ThreadActions({
   const [diffOpen, setDiffOpen] = useState(false)
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
   const pendingPrAction = useRef(false)
+  const skipGhCheck = useRef(false)
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
     prUrl ? { url: prUrl, kind: 'created' } : null,
   )
@@ -85,17 +86,20 @@ export function ThreadActions({
 
     // Pre-check gh availability before attempting PR creation
     setBusy(true)
-    try {
-      const ghStatus = await gitApi.ghStatus(cwd)
-      if (!ghStatus.installed || !ghStatus.authenticated) {
-        setBusy(false)
-        pendingPrAction.current = true
-        setGhSetupOpen(true)
-        return
+    if (!skipGhCheck.current) {
+      try {
+        const ghStatus = await gitApi.ghStatus(cwd)
+        if (!ghStatus.installed || !ghStatus.authenticated) {
+          setBusy(false)
+          pendingPrAction.current = true
+          setGhSetupOpen(true)
+          return
+        }
+      } catch {
+        // If check fails, proceed anyway — the PR creation will give a specific error
       }
-    } catch {
-      // If check fails, proceed anyway — the PR creation will give a specific error
     }
+    skipGhCheck.current = false
 
     try {
       const commitMsg = threadTitle.replace(/^\[.*?\]\s*/, '')
@@ -120,6 +124,7 @@ export function ThreadActions({
   const handleGhReady = useCallback(() => {
     if (pendingPrAction.current) {
       pendingPrAction.current = false
+      skipGhCheck.current = true
       handlePushAndPR()
     }
   }, [handlePushAndPR])

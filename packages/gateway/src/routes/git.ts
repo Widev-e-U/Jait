@@ -397,7 +397,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       const { exec: execCmd } = await import("node:child_process");
       const { promisify } = await import("node:util");
       const execP = promisify(execCmd);
-      const ghCheckEnv = { ...process.env, GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
+      const { GH_TOKEN: _gt, GITHUB_TOKEN: _ght, ...ghCheckEnv } = process.env;
 
       let installed = false;
       let authenticated = false;
@@ -454,7 +454,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       }
       // Local auth
       const { execSync } = await import("node:child_process");
-      const cleanEnv = { ...process.env, GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
+      const { GH_TOKEN: _gt2, GITHUB_TOKEN: _ght2, ...cleanEnv } = process.env;
 
       execSync("gh auth login --with-token", {
         input: token,

@@ -72,6 +72,7 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
   const [diffOpen, setDiffOpen] = useState(false)
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
   const pendingPrAction = useRef<{ action: GitStackedAction; opts?: { commitMessage?: string; featureBranch?: boolean; forcePushOnly?: boolean } } | null>(null)
+  const skipGhCheck = useRef(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
   // ── Status refresh (event-driven, no polling) ─────────────────
@@ -122,7 +123,7 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
     opts?: { commitMessage?: string; featureBranch?: boolean; forcePushOnly?: boolean },
   ) => {
     // Pre-check gh for PR actions
-    if (action === 'commit_push_pr') {
+    if (action === 'commit_push_pr' && !skipGhCheck.current) {
       try {
         const ghStatus = await gitApi.ghStatus(cwd)
         if (!ghStatus.installed || !ghStatus.authenticated) {
@@ -134,6 +135,7 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
         // If check fails, proceed anyway
       }
     }
+    skipGhCheck.current = false
 
     setIsBusy(true)
     setMenuOpen(false)
@@ -220,6 +222,7 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
     if (pendingPrAction.current) {
       const { action, opts } = pendingPrAction.current
       pendingPrAction.current = null
+      skipGhCheck.current = true
       runStackedAction(action, opts)
     }
   }, [runStackedAction])

@@ -17,7 +17,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Loader2, CheckCircle2, XCircle, ExternalLink } from 'lucide-react'
+import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
 import { gitApi, type GhStatusResult } from '@/lib/git-api'
 
 type Step = 'checking' | 'not-installed' | 'not-authenticated' | 'authenticating' | 'success' | 'error'
@@ -106,34 +106,15 @@ export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialo
           </div>
         )}
 
-        {/* Not installed */}
-        {step === 'not-installed' && (
+        {/* Not installed or not authenticated — show token input for both */}
+        {(step === 'not-installed' || step === 'not-authenticated') && (
           <div className="space-y-4 py-2">
             <div className="flex items-start gap-3">
-              <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
+              <XCircle className={`h-5 w-5 mt-0.5 shrink-0 ${step === 'not-installed' ? 'text-red-500' : 'text-amber-500'}`} />
               <div className="space-y-1">
-                <p className="text-sm font-medium">GitHub CLI is not installed</p>
-                <p className="text-xs text-muted-foreground">
-                  Install it from the official site, then click &quot;Re-check&quot; below.
+                <p className="text-sm font-medium">
+                  {step === 'not-installed' ? 'GitHub CLI not detected' : 'GitHub CLI is not authenticated'}
                 </p>
-              </div>
-            </div>
-            <Button variant="outline" size="sm" className="gap-1.5" asChild>
-              <a href="https://cli.github.com" target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-3.5 w-3.5" />
-                Download GitHub CLI
-              </a>
-            </Button>
-          </div>
-        )}
-
-        {/* Not authenticated */}
-        {step === 'not-authenticated' && (
-          <div className="space-y-4 py-2">
-            <div className="flex items-start gap-3">
-              <XCircle className="h-5 w-5 text-amber-500 mt-0.5 shrink-0" />
-              <div className="space-y-1">
-                <p className="text-sm font-medium">GitHub CLI is not authenticated</p>
                 <p className="text-xs text-muted-foreground">
                   Paste a Personal Access Token with <code className="text-xs">repo</code> scope to sign in.
                 </p>
@@ -165,6 +146,19 @@ export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialo
                 For fine-grained tokens, grant Contents + Pull Requests read/write access.
               </p>
             </div>
+            {step === 'not-installed' && (
+              <p className="text-[10px] text-muted-foreground">
+                If <code className="text-[10px]">gh</code> is not installed,{' '}
+                <a
+                  href="https://cli.github.com"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline hover:text-foreground"
+                >
+                  download it here
+                </a>.
+              </p>
+            )}
             {error && (
               <p className="text-xs text-red-500">{error}</p>
             )}
@@ -206,19 +200,21 @@ export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialo
         )}
 
         <DialogFooter>
-          {(step === 'not-installed' || step === 'error') && (
-            <Button variant="outline" size="sm" onClick={checkStatus}>
-              Re-check
-            </Button>
-          )}
-          {step === 'not-authenticated' && (
-            <Button
-              size="sm"
-              disabled={!token.trim()}
-              onClick={handleAuth}
-            >
-              Sign in
-            </Button>
+          {(step === 'not-installed' || step === 'not-authenticated' || step === 'error') && (
+            <>
+              {step === 'error' && (
+                <Button variant="outline" size="sm" onClick={checkStatus}>
+                  Re-check
+                </Button>
+              )}
+              <Button
+                size="sm"
+                disabled={!token.trim()}
+                onClick={handleAuth}
+              >
+                Sign in
+              </Button>
+            </>
           )}
           {step === 'success' && (
             <Button size="sm" onClick={handleProceed}>
