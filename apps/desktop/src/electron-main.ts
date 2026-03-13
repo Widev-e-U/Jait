@@ -966,20 +966,21 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const token = params.token as string;
       if (!token || typeof token !== "string") throw new Error("Missing token parameter");
 
-      const { exec: execGhAuth } = await import("node:child_process");
-      const { promisify: promisifyGhAuth } = await import("node:util");
-      const execGhA = promisifyGhAuth(execGhAuth);
+      const { execSync: execGhSync } = await import("node:child_process");
+      const cleanEnv = { ...process.env, GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
 
-      // Pipe token into gh auth login --with-token
-      await execGhA(`echo ${token} | gh auth login --with-token`, {
+      execGhSync("gh auth login --with-token", {
+        input: token,
         timeout: 30_000,
+        env: cleanEnv,
+        stdio: ["pipe", "pipe", "pipe"],
       });
 
       // Verify authentication
       let username: string | null = null;
       try {
-        const { stdout } = await execGhA("gh api user --jq .login", { timeout: 10_000 });
-        username = stdout.trim() || null;
+        const out = execGhSync("gh api user --jq .login", { timeout: 10_000, env: cleanEnv });
+        username = out.toString().trim() || null;
       } catch { /* verification failed but auth might still be ok */ }
 
       return { ok: true, username };

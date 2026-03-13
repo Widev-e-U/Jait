@@ -442,16 +442,20 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
         return result;
       }
       // Local auth
-      const { exec: execCmd } = await import("node:child_process");
-      const { promisify } = await import("node:util");
-      const execP = promisify(execCmd);
+      const { execSync } = await import("node:child_process");
+      const cleanEnv = { ...process.env, GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
 
-      await execP(`echo ${token} | gh auth login --with-token`, { timeout: 30_000 });
+      execSync("gh auth login --with-token", {
+        input: token,
+        timeout: 30_000,
+        env: cleanEnv,
+        stdio: ["pipe", "pipe", "pipe"],
+      });
 
       let username: string | null = null;
       try {
-        const { stdout } = await execP("gh api user --jq .login", { timeout: 10_000 });
-        username = stdout.trim() || null;
+        const out = execSync("gh api user --jq .login", { timeout: 10_000, env: cleanEnv });
+        username = out.toString().trim() || null;
       } catch { /* */ }
 
       return { ok: true, username };
