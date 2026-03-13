@@ -1,6 +1,7 @@
 {
   "appId": "dev.jait.desktop",
   "productName": "Jait",
+  "npmRebuild": false,
   "directories": {
     "output": "release",
     "buildResources": "assets"
