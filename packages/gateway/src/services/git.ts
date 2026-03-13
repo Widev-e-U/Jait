@@ -49,6 +49,8 @@ export interface GitStatusResult {
   pr: GitStatusPr | null;
   /** Whether GitHub CLI (`gh`) is installed and authenticated. */
   ghAvailable: boolean;
+  /** HTTPS remote URL for the primary remote (origin/Jait/etc.) */
+  remoteUrl: string | null;
 }
 
 export interface GitBranch {
@@ -215,6 +217,7 @@ export class GitService {
         behindCount: 0,
         pr: null,
         ghAvailable: false,
+        remoteUrl: null,
       };
     }
 
@@ -312,6 +315,13 @@ export class GitService {
       } catch { /* gh not available or no PR */ }
     }
 
+    // Resolve remote URL
+    let remoteUrl: string | null = null;
+    try {
+      const preferredRemote = await this.getPreferredRemote(cwd, branch ?? undefined);
+      remoteUrl = await this.getRemoteUrl(cwd, preferredRemote ?? "origin");
+    } catch { /* no remote */ }
+
     return {
       branch,
       hasWorkingTreeChanges: hasChanges,
@@ -321,6 +331,7 @@ export class GitService {
       behindCount,
       pr,
       ghAvailable: ghIsAvailable,
+      remoteUrl,
     };
   }
 
@@ -607,6 +618,41 @@ export class GitService {
 
   async createBranch(cwd: string, branch: string): Promise<void> {
     await gitExec(cwd, `checkout -b "${branch}"`);
+  }
+
+  // ── Clone operations ──────────────────────────────────────────
+
+  /**
+   * Clone a GitHub repo to a local path for gateway-side operation.
+   * Clones live under ~/.jait/clones/{repoName}.
+   * If the clone already exists, fetches the latest instead.
+   * Returns the path to the clone.
+   */
+  async cloneOrFetch(
+    repoUrl: string,
+    repoName: string,
+    defaultBranch = "main",
+  ): Promise<string> {
+    const clonePath = join(homedir(), ".jait", "clones", repoName);
+
+    if (existsSync(join(clonePath, ".git"))) {
+      // Already cloned — fetch latest
+      await gitExec(clonePath, "fetch origin", 60_000);
+      await gitExec(clonePath, `checkout "${defaultBranch}"`, 30_000).catch(() => {});
+      await gitExec(clonePath, `reset --hard "origin/${defaultBranch}"`, 30_000).catch(() => {});
+      return clonePath;
+    }
+
+    // Fresh clone
+    await mkdir(join(clonePath, ".."), { recursive: true });
+    const { exec: execP } = await import("node:child_process");
+    const { promisify: pfy } = await import("node:util");
+    const run = pfy(execP);
+    await run(`git clone --branch "${defaultBranch}" "${repoUrl}" "${clonePath}"`, {
+      timeout: 120_000,
+    });
+
+    return clonePath;
   }
 
   // ── Worktree operations ───────────────────────────────────────

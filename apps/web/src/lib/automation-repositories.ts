@@ -8,6 +8,7 @@ export interface AutomationRepository {
   defaultBranch: string
   localPath: string
   deviceId?: string | null
+  githubUrl?: string | null
   source: AutomationRepositorySource
 }
 

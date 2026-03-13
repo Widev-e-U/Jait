@@ -218,6 +218,7 @@ export const automationRepositories = sqliteTable(
     name: text("name").notNull(),
     defaultBranch: text("default_branch").notNull().default("main"),
     localPath: text("local_path").notNull(),
+    githubUrl: text("github_url"), // HTTPS clone URL for gateway-side cloning
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },

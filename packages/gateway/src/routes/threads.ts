@@ -29,6 +29,7 @@ import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
+import type { RepositoryService } from "../services/repositories.js";
 import { existsSync } from "node:fs";
 import {
   generateTitleViaTurn,
@@ -41,6 +42,7 @@ export interface ThreadRouteDeps {
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
   userService?: UserService;
+  repoService?: RepositoryService;
   ws?: WsControlPlane;
   gitService?: {
     runStackedAction(
@@ -61,6 +63,7 @@ export function registerThreadRoutes(
 ): void {
   const { threadService, providerRegistry, ws } = deps;
   const gitService = deps.gitService ?? new GitService();
+  const repoService = deps.repoService;
 
   // Track active onEvent unsubscribe functions per thread so we can clean up
   const threadUnsubs = new Map<string, () => void>();
@@ -268,7 +271,57 @@ export function registerThreadRoutes(
 
     // Fall back to cwd only for local providers with non-existent paths
     if (!pathExistsLocally && !isRemote) {
-      workingDirectory = process.cwd();
+      // Check if the caller wants to clone the repo to the gateway
+      const cloneToGateway = body["cloneToGateway"] === true;
+
+      if (!cloneToGateway) {
+        // Return a structured error so the frontend can offer to clone
+        return reply.status(422).send({
+          error: "The repo path is not accessible on this gateway and no desktop app is connected. You can clone the repo to the gateway to proceed.",
+          code: "NODE_OFFLINE",
+          workingDirectory,
+          threadId: id,
+        });
+      }
+
+      // Clone-to-gateway: find the matching repo for its GitHub URL
+      const matchingRepo = repoService
+        ? (repoService.list().find((r) =>
+          workingDirectory.startsWith(r.localPath) || workingDirectory.includes(r.name),
+        ) ?? null)
+        : null;
+
+      const repoUrl =
+        (typeof body["repoUrl"] === "string" ? body["repoUrl"] : null) ??
+        (matchingRepo as Record<string, unknown> | null)?.["githubUrl"] as string | null;
+
+      if (!repoUrl) {
+        return reply.status(400).send({
+          error: "Cannot clone: no GitHub URL available. Register the repo with a GitHub URL first.",
+          code: "NO_REPO_URL",
+        });
+      }
+
+      const repoName = matchingRepo?.name ?? "repo";
+      const defaultBranch = matchingRepo?.defaultBranch ?? "main";
+      const localGit = new GitService();
+
+      try {
+        // Clone or update the repo on the gateway
+        const clonePath = await localGit.cloneOrFetch(repoUrl, repoName, defaultBranch);
+
+        // Create a worktree for this thread's branch
+        const branch = thread.branch ?? `jait/${id.slice(-8)}`;
+        const wt = await localGit.createWorktree(clonePath, defaultBranch, branch);
+        workingDirectory = wt.path;
+
+        // Update the thread record with the gateway-local working directory
+        threadService.update(id, { workingDirectory, branch });
+      } catch (err) {
+        return reply.status(500).send({
+          error: `Failed to clone repo to gateway: ${err instanceof Error ? err.message : String(err)}`,
+        });
+      }
     }
 
     // Check availability

@@ -69,6 +69,7 @@ function dbRepoToLocal(repo: AutomationRepo, localDeviceId: string): RepositoryC
     defaultBranch: repo.defaultBranch,
     localPath: repo.localPath,
     deviceId: repo.deviceId,
+    githubUrl: repo.githubUrl,
     source: (!repo.deviceId || repo.deviceId === localDeviceId) ? 'local' : 'shared',
   }
 }
@@ -415,9 +416,11 @@ export function useAutomation(enabled = true) {
       }
 
       let branch = 'main'
+      let githubUrl: string | undefined
       try {
         const status = await gitApi.status(path)
         if (status.branch) branch = status.branch
+        if (status.remoteUrl) githubUrl = status.remoteUrl
       } catch {
         /* fall back to 'main' */
       }
@@ -428,6 +431,7 @@ export function useAutomation(enabled = true) {
           defaultBranch: branch,
           localPath: path,
           deviceId: localDeviceId,
+          githubUrl,
         })
         // Optimistically add; WS event will deduplicate
         const repo = dbRepoToLocal(created, localDeviceId)
@@ -474,10 +478,31 @@ export function useAutomation(enabled = true) {
           selectedThread.status === 'interrupted')
       ) {
         // Re-start the existing thread (worktree is still available)
-        const updated = await agentsApi.startThread(selectedThread.id, text)
-        // Immediately reflect the running status without waiting for WS
-        setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
-        void refresh()
+        try {
+          const updated = await agentsApi.startThread(selectedThread.id, text)
+          setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
+          void refresh()
+        } catch (startErr) {
+          const code = (startErr as Error & { code?: string }).code
+          if (code === 'NODE_OFFLINE' && selectedRepo) {
+            const githubUrl = (selectedRepo as { githubUrl?: string | null }).githubUrl
+            if (githubUrl && confirm(
+              'The desktop app is not connected. Clone the repo to the gateway and run the thread there?',
+            )) {
+              const updated = await agentsApi.startThread(selectedThread.id, {
+                message: text,
+                cloneToGateway: true,
+                repoUrl: githubUrl,
+              })
+              setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
+              void refresh()
+            } else if (!githubUrl) {
+              setError('Desktop app is offline and no GitHub URL is configured for this repo.')
+            }
+          } else {
+            throw startErr
+          }
+        }
       } else {
         if (!selectedRepo) return
 
@@ -515,11 +540,35 @@ export function useAutomation(enabled = true) {
               workingDirectory: worktreePath ?? repo.localPath,
               branch: branchName,
             })
-            await agentsApi.startThread(thread.id, {
-              message: text,
-              titleTask: text,
-              titlePrefix: `[${repo.name}] `,
-            })
+            try {
+              await agentsApi.startThread(thread.id, {
+                message: text,
+                titleTask: text,
+                titlePrefix: `[${repo.name}] `,
+              })
+            } catch (startErr) {
+              // If the desktop app is offline, offer to clone the repo to the gateway
+              const code = (startErr as Error & { code?: string }).code
+              if (code === 'NODE_OFFLINE') {
+                const githubUrl = (repo as { githubUrl?: string | null }).githubUrl
+                if (githubUrl && confirm(
+                  'The desktop app is not connected. Clone the repo to the gateway and run the thread there?',
+                )) {
+                  await agentsApi.startThread(thread.id, {
+                    message: text,
+                    titleTask: text,
+                    titlePrefix: `[${repo.name}] `,
+                    cloneToGateway: true,
+                    repoUrl: githubUrl,
+                  })
+                } else if (!githubUrl) {
+                  setError('Desktop app is offline and no GitHub URL is configured for this repo. Open the desktop app first.')
+                }
+                // If user cancelled the confirm, just leave the thread idle
+                return
+              }
+              throw startErr
+            }
           } catch (err) {
             setError(err instanceof Error ? err.message : 'Failed to create thread')
           }

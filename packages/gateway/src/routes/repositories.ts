@@ -57,6 +57,7 @@ export function registerRepoRoutes(
       defaultBranch?: string;
       localPath: string;
       deviceId?: string;
+      githubUrl?: string;
     };
 
     if (!body.name || !body.localPath) {
@@ -83,6 +84,7 @@ export function registerRepoRoutes(
       name: body.name,
       defaultBranch: body.defaultBranch,
       localPath: body.localPath,
+      githubUrl: body.githubUrl,
     });
 
     broadcastRepoEvent("created", { repo });
@@ -99,6 +101,7 @@ export function registerRepoRoutes(
       name?: string;
       defaultBranch?: string;
       localPath?: string;
+      githubUrl?: string;
     };
 
     const repo = repoService.update(request.params.id, body);

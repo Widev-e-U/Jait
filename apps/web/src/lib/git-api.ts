@@ -41,6 +41,8 @@ export interface GitStatusResult {
   pr: GitStatusPr | null
   /** Whether GitHub CLI (`gh`) is installed and authenticated on the server. */
   ghAvailable: boolean
+  /** HTTPS remote URL for the primary remote. */
+  remoteUrl: string | null
 }
 
 export interface GitBranch {

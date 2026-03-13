@@ -320,4 +320,15 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 012: Add github_url to automation repositories ──────────────
+  {
+    id: 12,
+    name: "automation_repositories_github_url",
+    run(db) {
+      try {
+        db.exec(`ALTER TABLE automation_repositories ADD COLUMN github_url TEXT`);
+      } catch { /* column already exists */ }
+    },
+  },
+
 ];

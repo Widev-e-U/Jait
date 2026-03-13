@@ -17,6 +17,7 @@ export interface CreateRepoParams {
   name: string;
   defaultBranch?: string;
   localPath: string;
+  githubUrl?: string;
 }
 
 export interface UpdateRepoParams {
@@ -24,6 +25,7 @@ export interface UpdateRepoParams {
   defaultBranch?: string;
   localPath?: string;
   deviceId?: string;
+  githubUrl?: string;
 }
 
 export type RepoRow = typeof automationRepositories.$inferSelect;
@@ -45,6 +47,7 @@ export class RepositoryService {
         name: params.name,
         defaultBranch: params.defaultBranch ?? "main",
         localPath: params.localPath,
+        githubUrl: params.githubUrl ?? null,
         createdAt: now,
         updatedAt: now,
       })

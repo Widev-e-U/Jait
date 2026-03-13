@@ -86,6 +86,8 @@ export interface StartThreadOptions {
   message?: string
   titlePrefix?: string
   titleTask?: string
+  cloneToGateway?: boolean
+  repoUrl?: string
 }
 
 export interface CreateThreadPrRequest {
@@ -107,6 +109,7 @@ export interface AutomationRepo {
   name: string
   defaultBranch: string
   localPath: string
+  githubUrl: string | null
   createdAt: string
   updatedAt: string
 }
@@ -116,6 +119,7 @@ export interface CreateRepoRequest {
   defaultBranch?: string
   localPath: string
   deviceId?: string
+  githubUrl?: string
 }
 
 export interface UpdateRepoRequest {
@@ -225,7 +229,9 @@ export class AgentsApi {
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({})) as Record<string, unknown>
-      throw new Error((err.error as string) || `Failed to start thread: ${res.statusText}`)
+      const error = new Error((err.error as string) || `Failed to start thread: ${res.statusText}`) as Error & { code?: string }
+      if (err.code) error.code = err.code as string
+      throw error
     }
     return res.json() as Promise<AgentThread>
   }
