@@ -1,13 +1,17 @@
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SandboxManager } from "./security/sandbox-manager.js";
 import { createTerminalRunTool } from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { createBrowserSandboxStartTool } from "./tools/browser-tools.js";
 
+const testWorkspace = join(tmpdir(), "jait-test-sandbox");
+
 const baseContext = {
   actionId: "a1",
   sessionId: "s1",
-  workspaceRoot: "/workspace/Jait",
+  workspaceRoot: testWorkspace,
   requestedBy: "test",
 };
 
@@ -46,7 +50,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
 
     const result = await manager.runCommand({
       command: "sleep 99",
-      workspaceRoot: "/workspace/Jait",
+      workspaceRoot: testWorkspace,
       timeoutMs: 1000,
       mountMode: "read-only",
       networkEnabled: false,
