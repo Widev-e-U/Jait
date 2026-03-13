@@ -720,7 +720,7 @@ export function registerThreadRoutes(
     const remoteProviders: { nodeId: string; nodeName: string; platform: string; providers: string[] }[] = [];
     if (ws) {
       for (const node of ws.getFsNodes()) {
-        if (node.isGateway || !node.providers?.length) continue;
+        if (node.isGateway) continue;
         remoteProviders.push({
           nodeId: node.id,
           nodeName: node.name,

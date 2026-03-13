@@ -90,10 +90,11 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
         } catch { /* fallback to false */ }
         // Check PR status via remote node's gh cli
         let pr: { number: number; title: string; url: string; baseBranch: string; headBranch: string; state: "open" | "closed" | "merged" } | null = null;
-        if (ghAvailable && currentBranch) {
+        const prBranch = branch ?? currentBranch;
+        if (ghAvailable && prBranch) {
           try {
             const prResult = await ws.proxyFsOp<{ number: number; title: string; url: string; baseBranch: string; headBranch: string; state: "open" | "closed" | "merged" } | null>(
-              remoteNodeId, "gh-pr-view", { branch: currentBranch, cwd }, 15_000,
+              remoteNodeId, "gh-pr-view", { branch: prBranch, cwd }, 15_000,
             );
             if (prResult) pr = prResult;
           } catch { /* no PR or gh error */ }

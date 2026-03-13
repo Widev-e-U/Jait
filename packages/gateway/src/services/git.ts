@@ -209,7 +209,7 @@ export class GitService {
     await gitExec(cwd, "init");
   }
 
-  async status(cwd: string, _branch?: string, githubToken?: string): Promise<GitStatusResult> {
+  async status(cwd: string, requestedBranch?: string, githubToken?: string): Promise<GitStatusResult> {
     const effectiveToken = await resolveGithubTokenWithFallback(githubToken);
     const isGit = await this.isRepo(cwd);
     if (!isGit) {
@@ -283,14 +283,15 @@ export class GitService {
     // PR status (via gh cli)
     let pr: GitStatusPr | null = null;
     let ghIsAvailable = false;
-    if (branch) {
+    const prBranch = requestedBranch ?? branch;
+    if (prBranch) {
       try {
         const hasGh = await ghAvailable(cwd);
         ghIsAvailable = hasGh;
         if (hasGh) {
           const json = await ghExec(
             cwd,
-            `pr view "${branch}" --json number,title,url,state,baseRefName,headRefName`,
+            `pr view "${prBranch}" --json number,title,url,state,baseRefName,headRefName`,
           );
           if (json) {
             const parsed = JSON.parse(json) as Record<string, unknown>;
@@ -308,11 +309,11 @@ export class GitService {
           }
         } else {
           if (effectiveToken) {
-            const remoteName = await this.getPreferredRemote(cwd, branch);
+            const remoteName = await this.getPreferredRemote(cwd, prBranch);
             const remoteUrl = await this.getRemoteUrl(cwd, remoteName ?? "");
             const githubRemote = parseGithubRemote(remoteUrl);
             if (githubRemote) {
-              const apiPr = await this.fetchGithubPrByHead(githubRemote, effectiveToken, branch);
+              const apiPr = await this.fetchGithubPrByHead(githubRemote, effectiveToken, prBranch);
               if (apiPr) pr = apiPr;
             }
           }
