@@ -131,11 +131,11 @@ jobs:
       - run: bun run build
       - name: Check Wine for Windows cross-compile
         run: |
-          if ! command -v wine64 &>/dev/null; then
+          if ! command -v wine &>/dev/null; then
             echo "::error::Wine is not installed. Install it on the runner: sudo apt install -y wine64"
             exit 1
           fi
-          echo "Wine found: $(wine64 --version)"
+          echo "Wine found: $(wine --version)"
       - name: Build Electron (Linux)
         working-directory: apps/desktop
         run: bun run build:linux
