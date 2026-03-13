@@ -387,6 +387,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       const { exec: execCmd } = await import("node:child_process");
       const { promisify } = await import("node:util");
       const execP = promisify(execCmd);
+      const ghCheckEnv = { ...process.env, GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
 
       let installed = false;
       let authenticated = false;
@@ -399,7 +400,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
 
       if (installed) {
         try {
-          const { stdout, stderr } = await execP("gh auth status 2>&1", { timeout: 10_000 });
+          const { stdout, stderr } = await execP("gh auth status", { timeout: 10_000, env: ghCheckEnv });
           const out = (stdout ?? "") + (stderr ?? "");
           if (out.includes("Logged in")) {
             authenticated = true;

@@ -899,6 +899,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const { exec: execGhCheck } = await import("node:child_process");
       const { promisify: promisifyGhCheck } = await import("node:util");
       const execGhC = promisifyGhCheck(execGhCheck);
+      const ghCheckEnv = { ...process.env, GH_TOKEN: undefined, GITHUB_TOKEN: undefined };
 
       let installed = false;
       let authenticated = false;
@@ -911,8 +912,8 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
       if (installed) {
         try {
-          const { stdout } = await execGhC("gh auth status 2>&1", { timeout: 10_000 });
-          const out = stdout.toString();
+          const { stdout, stderr } = await execGhC("gh auth status", { timeout: 10_000, env: ghCheckEnv });
+          const out = (stdout ?? "") + (stderr ?? "");
           if (out.includes("Logged in")) {
             authenticated = true;
             const match = out.match(/Logged in to .+ account (\S+)/);
