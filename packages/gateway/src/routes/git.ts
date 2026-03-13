@@ -39,6 +39,16 @@ function findRemoteNodeForCwd(ws: WsControlPlane | undefined, cwd: string): stri
   return null;
 }
 
+/** Find any connected remote fs node (for gh CLI ops that don't need a cwd). */
+function findAnyRemoteNode(ws: WsControlPlane | undefined): string | null {
+  if (!ws) return null;
+  for (const node of ws.getFsNodes()) {
+    if (node.isGateway) continue;
+    return node.id;
+  }
+  return null;
+}
+
 export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: WsControlPlane): void {
   const git = new GitService();
 
@@ -376,7 +386,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
     const cwd = body.cwd ?? "";
 
     try {
-      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : null;
+      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : findAnyRemoteNode(ws);
       if (remoteNodeId && ws) {
         const result = await ws.proxyFsOp<{ installed: boolean; authenticated: boolean; username: string | null }>(
           remoteNodeId, "gh-check", {}, 15_000,
@@ -435,7 +445,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
     }
 
     try {
-      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : null;
+      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : findAnyRemoteNode(ws);
       if (remoteNodeId && ws) {
         const result = await ws.proxyFsOp<{ ok: boolean; username: string | null }>(
           remoteNodeId, "gh-auth-token", { token }, 30_000,
