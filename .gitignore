@@ -25,6 +25,7 @@ apps/*/src/**/*.js
 apps/*/src/**/*.js.map
 apps/*/src/**/*.d.ts
 apps/*/src/**/*.d.ts.map
+!apps/web/src/global.d.ts
 
 # IDE
 .idea/
