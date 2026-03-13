@@ -1,5 +1,7 @@
 import type { AgentThread } from './agents-api'
 import {
+  buildRepositoryFallbackUnavailableMessage,
+  getRepositoryRuntimeInfo,
   inferSharedRepositories,
   inferThreadRepositoryName,
   threadBelongsToRepository,
@@ -63,5 +65,55 @@ describe('automation repositories', () => {
 
     expect(threadBelongsToRepository(thread, repository)).toBe(true)
     expect(inferSharedRepositories([thread], [repository])).toEqual([])
+  })
+
+  it('reports remote CLI providers for a repository host device', () => {
+    const repository: AutomationRepository = {
+      id: 'repo-2',
+      name: 'Remote Repo',
+      defaultBranch: 'main',
+      localPath: '/remote/repo',
+      deviceId: 'desktop-1',
+      source: 'shared',
+    }
+
+    expect(getRepositoryRuntimeInfo(repository, {
+      localDeviceId: 'browser-1',
+      localProviders: [],
+      remoteProviders: [
+        {
+          nodeId: 'desktop-1',
+          nodeName: 'Desktop (Windows)',
+          platform: 'windows',
+          providers: ['codex', 'claude-code'],
+        },
+      ],
+    })).toEqual({
+      hostType: 'device',
+      locationLabel: 'Desktop (Windows)',
+      online: true,
+      availableProviders: ['codex', 'claude-code'],
+    })
+  })
+
+  it('returns a clearer fallback message when a repo host is offline', () => {
+    const repository: AutomationRepository = {
+      id: 'repo-3',
+      name: 'Offline Repo',
+      defaultBranch: 'main',
+      localPath: '/offline/repo',
+      deviceId: 'desktop-2',
+      githubUrl: null,
+      source: 'shared',
+    }
+    const runtime = getRepositoryRuntimeInfo(repository, {
+      localDeviceId: 'browser-1',
+      localProviders: [],
+      remoteProviders: [],
+    })
+
+    expect(buildRepositoryFallbackUnavailableMessage(repository, runtime)).toBe(
+      'Desktop app is offline and no GitHub URL is configured for gateway fallback. Reconnect it or pick a connected repo/device.',
+    )
   })
 })
