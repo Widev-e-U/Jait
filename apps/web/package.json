@@ -23,6 +23,8 @@
     "@jait/api-client": "workspace:*",
     "@jait/shared": "workspace:*",
     "@jait/ui-shared": "workspace:*",
+    "@llm-ui/markdown": "^0.13.3",
+    "@llm-ui/react": "^0.13.3",
     "@lobehub/icons": "^4.9.0",
     "@monaco-editor/react": "^4.7.0",
     "@radix-ui/react-avatar": "^1.1.11",

@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "jait",
@@ -58,12 +59,14 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.28",
+      "version": "0.1.31",
       "dependencies": {
         "@capacitor/filesystem": "^6.0.0",
         "@jait/api-client": "workspace:*",
         "@jait/shared": "workspace:*",
         "@jait/ui-shared": "workspace:*",
+        "@llm-ui/markdown": "^0.13.3",
+        "@llm-ui/react": "^0.13.3",
         "@lobehub/icons": "^4.9.0",
         "@monaco-editor/react": "^4.7.0",
         "@radix-ui/react-avatar": "^1.1.11",
@@ -134,7 +137,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.46",
+      "version": "0.1.49",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -766,6 +769,10 @@
     "@lit-labs/ssr-dom-shim": ["@lit-labs/ssr-dom-shim@1.5.1", "", {}, "sha512-Aou5UdlSpr5whQe8AA/bZG0jMj96CoJIWbGfZ91qieWu5AWUMKw8VR/pAkQkJYvBNhmCcWnZlyyk5oze8JIqYA=="],
 
     "@lit/reactive-element": ["@lit/reactive-element@2.1.2", "", { "dependencies": { "@lit-labs/ssr-dom-shim": "^1.5.0" } }, "sha512-pbCDiVMnne1lYUIaYNN5wrwQXDtHaYtg7YEFPeW+hws6U47WeFvISGUWekPGKWOP1ygrs0ef0o1VJMk1exos5A=="],
+
+    "@llm-ui/markdown": ["@llm-ui/markdown@0.13.3", "", { "dependencies": { "@llm-ui/react": "0.13.3", "mdast-util-from-markdown": "^2.0.0", "mdast-util-gfm": "^3.0.0", "mdast-util-to-markdown": "^2.1.0", "micromark-extension-gfm": "^3.0.0", "remeda": "^1.57.0", "unist-util-visit": "^5.0.0" }, "peerDependencies": { "react": "^18.0.0" } }, "sha512-7wXte9RXQosSFKneYnVwnxUvwIgov7bE04nqA6PjMBDqxxeSI3FD5TFzrpBMj6+TN2Urraj5iJWaL4IdCQNtsA=="],
+
+    "@llm-ui/react": ["@llm-ui/react@0.13.3", "", { "dependencies": { "remeda": "^1.57.0" }, "peerDependencies": { "react": "^18.0.0" } }, "sha512-b5UtUl8KZp+P4VyAypNqGnSv8jZVJlyYrH8wvOQNIa9x/Y3H4zWiSNTV5BYk5rOJ7WPDCruvLJX/G87+HR1gog=="],
 
     "@lobehub/emojilib": ["@lobehub/emojilib@1.0.0", "", {}, "sha512-s9KnjaPjsEefaNv150G3aifvB+J3P4eEKG+epY9zDPS2BeB6+V2jELWqAZll+nkogMaVovjEE813z3V751QwGw=="],
 
@@ -3100,6 +3107,8 @@
     "remark-rehype": ["remark-rehype@11.1.2", "", { "dependencies": { "@types/hast": "^3.0.0", "@types/mdast": "^4.0.0", "mdast-util-to-hast": "^13.0.0", "unified": "^11.0.0", "vfile": "^6.0.0" } }, "sha512-Dh7l57ianaEoIpzbp0PC9UKAdCSVklD8E5Rpw7ETfbTl3FqcOOgq5q2LVDhgGCkaBv7p24JXikPdvhhmHvKMsw=="],
 
     "remark-stringify": ["remark-stringify@11.0.0", "", { "dependencies": { "@types/mdast": "^4.0.0", "mdast-util-to-markdown": "^2.0.0", "unified": "^11.0.0" } }, "sha512-1OSmLd3awB/t8qdoEOMazZkNsfVTeY4fTsgzcQFdXNq8ToTN4ZGwrMnlda4K6smTFKD+GRV6O48i6Z4iKgPPpw=="],
+
+    "remeda": ["remeda@1.61.0", "", {}, "sha512-caKfSz9rDeSKBQQnlJnVW3mbVdFgxgGWQKq1XlFokqjf+hQD5gxutLGTTY2A/x24UxVyJe9gH5fAkFI63ULw4A=="],
 
     "remend": ["remend@1.2.2", "", {}, "sha512-4ZJgIB9EG9fQE41mOJCRHMmnxDTKHWawQoJWZyUbZuj680wVyogu2ihnj8Edqm7vh2mo/TWHyEZpn2kqeDvS7w=="],
 

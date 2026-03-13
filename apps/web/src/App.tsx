@@ -415,6 +415,128 @@ function ManagerThreadListItem({
   )
 }
 
+interface ManagerActiveThreadsMenuProps {
+  threads: AgentThread[]
+  getRepositoryForThread: (thread: Pick<AgentThread, 'title' | 'workingDirectory'>) => AutomationRepository | null
+  ghAvailable: boolean
+  onOpenThread: (threadId: string) => void
+  onStopThread: (threadId: string) => void
+}
+
+function ManagerActiveThreadsMenu({
+  threads,
+  getRepositoryForThread,
+  ghAvailable,
+  onOpenThread,
+  onStopThread,
+}: ManagerActiveThreadsMenuProps) {
+  const [open, setOpen] = useState(false)
+
+  if (threads.length === 0) return null
+
+  return (
+    <DropdownMenu open={open} onOpenChange={setOpen}>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 rounded-lg px-2 text-xs"
+          title={`${threads.length} active ${threads.length === 1 ? 'thread' : 'threads'}`}
+        >
+          <SpinnerIcon className="h-3.5 w-3.5 animate-spin text-blue-500" />
+          <span className="hidden sm:inline">Active</span>
+          <Badge variant="secondary" className="h-4 rounded-md px-1 text-[10px]">
+            {threads.length}
+          </Badge>
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-[min(34rem,calc(100vw-1rem))] p-0">
+        <div className="flex items-center justify-between border-b px-3 py-2">
+          <div className="flex items-center gap-2">
+            <SpinnerIcon className="h-3.5 w-3.5 animate-spin text-blue-500" />
+            <span className="text-sm font-medium">
+              {threads.length} active {threads.length === 1 ? 'thread' : 'threads'}
+            </span>
+          </div>
+        </div>
+        <div className="max-h-[min(28rem,70vh)] overflow-y-auto">
+          {threads.map((thread) => {
+            const repo = getRepositoryForThread(thread)
+            const repoName = repo?.name ?? inferThreadRepositoryName(thread) ?? 'Unknown repo'
+
+            return (
+              <div
+                key={thread.id}
+                className="grid grid-cols-[minmax(0,1fr)_auto] gap-3 border-b px-3 py-3 last:border-b-0"
+              >
+                <button
+                  type="button"
+                  className="min-w-0 text-left transition-colors hover:text-foreground"
+                  onClick={() => {
+                    setOpen(false)
+                    onOpenThread(thread.id)
+                  }}
+                >
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <ManagerStatusDot status={thread.status} />
+                    <span className="truncate text-sm font-medium">
+                      {isTitlePending(thread.title)
+                        ? 'Generating title...'
+                        : thread.title.replace(/^\[.*?\]\s*/, '')}
+                    </span>
+                  </div>
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                    <span className="truncate">{repoName}</span>
+                    {thread.branch && (
+                      <Badge variant="outline" className="h-4 px-1 py-0 font-mono text-[9px]">
+                        {thread.branch}
+                      </Badge>
+                    )}
+                    <ThreadPrBadge prState={thread.prState} />
+                  </div>
+                </button>
+                <div className="flex items-center gap-1 self-start">
+                  {repo && (
+                    <div
+                      onClick={(event) => event.stopPropagation()}
+                      onMouseDown={(event) => event.stopPropagation()}
+                    >
+                      <ThreadActions
+                        threadId={thread.id}
+                        cwd={thread.workingDirectory ?? repo.localPath}
+                        branch={thread.branch}
+                        baseBranch={repo.defaultBranch}
+                        threadTitle={thread.title}
+                        threadStatus={thread.status}
+                        prUrl={thread.prUrl}
+                        prState={thread.prState as 'open' | 'closed' | 'merged' | null | undefined}
+                        ghAvailable={ghAvailable}
+                        showStatusBadge={false}
+                      />
+                    </div>
+                  )}
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 rounded-lg"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      void Promise.resolve(onStopThread(thread.id))
+                    }}
+                    title="Stop thread"
+                  >
+                    <Square className="h-3 w-3" />
+                  </Button>
+                </div>
+              </div>
+            )
+          })}
+        </div>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
 function App() {
   const [inputValue, setInputValue] = useState('')
   const [showLoginDialog, setShowLoginDialog] = useState(false)
@@ -605,6 +727,10 @@ function App() {
   const managerThreads = useMemo(
     () => [...automation.threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [automation.threads],
+  )
+  const activeManagerThreads = useMemo(
+    () => managerThreads.filter((thread) => thread.status === 'running'),
+    [managerThreads],
   )
   const managerCanCreateThread = automation.selectedRepo != null
   const managerComposerDisabled = automation.creating || !managerCanCreateThread
@@ -1689,6 +1815,18 @@ ${file.content.slice(0, 2000)}
 
           {/* Right: Context + Model + Account — always visible */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            {currentView === 'chat' && viewMode === 'manager' && (
+              <ManagerActiveThreadsMenu
+                threads={activeManagerThreads}
+                getRepositoryForThread={automation.getRepositoryForThread}
+                ghAvailable={automation.ghAvailable}
+                onOpenThread={(threadId) => {
+                  setCurrentView('chat')
+                  automation.setSelectedThreadId(threadId)
+                }}
+                onStopThread={(threadId) => automation.handleStop(threadId)}
+              />
+            )}
             {screenShare.isActive && (
               <span className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 shrink-0">
                 <Cast className="h-3 w-3 text-green-500 animate-pulse" />
@@ -2161,6 +2299,7 @@ ${file.content.slice(0, 2000)}
                           segments={msg.segments}
                           isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
                           compact
+                          preferLlmUi={false}
                         />
                       ))}
                     </Conversation>
@@ -2392,6 +2531,7 @@ ${file.content.slice(0, 2000)}
                       segments={msg.segments}
                       isStreaming={isLoading && msg === messages[messages.length - 1]}
                       compact={showWorkspace || showScreenShare}
+                      preferLlmUi
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
                     />
