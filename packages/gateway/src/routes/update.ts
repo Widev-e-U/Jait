@@ -25,7 +25,7 @@ export function registerUpdateRoutes(
     if (!user) return;
 
     try {
-      const latest = execSync("npm view jait version", {
+      const latest = execSync("npm view @widev/jait version", {
         encoding: "utf8",
         timeout: 15_000,
       }).trim();
@@ -54,7 +54,7 @@ export function registerUpdateRoutes(
     const raw = typeof body["version"] === "string" ? body["version"] : "latest";
     // Sanitise: only allow semver-ish or "latest"
     const version = /^[0-9a-zA-Z._-]+$/.test(raw) ? raw : "latest";
-    const pkg = `jait@${version}`;
+    const pkg = `@widev/jait@${version}`;
 
     try {
       // 1. Install new version
@@ -68,7 +68,7 @@ export function registerUpdateRoutes(
       let newVersion = version;
       try {
         newVersion = execSync(
-          "node -e \"process.stdout.write(require('jait/package.json').version)\"",
+          "node -e \"process.stdout.write(require('@widev/jait/package.json').version)\"",
           { encoding: "utf8", timeout: 10_000 },
         );
       } catch { /* best effort */ }

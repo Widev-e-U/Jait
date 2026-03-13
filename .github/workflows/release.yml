@@ -272,7 +272,7 @@ jobs:
           cp -r apps/web/dist packages/gateway/web-dist
           echo "✅ Bundled web frontend into packages/gateway/web-dist"
 
-      # 4. Publish jait (depends on shared + screen-share, web bundled inside)
+      # 4. Publish @widev/jait (depends on shared + screen-share, web bundled inside)
       - name: Resolve workspace deps (gateway)
         working-directory: packages/gateway
         run: |
@@ -281,7 +281,7 @@ jobs:
           jq --arg sv "^$SHARED_V" --arg scv "^$SCREEN_V" \
             '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv | del(.dependencies["@jait/web"])' \
             package.json > tmp.json && mv tmp.json package.json
-      - name: Publish jait
+      - name: Publish @widev/jait
         working-directory: packages/gateway
         run: |
           npm publish --access public 2>&1 | tee /tmp/npm-out.log

@@ -13,7 +13,7 @@ Jait is a local-first AI developer agent that can execute tools (terminal/files/
 ### Option 1: npm (recommended)
 
 ```bash
-npm install -g jait
+npm install -g @widev/jait
 jait
 ```
 

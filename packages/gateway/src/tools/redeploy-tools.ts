@@ -4,14 +4,14 @@
  * Detects the runtime environment and uses the appropriate strategy:
  *
  * **systemd** (detected when INVOCATION_ID is set):
- *   1. npm install -g jait@latest
+ *   1. npm install -g @widev/jait@latest
  *   2. Spawn canary on PORT+1, health-check it
  *   3. If healthy → kill canary, exit process.
  *      systemd's Restart=always automatically brings up the new version.
  *   4. If unhealthy → kill canary, report failure, stay running.
  *
  * **Bare process** (no service manager):
- *   1. npm install -g jait@latest
+ *   1. npm install -g @widev/jait@latest
  *   2. Spawn canary on PORT+1, health-check it
  *   3. If healthy → spawn fresh gateway on original port (detached),
  *      kill canary, then gracefully shut down current process.
@@ -91,13 +91,13 @@ async function npmRedeploy(
   deps: RedeployDeps,
   log: (msg: string) => void,
 ): Promise<ToolResult> {
-  const pkg = `jait@${tag}`;
+  const pkg = `@widev/jait@${tag}`;
 
   // ── 1. Capture current version ────────────────────────────────────
   let oldVersion = "unknown";
   try {
     oldVersion = execSync(
-      "node -e \"process.stdout.write(require('jait/package.json').version)\"",
+      "node -e \"process.stdout.write(require('@widev/jait/package.json').version)\"",
       { encoding: "utf8", timeout: 10_000 },
     );
   } catch {
@@ -121,7 +121,7 @@ async function npmRedeploy(
   let newVersion = "unknown";
   try {
     newVersion = execSync(
-      "node -e \"process.stdout.write(require('jait/package.json').version)\"",
+      "node -e \"process.stdout.write(require('@widev/jait/package.json').version)\"",
       { encoding: "utf8", timeout: 10_000 },
     );
   } catch {
