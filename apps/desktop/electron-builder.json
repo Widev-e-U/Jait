@@ -27,6 +27,7 @@
   },
   "linux": {
     "target": ["AppImage", "deb"],
-    "category": "Development"
+    "category": "Development",
+    "artifactName": "Jait-${version}-${arch}.${ext}"
   }
 }
