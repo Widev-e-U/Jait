@@ -367,8 +367,8 @@ jobs:
       - name: Delete existing release and recreate
         run: |
           TAG="v${{ steps.version.outputs.version }}"
-          # Delete the existing release (if any) so we start fresh
-          gh release delete "$TAG" --yes --cleanup-tag=false 2>/dev/null || echo "No existing release for $TAG"
+          echo "Cleaning up release $TAG"
+          gh release delete "$TAG" --yes --repo "${{ github.repository }}" 2>&1 || echo "No existing release for $TAG — nothing to delete"
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
