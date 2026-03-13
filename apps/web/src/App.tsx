@@ -1917,9 +1917,7 @@ ${file.content.slice(0, 2000)}
                         setCurrentView('settings')
                       } else {
                         window.open(
-                          appPlatform === 'capacitor'
-                            ? 'https://jait.dev/download#android'
-                            : 'https://jait.dev/download#desktop',
+                          'https://github.com/JakobWl/Jait/releases/latest',
                           '_blank',
                         )
                       }

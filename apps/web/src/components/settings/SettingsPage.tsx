@@ -237,23 +237,22 @@ export function SettingsPage({
             {updateChecking ? 'Checking...' : 'Check for updates'}
           </Button>
           {updateInfo?.hasUpdate && (
-            platform === 'web' ? (
+            <>
               <Button size="sm" onClick={onApplyUpdate} disabled={updateApplying}>
                 {updateApplying ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Download className="h-4 w-4 mr-1.5" />}
-                {updateApplying ? 'Updating...' : `Update to v${updateInfo.latestVersion}`}
+                {updateApplying ? 'Updating...' : `Update gateway to v${updateInfo.latestVersion}`}
               </Button>
-            ) : (
-              <Button size="sm" asChild>
-                <a href={platform === 'capacitor'
-                  ? 'https://jait.dev/download#android'
-                  : 'https://jait.dev/download#desktop'}
-                  target="_blank" rel="noopener noreferrer"
-                >
-                  <Download className="h-4 w-4 mr-1.5" />
-                  Download v{updateInfo.latestVersion}
-                </a>
-              </Button>
-            )
+              {platform !== 'web' && (
+                <Button size="sm" variant="outline" asChild>
+                  <a href={`https://github.com/JakobWl/Jait/releases/latest`}
+                    target="_blank" rel="noopener noreferrer"
+                  >
+                    <Download className="h-4 w-4 mr-1.5" />
+                    Download latest {platform === 'capacitor' ? 'APK' : 'desktop app'}
+                  </a>
+                </Button>
+              )}
+            </>
           )}
         </div>
         {updateInfo && !updateInfo.hasUpdate && (
