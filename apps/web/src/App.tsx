@@ -764,7 +764,7 @@ function App() {
   const screenShare = useScreenShare({ token })
 
   // ── Automation / Manager mode state ───────────────────────────────
-  const automation = useAutomation(viewMode === 'manager')
+  const automation = useAutomation()
 
   // Convert thread activities → ChatMessage[] for Message rendering
   const automationMessages = useMemo(
@@ -1862,12 +1862,13 @@ ${file.content.slice(0, 2000)}
 
           {/* Right: Context + Model + Account — always visible */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            {currentView === 'chat' && viewMode === 'manager' && (
+            {currentView === 'chat' && activeManagerThreads.length > 0 && (
               <ManagerActiveThreadsMenu
                 threads={activeManagerThreads}
                 getRepositoryForThread={automation.getRepositoryForThread}
                 ghAvailable={automation.ghAvailable}
                 onOpenThread={(threadId) => {
+                  if (viewMode !== 'manager') setViewMode('manager')
                   setCurrentView('chat')
                   automation.setSelectedThreadId(threadId)
                 }}
@@ -2935,8 +2936,8 @@ ${file.content.slice(0, 2000)}
           onSelect={(path, _nodeId) => { void automation.handleFolderSelected(path) }}
         />
 
-        {/* Floating screen share window — only on host/viewer devices */}
-        {showScreenShare && (screenShare.isHost || screenShare.isViewer) && (
+        {/* Floating screen share window */}
+        {showScreenShare && (
           <div
             className="fixed z-50 bg-background border rounded-lg shadow-2xl overflow-hidden flex flex-col"
             style={{
