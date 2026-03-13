@@ -1,8 +1,12 @@
 {
   "name": "@jait/desktop",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "description": "Jait AI desktop app",
-  "author": "JakobWl",
+  "author": {
+    "name": "JakobWl",
+    "email": "jakob@jait.dev"
+  },
+  "homepage": "https://github.com/JakobWl/Jait",
   "private": true,
   "type": "module",
   "main": "dist/electron-main.js",
