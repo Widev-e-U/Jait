@@ -121,7 +121,6 @@ jobs:
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
       )
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -149,7 +148,6 @@ jobs:
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
       )
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
@@ -289,9 +287,12 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: self-hosted
-    needs: [auto-tag, npm-publish]
+    needs: [auto-tag, npm-publish, desktop, android]
     if: |
-      always() && needs.npm-publish.result == 'success' && (
+      always() && 
+      needs.npm-publish.result == 'success' && 
+      needs.desktop.result == 'success' && 
+      needs.android.result == 'success' && (
         needs.auto-tag.outputs.tagged == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
