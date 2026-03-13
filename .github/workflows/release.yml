@@ -53,6 +53,7 @@ jobs:
       contents: write
     outputs:
       tagged: ${{ steps.push-tag.outputs.tagged || 'false' }}
+      changed: ${{ steps.version.outputs.changed || 'false' }}
       version: ${{ steps.version.outputs.version || '' }}
     steps:
       - uses: actions/checkout@v4
@@ -68,7 +69,7 @@ jobs:
 
           # Check if ANY watched package.json version changed
           CHANGED=false
-          for PKG in packages/gateway/package.json packages/shared/package.json; do
+          for PKG in packages/gateway/package.json packages/shared/package.json apps/desktop/package.json apps/mobile/package.json; do
             NEW=$(jq -r '.version' "$PKG" 2>/dev/null || echo "")
             OLD=$(git show HEAD~1:"$PKG" 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
             if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
@@ -116,6 +117,7 @@ jobs:
     if: |
       always() && (
         needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
       )
@@ -143,6 +145,7 @@ jobs:
     if: |
       always() && (
         needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
       )
@@ -193,6 +196,7 @@ jobs:
     if: |
       always() && (
         needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
       )
@@ -284,6 +288,7 @@ jobs:
     if: |
       always() && needs.npm-publish.result == 'success' && (
         needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
       )
