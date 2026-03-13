@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Eye, EyeOff, Key, Globe, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react'
+import { Eye, EyeOff, Key, Globe, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -66,6 +66,12 @@ function isSecretField(field: string): boolean {
 
 const API_URL = getApiUrl()
 
+export interface UpdateInfo {
+  currentVersion: string
+  latestVersion: string
+  hasUpdate: boolean
+}
+
 interface SettingsPageProps {
   username: string
   token: string | null
@@ -75,6 +81,12 @@ interface SettingsPageProps {
   onSttProviderChange: (next: SttProvider) => Promise<void>
   onClearArchive: () => Promise<number>
   activityEvents?: ActivityEvent[]
+  updateInfo: UpdateInfo | null
+  updateChecking: boolean
+  onCheckUpdate: () => void
+  onApplyUpdate: () => void
+  updateApplying: boolean
+  platform: 'web' | 'electron' | 'capacitor'
 }
 
 export function SettingsPage({
@@ -86,6 +98,12 @@ export function SettingsPage({
   onSttProviderChange,
   onClearArchive,
   activityEvents,
+  updateInfo,
+  updateChecking,
+  onCheckUpdate,
+  onApplyUpdate,
+  updateApplying,
+  platform,
 }: SettingsPageProps) {
   const [draft, setDraft] = useState<Record<string, string>>(apiKeys)
   const [saving, setSaving] = useState(false)
@@ -199,6 +217,58 @@ export function SettingsPage({
           Signed in as <span className="font-medium text-foreground">{username}</span>
         </p>
       </div>
+
+      {/* ── Software Update ─────────────────────────────────────────── */}
+      <Card className="p-5 space-y-4">
+        <div>
+          <h2 className="text-base font-medium flex items-center gap-2">
+            <ArrowUpCircle className="h-4 w-4" />
+            Software Update
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            {updateInfo
+              ? <>Running <span className="font-mono font-medium text-foreground">v{updateInfo.currentVersion}</span></>
+              : 'Check for the latest Jait version.'}
+          </p>
+        </div>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button variant="outline" size="sm" onClick={onCheckUpdate} disabled={updateChecking || updateApplying}>
+            {updateChecking ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : null}
+            {updateChecking ? 'Checking...' : 'Check for updates'}
+          </Button>
+          {updateInfo?.hasUpdate && (
+            platform === 'web' ? (
+              <Button size="sm" onClick={onApplyUpdate} disabled={updateApplying}>
+                {updateApplying ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Download className="h-4 w-4 mr-1.5" />}
+                {updateApplying ? 'Updating...' : `Update to v${updateInfo.latestVersion}`}
+              </Button>
+            ) : (
+              <Button size="sm" asChild>
+                <a href={platform === 'capacitor'
+                  ? 'https://jait.dev/download#android'
+                  : 'https://jait.dev/download#desktop'}
+                  target="_blank" rel="noopener noreferrer"
+                >
+                  <Download className="h-4 w-4 mr-1.5" />
+                  Download v{updateInfo.latestVersion}
+                </a>
+              </Button>
+            )
+          )}
+        </div>
+        {updateInfo && !updateInfo.hasUpdate && (
+          <p className="text-sm text-green-600 dark:text-green-400 flex items-center gap-1.5">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            You&apos;re on the latest version.
+          </p>
+        )}
+        {updateInfo?.hasUpdate && (
+          <p className="text-sm text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
+            <AlertCircle className="h-3.5 w-3.5" />
+            Version {updateInfo.latestVersion} is available{platform !== 'web' ? ' — download from jait.dev' : ''}.
+          </p>
+        )}
+      </Card>
 
       <Card className="p-5 space-y-4">
         <div>

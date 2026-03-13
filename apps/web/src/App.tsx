@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   ArrowLeft,
+  ArrowUpCircle,
   AlertTriangle,
   Calendar,
   Bug,
@@ -58,7 +59,7 @@ import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { ThreadActions } from '@/components/automation/ThreadActions'
 import { activitiesToMessages } from '@/lib/activity-to-messages'
-import { SettingsPage } from '@/components/settings/SettingsPage'
+import { SettingsPage, type UpdateInfo } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
@@ -579,6 +580,13 @@ function App() {
   const [gatewayUrlInput, setGatewayUrlInput] = useState(() => getStoredGatewayUrl() ?? '')
   const isStandaloneApp = !!(window as any).jaitDesktop || !!(window as any).Capacitor
   const isElectron = !!(window as any).jaitDesktop
+  const isCapacitor = !!(window as any).Capacitor
+  const appPlatform: 'web' | 'electron' | 'capacitor' = isElectron ? 'electron' : isCapacitor ? 'capacitor' : 'web'
+
+  // ── Update state ───────────────────────────────────────────────
+  const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
+  const [updateChecking, setUpdateChecking] = useState(false)
+  const [updateApplying, setUpdateApplying] = useState(false)
   const [desktopPlatform, setDesktopPlatform] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
   const [gatewayStep, setGatewayStep] = useState<'url' | 'auth'>(() =>
@@ -672,6 +680,45 @@ function App() {
     updateSettings,
     clearSessionArchive,
   } = useAuth()
+
+  // ── Update check/apply handlers ────────────────────────────────
+  const handleCheckUpdate = useCallback(async () => {
+    if (!token) return
+    setUpdateChecking(true)
+    try {
+      const res = await fetch(`${API_URL}/api/update/check`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
+      if (res.ok) {
+        setUpdateInfo(await res.json() as UpdateInfo)
+      }
+    } catch { /* ignore */ }
+    setUpdateChecking(false)
+  }, [token])
+
+  const handleApplyUpdate = useCallback(async () => {
+    if (!token || !updateInfo?.hasUpdate) return
+    setUpdateApplying(true)
+    try {
+      const res = await fetch(`${API_URL}/api/update/apply`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ version: updateInfo.latestVersion }),
+      })
+      if (res.ok) {
+        toast.success(`Updated to v${updateInfo.latestVersion}. Gateway is restarting...`)
+      } else {
+        const data = await res.json().catch(() => ({}))
+        toast.error((data as any).error ?? 'Update failed')
+      }
+    } catch { toast.error('Update request failed') }
+    setUpdateApplying(false)
+  }, [token, updateInfo])
+
+  // Auto-check for updates on mount (once authenticated)
+  useEffect(() => {
+    if (token) void handleCheckUpdate()
+  }, [token, handleCheckUpdate])
 
   const onLoginRequired = useCallback(() => setShowLoginDialog(true), [])
 
@@ -1860,6 +1907,32 @@ ${file.content.slice(0, 2000)}
               <span className="text-xs text-muted-foreground mr-1 sm:mr-2 hidden sm:inline">{remainingPrompts} remaining</span>
             )}
 
+            {updateInfo?.hasUpdate && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    onClick={() => {
+                      if (appPlatform === 'web') {
+                        setCurrentView('settings')
+                      } else {
+                        window.open(
+                          appPlatform === 'capacitor'
+                            ? 'https://jait.dev/download#android'
+                            : 'https://jait.dev/download#desktop',
+                          '_blank',
+                        )
+                      }
+                    }}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 transition-colors text-xs"
+                  >
+                    <ArrowUpCircle className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">v{updateInfo.latestVersion}</span>
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Update available — v{updateInfo.latestVersion}</TooltipContent>
+              </Tooltip>
+            )}
+
             {isAuthenticated ? (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -2166,6 +2239,12 @@ ${file.content.slice(0, 2000)}
               }}
               onClearArchive={handleClearArchive}
               activityEvents={activityEvents}
+              updateInfo={updateInfo}
+              updateChecking={updateChecking}
+              onCheckUpdate={() => { void handleCheckUpdate() }}
+              onApplyUpdate={() => { void handleApplyUpdate() }}
+              updateApplying={updateApplying}
+              platform={appPlatform}
             />
           </div>
         ) : (

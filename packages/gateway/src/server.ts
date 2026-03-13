@@ -31,6 +31,7 @@ import { registerThreadRoutes } from "./routes/threads.js";
 import { registerRepoRoutes } from "./routes/repositories.js";
 import { registerMcpRoutes } from "./routes/mcp-server.js";
 import { registerGitRoutes } from "./routes/git.js";
+import { registerUpdateRoutes } from "./routes/update.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -84,6 +85,7 @@ export interface ServerDeps {
   threadService?: ThreadService;
   repoService?: RepositoryService;
   providerRegistry?: ProviderRegistry;
+  shutdown?: () => Promise<void>;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -177,6 +179,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
       userService: deps.userService,
+      repoService: deps.repoService,
       ws: deps.ws,
     });
   }
@@ -192,6 +195,11 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   // MCP SSE server for external CLI agents
   if (deps.toolRegistry) {
     registerMcpRoutes(app, { toolRegistry: deps.toolRegistry, config });
+  }
+
+  // Self-update routes
+  if (deps.shutdown) {
+    registerUpdateRoutes(app, config, { shutdown: deps.shutdown, port: config.port });
   }
 
   // ── Serve the web frontend (SPA) if the built files exist ────────
@@ -236,6 +244,8 @@ function resolveWebDir(): string | null {
   }
   // 2. Probe known locations for @jait/web/dist (prefer nested dependency first)
   const candidates = [
+    // Bundled inside gateway package (npm publish layout)
+    join(__dirname, "../web-dist"),
     // Nested node_modules (npm global install typical layout — most reliable)
     join(__dirname, "../node_modules/@jait/web/dist"),
     // Use createRequire to find @jait/web regardless of hoist layout (ESM-safe)

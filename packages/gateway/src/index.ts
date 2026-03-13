@@ -381,6 +381,7 @@ async function main() {
     threadService,
     repoService,
     providerRegistry,
+    shutdown: shutdownRef,
   });
 
   // Wire terminal WS ↔ PTY
