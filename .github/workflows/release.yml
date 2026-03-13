@@ -33,7 +33,6 @@ on:
     paths:
       - packages/gateway/package.json
       - packages/shared/package.json
-      - apps/web/package.json
     tags:
       - 'v*'
   workflow_dispatch: {}
@@ -67,7 +66,7 @@ jobs:
 
           # Check if ANY watched package.json version changed
           CHANGED=false
-          for PKG in packages/gateway/package.json packages/shared/package.json apps/web/package.json; do
+          for PKG in packages/gateway/package.json packages/shared/package.json; do
             NEW=$(jq -r '.version' "$PKG" 2>/dev/null || echo "")
             OLD=$(git show HEAD~1:"$PKG" 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
             if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
@@ -267,36 +266,22 @@ jobs:
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
 
-      # 3. Publish @jait/web (pre-built frontend — strip deps, everything bundled by Vite)
-      - name: Strip deps from @jait/web (static files only)
-        working-directory: apps/web
-        run: jq '.dependencies = {} | .devDependencies = {}' package.json > tmp.json && mv tmp.json package.json
-      - name: Publish @jait/web
-        working-directory: apps/web
+      # 3. Bundle web frontend into gateway package (no separate @jait/web publish)
+      - name: Bundle web dist into gateway
         run: |
-          npm publish --access public 2>&1 | tee /tmp/npm-out.log
-          status=${PIPESTATUS[0]}
-          if [ $status -ne 0 ]; then
-            if grep -q 'EPUBLISHCONFLICT\|You cannot publish over' /tmp/npm-out.log; then
-              echo "⏭ Already published — skipping"
-            else
-              cat /tmp/npm-out.log; exit $status
-            fi
-          fi
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+          cp -r apps/web/dist packages/gateway/web-dist
+          echo "✅ Bundled web frontend into packages/gateway/web-dist"
 
-      # 4. Publish @jait/gateway (depends on shared + screen-share + web)
+      # 4. Publish jait (depends on shared + screen-share, web bundled inside)
       - name: Resolve workspace deps (gateway)
         working-directory: packages/gateway
         run: |
           SHARED_V=$(jq -r '.version' ../shared/package.json)
           SCREEN_V=$(jq -r '.version' ../screen-share/package.json)
-          WEB_V=$(jq -r '.version' ../../apps/web/package.json)
-          jq --arg sv "^$SHARED_V" --arg scv "^$SCREEN_V" --arg wv "^$WEB_V" \
-            '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv | .dependencies["@jait/web"] = $wv' \
+          jq --arg sv "^$SHARED_V" --arg scv "^$SCREEN_V" \
+            '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv | del(.dependencies["@jait/web"])' \
             package.json > tmp.json && mv tmp.json package.json
-      - name: Publish @jait/gateway
+      - name: Publish jait
         working-directory: packages/gateway
         run: |
           npm publish --access public 2>&1 | tee /tmp/npm-out.log
