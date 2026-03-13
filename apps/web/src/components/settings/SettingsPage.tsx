@@ -6,6 +6,7 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToolSettings } from './ToolSettings'
+import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { ActivityFeed } from '@/components/activity'
 import type { ActivityEvent } from '@jait/ui-shared'
@@ -112,6 +113,15 @@ export function SettingsPage({
   const [error, setError] = useState<string | null>(null)
   const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
   const [visible, setVisible] = useState<Record<string, boolean>>({})
+
+  // ── Desktop close-to-tray setting ───────────────────────────────
+  const [closeOnWindowClose, setCloseOnWindowClose] = useState(false)
+  useEffect(() => {
+    if (platform !== 'electron' || !window.jaitDesktop?.getSetting) return
+    void window.jaitDesktop.getSetting('closeOnWindowClose', false).then((v) => {
+      setCloseOnWindowClose(v === true)
+    })
+  }, [platform])
 
   // ── Gateway URL state ────────────────────────────────────────────
   const [gwDraft, setGwDraft] = useState(getStoredGatewayUrl() ?? '')
@@ -268,6 +278,34 @@ export function SettingsPage({
           </p>
         )}
       </Card>
+
+      {/* ── Desktop settings ────────────────────────────────────────── */}
+      {platform === 'electron' && (
+        <Card className="p-5 space-y-4">
+          <div>
+            <h2 className="text-base font-medium">Desktop</h2>
+            <p className="text-sm text-muted-foreground">
+              Settings specific to the desktop application.
+            </p>
+          </div>
+          <div className="flex items-center justify-between max-w-md">
+            <div>
+              <Label htmlFor="close-on-window-close">Quit on window close</Label>
+              <p className="text-xs text-muted-foreground">
+                When off, closing the window minimizes Jait to the system tray.
+              </p>
+            </div>
+            <Switch
+              id="close-on-window-close"
+              checked={closeOnWindowClose}
+              onCheckedChange={(checked) => {
+                setCloseOnWindowClose(checked)
+                void window.jaitDesktop?.setSetting('closeOnWindowClose', checked)
+              }}
+            />
+          </div>
+        </Card>
+      )}
 
       <Card className="p-5 space-y-4">
         <div>

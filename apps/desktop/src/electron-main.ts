@@ -22,6 +22,40 @@ const IS_DEV = !app.isPackaged;
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 
+// ── Persistent settings ───────────────────────────────────────────────
+const settingsPath = path.join(app.getPath("userData"), "desktop-settings.json");
+
+function loadSettings(): Record<string, unknown> {
+  try {
+    const { readFileSync } = require("node:fs") as typeof import("node:fs");
+    return JSON.parse(readFileSync(settingsPath, "utf-8"));
+  } catch { return {}; }
+}
+
+function saveSettings(settings: Record<string, unknown>): void {
+  const { writeFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
+  mkdirSync(path.dirname(settingsPath), { recursive: true });
+  writeFileSync(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
+}
+
+function getSetting<T>(key: string, defaultValue: T): T {
+  const s = loadSettings();
+  return (s[key] as T) ?? defaultValue;
+}
+
+function setSetting(key: string, value: unknown): void {
+  const s = loadSettings();
+  s[key] = value;
+  saveSettings(s);
+}
+
+/** Whether the app should quit on window close vs minimize to tray. Default: false (minimize to tray). */
+function shouldQuitOnClose(): boolean {
+  return getSetting("closeOnWindowClose", false);
+}
+
+let isQuitting = false;
+
 // ── Window creation ───────────────────────────────────────────────────
 function createMainWindow(): BrowserWindow {
   const isMac = process.platform === "darwin";
@@ -61,6 +95,14 @@ function createMainWindow(): BrowserWindow {
     win.show();
     win.focus();
     if (IS_DEV) win.webContents.openDevTools({ mode: "bottom" });
+  });
+
+  // Intercept close to minimize to tray (unless setting says quit)
+  win.on("close", (e) => {
+    if (!isQuitting && !shouldQuitOnClose()) {
+      e.preventDefault();
+      win.hide();
+    }
   });
 
   win.on("closed", () => {
@@ -120,7 +162,7 @@ function createTray(): void {
   tray.setToolTip("Jait Desktop");
 
   const contextMenu = Menu.buildFromTemplate([
-    { label: "Show Jait", click: () => mainWindow?.show() },
+    { label: "Show Jait", click: () => { mainWindow?.show(); mainWindow?.focus(); } },
     { type: "separator" },
     {
       label: "Screen Share",
@@ -130,10 +172,11 @@ function createTray(): void {
       ],
     },
     { type: "separator" },
-    { label: "Quit", click: () => app.quit() },
+    { label: "Quit", click: () => { isQuitting = true; app.quit(); } },
   ]);
   tray.setContextMenu(contextMenu);
-  tray.on("click", () => mainWindow?.show());
+  tray.on("click", () => { mainWindow?.show(); mainWindow?.focus(); });
+  tray.on("double-click", () => { mainWindow?.show(); mainWindow?.focus(); });
 }
 
 // ── IPC handlers ──────────────────────────────────────────────────────
@@ -145,6 +188,15 @@ ipcMain.handle("window:maximize", () => {
   else mainWindow?.maximize();
 });
 ipcMain.handle("window:close", () => mainWindow?.close());
+
+// ── Desktop settings IPC ──────────────────────────────────────────────
+ipcMain.handle("desktop:get-setting", (_event, key: string, defaultValue?: unknown) => {
+  return getSetting(key, defaultValue ?? null);
+});
+ipcMain.handle("desktop:set-setting", (_event, key: string, value: unknown) => {
+  setSetting(key, value);
+  return { ok: true };
+});
 ipcMain.handle("window:is-maximized", () => mainWindow?.isMaximized() ?? false);
 ipcMain.handle("window:set-title-bar-overlay", (_event, opts: { color?: string; symbolColor?: string; height?: number }) => {
   mainWindow?.setTitleBarOverlay(opts);
@@ -1049,6 +1101,10 @@ app.whenReady().then(async () => {
       loadApp(mainWindow);
     }
   });
+});
+
+app.on("before-quit", () => {
+  isQuitting = true;
 });
 
 app.on("window-all-closed", () => {

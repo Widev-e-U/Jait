@@ -106,4 +106,12 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   },
   setTitleBarOverlay: (opts: { color?: string; symbolColor?: string; height?: number }) =>
     ipcRenderer.invoke("window:set-title-bar-overlay", opts),
+
+  /** Get a persistent desktop setting */
+  getSetting: (key: string, defaultValue?: unknown) =>
+    ipcRenderer.invoke("desktop:get-setting", key, defaultValue) as Promise<unknown>,
+
+  /** Set a persistent desktop setting */
+  setSetting: (key: string, value: unknown) =>
+    ipcRenderer.invoke("desktop:set-setting", key, value) as Promise<{ ok: boolean }>,
 });

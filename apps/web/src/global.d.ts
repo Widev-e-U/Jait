@@ -25,6 +25,8 @@ interface JaitDesktop {
   windowIsMaximized: () => Promise<boolean>
   onMaximizedChange: (callback: (event: unknown, maximized: boolean) => void) => () => void
   setTitleBarOverlay: (opts: { color?: string; symbolColor?: string; height?: number }) => Promise<void>
+  getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>
+  setSetting: (key: string, value: unknown) => Promise<{ ok: boolean }>
 }
 
 declare global {
