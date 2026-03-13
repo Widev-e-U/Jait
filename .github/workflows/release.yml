@@ -114,7 +114,7 @@ jobs:
 
   # ── Build desktop apps (Electron) ──────────────────────────────────
   desktop:
-    name: Desktop Builds
+    name: Desktop Builds (Linux + Windows)
     runs-on: self-hosted
     needs: [auto-tag]
     if: |
@@ -129,15 +129,61 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
+      - name: Install Wine for Windows cross-compile
+        run: |
+          if command -v wine64 &>/dev/null; then
+            echo "Wine already installed — skipping"
+          else
+            sudo dpkg --add-architecture i386
+            sudo mkdir -pm755 /etc/apt/keyrings
+            sudo wget -O /etc/apt/keyrings/winehq-archive.key https://dl.winehq.org/wine-builds/winehq.key
+            sudo wget -NP /etc/apt/sources.list.d/ https://dl.winehq.org/wine-builds/ubuntu/dists/$(lsb_release -cs)/winehq-$(lsb_release -cs).sources
+            sudo apt-get update
+            sudo apt-get install -y --install-recommends winehq-stable
+          fi
       - name: Build Electron (Linux)
         working-directory: apps/desktop
         run: bun run build:linux
+      - name: Build Electron (Windows)
+        working-directory: apps/desktop
+        run: bun run build:win
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux
           path: |
             apps/desktop/release/*.AppImage
             apps/desktop/release/*.deb
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-windows
+          path: |
+            apps/desktop/release/*.exe
+
+  # ── Build macOS desktop app ────────────────────────────────────────
+  desktop-macos:
+    name: Desktop Build (macOS)
+    runs-on: macos-latest
+    needs: [auto-tag]
+    if: |
+      always() && (
+        needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.changed == 'true' ||
+        startsWith(github.ref, 'refs/tags/v') ||
+        github.event_name == 'workflow_dispatch'
+      )
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - run: bun install --frozen-lockfile
+      - run: bun run build
+      - name: Build Electron (macOS)
+        working-directory: apps/desktop
+        run: bun run build:mac
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-macos
+          path: |
+            apps/desktop/release/*.dmg
 
   # ── Build Android APK ──────────────────────────────────────────────
   android:
@@ -290,11 +336,12 @@ jobs:
   release:
     name: Create GitHub Release
     runs-on: self-hosted
-    needs: [auto-tag, npm-publish, desktop, android]
+    needs: [auto-tag, npm-publish, desktop, desktop-macos, android]
     if: |
       always() && 
       needs.npm-publish.result == 'success' && 
       needs.desktop.result == 'success' && 
+      needs.desktop-macos.result == 'success' && 
       needs.android.result == 'success' && (
         needs.auto-tag.outputs.tagged == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||

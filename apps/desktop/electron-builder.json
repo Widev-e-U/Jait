@@ -19,11 +19,13 @@
     }
   ],
   "win": {
-    "target": ["nsis", "portable"]
+    "target": ["nsis", "portable"],
+    "artifactName": "Jait-${version}-${arch}-setup.${ext}"
   },
   "mac": {
     "target": ["dmg"],
-    "category": "public.app-category.developer-tools"
+    "category": "public.app-category.developer-tools",
+    "artifactName": "Jait-${version}-${arch}.${ext}"
   },
   "linux": {
     "target": ["AppImage", "deb"],
