@@ -725,7 +725,7 @@ export function registerThreadRoutes(
           nodeId: node.id,
           nodeName: node.name,
           platform: node.platform,
-          providers: node.providers,
+          providers: node.providers ?? [],
         });
       }
     }
