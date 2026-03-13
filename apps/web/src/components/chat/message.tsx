@@ -1,4 +1,6 @@
 import { useMemo, useEffect, useRef, useState } from 'react'
+import { markdownLookBack } from '@llm-ui/markdown'
+import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy, Pencil, RotateCcw } from 'lucide-react'
@@ -46,6 +48,7 @@ interface MessageProps {
   segments?: MessageSegment[]
   isStreaming?: boolean
   compact?: boolean
+  preferLlmUi?: boolean
   onOpenTerminal?: (terminalId: string | null) => void
   onEditMessage?: (
     messageId: string,
@@ -53,6 +56,63 @@ interface MessageProps {
     messageIndex?: number,
     messageFromEnd?: number,
   ) => Promise<void> | void
+}
+
+function proseClassName(compact?: boolean) {
+  return compact
+    ? 'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none prose-sm prose-p:leading-normal'
+    : 'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none prose-base prose-p:leading-relaxed'
+}
+
+const MarkdownBlock: LLMOutputComponent = ({ blockMatch }) => (
+  <ReactMarkdown remarkPlugins={[remarkGfm]}>{blockMatch.output}</ReactMarkdown>
+)
+
+function StaticMarkdown({ content, compact }: { content: string; compact?: boolean }) {
+  return (
+    <div className={proseClassName(compact)}>
+      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+    </div>
+  )
+}
+
+function StreamingMarkdown({ content, compact }: { content: string; compact?: boolean }) {
+  const { blockMatches } = useLLMOutput({
+    llmOutput: content,
+    blocks: [],
+    fallbackBlock: {
+      component: MarkdownBlock,
+      lookBack: markdownLookBack(),
+    },
+    isStreamFinished: false,
+  })
+
+  return (
+    <div className={proseClassName(compact)}>
+      {blockMatches.map((blockMatch, index) => {
+        const Component = blockMatch.block.component
+        return <Component key={index} blockMatch={blockMatch} />
+      })}
+    </div>
+  )
+}
+
+function AssistantMarkdown({
+  content,
+  compact,
+  isStreaming,
+  preferLlmUi,
+}: {
+  content: string
+  compact?: boolean
+  isStreaming?: boolean
+  preferLlmUi?: boolean
+}) {
+  if (preferLlmUi && isStreaming) {
+    return <StreamingMarkdown content={content} compact={compact} />
+  }
+
+  return <StaticMarkdown content={content} compact={compact} />
 }
 
 export function Message({
@@ -69,6 +129,7 @@ export function Message({
   segments,
   isStreaming,
   compact,
+  preferLlmUi,
   onOpenTerminal,
   onEditMessage,
 }: MessageProps) {
@@ -279,13 +340,13 @@ export function Message({
               }
               // text segment
               return seg.content.trim() ? (
-                <div key={`ts-${i}`} className={cn(
-                  'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none',
-                  compact
-                    ? 'prose-sm prose-p:leading-normal'
-                    : 'prose-base prose-p:leading-relaxed',
-                )}>
-                  <ReactMarkdown remarkPlugins={[remarkGfm]}>{seg.content}</ReactMarkdown>
+                <div key={`ts-${i}`}>
+                  <AssistantMarkdown
+                    content={seg.content}
+                    compact={compact}
+                    isStreaming={!!isStreaming && i === segments.length - 1}
+                    preferLlmUi={preferLlmUi}
+                  />
                 </div>
               ) : null
             })}
@@ -362,14 +423,7 @@ export function Message({
             </div>
           ) : (
             <div className="relative">
-              <div className={cn(
-                'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none',
-                compact
-                  ? 'prose-sm prose-p:leading-normal'
-                  : 'prose-base prose-p:leading-relaxed',
-              )}>
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
-              </div>
+              <AssistantMarkdown content={content} compact={compact} isStreaming={isStreaming} preferLlmUi={preferLlmUi} />
               {renderActions()}
             </div>
           )
