@@ -228,20 +228,55 @@ export function createNetworkScanTool(): ToolDefinition {
       try {
         for (const subnet of subnets) {
           if (platform() === "win32") {
-            const pingCmd = Array.from({ length: 254 }, (_, i) =>
-              `start /b ping -n 1 -w 500 ${subnet}.${i + 1} > nul 2>&1`,
-            ).join(" & ");
-            await execAsync(pingCmd, { timeout: 30000 }).catch(() => {});
+            // Batched ping sweep — 25 per batch, batches in parallel
+            const BATCH = 25;
+            const batches: string[] = [];
+            for (let i = 1; i <= 254; i += BATCH) {
+              const end = Math.min(i + BATCH - 1, 254);
+              const cmds = Array.from({ length: end - i + 1 }, (_, j) =>
+                `ping -n 1 -w 500 ${subnet}.${i + j} > nul 2>&1`
+              ).join(" & ");
+              batches.push(cmds);
+            }
+            await Promise.all(
+              batches.map(cmd => execAsync(cmd, { timeout: 45000 }).catch(() => {}))
+            );
           } else {
             const pingCmd = `for i in $(seq 1 254); do ping -c 1 -W 1 ${subnet}.$i & done; wait`;
             await execAsync(pingCmd, { timeout: 30000, shell: "/bin/bash" }).catch(() => {});
           }
         }
+        // Brief pause for ARP cache to settle
+        await new Promise(r => setTimeout(r, 2500));
         // Re-read ARP table after all sweeps
         const { stdout } = await execAsync("arp -a", { timeout: 10000 });
         arpEntries = parseArpTable(stdout);
       } catch {
         // use existing ARP entries
+      }
+
+      // 2b. On Windows, supplement with Get-NetNeighbor
+      if (platform() === "win32") {
+        try {
+          const { stdout: pshOutput } = await execAsync(
+            'powershell -NoProfile -Command "Get-NetNeighbor -AddressFamily IPv4 | Where-Object { $_.State -ne \'Unreachable\' -and $_.LinkLayerAddress -ne \'\' -and $_.LinkLayerAddress -ne \'00-00-00-00-00-00\' } | Select-Object IPAddress,LinkLayerAddress | ConvertTo-Csv -NoTypeInformation"',
+            { timeout: 15000 },
+          );
+          const existingIps = new Set(arpEntries.map(e => e.ip));
+          for (const line of pshOutput.split("\n")) {
+            const csvMatch = /"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"\s*,\s*"([0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2})"/.exec(line);
+            if (!csvMatch) continue;
+            const ip = csvMatch[1]!;
+            const mac = csvMatch[2]!.replace(/-/g, ":").toLowerCase();
+            if (existingIps.has(ip)) continue;
+            if (mac === "ff:ff:ff:ff:ff:ff" || mac === "00:00:00:00:00:00") continue;
+            const firstOctet = parseInt(mac.slice(0, 2), 16);
+            if (firstOctet & 1) continue;
+            if (subnets.some(s => ip.startsWith(s + "."))) {
+              arpEntries.push({ ip, mac });
+            }
+          }
+        } catch {}
       }
 
       // 3. Filter to subnet

@@ -227,7 +227,7 @@ const knownNodes = new Map<string, GatewayNode>();
 // Route registration
 // ---------------------------------------------------------------------------
 
-export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane, sqlite?: SqliteDatabase) {
+export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane, sqlite?: SqliteDatabase, providerRegistry?: import("../providers/registry.js").ProviderRegistry) {
   // ---- GET /api/network/interfaces — local NIC info ----
   app.get("/api/network/interfaces", async () => {
     const ifaces = networkInterfaces();
@@ -285,19 +285,19 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       for (const subnet of subnets) {
         if (platform() === "win32") {
           // Split into batches of 25 to stay under cmd.exe 8191-char limit.
-          // Run batches in parallel — each batch runs pings sequentially (~7s per batch),
+          // Run batches in parallel — each batch runs pings sequentially,
           // but all batches run concurrently.
           const BATCH = 25;
           const batches: string[] = [];
           for (let i = 1; i <= 254; i += BATCH) {
             const end = Math.min(i + BATCH - 1, 254);
             const cmds = Array.from({ length: end - i + 1 }, (_, j) =>
-              `ping -n 1 -w 300 ${subnet}.${i + j} > nul 2>&1`
+              `ping -n 1 -w 500 ${subnet}.${i + j} > nul 2>&1`
             ).join(" & ");
             batches.push(cmds);
           }
           await Promise.all(
-            batches.map(cmd => execAsync(cmd, { timeout: 30000 }).catch(() => {}))
+            batches.map(cmd => execAsync(cmd, { timeout: 45000 }).catch(() => {}))
           );
         } else {
           const pingCmd = `for i in $(seq 1 254); do ping -c 1 -W 1 ${subnet}.$i & done; wait`;
@@ -305,7 +305,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
         }
       }
       // Brief pause to let the OS finish updating ARP/neighbour cache
-      await sleep(1500);
+      await sleep(2500);
       // Re-read ARP table after all sweeps
       const { stdout } = await execAsync("arp -a", { timeout: 10000 });
       arpOutput = stdout;
@@ -313,6 +313,34 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       arpEntries.push(...parseArpTable(stdout));
     } catch {
       // Ping sweep optional — use whatever ARP gave us
+    }
+
+    // 2b. On Windows, supplement with Get-NetNeighbor for entries ARP may miss
+    if (platform() === "win32") {
+      try {
+        const { stdout: pshOutput } = await execAsync(
+          'powershell -NoProfile -Command "Get-NetNeighbor -AddressFamily IPv4 | Where-Object { $_.State -ne \'Unreachable\' -and $_.LinkLayerAddress -ne \'\' -and $_.LinkLayerAddress -ne \'00-00-00-00-00-00\' } | Select-Object IPAddress,LinkLayerAddress | ConvertTo-Csv -NoTypeInformation"',
+          { timeout: 15000 },
+        );
+        const existingIps = new Set(arpEntries.map(e => e.ip));
+        for (const line of pshOutput.split("\n")) {
+          // CSV lines: "192.168.1.1","D4-E7-5C-AB-12-34"
+          const csvMatch = /"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"\s*,\s*"([0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2})"/.exec(line);
+          if (!csvMatch) continue;
+          const ip = csvMatch[1]!;
+          const mac = csvMatch[2]!.replace(/-/g, ":").toLowerCase();
+          if (existingIps.has(ip)) continue;
+          const IGNORED_MACS = new Set(["ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"]);
+          if (IGNORED_MACS.has(mac)) continue;
+          const firstOctet = parseInt(mac.slice(0, 2), 16);
+          if (firstOctet & 1) continue;
+          if (subnets.some(s => ip.startsWith(s + "."))) {
+            arpEntries.push({ ip, mac });
+          }
+        }
+      } catch {
+        // Get-NetNeighbor not available — continue with ARP entries
+      }
     }
 
     // 3. Filter to target subnet(s)
@@ -611,6 +639,15 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       }
     } catch {}
 
+    // Discover local providers available on the gateway
+    const gatewayProviders: string[] = [];
+    if (providerRegistry) {
+      for (const p of providerRegistry.list()) {
+        try { await p.checkAvailability(); } catch {}
+        if (p.info.available) gatewayProviders.push(p.id);
+      }
+    }
+
     const gatewayNode = {
       id: "gateway",
       type: "gateway" as const,
@@ -619,6 +656,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       ip: gatewayIp,
       version: PKG_VERSION,
       osVersion,
+      providers: gatewayProviders,
       online: true,
     };
 

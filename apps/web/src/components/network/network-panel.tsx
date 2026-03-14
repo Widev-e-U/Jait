@@ -38,6 +38,7 @@ interface TopologyGateway {
   ip: string
   version: string
   osVersion: string | null
+  providers: string[]
   online: boolean
 }
 
@@ -505,12 +506,21 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
     return { nodes, links }
   }, [topology])
 
-  // Center on gateway after data changes
+  // Center on gateway once after first data load — avoid re-zooming on every scan
+  const hasInitialZoomRef = useRef(false)
   useEffect(() => {
-    if (graphRef.current && graphData.nodes.length > 0) {
+    if (graphRef.current && graphData.nodes.length > 0 && !hasInitialZoomRef.current) {
+      hasInitialZoomRef.current = true
       setTimeout(() => {
-        graphRef.current?.zoomToFit(400, 120)
-      }, 500)
+        const fg = graphRef.current
+        if (!fg) return
+        fg.zoomToFit(400, 160)
+        // Cap zoom so it doesn't fly in too close with few nodes
+        setTimeout(() => {
+          const currentZoom = fg.zoom()
+          if (currentZoom > 3) fg.zoom(3, 400)
+        }, 500)
+      }, 1200)
     }
   }, [graphData.nodes.length])
 

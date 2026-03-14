@@ -130,10 +130,12 @@ export class WsControlPlane {
 
       ws.on("close", () => {
         this.clients.delete(clientId);
+        this.broadcastFsNodeChange(clientId);
       });
 
       ws.on("error", () => {
         this.clients.delete(clientId);
+        this.broadcastFsNodeChange(clientId);
       });
     });
   }
@@ -366,6 +368,13 @@ export class WsControlPlane {
           this.fsNodes.set(node.id, node);
           console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id} — providers: ${node.providers?.join(", ") ?? "none"}`);
           this.onFsNodeRegistered?.(node);
+          // Notify all clients so frontends can refresh provider/device lists
+          this.broadcastAll({
+            type: "fs.node-registered" as WsEvent["type"],
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: { nodeId: node.id, name: node.name, platform: node.platform, providers: node.providers ?? [] },
+          });
         }
         break;
       }
@@ -642,6 +651,23 @@ export class WsControlPlane {
       });
     }
     console.log(`[screen-share]   sent to ${sentCount} client(s)`);
+  }
+
+  /** Broadcast an fs.node-disconnected event when a client with FsNodes disconnects. */
+  private broadcastFsNodeChange(clientId: string): void {
+    // Find FsNodes owned by this client
+    for (const [id, node] of this.fsNodes) {
+      if (node.clientId === clientId && !node.isGateway) {
+        this.fsNodes.delete(id);
+        this.broadcastAll({
+          type: "fs.node-disconnected" as WsEvent["type"],
+          sessionId: "",
+          timestamp: new Date().toISOString(),
+          payload: { nodeId: id },
+        });
+        console.log(`[ws] fs node disconnected: ${node.name} (${id}) — client ${clientId} gone`);
+      }
+    }
   }
 
   /** Find all connected device IDs */

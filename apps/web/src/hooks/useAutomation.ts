@@ -178,6 +178,20 @@ export function useAutomation(enabled = true) {
     }
   }, [localDeviceId])
 
+  /** Lightweight refresh of just providers + repos (used when FsNodes connect/disconnect). */
+  const refreshProviders = useCallback(async () => {
+    if (!localStorage.getItem('token')) return
+    try {
+      const [provResult, repos] = await Promise.all([
+        agentsApi.listProviders(),
+        agentsApi.listRepos(),
+      ])
+      setProviders(provResult.providers)
+      setRemoteProviders(provResult.remoteProviders)
+      setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
+    } catch { /* best-effort */ }
+  }, [localDeviceId])
+
   const getRuntimeInfoForRepository = useCallback(
     (repository: RepositoryConnection) => getRepositoryRuntimeInfo(repository, {
       localDeviceId,
@@ -294,6 +308,12 @@ export function useAutomation(enabled = true) {
           setLocalRepositories(prev => prev.filter(r => r.id !== repoId))
           setSelectedRepoId(prev => prev === repoId ? null : prev)
         }
+        break
+      }
+      // ── FsNode events — re-fetch providers so online/offline updates ──
+      case 'fs.node-registered':
+      case 'fs.node-disconnected': {
+        void refreshProviders()
         break
       }
     }
