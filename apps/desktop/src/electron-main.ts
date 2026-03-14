@@ -862,9 +862,19 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
             await writeTmpFile(bodyFile, prBody, "utf-8");
             try {
               const baseFlag = baseBranch ? ` --base "${baseBranch}"` : "";
-              const pushFlag = (result.push as Record<string, unknown>).status !== "pushed" ? " --push" : "";
+              // If the branch wasn't pushed yet, push it now before creating the PR
+              if ((result.push as Record<string, unknown>).status !== "pushed") {
+                try {
+                  const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
+                  const remote = remotes.includes("origin") ? "origin" : remotes[0];
+                  if (remote) {
+                    await gitExecLocal(`push --set-upstream "${remote}" "${currentBranch}"`, 60_000);
+                    result.push = { status: "pushed", branch: currentBranch, upstreamBranch: `${remote}/${currentBranch}`, setUpstream: true };
+                  }
+                } catch { /* push failed — gh pr create may still work */ }
+              }
               const prUrl = await ghExecLocal(
-                `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}${pushFlag}`,
+                `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}`,
                 60_000,
               );
 
@@ -883,9 +893,6 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
               } catch { /* */ }
 
               result.pr = { status: "created", url: prUrl.trim(), number: prNumber, baseBranch: prBaseBranch, headBranch: prHeadBranch, title: prFinalTitle };
-              if ((result.push as Record<string, unknown>).status !== "pushed") {
-                result.push = { status: "pushed", branch: currentBranch };
-              }
             } finally {
               await unlinkTmp(bodyFile).catch(() => {});
             }
