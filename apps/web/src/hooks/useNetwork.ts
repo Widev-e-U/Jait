@@ -126,7 +126,7 @@ export function useNetwork(token?: string | null) {
       const res = await fetch(`${API_URL}/api/network/scan`, {
         method: 'POST',
         headers: headers(),
-        body: JSON.stringify({ subnet }),
+        body: JSON.stringify({ subnet, deep: true }),
         signal: abortRef.current.signal,
       })
       if (!res.ok) throw new Error(`Scan failed: ${res.status}`)

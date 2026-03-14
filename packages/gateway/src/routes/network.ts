@@ -9,6 +9,7 @@ import type { WsControlPlane } from "../ws.js";
 import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-tools.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import { createRequire } from "node:module";
+import { scanNetwork } from "../lib/network-scan.js";
 
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require("../../package.json") as { version: string };
@@ -19,64 +20,6 @@ const execAsync = promisify(exec);
 // Helpers
 // ---------------------------------------------------------------------------
 
-/** Derive the local subnet (e.g. "192.168.1") from active network interfaces. */
-function getLocalSubnets(): string[] {
-  const ifaces = networkInterfaces();
-  const subnets: string[] = [];
-  for (const entries of Object.values(ifaces)) {
-    if (!entries) continue;
-    for (const entry of entries) {
-      if (entry.family === "IPv4" && !entry.internal) {
-        // Skip link-local / APIPA addresses (169.254.x.x)
-        if (entry.address.startsWith("169.254.")) continue;
-        const parts = entry.address.split(".");
-        subnets.push(parts.slice(0, 3).join("."));
-      }
-    }
-  }
-  return [...new Set(subnets)];
-}
-
-/** Parse the output of `arp -a` into a list of IP→MAC pairs. */
-function parseArpTable(output: string): { ip: string; mac: string }[] {
-  const results: { ip: string; mac: string }[] = [];
-  // Matches lines like "  192.168.1.1           00-0a-95-9d-68-16     dynamic"
-  // or "(192.168.1.1) at 00:0a:95:9d:68:16 [ether] on eth0"
-  const lineRegex = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(?:at\s+)?([0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2})/;
-  const IGNORED_MACS = new Set(["ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"]);
-  for (const line of output.split("\n")) {
-    const match = lineRegex.exec(line);
-    if (match) {
-      const mac = match[2]!.replace(/-/g, ":").toLowerCase();
-      // Skip broadcast, null, and multicast MACs (first octet odd = multicast)
-      if (IGNORED_MACS.has(mac)) continue;
-      const firstOctet = parseInt(mac.slice(0, 2), 16);
-      if (firstOctet & 1) continue; // multicast bit set
-      results.push({ ip: match[1]!, mac });
-    }
-  }
-  return results;
-}
-
-/** Sleep helper. */
-function sleep(ms: number): Promise<void> {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/** Run tasks with bounded concurrency. */
-async function mapConcurrent<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
-  const results: R[] = new Array(items.length);
-  let idx = 0;
-  const run = async () => {
-    while (idx < items.length) {
-      const i = idx++;
-      results[i] = await fn(items[i]!);
-    }
-  };
-  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => run()));
-  return results;
-}
-
 /** TCP-connect probe to check if a single port is open. */
 function probePort(ip: string, port: number, timeoutMs = 2000): Promise<boolean> {
   return new Promise((resolve) => {
@@ -85,62 +28,6 @@ function probePort(ip: string, port: number, timeoutMs = 2000): Promise<boolean>
     socket.once("timeout", () => { socket.destroy(); resolve(false); });
     socket.once("error", () => { socket.destroy(); resolve(false); });
   });
-}
-
-/** Resolve hostname via reverse-DNS. */
-async function reverseResolve(ip: string): Promise<string | null> {
-  try {
-    const cmd = platform() === "win32"
-      ? `nslookup ${ip} 2>nul`
-      : `host ${ip} 2>/dev/null || true`;
-    const { stdout } = await execAsync(cmd, { timeout: 3000 });
-    // Windows: "Name:    myhost.local"
-    const winMatch = /Name:\s+(\S+)/i.exec(stdout);
-    if (winMatch) return winMatch[1]!;
-    // Linux: "1.168.192.in-addr.arpa domain name pointer myhost.local."
-    const linMatch = /pointer\s+(\S+)/i.exec(stdout);
-    if (linMatch) return linMatch[1]!.replace(/\.$/, "");
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-/** Detect OS version via SSH banner and/or Jait gateway health endpoint. */
-async function detectOsVersion(ip: string, sshReachable: boolean, agentStatus: string): Promise<string | null> {
-  if (agentStatus === "running") {
-    try {
-      const res = await fetch(`http://${ip}:8000/health`, { signal: AbortSignal.timeout(2000) });
-      if (res.ok) {
-        const health = (await res.json()) as { platform?: string; osVersion?: string; os?: string };
-        if (health.osVersion) return health.osVersion;
-        if (health.os) return health.os;
-      }
-    } catch {}
-  }
-  if (sshReachable) {
-    try {
-      const banner = await new Promise<string>((resolve) => {
-        const socket = createConnection({ host: ip, port: 22, timeout: 3000 });
-        let data = "";
-        socket.on("data", (chunk) => { data += chunk.toString(); socket.destroy(); resolve(data); });
-        socket.on("timeout", () => { socket.destroy(); resolve(""); });
-        socket.on("error", () => { socket.destroy(); resolve(""); });
-      });
-      if (banner) {
-        const trimmed = banner.trim().slice(0, 200);
-        if (/ubuntu/i.test(trimmed)) {
-          const m = /Ubuntu[\s-]*(\S*)/i.exec(trimmed);
-          return m ? `Ubuntu ${m[1]}` : "Ubuntu";
-        }
-        if (/debian/i.test(trimmed)) return "Debian";
-        if (/windows/i.test(trimmed)) return "Windows";
-        if (/raspbian/i.test(trimmed)) return "Raspbian";
-        if (trimmed.startsWith("SSH-")) return trimmed;
-      }
-    } catch {}
-  }
-  return null;
 }
 
 // ---------------------------------------------------------------------------
@@ -261,167 +148,27 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
   app.post("/api/network/scan", async (request) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const targetSubnet = body["subnet"] as string | undefined;
+    const deep = body["deep"] === undefined ? true : Boolean(body["deep"]);
+    const includeIps = Array.isArray(body["includeIps"])
+      ? body["includeIps"].filter((value): value is string => typeof value === "string")
+      : [];
 
-    const subnets = targetSubnet ? [targetSubnet] : getLocalSubnets();
-    if (subnets.length === 0) {
-      return { error: "No active IPv4 subnets found" };
-    }
-
-    const start = Date.now();
-
-    // 1. Collect ARP table
-    let arpOutput = "";
     try {
-      const { stdout } = await execAsync("arp -a", { timeout: 10000 });
-      arpOutput = stdout;
-    } catch {
-      // ARP might not be available — continue with ping sweep
-    }
+      const result: NetworkScanResult = await scanNetwork({ subnet: targetSubnet, deep, includeIps });
+      setLatestNetworkScan(result as unknown as import("../tools/network-tools.js").NetworkScanData);
 
-    const arpEntries = parseArpTable(arpOutput);
-
-    // 2. Ping sweep every detected subnet to populate ARP cache
-    try {
-      for (const subnet of subnets) {
-        if (platform() === "win32") {
-          // Split into batches of 25 to stay under cmd.exe 8191-char limit.
-          // Run batches in parallel — each batch runs pings sequentially,
-          // but all batches run concurrently.
-          const BATCH = 25;
-          const batches: string[] = [];
-          for (let i = 1; i <= 254; i += BATCH) {
-            const end = Math.min(i + BATCH - 1, 254);
-            const cmds = Array.from({ length: end - i + 1 }, (_, j) =>
-              `ping -n 1 -w 500 ${subnet}.${i + j} > nul 2>&1`
-            ).join(" & ");
-            batches.push(cmds);
-          }
-          await Promise.all(
-            batches.map(cmd => execAsync(cmd, { timeout: 45000 }).catch(() => {}))
-          );
-        } else {
-          const pingCmd = `for i in $(seq 1 254); do ping -c 1 -W 1 ${subnet}.$i & done; wait`;
-          await execAsync(pingCmd, { timeout: 30000, shell: "/bin/bash" }).catch(() => {});
+      if (sqlite) {
+        try {
+          persistHostsToDb(sqlite, result.hosts, result.scannedAt);
+        } catch (err) {
+          console.error("Failed to persist network hosts to DB:", err);
         }
       }
-      // Brief pause to let the OS finish updating ARP/neighbour cache
-      await sleep(2500);
-      // Re-read ARP table after all sweeps
-      const { stdout } = await execAsync("arp -a", { timeout: 10000 });
-      arpOutput = stdout;
-      arpEntries.length = 0;
-      arpEntries.push(...parseArpTable(stdout));
-    } catch {
-      // Ping sweep optional — use whatever ARP gave us
+
+      return result;
+    } catch (err) {
+      return { error: err instanceof Error ? err.message : "Network scan failed" };
     }
-
-    // 2b. On Windows, supplement with Get-NetNeighbor for entries ARP may miss
-    if (platform() === "win32") {
-      try {
-        const { stdout: pshOutput } = await execAsync(
-          'powershell -NoProfile -Command "Get-NetNeighbor -AddressFamily IPv4 | Where-Object { $_.State -ne \'Unreachable\' -and $_.LinkLayerAddress -ne \'\' -and $_.LinkLayerAddress -ne \'00-00-00-00-00-00\' } | Select-Object IPAddress,LinkLayerAddress | ConvertTo-Csv -NoTypeInformation"',
-          { timeout: 15000 },
-        );
-        const existingIps = new Set(arpEntries.map(e => e.ip));
-        for (const line of pshOutput.split("\n")) {
-          // CSV lines: "192.168.1.1","D4-E7-5C-AB-12-34"
-          const csvMatch = /"(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})"\s*,\s*"([0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2}-[0-9a-fA-F]{2})"/.exec(line);
-          if (!csvMatch) continue;
-          const ip = csvMatch[1]!;
-          const mac = csvMatch[2]!.replace(/-/g, ":").toLowerCase();
-          if (existingIps.has(ip)) continue;
-          const IGNORED_MACS = new Set(["ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"]);
-          if (IGNORED_MACS.has(mac)) continue;
-          const firstOctet = parseInt(mac.slice(0, 2), 16);
-          if (firstOctet & 1) continue;
-          if (subnets.some(s => ip.startsWith(s + "."))) {
-            arpEntries.push({ ip, mac });
-          }
-        }
-      } catch {
-        // Get-NetNeighbor not available — continue with ARP entries
-      }
-    }
-
-    // 3. Filter to target subnet(s)
-    const subnetFiltered = arpEntries.filter(e =>
-      subnets.some(s => e.ip.startsWith(s + "."))
-    );
-
-    // 4. Probe SSH (port 22) and common ports with bounded concurrency
-    const PROBE_PORTS = [22, 80, 443, 8000, 8080];
-    const hosts: NetworkHost[] = await mapConcurrent(subnetFiltered, 20, async (entry) => {
-        const portResults = await Promise.all(
-          PROBE_PORTS.map(async (port) => ({ port, open: await probePort(entry.ip, port, 1500) }))
-        );
-        const openPorts = portResults.filter(p => p.open).map(p => p.port);
-        const sshReachable = openPorts.includes(22);
-        const hostname = await reverseResolve(entry.ip);
-
-        // Check if this is a known Jait gateway node
-        let agentStatus: NetworkHost["agentStatus"] = "not-installed";
-        let providers: string[] | undefined;
-        if (openPorts.includes(8000)) {
-          try {
-            const res = await fetch(`http://${entry.ip}:8000/health`, { signal: AbortSignal.timeout(2000) });
-            if (res.ok) {
-              const health = await res.json() as { name?: string };
-              if (health.name === "jait-gateway") {
-                agentStatus = "running";
-                // Try to discover providers from the remote gateway
-                try {
-                  const topoRes = await fetch(`http://${entry.ip}:8000/api/network/topology`, { signal: AbortSignal.timeout(2000) });
-                  if (topoRes.ok) {
-                    const topo = await topoRes.json() as { devices?: { providers?: string[] }[] };
-                    const all = new Set<string>();
-                    for (const d of topo.devices ?? []) for (const p of d.providers ?? []) all.add(p);
-                    if (all.size > 0) providers = [...all];
-                  }
-                } catch {}
-              }
-            }
-          } catch {
-            agentStatus = "not-installed";
-          }
-        }
-
-        return {
-          ip: entry.ip,
-          mac: entry.mac,
-          hostname,
-          vendor: null,
-          alive: true,
-          openPorts,
-          sshReachable,
-          agentStatus,
-          osVersion: await detectOsVersion(entry.ip, sshReachable, agentStatus),
-          providers,
-          lastSeen: new Date().toISOString(),
-        };
-      });
-
-    const result: NetworkScanResult = {
-      subnet: subnets.map(s => s + ".0/24").join(", "),
-      hosts: hosts.sort((a, b) => {
-        const aNum = a.ip.split(".").map(Number).reduce((sum, n) => sum * 256 + n, 0);
-        const bNum = b.ip.split(".").map(Number).reduce((sum, n) => sum * 256 + n, 0);
-        return aNum - bNum;
-      }),
-      scannedAt: new Date().toISOString(),
-      durationMs: Date.now() - start,
-    };
-
-    // Update the shared cache so /api/network/scan/latest reflects this scan
-    setLatestNetworkScan(result as unknown as import("../tools/network-tools.js").NetworkScanData);
-
-    // Persist to DB
-    if (sqlite) {
-      try { persistHostsToDb(sqlite, result.hosts, result.scannedAt); } catch (err) {
-        console.error("Failed to persist network hosts to DB:", err);
-      }
-    }
-
-    return result;
   });
 
   // ---- POST /api/network/ssh/test — test SSH connectivity ----
@@ -673,7 +420,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
 
     // Scanned network hosts — prefer in-memory cache, fall back to DB
     const scan = getLatestNetworkScan();
-    let hostSource: { ip: string; mac: string | null; hostname: string | null; openPorts: number[]; sshReachable: boolean; agentStatus: string; osVersion?: string | null; providers?: string[] }[] =
+    let hostSource: { ip: string; mac: string | null; hostname: string | null; alive?: boolean; openPorts: number[]; sshReachable: boolean; agentStatus: string; osVersion?: string | null; providers?: string[] }[] =
       scan?.hosts ?? [];
     let scannedAt: string | null = scan?.scannedAt ?? null;
 
@@ -694,7 +441,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       agentStatus: h.agentStatus,
       osVersion: h.osVersion ?? null,
       providers: h.providers ?? [],
-      online: true,
+      online: h.alive ?? true,
     }));
 
     // Known gateway mesh nodes
