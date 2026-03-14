@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.70",
+  "version": "0.1.71",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "type": "module",
   "main": "dist/index.js",
@@ -17,7 +17,7 @@
     "prebuild": "bun run --filter @jait/web build && bun run bundle-web",
     "bundle-web": "node scripts/bundle-web.mjs",
     "build": "tsc",
-    "dev": "bun --watch src/index.ts",
+    "dev": "bun run --filter @jait/web build && bun --watch src/index.ts",
     "start": "node dist/index.js",
     "typecheck": "tsc --noEmit"
   },
