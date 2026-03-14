@@ -802,8 +802,9 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
           try {
             await gitExecLocal("push", 60_000);
             result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
-          } catch {
-            result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+          } catch (pushErr) {
+            const msg = pushErr instanceof Error ? pushErr.message : String(pushErr);
+            result.push = { status: "failed", branch: currentBranch, upstreamBranch, error: msg };
           }
         } else {
           // Try to find a remote to set upstream

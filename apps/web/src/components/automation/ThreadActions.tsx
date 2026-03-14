@@ -109,7 +109,17 @@ export function ThreadActions({
       })
       const result = response.result
 
-      if (result.pr.url) {
+      if (response.pushFailed) {
+        if (response.resumed) {
+          toast.info('Push failed — thread resumed', {
+            description: 'The agent is investigating the push failure and will fix the issue.',
+          })
+        } else {
+          toast.error('Push failed', {
+            description: response.error ?? 'Git push failed. Re-open the thread to fix the issue.',
+          })
+        }
+      } else if (result.pr.url) {
         setPrLink({ url: result.pr.url, kind: 'created' })
       } else if (result.push.createPrUrl) {
         setPrLink({ url: result.push.createPrUrl, kind: 'create' })

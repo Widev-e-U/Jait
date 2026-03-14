@@ -96,10 +96,13 @@ export interface CreateThreadPrRequest {
 }
 
 export interface CreateThreadPrResponse {
-  message: string
-  prUrl: string | null
+  message?: string
+  error?: string
+  prUrl?: string | null
   result: GitStepResult
   thread?: AgentThread
+  pushFailed?: boolean
+  resumed?: boolean
 }
 
 export interface AutomationRepo {

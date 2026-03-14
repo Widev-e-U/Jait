@@ -68,7 +68,7 @@ export interface GitListBranchesResult {
 
 export interface GitStepResult {
   commit: { status: "created" | "skipped_no_changes"; commitSha?: string; subject?: string };
-  push: { status: "pushed" | "skipped_not_requested" | "skipped_up_to_date" | "skipped_no_remote"; branch?: string; upstreamBranch?: string; setUpstream?: boolean; createPrUrl?: string };
+  push: { status: "pushed" | "skipped_not_requested" | "skipped_up_to_date" | "skipped_no_remote" | "failed"; branch?: string; upstreamBranch?: string; setUpstream?: boolean; createPrUrl?: string; error?: string };
   branch: { status: "created" | "skipped_not_requested"; name?: string };
   pr: { status: "created" | "opened_existing" | "skipped_not_requested" | "skipped_no_remote"; url?: string; number?: number; baseBranch?: string; headBranch?: string; title?: string };
 }
@@ -462,9 +462,9 @@ export class GitService {
           try {
             await gitExec(cwd, "push");
             result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
-          } catch {
-            // Already up-to-date or push failed — still proceed to PR
-            result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
+          } catch (pushErr) {
+            const msg = pushErr instanceof Error ? pushErr.message : String(pushErr);
+            result.push = { status: "failed", branch: currentBranch, upstreamBranch, error: msg };
           }
         } else {
           const remoteName = await this.getPreferredRemote(cwd, currentBranch);

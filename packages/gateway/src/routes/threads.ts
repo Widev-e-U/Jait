@@ -639,6 +639,50 @@ export function registerThreadRoutes(
       }
 
       const prUrl = result.pr.url ?? result.push.createPrUrl;
+
+      // ── Push failed — resume the thread so the agent can fix the issue ──
+      if (result.push.status === "failed") {
+        const pushError = result.push.error ?? "Unknown push error";
+        const resumeMessage = [
+          `Git push failed with the following error:\n\n${pushError}\n`,
+          "Please investigate and fix the issue (e.g. linting errors, type errors, or git hook failures),",
+          "then let me know when you're done so I can retry the push and PR creation.",
+        ].join("\n");
+
+        // Log the failure as a thread activity
+        const activity = threadService.addActivity(
+          thread.id,
+          "activity",
+          `Push failed: ${pushError}`,
+          { action: "push_failed", error: pushError, result },
+        );
+        broadcastThreadEvent(thread.id, "activity", { activity });
+
+        // Try to resume the thread with the error message
+        let resumed = false;
+        if (thread.providerSessionId) {
+          const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
+          if (provider) {
+            try {
+              const userActivity = threadService.addActivity(id, "message", resumeMessage.slice(0, 500), { role: "user", content: resumeMessage });
+              broadcastThreadEvent(id, "activity", { activity: userActivity });
+              threadService.update(id, { status: "running", error: null });
+              broadcastThreadStatus(id, "running");
+              await provider.sendTurn(thread.providerSessionId, resumeMessage);
+              resumed = true;
+            } catch { /* session may be dead — fall through */ }
+          }
+        }
+
+        return reply.status(200).send({
+          error: `Push failed: ${pushError}`,
+          pushFailed: true,
+          resumed,
+          result,
+          thread: threadService.getById(thread.id),
+        });
+      }
+
       const updatedThread = threadService.update(thread.id, {
         branch: result.push.branch ?? undefined,
         prUrl: result.pr.url ?? undefined,
