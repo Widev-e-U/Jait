@@ -1884,13 +1884,143 @@ ${file.content.slice(0, 2000)}
     })
   }, [activeSessionId, automation.handleSend, chatProvider, cliModel, createSession, sendMessage, token, viewMode])
 
+  // ── Push-to-talk voice recording state ─────────────────────────
+  const [voiceRecording, setVoiceRecording] = useState(false)
+  const [voiceTranscribing, setVoiceTranscribing] = useState(false)
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null)
+  const audioChunksRef = useRef<Blob[]>([])
+  const audioStreamRef = useRef<MediaStream | null>(null)
+
+  /** Encode PCM samples from an AudioBuffer into a WAV Blob (16-bit, 16 kHz mono). */
+  const buildWavBlob = useCallback((audioBuffer: AudioBuffer): Blob => {
+    const numChannels = 1
+    const sampleRate = audioBuffer.sampleRate
+    const samples = audioBuffer.getChannelData(0)
+    const buffer = new ArrayBuffer(44 + samples.length * 2)
+    const view = new DataView(buffer)
+
+    const writeStr = (offset: number, s: string) => {
+      for (let i = 0; i < s.length; i++) view.setUint8(offset + i, s.charCodeAt(i))
+    }
+    writeStr(0, 'RIFF')
+    view.setUint32(4, 36 + samples.length * 2, true)
+    writeStr(8, 'WAVE')
+    writeStr(12, 'fmt ')
+    view.setUint32(16, 16, true)
+    view.setUint16(20, 1, true) // PCM
+    view.setUint16(22, numChannels, true)
+    view.setUint32(24, sampleRate, true)
+    view.setUint32(28, sampleRate * numChannels * 2, true)
+    view.setUint16(32, numChannels * 2, true)
+    view.setUint16(34, 16, true) // bits per sample
+    writeStr(36, 'data')
+    view.setUint32(40, samples.length * 2, true)
+
+    let offset = 44
+    for (let i = 0; i < samples.length; i++) {
+      const s = Math.max(-1, Math.min(1, samples[i]))
+      view.setInt16(offset, s < 0 ? s * 0x8000 : s * 0x7FFF, true)
+      offset += 2
+    }
+    return new Blob([buffer], { type: 'audio/wav' })
+  }, [])
+
+  const stopRecordingAndTranscribe = useCallback(async () => {
+    setVoiceRecording(false)
+
+    // Stop MediaRecorder and collect audio
+    const recorder = mediaRecorderRef.current
+    if (!recorder || recorder.state === 'inactive') return
+
+    const audioBlob = await new Promise<Blob>((resolve) => {
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+      recorder.onstop = () => {
+        resolve(new Blob(audioChunksRef.current, { type: recorder.mimeType }))
+      }
+      recorder.stop()
+    })
+
+    // Stop mic
+    audioStreamRef.current?.getTracks().forEach((t) => t.stop())
+    audioStreamRef.current = null
+    mediaRecorderRef.current = null
+
+    if (audioBlob.size === 0) return
+
+    if (settings.stt_provider === 'wyoming') {
+      // Convert to WAV and send to Wyoming/HA via backend
+      setVoiceTranscribing(true)
+      try {
+        // Decode the webm blob to raw PCM, then re-encode as WAV
+        const arrayBuf = await audioBlob.arrayBuffer()
+        const audioCtx = new AudioContext({ sampleRate: 16000 })
+        const decoded = await audioCtx.decodeAudioData(arrayBuf)
+        const wavBlob = buildWavBlob(decoded)
+        await audioCtx.close()
+
+        // Convert to base64
+        const wavArrayBuf = await wavBlob.arrayBuffer()
+        const bytes = new Uint8Array(wavArrayBuf)
+        let binary = ''
+        for (let i = 0; i < bytes.length; i++) binary += String.fromCharCode(bytes[i])
+        const audioBase64 = btoa(binary)
+
+        const res = await fetch(`${API_URL}/api/voice/transcribe-audio`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+          },
+          body: JSON.stringify({ audioBase64, sessionId: activeSessionId ?? 'voice-input' }),
+        })
+        const data = (await res.json()) as { text?: string; error?: string; details?: string }
+        if (data.text) {
+          const transcript = data.text
+          setInputValue((prev) => (prev ? prev + ' ' + transcript : transcript))
+        } else {
+          console.warn('Wyoming transcription failed:', data.details ?? data.error)
+        }
+      } catch (err) {
+        console.error('Wyoming transcription error:', err)
+      } finally {
+        setVoiceTranscribing(false)
+      }
+    } else if (settings.stt_provider === 'browser') {
+      // Use Web Speech API on the captured audio (fallback: re-trigger recognition)
+      setVoiceTranscribing(true)
+      try {
+        const win = window as typeof window & { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any }
+        const speechApi = win.SpeechRecognition ?? win.webkitSpeechRecognition
+        if (!speechApi) {
+          window.alert('Browser Speech-to-Text is not supported.')
+          return
+        }
+        // Play the audio back through recognition isn't possible — for browser mode
+        // we fall back to a simpler approach: submit the blob text  
+        // Actually for browser mode we just insert a note that browser STT
+        // doesn't support audio blob transcription and should use direct mode
+        window.alert('Browser STT works best with direct microphone input. Consider switching to Wyoming for push-to-talk.')
+      } finally {
+        setVoiceTranscribing(false)
+      }
+    } else {
+      // simulated — show a prompt
+      const transcript = window.prompt('Transcription (simulated):')?.trim() ?? ''
+      if (transcript) {
+        setInputValue((prev) => (prev ? prev + ' ' + transcript : transcript))
+      }
+    }
+  }, [activeSessionId, buildWavBlob, settings.stt_provider, token])
+
   const handleVoiceInput = useCallback(async () => {
     if (!token) {
       setShowLoginDialog(true)
       return
     }
 
-    let transcript = ''
+    // For browser provider, keep the old direct recognition flow
     if (settings.stt_provider === 'browser') {
       const win = window as typeof window & { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any }
       const speechApi = win.SpeechRecognition ?? win.webkitSpeechRecognition
@@ -1898,7 +2028,7 @@ ${file.content.slice(0, 2000)}
         window.alert('Speech-to-Text provider "Browser" is not supported in this browser.')
         return
       }
-      transcript = await new Promise<string>((resolve) => {
+      const transcript = await new Promise<string>((resolve) => {
         const recognition = new speechApi()
         let resolved = false
         const finish = (value: string) => {
@@ -1918,23 +2048,63 @@ ${file.content.slice(0, 2000)}
         recognition.onend = () => finish('')
         recognition.start()
       })
-    } else {
-      transcript = window.prompt('Speak now (simulated transcript):')?.trim() ?? ''
-    }
-    if (!transcript) return
-
-    try {
-      const res = await fetch(`${API_URL}/api/voice/transcribe`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: activeSessionId ?? 'voice-input', transcript }),
-      })
-      const data = (await res.json()) as { text?: string }
-      if (data.text) {
-        await submitVoiceTranscript(data.text)
+      if (!transcript) return
+      try {
+        const res = await fetch(`${API_URL}/api/voice/transcribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: activeSessionId ?? 'voice-input', transcript }),
+        })
+        const data = (await res.json()) as { text?: string }
+        if (data.text) {
+          await submitVoiceTranscript(data.text)
+        }
+      } catch {
+        // noop
       }
-    } catch {
-      // noop
+      return
+    }
+
+    // For simulated provider, keep the old prompt flow
+    if (settings.stt_provider === 'simulated') {
+      const transcript = window.prompt('Speak now (simulated transcript):')?.trim() ?? ''
+      if (!transcript) return
+      try {
+        const res = await fetch(`${API_URL}/api/voice/transcribe`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sessionId: activeSessionId ?? 'voice-input', transcript }),
+        })
+        const data = (await res.json()) as { text?: string }
+        if (data.text) {
+          await submitVoiceTranscript(data.text)
+        }
+      } catch {
+        // noop
+      }
+      return
+    }
+
+    // Wyoming provider: push-to-talk with MediaRecorder
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({
+        audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
+      })
+      audioStreamRef.current = stream
+      audioChunksRef.current = []
+
+      const recorder = new MediaRecorder(stream)
+      mediaRecorderRef.current = recorder
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      recorder.start()
+      setVoiceRecording(true)
+    } catch (err) {
+      console.error('Microphone access denied:', err)
+      window.alert('Microphone access is required for push-to-talk.')
     }
   }, [activeSessionId, settings.stt_provider, submitVoiceTranscript, token])
 
@@ -2552,6 +2722,9 @@ ${file.content.slice(0, 2000)}
                           disabled={automation.creating}
                           placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
                           onVoiceInput={handleVoiceInput}
+                          voiceRecording={voiceRecording}
+                          voiceTranscribing={voiceTranscribing}
+                          onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                           viewMode={viewMode}
                           onViewModeChange={setViewMode}
                           provider={chatProvider}
@@ -2615,6 +2788,9 @@ ${file.content.slice(0, 2000)}
                             controlsDisabled={automation.creating}
                             placeholder={managerPlaceholder}
                             onVoiceInput={handleVoiceInput}
+                            voiceRecording={voiceRecording}
+                            voiceTranscribing={voiceTranscribing}
+                            onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                             viewMode={viewMode}
                             onViewModeChange={setViewMode}
                             provider={chatProvider}
@@ -2706,6 +2882,9 @@ ${file.content.slice(0, 2000)}
                     onQueue={handleQueue}
                     isLoading={isLoading}
                     onVoiceInput={handleVoiceInput}
+                    voiceRecording={voiceRecording}
+                    voiceTranscribing={voiceTranscribing}
+                    onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                     mode={chatMode}
                     onModeChange={setChatMode}
                     provider={chatProvider}
@@ -2849,6 +3028,9 @@ ${file.content.slice(0, 2000)}
                       isLoading={isLoading}
                       disabled={limitReached}
                       onVoiceInput={handleVoiceInput}
+                      voiceRecording={voiceRecording}
+                      voiceTranscribing={voiceTranscribing}
+                      onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                       mode={chatMode}
                       onModeChange={setChatMode}
                       provider={chatProvider}

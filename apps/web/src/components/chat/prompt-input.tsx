@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef, type ReactNode } from 'react'
-import { ArrowUp, ChevronDown, ListPlus, Mic, Square } from 'lucide-react'
+import { ArrowUp, ChevronDown, ListPlus, Mic, MicOff, Square, Loader2 } from 'lucide-react'
 import { getIconForFile, DEFAULT_FILE } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import {
@@ -43,6 +43,12 @@ interface PromptInputProps {
   className?: string
   footerLeadingContent?: ReactNode
   onVoiceInput?: () => void
+  /** True while mic is actively recording */
+  voiceRecording?: boolean
+  /** True while audio is being transcribed */
+  voiceTranscribing?: boolean
+  /** Called when user clicks "Done" to stop recording */
+  onVoiceStop?: () => void
   viewMode?: ViewMode
   onViewModeChange?: (viewMode: ViewMode) => void
   mode?: ChatMode
@@ -185,6 +191,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   className,
   footerLeadingContent,
   onVoiceInput,
+  voiceRecording,
+  voiceTranscribing,
+  onVoiceStop,
   viewMode,
   onViewModeChange,
   mode,
@@ -719,7 +728,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           </div>
         )}
         <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterControls ? 'pl-1' : 'ml-auto')}>
-          {onVoiceInput && !isLoading && (
+          {onVoiceInput && !isLoading && !voiceRecording && !voiceTranscribing && (
             <Button
               type="button"
               size="icon"
@@ -730,6 +739,30 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             >
               <Mic className="h-4 w-4" />
             </Button>
+          )}
+          {voiceRecording && onVoiceStop && (
+            <div className="flex items-center gap-1.5">
+              <span className="flex items-center gap-1.5 text-xs text-red-500 font-medium">
+                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
+                Recording...
+              </span>
+              <Button
+                type="button"
+                size="sm"
+                variant="destructive"
+                className="h-7 px-2.5 rounded-lg text-xs"
+                onClick={onVoiceStop}
+              >
+                <MicOff className="h-3.5 w-3.5 mr-1" />
+                Done
+              </Button>
+            </div>
+          )}
+          {voiceTranscribing && (
+            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              Transcribing...
+            </div>
           )}
           {isLoading && (
             <Button

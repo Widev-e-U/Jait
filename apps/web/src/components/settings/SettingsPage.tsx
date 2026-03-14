@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Eye, EyeOff, Key, Globe, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle } from 'lucide-react'
+import { Eye, EyeOff, Key, Globe, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -39,6 +39,9 @@ const API_KEY_FIELDS = [
   'PERPLEXITY_OPENROUTER_MODEL',
   'GROK_MODEL',
   'GEMINI_MODEL',
+  'HA_URL',
+  'HA_TOKEN',
+  'HA_STT_ENTITY',
 ] as const
 
 type FieldName = typeof API_KEY_FIELDS[number]
@@ -53,6 +56,7 @@ const FIELD_ICON: Record<string, React.ComponentType<{ size?: number; className?
   MOONSHOT: Moonshot,
   KIMI: Kimi,
   GROK: Grok,
+  HA: Home as React.ComponentType<{ size?: number; className?: string }>,
 }
 
 function getFieldIcon(field: FieldName): React.ComponentType<{ size?: number; className?: string }> | null {
@@ -410,9 +414,18 @@ export function SettingsPage({
             <SelectContent>
               <SelectItem value="simulated">Simuliert (Eingabe-Prompt)</SelectItem>
               <SelectItem value="browser">Browser (Web Speech API)</SelectItem>
+              <SelectItem value="wyoming">Wyoming / Whisper (Home Assistant)</SelectItem>
             </SelectContent>
           </Select>
         </div>
+        {sttProvider === 'wyoming' && (
+          <div className="space-y-3 max-w-sm border-l-2 border-primary/20 pl-4">
+            <p className="text-xs text-muted-foreground">
+              Configure your Home Assistant Wyoming/Whisper STT integration.
+              Set these values in the API keys section below: <code className="bg-muted px-1 py-0.5 rounded text-[10px]">HA_URL</code>, <code className="bg-muted px-1 py-0.5 rounded text-[10px]">HA_TOKEN</code>, and optionally <code className="bg-muted px-1 py-0.5 rounded text-[10px]">HA_STT_ENTITY</code> (defaults to <code className="bg-muted px-1 py-0.5 rounded text-[10px]">stt.faster_whisper</code>).
+            </p>
+          </div>
+        )}
       </Card>
 
       <Card className="p-5 space-y-4">

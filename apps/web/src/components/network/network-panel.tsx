@@ -210,14 +210,6 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
             </div>
           )}
 
-          {/* OS Version */}
-          {'osVersion' in node && node.osVersion && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">OS</span>
-              <span className="text-xs">{node.osVersion}</span>
-            </div>
-          )}
-
           {/* Providers */}
           {'providers' in node && node.providers.length > 0 && (
             <div>
@@ -598,6 +590,14 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       ctx.font = `bold ${Math.max(3, 8 / globalScale)}px -apple-system, BlinkMacSystemFont, sans-serif`
       ctx.fillStyle = '#22c55e'
       ctx.fillText('GATEWAY', x, y + size + 3 + fontSize + 2)
+      // Show OS version below GATEWAY label
+      if ('osVersion' in data && data.osVersion) {
+        const osFontSize = Math.max(2.5, 7 / globalScale)
+        ctx.font = `${osFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+        ctx.fillStyle = '#60a5fa'
+        const osLabel = data.osVersion.length > 30 ? data.osVersion.slice(0, 28) + '\u2026' : data.osVersion
+        ctx.fillText(osLabel, x, y + size + 3 + fontSize + 2 + Math.max(3, 8 / globalScale) + 2)
+      }
     }
 
     // OS version label for hosts

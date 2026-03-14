@@ -136,7 +136,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     registerConsentRoutes(app, deps.consentManager, deps.audit);
   }
   if (deps.voiceService && deps.consentManager) {
-    registerVoiceRoutes(app, deps.voiceService, deps.consentManager);
+    registerVoiceRoutes(app, deps.voiceService, deps.consentManager, config, deps.userService);
   }
   if (deps.trustEngine) {
     registerTrustRoutes(app, deps.trustEngine);

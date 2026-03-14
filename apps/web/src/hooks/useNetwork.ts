@@ -16,6 +16,7 @@ export interface NetworkHost {
   openPorts: number[]
   sshReachable: boolean
   agentStatus: 'not-installed' | 'installed' | 'running' | 'unreachable'
+  osVersion: string | null
   lastSeen: string
 }
 

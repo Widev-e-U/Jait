@@ -90,6 +90,36 @@ export class VoiceService {
     return { handled: false };
   }
 
+  /**
+   * Forward audio to a Home Assistant Wyoming/Whisper STT endpoint.
+   * Returns the transcribed text or null on failure.
+   */
+  async transcribeViaWyoming(input: {
+    audioBase64: string;
+    haUrl: string;
+    haToken: string;
+    sttEntity?: string;
+  }): Promise<string | null> {
+    const entity = input.sttEntity || "stt.faster_whisper";
+    const url = `${input.haUrl.replace(/\/+$/, "")}/api/stt/${entity}`;
+    const audioBuffer = Buffer.from(input.audioBase64, "base64");
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${input.haToken}`,
+        "Content-Type": "audio/wav",
+        "X-Speech-Content": "language=de, format=wav, codec=pcm, bit_rate=16, sample_rate=16000, channel=1",
+      },
+      body: audioBuffer,
+    });
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as { result?: string; text?: string };
+    if (data.result === "success" && data.text) return data.text;
+    return null;
+  }
+
   private decodeAudioAsText(audioBase64?: string): string | null {
     if (!audioBase64) return null;
     try {

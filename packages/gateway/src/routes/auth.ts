@@ -5,7 +5,7 @@ import type { ToolRegistry } from "../tools/registry.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
-const STT_PROVIDER_VALUES = new Set<SttProvider>(["simulated", "browser"]);
+const STT_PROVIDER_VALUES = new Set<SttProvider>(["simulated", "browser", "wyoming"]);
 const CHAT_PROVIDER_VALUES = new Set<ChatProvider>(["jait", "codex", "claude-code"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
