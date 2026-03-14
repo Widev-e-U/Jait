@@ -440,7 +440,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       const res = await fetch(`${API_URL}/api/network/scan`, {
         method: 'POST',
         headers: { ...headers(), 'Content-Type': 'application/json' },
-        body: '{}',
+        body: JSON.stringify({ deep: true }),
       })
       if (!res.ok) throw new Error(`Scan failed: ${res.status}`)
       await fetchTopology()
