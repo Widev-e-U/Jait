@@ -358,14 +358,12 @@ export function useAutomation(enabled = true) {
 
     const requestId = ++prStateRequestRef.current
     const repoPath = selectedRepo.localPath
-    const currentThreads = repoThreads
-    const baseStates = Object.fromEntries(currentThreads.map((t) => [t.id, null])) as Record<string, ThreadPrState>
-    const threadsWithBranch = currentThreads.filter((t) => typeof t.branch === 'string' && t.branch.length > 0)
+    const threadsWithBranch = repoThreads.filter((t) => typeof t.branch === 'string' && t.branch.length > 0)
 
     const loadPrStates = async () => {
       if (threadsWithBranch.length === 0) {
         if (requestId === prStateRequestRef.current) {
-          setThreadPrStates(baseStates)
+          setThreadPrStates({})
         }
         return
       }
@@ -383,17 +381,20 @@ export function useAutomation(enabled = true) {
 
           // Sync discovered PR metadata back to the thread DB so it
           // persists across sessions and shows in ThreadActions / sidebar.
-          if (status.pr && (
-            thread.prUrl !== status.pr.url ||
-            thread.prState !== status.pr.state ||
-            thread.prNumber !== status.pr.number
+          if (status.ghAvailable && (
+            (status.pr && (
+              thread.prUrl !== status.pr.url ||
+              thread.prState !== status.pr.state ||
+              thread.prNumber !== status.pr.number
+            )) ||
+            (!status.pr && thread.prState != null)
           )) {
             try {
               await agentsApi.updateThread(thread.id, {
-                prUrl: status.pr.url,
-                prNumber: status.pr.number,
-                prTitle: status.pr.title,
-                prState: status.pr.state,
+                prUrl: status.pr?.url ?? null,
+                prNumber: status.pr?.number ?? null,
+                prTitle: status.pr?.title ?? null,
+                prState: status.pr?.state ?? null,
               })
             } catch { /* best-effort sync */ }
           }
@@ -403,7 +404,9 @@ export function useAutomation(enabled = true) {
       )
       if (requestId !== prStateRequestRef.current) return
 
-      const nextStates = { ...baseStates }
+      // Only include successfully polled threads in the map so that
+      // failed requests don't mask the DB value via the `in` check.
+      const nextStates: Record<string, ThreadPrState> = {}
       let anyGhAvailable = false
       for (const result of settled) {
         if (result.status === 'fulfilled') {

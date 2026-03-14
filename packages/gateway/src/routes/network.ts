@@ -5,7 +5,12 @@ import { platform } from "node:os";
 import { networkInterfaces } from "node:os";
 import { createConnection } from "node:net";
 import type { NetworkHost, NetworkScanResult, SshTestResult, GatewayNode } from "@jait/shared";
+import type { WsControlPlane } from "../ws.js";
 import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-tools.js";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { version: PKG_VERSION } = require("../../package.json") as { version: string };
 
 const execAsync = promisify(exec);
 
@@ -37,12 +42,37 @@ function parseArpTable(output: string): { ip: string; mac: string }[] {
   // Matches lines like "  192.168.1.1           00-0a-95-9d-68-16     dynamic"
   // or "(192.168.1.1) at 00:0a:95:9d:68:16 [ether] on eth0"
   const lineRegex = /(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\s+(?:at\s+)?([0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2}[:-][0-9a-fA-F]{2})/;
+  const IGNORED_MACS = new Set(["ff:ff:ff:ff:ff:ff", "00:00:00:00:00:00"]);
   for (const line of output.split("\n")) {
     const match = lineRegex.exec(line);
     if (match) {
-      results.push({ ip: match[1]!, mac: match[2]!.replace(/-/g, ":").toLowerCase() });
+      const mac = match[2]!.replace(/-/g, ":").toLowerCase();
+      // Skip broadcast, null, and multicast MACs (first octet odd = multicast)
+      if (IGNORED_MACS.has(mac)) continue;
+      const firstOctet = parseInt(mac.slice(0, 2), 16);
+      if (firstOctet & 1) continue; // multicast bit set
+      results.push({ ip: match[1]!, mac });
     }
   }
+  return results;
+}
+
+/** Sleep helper. */
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+/** Run tasks with bounded concurrency. */
+async function mapConcurrent<T, R>(items: T[], concurrency: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let idx = 0;
+  const run = async () => {
+    while (idx < items.length) {
+      const i = idx++;
+      results[i] = await fn(items[i]!);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(concurrency, items.length) }, () => run()));
   return results;
 }
 
@@ -85,7 +115,7 @@ const knownNodes = new Map<string, GatewayNode>();
 // Route registration
 // ---------------------------------------------------------------------------
 
-export function registerNetworkRoutes(app: FastifyInstance) {
+export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane) {
   // ---- GET /api/network/interfaces — local NIC info ----
   app.get("/api/network/interfaces", async () => {
     const ifaces = networkInterfaces();
@@ -137,15 +167,28 @@ export function registerNetworkRoutes(app: FastifyInstance) {
     try {
       for (const subnet of subnets) {
         if (platform() === "win32") {
-          const pingCmd = Array.from({ length: 254 }, (_, i) =>
-            `start /b ping -n 1 -w 500 ${subnet}.${i + 1} > nul 2>&1`
-          ).join(" & ");
-          await execAsync(pingCmd, { timeout: 30000 }).catch(() => {});
+          // Split into batches of 25 to stay under cmd.exe 8191-char limit.
+          // Run batches in parallel — each batch runs pings sequentially (~7s per batch),
+          // but all batches run concurrently.
+          const BATCH = 25;
+          const batches: string[] = [];
+          for (let i = 1; i <= 254; i += BATCH) {
+            const end = Math.min(i + BATCH - 1, 254);
+            const cmds = Array.from({ length: end - i + 1 }, (_, j) =>
+              `ping -n 1 -w 300 ${subnet}.${i + j} > nul 2>&1`
+            ).join(" & ");
+            batches.push(cmds);
+          }
+          await Promise.all(
+            batches.map(cmd => execAsync(cmd, { timeout: 30000 }).catch(() => {}))
+          );
         } else {
           const pingCmd = `for i in $(seq 1 254); do ping -c 1 -W 1 ${subnet}.$i & done; wait`;
           await execAsync(pingCmd, { timeout: 30000, shell: "/bin/bash" }).catch(() => {});
         }
       }
+      // Brief pause to let the OS finish updating ARP/neighbour cache
+      await sleep(1500);
       // Re-read ARP table after all sweeps
       const { stdout } = await execAsync("arp -a", { timeout: 10000 });
       arpOutput = stdout;
@@ -160,10 +203,9 @@ export function registerNetworkRoutes(app: FastifyInstance) {
       subnets.some(s => e.ip.startsWith(s + "."))
     );
 
-    // 4. Probe SSH (port 22) and common ports in parallel
+    // 4. Probe SSH (port 22) and common ports with bounded concurrency
     const PROBE_PORTS = [22, 80, 443, 8000, 8080];
-    const hosts: NetworkHost[] = await Promise.all(
-      subnetFiltered.map(async (entry) => {
+    const hosts: NetworkHost[] = await mapConcurrent(subnetFiltered, 20, async (entry) => {
         const portResults = await Promise.all(
           PROBE_PORTS.map(async (port) => ({ port, open: await probePort(entry.ip, port, 1500) }))
         );
@@ -196,8 +238,7 @@ export function registerNetworkRoutes(app: FastifyInstance) {
           agentStatus,
           lastSeen: new Date().toISOString(),
         };
-      })
-    );
+      });
 
     const result: NetworkScanResult = {
       subnet: subnets.map(s => s + ".0/24").join(", "),
@@ -398,5 +439,77 @@ export function registerNetworkRoutes(app: FastifyInstance) {
     // Proxy to existing mobile device registry
     // This unifies the view of all connected devices in the Network panel
     return { devices: [] }; // Will be wired via deps if needed
+  });
+
+  // ---- GET /api/network/topology — unified graph data for the force-graph visualization ----
+  app.get("/api/network/topology", async () => {
+    // Gateway node (self)
+    const ifaces = networkInterfaces();
+    let gatewayIp = "127.0.0.1";
+    for (const entries of Object.values(ifaces)) {
+      if (!entries) continue;
+      for (const entry of entries) {
+        if (entry.family === "IPv4" && !entry.internal && !entry.address.startsWith("169.254.")) {
+          gatewayIp = entry.address;
+          break;
+        }
+      }
+      if (gatewayIp !== "127.0.0.1") break;
+    }
+
+    const gatewayNode = {
+      id: "gateway",
+      type: "gateway" as const,
+      name: platform() === "win32" ? process.env.COMPUTERNAME ?? "Gateway" : (await execAsync("hostname").then(r => r.stdout.trim()).catch(() => "Gateway")),
+      platform: platform() === "win32" ? "windows" : platform() === "darwin" ? "macos" : "linux",
+      ip: gatewayIp,
+      version: PKG_VERSION,
+      online: true,
+    };
+
+    // Connected FsNode devices
+    const connectedDevices = (ws?.getFsNodes() ?? []).filter(n => !n.isGateway).map(n => ({
+      id: `device-${n.id}`,
+      type: "device" as const,
+      name: n.name,
+      platform: n.platform,
+      providers: n.providers ?? [],
+      online: true,
+      registeredAt: n.registeredAt,
+    }));
+
+    // Scanned network hosts
+    const scan = getLatestNetworkScan();
+    const scannedHosts = (scan?.hosts ?? []).map(h => ({
+      id: `host-${h.ip}`,
+      type: "host" as const,
+      name: h.hostname ?? h.ip,
+      ip: h.ip,
+      mac: h.mac,
+      openPorts: h.openPorts,
+      sshReachable: h.sshReachable,
+      agentStatus: h.agentStatus,
+      online: true,
+    }));
+
+    // Known gateway mesh nodes
+    const meshNodes = [...knownNodes.values()].map(n => ({
+      id: `mesh-${n.id}`,
+      type: "mesh" as const,
+      name: n.hostname ?? n.ip,
+      ip: n.ip,
+      platform: n.platform,
+      version: n.version,
+      status: n.status,
+      online: n.status === "online",
+    }));
+
+    return {
+      gateway: gatewayNode,
+      devices: connectedDevices,
+      hosts: scannedHosts,
+      meshNodes,
+      scannedAt: scan?.scannedAt ?? null,
+    };
   });
 }

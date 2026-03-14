@@ -113,6 +113,7 @@ export interface AutomationRepo {
   defaultBranch: string
   localPath: string
   githubUrl: string | null
+  strategy: string | null
   createdAt: string
   updatedAt: string
 }
@@ -129,6 +130,43 @@ export interface UpdateRepoRequest {
   name?: string
   defaultBranch?: string
   localPath?: string
+  strategy?: string | null
+}
+
+// ── Plan Types ──────────────────────────────────────────────────────
+
+export type PlanStatus = 'draft' | 'active' | 'completed' | 'archived'
+export type PlanTaskStatus = 'proposed' | 'approved' | 'running' | 'completed' | 'skipped'
+
+export interface PlanTask {
+  id: string
+  title: string
+  description: string
+  status: PlanTaskStatus
+  threadId?: string
+  dependsOn?: string[]
+}
+
+export interface AutomationPlan {
+  id: string
+  repoId: string
+  userId: string | null
+  title: string
+  status: PlanStatus
+  tasks: PlanTask[]
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreatePlanRequest {
+  title?: string
+  tasks?: PlanTask[]
+}
+
+export interface UpdatePlanRequest {
+  title?: string
+  status?: PlanStatus
+  tasks?: PlanTask[]
 }
 
 // ── API Client ───────────────────────────────────────────────────────
@@ -337,6 +375,128 @@ export class AgentsApi {
       headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to delete repo: ${res.statusText}`)
+  }
+
+  // ── Repository Strategy ───────────────────────────────────────
+
+  async getRepoStrategy(repoId: string): Promise<string> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/strategy`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to get strategy: ${res.statusText}`)
+    const data = await res.json() as { strategy: string }
+    return data.strategy
+  }
+
+  async updateRepoStrategy(repoId: string, strategy: string): Promise<string> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/strategy`, {
+      method: 'PUT',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({ strategy }),
+    })
+    if (!res.ok) throw new Error(`Failed to update strategy: ${res.statusText}`)
+    const data = await res.json() as { strategy: string }
+    return data.strategy
+  }
+
+  async generateRepoStrategy(repoId: string): Promise<string> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/strategy/generate`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string }
+      throw new Error(err.error || `Failed to generate strategy: ${res.statusText}`)
+    }
+    const data = await res.json() as { strategy: string }
+    return data.strategy
+  }
+
+  // ── Plans ──────────────────────────────────────────────────────
+
+  async listPlans(repoId: string): Promise<AutomationPlan[]> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/plans`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to list plans: ${res.statusText}`)
+    const data = await res.json() as { plans: AutomationPlan[] }
+    return data.plans
+  }
+
+  async createPlan(repoId: string, params?: CreatePlanRequest): Promise<AutomationPlan> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/plans`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params ?? {}),
+    })
+    if (!res.ok) throw new Error(`Failed to create plan: ${res.statusText}`)
+    const data = await res.json() as { plan: AutomationPlan }
+    return data.plan
+  }
+
+  async getPlan(planId: string): Promise<AutomationPlan> {
+    const res = await fetch(`${API_URL}/api/plans/${planId}`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to get plan: ${res.statusText}`)
+    const data = await res.json() as { plan: AutomationPlan }
+    return data.plan
+  }
+
+  async updatePlan(planId: string, params: UpdatePlanRequest): Promise<AutomationPlan> {
+    const res = await fetch(`${API_URL}/api/plans/${planId}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to update plan: ${res.statusText}`)
+    const data = await res.json() as { plan: AutomationPlan }
+    return data.plan
+  }
+
+  async deletePlan(planId: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/plans/${planId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to delete plan: ${res.statusText}`)
+  }
+
+  async generatePlanTasks(planId: string, prompt?: string): Promise<{ plan: AutomationPlan; generated: number }> {
+    const res = await fetch(`${API_URL}/api/plans/${planId}/generate`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({ prompt }),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string }
+      throw new Error(err.error || `Failed to generate tasks: ${res.statusText}`)
+    }
+    return await res.json() as { plan: AutomationPlan; generated: number }
+  }
+
+  async startPlanTask(planId: string, taskId: string): Promise<{ task: PlanTask; repo: { id: string; name: string; localPath: string; defaultBranch: string; githubUrl: string | null } }> {
+    const res = await fetch(`${API_URL}/api/plans/${planId}/tasks/${taskId}/start`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) throw new Error(`Failed to start task: ${res.statusText}`)
+    return await res.json() as { task: PlanTask; repo: { id: string; name: string; localPath: string; defaultBranch: string; githubUrl: string | null } }
+  }
+
+  async startAllPlanTasks(planId: string): Promise<{ tasks: PlanTask[]; repo: { id: string; name: string; localPath: string; defaultBranch: string; githubUrl: string | null } }> {
+    const res = await fetch(`${API_URL}/api/plans/${planId}/start`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({}),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string }
+      throw new Error(err.error || `Failed to start tasks: ${res.statusText}`)
+    }
+    return await res.json() as { tasks: PlanTask[]; repo: { id: string; name: string; localPath: string; defaultBranch: string; githubUrl: string | null } }
   }
 }
 

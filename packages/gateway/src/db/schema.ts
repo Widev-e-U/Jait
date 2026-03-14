@@ -219,11 +219,31 @@ export const automationRepositories = sqliteTable(
     defaultBranch: text("default_branch").notNull().default("main"),
     localPath: text("local_path").notNull(),
     githubUrl: text("github_url"), // HTTPS clone URL for gateway-side cloning
+    strategy: text("strategy"), // Markdown strategy/instructions for agent threads
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
   },
   (table) => [
     index("idx_automation_repos_user").on(table.userId),
+  ],
+);
+
+// ─── Automation Plans ────────────────────────────────────────────────
+export const automationPlans = sqliteTable(
+  "automation_plans",
+  {
+    id: text("id").primaryKey(), // UUIDv7
+    repoId: text("repo_id").notNull(),
+    userId: text("user_id"),
+    title: text("title").notNull(),
+    status: text("status").notNull().default("draft"), // draft | active | completed | archived
+    tasks: text("tasks").notNull().default("[]"), // JSON array of PlanTask objects
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_automation_plans_repo").on(table.repoId),
+    index("idx_automation_plans_user").on(table.userId),
   ],
 );
 

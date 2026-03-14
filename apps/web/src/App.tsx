@@ -34,6 +34,7 @@ import {
   Circle,
   AlertCircle,
   Server,
+  ScrollText,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -58,6 +59,7 @@ import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { ThreadActions } from '@/components/automation/ThreadActions'
+import { StrategyModal } from '@/components/automation/StrategyModal'
 import { activitiesToMessages } from '@/lib/activity-to-messages'
 import { SettingsPage, type UpdateInfo } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
@@ -258,6 +260,7 @@ interface ManagerRepositoryPanelProps {
   onSelect: (repoId: string) => void
   onAddRepository: () => void
   onRemoveRepository: (repoId: string) => void
+  onOpenStrategy: (repo: AutomationRepository) => void
 }
 
 function ManagerRepositoryPanel({
@@ -268,6 +271,7 @@ function ManagerRepositoryPanel({
   onSelect,
   onAddRepository,
   onRemoveRepository,
+  onOpenStrategy,
 }: ManagerRepositoryPanelProps) {
   return (
     <div className="flex h-full flex-col">
@@ -334,18 +338,32 @@ function ManagerRepositoryPanel({
                   </div>
                   <ManagerRepoRuntimeMeta runtime={runtime} className="mt-1" />
                 </div>
-                {repo.source === 'local' && (
+                <div className="mt-0.5 flex shrink-0 flex-col gap-0.5">
                   <button
                     type="button"
-                    className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
+                    title="Strategy"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
                     onClick={(event) => {
                       event.stopPropagation()
-                      onRemoveRepository(repo.id)
+                      onOpenStrategy(repo)
                     }}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <ScrollText className="h-3 w-3" />
                   </button>
-                )}
+                  {repo.source === 'local' && (
+                    <button
+                      type="button"
+                      title="Remove"
+                      className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-destructive"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        onRemoveRepository(repo.id)
+                      }}
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
               </div>
             )
           })
@@ -549,7 +567,7 @@ function ManagerActiveThreadsMenu({
                         {thread.branch}
                       </Badge>
                     )}
-                    <ThreadPrBadge prState={threadPrStates[thread.id] ?? thread.prState} />
+                    <ThreadPrBadge prState={thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState} />
                   </div>
                 </button>
                 <div className="flex items-center gap-1 self-start">
@@ -566,7 +584,7 @@ function ManagerActiveThreadsMenu({
                         threadTitle={thread.title}
                         threadStatus={thread.status}
                         prUrl={thread.prUrl}
-                        prState={thread.prState as 'open' | 'closed' | 'merged' | null | undefined}
+                        prState={(thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
                         ghAvailable={ghAvailable}
                         showStatusBadge={false}
                       />
@@ -603,6 +621,7 @@ function App() {
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
   const [showManagerRepos, setShowManagerRepos] = useState(false)
+  const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(() => localStorage.getItem('showWorkspaceTree') !== 'false')
@@ -2321,7 +2340,7 @@ ${file.content.slice(0, 2000)}
                           threadTitle={automation.selectedThread.title}
                           threadStatus={automation.selectedThread.status}
                           prUrl={automation.selectedThread.prUrl}
-                          prState={automation.selectedThread.prState as 'open' | 'closed' | 'merged' | null | undefined}
+                          prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
                           ghAvailable={automation.ghAvailable}
                         />
                       </div>
@@ -2548,6 +2567,7 @@ ${file.content.slice(0, 2000)}
                           onSelect={automation.setSelectedRepoId}
                           onAddRepository={() => automation.setFolderPickerOpen(true)}
                           onRemoveRepository={(repoId) => { void automation.removeRepository(repoId) }}
+                          onOpenStrategy={(repo) => setStrategyRepo(repo)}
                         />
                       </div>
                     )}
@@ -2632,7 +2652,7 @@ ${file.content.slice(0, 2000)}
                                     thread={thread}
                                     repo={threadRepo}
                                     repoName={repoName}
-                                    prState={automation.threadPrStates[thread.id] ?? thread.prState}
+                                    prState={thread.id in automation.threadPrStates ? automation.threadPrStates[thread.id] : thread.prState}
                                     ghAvailable={automation.ghAvailable}
                                     onOpen={() => automation.setSelectedThreadId(thread.id)}
                                     onStop={() => { void automation.handleStop(thread.id) }}
@@ -3059,6 +3079,16 @@ ${file.content.slice(0, 2000)}
           onOpenChange={automation.setFolderPickerOpen}
           onSelect={(path, _nodeId) => { void automation.handleFolderSelected(path) }}
         />
+
+        {/* Strategy editor modal */}
+        {strategyRepo && (
+          <StrategyModal
+            open={!!strategyRepo}
+            onOpenChange={(open) => { if (!open) setStrategyRepo(null) }}
+            repoId={strategyRepo.id}
+            repoName={strategyRepo.name}
+          />
+        )}
 
         {/* Floating screen share window */}
         {showScreenShare && (

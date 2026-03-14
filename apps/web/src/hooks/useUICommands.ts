@@ -234,8 +234,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'provider.op-request') {
         // Gateway is asking us to run a provider operation (start-session, send-turn, etc.)
         void handleProviderOpRequest(msg.payload as { requestId: string; op: string; [key: string]: unknown })
-      } else if (msg.type.startsWith('thread.') || msg.type.startsWith('repo.')) {
-        // Thread & repo lifecycle events — forward to automation hook
+      } else if (msg.type.startsWith('thread.') || msg.type.startsWith('repo.') || msg.type.startsWith('plan.')) {
+        // Thread, repo & plan lifecycle events — forward to automation hook
         onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
       }
     } catch {

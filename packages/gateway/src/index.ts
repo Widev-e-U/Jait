@@ -26,6 +26,7 @@ import { VoiceService } from "./voice/service.js";
 import { ScreenShareService } from "@jait/screen-share";
 import { ThreadService } from "./services/threads.js";
 import { RepositoryService } from "./services/repositories.js";
+import { PlanService } from "./services/plans.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { CodexProvider } from "./providers/codex-provider.js";
 import { ClaudeCodeProvider } from "./providers/claude-code-provider.js";
@@ -66,6 +67,7 @@ async function main() {
   }
 
   const repoService = new RepositoryService(db);
+  const planService = new PlanService(db);
   const providerRegistry = new ProviderRegistry();
   providerRegistry.register(new JaitProvider());
   providerRegistry.register(new CodexProvider());
@@ -380,6 +382,7 @@ async function main() {
     screenShare,
     threadService,
     repoService,
+    planService,
     providerRegistry,
     shutdown: shutdownRef,
   });

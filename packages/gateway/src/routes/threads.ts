@@ -464,9 +464,21 @@ export function registerThreadRoutes(
 
           // ── Send the actual coding turn ────────────────────────
           if (message) {
+            // Look up repository strategy to prepend as agent instructions
+            let fullMessage = message;
+            if (repoService && workingDirectory) {
+              const matchingRepo = repoService.list().find((r) =>
+                workingDirectory.startsWith(r.localPath) ||
+                workingDirectory.includes(r.name),
+              );
+              if (matchingRepo?.strategy?.trim()) {
+                fullMessage = `<repository-strategy>\n${matchingRepo.strategy.trim()}\n</repository-strategy>\n\n${message}`;
+              }
+            }
+
             const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
             broadcastThreadEvent(id, "activity", { activity: userActivity });
-            await provider.sendTurn(session.id, message);
+            await provider.sendTurn(session.id, fullMessage);
           }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);

@@ -8,7 +8,8 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { autoUpdater, type UpdateInfo } from "electron-updater";
+import electronUpdater, { type UpdateInfo } from "electron-updater";
+const { autoUpdater } = electronUpdater;
 
 // Remove the default application menu (File, Edit, View, etc.)
 Menu.setApplicationMenu(null);

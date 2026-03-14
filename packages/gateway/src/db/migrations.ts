@@ -331,4 +331,37 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 013: Add strategy to automation repositories ────────────────
+  {
+    id: 13,
+    name: "automation_repositories_strategy",
+    run(db) {
+      try {
+        db.exec(`ALTER TABLE automation_repositories ADD COLUMN strategy TEXT`);
+      } catch { /* column already exists */ }
+    },
+  },
+
+  // ─── 014: Automation plans table ─────────────────────────────────
+  {
+    id: 14,
+    name: "automation_plans_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS automation_plans (
+          id TEXT PRIMARY KEY,
+          repo_id TEXT NOT NULL,
+          user_id TEXT,
+          title TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'draft',
+          tasks TEXT NOT NULL DEFAULT '[]',
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_automation_plans_repo ON automation_plans(repo_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_automation_plans_user ON automation_plans(user_id)`);
+    },
+  },
+
 ];

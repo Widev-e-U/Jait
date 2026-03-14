@@ -29,6 +29,7 @@ import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import { registerFilesystemRoutes } from "./routes/filesystem.js";
 import { registerThreadRoutes } from "./routes/threads.js";
 import { registerRepoRoutes } from "./routes/repositories.js";
+import { registerPlanRoutes } from "./routes/plans.js";
 import { registerMcpRoutes } from "./routes/mcp-server.js";
 import { registerGitRoutes } from "./routes/git.js";
 import { registerUpdateRoutes } from "./routes/update.js";
@@ -51,6 +52,7 @@ import type { ScreenShareService } from "@jait/screen-share";
 import type { SessionStateService } from "./services/session-state.js";
 import type { ThreadService } from "./services/threads.js";
 import type { RepositoryService } from "./services/repositories.js";
+import type { PlanService } from "./services/plans.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { SqliteDatabase } from "./db/sqlite-shim.js";
 import { getSchemaVersion } from "./db/connection.js";
@@ -84,6 +86,7 @@ export interface ServerDeps {
   screenShare?: ScreenShareService;
   threadService?: ThreadService;
   repoService?: RepositoryService;
+  planService?: PlanService;
   providerRegistry?: ProviderRegistry;
   shutdown?: () => Promise<void>;
 }
@@ -158,7 +161,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     });
   }
 
-  registerNetworkRoutes(app);
+  registerNetworkRoutes(app, deps.ws);
 
   if (deps.screenShare && deps.ws) {
     registerScreenShareRoutes(app, { screenShare: deps.screenShare, ws: deps.ws });
@@ -188,6 +191,19 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.repoService) {
     registerRepoRoutes(app, config, {
       repoService: deps.repoService,
+      userService: deps.userService,
+      ws: deps.ws,
+    });
+  }
+
+  // Automation plan routes
+  if (deps.planService && deps.repoService) {
+    registerPlanRoutes(app, config, {
+      planService: deps.planService,
+      repoService: deps.repoService,
+      threadService: deps.threadService,
+      providerRegistry: deps.providerRegistry,
+      userService: deps.userService,
       ws: deps.ws,
     });
   }

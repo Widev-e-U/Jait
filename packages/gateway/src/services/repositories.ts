@@ -26,6 +26,7 @@ export interface UpdateRepoParams {
   localPath?: string;
   deviceId?: string;
   githubUrl?: string;
+  strategy?: string | null;
 }
 
 export type RepoRow = typeof automationRepositories.$inferSelect;

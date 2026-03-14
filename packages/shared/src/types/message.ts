@@ -41,6 +41,9 @@ export type WsEventType =
   | "repo.created"
   | "repo.updated"
   | "repo.deleted"
+  | "plan.created"
+  | "plan.updated"
+  | "plan.deleted"
   | "fs.changes"
   | "error";
 
