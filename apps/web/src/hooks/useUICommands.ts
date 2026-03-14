@@ -213,9 +213,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
     // 2) Capacitor (Android/iOS) — local notification
     if (window.Capacitor) {
       try {
-        // eslint-disable-next-line @typescript-eslint/ban-ts-comment
-        // @ts-expect-error - only available in Capacitor builds
-        const { LocalNotifications } = await import('@capacitor/local-notifications')
+        const capNotifMod = '@capacitor/local-notifications'
+        const { LocalNotifications } = await import(capNotifMod)
         const perm = await LocalNotifications.requestPermissions()
         if (perm.display === 'granted') {
           await LocalNotifications.schedule({
@@ -314,7 +313,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
   /** Browse a local directory using Capacitor Filesystem API */
   const capacitorBrowse = useCallback(async (dirPath: string) => {
-    const { Filesystem, Directory } = await import('@capacitor/filesystem')
+    const capFsMod = '@capacitor/filesystem'
+    const { Filesystem, Directory } = await import(capFsMod)
     // Determine the base directory and relative path
     let directory: typeof Directory[keyof typeof Directory] | undefined
     let path = dirPath
