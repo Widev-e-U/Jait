@@ -290,3 +290,23 @@ export const scheduledJobs = sqliteTable(
     index("idx_scheduled_jobs_updated").on(table.updatedAt),
   ],
 );
+
+// ─── Scheduled Job Runs (persistent execution history) ───────────────
+export const scheduledJobRuns = sqliteTable(
+  "scheduled_job_runs",
+  {
+    id: text("id").primaryKey(), // UUIDv7
+    jobId: text("job_id").notNull(),
+    status: text("status").notNull().default("running"), // running | completed | failed
+    triggeredBy: text("triggered_by").notNull().default("schedule"), // schedule | manual | maintenance
+    output: text("output"), // stdout/stderr or summary text
+    error: text("error"),
+    planId: text("plan_id"), // FK → automation_plans.id if a fix plan was created
+    startedAt: text("started_at").notNull(),
+    completedAt: text("completed_at"),
+  },
+  (table) => [
+    index("idx_job_runs_job").on(table.jobId),
+    index("idx_job_runs_started").on(table.startedAt),
+  ],
+);

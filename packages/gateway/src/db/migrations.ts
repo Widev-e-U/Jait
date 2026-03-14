@@ -364,6 +364,29 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 016: Scheduled job runs (persistent execution history) ──────
+  {
+    id: 16,
+    name: "scheduled_job_runs_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS scheduled_job_runs (
+          id TEXT PRIMARY KEY,
+          job_id TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'running',
+          triggered_by TEXT NOT NULL DEFAULT 'schedule',
+          output TEXT,
+          error TEXT,
+          plan_id TEXT,
+          started_at TEXT NOT NULL,
+          completed_at TEXT
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_job_runs_job ON scheduled_job_runs(job_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_job_runs_started ON scheduled_job_runs(started_at)`);
+    },
+  },
+
   // ─── 015: Network hosts table (persistent scan results) ──────────
   {
     id: 15,

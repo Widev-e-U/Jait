@@ -30,6 +30,7 @@ import { registerFilesystemRoutes } from "./routes/filesystem.js";
 import { registerThreadRoutes } from "./routes/threads.js";
 import { registerRepoRoutes } from "./routes/repositories.js";
 import { registerPlanRoutes } from "./routes/plans.js";
+import { registerMaintenanceRoutes } from "./routes/maintenance.js";
 import { registerMcpRoutes } from "./routes/mcp-server.js";
 import { registerGitRoutes } from "./routes/git.js";
 import { registerUpdateRoutes } from "./routes/update.js";
@@ -87,6 +88,8 @@ export interface ServerDeps {
   threadService?: ThreadService;
   repoService?: RepositoryService;
   planService?: PlanService;
+  maintenanceService?: import("./services/maintenance.js").MaintenanceService;
+  notifications?: import("./services/notifications.js").NotificationService;
   providerRegistry?: ProviderRegistry;
   shutdown?: () => Promise<void>;
 }
@@ -204,6 +207,15 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
       userService: deps.userService,
+      ws: deps.ws,
+    });
+  }
+
+  // Maintenance routes (supervised self-test/self-fix)
+  if (deps.maintenanceService) {
+    registerMaintenanceRoutes(app, config, {
+      maintenanceService: deps.maintenanceService,
+      notifications: deps.notifications,
       ws: deps.ws,
     });
   }

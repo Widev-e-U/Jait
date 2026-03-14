@@ -34,6 +34,8 @@ import { JaitProvider } from "./providers/jait-provider.js";
 import { WorkspaceWatcher } from "./services/workspace-watcher.js";
 import type { FileChangeEvent } from "./services/workspace-watcher.js";
 import { GitService } from "./services/git.js";
+import { MaintenanceService } from "./services/maintenance.js";
+import { NotificationService } from "./services/notifications.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
 
 async function main() {
@@ -71,6 +73,7 @@ async function main() {
 
   const repoService = new RepositoryService(db);
   const planService = new PlanService(db);
+  const maintenanceService = new MaintenanceService(db, planService, repoService);
   const providerRegistry = new ProviderRegistry();
   providerRegistry.register(new JaitProvider());
   providerRegistry.register(new CodexProvider());
@@ -85,6 +88,9 @@ async function main() {
 
   // WebSocket control plane (created early so consent callbacks can reference it)
   const ws = new WsControlPlane(config);
+
+  // Notification service — broadcasts to all connected clients
+  const notifications = new NotificationService(ws);
 
   // Workspace file watcher — uses @parcel/watcher (same as VS Code) for
   // native recursive watching with event coalescing.
@@ -223,6 +229,8 @@ async function main() {
     threadMcpConfig: { host: config.host, port: config.port },
     threadService,
     providerRegistry,
+    maintenanceService,
+    notifications,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -319,6 +327,8 @@ async function main() {
     threadMcpConfig: { host: config.host, port: config.port },
     threadService,
     providerRegistry,
+    maintenanceService,
+    notifications,
     config,
     shutdown: shutdownRef,
   });
@@ -356,6 +366,32 @@ async function main() {
     }
   }
 
+  // Seed built-in "Self-Test" maintenance job if it doesn't already exist
+  {
+    const existingJobs = scheduler.list();
+    const hasSelfTest = existingJobs.some(
+      (j) => j.toolName === "maintenance.run" && j.name === "Self-Test",
+    );
+    if (!hasSelfTest) {
+      scheduler.create({
+        name: "Self-Test",
+        cron: "30 3 * * *", // daily at 03:30 UTC
+        toolName: "maintenance.run",
+        input: {
+          __jaitJobMeta: {
+            jobType: "system_job",
+            description:
+              "Runs typecheck, tests, and lint on all registered repositories. " +
+              "Creates fix plans with proposed tasks when checks fail. " +
+              "Review and approve proposed tasks to start agent fix threads.",
+          },
+        },
+        enabled: false, // disabled by default — user enables when ready
+      });
+      console.log("Seeded built-in job: Self-Test (daily, disabled — enable to activate)");
+    }
+  }
+
   console.log(`Consent manager initialized (profile: coding, timeout: 120s, ${permissions.size} tool permissions)`);
 
   const server = await createServer(config, {
@@ -386,6 +422,8 @@ async function main() {
     threadService,
     repoService,
     planService,
+    maintenanceService,
+    notifications,
     providerRegistry,
     shutdown: shutdownRef,
   });

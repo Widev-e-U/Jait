@@ -46,6 +46,7 @@ export { createAgentSpawnTool } from "./agent-tools.js";
 export { createThreadControlTool } from "./thread-tools.js";
 export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
 export { createRedeployTool } from "./redeploy-tools.js";
+export { createMaintenanceRunTool } from "./maintenance-tools.js";
 export { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 export { McpManager, wrapMcpTool, registerMcpTools, unregisterMcpTools, type McpServerConfig, type McpConnection } from "./mcp-bridge.js";
 export { ToolName, type ToolNameValue } from "./tool-names.js";
@@ -140,6 +141,7 @@ import { createAgentSpawnTool } from "./agent-tools.js";
 import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
+import { createMaintenanceRunTool } from "./maintenance-tools.js";
 import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import type { VoiceService } from "../voice/service.js";
 import { type AppConfig, inferContextWindow } from "../config.js";
@@ -171,6 +173,8 @@ export interface ToolRegistryDeps {
   threadMcpConfig?: { host: string; port: number };
   threadService?: ThreadService;
   providerRegistry?: ProviderRegistry;
+  maintenanceService?: import("../services/maintenance.js").MaintenanceService;
+  notifications?: import("../services/notifications.js").NotificationService;
   /** Graceful shutdown callback — needed by the redeploy tool */
   shutdown?: () => Promise<void>;
 }
@@ -305,6 +309,11 @@ export function createToolRegistry(
 
   // Network tools
   tools.register(createNetworkScanTool());
+
+  // Maintenance tools
+  if (deps.maintenanceService) {
+    tools.register(createMaintenanceRunTool(deps.maintenanceService, deps.notifications));
+  }
 
   // Agent spawn (sub-agent) tool — needs config for LLM settings
   if (deps.config) {

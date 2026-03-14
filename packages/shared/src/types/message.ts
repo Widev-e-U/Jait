@@ -44,6 +44,7 @@ export type WsEventType =
   | "plan.created"
   | "plan.updated"
   | "plan.deleted"
+  | "notification"
   | "fs.changes"
   | "error";
 

@@ -41,26 +41,38 @@ interface SchedulerOptions {
 
 const MINUTE_MS = 60_000;
 
+/**
+ * Match a single cron field against a value.
+ * Supports: "*" (any), exact number, comma lists, and step syntax.
+ */
+function matchCronField(field: string, value: number): boolean {
+  if (field === "*") return true;
+  // Step syntax: */N
+  if (field.startsWith("*/")) {
+    const step = Number.parseInt(field.slice(2), 10);
+    return !Number.isNaN(step) && step > 0 && value % step === 0;
+  }
+  // Comma-separated list: 1,15,30
+  if (field.includes(",")) {
+    return field.split(",").some((v) => Number.parseInt(v.trim(), 10) === value);
+  }
+  // Exact match
+  return Number.parseInt(field, 10) === value;
+}
+
 function matchesCronMinute(cron: string, date: Date): boolean {
   const parts = cron.trim().split(/\s+/);
   if (parts.length !== 5) return false;
 
-  const minute = parts[0] ?? "";
-  const hour = parts[1] ?? "";
+  const [minute, hour, dayOfMonth, month, weekday] = parts as [string, string, string, string, string];
 
-  const minuteValue = date.getUTCMinutes();
-  const hourValue = date.getUTCHours();
-
-  const minuteOk = minute === "*" || Number.parseInt(minute, 10) === minuteValue;
-  const hourOk = hour === "*" || Number.parseInt(hour, 10) === hourValue;
-
-  // keep support intentionally small for Sprint 7:
-  // day-of-month, month, day-of-week are wildcard only.
-  const day = parts[2] === "*";
-  const month = parts[3] === "*";
-  const weekday = parts[4] === "*";
-
-  return minuteOk && hourOk && day && month && weekday;
+  return (
+    matchCronField(minute, date.getUTCMinutes()) &&
+    matchCronField(hour, date.getUTCHours()) &&
+    matchCronField(dayOfMonth, date.getUTCDate()) &&
+    matchCronField(month, date.getUTCMonth() + 1) && // cron months are 1-12
+    matchCronField(weekday, date.getUTCDay()) // cron weekdays: 0=Sun
+  );
 }
 
 function isSameUtcMinute(iso: string | null, now: Date): boolean {
