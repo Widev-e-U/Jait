@@ -161,9 +161,17 @@ export class ThreadService {
   markCompleted(id: string): ThreadRow | undefined {
     return this.update(id, {
       status: "completed",
-      providerSessionId: null,
+      // Keep providerSessionId alive so the thread can be resumed
+      // (e.g. to fix push failures). It gets cleared on PR merge or manual close.
       error: null,
       completedAt: new Date().toISOString(),
+    });
+  }
+
+  /** Clear the provider session — called when a PR is merged or the thread is manually closed. */
+  clearSession(id: string): ThreadRow | undefined {
+    return this.update(id, {
+      providerSessionId: null,
     });
   }
 

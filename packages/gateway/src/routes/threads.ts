@@ -224,6 +224,14 @@ export function registerThreadRoutes(
         });
         broadcastThreadEvent(id, "activity", { activity });
       }
+
+      // When the PR is merged (or closed), the session is no longer needed.
+      if (prState === "merged" || prState === "closed") {
+        threadService.clearSession(id);
+        const unsub = threadUnsubs.get(id);
+        if (unsub) { unsub(); threadUnsubs.delete(id); }
+        remoteProviders.delete(id);
+      }
     }
 
     broadcastThreadEvent(id, "updated", { thread });
@@ -267,7 +275,7 @@ export function registerThreadRoutes(
     const body = (request.body as Record<string, unknown>) ?? {};
     const thread = threadService.getById(id);
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
-    if (thread.providerSessionId) {
+    if (thread.providerSessionId && thread.status === "running") {
       return reply.status(409).send({ error: "Thread already has an active session" });
     }
 
@@ -418,7 +426,9 @@ export function registerThreadRoutes(
           broadcastThreadStatus(id, "completed");
           unsubscribe();
           threadUnsubs.delete(id);
-          remoteProviders.delete(id);
+          // Keep remoteProviders entry — the thread can still be resumed
+          // with a new session (e.g. to fix push failures). Cleaned up on
+          // PR merge/close or thread deletion.
         } else if (event.type === "session.error") {
           threadService.markError(id, event.error);
           broadcastThreadStatus(id, "error", event.error);
@@ -699,9 +709,10 @@ export function registerThreadRoutes(
 
         // Try to resume the thread with the error message
         let resumed = false;
-        if (thread.providerSessionId) {
-          const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
-          if (provider) {
+        const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
+        if (provider) {
+          // 1) Try sending a turn on the existing session
+          if (thread.providerSessionId) {
             try {
               const userActivity = threadService.addActivity(id, "message", resumeMessage.slice(0, 500), { role: "user", content: resumeMessage });
               broadcastThreadEvent(id, "activity", { activity: userActivity });
@@ -709,7 +720,62 @@ export function registerThreadRoutes(
               broadcastThreadStatus(id, "running");
               await provider.sendTurn(thread.providerSessionId, resumeMessage);
               resumed = true;
-            } catch { /* session may be dead — fall through */ }
+            } catch { /* session may be dead — start a new one below */ }
+          }
+
+          // 2) If existing session was dead or absent, start a fresh session
+          if (!resumed) {
+            try {
+              const wdir = thread.workingDirectory ?? process.cwd();
+              const mcpServers = !(provider instanceof RemoteCliProvider)
+                ? [providerRegistry.buildJaitMcpServerRef(config)]
+                : [];
+              const newSession = await provider.startSession({
+                threadId: id,
+                workingDirectory: wdir,
+                mode: (thread.runtimeMode as "full-access" | "supervised") ?? "full-access",
+                model: thread.model ?? undefined,
+                mcpServers,
+              });
+
+              // Set up event listener for the new session
+              const prevUnsub = threadUnsubs.get(id);
+              if (prevUnsub) { prevUnsub(); threadUnsubs.delete(id); }
+
+              const unsub = provider.onEvent((evt: ProviderEvent) => {
+                if (!isThreadSessionEvent(evt, newSession.id)) return;
+                const act = threadService.logProviderEvent(id, evt);
+                if (act) broadcastThreadEvent(id, "activity", { event: evt, activity: act });
+
+                if (evt.type === "session.completed") {
+                  threadService.markCompleted(id);
+                  broadcastThreadStatus(id, "completed");
+                  unsub(); threadUnsubs.delete(id);
+                } else if (evt.type === "session.error") {
+                  threadService.markError(id, evt.error);
+                  broadcastThreadStatus(id, "error", evt.error);
+                  unsub(); threadUnsubs.delete(id);
+                } else if (evt.type === "turn.started") {
+                  const cur = threadService.getById(id);
+                  if (cur && cur.status !== "running") {
+                    threadService.update(id, { status: "running", error: null });
+                    broadcastThreadStatus(id, "running");
+                  }
+                } else if (evt.type === "turn.completed") {
+                  threadService.update(id, { status: "completed", error: null, completedAt: new Date().toISOString() });
+                  broadcastThreadStatus(id, "completed");
+                }
+              });
+              threadUnsubs.set(id, unsub);
+
+              threadService.markRunning(id, newSession.id);
+              broadcastThreadStatus(id, "running");
+
+              const userActivity = threadService.addActivity(id, "message", resumeMessage.slice(0, 500), { role: "user", content: resumeMessage });
+              broadcastThreadEvent(id, "activity", { activity: userActivity });
+              await provider.sendTurn(newSession.id, resumeMessage);
+              resumed = true;
+            } catch { /* both resume attempts failed */ }
           }
         }
 
