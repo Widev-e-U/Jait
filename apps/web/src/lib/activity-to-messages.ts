@@ -175,17 +175,18 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
           : typeof payload.text === 'string' ? payload.text
           : typeof payload.message === 'string' ? payload.message
           : null
+        const resolvedText = text ?? (act.kind === 'activity' ? act.summary : null)
 
         // If it looks like a user or assistant message (from Codex generic events)
         const role = payload.role as string | undefined
-        if (role === 'user' && text) {
+        if (role === 'user' && resolvedText) {
           flush()
-          messages.push({ id: act.id, role: 'user', content: text })
-        } else if (text) {
+          messages.push({ id: act.id, role: 'user', content: resolvedText })
+        } else if (resolvedText) {
           const msg = ensureAssistant(act.id)
           flushToolGroup()
-          msg.content += (msg.content ? '\n' : '') + text
-          currentSegments.push({ type: 'text', content: text })
+          msg.content += (msg.content ? '\n' : '') + resolvedText
+          currentSegments.push({ type: 'text', content: resolvedText })
         }
         // Silently skip activities with no extractable text (reasoning deltas,
         // token counts, lifecycle noise, etc.)

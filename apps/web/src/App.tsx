@@ -36,6 +36,7 @@ import {
   Server,
   ScrollText,
   ListChecks,
+  type LucideIcon,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -87,7 +88,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import { agentsApi, type AgentThread } from '@/lib/agents-api'
+import { agentsApi, type AgentThread, type AutomationPlan } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 
 const API_URL = getApiUrl()
@@ -252,6 +253,69 @@ function ManagerRepoPicker({
         </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
+  )
+}
+
+function summarizeManagerPreview(value: string | null | undefined, fallback: string, maxLength = 180): string {
+  const normalized = value
+    ?.replace(/^#{1,6}\s+/gm, '')
+    .replace(/`+/g, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+
+  if (!normalized) return fallback
+  return normalized.length > maxLength ? `${normalized.slice(0, maxLength - 1)}…` : normalized
+}
+
+function ManagerRepoPageCard({
+  icon: Icon,
+  title,
+  meta,
+  description,
+  actionLabel,
+  loading = false,
+  disabled = false,
+  onOpen,
+}: {
+  icon: LucideIcon
+  title: string
+  meta?: string | null
+  description: string
+  actionLabel: string
+  loading?: boolean
+  disabled?: boolean
+  onOpen: () => void
+}) {
+  return (
+    <div className="rounded-xl border bg-card/70 px-4 py-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <div className="rounded-md border bg-muted/60 p-1.5 text-muted-foreground">
+              <Icon className="h-4 w-4" />
+            </div>
+            <div className="min-w-0">
+              <div className="text-sm font-medium">{title}</div>
+              {meta && (
+                <div className="text-[11px] text-muted-foreground">{meta}</div>
+              )}
+            </div>
+          </div>
+          <p className="mt-3 text-xs leading-relaxed text-muted-foreground">
+            {loading ? 'Loading…' : description}
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 shrink-0 text-xs"
+          disabled={disabled}
+          onClick={onOpen}
+        >
+          {actionLabel}
+        </Button>
+      </div>
+    </div>
   )
 }
 
@@ -639,6 +703,10 @@ function App() {
   const [showManagerRepos, setShowManagerRepos] = useState(false)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
+  const [managerRepoPreviewVersion, setManagerRepoPreviewVersion] = useState(0)
+  const [managerRepoStrategyPreview, setManagerRepoStrategyPreview] = useState<string | null>(null)
+  const [managerRepoPlansPreview, setManagerRepoPlansPreview] = useState<AutomationPlan[]>([])
+  const [managerRepoPreviewLoading, setManagerRepoPreviewLoading] = useState(false)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(() => localStorage.getItem('showWorkspaceTree') !== 'false')
@@ -915,6 +983,45 @@ function App() {
   const managerPlaceholder = !automation.selectedRepo
     ? 'Select a repository to start a thread...'
     : 'Describe what you want to do...'
+  const selectedManagerPlan = useMemo(
+    () => [...managerRepoPlansPreview].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())[0] ?? null,
+    [managerRepoPlansPreview],
+  )
+  const selectedManagerPlanProposedCount = useMemo(
+    () => selectedManagerPlan?.tasks.filter((task) => task.status === 'proposed').length ?? 0,
+    [selectedManagerPlan],
+  )
+  const selectedManagerPlanReadyCount = useMemo(
+    () => selectedManagerPlan?.tasks.filter((task) => task.status === 'approved').length ?? 0,
+    [selectedManagerPlan],
+  )
+
+  useEffect(() => {
+    const repo = automation.selectedRepo
+    if (viewMode !== 'manager' || !repo || repo.source !== 'local') {
+      setManagerRepoStrategyPreview(null)
+      setManagerRepoPlansPreview([])
+      setManagerRepoPreviewLoading(false)
+      return
+    }
+
+    let cancelled = false
+    setManagerRepoPreviewLoading(true)
+
+    void Promise.allSettled([
+      agentsApi.getRepoStrategy(repo.id),
+      agentsApi.listPlans(repo.id),
+    ]).then(([strategyResult, plansResult]) => {
+      if (cancelled) return
+      setManagerRepoStrategyPreview(strategyResult.status === 'fulfilled' ? strategyResult.value : null)
+      setManagerRepoPlansPreview(plansResult.status === 'fulfilled' ? plansResult.value : [])
+      setManagerRepoPreviewLoading(false)
+    })
+
+    return () => {
+      cancelled = true
+    }
+  }, [automation.selectedRepo, managerRepoPreviewVersion, viewMode])
 
   // ── UI command channel (server ↔ frontend via WebSocket) ──────────
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
@@ -2816,6 +2923,55 @@ ${file.content.slice(0, 2000)}
                       {/* Thread list header + threads */}
                       <div className="flex-1 overflow-y-auto">
                         <div className="mx-auto w-full max-w-3xl">
+                          {automation.selectedRepo && (
+                            <div className="grid gap-3 px-3 py-3 md:grid-cols-2">
+                              <ManagerRepoPageCard
+                                icon={ScrollText}
+                                title="Strategy"
+                                meta={automation.selectedRepo.source === 'local' ? automation.selectedRepo.defaultBranch : 'Shared repository'}
+                                description={
+                                  automation.selectedRepo.source === 'local'
+                                    ? summarizeManagerPreview(
+                                        managerRepoStrategyPreview,
+                                        'No strategy yet. Add build, test, and repo instructions so manager threads have clear context.',
+                                      )
+                                    : 'Add this repository locally to edit its strategy page.'
+                                }
+                                actionLabel="Open strategy"
+                                loading={managerRepoPreviewLoading && automation.selectedRepo.source === 'local'}
+                                disabled={automation.selectedRepo.source !== 'local'}
+                                onOpen={() => setStrategyRepo(automation.selectedRepo)}
+                              />
+                              <ManagerRepoPageCard
+                                icon={ListChecks}
+                                title="Todos"
+                                meta={
+                                  automation.selectedRepo.source === 'local'
+                                    ? selectedManagerPlan
+                                      ? `${selectedManagerPlan.tasks.length} tasks · ${selectedManagerPlanProposedCount} proposed · ${selectedManagerPlanReadyCount} ready`
+                                      : 'No todo plan yet'
+                                    : 'Shared repository'
+                                }
+                                description={
+                                  automation.selectedRepo.source === 'local'
+                                    ? selectedManagerPlan
+                                      ? summarizeManagerPreview(
+                                          [
+                                            selectedManagerPlan.title,
+                                            ...selectedManagerPlan.tasks.slice(0, 2).map((task) => task.title),
+                                          ].join(' • '),
+                                          'No todo plan yet.',
+                                        )
+                                      : 'Generate a todo plan with proposed tasks before starting the next threads.'
+                                    : 'Add this repository locally to open its todo page.'
+                                }
+                                actionLabel="Open todos"
+                                loading={managerRepoPreviewLoading && automation.selectedRepo.source === 'local'}
+                                disabled={automation.selectedRepo.source !== 'local'}
+                                onOpen={() => setPlanRepo(automation.selectedRepo)}
+                              />
+                            </div>
+                          )}
                           <div className="flex items-center justify-between border-b px-3 py-2">
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-medium">Threads</span>
@@ -3285,7 +3441,12 @@ ${file.content.slice(0, 2000)}
         {strategyRepo && (
           <StrategyModal
             open={!!strategyRepo}
-            onOpenChange={(open) => { if (!open) setStrategyRepo(null) }}
+            onOpenChange={(open) => {
+              if (!open) {
+                setStrategyRepo(null)
+                setManagerRepoPreviewVersion((version) => version + 1)
+              }
+            }}
             repoId={strategyRepo.id}
             repoName={strategyRepo.name}
           />
@@ -3294,7 +3455,12 @@ ${file.content.slice(0, 2000)}
         {planRepo && (
           <PlanModal
             open={!!planRepo}
-            onOpenChange={(open) => { if (!open) setPlanRepo(null) }}
+            onOpenChange={(open) => {
+              if (!open) {
+                setPlanRepo(null)
+                setManagerRepoPreviewVersion((version) => version + 1)
+              }
+            }}
             repoId={planRepo.id}
             repoName={planRepo.name}
             defaultBranch={planRepo.defaultBranch}

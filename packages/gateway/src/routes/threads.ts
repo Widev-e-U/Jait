@@ -180,6 +180,8 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
+    const existing = threadService.getById(id);
+    if (!existing) return reply.status(404).send({ error: "Thread not found" });
     const body = request.body as Record<string, unknown>;
     const prState =
       body["prState"] === "open" || body["prState"] === "closed" || body["prState"] === "merged"
@@ -198,7 +200,32 @@ export function registerThreadRoutes(
       prTitle: typeof body["prTitle"] === "string" ? body["prTitle"] : body["prTitle"] === null ? null : undefined,
       prState,
     });
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    if (
+      thread &&
+      prState !== undefined &&
+      prState !== existing.prState
+    ) {
+      const prUrl = thread.prUrl ?? existing.prUrl ?? null;
+      const summary =
+        prState === "open"
+          ? prUrl ? `Pull request created: ${prUrl}` : "Pull request created"
+          : prState === "merged"
+            ? prUrl ? `Pull request merged: ${prUrl}` : "Pull request merged"
+            : prState === "closed"
+              ? prUrl ? `Pull request closed: ${prUrl}` : "Pull request closed"
+              : null;
+
+      if (summary) {
+        const activity = threadService.addActivity(id, "activity", summary, {
+          action: "pr_state_changed",
+          previousPrState: existing.prState,
+          prState,
+          prUrl,
+        });
+        broadcastThreadEvent(id, "activity", { activity });
+      }
+    }
+
     broadcastThreadEvent(id, "updated", { thread });
     return thread;
   });
