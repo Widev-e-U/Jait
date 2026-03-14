@@ -116,6 +116,13 @@ export function SettingsPage({
 
   // ── Desktop close-to-tray setting ───────────────────────────────
   const [closeOnWindowClose, setCloseOnWindowClose] = useState(false)
+  const [appVersion, setAppVersion] = useState<string | null>(null)
+  useEffect(() => {
+    if (platform !== 'electron' || !window.jaitDesktop?.getInfo) return
+    void window.jaitDesktop.getInfo().then((info) => {
+      if (info.appVersion) setAppVersion(info.appVersion)
+    })
+  }, [platform])
   useEffect(() => {
     if (platform !== 'electron' || !window.jaitDesktop?.getSetting) return
     void window.jaitDesktop.getSetting('closeOnWindowClose', false).then((v) => {
@@ -237,8 +244,11 @@ export function SettingsPage({
           </h2>
           <p className="text-sm text-muted-foreground">
             {updateInfo
-              ? <>Running <span className="font-mono font-medium text-foreground">v{updateInfo.currentVersion}</span></>
+              ? <>Gateway <span className="font-mono font-medium text-foreground">v{updateInfo.currentVersion}</span></>
               : 'Check for the latest Jait version.'}
+            {appVersion && (
+              <> &middot; Desktop app <span className="font-mono font-medium text-foreground">v{appVersion}</span></>
+            )}
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-3">

@@ -18,9 +18,9 @@
     "typecheck": "tsc --noEmit",
     "pack": "electron-builder --dir --config electron-builder.json",
     "dist": "electron-builder --config electron-builder.json",
-    "build:win": "electron-builder --config electron-builder.json --win",
-    "build:mac": "electron-builder --config electron-builder.json --mac",
-    "build:linux": "electron-builder --config electron-builder.json --linux"
+    "build:win": "electron-builder --config electron-builder.json --win --publish never",
+    "build:mac": "electron-builder --config electron-builder.json --mac --publish never",
+    "build:linux": "electron-builder --config electron-builder.json --linux --publish never"
   },
   "dependencies": {
     "@jait/api-client": "workspace:*",

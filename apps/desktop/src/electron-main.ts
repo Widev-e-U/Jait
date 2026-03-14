@@ -208,6 +208,7 @@ ipcMain.handle("desktop:get-info", () => ({
   platform: process.platform as "win32" | "darwin" | "linux",
   arch: process.arch,
   electronVersion: process.versions.electron,
+  appVersion: app.getVersion(),
   gatewayUrl: GATEWAY_URL,
   isPackaged: app.isPackaged,
 }));

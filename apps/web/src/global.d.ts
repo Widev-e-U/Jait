@@ -1,6 +1,6 @@
 interface JaitDesktop {
   gatewayUrl?: string
-  getInfo: () => Promise<{ platform: string; arch: string; gatewayUrl?: string }>
+  getInfo: () => Promise<{ platform: string; arch: string; appVersion?: string; gatewayUrl?: string }>
   getDesktopSources: () => Promise<Array<{ id: string; name: string; thumbnail: string; appIcon: string | null }>>
   notify: (opts: { title: string; body: string }) => Promise<void>
   confirmShare: (opts: { title: string; message: string }) => Promise<{ accepted: boolean }>
