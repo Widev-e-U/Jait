@@ -65,6 +65,47 @@ async function reverseResolve(ip: string): Promise<string | null> {
   }
 }
 
+/** Detect OS version via SSH banner and/or Jait gateway health endpoint. */
+async function detectOsVersion(ip: string, sshReachable: boolean, agentStatus: string): Promise<string | null> {
+  // If it's a running Jait gateway, ask its health endpoint for OS info
+  if (agentStatus === "running") {
+    try {
+      const res = await fetch(`http://${ip}:8000/health`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
+        const health = (await res.json()) as { platform?: string; osVersion?: string; os?: string };
+        if (health.osVersion) return health.osVersion;
+        if (health.os) return health.os;
+      }
+    } catch {}
+  }
+  // Try SSH banner for OS hints
+  if (sshReachable) {
+    try {
+      const banner = await new Promise<string>((resolve) => {
+        const socket = createConnection({ host: ip, port: 22, timeout: 3000 });
+        let data = "";
+        socket.on("data", (chunk) => { data += chunk.toString(); socket.destroy(); resolve(data); });
+        socket.on("timeout", () => { socket.destroy(); resolve(""); });
+        socket.on("error", () => { socket.destroy(); resolve(""); });
+      });
+      if (banner) {
+        const trimmed = banner.trim().slice(0, 200);
+        // Extract OS info from SSH banner (e.g. "SSH-2.0-OpenSSH_8.9p1 Ubuntu-3ubuntu0.6")
+        if (/ubuntu/i.test(trimmed)) {
+          const m = /Ubuntu[\s-]*(\S*)/i.exec(trimmed);
+          return m ? `Ubuntu ${m[1]}` : "Ubuntu";
+        }
+        if (/debian/i.test(trimmed)) return "Debian";
+        if (/windows/i.test(trimmed)) return "Windows";
+        if (/raspbian/i.test(trimmed)) return "Raspbian";
+        // Return raw banner as fallback if it looks informative
+        if (trimmed.startsWith("SSH-")) return trimmed;
+      }
+    } catch {}
+  }
+  return null;
+}
+
 // ---------------------------------------------------------------------------
 // Shared scan result cache — accessible from network routes too
 // ---------------------------------------------------------------------------
@@ -77,6 +118,8 @@ export interface NetworkScanHost {
   openPorts: number[];
   sshReachable: boolean;
   agentStatus: "not-installed" | "installed" | "running" | "unreachable";
+  osVersion: string | null;
+  providers?: string[];
   lastSeen: string;
 }
 
@@ -90,12 +133,55 @@ export interface NetworkScanData {
 /** In-memory cache of the latest scan result, populated by the tool/job */
 let latestScan: NetworkScanData | null = null;
 
+/** Optional DB reference, set once at startup for persistent storage */
+let _sqlite: import("../db/sqlite-shim.js").SqliteDatabase | undefined;
+
+export function setNetworkScanDb(sqlite: import("../db/sqlite-shim.js").SqliteDatabase): void {
+  _sqlite = sqlite;
+}
+
 export function getLatestNetworkScan(): NetworkScanData | null {
   return latestScan;
 }
 
 export function setLatestNetworkScan(data: NetworkScanData): void {
   latestScan = data;
+  // Persist to DB if available
+  if (_sqlite && data.hosts.length > 0) {
+    try {
+      const upsert = _sqlite.prepare(`
+        INSERT INTO network_hosts (ip, mac, hostname, os_version, open_ports, ssh_reachable, agent_status, providers, first_seen_at, last_seen_at, scanned_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ON CONFLICT(ip) DO UPDATE SET
+          mac = excluded.mac,
+          hostname = excluded.hostname,
+          os_version = COALESCE(excluded.os_version, network_hosts.os_version),
+          open_ports = excluded.open_ports,
+          ssh_reachable = excluded.ssh_reachable,
+          agent_status = excluded.agent_status,
+          providers = excluded.providers,
+          last_seen_at = excluded.last_seen_at,
+          scanned_at = excluded.scanned_at
+      `);
+      for (const h of data.hosts) {
+        upsert.run(
+          h.ip,
+          h.mac ?? null,
+          h.hostname ?? null,
+          h.osVersion ?? null,
+          JSON.stringify(h.openPorts),
+          h.sshReachable ? 1 : 0,
+          h.agentStatus,
+          h.providers?.length ? JSON.stringify(h.providers) : null,
+          data.scannedAt,
+          h.lastSeen,
+          data.scannedAt,
+        );
+      }
+    } catch (err) {
+      console.error("Failed to persist network hosts to DB:", err);
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -178,6 +264,7 @@ export function createNetworkScanTool(): ToolDefinition {
           const hostname = await reverseResolve(entry.ip);
 
           let agentStatus: NetworkScanHost["agentStatus"] = "not-installed";
+          let providers: string[] | undefined;
           if (openPorts.includes(8000)) {
             try {
               const res = await fetch(`http://${entry.ip}:8000/health`, {
@@ -185,7 +272,21 @@ export function createNetworkScanTool(): ToolDefinition {
               });
               if (res.ok) {
                 const health = (await res.json()) as { name?: string };
-                if (health.name === "jait-gateway") agentStatus = "running";
+                if (health.name === "jait-gateway") {
+                  agentStatus = "running";
+                  // Try to discover providers from the remote gateway
+                  try {
+                    const topoRes = await fetch(`http://${entry.ip}:8000/api/network/topology`, {
+                      signal: AbortSignal.timeout(2000),
+                    });
+                    if (topoRes.ok) {
+                      const topo = (await topoRes.json()) as { devices?: { providers?: string[] }[] };
+                      const all = new Set<string>();
+                      for (const d of topo.devices ?? []) for (const p of d.providers ?? []) all.add(p);
+                      if (all.size > 0) providers = [...all];
+                    }
+                  } catch {}
+                }
               }
             } catch {
               agentStatus = "not-installed";
@@ -200,6 +301,8 @@ export function createNetworkScanTool(): ToolDefinition {
             openPorts,
             sshReachable,
             agentStatus,
+            osVersion: await detectOsVersion(entry.ip, sshReachable, agentStatus),
+            providers,
             lastSeen: new Date().toISOString(),
           };
         }),

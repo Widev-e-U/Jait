@@ -364,4 +364,28 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 015: Network hosts table (persistent scan results) ──────────
+  {
+    id: 15,
+    name: "network_hosts_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS network_hosts (
+          ip TEXT PRIMARY KEY,
+          mac TEXT,
+          hostname TEXT,
+          os_version TEXT,
+          open_ports TEXT NOT NULL DEFAULT '[]',
+          ssh_reachable INTEGER NOT NULL DEFAULT 0,
+          agent_status TEXT NOT NULL DEFAULT 'not-installed',
+          providers TEXT,
+          first_seen_at TEXT NOT NULL,
+          last_seen_at TEXT NOT NULL,
+          scanned_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_network_hosts_last_seen ON network_hosts(last_seen_at DESC)`);
+    },
+  },
+
 ];

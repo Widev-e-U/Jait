@@ -247,6 +247,27 @@ export const automationPlans = sqliteTable(
   ],
 );
 
+// ─── Network Hosts (persistent scan results) ────────────────────────
+export const networkHosts = sqliteTable(
+  "network_hosts",
+  {
+    ip: text("ip").primaryKey(),
+    mac: text("mac"),
+    hostname: text("hostname"),
+    osVersion: text("os_version"),
+    openPorts: text("open_ports").notNull().default("[]"), // JSON number[]
+    sshReachable: integer("ssh_reachable").notNull().default(0),
+    agentStatus: text("agent_status").notNull().default("not-installed"),
+    providers: text("providers"), // JSON string[] | null
+    firstSeenAt: text("first_seen_at").notNull(),
+    lastSeenAt: text("last_seen_at").notNull(),
+    scannedAt: text("scanned_at").notNull(),
+  },
+  (table) => [
+    index("idx_network_hosts_last_seen").on(table.lastSeenAt),
+  ],
+);
+
 // ─── Scheduled Jobs ──────────────────────────────────────────────────
 export const scheduledJobs = sqliteTable(
   "scheduled_jobs",

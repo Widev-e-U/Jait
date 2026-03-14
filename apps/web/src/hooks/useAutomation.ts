@@ -97,6 +97,7 @@ export function useAutomation(enabled = true) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
   const [loading, setLoading] = useState(false)
+  const [loadingActivities, setLoadingActivities] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   // Send state
@@ -302,16 +303,19 @@ export function useAutomation(enabled = true) {
   useEffect(() => {
     if (!enabled || !selectedThreadId) {
       setActivities([])
+      setLoadingActivities(false)
       return
     }
 
     const cached = activityCacheRef.current.get(selectedThreadId)
     if (cached) {
       setActivities(cached)
+      setLoadingActivities(false)
       return
     }
 
     setActivities([])
+    setLoadingActivities(true)
     let cancelled = false
     const fetchActivities = async () => {
       if (!localStorage.getItem('token')) return
@@ -324,6 +328,8 @@ export function useAutomation(enabled = true) {
         }
       } catch {
         /* ignore */
+      } finally {
+        if (!cancelled) setLoadingActivities(false)
       }
     }
     void fetchActivities()
@@ -435,6 +441,22 @@ export function useAutomation(enabled = true) {
       const existing = localRepositories.find((r) => r.localPath === path)
       if (existing) {
         setSelectedRepoId(existing.id)
+        // Ensure the repo is associated with this device and has a githubUrl
+        const updates: Record<string, string> = {}
+        if (!existing.deviceId || existing.deviceId !== localDeviceId) {
+          updates.deviceId = localDeviceId
+        }
+        if (!existing.githubUrl) {
+          try {
+            const status = await gitApi.status(path)
+            if (status.remoteUrl) updates.githubUrl = status.remoteUrl
+          } catch { /* ignore */ }
+        }
+        if (Object.keys(updates).length > 0) {
+          try {
+            await agentsApi.updateRepo(existing.id, updates)
+          } catch { /* best-effort */ }
+        }
         return
       }
 
@@ -647,6 +669,7 @@ export function useAutomation(enabled = true) {
     threadPrStates,
     ghAvailable,
     activities,
+    loadingActivities,
     activityEndRef,
     providers,
     remoteProviders,

@@ -1,6 +1,6 @@
 import { useLayoutEffect, useRef } from 'react'
 import { useStickToBottom } from 'use-stick-to-bottom'
-import { ArrowDown } from 'lucide-react'
+import { ArrowDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 
@@ -8,9 +8,10 @@ interface ConversationProps {
   children: React.ReactNode
   className?: string
   compact?: boolean
+  loading?: boolean
 }
 
-export function Conversation({ children, className, compact }: ConversationProps) {
+export function Conversation({ children, className, compact, loading }: ConversationProps) {
   const { scrollRef, contentRef, isAtBottom, scrollToBottom } = useStickToBottom({
     initial: 'instant',
   })
@@ -34,13 +35,19 @@ export function Conversation({ children, className, compact }: ConversationProps
 
   return (
     <div className={cn('relative flex-1 overflow-hidden', className)}>
-      <div ref={scrollRef} className="h-full overflow-y-auto">
-        <div ref={contentRef} className={cn('mx-auto py-6', compact ? 'max-w-none px-4' : 'max-w-3xl px-4')}>
-          {children}
+      {loading ? (
+        <div className="flex h-full items-center justify-center">
+          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
-      </div>
+      ) : (
+        <div ref={scrollRef} className="h-full overflow-y-auto">
+          <div ref={contentRef} className={cn('mx-auto py-6', compact ? 'max-w-none px-4' : 'max-w-3xl px-4')}>
+            {children}
+          </div>
+        </div>
+      )}
 
-      {!isAtBottom && (
+      {!loading && !isAtBottom && (
         <Button
           variant="outline"
           size="icon"

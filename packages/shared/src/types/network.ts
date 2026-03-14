@@ -13,6 +13,10 @@ export interface NetworkHost {
   sshReachable: boolean
   /** Gateway agent status on this host */
   agentStatus: 'not-installed' | 'installed' | 'running' | 'unreachable'
+  /** Detected OS version string (e.g. "Windows 11 Pro 23H2", "Ubuntu 22.04") */
+  osVersion: string | null
+  /** AI providers available on this host (if running jait-gateway) */
+  providers?: string[]
   /** Timestamp of last scan */
   lastSeen: string
 }

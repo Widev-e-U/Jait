@@ -106,6 +106,7 @@ export function registerRepoRoutes(
       defaultBranch?: string;
       localPath?: string;
       githubUrl?: string;
+      deviceId?: string;
       strategy?: string | null;
     };
 

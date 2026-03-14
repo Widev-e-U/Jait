@@ -20,6 +20,7 @@ import {
   Wifi,
   Shield,
   Terminal,
+  Rocket,
 } from 'lucide-react'
 import { getApiUrl } from '@/lib/gateway-url'
 
@@ -36,6 +37,7 @@ interface TopologyGateway {
   platform: string
   ip: string
   version: string
+  osVersion: string | null
   online: boolean
 }
 
@@ -58,6 +60,8 @@ interface TopologyHost {
   openPorts: number[]
   sshReachable: boolean
   agentStatus: string
+  osVersion: string | null
+  providers: string[]
   online: boolean
 }
 
@@ -112,7 +116,7 @@ const NODE_SIZES: Record<string, number> = {
   gateway: 14,
   device: 10,
   mesh: 10,
-  host: 6,
+  host: 8,
 }
 
 const PLATFORM_ICONS: Record<string, string> = {
@@ -127,7 +131,7 @@ const PLATFORM_ICONS: Record<string, string> = {
 // Detail Panel
 // ---------------------------------------------------------------------------
 
-function NodeDetail({ node, onClose }: { node: TopologyNode | null; onClose: () => void }) {
+function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; onClose: () => void; onDeploy?: (ip: string) => void }) {
   if (!node) return null
 
   const Icon = node.type === 'gateway' ? Server
@@ -136,6 +140,10 @@ function NodeDetail({ node, onClose }: { node: TopologyNode | null; onClose: () 
         : Monitor
 
   const color = NODE_COLORS[node.type] ?? '#6b7280'
+
+  const showDeploy = 'sshReachable' in node && node.sshReachable
+    && 'agentStatus' in node && node.agentStatus !== 'running'
+    && 'ip' in node
 
   return (
     <Dialog open={!!node} onOpenChange={(o) => !o && onClose()}>
@@ -186,6 +194,14 @@ function NodeDetail({ node, onClose }: { node: TopologyNode | null; onClose: () 
             </div>
           )}
 
+          {/* OS Version (gateway + hosts) */}
+          {'osVersion' in node && node.osVersion && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">OS</span>
+              <span className="text-xs">{node.osVersion}</span>
+            </div>
+          )}
+
           {/* MAC */}
           {'mac' in node && node.mac && (
             <div className="flex items-center justify-between">
@@ -194,7 +210,15 @@ function NodeDetail({ node, onClose }: { node: TopologyNode | null; onClose: () 
             </div>
           )}
 
-          {/* Providers (devices) */}
+          {/* OS Version */}
+          {'osVersion' in node && node.osVersion && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">OS</span>
+              <span className="text-xs">{node.osVersion}</span>
+            </div>
+          )}
+
+          {/* Providers */}
           {'providers' in node && node.providers.length > 0 && (
             <div>
               <span className="text-muted-foreground block mb-1.5">Providers</span>
@@ -208,7 +232,7 @@ function NodeDetail({ node, onClose }: { node: TopologyNode | null; onClose: () 
             </div>
           )}
 
-          {/* Open Ports (hosts) */}
+          {/* Open Ports */}
           {'openPorts' in node && node.openPorts.length > 0 && (
             <div>
               <span className="text-muted-foreground block mb-1.5">Open Ports</span>
@@ -231,8 +255,8 @@ function NodeDetail({ node, onClose }: { node: TopologyNode | null; onClose: () 
             </div>
           )}
 
-          {/* Agent Status (hosts) */}
-          {'agentStatus' in node && node.agentStatus !== 'not-installed' && (
+          {/* Agent Status */}
+          {'agentStatus' in node && (
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Agent</span>
               <Badge variant={node.agentStatus === 'running' ? 'default' : 'secondary'} className="text-[10px]">
@@ -258,7 +282,119 @@ function NodeDetail({ node, onClose }: { node: TopologyNode | null; onClose: () 
               </a>
             </Button>
           )}
+
+          {/* Deploy Node button — shown when SSH is reachable but agent is not running */}
+          {showDeploy && onDeploy && (
+            <Button size="sm" variant="default" className="w-full mt-2"
+              onClick={() => { onDeploy((node as TopologyHost).ip); onClose(); }}>
+              <Rocket className="h-3.5 w-3.5 mr-1.5" />
+              Deploy Node
+            </Button>
+          )}
         </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Deploy Dialog
+// ---------------------------------------------------------------------------
+
+function DeployDialog({ ip, token, onClose }: { ip: string | null; token?: string | null; onClose: () => void }) {
+  const [username, setUsername] = useState('')
+  const [authMethod, setAuthMethod] = useState<'password' | 'key'>('password')
+  const [result, setResult] = useState<{ instructions: string[]; sshCommand: string } | null>(null)
+  const [loading, setLoading] = useState(false)
+
+  if (!ip) return null
+
+  const handleDeploy = async () => {
+    setLoading(true)
+    try {
+      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+      if (token) headers['Authorization'] = `Bearer ${token}`
+      const res = await fetch(`${API_URL}/api/network/deploy`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ ip, username, authMethod }),
+      })
+      if (res.ok) {
+        const data = await res.json() as { instructions: string[]; sshCommand: string }
+        setResult(data)
+      }
+    } catch {
+      // ignore
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  return (
+    <Dialog open={!!ip} onOpenChange={(o) => { if (!o) { setResult(null); setUsername(''); onClose(); } }}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Rocket className="h-4 w-4" />
+            Deploy Jait Node to {ip}
+          </DialogTitle>
+        </DialogHeader>
+
+        {!result ? (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">SSH Username</label>
+              <input
+                type="text"
+                value={username}
+                onChange={(e) => setUsername(e.target.value)}
+                placeholder="e.g. pi, ubuntu, root"
+                className="w-full px-3 py-2 text-sm rounded-md border bg-background"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm text-muted-foreground">Auth Method</label>
+              <div className="flex gap-2">
+                <Button size="sm" variant={authMethod === 'password' ? 'default' : 'outline'}
+                  onClick={() => setAuthMethod('password')}>
+                  Password
+                </Button>
+                <Button size="sm" variant={authMethod === 'key' ? 'default' : 'outline'}
+                  onClick={() => setAuthMethod('key')}>
+                  SSH Key
+                </Button>
+              </div>
+            </div>
+
+            <Button className="w-full" onClick={() => void handleDeploy()} disabled={!username.trim() || loading}>
+              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Rocket className="h-4 w-4 mr-2" />}
+              Generate Deploy Script
+            </Button>
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <span className="text-sm font-medium">Instructions</span>
+              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
+                {result.instructions.map((step, i) => (
+                  <li key={i}>{step}</li>
+                ))}
+              </ol>
+            </div>
+
+            <div className="space-y-2">
+              <span className="text-sm font-medium">SSH Command</span>
+              <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all">
+                {result.sshCommand}
+              </pre>
+            </div>
+
+            <Button variant="outline" className="w-full" onClick={() => { navigator.clipboard.writeText(result.sshCommand); }}>
+              Copy Command
+            </Button>
+          </div>
+        )}
       </DialogContent>
     </Dialog>
   )
@@ -281,6 +417,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
+  const [deployIp, setDeployIp] = useState<string | null>(null)
 
   const headers = useCallback((): Record<string, string> => {
     const h: Record<string, string> = {}
@@ -380,7 +517,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
   useEffect(() => {
     if (graphRef.current && graphData.nodes.length > 0) {
       setTimeout(() => {
-        graphRef.current?.zoomToFit(400, 60)
+        graphRef.current?.zoomToFit(400, 120)
       }, 500)
     }
   }, [graphData.nodes.length])
@@ -390,7 +527,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
     const { data } = node
     const x = node.x ?? 0
     const y = node.y ?? 0
-    const size = NODE_SIZES[data.type] ?? 6
+    const size = NODE_SIZES[data.type] ?? 8
     const color = NODE_COLORS[data.type] ?? '#6b7280'
     const isHovered = hoveredNode === node.id
     const isSelected = selectedNode?.id === data.id
@@ -401,6 +538,15 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       ctx.arc(x, y, size + 4, 0, 2 * Math.PI)
       ctx.fillStyle = `${color}33`
       ctx.fill()
+    }
+
+    // SSH ring indicator for hosts
+    if (data.type === 'host' && 'sshReachable' in data && data.sshReachable) {
+      ctx.beginPath()
+      ctx.arc(x, y, size + 3, 0, 2 * Math.PI)
+      ctx.strokeStyle = '#f59e0b55'
+      ctx.lineWidth = 1.5 / globalScale
+      ctx.stroke()
     }
 
     // Outer ring on hover/select
@@ -429,7 +575,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       ctx.stroke()
     }
 
-    // Platform emoji inside for gateway/device
+    // Platform emoji inside for gateway/device/mesh
     if ((data.type === 'gateway' || data.type === 'device' || data.type === 'mesh') && 'platform' in data) {
       const emoji = PLATFORM_ICONS[data.platform] ?? '\ud83d\udcbb'
       ctx.font = `${size * 0.9}px sans-serif`
@@ -452,6 +598,44 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       ctx.font = `bold ${Math.max(3, 8 / globalScale)}px -apple-system, BlinkMacSystemFont, sans-serif`
       ctx.fillStyle = '#22c55e'
       ctx.fillText('GATEWAY', x, y + size + 3 + fontSize + 2)
+    }
+
+    // OS version label for hosts
+    if (data.type === 'host' && 'osVersion' in data && data.osVersion) {
+      const osFontSize = Math.max(2.5, 7 / globalScale)
+      ctx.font = `${osFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.fillStyle = '#60a5fa'
+      const osLabel = data.osVersion.length > 24 ? data.osVersion.slice(0, 22) + '\u2026' : data.osVersion
+      ctx.fillText(osLabel, x, y + size + 3 + fontSize + 2)
+    }
+
+    // Providers label below name (for devices and hosts with providers)
+    const providers = ('providers' in data && Array.isArray(data.providers)) ? data.providers : []
+    if (providers.length > 0) {
+      const provFontSize = Math.max(2.5, 7 / globalScale)
+      ctx.font = `${provFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.fillStyle = '#a855f7'
+      const yOffset = data.type === 'gateway' ? fontSize * 2 + 6 : fontSize + 5
+      ctx.fillText(providers.join(' \u00b7 '), x, y + size + 3 + yOffset)
+    }
+
+    // Port count badge for hosts (top-left of node)
+    if (data.type === 'host' && 'openPorts' in data && data.openPorts.length > 0) {
+      const portCount = data.openPorts.length
+      const badgeFontSize = Math.max(2.5, 7 / globalScale)
+      ctx.font = `bold ${badgeFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.fillStyle = '#3b82f6'
+      ctx.textAlign = 'center'
+      ctx.textBaseline = 'middle'
+      // Small badge circle
+      const bx = x - size * 0.65
+      const by = y - size * 0.65
+      ctx.beginPath()
+      ctx.arc(bx, by, 3.5, 0, 2 * Math.PI)
+      ctx.fillStyle = '#3b82f6'
+      ctx.fill()
+      ctx.fillStyle = '#ffffff'
+      ctx.fillText(String(portCount), bx, by)
     }
   }, [hoveredNode, selectedNode])
 
@@ -536,7 +720,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       )}
 
       {/* Legend */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b text-[10px] text-muted-foreground shrink-0">
+      <div className="flex items-center gap-4 px-4 py-2 border-b text-[10px] text-muted-foreground shrink-0 flex-wrap">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS.gateway }} />
           Gateway
@@ -552,6 +736,10 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS.host }} />
           Network Host
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span className="h-2.5 w-2.5 rounded-full border border-amber-500/50" style={{ backgroundColor: 'transparent' }} />
+          SSH Available
         </span>
       </div>
 
@@ -606,7 +794,10 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       </div>
 
       {/* Node detail dialog */}
-      <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} />
+      <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} onDeploy={(ip) => setDeployIp(ip)} />
+
+      {/* Deploy dialog */}
+      <DeployDialog ip={deployIp} token={token} onClose={() => setDeployIp(null)} />
     </div>
   )
 }

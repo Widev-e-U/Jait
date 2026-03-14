@@ -70,6 +70,7 @@ export function AgentsPage() {
   const [threads, setThreads] = useState<AgentThread[]>([])
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [activities, setActivities] = useState<ThreadActivity[]>([])
+  const [loadingActivities, setLoadingActivities] = useState(false)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -114,14 +115,18 @@ export function AgentsPage() {
   useEffect(() => {
     if (!selectedId) {
       setActivities([])
+      setLoadingActivities(false)
       return
     }
     let cancelled = false
+    setLoadingActivities(true)
     const fetchActivities = async () => {
       try {
         const acts = await agentsApi.getActivities(selectedId)
         if (!cancelled) setActivities(acts)
-      } catch { /* ignore */ }
+      } catch { /* ignore */ } finally {
+        if (!cancelled) setLoadingActivities(false)
+      }
     }
     fetchActivities()
     const interval = setInterval(fetchActivities, 2000)
@@ -398,7 +403,11 @@ export function AgentsPage() {
 
             {/* Activity feed */}
             <ScrollArea className="flex-1 p-4">
-              {activities.length === 0 ? (
+              {loadingActivities && activities.length === 0 ? (
+                <div className="flex justify-center py-8">
+                  <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                </div>
+              ) : activities.length === 0 ? (
                 <div className="text-sm text-muted-foreground text-center py-8">
                   No activity yet. Start the thread to begin.
                 </div>

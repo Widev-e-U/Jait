@@ -365,6 +365,7 @@ export class WsControlPlane {
           };
           this.fsNodes.set(node.id, node);
           console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id} — providers: ${node.providers?.join(", ") ?? "none"}`);
+          this.onFsNodeRegistered?.(node);
         }
         break;
       }
@@ -576,6 +577,9 @@ export class WsControlPlane {
   onScreenShareStop?: (sessionId: string) => void;
   /** Callback when a remote node sends a provider event (token, tool.start, etc.) */
   onRemoteProviderEvent?: (sessionId: string, event: unknown) => void;
+
+  /** Called when a filesystem node (desktop/mobile) registers. */
+  onFsNodeRegistered?: (node: FsNode) => void;
 
   // ── Screen sharing helpers ────────────────────────────────────────
 

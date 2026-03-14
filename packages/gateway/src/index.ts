@@ -33,6 +33,8 @@ import { ClaudeCodeProvider } from "./providers/claude-code-provider.js";
 import { JaitProvider } from "./providers/jait-provider.js";
 import { WorkspaceWatcher } from "./services/workspace-watcher.js";
 import type { FileChangeEvent } from "./services/workspace-watcher.js";
+import { GitService } from "./services/git.js";
+import { setNetworkScanDb } from "./tools/network-tools.js";
 
 async function main() {
   const config = loadConfig();
@@ -40,6 +42,7 @@ async function main() {
   // Initialize SQLite database
   const { db, sqlite } = await openDatabase();
   migrateDatabase(sqlite);
+  setNetworkScanDb(sqlite);
   console.log("Database initialized at ~/.jait/data/jait.db");
 
   // Services
@@ -473,6 +476,46 @@ async function main() {
     if (session) {
       ws.broadcastScreenShareState(session);
       console.log(`Screen share stopped: ${sessionId}`);
+    }
+  };
+
+  // When a desktop/mobile FsNode registers, auto-claim repos that have no
+  // deviceId but a matching local path platform. This ensures repos created
+  // before deviceId tracking get properly associated.
+  ws.onFsNodeRegistered = (node) => {
+    if (node.isGateway) return;
+    const isWindowsNode = node.platform === "windows";
+    const git = new GitService();
+    for (const repo of repoService.list()) {
+      if (repo.deviceId) continue; // already claimed
+      const path = repo.localPath;
+      const pathIsWindows = /^[A-Za-z]:[\\\/]/.test(path);
+      if (pathIsWindows === isWindowsNode) {
+        repoService.update(repo.id, { deviceId: node.id });
+        ws.broadcastAll({
+          type: "repo.updated",
+          sessionId: "",
+          timestamp: new Date().toISOString(),
+          payload: { repo: { ...repo, deviceId: node.id } },
+        });
+        console.log(`[ws] auto-claimed repo "${repo.name}" for node ${node.name} (${node.id})`);
+        // Also try to fill in missing githubUrl asynchronously
+        if (!repo.githubUrl) {
+          git.getPreferredRemote(path).then(async (remoteName) => {
+            if (!remoteName) return;
+            const url = await git.getRemoteUrl(path, remoteName);
+            if (!url) return;
+            repoService.update(repo.id, { githubUrl: url });
+            ws.broadcastAll({
+              type: "repo.updated",
+              sessionId: "",
+              timestamp: new Date().toISOString(),
+              payload: { repo: { ...repo, deviceId: node.id, githubUrl: url } },
+            });
+            console.log(`[ws] detected githubUrl for repo "${repo.name}": ${url}`);
+          }).catch(() => {});
+        }
+      }
     }
   };
 

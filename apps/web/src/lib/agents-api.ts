@@ -130,6 +130,8 @@ export interface UpdateRepoRequest {
   name?: string
   defaultBranch?: string
   localPath?: string
+  deviceId?: string
+  githubUrl?: string
   strategy?: string | null
 }
 

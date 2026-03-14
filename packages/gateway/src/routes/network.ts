@@ -7,6 +7,7 @@ import { createConnection } from "node:net";
 import type { NetworkHost, NetworkScanResult, SshTestResult, GatewayNode } from "@jait/shared";
 import type { WsControlPlane } from "../ws.js";
 import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-tools.js";
+import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import { createRequire } from "node:module";
 
 const require = createRequire(import.meta.url);
@@ -105,6 +106,117 @@ async function reverseResolve(ip: string): Promise<string | null> {
   }
 }
 
+/** Detect OS version via SSH banner and/or Jait gateway health endpoint. */
+async function detectOsVersion(ip: string, sshReachable: boolean, agentStatus: string): Promise<string | null> {
+  if (agentStatus === "running") {
+    try {
+      const res = await fetch(`http://${ip}:8000/health`, { signal: AbortSignal.timeout(2000) });
+      if (res.ok) {
+        const health = (await res.json()) as { platform?: string; osVersion?: string; os?: string };
+        if (health.osVersion) return health.osVersion;
+        if (health.os) return health.os;
+      }
+    } catch {}
+  }
+  if (sshReachable) {
+    try {
+      const banner = await new Promise<string>((resolve) => {
+        const socket = createConnection({ host: ip, port: 22, timeout: 3000 });
+        let data = "";
+        socket.on("data", (chunk) => { data += chunk.toString(); socket.destroy(); resolve(data); });
+        socket.on("timeout", () => { socket.destroy(); resolve(""); });
+        socket.on("error", () => { socket.destroy(); resolve(""); });
+      });
+      if (banner) {
+        const trimmed = banner.trim().slice(0, 200);
+        if (/ubuntu/i.test(trimmed)) {
+          const m = /Ubuntu[\s-]*(\S*)/i.exec(trimmed);
+          return m ? `Ubuntu ${m[1]}` : "Ubuntu";
+        }
+        if (/debian/i.test(trimmed)) return "Debian";
+        if (/windows/i.test(trimmed)) return "Windows";
+        if (/raspbian/i.test(trimmed)) return "Raspbian";
+        if (trimmed.startsWith("SSH-")) return trimmed;
+      }
+    } catch {}
+  }
+  return null;
+}
+
+// ---------------------------------------------------------------------------
+// DB helpers — persist and read scanned hosts
+// ---------------------------------------------------------------------------
+
+function persistHostsToDb(sqlite: SqliteDatabase, hosts: NetworkHost[], scannedAt: string): void {
+  const upsert = sqlite.prepare(`
+    INSERT INTO network_hosts (ip, mac, hostname, os_version, open_ports, ssh_reachable, agent_status, providers, first_seen_at, last_seen_at, scanned_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(ip) DO UPDATE SET
+      mac = excluded.mac,
+      hostname = excluded.hostname,
+      os_version = COALESCE(excluded.os_version, network_hosts.os_version),
+      open_ports = excluded.open_ports,
+      ssh_reachable = excluded.ssh_reachable,
+      agent_status = excluded.agent_status,
+      providers = excluded.providers,
+      last_seen_at = excluded.last_seen_at,
+      scanned_at = excluded.scanned_at
+  `);
+  for (const h of hosts) {
+    upsert.run(
+      h.ip,
+      h.mac ?? null,
+      h.hostname ?? null,
+      h.osVersion ?? null,
+      JSON.stringify(h.openPorts),
+      h.sshReachable ? 1 : 0,
+      h.agentStatus,
+      h.providers?.length ? JSON.stringify(h.providers) : null,
+      scannedAt,
+      h.lastSeen,
+      scannedAt,
+    );
+  }
+}
+
+interface DbHostRow {
+  ip: string;
+  mac: string | null;
+  hostname: string | null;
+  os_version: string | null;
+  open_ports: string;
+  ssh_reachable: number;
+  agent_status: string;
+  providers: string | null;
+  first_seen_at: string;
+  last_seen_at: string;
+  scanned_at: string;
+}
+
+function readHostsFromDb(sqlite: SqliteDatabase): { hosts: NetworkHost[]; scannedAt: string | null } {
+  const rows = sqlite.prepare(
+    "SELECT * FROM network_hosts ORDER BY last_seen_at DESC"
+  ).all() as DbHostRow[];
+  let scannedAt: string | null = null;
+  const hosts: NetworkHost[] = rows.map((r) => {
+    if (!scannedAt || r.scanned_at > scannedAt) scannedAt = r.scanned_at;
+    return {
+      ip: r.ip,
+      mac: r.mac,
+      hostname: r.hostname,
+      vendor: null,
+      alive: true,
+      openPorts: JSON.parse(r.open_ports) as number[],
+      sshReachable: r.ssh_reachable === 1,
+      agentStatus: r.agent_status as NetworkHost["agentStatus"],
+      osVersion: r.os_version,
+      providers: r.providers ? (JSON.parse(r.providers) as string[]) : undefined,
+      lastSeen: r.last_seen_at,
+    };
+  });
+  return { hosts, scannedAt };
+}
+
 // ---------------------------------------------------------------------------
 // In-memory node registry (gateway mesh)
 // ---------------------------------------------------------------------------
@@ -115,7 +227,7 @@ const knownNodes = new Map<string, GatewayNode>();
 // Route registration
 // ---------------------------------------------------------------------------
 
-export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane) {
+export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane, sqlite?: SqliteDatabase) {
   // ---- GET /api/network/interfaces — local NIC info ----
   app.get("/api/network/interfaces", async () => {
     const ifaces = networkInterfaces();
@@ -131,13 +243,18 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
     return { interfaces: result };
   });
 
-  // ---- GET /api/network/scan/latest — return cached scan from the scheduled job ----
+  // ---- GET /api/network/scan/latest — return cached scan or DB data ----
   app.get("/api/network/scan/latest", async () => {
     const cached = getLatestNetworkScan();
-    if (!cached) {
-      return { ok: false, message: "No scan results yet. Trigger a scan or wait for the scheduled job." };
+    if (cached) return cached;
+    // Fall back to DB if no in-memory cache yet
+    if (sqlite) {
+      const { hosts, scannedAt } = readHostsFromDb(sqlite);
+      if (hosts.length > 0) {
+        return { subnet: "", hosts, scannedAt: scannedAt ?? new Date().toISOString(), durationMs: 0 };
+      }
     }
-    return cached;
+    return { ok: false, message: "No scan results yet. Trigger a scan or wait for the scheduled job." };
   });
 
   // ---- POST /api/network/scan — ARP scan + port probe ----
@@ -215,12 +332,25 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
 
         // Check if this is a known Jait gateway node
         let agentStatus: NetworkHost["agentStatus"] = "not-installed";
+        let providers: string[] | undefined;
         if (openPorts.includes(8000)) {
           try {
             const res = await fetch(`http://${entry.ip}:8000/health`, { signal: AbortSignal.timeout(2000) });
             if (res.ok) {
               const health = await res.json() as { name?: string };
-              if (health.name === "jait-gateway") agentStatus = "running";
+              if (health.name === "jait-gateway") {
+                agentStatus = "running";
+                // Try to discover providers from the remote gateway
+                try {
+                  const topoRes = await fetch(`http://${entry.ip}:8000/api/network/topology`, { signal: AbortSignal.timeout(2000) });
+                  if (topoRes.ok) {
+                    const topo = await topoRes.json() as { devices?: { providers?: string[] }[] };
+                    const all = new Set<string>();
+                    for (const d of topo.devices ?? []) for (const p of d.providers ?? []) all.add(p);
+                    if (all.size > 0) providers = [...all];
+                  }
+                } catch {}
+              }
             }
           } catch {
             agentStatus = "not-installed";
@@ -231,11 +361,13 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
           ip: entry.ip,
           mac: entry.mac,
           hostname,
-          vendor: null, // Could add OUI lookup later
+          vendor: null,
           alive: true,
           openPorts,
           sshReachable,
           agentStatus,
+          osVersion: await detectOsVersion(entry.ip, sshReachable, agentStatus),
+          providers,
           lastSeen: new Date().toISOString(),
         };
       });
@@ -252,7 +384,14 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
     };
 
     // Update the shared cache so /api/network/scan/latest reflects this scan
-    setLatestNetworkScan(result as import("../tools/network-tools.js").NetworkScanData);
+    setLatestNetworkScan(result as unknown as import("../tools/network-tools.js").NetworkScanData);
+
+    // Persist to DB
+    if (sqlite) {
+      try { persistHostsToDb(sqlite, result.hosts, result.scannedAt); } catch (err) {
+        console.error("Failed to persist network hosts to DB:", err);
+      }
+    }
 
     return result;
   });
@@ -457,6 +596,21 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
       if (gatewayIp !== "127.0.0.1") break;
     }
 
+    let osVersion: string | null = null;
+    try {
+      if (platform() === "win32") {
+        const { stdout } = await execAsync("cmd /c ver", { timeout: 3000 });
+        osVersion = stdout.trim().replace(/^\s*\n+/, "") || null;
+      } else if (platform() === "darwin") {
+        const { stdout } = await execAsync("sw_vers -productVersion", { timeout: 3000 });
+        osVersion = `macOS ${stdout.trim()}`;
+      } else {
+        // Try /etc/os-release for Linux distros
+        const { stdout } = await execAsync("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'", { timeout: 3000 });
+        osVersion = stdout.trim() || null;
+      }
+    } catch {}
+
     const gatewayNode = {
       id: "gateway",
       type: "gateway" as const,
@@ -464,6 +618,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
       platform: platform() === "win32" ? "windows" : platform() === "darwin" ? "macos" : "linux",
       ip: gatewayIp,
       version: PKG_VERSION,
+      osVersion,
       online: true,
     };
 
@@ -478,9 +633,19 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
       registeredAt: n.registeredAt,
     }));
 
-    // Scanned network hosts
+    // Scanned network hosts — prefer in-memory cache, fall back to DB
     const scan = getLatestNetworkScan();
-    const scannedHosts = (scan?.hosts ?? []).map(h => ({
+    let hostSource: { ip: string; mac: string | null; hostname: string | null; openPorts: number[]; sshReachable: boolean; agentStatus: string; osVersion?: string | null; providers?: string[] }[] =
+      scan?.hosts ?? [];
+    let scannedAt: string | null = scan?.scannedAt ?? null;
+
+    if (hostSource.length === 0 && sqlite) {
+      const dbData = readHostsFromDb(sqlite);
+      hostSource = dbData.hosts;
+      scannedAt = dbData.scannedAt;
+    }
+
+    const scannedHosts = hostSource.map(h => ({
       id: `host-${h.ip}`,
       type: "host" as const,
       name: h.hostname ?? h.ip,
@@ -489,6 +654,8 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
       openPorts: h.openPorts,
       sshReachable: h.sshReachable,
       agentStatus: h.agentStatus,
+      osVersion: h.osVersion ?? null,
+      providers: h.providers ?? [],
       online: true,
     }));
 
@@ -509,7 +676,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane)
       devices: connectedDevices,
       hosts: scannedHosts,
       meshNodes,
-      scannedAt: scan?.scannedAt ?? null,
+      scannedAt,
     };
   });
 }

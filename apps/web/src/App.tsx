@@ -35,6 +35,7 @@ import {
   AlertCircle,
   Server,
   ScrollText,
+  ListChecks,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -60,6 +61,7 @@ import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { ThreadActions } from '@/components/automation/ThreadActions'
 import { StrategyModal } from '@/components/automation/StrategyModal'
+import { PlanModal } from '@/components/automation/PlanModal'
 import { activitiesToMessages } from '@/lib/activity-to-messages'
 import { SettingsPage, type UpdateInfo } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
@@ -85,7 +87,8 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import type { AgentThread } from '@/lib/agents-api'
+import { agentsApi, type AgentThread } from '@/lib/agents-api'
+import { gitApi } from '@/lib/git-api'
 
 const API_URL = getApiUrl()
 
@@ -261,6 +264,7 @@ interface ManagerRepositoryPanelProps {
   onAddRepository: () => void
   onRemoveRepository: (repoId: string) => void
   onOpenStrategy: (repo: AutomationRepository) => void
+  onOpenPlan: (repo: AutomationRepository) => void
 }
 
 function ManagerRepositoryPanel({
@@ -272,6 +276,7 @@ function ManagerRepositoryPanel({
   onAddRepository,
   onRemoveRepository,
   onOpenStrategy,
+  onOpenPlan,
 }: ManagerRepositoryPanelProps) {
   return (
     <div className="flex h-full flex-col">
@@ -349,6 +354,17 @@ function ManagerRepositoryPanel({
                     }}
                   >
                     <ScrollText className="h-3 w-3" />
+                  </button>
+                  <button
+                    type="button"
+                    title="Plans"
+                    className="shrink-0 rounded p-0.5 text-muted-foreground transition-colors hover:text-primary"
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onOpenPlan(repo)
+                    }}
+                  >
+                    <ListChecks className="h-3 w-3" />
                   </button>
                   {repo.source === 'local' && (
                     <button
@@ -622,6 +638,7 @@ function App() {
   const [showTerminal, setShowTerminal] = useState(false)
   const [showManagerRepos, setShowManagerRepos] = useState(false)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
+  const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(() => localStorage.getItem('showWorkspaceTree') !== 'false')
@@ -829,6 +846,7 @@ function App() {
   const {
     messages,
     isLoading,
+    isLoadingHistory,
     remainingPrompts,
     error,
     hitMaxRounds,
@@ -1921,7 +1939,7 @@ ${file.content.slice(0, 2000)}
   }, [activeSessionId, settings.stt_provider, submitVoiceTranscript, token])
 
   const limitReached = error === 'limit_reached'
-  const hasMessages = messages.length > 0
+  const hasMessages = messages.length > 0 || isLoadingHistory
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
   const activityEvents: ActivityEvent[] = [
@@ -2496,8 +2514,8 @@ ${file.content.slice(0, 2000)}
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
                 {automation.selectedThread ? (
                   <>
-                    <Conversation className="min-h-0 flex-1 border-b" compact>
-                      {automationMessages.length === 0 && (
+                    <Conversation className="min-h-0 flex-1 border-b" compact loading={automation.loadingActivities}>
+                      {automationMessages.length === 0 && !automation.loadingActivities && (
                         <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
                       )}
                       {automationMessages.map((msg, idx) => (
@@ -2568,6 +2586,7 @@ ${file.content.slice(0, 2000)}
                           onAddRepository={() => automation.setFolderPickerOpen(true)}
                           onRemoveRepository={(repoId) => { void automation.removeRepository(repoId) }}
                           onOpenStrategy={(repo) => setStrategyRepo(repo)}
+                          onOpenPlan={(repo) => setPlanRepo(repo)}
                         />
                       </div>
                     )}
@@ -2738,7 +2757,7 @@ ${file.content.slice(0, 2000)}
                     )}
                   </div>
                 )}
-                <Conversation className="min-h-0 flex-1 border-b" compact={showDesktopWorkspace}>
+                <Conversation className="min-h-0 flex-1 border-b" compact={showDesktopWorkspace} loading={isLoadingHistory}>
                   {messages.map((msg, idx) => (
                     <Message
                       key={msg.id}
@@ -3087,6 +3106,46 @@ ${file.content.slice(0, 2000)}
             onOpenChange={(open) => { if (!open) setStrategyRepo(null) }}
             repoId={strategyRepo.id}
             repoName={strategyRepo.name}
+          />
+        )}
+
+        {planRepo && (
+          <PlanModal
+            open={!!planRepo}
+            onOpenChange={(open) => { if (!open) setPlanRepo(null) }}
+            repoId={planRepo.id}
+            repoName={planRepo.name}
+            defaultBranch={planRepo.defaultBranch}
+            repoLocalPath={planRepo.localPath}
+            onStartThread={(task, plan, _repo) => {
+              void (async () => {
+                const repo = planRepo!
+                const branchName = `jait/${Math.random().toString(16).slice(2, 10)}`
+                let worktreePath: string | undefined
+                try {
+                  const wt = await gitApi.createWorktree(repo.localPath, repo.defaultBranch, branchName)
+                  worktreePath = wt.path
+                } catch {
+                  try { await gitApi.createBranch(repo.localPath, branchName, repo.defaultBranch) } catch { /* ignore */ }
+                }
+                const thread = await agentsApi.createThread({
+                  title: `[${repo.name}] ${task.title}`,
+                  providerId: chatProvider,
+                  workingDirectory: worktreePath ?? repo.localPath,
+                  branch: branchName,
+                })
+                await agentsApi.startThread(thread.id, {
+                  message: task.description || task.title,
+                  titleTask: task.title,
+                  titlePrefix: `[${repo.name}] `,
+                })
+                // Update the task with the created thread ID
+                const updatedTasks = plan.tasks.map((t: any) =>
+                  t.id === task.id ? { ...t, status: 'running' as const, threadId: thread.id } : t
+                )
+                await agentsApi.updatePlan(plan.id, { tasks: updatedTasks })
+              })()
+            }}
           />
         )}
 
