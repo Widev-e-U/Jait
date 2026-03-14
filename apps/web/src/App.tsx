@@ -473,6 +473,7 @@ function ManagerThreadListItem({
 interface ManagerActiveThreadsMenuProps {
   threads: AgentThread[]
   getRepositoryForThread: (thread: Pick<AgentThread, 'title' | 'workingDirectory'>) => AutomationRepository | null
+  threadPrStates: Record<string, 'open' | 'closed' | 'merged' | null>
   ghAvailable: boolean
   onOpenThread: (threadId: string) => void
   onStopThread: (threadId: string) => void
@@ -481,6 +482,7 @@ interface ManagerActiveThreadsMenuProps {
 function ManagerActiveThreadsMenu({
   threads,
   getRepositoryForThread,
+  threadPrStates,
   ghAvailable,
   onOpenThread,
   onStopThread,
@@ -547,7 +549,7 @@ function ManagerActiveThreadsMenu({
                         {thread.branch}
                       </Badge>
                     )}
-                    <ThreadPrBadge prState={automation.threadPrStates[thread.id] ?? thread.prState} />
+                    <ThreadPrBadge prState={threadPrStates[thread.id] ?? thread.prState} />
                   </div>
                 </button>
                 <div className="flex items-center gap-1 self-start">
@@ -643,6 +645,7 @@ function App() {
   const [updateApplying, setUpdateApplying] = useState(false)
   const pendingGatewayRestartVersionRef = useRef<string | null>(null)
   const gatewayRestartSawDisconnectRef = useRef(false)
+  const automationRefreshRef = useRef<() => Promise<void>>(async () => {})
   const [desktopPlatform, setDesktopPlatform] = useState<string | null>(null)
   const [isMaximized, setIsMaximized] = useState(false)
   const [gatewayStep, setGatewayStep] = useState<'url' | 'auth'>(() =>
@@ -782,7 +785,7 @@ function App() {
     }
 
     // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
-    void automation.refresh()
+    void automationRefreshRef.current()
 
     if (reconnected && pendingGatewayRestartVersionRef.current && gatewayRestartSawDisconnectRef.current) {
       const version = pendingGatewayRestartVersionRef.current
@@ -791,7 +794,7 @@ function App() {
       toast.success(`Gateway restarted on v${version}.`)
       void handleCheckUpdate()
     }
-  }, [handleCheckUpdate, automation.refresh])
+  }, [handleCheckUpdate])
 
   // Auto-check for updates on mount (once authenticated)
   useEffect(() => {
@@ -843,6 +846,7 @@ function App() {
 
   // ── Automation / Manager mode state ───────────────────────────────
   const automation = useAutomation()
+  automationRefreshRef.current = automation.refresh
 
   // Convert thread activities → ChatMessage[] for Message rendering
   const automationMessages = useMemo(
@@ -1977,6 +1981,7 @@ ${file.content.slice(0, 2000)}
               <ManagerActiveThreadsMenu
                 threads={activeManagerThreads}
                 getRepositoryForThread={automation.getRepositoryForThread}
+                threadPrStates={automation.threadPrStates}
                 ghAvailable={automation.ghAvailable}
                 onOpenThread={(threadId) => {
                   if (viewMode !== 'manager') setViewMode('manager')
