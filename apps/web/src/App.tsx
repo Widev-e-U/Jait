@@ -547,7 +547,7 @@ function ManagerActiveThreadsMenu({
                         {thread.branch}
                       </Badge>
                     )}
-                    <ThreadPrBadge prState={thread.prState} />
+                    <ThreadPrBadge prState={automation.threadPrStates[thread.id] ?? thread.prState} />
                   </div>
                 </button>
                 <div className="flex items-center gap-1 self-start">
@@ -781,6 +781,9 @@ function App() {
       return
     }
 
+    // Re-fetch providers so FsNode registration is picked up (fixes "Offline" on desktop)
+    void automation.refresh()
+
     if (reconnected && pendingGatewayRestartVersionRef.current && gatewayRestartSawDisconnectRef.current) {
       const version = pendingGatewayRestartVersionRef.current
       pendingGatewayRestartVersionRef.current = null
@@ -788,7 +791,7 @@ function App() {
       toast.success(`Gateway restarted on v${version}.`)
       void handleCheckUpdate()
     }
-  }, [handleCheckUpdate])
+  }, [handleCheckUpdate, automation.refresh])
 
   // Auto-check for updates on mount (once authenticated)
   useEffect(() => {
@@ -2624,7 +2627,7 @@ ${file.content.slice(0, 2000)}
                                     thread={thread}
                                     repo={threadRepo}
                                     repoName={repoName}
-                                    prState={thread.prState ?? automation.threadPrStates[thread.id]}
+                                    prState={automation.threadPrStates[thread.id] ?? thread.prState}
                                     ghAvailable={automation.ghAvailable}
                                     onOpen={() => automation.setSelectedThreadId(thread.id)}
                                     onStop={() => { void automation.handleStop(thread.id) }}

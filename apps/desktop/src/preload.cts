@@ -114,4 +114,27 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   /** Set a persistent desktop setting */
   setSetting: (key: string, value: unknown) =>
     ipcRenderer.invoke("desktop:set-setting", key, value) as Promise<{ ok: boolean }>,
+
+  // ── Auto-update API ────────────────────────────────────────────────
+  /** Check for application updates */
+  checkForUpdate: () =>
+    ipcRenderer.invoke("update:check") as Promise<{ updateAvailable: boolean; version?: string; error?: string }>,
+
+  /** Download the available update */
+  downloadUpdate: () =>
+    ipcRenderer.invoke("update:download") as Promise<{ ok: boolean }>,
+
+  /** Quit and install the downloaded update */
+  installUpdate: () =>
+    ipcRenderer.invoke("update:install") as Promise<void>,
+
+  /** Listen for update events from the main process */
+  onUpdateEvent: (
+    event: string,
+    callback: (_event: unknown, data: unknown) => void,
+  ) => {
+    const channel = `update:${event}`;
+    ipcRenderer.on(channel, callback);
+    return () => { ipcRenderer.removeListener(channel, callback); };
+  },
 });

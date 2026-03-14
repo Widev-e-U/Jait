@@ -8,6 +8,7 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { autoUpdater, type UpdateInfo } from "electron-updater";
 
 // Remove the default application menu (File, Edit, View, etc.)
 Menu.setApplicationMenu(null);
@@ -1061,6 +1062,73 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
   }
 });
 
+// ── Auto-updater ──────────────────────────────────────────────────────
+function initAutoUpdater(): void {
+  if (IS_DEV) return; // Skip in development
+
+  autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on("checking-for-update", () => {
+    mainWindow?.webContents.send("update:checking");
+  });
+
+  autoUpdater.on("update-available", (info: UpdateInfo) => {
+    mainWindow?.webContents.send("update:available", {
+      version: info.version,
+      releaseDate: info.releaseDate,
+      releaseNotes: typeof info.releaseNotes === "string" ? info.releaseNotes : undefined,
+    });
+  });
+
+  autoUpdater.on("update-not-available", () => {
+    mainWindow?.webContents.send("update:not-available");
+  });
+
+  autoUpdater.on("download-progress", (progress) => {
+    mainWindow?.webContents.send("update:download-progress", {
+      percent: progress.percent,
+      transferred: progress.transferred,
+      total: progress.total,
+      bytesPerSecond: progress.bytesPerSecond,
+    });
+  });
+
+  autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+    mainWindow?.webContents.send("update:downloaded", {
+      version: info.version,
+    });
+  });
+
+  autoUpdater.on("error", (err) => {
+    mainWindow?.webContents.send("update:error", err.message);
+  });
+
+  // Check for updates after a short delay, then every 4 hours
+  setTimeout(() => autoUpdater.checkForUpdates().catch(() => {}), 10_000);
+  setInterval(() => autoUpdater.checkForUpdates().catch(() => {}), 4 * 60 * 60 * 1000);
+}
+
+// ── Auto-updater IPC ──────────────────────────────────────────────────
+ipcMain.handle("update:check", async () => {
+  if (IS_DEV) return { updateAvailable: false };
+  try {
+    const result = await autoUpdater.checkForUpdates();
+    return { updateAvailable: !!result?.updateInfo, version: result?.updateInfo?.version };
+  } catch (err) {
+    return { updateAvailable: false, error: err instanceof Error ? err.message : String(err) };
+  }
+});
+
+ipcMain.handle("update:download", async () => {
+  await autoUpdater.downloadUpdate();
+  return { ok: true };
+});
+
+ipcMain.handle("update:install", () => {
+  autoUpdater.quitAndInstall();
+});
+
 // ── App lifecycle ─────────────────────────────────────────────────────
 app.whenReady().then(async () => {
   // Set up CSP for screen sharing
@@ -1093,6 +1161,7 @@ app.whenReady().then(async () => {
   mainWindow = createMainWindow();
   await loadApp(mainWindow);
   createTray();
+  initAutoUpdater();
 
   app.on("activate", () => {
     // macOS: re-create window when dock icon is clicked

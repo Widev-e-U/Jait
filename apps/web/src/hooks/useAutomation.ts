@@ -416,6 +416,12 @@ export function useAutomation(enabled = true) {
     }
 
     void loadPrStates()
+
+    // Re-check PR states periodically so merged/closed PRs get picked up
+    const interval = setInterval(() => {
+      if (prStateRequestRef.current === requestId) void loadPrStates()
+    }, 60_000)
+    return () => clearInterval(interval)
   }, [enabled, repoThreads, selectedRepo])
 
   // ── Repository CRUD (API-backed) ────────────────────────────────

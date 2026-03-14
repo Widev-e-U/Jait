@@ -27,6 +27,15 @@ interface JaitDesktop {
   setTitleBarOverlay: (opts: { color?: string; symbolColor?: string; height?: number }) => Promise<void>
   getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>
   setSetting: (key: string, value: unknown) => Promise<{ ok: boolean }>
+
+  // Auto-update
+  checkForUpdate: () => Promise<{ updateAvailable: boolean; version?: string; error?: string }>
+  downloadUpdate: () => Promise<{ ok: boolean }>
+  installUpdate: () => Promise<void>
+  onUpdateEvent: (
+    event: 'checking' | 'available' | 'not-available' | 'download-progress' | 'downloaded' | 'error',
+    callback: (event: unknown, data: unknown) => void,
+  ) => () => void
 }
 
 declare global {

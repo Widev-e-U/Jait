@@ -47,5 +47,10 @@
     "target": ["AppImage", "deb"],
     "category": "Development",
     "artifactName": "Jait-${version}-${arch}.${ext}"
+  },
+  "publish": {
+    "provider": "github",
+    "owner": "JakobWl",
+    "repo": "Jait"
   }
 }
