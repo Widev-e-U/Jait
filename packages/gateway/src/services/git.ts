@@ -528,10 +528,20 @@ export class GitService {
             }
           } catch { /* no existing PR */ }
 
-          // Create new PR — use --push if branch wasn't pushed yet
+          // Create new PR
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const baseFlag = baseBranch ? ` --base "${baseBranch}"` : '';
-          const pushFlag = result.push.status !== "pushed" ? " --push" : "";
+
+          // If the branch wasn't pushed yet, push it now before creating the PR
+          if (result.push.status !== "pushed") {
+            try {
+              const remoteName = await this.getPreferredRemote(cwd, currentBranch);
+              if (remoteName) {
+                await gitExec(cwd, `push --set-upstream "${remoteName}" "${currentBranch}"`);
+                result.push = { status: "pushed", branch: currentBranch, upstreamBranch: `${remoteName}/${currentBranch}`, setUpstream: true };
+              }
+            } catch { /* push failed — gh pr create may still succeed */ }
+          }
 
           // Generate PR body from diff context
           const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
@@ -545,7 +555,7 @@ export class GitService {
             // gh pr create outputs the PR URL on stdout (--json is not supported)
             const prUrl = await ghExec(
               cwd,
-              `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}${pushFlag}`,
+              `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}`,
               60_000,
             );
 
