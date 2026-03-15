@@ -134,6 +134,7 @@ describe("POST /api/workspace/open", () => {
       open: true,
       remotePath: TEST_DIR,
       surfaceId,
+      nodeId: 'gateway',
     });
   });
 

@@ -127,7 +127,7 @@ export function registerWorkspaceRoutes(
 
     // Persist workspace state to session DB so late-joiners get it
     if (sessionState) {
-      sessionState.set(sessionId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId } });
+      sessionState.set(sessionId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId, nodeId } });
     }
 
     // Also persist workspacePath on the session record so CLI providers

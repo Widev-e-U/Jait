@@ -66,6 +66,8 @@ interface PromptInputProps {
   onMoveToGateway?: () => void
   /** Active session info — shows where the current session is running. */
   sessionInfo?: SessionInfo | null
+  /** Node ID of the open workspace (scopes CLI providers to that device). */
+  workspaceNodeId?: string
   /** All files available for @ mention (pre-loaded from visible tree) */
   availableFiles?: ReferencedFile[]
   /** Lazy search across the entire workspace directory */
@@ -213,6 +215,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   repoRuntime,
   onMoveToGateway,
   sessionInfo,
+  workspaceNodeId,
   availableFiles = EMPTY_FILES,
   onSearchFiles,
   workspaceOpen = false,
@@ -730,6 +733,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   repoRuntime={repoRuntime}
                   onMoveToGateway={onMoveToGateway}
                   sessionInfo={sessionInfo}
+                  workspaceNodeId={workspaceNodeId}
                 />
               )}
               {showCliModelSelector && (

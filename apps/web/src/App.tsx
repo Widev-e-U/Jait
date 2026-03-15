@@ -1015,7 +1015,7 @@ function App() {
 
 
   // ── UI command channel (server ↔ frontend via WebSocket) ──────────
-  const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string } | null>(null)
+  const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
 
   // Detect Electron platform and listen for maximize/unmaximize (custom titlebar)
   useEffect(() => {
@@ -1037,7 +1037,7 @@ function App() {
   }, [activeSessionId])
 
   // ── Persistent session state for panels ───────────────────────────
-  interface WorkspacePanelState { open: boolean; remotePath: string; surfaceId?: string }
+  interface WorkspacePanelState { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string }
   const [savedWorkspace, setSavedWorkspace] = useSessionState<WorkspacePanelState>(
     activeSessionId, 'workspace.panel', token,
   )
@@ -1063,6 +1063,7 @@ function App() {
       setActiveWorkspace({
         surfaceId: savedWorkspace.surfaceId ?? '',
         workspaceRoot: savedWorkspace.remotePath,
+        nodeId: savedWorkspace.nodeId,
       })
     }
   }, [savedWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
@@ -1101,7 +1102,7 @@ function App() {
           const v = value as WorkspacePanelState
           if (v.open) {
             setShowWorkspace(true)
-            if (v.remotePath) setActiveWorkspace({ surfaceId: v.surfaceId ?? '', workspaceRoot: v.remotePath })
+            if (v.remotePath) setActiveWorkspace({ surfaceId: v.surfaceId ?? '', workspaceRoot: v.remotePath, nodeId: v.nodeId })
           } else {
             setShowWorkspace(false)
           }
@@ -1150,7 +1151,7 @@ function App() {
     const wp = state['workspace.panel'] as WorkspacePanelState | null | undefined
     if (wp && wp.open) {
       setShowWorkspace(true)
-      if (wp.remotePath) setActiveWorkspace({ surfaceId: wp.surfaceId ?? '', workspaceRoot: wp.remotePath })
+      if (wp.remotePath) setActiveWorkspace({ surfaceId: wp.surfaceId ?? '', workspaceRoot: wp.remotePath, nodeId: wp.nodeId })
     } else {
       setShowWorkspace(false)
       setActiveWorkspace(null)
@@ -1199,8 +1200,8 @@ function App() {
     listeners: {
       'workspace.open': useCallback((data: WorkspaceOpenData) => {
         setShowWorkspace(true)
-        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
-        const state = { open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId }
+        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
+        const state = { open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
         setSavedWorkspace(state)
       }, [setSavedWorkspace]),
       'workspace.close': useCallback(() => {
@@ -3330,6 +3331,7 @@ function App() {
                     onSearchFiles={handleSearchFiles}
                     workspaceOpen={showWorkspace}
                     sessionInfo={sessionInfo}
+                    workspaceNodeId={activeWorkspace?.nodeId}
                   />
                 </div>
               </div>
@@ -3483,6 +3485,7 @@ function App() {
                       onSearchFiles={handleSearchFiles}
                       workspaceOpen={showWorkspace}
                       sessionInfo={sessionInfo}
+                      workspaceNodeId={activeWorkspace?.nodeId}
                     />
                     <div className="flex items-center justify-between gap-2 px-1">
                       <div className="flex items-center gap-2 min-w-0">

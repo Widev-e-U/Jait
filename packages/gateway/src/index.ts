@@ -128,7 +128,8 @@ async function main() {
       const snap = surface.snapshot();
       const sid = snap.sessionId ?? "";
       const workspaceRoot = (snap.metadata as Record<string, unknown>)?.workspaceRoot ?? null;
-      const panelState = { open: true, remotePath: workspaceRoot, surfaceId: id };
+      const nodeId = (snap.metadata as Record<string, unknown>)?.nodeId as string | undefined;
+      const panelState = { open: true, remotePath: workspaceRoot, surfaceId: id, nodeId: nodeId ?? 'gateway' };
 
       // Start native file watcher for local filesystems
       if (surface.type === "filesystem" && typeof workspaceRoot === "string") {
@@ -146,6 +147,7 @@ async function main() {
           data: {
             surfaceId: id,
             workspaceRoot: workspaceRoot as string,
+            nodeId: nodeId ?? 'gateway',
           },
         },
         sid,

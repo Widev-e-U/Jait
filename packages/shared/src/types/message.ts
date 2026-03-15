@@ -73,6 +73,7 @@ export interface UICommandPayload<T = Record<string, unknown>> {
 export interface WorkspaceOpenData {
   surfaceId: string;
   workspaceRoot: string;
+  nodeId?: string;
 }
 
 export interface WorkspaceCloseData {

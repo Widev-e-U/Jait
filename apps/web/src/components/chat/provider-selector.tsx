@@ -30,6 +30,8 @@ interface ProviderSelectorProps {
   onMoveToGateway?: () => void
   /** Active session info — shows where the current session is running. */
   sessionInfo?: { isRemote: boolean; remoteNode?: { nodeName: string; platform: string } } | null
+  /** Node ID of the open developer-mode workspace (scopes CLI providers to that device). */
+  workspaceNodeId?: string
 }
 
 /** Wrap @lobehub/icons so they conform to the same {className} interface as lucide icons. */
@@ -70,7 +72,7 @@ function summariseReason(reason: string): string {
   return 'unavailable'
 }
 
-export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false, repoRuntime, onMoveToGateway, sessionInfo }: ProviderSelectorProps) {
+export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false, repoRuntime, onMoveToGateway, sessionInfo, workspaceNodeId }: ProviderSelectorProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
 
@@ -92,15 +94,22 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   const repoLoading = repoRuntime?.loading ?? false
   const repoIsGateway = repoRuntime?.hostType === 'gateway'
 
+  // Developer-mode workspace scoping: if workspace is on a non-gateway node, scope providers
+  const wsNodeIsRemote = Boolean(workspaceNodeId && workspaceNodeId !== 'gateway')
+  const wsRemoteNode = wsNodeIsRemote ? remoteProviders.find((n) => n.nodeId === workspaceNodeId) : undefined
+  const scopedToWorkspaceNode = wsNodeIsRemote && !scopedToRepo
+
   const current = PROVIDER_DEFS.find((p) => p.value === provider) ?? PROVIDER_DEFS[0]
   const CurrentIcon = current.icon
 
   // Determine location label for the trigger button
   const locationLabel = scopedToRepo
     ? (repoIsGateway ? 'Gateway' : repoRuntime?.locationLabel)
-    : sessionInfo?.isRemote && sessionInfo.remoteNode
-      ? sessionInfo.remoteNode.nodeName
-      : undefined
+    : scopedToWorkspaceNode
+      ? (wsRemoteNode?.nodeName ?? workspaceNodeId)
+      : sessionInfo?.isRemote && sessionInfo.remoteNode
+        ? sessionInfo.remoteNode.nodeName
+        : undefined
 
   return (
     <DropdownMenu>
@@ -146,6 +155,14 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
             <DropdownMenuSeparator />
           </>
         )}
+        {scopedToWorkspaceNode && !wsRemoteNode && (
+          <>
+            <div className="px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+              Device is offline — only Jait (gateway) is available
+            </div>
+            <DropdownMenuSeparator />
+          </>
+        )}
         {PROVIDER_DEFS.map((p) => {
           const Icon = p.icon
           const isActive = provider === p.value
@@ -154,15 +171,18 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
           let isAvailable: boolean
           let reason: string | undefined
           let remoteNode: RemoteProviderInfo | undefined
+          let nodeLabel: string | undefined
 
           if (scopedToRepo) {
             // Jait always runs on the gateway
             if (p.value === 'jait') {
               isAvailable = true
+              nodeLabel = 'Gateway'
             } else if (repoIsGateway) {
               // Gateway-hosted repo: use local gateway availability
               isAvailable = status?.available !== false
               reason = status?.unavailableReason
+              nodeLabel = 'Gateway'
             } else if (repoLoading) {
               // Still loading — disable CLI providers
               isAvailable = false
@@ -175,6 +195,21 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
               // Device online — only show providers the device reports
               isAvailable = repoAvailable.includes(p.value)
               reason = isAvailable ? undefined : 'Not available on this device'
+              nodeLabel = repoRuntime?.locationLabel ?? 'device'
+            }
+          } else if (scopedToWorkspaceNode) {
+            // Developer mode with workspace on remote device
+            if (p.value === 'jait') {
+              isAvailable = true
+              nodeLabel = 'Gateway'
+            } else if (!wsRemoteNode) {
+              // Node is offline
+              isAvailable = false
+              reason = 'Device is offline'
+            } else {
+              isAvailable = wsRemoteNode.providers.includes(p.value)
+              reason = isAvailable ? undefined : 'Not available on this device'
+              nodeLabel = wsRemoteNode.nodeName
             }
           } else {
             // Unscoped (chat mode) — original logic
@@ -184,6 +219,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
               ? remoteProviders.find((r) => r.providers.includes(p.value))
               : undefined
             isAvailable = isLocallyAvailable || !!remoteNode
+            nodeLabel = !status?.available && remoteNode ? remoteNode.nodeName : 'Gateway'
           }
 
           return (
@@ -197,16 +233,10 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium flex items-center gap-1.5">
                   {p.label}
-                  {isAvailable && scopedToRepo && (
+                  {isAvailable && nodeLabel && (
                     <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                       <Monitor className="h-3 w-3" />
-                      {p.value === 'jait' ? 'Gateway' : (repoIsGateway ? 'Gateway' : repoRuntime?.locationLabel ?? 'device')}
-                    </span>
-                  )}
-                  {isAvailable && !scopedToRepo && (
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                      <Monitor className="h-3 w-3" />
-                      {!status?.available && remoteNode ? remoteNode.nodeName : 'Gateway'}
+                      {nodeLabel}
                     </span>
                   )}
                   {!isAvailable && (
