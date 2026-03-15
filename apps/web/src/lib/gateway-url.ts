@@ -16,10 +16,15 @@ const STORAGE_KEY = 'jait-gateway-url'
 /**
  * When the web UI is served by the gateway itself (same origin),
  * use the page origin so it works behind reverse proxies / HTTPS.
- * Falls back to localhost:8000 for standalone dev or SSR.
+ * In Vite dev, the UI usually runs on :3000 while the gateway runs on :8000,
+ * so default to the same host on port 8000 unless the user or env overrides it.
+ * Falls back to localhost:8000 for SSR or unknown environments.
  */
 function getDefaultHttp(): string {
   if (typeof window !== 'undefined' && window.location?.origin && window.location.origin !== 'null') {
+    if (import.meta.env.DEV && window.location.port && window.location.port !== '8000') {
+      return `${window.location.protocol}//${window.location.hostname}:8000`
+    }
     return window.location.origin
   }
   return 'http://localhost:8000'

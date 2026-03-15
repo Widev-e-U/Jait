@@ -198,12 +198,18 @@ export function CreateJobDialog({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background text-foreground border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="create-job-dialog-title"
+        data-testid="create-job-dialog"
+        className="bg-background text-foreground border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+      >
         <div className="flex items-center justify-between p-4 border-b">
-          <h2 className="text-xl font-semibold">
+          <h2 id="create-job-dialog-title" className="text-xl font-semibold">
             {editJob ? 'Edit Job' : 'Create New Job'}
           </h2>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close dialog">
             <X className="h-5 w-5" />
           </Button>
         </div>
@@ -221,7 +227,7 @@ export function CreateJobDialog({
               <div>
                 <Label htmlFor="provider">Provider</Label>
                 <Select value={provider} onValueChange={(v) => { setProvider(v); setModel('') }}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="provider-select">
                     <SelectValue placeholder="Select provider" />
                   </SelectTrigger>
                   <SelectContent>
@@ -241,7 +247,7 @@ export function CreateJobDialog({
                 <div>
                   <Label htmlFor="model">Model</Label>
                   <Select value={model} onValueChange={setModel}>
-                    <SelectTrigger>
+                    <SelectTrigger data-testid="model-select">
                       <SelectValue placeholder="Select model" />
                     </SelectTrigger>
                     <SelectContent>
@@ -340,7 +346,7 @@ export function CreateJobDialog({
                 </div>
               ) : (
                 <Select value={schedule} onValueChange={setSchedule}>
-                  <SelectTrigger>
+                  <SelectTrigger data-testid="schedule-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>

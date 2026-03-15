@@ -45,6 +45,7 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
+e2e/test-results/
 
 # Temp
 temp-*/

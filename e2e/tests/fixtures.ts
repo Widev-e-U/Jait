@@ -1,12 +1,11 @@
 /**
  * E2E test fixtures for authentication and common setup
  */
-import { test as base, expect, Page } from '@playwright/test'
+import { test as base, expect, request as playwrightRequest, Page } from '@playwright/test'
 
-// API base URL
 const API_URL = process.env.API_URL || 'http://localhost:8000'
+const TEST_PASSWORD = 'e2e-password-123'
 
-// Test user data
 export const TEST_USER = {
   id: 'e2e-test-user-123',
   email: 'e2e-test@example.com',
@@ -14,82 +13,121 @@ export const TEST_USER = {
   picture: 'https://example.com/avatar.jpg',
 }
 
-/**
- * Create a test token via the backend test endpoint
- */
-export async function getTestToken(page: Page): Promise<string> {
-  const response = await page.request.post(`${API_URL}/auth/test/token`, {
-    data: TEST_USER,
+interface TestAuthIdentity {
+  username: string
+  password: string
+}
+
+export async function getTestToken(page: Page, identity: TestAuthIdentity): Promise<string> {
+  const registerResponse = await page.request.post(`${API_URL}/auth/register`, {
+    data: {
+      username: identity.username,
+      password: identity.password,
+    },
   })
-  
-  if (!response.ok()) {
-    throw new Error(`Failed to get test token: ${await response.text()}`)
+
+  if (registerResponse.ok()) {
+    const data = await registerResponse.json()
+    return data.access_token
   }
-  
-  const data = await response.json()
+
+  if (registerResponse.status() !== 409) {
+    throw new Error(`Failed to register test user: ${await registerResponse.text()}`)
+  }
+
+  const loginResponse = await page.request.post(`${API_URL}/auth/login`, {
+    data: {
+      username: identity.username,
+      password: identity.password,
+    },
+  })
+
+  if (!loginResponse.ok()) {
+    throw new Error(`Failed to log in test user: ${await loginResponse.text()}`)
+  }
+
+  const data = await loginResponse.json()
   return data.access_token
 }
 
-/**
- * Authenticate a page by setting the auth state
- */
 export async function authenticatePage(page: Page, token: string): Promise<void> {
-  // Set localStorage before navigation
-  await page.addInitScript(({ token, user }) => {
-    localStorage.setItem('token', token)
-    // Also set user info if needed by the app immediately
-  }, { token, user: TEST_USER })
+  await page.goto('/')
+  await page.evaluate((storedToken) => {
+    localStorage.setItem('token', storedToken)
+  }, token)
+  await page.reload()
+  await page.waitForLoadState('domcontentloaded')
 }
 
-/**
- * Clean up test jobs after tests
- */
+async function loginThroughUi(page: Page, identity: TestAuthIdentity): Promise<void> {
+  const dialog = page.getByRole('dialog', { name: 'Account' })
+  if (!(await dialog.isVisible().catch(() => false))) {
+    await page.getByRole('button', { name: 'Sign in' }).click()
+  }
+
+  await page.getByRole('textbox', { name: 'Username' }).fill(identity.username)
+  await page.getByRole('textbox', { name: 'Password' }).fill(identity.password)
+  await page.getByRole('button', { name: 'Login' }).click()
+  await expect(dialog).not.toBeVisible({ timeout: 15000 })
+}
+
 export async function cleanupTestJobs(page: Page, token: string): Promise<void> {
+  let apiContext: Awaited<ReturnType<typeof playwrightRequest.newContext>> | null = null
   try {
-    // List all jobs for the test user and delete them
-    const listResponse = await page.request.get(`${API_URL}/jobs?include_disabled=true`, {
-      headers: { Authorization: `Bearer ${token}` }
+    apiContext = await playwrightRequest.newContext()
+    const listResponse = await apiContext.get(`${API_URL}/jobs?include_disabled=true`, {
+      headers: { Authorization: `Bearer ${token}` },
     })
-    
-    if (listResponse.ok()) {
-      const data = await listResponse.json()
-      for (const job of data.items) {
-        await page.request.delete(`${API_URL}/jobs/${job.id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        })
-      }
+
+    if (!listResponse.ok()) return
+
+    const data = await listResponse.json() as { items?: Array<{ id: string }> }
+    for (const job of data.items ?? []) {
+      await apiContext.delete(`${API_URL}/jobs/${job.id}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      })
     }
   } catch (error) {
     console.warn('Failed to cleanup test jobs:', error)
+  } finally {
+    await apiContext?.dispose()
   }
 }
 
-// Extended test interface with fixtures
 interface JobsFixtures {
+  authIdentity: TestAuthIdentity
   authenticatedPage: Page
   apiToken: string
 }
 
-/**
- * Extended test with authentication fixture
- */
 export const test = base.extend<JobsFixtures>({
-  authenticatedPage: async ({ page }, use) => {
+  authIdentity: async ({}, use, testInfo) => {
+    const suffix = `${testInfo.parallelIndex}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    await use({
+      username: `e2e-${suffix}`,
+      password: TEST_PASSWORD,
+    })
+  },
+
+  apiToken: async ({ page, authIdentity }, use) => {
+    const token = await getTestToken(page, authIdentity)
+    await use(token)
+  },
+
+  authenticatedPage: async ({ page, apiToken, authIdentity }, use) => {
     try {
-      const token = await getTestToken(page)
-      await authenticatePage(page, token)
+      await authenticatePage(page, apiToken)
+      await page.waitForTimeout(300)
+      if (await page.getByRole('button', { name: 'Sign in' }).isVisible().catch(() => false)) {
+        await loginThroughUi(page, authIdentity)
+      }
       await use(page)
-      await cleanupTestJobs(page, token)
     } catch (error) {
-      // If test endpoint not available, skip auth tests
       console.warn('Auth setup failed, tests may fail:', error)
       await use(page)
+    } finally {
+      await cleanupTestJobs(page, apiToken)
     }
-  },
-  
-  apiToken: async ({ page }, use) => {
-    const token = await getTestToken(page)
-    await use(token)
   },
 })
 

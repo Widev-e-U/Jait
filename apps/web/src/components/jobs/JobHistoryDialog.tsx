@@ -77,18 +77,24 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-background text-foreground border border-border rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="job-history-dialog-title"
+        data-testid="job-history-dialog"
+        className="bg-background text-foreground border border-border rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+      >
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b">
           <div>
-            <h2 className="text-xl font-semibold">Job History</h2>
+            <h2 id="job-history-dialog-title" className="text-xl font-semibold">Job History</h2>
             <p className="text-sm text-muted-foreground">{job.name}</p>
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={loadRuns} disabled={isLoading}>
               <RefreshCw className={`h-4 w-4 ${isLoading ? 'animate-spin' : ''}`} />
             </Button>
-            <Button variant="ghost" size="sm" onClick={onClose}>
+            <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close history dialog">
               <X className="h-5 w-5" />
             </Button>
           </div>

@@ -57,7 +57,10 @@ export function JobCard({
   }
 
   return (
-    <Card className={`transition-opacity ${isLoading ? 'opacity-50' : ''} ${!job.enabled ? 'opacity-75' : ''}`}>
+    <Card
+      data-testid={`job-card-${job.id}`}
+      className={`transition-opacity ${isLoading ? 'opacity-50' : ''} ${!job.enabled ? 'opacity-75' : ''}`}
+    >
       <CardHeader className="pb-2">
         <div className="flex items-start justify-between">
           <div className="flex items-center gap-3">
@@ -144,6 +147,7 @@ export function JobCard({
             size="sm"
             onClick={handleTrigger}
             disabled={isTriggering || !job.enabled}
+            data-testid={`job-trigger-${job.id}`}
           >
             {isTriggering ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -156,6 +160,7 @@ export function JobCard({
             variant="ghost"
             size="sm"
             onClick={() => onViewHistory(job)}
+            data-testid={`job-history-${job.id}`}
           >
             <History className="h-4 w-4 mr-1" />
             History
@@ -164,6 +169,8 @@ export function JobCard({
             variant="ghost"
             size="sm"
             onClick={() => onEdit(job)}
+            aria-label={`Edit job ${job.name}`}
+            data-testid={`job-edit-${job.id}`}
           >
             <Edit className="h-4 w-4" />
           </Button>
@@ -172,6 +179,8 @@ export function JobCard({
             size="sm"
             onClick={() => onDelete(job.id)}
             className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            aria-label={`Delete job ${job.name}`}
+            data-testid={`job-delete-${job.id}`}
           >
             <Trash2 className="h-4 w-4" />
           </Button>

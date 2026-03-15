@@ -3,6 +3,8 @@
  */
 import { test, expect } from './fixtures'
 
+test.describe.configure({ mode: 'serial' })
+
 test.describe('Jobs Page Navigation', () => {
   test('should navigate to jobs page when clicking Jobs tab', async ({ authenticatedPage }) => {
     await authenticatedPage.goto('/')
@@ -19,7 +21,7 @@ test.describe('Jobs Page Navigation', () => {
     await authenticatedPage.click('button:has-text("Jobs")')
     
     // Should show empty state
-    await expect(authenticatedPage.locator('text=No scheduled jobs yet')).toBeVisible()
+    await expect(authenticatedPage.getByText('No scheduled jobs yet', { exact: true })).toBeVisible()
     await expect(authenticatedPage.locator('button:has-text("Create Your First Job")')).toBeVisible()
   })
 })
@@ -64,21 +66,15 @@ test.describe('Create Job Dialog', () => {
     // Try to submit without filling required fields
     await authenticatedPage.click('button:has-text("Create Job")')
     
-    // Should show validation errors (HTML5 or custom)
-    // Note: Actual validation behavior depends on implementation
-    await expect(authenticatedPage.locator('[role="dialog"]')).toBeVisible()
+    await expect(authenticatedPage.getByTestId('create-job-dialog')).toBeVisible()
+    await expect(authenticatedPage.locator('input#name')).toBeVisible()
   })
 
   test('should select schedule from presets', async ({ authenticatedPage }) => {
     await authenticatedPage.click('button:has-text("New Job")')
     
-    // Open schedule dropdown
-    await authenticatedPage.click('[data-testid="schedule-select"]').catch(async () => {
-      // Fallback: click any Select trigger that might be the schedule
-      await authenticatedPage.locator('button:has-text("Hourly")').click()
-    })
-    
-    // The preset dropdown should be visible if implemented with Select component
+    await authenticatedPage.getByTestId('schedule-select').click()
+    await expect(authenticatedPage.getByText('Daily at 9am', { exact: true })).toBeVisible()
   })
 
   test('should toggle custom schedule input', async ({ authenticatedPage }) => {
@@ -105,13 +101,10 @@ test.describe('Create Agent Task Job', () => {
     // Fill in the job name
     await authenticatedPage.fill('input#name', 'Test Daily Summary')
     
-    // Select provider (if providers are available)
-    try {
-      await authenticatedPage.click('[data-testid="provider-select"]')
-      await authenticatedPage.locator('text=ollama').first().click()
-    } catch {
-      // Provider might not be available in test
-    }
+    await authenticatedPage.getByTestId('provider-select').click()
+    await authenticatedPage.getByText('Ollama', { exact: true }).click()
+    await authenticatedPage.getByTestId('model-select').click()
+    await authenticatedPage.getByText('local-model', { exact: true }).click()
     
     // Fill in prompt
     await authenticatedPage.fill('textarea#prompt', 'Summarize the daily activities')
@@ -141,6 +134,7 @@ test.describe('Job Card Actions', () => {
         enabled: true,
       },
     })
+    expect(response.ok()).toBeTruthy()
     return response.json()
   }
 
@@ -151,10 +145,11 @@ test.describe('Job Card Actions', () => {
     await authenticatedPage.goto('/')
     await authenticatedPage.click('button:has-text("Jobs")')
     
-    // Should see the job card
-    await expect(authenticatedPage.locator(`text=${job.name}`)).toBeVisible()
-    await expect(authenticatedPage.locator('text=Agent Task')).toBeVisible()
-    await expect(authenticatedPage.locator('text=0 * * * *')).toBeVisible()
+    const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
+    await expect(jobCard).toBeVisible()
+    await expect(jobCard.getByText(job.name, { exact: true })).toBeVisible()
+    await expect(jobCard.getByText('Agent Task', { exact: true })).toBeVisible()
+    await expect(jobCard.getByText('0 * * * *', { exact: true })).toBeVisible()
   })
 
   test('should toggle job enabled state', async ({ authenticatedPage, apiToken }) => {
@@ -163,8 +158,7 @@ test.describe('Job Card Actions', () => {
     await authenticatedPage.goto('/')
     await authenticatedPage.click('button:has-text("Jobs")')
     
-    // Find the toggle switch for this job and click it
-    const jobCard = authenticatedPage.locator(`text=${job.name}`).locator('..')
+    const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
     const toggle = jobCard.locator('button[role="switch"]')
     
     // Check initial state
@@ -185,8 +179,7 @@ test.describe('Job Card Actions', () => {
     await authenticatedPage.goto('/')
     await authenticatedPage.click('button:has-text("Jobs")')
     
-    // Click Run Now button
-    await authenticatedPage.click('button:has-text("Run Now")')
+    await authenticatedPage.getByTestId(`job-trigger-${job.id}`).click()
     
     // Should show some feedback (button might show loading state)
     // Note: Actual behavior depends on Temporal being available
@@ -198,12 +191,11 @@ test.describe('Job Card Actions', () => {
     await authenticatedPage.goto('/')
     await authenticatedPage.click('button:has-text("Jobs")')
     
-    // Click History button
-    await authenticatedPage.click('button:has-text("History")')
+    await authenticatedPage.getByTestId(`job-history-${job.id}`).click()
     
     // Should see history dialog
-    await expect(authenticatedPage.locator('h2:has-text("Job History")')).toBeVisible()
-    await expect(authenticatedPage.locator(`text=${job.name}`)).toBeVisible()
+    await expect(authenticatedPage.getByTestId('job-history-dialog')).toBeVisible()
+    await expect(authenticatedPage.getByText(job.name, { exact: true })).toBeVisible()
   })
 
   test('should open edit dialog', async ({ authenticatedPage, apiToken }) => {
@@ -212,12 +204,10 @@ test.describe('Job Card Actions', () => {
     await authenticatedPage.goto('/')
     await authenticatedPage.click('button:has-text("Jobs")')
     
-    // Click Edit button (icon button with pencil)
-    const jobCard = authenticatedPage.locator(`text=${job.name}`).locator('..').locator('..')
-    await jobCard.locator('button:has(svg.lucide-edit)').click()
+    await authenticatedPage.getByTestId(`job-edit-${job.id}`).click()
     
     // Should see edit dialog with populated fields
-    await expect(authenticatedPage.locator('h2:has-text("Edit Job")')).toBeVisible()
+    await expect(authenticatedPage.getByTestId('create-job-dialog')).toBeVisible()
     await expect(authenticatedPage.locator(`input[value="${job.name}"]`)).toBeVisible()
   })
 
@@ -227,18 +217,16 @@ test.describe('Job Card Actions', () => {
     await authenticatedPage.goto('/')
     await authenticatedPage.click('button:has-text("Jobs")')
     
-    // Should see the job initially
-    await expect(authenticatedPage.locator(`text=${job.name}`)).toBeVisible()
+    const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
+    await expect(jobCard).toBeVisible()
     
     // Setup dialog handler for confirmation
     authenticatedPage.on('dialog', dialog => dialog.accept())
     
-    // Click Delete button (red trash icon)
-    const jobCard = authenticatedPage.locator(`text=${job.name}`).locator('..').locator('..')
-    await jobCard.locator('button:has(svg.lucide-trash-2)').click()
+    await authenticatedPage.getByTestId(`job-delete-${job.id}`).click()
     
     // Job should be removed from the list
-    await expect(authenticatedPage.locator(`text=${job.name}`)).not.toBeVisible({ timeout: 5000 })
+    await expect(authenticatedPage.getByTestId(`job-card-${job.id}`)).not.toBeVisible({ timeout: 5000 })
   })
 })
 
@@ -262,9 +250,7 @@ test.describe('Job History Dialog', () => {
     await authenticatedPage.goto('/')
     await authenticatedPage.click('button:has-text("Jobs")')
     
-    // Open history
-    const jobCard = authenticatedPage.locator(`text=${job.name}`).locator('..')
-    await authenticatedPage.click('button:has-text("History")')
+    await authenticatedPage.getByTestId(`job-history-${job.id}`).click()
     
     // Should show empty state
     await expect(authenticatedPage.locator('text=No runs yet')).toBeVisible()
@@ -283,15 +269,16 @@ test.describe('Job History Dialog', () => {
         model: 'qwen2.5:7b',
       },
     })
+    const job = await response.json()
     
     await authenticatedPage.goto('/')
     await authenticatedPage.click('button:has-text("Jobs")')
-    await authenticatedPage.click('button:has-text("History")')
+    await authenticatedPage.getByTestId(`job-history-${job.id}`).click()
     
     // Close dialog
-    await authenticatedPage.locator('[role="dialog"] button:has(svg.lucide-x)').click()
+    await authenticatedPage.getByRole('button', { name: 'Close history dialog' }).click()
     
-    await expect(authenticatedPage.locator('h2:has-text("Job History")')).not.toBeVisible()
+    await expect(authenticatedPage.getByTestId('job-history-dialog')).not.toBeVisible()
   })
 })
 
