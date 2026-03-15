@@ -26,7 +26,8 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
-import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
+import { WorkspaceSync } from "../services/workspace-sync.js";
+import { resolveRemoteNodeForSession } from "../tools/remote-executor.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
 import type { RepositoryService } from "../services/repositories.js";
@@ -68,9 +69,8 @@ export function registerThreadRoutes(
   // Track active onEvent unsubscribe functions per thread so we can clean up
   const threadUnsubs = new Map<string, () => void>();
 
-  // Track RemoteCliProvider instances per thread so /send, /stop, /interrupt
-  // can access them (they're not in the global providerRegistry)
-  const remoteProviders = new Map<string, RemoteCliProvider>();
+  // Track WorkspaceSync instances per thread for push-back after turns
+  const threadWorkspaceSyncs = new Map<string, WorkspaceSync>();
 
   // ── Helpers ──────────────────────────────────────────────────────
 
@@ -104,32 +104,6 @@ export function registerThreadRoutes(
 
   function isThreadSessionEvent(event: ProviderEvent, sessionId: string): boolean {
     return event.sessionId === sessionId;
-  }
-
-  /**
-   * Find a connected remote node that can run a provider for a given path.
-   * Matches the path's platform format (e.g. Windows drive letter) to a
-   * connected FsNode's platform, and checks that the node has the provider.
-   */
-  function findRemoteNodeForPath(
-    wsPlane: WsControlPlane,
-    dirPath: string,
-    provId: ProviderId,
-  ) {
-    // Detect path platform: drive letter (C:\) or backslash → windows
-    const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(dirPath);
-    const expectedPlatform = isWindowsPath ? "windows" : null;
-
-    for (const node of wsPlane.getFsNodes()) {
-      if (node.isGateway) continue;
-      // Match platform if we can detect it from the path
-      if (expectedPlatform && node.platform !== expectedPlatform) continue;
-      // If we can't detect platform from path, accept any remote node
-      // Check that the node has the requested provider
-      if (!node.providers?.includes(provId === "claude-code" ? "claude-code" : provId)) continue;
-      return node;
-    }
-    return null;
   }
 
   // ── CRUD Routes ──────────────────────────────────────────────────
@@ -230,7 +204,8 @@ export function registerThreadRoutes(
         threadService.clearSession(id);
         const unsub = threadUnsubs.get(id);
         if (unsub) { unsub(); threadUnsubs.delete(id); }
-        remoteProviders.delete(id);
+        const sync = threadWorkspaceSyncs.get(id);
+        if (sync) { sync.cleanup().catch(() => {}); threadWorkspaceSyncs.delete(id); }
       }
     }
 
@@ -260,7 +235,8 @@ export function registerThreadRoutes(
     }
 
     threadService.delete(id);
-    remoteProviders.delete(id);
+    const sync = threadWorkspaceSyncs.get(id);
+    if (sync) { sync.cleanup().catch(() => {}); threadWorkspaceSyncs.delete(id); }
     broadcastThreadEvent(id, "deleted", {});
     return reply.status(204).send();
   });
@@ -286,76 +262,78 @@ export function registerThreadRoutes(
     let workingDirectory = thread.workingDirectory ?? process.cwd();
     const pathExistsLocally = existsSync(workingDirectory);
 
-    // Determine if we need a remote provider:
-    // If the path doesn't exist locally, look for a connected remote node
-    // that matches the path's platform and has the requested provider.
-    let provider = providerRegistry.get(providerId);
-    let isRemote = false;
-
-    if (!pathExistsLocally && ws && providerId !== "jait") {
-      const remoteNode = findRemoteNodeForPath(ws, workingDirectory, providerId);
-      if (remoteNode) {
-        provider = new RemoteCliProvider(ws, remoteNode.id, providerId);
-        isRemote = true;
-      }
-    }
+    // CLI providers always run on the gateway. If the path doesn't
+    // exist locally, try workspace sync or clone-to-gateway.
+    const provider = providerRegistry.get(providerId);
 
     if (!provider) {
       return reply.status(400).send({ error: `Provider '${providerId}' not registered` });
     }
 
-    // Fall back to cwd only for local providers with non-existent paths
-    if (!pathExistsLocally && !isRemote) {
-      // Check if the caller wants to clone the repo to the gateway
-      const cloneToGateway = body["cloneToGateway"] === true;
-
-      if (!cloneToGateway) {
-        // Return a structured error so the frontend can offer to clone
-        return reply.status(422).send({
-          error: "The repo path is not accessible on this gateway and no desktop app is connected. You can clone the repo to the gateway to proceed.",
-          code: "NODE_OFFLINE",
-          workingDirectory,
-          threadId: id,
-        });
+    if (!pathExistsLocally) {
+      // Option A: Sync workspace from a connected remote node
+      let synced = false;
+      if (ws && providerId !== "jait") {
+        const nodeId = resolveRemoteNodeForSession(ws, workingDirectory);
+        if (nodeId) {
+          const sync = new WorkspaceSync({ ws, nodeId, remotePath: workingDirectory, sessionId: id });
+          try {
+            await sync.pull();
+            workingDirectory = sync.localDir;
+            threadWorkspaceSyncs.set(id, sync);
+            threadService.update(id, { workingDirectory });
+            synced = true;
+          } catch (err) {
+            console.warn(`[threads] workspace sync failed, falling back to clone: ${err}`);
+          }
+        }
       }
 
-      // Clone-to-gateway: find the matching repo for its GitHub URL
-      const matchingRepo = repoService
-        ? (repoService.list().find((r) =>
-          workingDirectory.startsWith(r.localPath) || workingDirectory.includes(r.name),
-        ) ?? null)
-        : null;
+      // Option B: Clone the repo to the gateway from GitHub
+      if (!synced) {
+        const cloneToGateway = body["cloneToGateway"] === true;
 
-      const repoUrl =
-        (typeof body["repoUrl"] === "string" ? body["repoUrl"] : null) ??
-        (matchingRepo as Record<string, unknown> | null)?.["githubUrl"] as string | null;
+        if (!cloneToGateway) {
+          return reply.status(422).send({
+            error: "The repo path is not accessible on this gateway and no desktop app is connected. You can clone the repo to the gateway to proceed.",
+            code: "NODE_OFFLINE",
+            workingDirectory,
+            threadId: id,
+          });
+        }
 
-      if (!repoUrl) {
-        return reply.status(400).send({
-          error: "Cannot clone: no GitHub URL available. Register the repo with a GitHub URL first.",
-          code: "NO_REPO_URL",
-        });
-      }
+        const matchingRepo = repoService
+          ? (repoService.list().find((r) =>
+            workingDirectory.startsWith(r.localPath) || workingDirectory.includes(r.name),
+          ) ?? null)
+          : null;
 
-      const repoName = matchingRepo?.name ?? "repo";
-      const defaultBranch = matchingRepo?.defaultBranch ?? "main";
-      const localGit = new GitService();
+        const repoUrl =
+          (typeof body["repoUrl"] === "string" ? body["repoUrl"] : null) ??
+          (matchingRepo as Record<string, unknown> | null)?.["githubUrl"] as string | null;
 
-      try {
-        // Clone or update the repo on the gateway
-        const clonePath = await localGit.cloneOrFetch(repoUrl, repoName, defaultBranch);
+        if (!repoUrl) {
+          return reply.status(400).send({
+            error: "Cannot clone: no GitHub URL available. Register the repo with a GitHub URL first.",
+            code: "NO_REPO_URL",
+          });
+        }
 
-        // Create a worktree for this thread's branch
-        const branch = thread.branch ?? `jait/${id.slice(-8)}`;
-        const wt = await localGit.createWorktree(clonePath, defaultBranch, branch);
-        workingDirectory = wt.path;
+        const repoName = matchingRepo?.name ?? "repo";
+        const defaultBranch = matchingRepo?.defaultBranch ?? "main";
+        const localGit = new GitService();
 
-        // Update the thread record with the gateway-local working directory
-        threadService.update(id, { workingDirectory, branch });
-      } catch (err) {
-        return reply.status(500).send({
-          error: `Failed to clone repo to gateway: ${err instanceof Error ? err.message : String(err)}`,
-        });
+        try {
+          const clonePath = await localGit.cloneOrFetch(repoUrl, repoName, defaultBranch);
+          const branch = thread.branch ?? `jait/${id.slice(-8)}`;
+          const wt = await localGit.createWorktree(clonePath, defaultBranch, branch);
+          workingDirectory = wt.path;
+          threadService.update(id, { workingDirectory, branch });
+        } catch (err) {
+          return reply.status(500).send({
+            error: `Failed to clone repo to gateway: ${err instanceof Error ? err.message : String(err)}`,
+          });
+        }
       }
     }
 
@@ -367,13 +345,8 @@ export function registerThreadRoutes(
       });
     }
 
-    // Build MCP server references so CLI agents can call Jait's tools
-    const mcpServers = isRemote ? [] : [providerRegistry.buildJaitMcpServerRef(config)];
-
-    // Store remote provider for /send, /stop, /interrupt access
-    if (isRemote && provider instanceof RemoteCliProvider) {
-      remoteProviders.set(id, provider);
-    }
+    // CLI providers run locally — MCP always available
+    const mcpServers = [providerRegistry.buildJaitMcpServerRef(config)];
 
     try {
       const session = await provider.startSession({
@@ -426,7 +399,7 @@ export function registerThreadRoutes(
           broadcastThreadStatus(id, "completed");
           unsubscribe();
           threadUnsubs.delete(id);
-          // Keep remoteProviders entry — the thread can still be resumed
+          // Keep workspace sync entry — the thread can still be resumed
           // with a new session (e.g. to fix push failures). Cleaned up on
           // PR merge/close or thread deletion.
         } else if (event.type === "session.error") {
@@ -434,7 +407,8 @@ export function registerThreadRoutes(
           broadcastThreadStatus(id, "error", event.error);
           unsubscribe();
           threadUnsubs.delete(id);
-          remoteProviders.delete(id);
+          const errSync = threadWorkspaceSyncs.get(id);
+          if (errSync) { errSync.cleanup().catch(() => {}); threadWorkspaceSyncs.delete(id); }
         } else if (event.type === "turn.started") {
           // A new turn began — make sure the thread is marked running.
           // This acts as a safety net: if a previous turn.completed leaked
@@ -450,6 +424,14 @@ export function registerThreadRoutes(
           // providerSessionId to decide between /send and /start.
           threadService.update(id, { status: "completed", error: null, completedAt: new Date().toISOString() });
           broadcastThreadStatus(id, "completed");
+
+          // Push changed files back to the remote node (if workspace was synced)
+          const turnSync = threadWorkspaceSyncs.get(id);
+          if (turnSync) {
+            turnSync.push().catch((err) => {
+              console.warn(`[threads] workspace push-back failed for ${id}: ${err}`);
+            });
+          }
         }
       });
 
@@ -571,7 +553,7 @@ export function registerThreadRoutes(
       return reply.status(409).send({ error: "Thread has no active session — use /start instead" });
     }
 
-    const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
+    const provider = providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
     // Persist user message BEFORE sendTurn so it survives provider errors
@@ -599,13 +581,14 @@ export function registerThreadRoutes(
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
 
     if (thread.providerSessionId) {
-      const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
+      const provider = providerRegistry.get(thread.providerId as ProviderId);
       if (provider) {
         try {
           await provider.stopSession(thread.providerSessionId);
         } catch { /* best effort */ }
       }
-      remoteProviders.delete(id);
+      const stopSync = threadWorkspaceSyncs.get(id);
+      if (stopSync) { stopSync.push().catch(() => {}); threadWorkspaceSyncs.delete(id); }
     }
 
     threadService.markInterrupted(id);
@@ -624,7 +607,7 @@ export function registerThreadRoutes(
       return reply.status(409).send({ error: "Thread has no active session" });
     }
 
-    const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
+    const provider = providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
     await provider.interruptTurn(thread.providerSessionId);
@@ -738,7 +721,7 @@ export function registerThreadRoutes(
 
         // Try to resume the thread with the error message
         let resumed = false;
-        const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
+        const provider = providerRegistry.get(thread.providerId as ProviderId);
         if (provider) {
           // 1) Try sending a turn on the existing session
           if (thread.providerSessionId) {
@@ -757,9 +740,7 @@ export function registerThreadRoutes(
           if (!resumed) {
             try {
               const wdir = thread.workingDirectory ?? process.cwd();
-              const mcpServers = !(provider instanceof RemoteCliProvider)
-                ? [providerRegistry.buildJaitMcpServerRef(config)]
-                : [];
+              const mcpServers = [providerRegistry.buildJaitMcpServerRef(config)];
               const newSession = await provider.startSession({
                 threadId: id,
                 workingDirectory: wdir,

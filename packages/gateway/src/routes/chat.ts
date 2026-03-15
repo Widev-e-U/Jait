@@ -15,8 +15,9 @@ import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { ProviderId, ProviderEvent, CliProviderAdapter } from "../providers/contracts.js";
-import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveWorkspaceRoot } from "../tools/core/get-fs.js";
+import { resolveRemoteNodeForSession, createRemoteToolExecutor } from "../tools/remote-executor.js";
+import { WorkspaceSync } from "../services/workspace-sync.js";
 import { existsSync } from "node:fs";
 import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
@@ -555,36 +556,40 @@ export function registerChatRoutes(
 
   // ── Tool execution helper ──────────────────────────────────────────
 
-  async function executeTool(
-    toolName: string,
-    args: unknown,
-    sessionId: string,
-    auth?: { userId?: string; apiKeys?: Record<string, string> },
-    onOutputChunk?: (chunk: string) => void,
-    signal?: AbortSignal,
-  ): Promise<ToolResult> {
-    if (!toolRegistry) {
-      return { ok: false, message: "Tool registry not available" };
-    }
-    if (signal?.aborted) {
-      return { ok: false, message: "Cancelled" };
-    }
-    const context: ToolContext = {
-      sessionId,
-      actionId: uuidv7(),
-      workspaceRoot: surfaceRegistry
-        ? resolveWorkspaceRoot(surfaceRegistry, sessionId)
-        : process.cwd(),
-      requestedBy: "agent",
-      userId: auth?.userId,
-      apiKeys: auth?.apiKeys,
-      onOutputChunk,
-      signal,
-    };
-    try {
-      const toolPromise = toolExecutor
-        ? toolExecutor(toolName, args, context)
-        : toolRegistry.execute(toolName, args, context, audit);
+  function makeExecuteTool(
+    executor?: typeof toolExecutor,
+  ) {
+    return async function executeTool(
+      toolName: string,
+      args: unknown,
+      sessionId: string,
+      auth?: { userId?: string; apiKeys?: Record<string, string> },
+      onOutputChunk?: (chunk: string) => void,
+      signal?: AbortSignal,
+    ): Promise<ToolResult> {
+      if (!toolRegistry) {
+        return { ok: false, message: "Tool registry not available" };
+      }
+      if (signal?.aborted) {
+        return { ok: false, message: "Cancelled" };
+      }
+      const context: ToolContext = {
+        sessionId,
+        actionId: uuidv7(),
+        workspaceRoot: surfaceRegistry
+          ? resolveWorkspaceRoot(surfaceRegistry, sessionId)
+          : process.cwd(),
+        requestedBy: "agent",
+        userId: auth?.userId,
+        apiKeys: auth?.apiKeys,
+        onOutputChunk,
+        signal,
+      };
+      try {
+        const effectiveExec = executor ?? toolExecutor;
+        const toolPromise = effectiveExec
+          ? effectiveExec(toolName, args, context)
+          : toolRegistry.execute(toolName, args, context, audit);
 
       // Race the tool execution against the abort signal so a stuck tool
       // (e.g. browser launch hanging) doesn't block the cancel flow forever.
@@ -603,7 +608,11 @@ export function registerChatRoutes(
       if (signal?.aborted) return { ok: false, message: "Cancelled" };
       return { ok: false, message: err instanceof Error ? err.message : String(err) };
     }
+    };
   }
+
+  /** Default executeTool using the module-level toolExecutor */
+  const executeTool = makeExecuteTool();
 
   // ══ POST /api/chat — Main chat endpoint with agentic tool loop ═════
 
@@ -676,6 +685,13 @@ export function registerChatRoutes(
       : (sessionRecord?.workspacePath?.trim() || process.cwd());
     const promptCtx: PromptContext = { workspaceRoot: wsRoot };
 
+    // Detect if the workspace lives on a remote node and resolve the
+    // node ID so tool execution can be delegated there.
+    const remoteNodeId = ws ? resolveRemoteNodeForSession(ws, wsRoot) : null;
+    if (remoteNodeId) {
+      console.log(`[chat] session=${sessionId} workspace="${wsRoot}" → remote node ${remoteNodeId}`);
+    }
+
     if (!sessionHistory.has(sessionId)) {
       sessionHistory.set(sessionId, [
         { role: "system", content: buildSystemPrompt(chatMode, modelEndpoint, promptCtx) },
@@ -695,6 +711,16 @@ export function registerChatRoutes(
 
     const streamAbort = new AbortController();
     sessionAbortControllers.set(sessionId, streamAbort);
+
+    // Build a tool executor that delegates to the remote node when needed.
+    // For remote workspaces, tools like terminal.run and file.write will be
+    // proxied to the node via the tool.op-request/response protocol.
+    const effectiveToolExecutor = (remoteNodeId && ws && toolExecutor)
+      ? createRemoteToolExecutor(
+          { ws, localExecutor: toolExecutor },
+          remoteNodeId,
+        )
+      : toolExecutor;
 
     let fullContent = "";
     let partialToolCalls: PersistedToolCall[] = [];
@@ -730,31 +756,32 @@ export function registerChatRoutes(
           ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
           : (sessionRecord?.workspacePath?.trim() || process.cwd());
 
-        // Detect if the workspace lives on a remote node (e.g. Windows
-        // desktop) and route the CLI provider session there instead of
-        // trying to spawn codex/claude-code locally on the gateway.
+        // CLI providers always run on the gateway. If the workspace path
+        // is on a remote node, sync the files locally first.
         const pathExistsLocally = existsSync(cliWsRoot);
-        let cliProvider: CliProviderAdapter | null = null;
-        let isRemote = false;
+        let effectiveCwd = cliWsRoot;
+        let workspaceSync: WorkspaceSync | null = null;
 
         if (!pathExistsLocally && ws) {
-          // Match path platform to connected FsNodes
-          const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(cliWsRoot);
-          const expectedPlatform = isWindowsPath ? "windows" : null;
-          for (const node of ws.getFsNodes()) {
-            if (node.isGateway) continue;
-            if (expectedPlatform && node.platform !== expectedPlatform) continue;
-            if (!node.providers?.includes(requestProvider)) continue;
-            cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
-            isRemote = true;
-            break;
+          // Find a connected remote node that owns this path
+          const nodeId = resolveRemoteNodeForSession(ws, cliWsRoot);
+          if (nodeId) {
+            workspaceSync = new WorkspaceSync({ ws, nodeId, remotePath: cliWsRoot, sessionId });
+            try {
+              safeWrite(`data: ${JSON.stringify({ type: "token", content: "Syncing workspace from remote node...\n" })}\n\n`);
+              await workspaceSync.pull();
+              effectiveCwd = workspaceSync.localDir;
+              console.log(`[chat/cli] Synced remote workspace to ${effectiveCwd}`);
+            } catch (err) {
+              safeWrite(`data: ${JSON.stringify({ type: "error", message: `Failed to sync remote workspace: ${err instanceof Error ? err.message : String(err)}` })}\n\n`);
+              reply.raw.end();
+              return;
+            }
           }
         }
 
-        // Fall back to the local provider if path exists on the gateway
-        if (!cliProvider) {
-          cliProvider = providerRegistry.get(requestProvider) ?? null;
-        }
+        // Always use the local provider — CLI agents run on the gateway
+        let cliProvider = providerRegistry.get(requestProvider) ?? null;
 
         if (!cliProvider) {
           safeWrite(`data: ${JSON.stringify({ type: "error", message: `Unknown provider: ${requestProvider}` })}\n\n`);
@@ -764,12 +791,12 @@ export function registerChatRoutes(
 
         const available = await cliProvider.checkAvailability();
         if (!available) {
-          safeWrite(`data: ${JSON.stringify({ type: "error", message: `Provider ${requestProvider} is not available${isRemote ? " on the remote node" : ""}: ${cliProvider.info.unavailableReason ?? "CLI not found"}` })}\n\n`);
+          safeWrite(`data: ${JSON.stringify({ type: "error", message: `Provider ${requestProvider} is not available: ${cliProvider.info.unavailableReason ?? "CLI not found"}` })}\n\n`);
           reply.raw.end();
           return;
         }
 
-        console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.workspacePath="${sessionRecord?.workspacePath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
+        console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" effectiveCwd="${effectiveCwd}" session.workspacePath="${sessionRecord?.workspacePath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
 
         // Ensure a FileSystemSurface exists for this session so we can
         // back up files before CLI providers (Codex/Claude) write them,
@@ -787,7 +814,7 @@ export function registerChatRoutes(
               surfaceRegistry.onSurfaceStarted = null as any;
               const started = await surfaceRegistry.startSurface("filesystem", fsId, {
                 sessionId,
-                workspaceRoot: cliWsRoot,
+                workspaceRoot: effectiveCwd,
               });
               surfaceRegistry.onSurfaceStarted = prevHandler;
               cliFsSurface = started as FileSystemSurface;
@@ -795,8 +822,8 @@ export function registerChatRoutes(
           }
         }
 
-        // Remote providers can't reach the gateway's MCP endpoint
-        const mcpServers = isRemote ? [] : [providerRegistry.buildJaitMcpServerRef(config)];
+        // CLI providers run locally on the gateway — MCP always available
+        const mcpServers = [providerRegistry.buildJaitMcpServerRef(config)];
 
         // ── Reuse an existing CLI session if one is alive for this Jait session ──
         const cachedCliSession = activeCliSessions.get(sessionId);
@@ -816,14 +843,14 @@ export function registerChatRoutes(
 
           const session = await cliProvider.startSession({
             threadId: sessionId,
-            workingDirectory: cliWsRoot,
+            workingDirectory: effectiveCwd,
             mode: "full-access",
             model: typeof body["model"] === "string" ? body["model"] as string : undefined,
             mcpServers,
           });
           providerSessionId = session.id;
           activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId, provider: cliProvider });
-          console.log(`[chat/cli] Started new ${requestProvider}${isRemote ? " (remote)" : ""} session ${providerSessionId} for ${sessionId}`);
+          console.log(`[chat/cli] Started new ${requestProvider} session ${providerSessionId} for ${sessionId}`);
         }
 
         // Collect full content from CLI provider events
@@ -999,7 +1026,7 @@ export function registerChatRoutes(
           activeCliSessions.delete(sessionId);
           const freshSession = await cliProvider.startSession({
             threadId: sessionId,
-            workingDirectory: cliWsRoot,
+            workingDirectory: effectiveCwd,
             mode: "full-access",
             model: typeof body["model"] === "string" ? body["model"] as string : undefined,
             mcpServers,
@@ -1051,6 +1078,18 @@ export function registerChatRoutes(
         // Persist assistant message with tool calls and segments
         history.push({ role: "assistant", content: fullContent, uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined });
         persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson);
+
+        // Push changed files back to the remote node if workspace was synced
+        if (workspaceSync) {
+          try {
+            const { pushed } = await workspaceSync.push();
+            if (pushed > 0) {
+              console.log(`[chat/cli] Pushed ${pushed} changed file(s) back to remote node`);
+            }
+          } catch (err) {
+            console.error(`[chat/cli] Failed to push changes back:`, err);
+          }
+        }
 
         // Session stays alive for the next turn — do NOT stop it.
         // It will be cleaned up on session error, provider switch, or server shutdown.
@@ -1136,7 +1175,10 @@ export function registerChatRoutes(
             onPersist: (sid, role, content, tc, seg) => persistMessage(sid, role, content, tc, seg),
             log: app.log,
           },
-          executeTool,
+          // Use remote-aware executor when workspace is on a remote node
+          effectiveToolExecutor !== toolExecutor
+            ? makeExecuteTool(effectiveToolExecutor)
+            : executeTool,
           steering,
         );
         fullContent = result.content;

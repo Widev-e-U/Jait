@@ -281,6 +281,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
       } else if (msg.type === 'provider.op-request') {
         // Gateway is asking us to run a provider operation (start-session, send-turn, etc.)
         void handleProviderOpRequest(msg.payload as { requestId: string; op: string; [key: string]: unknown })
+      } else if (msg.type === 'tool.op-request') {
+        // Gateway is asking us to execute a Jait tool locally (terminal.run, file.write, etc.)
+        void handleToolOpRequest(msg.payload as { requestId: string; tool: string; args: Record<string, unknown>; sessionId?: string; workspaceRoot?: string })
       } else if (msg.type === 'notification') {
         // Cross-platform notification from the gateway
         void handleGatewayNotification(msg.payload as {
@@ -474,6 +477,43 @@ export function useUICommands(opts: UseUICommandsOptions) {
         payload: {
           requestId,
           error: err instanceof Error ? err.message : 'Provider operation failed',
+        },
+      }))
+    }
+  }, [])
+
+  /**
+   * Handle a tool execution request from the gateway.
+   * Dispatches to the Electron IPC bridge for local execution on this node.
+   */
+  const handleToolOpRequest = useCallback(async (payload: {
+    requestId: string; tool: string; args: Record<string, unknown>;
+    sessionId?: string; workspaceRoot?: string
+  }) => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    const { requestId, tool, args, sessionId, workspaceRoot } = payload
+    try {
+      const platform = detectPlatform()
+      if (platform === 'electron' && window.jaitDesktop?.toolOp) {
+        const result = await window.jaitDesktop.toolOp(
+          tool,
+          args,
+          { sessionId, workspaceRoot },
+        )
+        ws.send(JSON.stringify({
+          type: 'tool.op-response',
+          payload: { requestId, result },
+        }))
+      } else {
+        throw new Error('Tool execution not supported on this platform')
+      }
+    } catch (err) {
+      ws.send(JSON.stringify({
+        type: 'tool.op-response',
+        payload: {
+          requestId,
+          error: err instanceof Error ? err.message : 'Tool execution failed',
         },
       }))
     }

@@ -1304,6 +1304,184 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
   }
 });
 
+// ── Remote tool execution handler ─────────────────────────────────────
+// Executes Jait tool calls on behalf of the gateway when the workspace
+// lives on this desktop node. Supports terminal.run (via child_process),
+// file.read/write/patch/list/stat, os.query, and search tools.
+ipcMain.handle("desktop:tool-op", async (
+  _event,
+  tool: string,
+  args: Record<string, unknown>,
+  meta: { sessionId?: string; workspaceRoot?: string },
+) => {
+  const { resolve, dirname, basename } = await import("node:path");
+  const { promisify } = await import("node:util");
+  const { exec: execAsync } = await import("node:child_process");
+  const execP = promisify(execAsync);
+  const cwd = meta.workspaceRoot ? resolve(meta.workspaceRoot) : process.cwd();
+
+  switch (tool) {
+    // ── Terminal execution ──────────────────────────────────────────
+    case "execute":
+    case "terminal.run": {
+      const command = String(args.command ?? "");
+      if (!command) return { ok: false, message: "No command provided" };
+      const timeout = typeof args.timeout === "number" ? args.timeout : 30_000;
+      const cmdCwd = args.cwd ? resolve(String(args.cwd)) : cwd;
+      try {
+        const { stdout, stderr } = await execP(command, {
+          cwd: cmdCwd,
+          timeout: timeout || 120_000,
+          maxBuffer: 10 * 1024 * 1024,
+          env: process.env as Record<string, string>,
+          shell: process.platform === "win32" ? "powershell.exe" : "/bin/bash",
+        });
+        const output = (stdout + (stderr ? `\n${stderr}` : "")).trim();
+        return { ok: true, message: output || "Command completed with no output" };
+      } catch (err) {
+        const e = err as { stdout?: string; stderr?: string; code?: number; message?: string };
+        const output = ((e.stdout ?? "") + (e.stderr ? `\n${e.stderr}` : "")).trim();
+        return { ok: false, message: output || e.message || "Command failed" };
+      }
+    }
+
+    // ── File read ──────────────────────────────────────────────────
+    case "read":
+    case "file.read": {
+      const filePath = resolve(String(args.path ?? ""));
+      try {
+        const content = await readFile(filePath, "utf-8");
+        return { ok: true, message: content };
+      } catch (err) {
+        return { ok: false, message: `Failed to read: ${(err as Error).message}` };
+      }
+    }
+
+    // ── File write ─────────────────────────────────────────────────
+    case "edit":
+    case "file.write": {
+      const filePath = resolve(String(args.path ?? ""));
+      const content = String(args.content ?? "");
+      try {
+        await mkdir(dirname(filePath), { recursive: true });
+        await writeFile(filePath, content, "utf-8");
+        return { ok: true, message: `Wrote ${content.length} bytes to ${basename(filePath)}` };
+      } catch (err) {
+        return { ok: false, message: `Failed to write: ${(err as Error).message}` };
+      }
+    }
+
+    // ── File patch ─────────────────────────────────────────────────
+    case "file.patch": {
+      const filePath = resolve(String(args.path ?? ""));
+      const find = String(args.find ?? args.search ?? "");
+      const replace = String(args.replace ?? "");
+      if (!find) return { ok: false, message: "No search string provided" };
+      try {
+        const original = await readFile(filePath, "utf-8");
+        if (!original.includes(find)) {
+          return { ok: false, message: "Search string not found in file" };
+        }
+        const updated = original.replace(find, replace);
+        await writeFile(filePath, updated, "utf-8");
+        return { ok: true, message: `Patched ${basename(filePath)}` };
+      } catch (err) {
+        return { ok: false, message: `Failed to patch: ${(err as Error).message}` };
+      }
+    }
+
+    // ── File list ──────────────────────────────────────────────────
+    case "file.list": {
+      const dirPath = resolve(String(args.path ?? cwd));
+      try {
+        const entries = await readdir(dirPath, { withFileTypes: true });
+        const list = entries.map((e) => (e.isDirectory() ? e.name + "/" : e.name));
+        return { ok: true, message: list.join("\n"), data: list };
+      } catch (err) {
+        return { ok: false, message: `Failed to list: ${(err as Error).message}` };
+      }
+    }
+
+    // ── File stat ──────────────────────────────────────────────────
+    case "file.stat": {
+      const filePath = resolve(String(args.path ?? ""));
+      try {
+        const info = await fsStat(filePath);
+        const data = {
+          size: info.size,
+          isDirectory: info.isDirectory(),
+          modified: info.mtime.toISOString(),
+        };
+        return { ok: true, message: `${info.isDirectory() ? "directory" : "file"}, ${info.size} bytes`, data };
+      } catch (err) {
+        return { ok: false, message: `Failed to stat: ${(err as Error).message}` };
+      }
+    }
+
+    // ── Content search (grep-like) ─────────────────────────────────
+    case "search":
+    case "file.search": {
+      const pattern = String(args.pattern ?? args.query ?? "");
+      const searchPath = resolve(String(args.path ?? cwd));
+      if (!pattern) return { ok: false, message: "No search pattern provided" };
+      try {
+        // Use git grep if inside a repo, otherwise use findstr/grep
+        const isGitRepo = await execP("git rev-parse --is-inside-work-tree", {
+          cwd: searchPath, timeout: 5000,
+        }).then(() => true).catch(() => false);
+
+        let output: string;
+        if (isGitRepo) {
+          const { stdout } = await execP(
+            `git grep -n -I --max-count=50 ${JSON.stringify(pattern)}`,
+            { cwd: searchPath, timeout: 30_000, maxBuffer: 5 * 1024 * 1024 },
+          );
+          output = stdout.trim();
+        } else if (process.platform === "win32") {
+          const { stdout } = await execP(
+            `findstr /s /n /i ${JSON.stringify(pattern)} *`,
+            { cwd: searchPath, timeout: 30_000, maxBuffer: 5 * 1024 * 1024 },
+          );
+          output = stdout.trim();
+        } else {
+          const { stdout } = await execP(
+            `grep -rn --max-count=50 ${JSON.stringify(pattern)} .`,
+            { cwd: searchPath, timeout: 30_000, maxBuffer: 5 * 1024 * 1024 },
+          );
+          output = stdout.trim();
+        }
+        return { ok: true, message: output || "No matches found" };
+      } catch {
+        return { ok: true, message: "No matches found" };
+      }
+    }
+
+    // ── OS query ───────────────────────────────────────────────────
+    case "os.query": {
+      try {
+        const os = await import("node:os");
+        const data: Record<string, unknown> = {
+          platform: os.platform(),
+          arch: os.arch(),
+          hostname: os.hostname(),
+          cpus: os.cpus().length,
+          totalMemory: os.totalmem(),
+          freeMemory: os.freemem(),
+          uptime: os.uptime(),
+          homedir: os.homedir(),
+          tmpdir: os.tmpdir(),
+        };
+        return { ok: true, message: JSON.stringify(data, null, 2), data };
+      } catch (err) {
+        return { ok: false, message: `OS query failed: ${(err as Error).message}` };
+      }
+    }
+
+    default:
+      return { ok: false, message: `Tool '${tool}' is not supported for remote execution on this node` };
+  }
+});
+
 // ── Auto-updater ──────────────────────────────────────────────────────
 function initAutoUpdater(): void {
   if (IS_DEV) return; // Skip in development

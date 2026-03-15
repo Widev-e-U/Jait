@@ -11,6 +11,7 @@ const allowedIpcChannels = {
     "desktop:fs-op",
     "desktop:detect-providers",
     "desktop:provider-op",
+    "desktop:tool-op",
     "window:minimize",
     "window:maximize",
     "window:close",

@@ -56,6 +56,15 @@ export class WsControlPlane {
     timer: ReturnType<typeof setTimeout>;
   }>();
 
+  /** Pending remote tool execution requests */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private pendingToolOps = new Map<string, {
+    resolve: (value: any) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+    onOutputChunk?: (chunk: string) => void;
+  }>();
+
   constructor(private config: AppConfig) {
     // Use the configured JWT secret, or a dev-mode fallback
     const secret = config.jwtSecret || "jait-dev-secret-change-in-production";
@@ -464,6 +473,41 @@ export class WsControlPlane {
         break;
       }
 
+      // ── Remote tool execution responses ─────────────────────────
+      case "tool.op-response": {
+        const resp = msg.payload as {
+          requestId?: string;
+          result?: unknown;
+          error?: string;
+        } | undefined;
+        if (resp?.requestId) {
+          const pending = this.pendingToolOps.get(resp.requestId);
+          if (pending) {
+            this.pendingToolOps.delete(resp.requestId);
+            clearTimeout(pending.timer);
+            if (resp.error) {
+              pending.reject(new Error(resp.error));
+            } else {
+              pending.resolve(resp.result);
+            }
+          }
+        }
+        break;
+      }
+      case "tool.op-output": {
+        const outPayload = msg.payload as {
+          requestId?: string;
+          chunk?: string;
+        } | undefined;
+        if (outPayload?.requestId && outPayload.chunk) {
+          const pending = this.pendingToolOps.get(outPayload.requestId);
+          if (pending?.onOutputChunk) {
+            pending.onOutputChunk(outPayload.chunk);
+          }
+        }
+        break;
+      }
+
       // ── Generic fs operation responses (stat, read, write, list) ──
       case "fs.op-response": {
         const resp = msg.payload as {
@@ -807,6 +851,40 @@ export class WsControlPlane {
       if (node.id === deviceId && !node.isGateway) return node;
     }
     return undefined;
+  }
+
+  /**
+   * Send a tool execution request to a remote node and wait for the result.
+   * Used to delegate Jait tool calls (terminal.run, file.write, etc.) to nodes.
+   */
+  proxyToolOp<T = unknown>(
+    nodeId: string,
+    tool: string,
+    args: Record<string, unknown>,
+    options: { timeoutMs?: number; sessionId?: string; workspaceRoot?: string; onOutputChunk?: (chunk: string) => void } = {},
+  ): Promise<T> {
+    const { timeoutMs = 120_000, sessionId, workspaceRoot, onOutputChunk } = options;
+    const node = this.fsNodes.get(nodeId);
+    if (!node) return Promise.reject(new Error(`Unknown node: ${nodeId}`));
+    if (node.isGateway) return Promise.reject(new Error("Use local execution for gateway node"));
+    const client = this.clients.get(node.clientId);
+    if (!client || client.ws.readyState !== 1) {
+      return Promise.reject(new Error(`Node ${nodeId} is not connected`));
+    }
+    const requestId = nanoid();
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingToolOps.delete(requestId);
+        reject(new Error(`Tool '${tool}' timed out on node ${nodeId}`));
+      }, timeoutMs);
+      this.pendingToolOps.set(requestId, { resolve: resolve as (v: unknown) => void, reject, timer, onOutputChunk });
+      this.send(client.ws, {
+        type: "tool.op-request" as WsEvent["type"],
+        sessionId: sessionId ?? "",
+        timestamp: new Date().toISOString(),
+        payload: { requestId, tool, args, sessionId, workspaceRoot },
+      });
+    });
   }
 
   /**
