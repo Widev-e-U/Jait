@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState } from 'react'
+import { memo, useMemo, useEffect, useRef, useState } from 'react'
 import { markdownLookBack } from '@llm-ui/markdown'
 import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown from 'react-markdown'
@@ -115,7 +115,7 @@ function AssistantMarkdown({
   return <StaticMarkdown content={content} compact={compact} />
 }
 
-export function Message({
+function MessageInner({
   messageId,
   messageIndex,
   messageFromEnd,
@@ -440,3 +440,6 @@ export function Message({
     </div>
   )
 }
+
+export const Message = memo(MessageInner)
+Message.displayName = 'Message'

@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect } from 'react'
-import { flushSync } from 'react-dom'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import type { TodoItem } from '@/components/chat/todo-list'
 import type { ChangedFile, FileChangeState } from '@/components/chat/files-changed'
@@ -581,6 +580,8 @@ export function useChat(
     // Guard: only update state if we're still on the same session
     const isStale = () =>
       prevSessionIdRef.current !== requestSessionId || requestVersionRef.current !== requestVersion
+    let pendingMessageUpdates: Partial<ChatMessage> | null = null
+    let pendingMessageFrame: number | null = null
 
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
@@ -646,15 +647,32 @@ export function useChat(
         }
       }
 
+      const flushPendingMessageUpdates = () => {
+        if (pendingMessageFrame !== null) {
+          window.cancelAnimationFrame(pendingMessageFrame)
+          pendingMessageFrame = null
+        }
+        if (isStale() || !pendingMessageUpdates) return
+        const updates = pendingMessageUpdates
+        pendingMessageUpdates = null
+        setState(prev => ({
+          ...prev,
+          messages: prev.messages.map(m =>
+            m.id === assistantId ? { ...m, ...updates } : m
+          ),
+        }))
+      }
+
       const updateMessage = (updates: Partial<ChatMessage>) => {
         if (isStale()) return
-        flushSync(() => {
-          setState(prev => ({
-            ...prev,
-            messages: prev.messages.map(m =>
-              m.id === assistantId ? { ...m, ...updates } : m
-            ),
-          }))
+        pendingMessageUpdates = {
+          ...(pendingMessageUpdates ?? {}),
+          ...updates,
+        }
+        if (pendingMessageFrame !== null) return
+        pendingMessageFrame = window.requestAnimationFrame(() => {
+          pendingMessageFrame = null
+          flushPendingMessageUpdates()
         })
       }
 
@@ -802,6 +820,7 @@ export function useChat(
                 return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
               })
             } else if (data.type === 'done') {
+              flushPendingMessageUpdates()
               if (thinkingStart && !thinkingDuration) {
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
               }
@@ -838,7 +857,13 @@ export function useChat(
           }
         }
       }
+      flushPendingMessageUpdates()
     } catch (error) {
+      if (pendingMessageFrame !== null) {
+        window.cancelAnimationFrame(pendingMessageFrame)
+        pendingMessageFrame = null
+      }
+      pendingMessageUpdates = null
       if (error instanceof Error && error.name === 'AbortError') {
         if (!isStale()) {
           setState(prev => ({
