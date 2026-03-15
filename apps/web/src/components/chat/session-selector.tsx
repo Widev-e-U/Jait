@@ -63,7 +63,7 @@ export function SessionSelector({
             sessions.map((session) => (
               <div
                 key={session.id}
-                className={`group flex items-center gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors text-sm ${
+                className={`group flex items-start gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors text-sm ${
                   session.id === activeSessionId
                     ? 'bg-secondary text-secondary-foreground'
                     : 'hover:bg-muted/50'
@@ -77,27 +77,28 @@ export function SessionSelector({
                   <div className="truncate text-xs font-medium">
                     {session.name || 'Untitled'}
                   </div>
-                  <div className="text-[10px] text-muted-foreground flex items-center gap-1">
+                  <div className="text-[10px] text-muted-foreground">
                     {formatTime(session.lastActiveAt)}
-                    {session.id === activeSessionId && sessionInfo && (
-                      <span className="inline-flex items-center gap-0.5 text-blue-500">
-                        · {sessionInfo.provider}
-                        {sessionInfo.isRemote && sessionInfo.remoteNode && (
-                          <><Monitor className="h-2.5 w-2.5" /> {sessionInfo.remoteNode.nodeName}</>
-                        )}
-                        {!sessionInfo.isRemote && (
-                          <><Monitor className="h-2.5 w-2.5" /> Gateway</>
-                        )}
-                      </span>
-                    )}
                   </div>
+                  {session.id === activeSessionId && sessionInfo && (
+                    <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-blue-500">
+                      <span className="truncate">{sessionInfo.provider}</span>
+                      <span className="shrink-0 text-muted-foreground">·</span>
+                      <Monitor className="h-2.5 w-2.5 shrink-0" />
+                      <span className="truncate">
+                        {sessionInfo.isRemote && sessionInfo.remoteNode
+                          ? sessionInfo.remoteNode.nodeName
+                          : 'Gateway'}
+                      </span>
+                    </div>
+                  )}
                 </div>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start"
                       onClick={(e) => {
                         e.stopPropagation()
                         onArchive(session.id)
