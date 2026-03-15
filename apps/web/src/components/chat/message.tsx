@@ -1,7 +1,7 @@
 import { memo, useMemo, useEffect, useRef, useState } from 'react'
 import { markdownLookBack } from '@llm-ui/markdown'
 import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
-import ReactMarkdown from 'react-markdown'
+import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy, Pencil, RotateCcw } from 'lucide-react'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,7 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
+import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
 
 /** Parse "Referenced files:" block from message content and return clean text + file paths. */
 function parseReferencedFiles(content: string): { text: string; files: { path: string; name: string }[] } {
@@ -56,6 +57,7 @@ interface MessageProps {
     messageIndex?: number,
     messageFromEnd?: number,
   ) => Promise<void> | void
+  onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
 }
 
 function proseClassName(compact?: boolean) {
@@ -64,19 +66,64 @@ function proseClassName(compact?: boolean) {
     : 'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none prose-base prose-p:leading-relaxed'
 }
 
-const MarkdownBlock: LLMOutputComponent = ({ blockMatch }) => (
-  <ReactMarkdown remarkPlugins={[remarkGfm]}>{blockMatch.output}</ReactMarkdown>
-)
+function buildMarkdownComponents(
+  onOpenPath?: MessageProps['onOpenPath'],
+): Components | undefined {
+  if (!onOpenPath) return undefined
 
-function StaticMarkdown({ content, compact }: { content: string; compact?: boolean }) {
+  return {
+    a: ({ href, children, ...props }) => {
+      const target = parseWorkspaceLinkTarget(href)
+      if (!target) {
+        return <a href={href} {...props}>{children}</a>
+      }
+
+      return (
+        <a
+          href={href}
+          {...props}
+          onClick={(event) => {
+            event.preventDefault()
+            void onOpenPath(target.path, target.line, target.column)
+          }}
+        >
+          {children}
+        </a>
+      )
+    },
+  }
+}
+
+function StaticMarkdown({
+  content,
+  compact,
+  onOpenPath,
+}: {
+  content: string
+  compact?: boolean
+  onOpenPath?: MessageProps['onOpenPath']
+}) {
+  const components = useMemo(() => buildMarkdownComponents(onOpenPath), [onOpenPath])
   return (
     <div className={proseClassName(compact)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{content}</ReactMarkdown>
     </div>
   )
 }
 
-function StreamingMarkdown({ content, compact }: { content: string; compact?: boolean }) {
+function StreamingMarkdown({
+  content,
+  compact,
+  onOpenPath,
+}: {
+  content: string
+  compact?: boolean
+  onOpenPath?: MessageProps['onOpenPath']
+}) {
+  const components = useMemo(() => buildMarkdownComponents(onOpenPath), [onOpenPath])
+  const MarkdownBlock: LLMOutputComponent = ({ blockMatch }) => (
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{blockMatch.output}</ReactMarkdown>
+  )
   const { blockMatches } = useLLMOutput({
     llmOutput: content,
     blocks: [],
@@ -102,17 +149,19 @@ function AssistantMarkdown({
   compact,
   isStreaming,
   preferLlmUi,
+  onOpenPath,
 }: {
   content: string
   compact?: boolean
   isStreaming?: boolean
   preferLlmUi?: boolean
+  onOpenPath?: MessageProps['onOpenPath']
 }) {
   if (preferLlmUi && isStreaming) {
-    return <StreamingMarkdown content={content} compact={compact} />
+    return <StreamingMarkdown content={content} compact={compact} onOpenPath={onOpenPath} />
   }
 
-  return <StaticMarkdown content={content} compact={compact} />
+  return <StaticMarkdown content={content} compact={compact} onOpenPath={onOpenPath} />
 }
 
 function MessageInner({
@@ -132,6 +181,7 @@ function MessageInner({
   preferLlmUi,
   onOpenTerminal,
   onEditMessage,
+  onOpenPath,
 }: MessageProps) {
   const isUser = role === 'user'
 
@@ -346,6 +396,7 @@ function MessageInner({
                     compact={compact}
                     isStreaming={!!isStreaming && i === segments.length - 1}
                     preferLlmUi={preferLlmUi}
+                    onOpenPath={onOpenPath}
                   />
                 </div>
               ) : null
@@ -423,7 +474,13 @@ function MessageInner({
             </div>
           ) : (
             <div className="relative">
-              <AssistantMarkdown content={content} compact={compact} isStreaming={isStreaming} preferLlmUi={preferLlmUi} />
+              <AssistantMarkdown
+                content={content}
+                compact={compact}
+                isStreaming={isStreaming}
+                preferLlmUi={preferLlmUi}
+                onOpenPath={onOpenPath}
+              />
               {renderActions()}
             </div>
           )

@@ -12,10 +12,10 @@
  *   POST /mcp/messages   — JSON-RPC requests from the connected client
  */
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { ToolRegistry } from "../tools/registry.js";
-import type { ToolContext } from "../tools/contracts.js";
+import type { ToolContext, ToolDefinition } from "../tools/contracts.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 interface McpDeps {
@@ -49,10 +49,49 @@ interface McpClient {
 
 const clients = new Map<string, McpClient>();
 
+interface McpBaseUrlRequestLike {
+  headers: Record<string, unknown>;
+  protocol?: string;
+  hostname?: string;
+}
+
+export function resolveMcpBaseUrl(
+  request: McpBaseUrlRequestLike,
+  config: Pick<AppConfig, "host" | "port">,
+): string {
+  const forwardedProto = request.headers["x-forwarded-proto"];
+  const proto = typeof forwardedProto === "string"
+    ? forwardedProto.split(",")[0]?.trim()
+    : request.protocol;
+  const forwardedHost = request.headers["x-forwarded-host"];
+  const hostHeader = typeof forwardedHost === "string"
+    ? forwardedHost.split(",")[0]?.trim()
+    : typeof request.headers.host === "string"
+      ? request.headers.host
+      : undefined;
+
+  if (proto && hostHeader) {
+    return `${proto}://${hostHeader}`;
+  }
+
+  const host = config.host === "0.0.0.0"
+    ? "127.0.0.1"
+    : request.hostname?.trim() || config.host;
+  return `${proto ?? "http"}://${host}:${config.port}`;
+}
+
+export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
+  return toolRegistry.list().filter((tool) => {
+    const source = tool.source ?? "builtin";
+    const tier = tool.tier ?? "standard";
+    return source === "builtin" && tier !== "core";
+  });
+}
+
 // ── Route registration ───────────────────────────────────────────────
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
-  const { toolRegistry } = deps;
+  const { toolRegistry, config } = deps;
 
   /**
    * GET /mcp/sse — SSE connection endpoint.
@@ -82,7 +121,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
     clients.set(clientId, client);
 
     // Send the endpoint URL for the client to POST requests to
-    const baseUrl = `http://${request.hostname}`;
+    const baseUrl = resolveMcpBaseUrl(request as FastifyRequest, config);
     write(`event: endpoint\ndata: ${baseUrl}/mcp/messages?clientId=${clientId}\n\n`);
 
     // Keepalive
@@ -135,7 +174,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
 
 // ── Request handler ──────────────────────────────────────────────────
 
-async function handleMcpRequest(
+export async function handleMcpRequest(
   request: McpRequest,
   toolRegistry: ToolRegistry,
 ): Promise<McpResponse> {
@@ -161,9 +200,7 @@ async function handleMcpRequest(
         jsonrpc: "2.0",
         id: request.id,
         result: {
-          tools: toolRegistry.list()
-            .filter((t) => (t.source ?? "builtin") === "builtin")
-            .map((tool) => ({
+          tools: listToolsForMcp(toolRegistry).map((tool) => ({
               name: tool.name,
               description: tool.description,
               inputSchema: {

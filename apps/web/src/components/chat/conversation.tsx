@@ -1,4 +1,4 @@
-import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Children, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { ArrowDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -11,16 +11,17 @@ interface ConversationProps {
   loading?: boolean
 }
 
-const BOTTOM_THRESHOLD_PX = 96
+const STICKY_BOTTOM_THRESHOLD_PX = 24
 type VirtualScrollBehavior = 'auto' | 'smooth'
 
 export function Conversation({ children, className, compact, loading }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
   const [isAtBottom, setIsAtBottom] = useState(true)
-  const [isNearBottom, setIsNearBottom] = useState(true)
+  const [stickToBottom, setStickToBottom] = useState(true)
   const prevChildCount = useRef(0)
   const prevLoadingRef = useRef(loading)
+  const prevScrollTopRef = useRef(0)
 
   const virtualizer = useVirtualizer({
     count: childItems.length,
@@ -30,13 +31,22 @@ export function Conversation({ children, className, compact, loading }: Conversa
     paddingStart: 24,
     paddingEnd: 24,
   })
+  const totalSize = virtualizer.getTotalSize()
 
   const updateBottomState = useCallback(() => {
     const el = scrollRef.current
     if (!el) return
     const distanceFromBottom = el.scrollHeight - el.scrollTop - el.clientHeight
-    setIsAtBottom(distanceFromBottom < 16)
-    setIsNearBottom(distanceFromBottom < BOTTOM_THRESHOLD_PX)
+    const nextIsAtBottom = distanceFromBottom < STICKY_BOTTOM_THRESHOLD_PX
+    const scrollingUp = el.scrollTop < prevScrollTopRef.current
+    prevScrollTopRef.current = el.scrollTop
+
+    setIsAtBottom(nextIsAtBottom)
+    setStickToBottom((prev) => {
+      if (nextIsAtBottom) return true
+      if (scrollingUp && distanceFromBottom > 8) return false
+      return prev
+    })
   }, [])
 
   const scrollToBottom = useCallback((behavior: VirtualScrollBehavior = 'smooth') => {
@@ -57,17 +67,18 @@ export function Conversation({ children, className, compact, loading }: Conversa
     prevLoadingRef.current = loading
 
     if (!loading && count > 0 && (wasEmpty || finishedLoading)) {
+      setStickToBottom(true)
       scrollToBottom('auto')
     }
   }, [childItems.length, loading, scrollToBottom])
 
-  useEffect(() => {
-    if (loading || childItems.length === 0 || (!isAtBottom && !isNearBottom)) return
+  useLayoutEffect(() => {
+    if (loading || childItems.length === 0 || !stickToBottom) return
     const frameId = window.requestAnimationFrame(() => {
       scrollToBottom('auto')
     })
     return () => window.cancelAnimationFrame(frameId)
-  }, [childItems.length, isAtBottom, isNearBottom, loading, scrollToBottom])
+  }, [childItems.length, totalSize, stickToBottom, loading, scrollToBottom])
 
   return (
     <div className={cn('relative flex-1 overflow-hidden', className)}>
@@ -114,7 +125,10 @@ export function Conversation({ children, className, compact, loading }: Conversa
           variant="outline"
           size="icon"
           className="absolute bottom-4 left-1/2 h-8 w-8 -translate-x-1/2 rounded-full shadow-md"
-          onClick={() => scrollToBottom()}
+          onClick={() => {
+            setStickToBottom(true)
+            scrollToBottom()
+          }}
         >
           <ArrowDown className="h-4 w-4" />
         </Button>

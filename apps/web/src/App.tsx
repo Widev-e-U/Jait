@@ -95,6 +95,7 @@ import {
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { agentsApi, type AgentThread, type ProviderId } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
+import { getWorkspaceRootForPath, isPathWithinWorkspace } from '@/lib/workspace-links'
 
 const API_URL = getApiUrl()
 const VOICE_LEVEL_BAR_COUNT = 18
@@ -1867,6 +1868,61 @@ function App() {
     }
   }, [token, showWorkspace, mergeWorkspaceFiles])
 
+  const handleOpenMessagePath = useCallback(async (filePath: string) => {
+    try {
+      let targetWorkspaceRoot = activeWorkspace?.workspaceRoot ?? null
+      if (!isPathWithinWorkspace(filePath, targetWorkspaceRoot)) {
+        targetWorkspaceRoot = getWorkspaceRootForPath(filePath)
+      }
+
+      if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
+        await openRemoteWorkspaceOnGateway(targetWorkspaceRoot, activeWorkspace?.nodeId, activeSessionId)
+      }
+
+      const existing = workspaceFiles.find((file) => file.path === filePath)
+      if (existing) {
+        mergeWorkspaceFiles([existing])
+        setActiveWorkspaceFileId(existing.id)
+      } else {
+        const headers: Record<string, string> = {}
+        if (token) headers.Authorization = `Bearer ${token}`
+        const readRes = await fetch(
+          `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}`,
+          { headers },
+        )
+        if (!readRes.ok) {
+          throw new Error(`Failed to open file: ${readRes.status}`)
+        }
+
+        const readData = await readRes.json() as { path: string; content: string }
+        const name = filePath.split(/[\\/]/).pop() ?? filePath
+        const file: WorkspaceFile = {
+          id: readData.path,
+          name,
+          path: readData.path,
+          content: readData.content,
+          language: workspaceLanguageForPath(name),
+        }
+        mergeWorkspaceFiles([file])
+        setActiveWorkspaceFileId(file.id)
+      }
+
+      if (!showWorkspace) setShowWorkspace(true)
+      showWorkspaceEditorPanel()
+    } catch (err) {
+      toast(err instanceof Error ? err.message : 'Failed to open linked file')
+    }
+  }, [
+    activeSessionId,
+    activeWorkspace,
+    mergeWorkspaceFiles,
+    openRemoteWorkspaceOnGateway,
+    showWorkspace,
+    showWorkspaceEditorPanel,
+    token,
+    workspaceFiles,
+  ])
+
   /** Close the diff view */
   const handleDiffClose = useCallback(() => {
     setActiveDiff(null)
@@ -3332,6 +3388,7 @@ function App() {
                           isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
                           compact
                           preferLlmUi={false}
+                          onOpenPath={handleOpenMessagePath}
                         />
                       ))}
                     </Conversation>
@@ -3631,12 +3688,13 @@ function App() {
                       preferLlmUi
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
+                      onOpenPath={handleOpenMessagePath}
                     />
                   ))}
                 </Conversation>
 
                 <div className={`shrink-0 py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}>
-                  <div className={`mx-auto space-y-1.5 ${showDesktopWorkspace ? 'max-w-none' : 'max-w-3xl'}`}>
+                  <div className="mx-auto w-full max-w-3xl space-y-1.5">
                     {todoList.length > 0 && (
                       <TodoList items={todoList} />
                     )}
