@@ -802,7 +802,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
         if (hasUpstream) {
           try {
-            await gitExecLocal("push", 60_000);
+            await gitExecLocal("push --no-verify", 60_000);
             result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
           } catch (pushErr) {
             const msg = pushErr instanceof Error ? pushErr.message : String(pushErr);
@@ -813,7 +813,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
           const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
           const remote = remotes.includes("origin") ? "origin" : remotes[0];
           if (remote) {
-            await gitExecLocal(`push --set-upstream "${remote}" "${currentBranch}"`, 60_000);
+            await gitExecLocal(`push --no-verify --set-upstream "${remote}" "${currentBranch}"`, 60_000);
             result.push = { status: "pushed", branch: currentBranch, upstreamBranch: `${remote}/${currentBranch}`, setUpstream: true };
           } else {
             result.push = { status: "skipped_no_remote", branch: currentBranch };
@@ -868,7 +868,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
                   const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
                   const remote = remotes.includes("origin") ? "origin" : remotes[0];
                   if (remote) {
-                    await gitExecLocal(`push --set-upstream "${remote}" "${currentBranch}"`, 60_000);
+                    await gitExecLocal(`push --no-verify --set-upstream "${remote}" "${currentBranch}"`, 60_000);
                     result.push = { status: "pushed", branch: currentBranch, upstreamBranch: `${remote}/${currentBranch}`, setUpstream: true };
                   }
                 } catch { /* push failed — gh pr create may still work */ }

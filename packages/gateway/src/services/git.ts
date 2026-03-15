@@ -460,7 +460,7 @@ export class GitService {
 
         if (hasUpstream) {
           try {
-            await gitExec(cwd, "push");
+            await gitExec(cwd, "push --no-verify");
             result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
           } catch (pushErr) {
             const msg = pushErr instanceof Error ? pushErr.message : String(pushErr);
@@ -472,7 +472,7 @@ export class GitService {
             result.push = { status: "skipped_no_remote", branch: currentBranch };
             // Don't return early — still try PR via gh CLI which may work
           } else {
-            await gitExec(cwd, `push --set-upstream "${remoteName}" "${currentBranch}"`);
+            await gitExec(cwd, `push --no-verify --set-upstream "${remoteName}" "${currentBranch}"`);
             result.push = {
               status: "pushed",
               branch: currentBranch,
@@ -537,7 +537,7 @@ export class GitService {
             try {
               const remoteName = await this.getPreferredRemote(cwd, currentBranch);
               if (remoteName) {
-                await gitExec(cwd, `push --set-upstream "${remoteName}" "${currentBranch}"`);
+                await gitExec(cwd, `push --no-verify --set-upstream "${remoteName}" "${currentBranch}"`);
                 result.push = { status: "pushed", branch: currentBranch, upstreamBranch: `${remoteName}/${currentBranch}`, setUpstream: true };
               }
             } catch { /* push failed — gh pr create may still succeed */ }
