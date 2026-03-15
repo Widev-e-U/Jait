@@ -4,17 +4,19 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Bot, ChevronDown, Check, AlertTriangle } from 'lucide-react'
+import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2 } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
+import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 
 interface ProviderSelectorProps {
   provider: ProviderId
@@ -22,6 +24,10 @@ interface ProviderSelectorProps {
   disabled?: boolean
   className?: string
   iconOnly?: boolean
+  /** When set, scopes provider availability to the selected repo's device. */
+  repoRuntime?: RepositoryRuntimeInfo | null
+  /** Called when user wants to move the repo to the gateway. */
+  onMoveToGateway?: () => void
 }
 
 /** Wrap @lobehub/icons so they conform to the same {className} interface as lucide icons. */
@@ -62,7 +68,7 @@ function summariseReason(reason: string): string {
   return 'unavailable'
 }
 
-export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false }: ProviderSelectorProps) {
+export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false, repoRuntime, onMoveToGateway }: ProviderSelectorProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
 
@@ -76,6 +82,13 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
       })
       .catch(() => {/* ignore */})
   }, [])
+
+  // When a repo runtime is provided, scope provider availability to the repo's device
+  const scopedToRepo = repoRuntime != null
+  const repoAvailable = repoRuntime?.availableProviders ?? []
+  const repoOnline = repoRuntime?.online ?? true
+  const repoLoading = repoRuntime?.loading ?? false
+  const repoIsGateway = repoRuntime?.hostType === 'gateway'
 
   const current = PROVIDER_DEFS.find((p) => p.value === provider) ?? PROVIDER_DEFS[0]
   const CurrentIcon = current.icon
@@ -101,17 +114,63 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
         </button>
       </DropdownMenuTrigger>
       <DropdownMenuContent align="start" side="top" className="w-72">
+        {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && (
+          <>
+            <div className="px-2 py-1.5 text-xs text-amber-600 dark:text-amber-400">
+              Device is offline — only Jait (gateway) is available
+            </div>
+            <DropdownMenuSeparator />
+          </>
+        )}
+        {scopedToRepo && repoLoading && (
+          <>
+            <div className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Connecting to device…
+            </div>
+            <DropdownMenuSeparator />
+          </>
+        )}
         {PROVIDER_DEFS.map((p) => {
           const Icon = p.icon
           const isActive = provider === p.value
           const status = providerStatus[p.value]
-          const isLocallyAvailable = status?.available !== false // default to available if not fetched
-          const reason = status?.unavailableReason
-          // Check if available on a remote node
-          const remoteNode = !isLocallyAvailable
-            ? remoteProviders.find((r) => r.providers.includes(p.value))
-            : undefined
-          const isAvailable = isLocallyAvailable || !!remoteNode
+
+          let isAvailable: boolean
+          let reason: string | undefined
+          let remoteNode: RemoteProviderInfo | undefined
+
+          if (scopedToRepo) {
+            // Jait always runs on the gateway
+            if (p.value === 'jait') {
+              isAvailable = true
+            } else if (repoIsGateway) {
+              // Gateway-hosted repo: use local gateway availability
+              isAvailable = status?.available !== false
+              reason = status?.unavailableReason
+            } else if (repoLoading) {
+              // Still loading — disable CLI providers
+              isAvailable = false
+              reason = 'Checking device…'
+            } else if (!repoOnline) {
+              // Device offline — CLI providers unavailable
+              isAvailable = false
+              reason = 'Device is offline'
+            } else {
+              // Device online — only show providers the device reports
+              isAvailable = repoAvailable.includes(p.value)
+              reason = isAvailable ? undefined : 'Not available on this device'
+            }
+          } else {
+            // Unscoped (chat mode) — original logic
+            const isLocallyAvailable = status?.available !== false
+            reason = status?.unavailableReason
+            remoteNode = !isLocallyAvailable
+              ? remoteProviders.find((r) => r.providers.includes(p.value))
+              : undefined
+            isAvailable = isLocallyAvailable || !!remoteNode
+          }
+
           return (
             <DropdownMenuItem
               key={p.value}
@@ -123,7 +182,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium flex items-center gap-1.5">
                   {p.label}
-                  {!isLocallyAvailable && remoteNode && (
+                  {!scopedToRepo && !status?.available && remoteNode && (
                     <span className="text-[10px] text-blue-500 flex items-center gap-0.5">
                       remote · {remoteNode.nodeName}
                     </span>
@@ -143,6 +202,23 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
             </DropdownMenuItem>
           )
         })}
+        {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && onMoveToGateway && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={onMoveToGateway}
+              className="flex items-start gap-2.5 py-2 cursor-pointer"
+            >
+              <Server className="h-4 w-4 mt-0.5 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <div className="text-sm font-medium">Move to Gateway</div>
+                <div className="text-xs text-muted-foreground leading-snug">
+                  Run this repo on the gateway server instead
+                </div>
+              </div>
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

@@ -16,6 +16,7 @@ export interface RepositoryRuntimeInfo {
   hostType: 'gateway' | 'device'
   locationLabel: string
   online: boolean
+  loading: boolean
   availableProviders: ProviderId[]
 }
 
@@ -127,15 +128,17 @@ export function getRepositoryRuntimeInfo(
     localDeviceId: string
     localProviders: ProviderInfo[]
     remoteProviders: RemoteProviderInfo[]
+    providersLoaded: boolean
   },
 ): RepositoryRuntimeInfo {
-  const { localDeviceId, localProviders, remoteProviders } = options
+  const { localDeviceId, localProviders, remoteProviders, providersLoaded } = options
 
   if (!repository.deviceId) {
     return {
       hostType: 'gateway',
       locationLabel: 'Gateway',
       online: true,
+      loading: false,
       availableProviders: localProviders.filter((provider) => provider.available).map((provider) => provider.id),
     }
   }
@@ -144,11 +147,13 @@ export function getRepositoryRuntimeInfo(
   const locationLabel = repository.deviceId === localDeviceId
     ? 'This device'
     : remoteNode?.nodeName ?? 'Desktop app'
+  const isOnline = Boolean(remoteNode)
 
   return {
     hostType: 'device',
     locationLabel,
-    online: Boolean(remoteNode),
+    online: isOnline,
+    loading: !isOnline && !providersLoaded,
     availableProviders: dedupeProviders(remoteNode?.providers ?? []),
   }
 }

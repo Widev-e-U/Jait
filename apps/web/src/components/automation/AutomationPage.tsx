@@ -652,7 +652,7 @@ export function AutomationPage() {
       <FolderPickerDialog
         open={folderPickerOpen}
         onOpenChange={setFolderPickerOpen}
-        onSelect={(path) => void handleFolderSelected(path)}
+        onSelect={(path, _nodeId) => void handleFolderSelected(path)}
       />
     </div>
   )

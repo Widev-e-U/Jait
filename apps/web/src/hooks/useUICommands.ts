@@ -12,6 +12,7 @@ import type {
 
 import { toast } from 'sonner'
 import { getWsUrl } from '@/lib/gateway-url'
+import { detectPlatform, initDeviceId } from '@/lib/device-id'
 
 const WS_URL = getWsUrl()
 
@@ -22,22 +23,7 @@ function hashCode(s: string): number {
   return h
 }
 
-// ── Device / platform helpers (shared with useScreenShare) ──────────
-function detectPlatform(): 'electron' | 'capacitor' | 'web' {
-  if (typeof window !== 'undefined' && window.jaitDesktop) return 'electron'
-  if (typeof window !== 'undefined' && 'Capacitor' in window) return 'capacitor'
-  return 'web'
-}
-
-function generateDeviceId(): string {
-  const platform = detectPlatform()
-  const storageKey = `jait-device-id-${platform}`
-  const stored = localStorage.getItem(storageKey)
-  if (stored) return stored
-  const id = `${platform}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  localStorage.setItem(storageKey, id)
-  return id
-}
+// ── Device / platform helpers ───────────────────────────────────────
 
 function getDeviceName(): string {
   const platform = detectPlatform()
@@ -515,18 +501,17 @@ export function useUICommands(opts: UseUICommandsOptions) {
         flushQueue(ws)
         // Register as a filesystem node if this client can browse files locally
         if (canActAsFsNode()) {
-          // Detect locally installed CLI providers (codex, claude-code)
-          const detectProviders = async (): Promise<string[]> => {
+          // Ensure device ID is initialised from persistent storage
+          void initDeviceId().then(async (deviceId) => {
+            // Detect locally installed CLI providers (codex, claude-code)
+            let providers: string[] = []
             if (detectPlatform() === 'electron' && window.jaitDesktop?.detectProviders) {
-              try { return await window.jaitDesktop.detectProviders() } catch { return [] }
+              try { providers = await window.jaitDesktop.detectProviders() } catch { /* */ }
             }
-            return []
-          }
-          void detectProviders().then((providers) => {
             const nodeMsg = JSON.stringify({
               type: 'fs.register-node',
               payload: {
-                id: generateDeviceId(),
+                id: deviceId,
                 name: getDeviceName(),
                 platform: detectFsNodePlatform(),
                 providers,

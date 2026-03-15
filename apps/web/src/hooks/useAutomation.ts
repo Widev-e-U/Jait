@@ -97,6 +97,7 @@ export function useAutomation(enabled = true) {
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
   const [loading, setLoading] = useState(false)
+  const [providersLoaded, setProvidersLoaded] = useState(false)
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -169,6 +170,7 @@ export function useAutomation(enabled = true) {
       setThreads(ts)
       setProviders(provResult.providers)
       setRemoteProviders(provResult.remoteProviders)
+      setProvidersLoaded(true)
       setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
       setError(null)
     } catch (err) {
@@ -197,8 +199,9 @@ export function useAutomation(enabled = true) {
       localDeviceId,
       localProviders: providers,
       remoteProviders,
+      providersLoaded,
     }),
-    [localDeviceId, providers, remoteProviders],
+    [localDeviceId, providers, remoteProviders, providersLoaded],
   )
 
   // Fetch threads + providers once on mount (no polling — WS pushes updates)
@@ -456,15 +459,20 @@ export function useAutomation(enabled = true) {
   // ── Repository CRUD (API-backed) ────────────────────────────────
 
   const handleFolderSelected = useCallback(
-    async (path: string) => {
+    async (path: string, nodeId?: string) => {
+      // Determine the device ID based on the node that hosts the path.
+      // 'gateway' or undefined means the repo lives on the gateway server.
+      const repoDeviceId = nodeId && nodeId !== 'gateway' ? nodeId : undefined
+
       // If repo already exists locally, just select it
       const existing = localRepositories.find((r) => r.localPath === path)
       if (existing) {
         setSelectedRepoId(existing.id)
-        // Ensure the repo is associated with this device and has a githubUrl
+        // Update the repo's device ownership and fill in missing githubUrl
         const updates: Record<string, string> = {}
-        if (!existing.deviceId || existing.deviceId !== localDeviceId) {
-          updates.deviceId = localDeviceId
+        const expectedDeviceId = repoDeviceId ?? ''
+        if ((existing.deviceId ?? '') !== expectedDeviceId) {
+          updates.deviceId = expectedDeviceId
         }
         if (!existing.githubUrl) {
           try {
@@ -495,7 +503,7 @@ export function useAutomation(enabled = true) {
           name: folderName(path),
           defaultBranch: branch,
           localPath: path,
-          deviceId: localDeviceId,
+          deviceId: repoDeviceId,
           githubUrl,
         })
         // Optimistically add; WS event will deduplicate

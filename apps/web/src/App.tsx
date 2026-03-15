@@ -173,7 +173,9 @@ function ManagerRepoRuntimeMeta({
   return (
     <div className={`flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground ${className}`.trim()}>
       <span>{runtime.locationLabel}</span>
-      {!runtime.online && (
+      {runtime.loading ? (
+        <SpinnerIcon className="h-3 w-3 animate-spin text-muted-foreground" />
+      ) : !runtime.online && (
         <Badge
           variant="outline"
           className="h-4 border-amber-500/30 bg-amber-500/10 px-1 py-0 text-[9px] text-amber-700 dark:text-amber-300"
@@ -1728,6 +1730,18 @@ ${file.content.slice(0, 2000)}
     await automation.handleSend(text, chatProvider, chatProvider !== 'jait' ? cliModel : undefined)
   }
 
+  /** Move the selected repo to run on the gateway instead of its current device. */
+  const handleMoveRepoToGateway = useCallback(async () => {
+    const repo = automation.selectedRepo
+    if (!repo) return
+    try {
+      await agentsApi.updateRepo(repo.id, { deviceId: '' })
+      await automation.refresh()
+    } catch {
+      automation.setError('Failed to move repository to gateway')
+    }
+  }, [automation.selectedRepo, automation.refresh, automation.setError])
+
   const handleSuggestion = async (suggestion: string) => {
     if (!token) {
       setShowLoginDialog(true)
@@ -2766,6 +2780,8 @@ ${file.content.slice(0, 2000)}
                           onProviderChange={setChatProvider}
                           cliModel={cliModel}
                           onCliModelChange={setCliModel}
+                          repoRuntime={selectedThreadRepoRuntime}
+                          onMoveToGateway={handleMoveRepoToGateway}
                         />
                         <div className="flex items-center gap-2 px-1 mt-1.5">
                           {selectedThreadRepoRuntime && (
@@ -2832,6 +2848,8 @@ ${file.content.slice(0, 2000)}
                             onProviderChange={setChatProvider}
                             cliModel={cliModel}
                             onCliModelChange={setCliModel}
+                            repoRuntime={selectedRepoRuntime}
+                            onMoveToGateway={handleMoveRepoToGateway}
                             footerLeadingContent={(
                               <ManagerRepoPicker
                                 repositories={automation.repositories}
@@ -3314,7 +3332,7 @@ ${file.content.slice(0, 2000)}
         <FolderPickerDialog
           open={automation.folderPickerOpen}
           onOpenChange={automation.setFolderPickerOpen}
-          onSelect={(path, _nodeId) => { void automation.handleFolderSelected(path) }}
+          onSelect={(path, nodeId) => { void automation.handleFolderSelected(path, nodeId) }}
         />
 
         {/* Strategy editor modal */}

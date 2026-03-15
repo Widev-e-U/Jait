@@ -15,6 +15,7 @@ import type { ViewMode } from '@/components/chat/view-mode-selector'
 import { ProviderSelector } from '@/components/chat/provider-selector'
 import { CliModelSelector } from '@/components/chat/cli-model-selector'
 import type { ProviderId } from '@/lib/agents-api'
+import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { FileIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
@@ -58,6 +59,10 @@ interface PromptInputProps {
   /** Model override for CLI providers (codex / claude-code). */
   cliModel?: string | null
   onCliModelChange?: (model: string | null) => void
+  /** Scoped runtime info for the selected repo (Manager mode). */
+  repoRuntime?: RepositoryRuntimeInfo | null
+  /** Called when user wants to move the repo to the gateway. */
+  onMoveToGateway?: () => void
   /** All files available for @ mention (pre-loaded from visible tree) */
   availableFiles?: ReferencedFile[]
   /** Lazy search across the entire workspace directory */
@@ -202,6 +207,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onProviderChange,
   cliModel,
   onCliModelChange,
+  repoRuntime,
+  onMoveToGateway,
   availableFiles = EMPTY_FILES,
   onSearchFiles,
   workspaceOpen = false,
@@ -716,6 +723,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   onChange={onProviderChange!}
                   disabled={selectorsDisabled}
                   iconOnly
+                  repoRuntime={repoRuntime}
+                  onMoveToGateway={onMoveToGateway}
                 />
               )}
               {showCliModelSelector && (

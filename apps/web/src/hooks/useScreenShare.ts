@@ -26,6 +26,7 @@ import type {
 } from '@jait/shared'
 
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
+import { generateDeviceId, detectPlatform } from '@/lib/device-id'
 
 const API_URL = getApiUrl()
 const WS_URL = getWsUrl()
@@ -90,29 +91,11 @@ interface UseScreenShareOptions {
 
 // ── Helpers ───────────────────────────────────────────────────────────
 
-function detectPlatform(): 'electron' | 'react-native' | 'web' {
-  if (typeof window !== 'undefined' && window.jaitDesktop) return 'electron'
-  if (typeof window !== 'undefined' && 'Capacitor' in window) return 'react-native'
-  return 'web'
-}
-
-function generateDeviceId(): string {
-  const platform = detectPlatform()
-  // Use separate localStorage keys per platform so Electron and browser
-  // on the same machine don't share the same device ID.
-  const storageKey = `jait-device-id-${platform}`
-  const stored = localStorage.getItem(storageKey)
-  if (stored) return stored
-  const id = `${platform}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
-  localStorage.setItem(storageKey, id)
-  return id
-}
-
 function getDeviceName(): string {
   const platform = detectPlatform()
   const ua = navigator.userAgent
   if (platform === 'electron') return `Jait Desktop (${navigator.platform})`
-  if (platform === 'react-native') return 'Jait Mobile'
+  if (platform === 'capacitor') return 'Jait Mobile'
   if (ua.includes('Chrome')) return `Chrome (${navigator.platform})`
   if (ua.includes('Firefox')) return `Firefox (${navigator.platform})`
   if (ua.includes('Safari')) return `Safari (${navigator.platform})`
@@ -165,7 +148,6 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     const capabilities = ['screen-view']
     if (platform === 'electron') capabilities.push('screen-share', 'remote-input')
     if (platform === 'web') capabilities.push('screen-share')
-    if (platform === 'react-native') capabilities.push('screen-share')
 
     try {
       const res = await fetch(`${API_URL}/api/screen-share/devices/register`, {
