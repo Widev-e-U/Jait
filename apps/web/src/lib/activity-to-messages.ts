@@ -67,12 +67,25 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const role = payload.role as string | undefined
         // Prefer full content from payload (summary is truncated to 500 chars)
         const fullContent = typeof payload.content === 'string' ? payload.content : act.summary
+        const referencedFiles = Array.isArray(payload.referencedFiles)
+          ? payload.referencedFiles.flatMap((entry) => {
+            if (!entry || typeof entry !== 'object') return []
+            const path = typeof (entry as Record<string, unknown>).path === 'string'
+              ? (entry as Record<string, unknown>).path as string
+              : null
+            const name = typeof (entry as Record<string, unknown>).name === 'string'
+              ? (entry as Record<string, unknown>).name as string
+              : null
+            return path && name ? [{ path, name }] : []
+          })
+          : undefined
         if (role === 'user') {
           flush()
           messages.push({
             id: act.id,
             role: 'user',
             content: fullContent,
+            referencedFiles,
           })
         } else {
           // assistant text — fold into current assistant message
@@ -125,6 +138,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
           tc.result = {
             ok: (payload.ok as boolean) ?? false,
             message: (payload.message as string) ?? act.summary,
+            ...(payload.data !== undefined ? { data: payload.data } : {}),
           }
           tc.completedAt = new Date(act.createdAt).getTime()
         }

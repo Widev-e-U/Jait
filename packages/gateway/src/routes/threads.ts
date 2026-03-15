@@ -460,8 +460,18 @@ export function registerThreadRoutes(
 
       // Send initial message if provided
       const message = typeof body["message"] === "string" ? body["message"] : undefined;
+      const attachments = Array.isArray(body["attachments"]) ? body["attachments"] as string[] : undefined;
+      const displayContent = typeof body["displayContent"] === "string" ? body["displayContent"] : message;
+      const referencedFiles = Array.isArray(body["referencedFiles"])
+        ? (body["referencedFiles"] as unknown[]).flatMap((entry) => {
+            if (!entry || typeof entry !== "object") return [];
+            const path = typeof (entry as Record<string, unknown>).path === "string" ? (entry as Record<string, unknown>).path as string : null;
+            const name = typeof (entry as Record<string, unknown>).name === "string" ? (entry as Record<string, unknown>).name as string : null;
+            return path && name ? [{ path, name }] : [];
+          })
+        : undefined;
       const titlePrefix = typeof body["titlePrefix"] === "string" ? body["titlePrefix"] : "";
-      const titleTask = typeof body["titleTask"] === "string" ? body["titleTask"] : message ?? "";
+      const titleTask = typeof body["titleTask"] === "string" ? body["titleTask"] : displayContent ?? message ?? "";
 
       // ── Return response immediately — run title + coding turn in background ──
       // The session is alive and marked running. The frontend gets a fast
@@ -513,9 +523,14 @@ export function registerThreadRoutes(
               }
             }
 
-            const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
+            const userActivity = threadService.addActivity(id, "message", (displayContent ?? message).slice(0, 500), {
+              role: "user",
+              content: displayContent ?? message,
+              fullContent: message,
+              referencedFiles,
+            });
             broadcastThreadEvent(id, "activity", { activity: userActivity });
-            await provider.sendTurn(session.id, fullMessage);
+            await provider.sendTurn(session.id, fullMessage, attachments);
           }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
@@ -540,6 +555,15 @@ export function registerThreadRoutes(
     const body = request.body as Record<string, unknown>;
     const message = typeof body["message"] === "string" ? body["message"] : "";
     const attachments = Array.isArray(body["attachments"]) ? body["attachments"] as string[] : undefined;
+    const displayContent = typeof body["displayContent"] === "string" ? body["displayContent"] : message;
+    const referencedFiles = Array.isArray(body["referencedFiles"])
+      ? (body["referencedFiles"] as unknown[]).flatMap((entry) => {
+          if (!entry || typeof entry !== "object") return [];
+          const path = typeof (entry as Record<string, unknown>).path === "string" ? (entry as Record<string, unknown>).path as string : null;
+          const name = typeof (entry as Record<string, unknown>).name === "string" ? (entry as Record<string, unknown>).name as string : null;
+          return path && name ? [{ path, name }] : [];
+        })
+      : undefined;
 
     const thread = threadService.getById(id);
     if (!thread) return reply.status(404).send({ error: "Thread not found" });
@@ -551,7 +575,12 @@ export function registerThreadRoutes(
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });
 
     // Persist user message BEFORE sendTurn so it survives provider errors
-    const userActivity = threadService.addActivity(id, "message", message.slice(0, 500), { role: "user", content: message });
+    const userActivity = threadService.addActivity(id, "message", (displayContent ?? message).slice(0, 500), {
+      role: "user",
+      content: displayContent ?? message,
+      fullContent: message,
+      referencedFiles,
+    });
     broadcastThreadEvent(id, "activity", { activity: userActivity });
 
     threadService.update(id, { status: "running", error: null });

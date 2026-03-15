@@ -82,12 +82,26 @@ export interface UpdateThreadRequest {
   prState?: 'open' | 'closed' | 'merged' | null
 }
 
+export interface ThreadReferencedFile {
+  path: string
+  name: string
+}
+
+export interface ThreadMessageMetadata {
+  attachments?: string[]
+  displayContent?: string
+  referencedFiles?: ThreadReferencedFile[]
+}
+
 export interface StartThreadOptions {
   message?: string
   titlePrefix?: string
   titleTask?: string
   cloneToGateway?: boolean
   repoUrl?: string
+  attachments?: string[]
+  displayContent?: string
+  referencedFiles?: ThreadReferencedFile[]
 }
 
 export interface CreateThreadPrRequest {
@@ -279,11 +293,14 @@ export class AgentsApi {
     return res.json() as Promise<AgentThread>
   }
 
-  async sendTurn(id: string, message: string): Promise<void> {
+  async sendTurn(id: string, options: string | ({ message: string } & ThreadMessageMetadata)): Promise<void> {
+    const body = typeof options === 'string'
+      ? { message: options }
+      : options
     const res = await fetch(`${API_URL}/api/threads/${id}/send`, {
       method: 'POST',
       headers: this.getHeaders(true),
-      body: JSON.stringify({ message }),
+      body: JSON.stringify(body),
     })
     if (!res.ok) throw new Error(`Failed to send turn: ${res.statusText}`)
   }

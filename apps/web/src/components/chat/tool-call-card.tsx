@@ -233,6 +233,29 @@ function formatSearchResults(data: Record<string, unknown>): string | null {
   return lines.join('\n').trim() || null
 }
 
+function formatFetchedResults(data: Record<string, unknown>): string | null {
+  const rawResults = data.results
+  if (!Array.isArray(rawResults) || rawResults.length === 0) return null
+
+  const results = rawResults
+    .filter((value): value is Record<string, unknown> => typeof value === 'object' && value !== null)
+    .slice(0, 5)
+
+  const lines: string[] = []
+  for (let i = 0; i < results.length; i++) {
+    const entry = results[i]!
+    const url = typeof entry.url === 'string' ? entry.url.trim() : ''
+    const message = typeof entry.message === 'string' ? entry.message.trim() : ''
+    const content = typeof entry.content === 'string' ? entry.content.trim() : ''
+    lines.push(`${i + 1}. ${url || `Result ${i + 1}`}`)
+    if (message) lines.push(`   ${message}`)
+    if (content) lines.push(`   ${truncate(content, 240)}`)
+    if (i < results.length - 1) lines.push('')
+  }
+
+  return lines.join('\n').trim() || null
+}
+
 function formatMemorySaveResult(data: Record<string, unknown>): string | null {
   const id = typeof data.id === 'string' ? data.id : ''
   const scope = typeof data.scope === 'string' ? data.scope : ''
@@ -285,8 +308,12 @@ function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (normalizedTool === 'os.query' && data && data.platform != null) {
     return formatSystemInfo(data)
   }
-  if ((normalizedTool === 'web.search' || normalizedTool === 'browser.search') && data) {
+  if ((normalizedTool === 'web.search' || normalizedTool === 'browser.search' || (normalizedTool === 'web' && Array.isArray(data?.results) && typeof data?.query === 'string')) && data) {
     const formatted = formatSearchResults(data)
+    if (formatted) return formatted
+  }
+  if (normalizedTool === 'web' && data && Array.isArray(data.results)) {
+    const formatted = formatFetchedResults(data)
     if (formatted) return formatted
   }
   if (normalizedTool === 'memory.save' && data) {
@@ -697,7 +724,7 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
     ? String((resultData.result as Record<string, unknown>).path ?? '')
     : null
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
-  const isFileEdit = normalizedTool === 'file.write' || normalizedTool === 'file.patch'
+  const isFileEdit = normalizedTool === 'file.write' || normalizedTool === 'file.patch' || normalizedTool === 'edit'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getTerminalId(call) : null
@@ -826,9 +853,9 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
           ) : isFileEdit && call.status === 'success' ? (
             <EditDiffView
               filePath={String(call.args.path ?? '')}
-              oldText={normalizedTool === 'file.patch' ? String(call.args.search ?? '') : undefined}
-              newText={normalizedTool === 'file.patch' ? String(call.args.replace ?? '') : undefined}
-              writtenContent={normalizedTool === 'file.write' ? String(call.args.content ?? '') : undefined}
+              oldText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && call.args.search != null) ? String(call.args.search ?? '') : undefined}
+              newText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && call.args.replace != null) ? String(call.args.replace ?? '') : undefined}
+              writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && call.args.content != null) ? String(call.args.content ?? '') : undefined}
               isNewFile={normalizedTool === 'file.write'}
             />
           ) : displayOutput ? (
