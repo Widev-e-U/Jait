@@ -208,7 +208,7 @@ function ThreadPrBadge({ prState }: { prState: 'open' | 'closed' | 'merged' | nu
         ? 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/30'
         : 'bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-300 dark:bg-red-500/20 dark:border-red-400/30'
   return (
-    <Badge variant="outline" className={`text-[9px] px-1 py-0 h-4 ${className}`}>
+    <Badge variant="outline" className={`h-4 shrink-0 whitespace-nowrap px-1 py-0 text-[9px] ${className}`}>
       {label}
     </Badge>
   )
@@ -499,24 +499,24 @@ function ManagerThreadListItem({
             )}
           </div>
         </div>
-        <div className="flex gap-1 text-xs text-muted-foreground pl-[calc(0.75rem+6px)]">
-          <span className="truncate">{repoName}</span>
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 pl-[calc(0.75rem+6px)] text-xs text-muted-foreground sm:flex-nowrap sm:gap-x-1 sm:gap-y-0">
+          <span className="min-w-0 basis-full truncate sm:basis-auto">{repoName}</span>
           {thread.branch && (
             <>
-              <span>·</span>
-              <span className="truncate font-mono">{thread.branch}</span>
+              <span className="hidden sm:inline">·</span>
+              <span className="max-w-full truncate font-mono">{thread.branch}</span>
             </>
           )}
           {thread.providerId && thread.providerId !== 'jait' && (
             <>
-              <span>·</span>
-              <span className="truncate">{thread.providerId}</span>
+              <span className="hidden sm:inline">·</span>
+              <span className="shrink-0 whitespace-nowrap">{thread.providerId}</span>
             </>
           )}
           {thread.executionNodeName && (
             <>
-              <span>·</span>
-              <span className="truncate text-blue-500 dark:text-blue-400">
+              <span className="hidden sm:inline">·</span>
+              <span className="inline-flex max-w-full items-center gap-1 truncate text-blue-500 dark:text-blue-400">
                 <Monitor className="inline h-3 w-3 mr-0.5 -mt-px" />
                 {thread.executionNodeName}
               </span>
@@ -524,7 +524,7 @@ function ManagerThreadListItem({
           )}
           {prState && (
             <>
-              <span>·</span>
+              <span className="hidden sm:inline">·</span>
               <ThreadPrBadge prState={prState} />
             </>
           )}
@@ -1106,6 +1106,7 @@ function App() {
     () => managerThreads.filter((thread) => thread.status === 'running'),
     [managerThreads],
   )
+  const compactManagerToolbar = isMobile && viewMode === 'manager' && Boolean(automation.selectedThread)
   const selectedManagerQueue = useMemo(
     () => (automation.selectedThread ? managerMessageQueues[automation.selectedThread.id] ?? [] : []),
     [automation.selectedThread, managerMessageQueues],
@@ -2766,7 +2767,13 @@ function App() {
 
         {/* Chat-specific toolbar */}
         {currentView === 'chat' && (
-          <div className="flex items-center gap-1 px-2 sm:px-5 h-9 border-b shrink-0 bg-muted/30 overflow-x-auto scrollbar-none">
+          <div
+            className={`flex border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${
+              compactManagerToolbar
+                ? 'min-h-9 flex-wrap items-start gap-2 py-1.5'
+                : 'h-9 items-center gap-1 overflow-x-auto scrollbar-none'
+            }`}
+          >
             {viewMode === 'developer' && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -2958,45 +2965,57 @@ function App() {
                 )}
                 <div className="flex-1" />
                 {automation.selectedThread ? (
-                  <div className="flex items-center gap-2 shrink-0">
-                    <ManagerStatusDot status={automation.selectedThread.status} />
-                    {isTitlePending(automation.selectedThread.title) ? (
-                      <TitleSkeleton className="text-[11px] h-3.5 w-28" />
-                    ) : (
-                      <span className="text-[11px] text-muted-foreground truncate max-w-[200px]">
-                        {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
-                      </span>
-                    )}
-                    {automation.selectedRepo && (
-                      <span className="text-[10px] text-muted-foreground truncate max-w-[160px]">
-                        {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
-                      </span>
-                    )}
-                    {automation.selectedThread.branch && (
-                      <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">
-                        {automation.selectedThread.branch}
-                      </Badge>
-                    )}
-                    {automation.selectedThread.status === 'running' && (
-                      <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => void automation.handleStop(automation.selectedThread!.id)}>
-                        <Square className="h-2.5 w-2.5" />
-                      </Button>
-                    )}
-                    {automation.showGitActions && automation.selectedRepo && (
-                      <div className="ml-2 shrink-0">
-                        <ThreadActions
-                          threadId={automation.selectedThread.id}
-                          cwd={automation.selectedThread.workingDirectory ?? automation.selectedRepo.localPath}
-                          branch={automation.selectedThread.branch}
-                          baseBranch={automation.selectedRepo.defaultBranch}
-                          threadTitle={automation.selectedThread.title}
-                          threadStatus={automation.selectedThread.status}
-                          prUrl={automation.selectedThread.prUrl}
-                          prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
-                          ghAvailable={automation.ghAvailable}
-                        />
+                  <div className={isMobile ? 'flex min-w-0 basis-full items-start gap-2' : 'flex min-w-0 items-center gap-2 shrink-0'}>
+                    <div className="flex min-w-0 flex-1 items-start gap-2">
+                      <ManagerStatusDot status={automation.selectedThread.status} />
+                      <div className={`min-w-0 ${isMobile ? 'flex-1' : 'flex items-center gap-2'}`}>
+                        {isTitlePending(automation.selectedThread.title) ? (
+                          <TitleSkeleton className="text-[11px] h-3.5 w-28" />
+                        ) : (
+                          <span className={`text-[11px] text-muted-foreground truncate ${isMobile ? 'block' : 'max-w-[200px]'}`}>
+                            {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
+                          </span>
+                        )}
+                        {(automation.selectedRepo || (isMobile && automation.selectedThread.branch)) && (
+                          <span className={`text-[10px] text-muted-foreground truncate ${isMobile ? 'mt-0.5 block' : 'max-w-[160px]'}`}>
+                            {automation.selectedRepo
+                              ? `${automation.selectedRepo.name} · ${automation.selectedRepo.defaultBranch}`
+                              : ''}
+                            {isMobile && automation.selectedThread.branch
+                              ? `${automation.selectedRepo ? ' · ' : ''}${automation.selectedThread.branch}`
+                              : ''}
+                          </span>
+                        )}
                       </div>
-                    )}
+                    </div>
+                    <div className={`flex shrink-0 items-center gap-1 ${isMobile ? '' : ''}`}>
+                      {!isMobile && automation.selectedThread.branch && (
+                        <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">
+                          {automation.selectedThread.branch}
+                        </Badge>
+                      )}
+                      {automation.selectedThread.status === 'running' && (
+                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => void automation.handleStop(automation.selectedThread!.id)}>
+                          <Square className="h-2.5 w-2.5" />
+                        </Button>
+                      )}
+                      {automation.showGitActions && automation.selectedRepo && (
+                        <div className={isMobile ? 'shrink-0' : 'ml-2 shrink-0'}>
+                          <ThreadActions
+                            threadId={automation.selectedThread.id}
+                            cwd={automation.selectedThread.workingDirectory ?? automation.selectedRepo.localPath}
+                            branch={automation.selectedThread.branch}
+                            baseBranch={automation.selectedRepo.defaultBranch}
+                            threadTitle={automation.selectedThread.title}
+                            threadStatus={automation.selectedThread.status}
+                            prUrl={automation.selectedThread.prUrl}
+                            prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
+                            ghAvailable={automation.ghAvailable}
+                            showStatusBadge={!isMobile}
+                          />
+                        </div>
+                      )}
+                    </div>
                   </div>
                 ) : null}
               </>
