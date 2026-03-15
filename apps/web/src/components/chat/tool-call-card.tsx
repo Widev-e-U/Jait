@@ -4,6 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
+import { getToolCallBodyKind, normalizeToolName } from '@/lib/tool-call-body'
 import { cn } from '@/lib/utils'
 
 /** Auto-scroll a container to the bottom when content changes */
@@ -34,8 +35,7 @@ export interface ToolCallInfo {
  * dotted names like `terminal.run`. Normalize to dotted for all UI logic.
  */
 function normalizeTool(name: string): string {
-  const idx = name.indexOf('_')
-  return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
+  return normalizeToolName(name)
 }
 
 const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: string }> = {
@@ -729,7 +729,6 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
     ? String((resultData.result as Record<string, unknown>).path ?? '')
     : null
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
-  const isFileEdit = normalizedTool === 'file.write' || normalizedTool === 'file.patch' || normalizedTool === 'edit'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getTerminalId(call) : null
@@ -737,6 +736,15 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   const isPending = call.status === 'pending'
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
+  const bodyKind = getToolCallBodyKind({
+    tool: normalizedTool,
+    args: call.args,
+    status: call.status,
+    displayOutput,
+    snapshotText,
+    screenshotPath,
+  })
+  const hasExpandableContent = bodyKind !== 'none'
 
   const StatusIcon = call.status === 'pending'
     ? Loader2
@@ -771,46 +779,115 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
     return () => window.clearInterval(id)
   }, [call.status])
 
-  return (
-    <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="group flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted/50 transition-colors">
-        <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
-          <ChevronRight className={cn(
-            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
-            open && 'rotate-90'
-          )} />
-          <StatusIcon className={cn(
-            'h-4 w-4 shrink-0',
-            statusColor,
-            (call.status === 'running' || call.status === 'pending') && 'animate-spin'
-          )} />
-          <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
-          <span className="text-sm font-medium text-muted-foreground truncate flex-1">
-            {isPending ? (
-              <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
-            ) : isTerminal ? (
-              <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-zinc-700/60 bg-[#0b0f14] px-2 py-0.5 text-[#c9d1d9]">
-                <span className="shrink-0 text-[10px] text-emerald-400">$</span>
-                <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
-              </span>
-            ) : (
-              <span>{meta.label}: <code className="text-xs font-mono">{summary}</code></span>
-            )}
+  const headerContent = (
+    <>
+      <StatusIcon className={cn(
+        'h-4 w-4 shrink-0',
+        statusColor,
+        (call.status === 'running' || call.status === 'pending') && 'animate-spin'
+      )} />
+      <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
+      <span className="text-sm font-medium text-muted-foreground truncate flex-1">
+        {isPending ? (
+          <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
+        ) : isTerminal ? (
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-zinc-700/60 bg-[#0b0f14] px-2 py-0.5 text-[#c9d1d9]">
+            <span className="shrink-0 text-[10px] text-emerald-400">$</span>
+            <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
           </span>
-          <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
-            <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
-          </span>
-          {terminalOutcomeBadge && (
-            <span
-              className={cn(
-                'rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0',
-                terminalOutcomeBadge.className,
-              )}
-            >
-              {terminalOutcomeBadge.label}
-            </span>
+        ) : (
+          <span>{meta.label}: <code className="text-xs font-mono">{summary}</code></span>
+        )}
+      </span>
+      <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
+        <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
+      </span>
+      {terminalOutcomeBadge && (
+        <span
+          className={cn(
+            'rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0',
+            terminalOutcomeBadge.className,
           )}
-        </CollapsibleTrigger>
+        >
+          {terminalOutcomeBadge.label}
+        </span>
+      )}
+    </>
+  )
+
+  const bodyContent = bodyKind === 'pending' ? (
+    <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
+  ) : bodyKind === 'terminal' ? (
+    <pre ref={terminalScrollRef} className={cn(
+      'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
+      'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+      call.result && !call.result.ok && 'text-red-400 dark:text-red-400'
+    )}>
+      <span className="text-emerald-400">$ </span>
+      {summary}
+      {(displayOutput || call.status === 'running') && '\n'}
+      {displayOutput}
+      {call.status === 'running' && (
+        <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
+      )}
+    </pre>
+  ) : bodyKind === 'browserSnapshot' ? (
+    <BrowserSnapshotView snapshot={snapshotText!} />
+  ) : bodyKind === 'browserScreenshot' ? (
+    <BrowserScreenshotView path={screenshotPath!} />
+  ) : bodyKind === 'editDiff' ? (
+    <EditDiffView
+      filePath={String(call.args.path ?? '')}
+      oldText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && call.args.search != null) ? String(call.args.search ?? '') : undefined}
+      newText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && call.args.replace != null) ? String(call.args.replace ?? '') : undefined}
+      writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && call.args.content != null) ? String(call.args.content ?? '') : undefined}
+      isNewFile={normalizedTool === 'file.write'}
+    />
+  ) : bodyKind === 'output' ? (
+    <pre className={cn(
+      'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
+      'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+      call.result && !call.result.ok && 'text-red-400 dark:text-red-400'
+    )}>
+      {displayOutput}
+      {call.status === 'running' && (
+        <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
+      )}
+    </pre>
+  ) : bodyKind === 'runningHint' ? (
+    <div
+      className={cn(
+        'rounded-md border px-3 py-2 text-xs',
+        'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <Loader2 className="h-3 w-3 animate-spin" />
+        <span>{runningHint}</span>
+      </div>
+      <div className="mt-1 text-[11px] opacity-75">
+        Elapsed: <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
+      </div>
+    </div>
+  ) : null
+
+  return (
+    <Collapsible open={hasExpandableContent ? open : false} onOpenChange={setOpen}>
+      <div className="group flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted/50 transition-colors">
+        {hasExpandableContent ? (
+          <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
+            <ChevronRight className={cn(
+              'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
+              open && 'rotate-90'
+            )} />
+            {headerContent}
+          </CollapsibleTrigger>
+        ) : (
+          <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
+            <span className="h-3.5 w-3.5 shrink-0" />
+            {headerContent}
+          </div>
+        )}
         {canOpenTerminal && onOpenTerminal && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -833,65 +910,13 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
         )}
       </div>
 
-      <CollapsibleContent>
-        <div className="ml-[3.25rem] mr-3 mb-2">
-          {isPending ? (
-            <PendingToolBody tool={call.tool} streamingArgs={call.streamingArgs} scrollRef={argsScrollRef} />
-          ) : isTerminal ? (
-            <pre ref={terminalScrollRef} className={cn(
-              'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
-              'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
-              call.result && !call.result.ok && 'text-red-400 dark:text-red-400'
-            )}>
-              <span className="text-emerald-400">$ </span>
-              {summary}
-              {(displayOutput || call.status === 'running') && '\n'}
-              {displayOutput}
-              {call.status === 'running' && (
-                <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
-              )}
-            </pre>
-          ) : snapshotText && normalizedTool === 'browser.snapshot' ? (
-            <BrowserSnapshotView snapshot={snapshotText} />
-          ) : screenshotPath ? (
-            <BrowserScreenshotView path={screenshotPath} />
-          ) : isFileEdit && call.status === 'success' ? (
-            <EditDiffView
-              filePath={String(call.args.path ?? '')}
-              oldText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && call.args.search != null) ? String(call.args.search ?? '') : undefined}
-              newText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && call.args.replace != null) ? String(call.args.replace ?? '') : undefined}
-              writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && call.args.content != null) ? String(call.args.content ?? '') : undefined}
-              isNewFile={normalizedTool === 'file.write'}
-            />
-          ) : displayOutput ? (
-            <pre className={cn(
-              'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
-              'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
-              call.result && !call.result.ok && 'text-red-400 dark:text-red-400'
-            )}>
-              {displayOutput}
-              {call.status === 'running' && (
-                <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
-              )}
-            </pre>
-          ) : call.status === 'running' ? (
-            <div
-              className={cn(
-                'rounded-md border px-3 py-2 text-xs',
-                'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
-              )}
-            >
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>{runningHint}</span>
-              </div>
-              <div className="mt-1 text-[11px] opacity-75">
-                Elapsed: <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
-              </div>
-            </div>
-          ) : null}
-        </div>
-      </CollapsibleContent>
+      {hasExpandableContent && (
+        <CollapsibleContent>
+          <div className="ml-[3.25rem] mr-3 mb-2">
+            {bodyContent}
+          </div>
+        </CollapsibleContent>
+      )}
     </Collapsible>
   )
 }
