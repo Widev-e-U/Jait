@@ -30,6 +30,7 @@ import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { UserService } from "../services/users.js";
 import type { RepositoryService } from "../services/repositories.js";
+import { assertOwnership } from "../security/ownership.js";
 import { existsSync } from "node:fs";
 import {
   generateTitleViaTurn,
@@ -106,6 +107,11 @@ export function registerThreadRoutes(
     return event.sessionId === sessionId;
   }
 
+  function getOwnedThread(threadId: string, userId: string) {
+    const thread = threadService.getById(threadId);
+    return thread?.userId === userId ? thread : null;
+  }
+
   /**
    * Find a connected remote node that can run a provider for a given path.
    * Matches the path's platform format (e.g. Windows drive letter) to a
@@ -141,7 +147,7 @@ export function registerThreadRoutes(
     const query = request.query as Record<string, string>;
     const sessionId = query["sessionId"];
     const threads = sessionId
-      ? threadService.listBySession(sessionId)
+      ? threadService.listBySession(sessionId).filter((thread) => thread.userId === authUser.id)
       : threadService.list(authUser.id);
     return { threads };
   });
@@ -170,8 +176,8 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
     return thread;
   });
 
@@ -180,8 +186,8 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const existing = threadService.getById(id);
-    if (!existing) return reply.status(404).send({ error: "Thread not found" });
+    const existing = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, existing, authUser.id, "Thread not found")) return;
     const body = request.body as Record<string, unknown>;
     const prState =
       body["prState"] === "open" || body["prState"] === "closed" || body["prState"] === "merged"
@@ -243,8 +249,8 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const existing = threadService.getById(id);
-    if (!existing) return reply.status(404).send({ error: "Thread not found" });
+    const existing = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, existing, authUser.id, "Thread not found")) return;
 
     // Stop any running session first
     if (existing.status === "running" && existing.providerSessionId) {
@@ -273,8 +279,8 @@ export function registerThreadRoutes(
     if (!authUser) return;
     const { id } = request.params as { id: string };
     const body = (request.body as Record<string, unknown>) ?? {};
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
     if (thread.providerSessionId && thread.status === "running") {
       return reply.status(409).send({ error: "Thread already has an active session" });
     }
@@ -323,7 +329,7 @@ export function registerThreadRoutes(
 
       // Clone-to-gateway: find the matching repo for its GitHub URL
       const matchingRepo = repoService
-        ? (repoService.list().find((r) =>
+        ? (repoService.list(authUser.id).find((r) =>
           workingDirectory.startsWith(r.localPath) || workingDirectory.includes(r.name),
         ) ?? null)
         : null;
@@ -485,8 +491,6 @@ export function registerThreadRoutes(
       // The session is alive and marked running. The frontend gets a fast
       // response; title generation and the coding turn happen asynchronously
       // with progress pushed via WS events.
-      const updated = threadService.getById(id);
-
       void (async () => {
         try {
           // ── Title generation (via Codex turn) ─────────────────
@@ -522,7 +526,7 @@ export function registerThreadRoutes(
             // Look up repository strategy to prepend as agent instructions
             let fullMessage = message;
             if (repoService && workingDirectory) {
-              const matchingRepo = repoService.list().find((r) =>
+              const matchingRepo = repoService.list(authUser.id).find((r) =>
                 workingDirectory.startsWith(r.localPath) ||
                 workingDirectory.includes(r.name),
               );
@@ -547,6 +551,8 @@ export function registerThreadRoutes(
         }
       })();
 
+      const updated = getOwnedThread(id, authUser.id);
+      if (!assertOwnership(reply, updated, authUser.id, "Thread not found")) return;
       return reply.status(200).send(updated);
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -573,8 +579,8 @@ export function registerThreadRoutes(
         })
       : undefined;
 
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
     if (!thread.providerSessionId) {
       return reply.status(409).send({ error: "Thread has no active session — use /start instead" });
     }
@@ -603,8 +609,8 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
 
     if (thread.providerSessionId) {
       const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
@@ -626,8 +632,8 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { id } = request.params as { id: string };
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
     if (!thread.providerSessionId) {
       return reply.status(409).send({ error: "Thread has no active session" });
     }
@@ -648,8 +654,8 @@ export function registerThreadRoutes(
     const requestId = typeof body["requestId"] === "string" ? body["requestId"] : "";
     const approved = body["approved"] !== false;
 
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
     if (!thread.providerSessionId) {
       return reply.status(409).send({ error: "Thread has no active session" });
     }
@@ -667,8 +673,8 @@ export function registerThreadRoutes(
     if (!authUser) return;
     const { id } = request.params as { id: string };
     const body = (request.body as Record<string, unknown>) ?? {};
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
     if (!thread.completedAt) {
       return reply.status(409).send({
         error: "Thread must be completed before creating a pull request.",
@@ -898,8 +904,8 @@ export function registerThreadRoutes(
         ? undefined
         : Math.min(Math.max(parsedLimit, 1), 2000);
 
-    const thread = threadService.getById(id);
-    if (!thread) return reply.status(404).send({ error: "Thread not found" });
+    const thread = getOwnedThread(id, authUser.id);
+    if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
 
     const activities = threadService.getActivities(id, limit);
     return { activities };

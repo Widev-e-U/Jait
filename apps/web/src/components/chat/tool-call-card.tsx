@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useRef, useState } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
@@ -711,7 +711,7 @@ interface ToolCallCardProps {
   onOpenTerminal?: (terminalId: string | null) => void
 }
 
-export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
+function ToolCallCardInner({ call, onOpenTerminal }: ToolCallCardProps) {
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending')
   const [now, setNow] = useState(() => Date.now())
   const prevStatusRef = useRef(call.status)
@@ -921,6 +921,9 @@ export function ToolCallCard({ call, onOpenTerminal }: ToolCallCardProps) {
   )
 }
 
+export const ToolCallCard = memo(ToolCallCardInner)
+ToolCallCard.displayName = 'ToolCallCard'
+
 /** Group of tool call cards rendered between message content */
 interface ToolCallGroupProps {
   calls: ToolCallInfo[]
@@ -933,7 +936,7 @@ interface ToolCallGroupProps {
  */
 const MAX_VISIBLE_COMPLETED = 6
 
-export function ToolCallGroup({ calls, onOpenTerminal }: ToolCallGroupProps) {
+function ToolCallGroupInner({ calls, onOpenTerminal }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
   if (calls.length === 0) return null
 
@@ -977,3 +980,6 @@ export function ToolCallGroup({ calls, onOpenTerminal }: ToolCallGroupProps) {
     </div>
   )
 }
+
+export const ToolCallGroup = memo(ToolCallGroupInner)
+ToolCallGroup.displayName = 'ToolCallGroup'

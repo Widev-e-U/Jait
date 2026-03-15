@@ -21,6 +21,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
+import { assertOwnership } from "../security/ownership.js";
 import type { WsEventType } from "@jait/shared";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -51,11 +52,23 @@ export function registerPlanRoutes(
     });
   }
 
+  function getOwnedRepo(repoId: string, userId: string) {
+    const repo = repoService.getById(repoId);
+    return repo?.userId === userId ? repo : null;
+  }
+
+  function getOwnedPlan(planId: string, userId: string) {
+    const plan = planService.getById(planId);
+    return plan?.userId === userId ? plan : null;
+  }
+
   // ── LIST plans for a repo ────────────────────────────────────────
 
   app.get<{ Params: { repoId: string } }>("/api/repos/:repoId/plans", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
+    const repo = getOwnedRepo(request.params.repoId, user.id);
+    if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
     const plans = planService.listByRepo(request.params.repoId);
     return { plans };
   });
@@ -66,10 +79,8 @@ export function registerPlanRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const repo = repoService.getById(request.params.repoId);
-    if (!repo) {
-      return reply.status(404).send({ error: "Repository not found" });
-    }
+    const repo = getOwnedRepo(request.params.repoId, user.id);
+    if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
     const body = request.body as { title?: string; tasks?: PlanTask[] };
     const plan = planService.create({
@@ -89,10 +100,8 @@ export function registerPlanRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const plan = planService.getById(request.params.id);
-    if (!plan) {
-      return reply.status(404).send({ error: "Plan not found" });
-    }
+    const plan = getOwnedPlan(request.params.id, user.id);
+    if (!assertOwnership(reply, plan, user.id, "Plan not found")) return;
     return { plan };
   });
 
@@ -107,6 +116,9 @@ export function registerPlanRoutes(
       status?: string;
       tasks?: PlanTask[];
     };
+
+    const existing = getOwnedPlan(request.params.id, user.id);
+    if (!assertOwnership(reply, existing, user.id, "Plan not found")) return;
 
     const plan = planService.update(request.params.id, {
       title: body.title,
@@ -129,10 +141,8 @@ export function registerPlanRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const existing = planService.getById(request.params.id);
-    if (!existing) {
-      return reply.status(404).send({ error: "Plan not found" });
-    }
+    const existing = getOwnedPlan(request.params.id, user.id);
+    if (!assertOwnership(reply, existing, user.id, "Plan not found")) return;
 
     planService.delete(request.params.id);
     broadcastPlanEvent("deleted", { planId: request.params.id });
@@ -145,15 +155,11 @@ export function registerPlanRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const plan = planService.getById(request.params.id);
-    if (!plan) {
-      return reply.status(404).send({ error: "Plan not found" });
-    }
+    const plan = getOwnedPlan(request.params.id, user.id);
+    if (!assertOwnership(reply, plan, user.id, "Plan not found")) return;
 
-    const repo = repoService.getById(plan.repoId);
-    if (!repo) {
-      return reply.status(404).send({ error: "Repository not found" });
-    }
+    const repo = getOwnedRepo(plan.repoId, user.id);
+    if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
     const body = request.body as { prompt?: string } | undefined;
     const userPromptHint = (body?.prompt ?? "").trim();
@@ -285,8 +291,8 @@ export function registerPlanRoutes(
       const user = await requireAuth(request, reply, config.jwtSecret);
       if (!user) return;
 
-      const plan = planService.getById(request.params.id);
-      if (!plan) return reply.status(404).send({ error: "Plan not found" });
+      const plan = getOwnedPlan(request.params.id, user.id);
+      if (!assertOwnership(reply, plan, user.id, "Plan not found")) return;
 
       const task = plan.tasks.find((t) => t.id === request.params.taskId);
       if (!task) return reply.status(404).send({ error: "Task not found in plan" });
@@ -295,8 +301,8 @@ export function registerPlanRoutes(
         return reply.status(409).send({ error: "Task already has a thread" });
       }
 
-      const repo = repoService.getById(plan.repoId);
-      if (!repo) return reply.status(404).send({ error: "Repository not found" });
+      const repo = getOwnedRepo(plan.repoId, user.id);
+      if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
       // The actual thread creation and start is handled by the frontend
       // the task info — the frontend will create the thread using the
@@ -331,8 +337,8 @@ export function registerPlanRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const plan = planService.getById(request.params.id);
-    if (!plan) return reply.status(404).send({ error: "Plan not found" });
+    const plan = getOwnedPlan(request.params.id, user.id);
+    if (!assertOwnership(reply, plan, user.id, "Plan not found")) return;
 
     const approved = plan.tasks.filter((t) => t.status === "approved" && !t.threadId);
     if (approved.length === 0) {
@@ -342,8 +348,8 @@ export function registerPlanRoutes(
     // Mark plan as active
     planService.update(plan.id, { status: "active" });
 
-    const repo = repoService.getById(plan.repoId);
-    if (!repo) return reply.status(404).send({ error: "Repository not found" });
+    const repo = getOwnedRepo(plan.repoId, user.id);
+    if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
     // Return the list of tasks to start — the frontend handles
     // thread creation for each one (parallelizing as it sees fit).
