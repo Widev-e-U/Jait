@@ -100,6 +100,15 @@ export interface GitWorktreeResult {
   branch: string;
 }
 
+export interface PrCheck {
+  name: string;
+  state: string;
+  conclusion: string;
+  startedAt: string;
+  completedAt: string;
+  detailsUrl: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
@@ -339,6 +348,19 @@ export class GitService {
       ghAvailable: ghIsAvailable,
       remoteUrl,
     };
+  }
+
+  /** Fetch CI check statuses for a PR branch via `gh pr checks`. */
+  async prChecks(cwd: string, branch: string): Promise<PrCheck[]> {
+    try {
+      const hasGh = await ghAvailable(cwd);
+      if (!hasGh) return [];
+      const json = await ghExec(cwd, `pr checks "${branch}" --json name,state,conclusion,startedAt,completedAt,detailsUrl`);
+      if (!json) return [];
+      return JSON.parse(json) as PrCheck[];
+    } catch {
+      return [];
+    }
   }
 
   async listBranches(cwd: string): Promise<GitListBranchesResult> {

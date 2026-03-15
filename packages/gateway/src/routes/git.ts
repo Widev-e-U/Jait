@@ -434,6 +434,32 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
     }
   });
 
+  /** Fetch CI check statuses for a PR branch */
+  app.post("/api/git/pr-checks", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; branch?: string };
+    const cwd = body.cwd ?? "";
+    const branch = body.branch;
+    if (!branch || typeof branch !== "string") {
+      return reply.status(400).send({ error: "Missing branch parameter" });
+    }
+
+    try {
+      const remoteNodeId = cwd ? findRemoteNodeForCwd(ws, cwd) : findAnyRemoteNode(ws);
+      if (remoteNodeId && ws) {
+        const result = await ws.proxyFsOp<unknown[]>(
+          remoteNodeId, "gh-pr-checks", { cwd, branch }, 15_000,
+        );
+        return result;
+      }
+      // Local check
+      return await git.prChecks(cwd, branch);
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "pr checks failed" });
+    }
+  });
+
   /** Authenticate GitHub CLI with a token */
   app.post("/api/git/gh-auth", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

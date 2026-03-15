@@ -13,7 +13,7 @@
     },
     "apps/desktop": {
       "name": "@jait/desktop",
-      "version": "0.1.24",
+      "version": "0.1.28",
       "dependencies": {
         "@jait/api-client": "workspace:*",
         "@jait/shared": "workspace:*",
@@ -59,7 +59,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.31",
+      "version": "0.1.41",
       "dependencies": {
         "@capacitor/filesystem": "^6.0.0",
         "@jait/api-client": "workspace:*",
@@ -94,6 +94,7 @@
         "react-force-graph-2d": "^1.29.1",
         "react-markdown": "^10.1.0",
         "remark-gfm": "^4.0.1",
+        "simple-icons": "^16.12.0",
         "sonner": "^2.0.7",
         "tailwind-merge": "^2.6.1",
         "tailwindcss-animate": "^1.0.7",
@@ -138,7 +139,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.64",
+      "version": "0.1.81",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -149,7 +150,6 @@
         "@fastify/websocket": "^11.0.0",
         "@jait/screen-share": "workspace:*",
         "@jait/shared": "workspace:*",
-        "@jait/web": "workspace:*",
         "@parcel/watcher": "^2.5.6",
         "better-sqlite3": "^12.6.2",
         "dotenv": "^16.4.0",
@@ -182,7 +182,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.18",
+      "version": "0.1.19",
       "dependencies": {
         "zod": "^3.24.0",
       },
@@ -3284,6 +3284,8 @@
     "simple-concat": ["simple-concat@1.0.1", "", {}, "sha512-cSFtAPtRhljv69IK0hTVZQ+OfE9nePi/rtJmw5UjHeVyVroEqJXP1sFztKUy1qU+xvz3u/sfYJLa947b7nAN2Q=="],
 
     "simple-get": ["simple-get@4.0.1", "", { "dependencies": { "decompress-response": "^6.0.0", "once": "^1.3.1", "simple-concat": "^1.0.0" } }, "sha512-brv7p5WgH0jmQJr1ZDDfKDOSeWWg+OVypG99A/5vYGPqJ6pxiaHLy8nxtFjBA7oMa01ebA9gfh1uMCFqOuXxvA=="],
+
+    "simple-icons": ["simple-icons@16.12.0", "", {}, "sha512-fDJDqXUpkb2twqH+eBQpJsCYUE6jEH7VkuuPL9dH16sbLf6KKnwyijULmcx7SCoy3c2L6pl8WCzt+4rpYjoWfw=="],
 
     "simple-plist": ["simple-plist@1.3.1", "", { "dependencies": { "bplist-creator": "0.1.0", "bplist-parser": "0.3.1", "plist": "^3.0.5" } }, "sha512-iMSw5i0XseMnrhtIzRb7XpQEXepa9xhWxGUojHBL43SIpQuDQkh3Wpy67ZbDzZVr6EKxvwVChnVpdl8hEVLDiw=="],
 

@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Eye, GitPullRequest, Loader2, AlertTriangle } from 'lucide-react'
-import { gitApi } from '@/lib/git-api'
+import { Eye, GitPullRequest, Loader2, AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { gitApi, type PrCheck } from '@/lib/git-api'
 import { agentsApi, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
@@ -63,6 +63,38 @@ export function ThreadActions({
       return null
     })
   }, [prUrl])
+
+  // ── CI checks polling ──────────────────────────────────────────────
+  type ChecksStatus = 'pending' | 'passing' | 'failing' | null
+  const [checksStatus, setChecksStatus] = useState<ChecksStatus>(null)
+  const checksTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+
+  useEffect(() => {
+    // Only poll checks when we have an open PR with a branch
+    if (!branch || !prUrl || prState === 'merged' || prState === 'closed') {
+      setChecksStatus(null)
+      if (checksTimerRef.current) { clearInterval(checksTimerRef.current); checksTimerRef.current = null }
+      return
+    }
+
+    const fetchChecks = async () => {
+      try {
+        const checks = await gitApi.prChecks(cwd, branch)
+        if (!checks || checks.length === 0) { setChecksStatus(null); return }
+        const hasFailing = checks.some((c: PrCheck) => c.conclusion === 'failure' || c.conclusion === 'cancelled')
+        const hasPending = checks.some((c: PrCheck) => c.state === 'PENDING' || c.state === 'QUEUED' || c.state === 'IN_PROGRESS' || !c.conclusion)
+        if (hasFailing) setChecksStatus('failing')
+        else if (hasPending) setChecksStatus('pending')
+        else setChecksStatus('passing')
+      } catch {
+        // Silently ignore — don't reset status on transient errors
+      }
+    }
+
+    fetchChecks()
+    checksTimerRef.current = setInterval(fetchChecks, 15_000)
+    return () => { if (checksTimerRef.current) { clearInterval(checksTimerRef.current); checksTimerRef.current = null } }
+  }, [branch, cwd, prUrl, prState])
 
   const existingPrLink = prLink ?? (prUrl ? { url: prUrl, kind: 'created' as const } : null)
   const buttonLabel = existingPrLink
@@ -191,6 +223,21 @@ export function ThreadActions({
                 : existingPrLink.kind === 'created'
                   ? 'PR open'
                   : 'PR ready to open'}
+          </Badge>
+        )}
+        {showStatusBadge && existingPrLink?.kind === 'created' && prState === 'open' && checksStatus && (
+          <Badge
+            variant="outline"
+            className={`h-5 px-1.5 text-[10px] font-medium inline-flex items-center gap-0.5 ${
+              checksStatus === 'failing'
+                ? 'border-red-500/40 text-red-700 bg-red-500/10 dark:text-red-300 dark:bg-red-500/20 dark:border-red-400/40'
+                : checksStatus === 'pending'
+                  ? 'border-amber-500/40 text-amber-700 bg-amber-500/10 dark:text-amber-300 dark:bg-amber-500/20 dark:border-amber-400/40'
+                  : 'border-green-500/40 text-green-700 bg-green-500/10 dark:text-green-300 dark:bg-green-500/20 dark:border-green-400/40'
+            }`}
+          >
+            {checksStatus === 'failing' ? <XCircle className="h-3 w-3" /> : checksStatus === 'pending' ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
+            {checksStatus === 'failing' ? 'Checks failing' : checksStatus === 'pending' ? 'Checks pending' : 'Checks passed'}
           </Badge>
         )}
         {!ghAvailable && !existingPrLink && (

@@ -103,6 +103,15 @@ export interface GhAuthResult {
   username: string | null
 }
 
+export interface PrCheck {
+  name: string
+  state: string
+  conclusion: string
+  startedAt: string
+  completedAt: string
+  detailsUrl: string
+}
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function getToken(): string | null {
@@ -205,6 +214,10 @@ export const gitApi = {
 
   ghAuth(token: string, cwd?: string): Promise<GhAuthResult> {
     return gitPost<GhAuthResult>('gh-auth', { token, ...(cwd ? { cwd } : {}) })
+  },
+
+  prChecks(cwd: string, branch: string): Promise<PrCheck[]> {
+    return gitPost<PrCheck[]>('pr-checks', { cwd, branch })
   },
 }
 

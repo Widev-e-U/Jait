@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import { siLinux, siApple, siAndroid } from 'simple-icons'
 import {
   Dialog,
   DialogContent,
@@ -120,12 +121,55 @@ const NODE_SIZES: Record<string, number> = {
   host: 8,
 }
 
-const PLATFORM_ICONS: Record<string, string> = {
-  windows: '\u{1fa9f}',
-  macos: '\ud83c\udf4e',
-  linux: '\ud83d\udc27',
-  android: '\ud83d\udcf1',
-  ios: '\ud83d\udcf1',
+// ---------------------------------------------------------------------------
+// OS icon images (pre-loaded SVG data URIs for canvas rendering)
+// ---------------------------------------------------------------------------
+
+// Windows logo (4-square) — not in simple-icons, inlined here
+const WINDOWS_PATH = 'M0 3.449L9.75 2.1V11.551H0zm10.949-1.564L24 0v11.551H10.949zM0 12.449h9.75v9.451L0 20.551zm10.949-.898H24V24l-13.051-1.869z'
+
+function buildSvgDataUri(path: string, fill: string, viewBox = '0 0 24 24'): string {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" fill="${fill}"><path d="${path}"/></svg>`
+  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
+}
+
+function preloadImage(src: string): HTMLImageElement {
+  const img = new Image()
+  img.src = src
+  return img
+}
+
+const OS_IMAGES: Record<string, HTMLImageElement> = {
+  windows: preloadImage(buildSvgDataUri(WINDOWS_PATH, '#0078D4')),
+  macos: preloadImage(buildSvgDataUri(siApple.path, '#ffffff')),
+  linux: preloadImage(buildSvgDataUri(siLinux.path, '#FCC624')),
+  android: preloadImage(buildSvgDataUri(siAndroid.path, '#3DDC84')),
+  ios: preloadImage(buildSvgDataUri(siApple.path, '#ffffff')),
+}
+
+/** Detect OS family from an osVersion string like "Windows 11 Pro", "Ubuntu 24.04 LTS", etc. */
+function detectOsFamily(osVersion: string | null | undefined): string | null {
+  if (!osVersion) return null
+  const v = osVersion.toLowerCase()
+  if (v.includes('windows')) return 'windows'
+  if (v.includes('macos') || v.includes('mac os') || v.includes('darwin')) return 'macos'
+  if (v.includes('android')) return 'android'
+  if (v.includes('ios') || v.includes('iphone') || v.includes('ipad')) return 'ios'
+  if (v.includes('linux') || v.includes('ubuntu') || v.includes('debian') || v.includes('fedora') || v.includes('arch') || v.includes('centos') || v.includes('rhel') || v.includes('mint') || v.includes('manjaro') || v.includes('suse') || v.includes('alpine')) return 'linux'
+  return null
+}
+
+function getOsImage(data: TopologyNode): HTMLImageElement | null {
+  // Use platform field directly (gateway/device/mesh)
+  if ('platform' in data && typeof data.platform === 'string' && OS_IMAGES[data.platform]) {
+    return OS_IMAGES[data.platform]!
+  }
+  // Fall back to parsing osVersion string (hosts)
+  if ('osVersion' in data) {
+    const family = detectOsFamily((data as { osVersion?: string | null }).osVersion)
+    if (family && OS_IMAGES[family]) return OS_IMAGES[family]!
+  }
+  return null
 }
 
 // ---------------------------------------------------------------------------
@@ -173,9 +217,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
           {'platform' in node && node.platform && (
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">Platform</span>
-              <span className="flex items-center gap-1.5">
-                {PLATFORM_ICONS[node.platform] ?? '\ud83d\udcbb'} {node.platform}
-              </span>
+              <span className="flex items-center gap-1.5 capitalize">{node.platform}</span>
             </div>
           )}
 
@@ -418,13 +460,18 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
     return h
   }, [token])
 
-  // Fetch topology
+  // Fetch topology — only update state when data actually changed to avoid
+  // force-graph restarting its simulation on every poll cycle.
+  const topologyJsonRef = useRef<string>('')
   const fetchTopology = useCallback(async () => {
     try {
       const res = await fetch(`${API_URL}/api/network/topology`, { headers: headers() })
       if (res.ok) {
-        const data = await res.json() as TopologyResponse
-        setTopology(data)
+        const text = await res.text()
+        if (text !== topologyJsonRef.current) {
+          topologyJsonRef.current = text
+          setTopology(JSON.parse(text) as TopologyResponse)
+        }
         setError(null)
       }
     } catch (err) {
@@ -577,13 +624,11 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       ctx.stroke()
     }
 
-    // Platform emoji inside for gateway/device/mesh
-    if ((data.type === 'gateway' || data.type === 'device' || data.type === 'mesh') && 'platform' in data) {
-      const emoji = PLATFORM_ICONS[data.platform] ?? '\ud83d\udcbb'
-      ctx.font = `${size * 0.9}px sans-serif`
-      ctx.textAlign = 'center'
-      ctx.textBaseline = 'middle'
-      ctx.fillText(emoji, x, y + 0.5)
+    // OS icon inside node circle
+    const osImg = getOsImage(data)
+    if (osImg?.complete && osImg.naturalWidth > 0) {
+      const iconSize = size * 1.1
+      ctx.drawImage(osImg, x - iconSize / 2, y - iconSize / 2, iconSize, iconSize)
     }
 
     // Label below
@@ -600,23 +645,6 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       ctx.font = `bold ${Math.max(3, 8 / globalScale)}px -apple-system, BlinkMacSystemFont, sans-serif`
       ctx.fillStyle = '#22c55e'
       ctx.fillText('GATEWAY', x, y + size + 3 + fontSize + 2)
-      // Show OS version below GATEWAY label
-      if ('osVersion' in data && data.osVersion) {
-        const osFontSize = Math.max(2.5, 7 / globalScale)
-        ctx.font = `${osFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
-        ctx.fillStyle = '#60a5fa'
-        const osLabel = data.osVersion.length > 30 ? data.osVersion.slice(0, 28) + '\u2026' : data.osVersion
-        ctx.fillText(osLabel, x, y + size + 3 + fontSize + 2 + Math.max(3, 8 / globalScale) + 2)
-      }
-    }
-
-    // OS version label for hosts
-    if (data.type === 'host' && 'osVersion' in data && data.osVersion) {
-      const osFontSize = Math.max(2.5, 7 / globalScale)
-      ctx.font = `${osFontSize}px -apple-system, BlinkMacSystemFont, sans-serif`
-      ctx.fillStyle = '#60a5fa'
-      const osLabel = data.osVersion.length > 24 ? data.osVersion.slice(0, 22) + '\u2026' : data.osVersion
-      ctx.fillText(osLabel, x, y + size + 3 + fontSize + 2)
     }
 
     // Providers label below name (for devices and hosts with providers)

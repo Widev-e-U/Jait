@@ -1067,6 +1067,26 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
       return { ok: true, username };
     }
+    case "gh-pr-checks": {
+      // Fetch CI check statuses for a PR branch
+      const checkBranch = params.branch as string;
+      if (!checkBranch) throw new Error("Missing branch parameter");
+
+      const { exec: execGhChk } = await import("node:child_process");
+      const { promisify: promisifyGhChk } = await import("node:util");
+      const execChk = promisifyGhChk(execGhChk);
+      const checkCwd = (params.cwd as string) || process.cwd();
+
+      try {
+        const { stdout } = await execChk(
+          `gh pr checks "${checkBranch}" --json name,state,conclusion,startedAt,completedAt,detailsUrl`,
+          { cwd: checkCwd, timeout: 15_000 },
+        );
+        return JSON.parse(stdout.trim());
+      } catch {
+        return [];
+      }
+    }
     default:
       throw new Error(`Unknown filesystem operation: ${op}`);
   }
