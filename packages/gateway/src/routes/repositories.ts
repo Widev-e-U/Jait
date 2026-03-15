@@ -13,6 +13,7 @@ import type { RepositoryService } from "../services/repositories.js";
 import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
+import { assertOwnership } from "../security/ownership.js";
 import type { WsEventType } from "@jait/shared";
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
@@ -39,6 +40,11 @@ export function registerRepoRoutes(
       timestamp: new Date().toISOString(),
       payload: data as Record<string, unknown>,
     });
+  }
+
+  function getOwnedRepo(repoId: string, userId: string) {
+    const repo = repoService.getById(repoId);
+    return repo?.userId === userId ? repo : null;
   }
 
   // ── LIST ─────────────────────────────────────────────────────────
@@ -110,10 +116,11 @@ export function registerRepoRoutes(
       strategy?: string | null;
     };
 
+    const existing = getOwnedRepo(request.params.id, user.id);
+    if (!assertOwnership(reply, existing, user.id, "Repository not found")) return;
+
     const repo = repoService.update(request.params.id, body);
-    if (!repo) {
-      return reply.status(404).send({ error: "Repository not found" });
-    }
+    if (!repo) return reply.status(404).send({ error: "Repository not found" });
 
     broadcastRepoEvent("updated", { repo });
     return { repo };
@@ -126,10 +133,8 @@ export function registerRepoRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const repo = repoService.getById(request.params.id);
-    if (!repo) {
-      return reply.status(404).send({ error: "Repository not found" });
-    }
+    const repo = getOwnedRepo(request.params.id, user.id);
+    if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
     return { strategy: repo.strategy ?? "" };
   });
@@ -144,10 +149,11 @@ export function registerRepoRoutes(
       return reply.status(400).send({ error: "strategy must be a string" });
     }
 
+    const existing = getOwnedRepo(request.params.id, user.id);
+    if (!assertOwnership(reply, existing, user.id, "Repository not found")) return;
+
     const repo = repoService.update(request.params.id, { strategy: body.strategy });
-    if (!repo) {
-      return reply.status(404).send({ error: "Repository not found" });
-    }
+    if (!repo) return reply.status(404).send({ error: "Repository not found" });
 
     broadcastRepoEvent("updated", { repo });
     return { strategy: repo.strategy ?? "" };
@@ -158,10 +164,8 @@ export function registerRepoRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const repo = repoService.getById(request.params.id);
-    if (!repo) {
-      return reply.status(404).send({ error: "Repository not found" });
-    }
+    const repo = getOwnedRepo(request.params.id, user.id);
+    if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
     // Gather context from the repo if locally accessible
     let repoContext = "";
@@ -260,10 +264,8 @@ export function registerRepoRoutes(
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
 
-    const existing = repoService.getById(request.params.id);
-    if (!existing) {
-      return reply.status(404).send({ error: "Repository not found" });
-    }
+    const existing = getOwnedRepo(request.params.id, user.id);
+    if (!assertOwnership(reply, existing, user.id, "Repository not found")) return;
 
     repoService.delete(request.params.id);
     broadcastRepoEvent("deleted", { repoId: request.params.id });
