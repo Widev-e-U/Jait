@@ -72,7 +72,7 @@ function buildMarkdownComponents(
   if (!onOpenPath) return undefined
 
   return {
-    a: ({ href, children, ...props }) => {
+    a: ({ href, children, ref: _ref, ...props }) => {
       const target = parseWorkspaceLinkTarget(href)
       if (!target) {
         return <a href={href} {...props}>{children}</a>
