@@ -714,11 +714,12 @@ export function registerThreadRoutes(
           // 1) Try sending a turn on the existing session
           if (thread.providerSessionId) {
             try {
+              await provider.sendTurn(thread.providerSessionId, resumeMessage);
+              // sendTurn succeeded — now mark running and log the user message
               const userActivity = threadService.addActivity(id, "message", resumeMessage.slice(0, 500), { role: "user", content: resumeMessage });
               broadcastThreadEvent(id, "activity", { activity: userActivity });
               threadService.update(id, { status: "running", error: null });
               broadcastThreadStatus(id, "running");
-              await provider.sendTurn(thread.providerSessionId, resumeMessage);
               resumed = true;
             } catch { /* session may be dead — start a new one below */ }
           }
@@ -768,15 +769,30 @@ export function registerThreadRoutes(
               });
               threadUnsubs.set(id, unsub);
 
-              threadService.markRunning(id, newSession.id);
-              broadcastThreadStatus(id, "running");
-
-              const userActivity = threadService.addActivity(id, "message", resumeMessage.slice(0, 500), { role: "user", content: resumeMessage });
-              broadcastThreadEvent(id, "activity", { activity: userActivity });
-              await provider.sendTurn(newSession.id, resumeMessage);
-              resumed = true;
-            } catch { /* both resume attempts failed */ }
+              // Send the turn first — only mark running if it succeeds
+              try {
+                await provider.sendTurn(newSession.id, resumeMessage);
+                threadService.markRunning(id, newSession.id);
+                broadcastThreadStatus(id, "running");
+                const userActivity = threadService.addActivity(id, "message", resumeMessage.slice(0, 500), { role: "user", content: resumeMessage });
+                broadcastThreadEvent(id, "activity", { activity: userActivity });
+                resumed = true;
+              } catch {
+                // sendTurn failed on new session — clean up
+                unsub(); threadUnsubs.delete(id);
+              }
+            } catch { /* session start failed */ }
           }
+        }
+
+        // If resume failed, revert thread to completed (not stuck as "running")
+        if (!resumed) {
+          threadService.update(id, {
+            status: "completed",
+            error: "Push failed and automatic resume was not possible. Use the Start button to retry manually.",
+            completedAt: new Date().toISOString(),
+          });
+          broadcastThreadStatus(id, "completed");
         }
 
         return reply.status(200).send({
