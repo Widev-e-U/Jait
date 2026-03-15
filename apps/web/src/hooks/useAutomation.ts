@@ -398,10 +398,19 @@ export function useAutomation(enabled = true) {
         return
       }
 
-      const settled = await Promise.allSettled(
-        threadsWithBranch.map(async (thread) => {
-          // Use the thread's worktree directory when available so git
-          // status resolves the correct branch (not the main repo's HEAD).
+      // Only poll threads that might have actionable PR state changes:
+      // skip threads whose PR is already merged/closed (terminal states).
+      const pollable = threadsWithBranch.filter(
+        (t) => t.prState !== 'merged' && t.prState !== 'closed',
+      )
+
+      // Serialize requests to avoid flooding the FsNode / gh CLI with
+      // dozens of parallel git-status + gh-pr-view calls that consume
+      // excessive RAM and block the event loop.
+      const results: { threadId: string; prState: ThreadPrState; ghAvailable: boolean }[] = []
+      for (const thread of pollable) {
+        if (requestId !== prStateRequestRef.current) return
+        try {
           const statusCwd = thread.workingDirectory ?? repoPath
           const status = await gitApi.status(
             statusCwd,
@@ -429,19 +438,23 @@ export function useAutomation(enabled = true) {
             } catch { /* best-effort sync */ }
           }
 
-          return { threadId: thread.id, prState, ghAvailable: status.ghAvailable }
-        }),
-      )
+          results.push({ threadId: thread.id, prState, ghAvailable: status.ghAvailable })
+        } catch {
+          // Skip failed threads — don't mask the DB value
+        }
+      }
       if (requestId !== prStateRequestRef.current) return
 
-      // Only include successfully polled threads in the map so that
-      // failed requests don't mask the DB value via the `in` check.
       const nextStates: Record<string, ThreadPrState> = {}
       let anyGhAvailable = false
-      for (const result of settled) {
-        if (result.status === 'fulfilled') {
-          nextStates[result.value.threadId] = result.value.prState
-          if (result.value.ghAvailable) anyGhAvailable = true
+      for (const r of results) {
+        nextStates[r.threadId] = r.prState
+        if (r.ghAvailable) anyGhAvailable = true
+      }
+      // Preserve terminal states for threads we didn't poll
+      for (const thread of threadsWithBranch) {
+        if (!(thread.id in nextStates) && (thread.prState === 'merged' || thread.prState === 'closed')) {
+          nextStates[thread.id] = thread.prState as ThreadPrState
         }
       }
       setGhAvailable(anyGhAvailable)
