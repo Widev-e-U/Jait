@@ -5,7 +5,7 @@ import { messages, sessions, userSettings, users } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 export type ThemeMode = "light" | "dark" | "system";
-export type SttProvider = "simulated" | "browser" | "wyoming";
+export type SttProvider = "simulated" | "browser" | "wyoming" | "whisper";
 export type ChatProvider = "jait" | "codex" | "claude-code";
 
 export interface UserRecord {
