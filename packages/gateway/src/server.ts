@@ -268,33 +268,16 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
 /** Resolve the directory containing the built web frontend. */
 function resolveWebDir(): string | null {
-  // 1. Explicit env override
+  // Explicit env override
   if (process.env["JAIT_WEB_DIR"] && existsSync(process.env["JAIT_WEB_DIR"])) {
     return process.env["JAIT_WEB_DIR"];
   }
-  // 2. Probe known locations for @jait/web/dist (prefer nested dependency first)
   const candidates = [
-    // Bundled inside gateway package (npm publish layout)
+    // Bundled inside gateway package (npm publish + global install)
     join(__dirname, "../web-dist"),
-    // Nested node_modules (npm global install typical layout — most reliable)
-    join(__dirname, "../node_modules/@jait/web/dist"),
-    // Use createRequire to find @jait/web regardless of hoist layout (ESM-safe)
-    (() => {
-      try {
-        const require = createRequire(import.meta.url);
-        const webPkg = require.resolve("@jait/web/package.json");
-        return join(dirname(webPkg), "dist");
-      } catch { return null; }
-    })(),
-    // npm global install: node_modules/@jait/web/dist (relative to gateway dist/)
-    join(__dirname, "../../web/dist"),
-    // If @jait/web is hoisted into top-level node_modules
-    join(__dirname, "../../../@jait/web/dist"),
-    // Monorepo dev layout
+    // Monorepo dev layout (bun run dev)
     join(__dirname, "../../../../apps/web/dist"),
-    // Manual placement in CWD
-    join(process.cwd(), "web-dist"),
-  ].filter((c): c is string => c !== null);
+  ];
   for (const dir of candidates) {
     if (existsSync(join(dir, "index.html"))) return dir;
   }

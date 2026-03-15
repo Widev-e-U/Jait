@@ -33,6 +33,7 @@ on:
     paths:
       - packages/gateway/package.json
       - packages/shared/package.json
+      - packages/screen-share/package.json
       - apps/desktop/package.json
       - apps/mobile/package.json
     tags:

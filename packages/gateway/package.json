@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.78",
+  "version": "0.1.79",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "type": "module",
   "main": "dist/index.js",
@@ -43,7 +43,6 @@
     "@fastify/websocket": "^11.0.0",
     "@jait/screen-share": "workspace:*",
     "@jait/shared": "workspace:*",
-    "@jait/web": "workspace:*",
     "@parcel/watcher": "^2.5.6",
     "better-sqlite3": "^12.6.2",
     "dotenv": "^16.4.0",
