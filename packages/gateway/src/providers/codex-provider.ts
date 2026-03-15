@@ -151,12 +151,11 @@ export class CodexProvider implements CliProviderAdapter {
    * performing the initialize handshake, then calling `model/list`.
    */
   async listModels(): Promise<ProviderModelInfo[]> {
-    const cmd = this.codexPath ?? "codex";
-    const child = spawn(cmd, ["app-server"], {
+    const spawnSpec = parseCommand(this.codexPath ?? "codex");
+    const child = spawn(spawnSpec.command, [...spawnSpec.args, "app-server"], {
       cwd: process.cwd(),
       env: process.env as Record<string, string>,
       stdio: ["pipe", "pipe", "pipe"],
-      shell: true,
     });
 
     const rl = readline.createInterface({ input: child.stdout! });
@@ -246,16 +245,19 @@ export class CodexProvider implements CliProviderAdapter {
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
     const sessionId = uuidv7();
 
-    const cmd = this.codexPath ?? "codex";
-    const child = spawn(cmd, ["app-server"], {
-      cwd: options.workingDirectory,
-      env: {
-        ...process.env as Record<string, string>,
-        ...options.env,
+    const spawnSpec = parseCommand(this.codexPath ?? "codex");
+    const child = spawn(
+      spawnSpec.command,
+      [...spawnSpec.args, "app-server", ...buildCodexMcpConfigArgs(options.mcpServers)],
+      {
+        cwd: options.workingDirectory,
+        env: {
+          ...process.env as Record<string, string>,
+          ...options.env,
+        },
+        stdio: ["pipe", "pipe", "pipe"],
       },
-      stdio: ["pipe", "pipe", "pipe"],
-      shell: true,
-    });
+    );
 
     const rl = readline.createInterface({ input: child.stdout! });
 
@@ -576,15 +578,13 @@ export class CodexProvider implements CliProviderAdapter {
 
   private testCommand(cmd: string): Promise<boolean> {
     return new Promise((resolve) => {
-      const parts = cmd.split(" ");
-      const bin = parts[0];
-      if (!bin) {
+      const spawnSpec = parseCommand(cmd);
+      if (!spawnSpec.command) {
         resolve(false);
         return;
       }
-      const child = spawn(bin, [...parts.slice(1), "--version"], {
+      const child = spawn(spawnSpec.command, [...spawnSpec.args, "--version"], {
         stdio: "pipe",
-        shell: true,
       });
       const timer = setTimeout(() => {
         child.kill();
@@ -614,10 +614,51 @@ function mapRuntimeMode(mode: string): {
   return { approvalPolicy: "never", sandbox: "danger-full-access" };
 }
 
+export function buildCodexMcpConfigArgs(
+  servers: StartSessionOptions["mcpServers"],
+): string[] {
+  if (!servers?.length) return [];
+
+  const args: string[] = [];
+
+  for (const server of servers) {
+    const prefix = `mcp_servers.${server.name}`;
+
+    if (server.transport === "sse" && server.url) {
+      args.push("-c", `${prefix}.url=${toTomlString(server.url)}`);
+      continue;
+    }
+
+    if (server.transport === "stdio" && server.command) {
+      args.push("-c", `${prefix}.command=${toTomlString(server.command)}`);
+      args.push("-c", `${prefix}.args=${toTomlArray(server.args ?? [])}`);
+      for (const [key, value] of Object.entries(server.env ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+        args.push("-c", `${prefix}.env.${key}=${toTomlString(value)}`);
+      }
+    }
+  }
+
+  return args;
+}
+
+function toTomlString(value: string): string {
+  return JSON.stringify(value);
+}
+
+function toTomlArray(values: string[]): string {
+  return `[${values.map((value) => toTomlString(value)).join(", ")}]`;
+}
+
+function parseCommand(commandLine: string): { command: string; args: string[] } {
+  const parts = commandLine.trim().split(/\s+/).filter(Boolean);
+  return {
+    command: parts[0] ?? "",
+    args: parts.slice(1),
+  };
+}
+
 /**
- * On Windows with `shell: true`, `child.kill()` only terminates the cmd.exe
- * wrapper, leaving the actual process running. Use `taskkill /T` to kill
- * the entire process tree.
+ * On Windows, use `taskkill /T` to kill the entire process tree.
  */
 function killChildTree(child: ChildProcess): void {
   if (process.platform === "win32" && child.pid !== undefined) {

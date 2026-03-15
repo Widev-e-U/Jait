@@ -109,6 +109,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
         mode: options.mode,
         model: options.model,
         env: options.env,
+        mcpServers: options.mcpServers,
       }, 90_000);
 
       session.status = "running";

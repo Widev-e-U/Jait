@@ -309,10 +309,77 @@ interface RemoteProviderSession {
   mode: string;
   model: string | null;
   env: Record<string, string>;
+  mcpServers?: DesktopMcpServerRef[];
+  mcpConfigPath?: string;
   stopRequested: boolean;
 }
 
 const remoteProviderSessions = new Map<string, RemoteProviderSession>();
+
+interface DesktopMcpServerRef {
+  name: string;
+  transport: "stdio" | "sse";
+  command?: string;
+  args?: string[];
+  url?: string;
+  env?: Record<string, string>;
+}
+
+function getDesktopJaitMcpServers(servers?: DesktopMcpServerRef[]): DesktopMcpServerRef[] {
+  if (servers?.length) return servers;
+  return [{
+    name: "jait",
+    transport: "sse",
+    url: new URL("/mcp/sse", `${GATEWAY_URL.replace(/\/+$/, "")}/`).toString(),
+  }];
+}
+
+function buildDesktopCodexMcpArgs(servers?: DesktopMcpServerRef[]): string[] {
+  if (!servers?.length) return [];
+
+  const args: string[] = [];
+  for (const server of servers) {
+    const prefix = `mcp_servers.${server.name}`;
+    if (server.transport === "sse" && server.url) {
+      args.push("-c", `${prefix}.url=${JSON.stringify(server.url)}`);
+      continue;
+    }
+    if (server.transport === "stdio" && server.command) {
+      args.push("-c", `${prefix}.command=${JSON.stringify(server.command)}`);
+      args.push("-c", `${prefix}.args=[${(server.args ?? []).map((arg) => JSON.stringify(arg)).join(", ")}]`);
+      for (const [key, value] of Object.entries(server.env ?? {}).sort(([a], [b]) => a.localeCompare(b))) {
+        args.push("-c", `${prefix}.env.${key}=${JSON.stringify(value)}`);
+      }
+    }
+  }
+  return args;
+}
+
+function buildDesktopClaudeMcpConfig(sessionId: string, servers?: DesktopMcpServerRef[]): string | undefined {
+  if (!servers?.length) return undefined;
+  const config = { mcpServers: {} as Record<string, unknown> };
+
+  for (const server of servers) {
+    if (server.transport === "sse" && server.url) {
+      config.mcpServers[server.name] = { url: server.url };
+      continue;
+    }
+    if (server.transport === "stdio" && server.command) {
+      config.mcpServers[server.name] = {
+        command: server.command,
+        args: server.args ?? [],
+        env: server.env ?? {},
+      };
+    }
+  }
+
+  const configDir = path.join(app.getPath("temp"), "jait-desktop-mcp", sessionId);
+  const { mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
+  mkdirSync(configDir, { recursive: true });
+  const configPath = path.join(configDir, "mcp-config.json");
+  writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
+  return configPath;
+}
 
 function rpcSend(session: RemoteProviderSession, method: string, params?: unknown, timeoutMs = 60_000): Promise<unknown> {
   if (!session.child?.stdin?.writable) {
@@ -437,6 +504,10 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
     args.push("--model", session.model);
   }
 
+  if (session.mcpConfigPath) {
+    args.push("--mcp-config", session.mcpConfigPath);
+  }
+
   args.push(message);
 
   const child = spawn("claude", args, {
@@ -508,10 +579,11 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
 ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<string, unknown>) => {
   switch (op) {
     case "start-session": {
-      const { sessionId, providerId, workingDirectory, mode, model, env: extraEnv } = params as {
+      const { sessionId, providerId, workingDirectory, mode, model, env: extraEnv, mcpServers } = params as {
         sessionId: string; providerId: string; workingDirectory: string;
-        mode: string; model?: string; env?: Record<string, string>;
+        mode: string; model?: string; env?: Record<string, string>; mcpServers?: DesktopMcpServerRef[];
       };
+      const resolvedMcpServers = getDesktopJaitMcpServers(mcpServers);
 
       if (providerId === "claude-code") {
         remoteProviderSessions.set(sessionId, {
@@ -525,13 +597,15 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
           mode,
           model: model ?? null,
           env: { ...process.env, ...extraEnv } as Record<string, string>,
+          mcpServers: resolvedMcpServers,
+          mcpConfigPath: buildDesktopClaudeMcpConfig(sessionId, resolvedMcpServers),
           stopRequested: false,
         });
         return { ok: true, providerThreadId: sessionId };
       }
 
       const cmd = "codex";
-      const args = ["app-server"];
+      const args = ["app-server", ...buildDesktopCodexMcpArgs(resolvedMcpServers)];
 
       const child = spawn(cmd, args, {
         cwd: workingDirectory,
@@ -551,6 +625,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         mode,
         model: model ?? null,
         env: { ...process.env, ...extraEnv } as Record<string, string>,
+        mcpServers: resolvedMcpServers,
         stopRequested: false,
       };
       remoteProviderSessions.set(sessionId, sess);
@@ -646,7 +721,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       }
 
       const cmd = "codex";
-      const args = ["app-server"];
+      const args = ["app-server", ...buildDesktopCodexMcpArgs(getDesktopJaitMcpServers())];
 
       const child = spawn(cmd, args, {
         cwd: process.cwd(),

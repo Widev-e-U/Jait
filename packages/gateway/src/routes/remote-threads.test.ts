@@ -338,6 +338,13 @@ describe("remote provider e2e flow", () => {
     expect(startCalls.length).toBe(1);
     expect(startCalls[0]!.params.workingDirectory).toBe(REMOTE_CWD);
     expect(startCalls[0]!.params.providerId).toBe("codex");
+    expect(startCalls[0]!.params.mcpServers).toEqual([
+      expect.objectContaining({
+        name: "jait",
+        transport: "sse",
+        url: expect.stringMatching(/\/mcp\/sse$/),
+      }),
+    ]);
 
     // The /start handler fires title generation + coding turn in background.
     // Wait a tick for the async background task to call send-turn.

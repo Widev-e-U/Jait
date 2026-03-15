@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import { type AppConfig, inferContextWindow } from "../config.js";
 import type { JaitDB } from "../db/index.js";
 import type { SessionService } from "../services/sessions.js";
@@ -146,6 +146,19 @@ function accumulateToolResult(sessionId: string, callId: string, ok: boolean, me
 
 /** Persistent CLI provider sessions — kept alive across turns so the agent retains conversation context */
 const activeCliSessions = new Map<string, { providerId: ProviderId; providerSessionId: string; provider: CliProviderAdapter }>();
+
+function getRequestBaseUrl(request: FastifyRequest): string | undefined {
+  const forwardedProto = request.headers["x-forwarded-proto"];
+  const proto = typeof forwardedProto === "string"
+    ? forwardedProto.split(",")[0]?.trim()
+    : request.protocol;
+  const forwardedHost = request.headers["x-forwarded-host"];
+  const host = typeof forwardedHost === "string"
+    ? forwardedHost.split(",")[0]?.trim()
+    : request.headers.host;
+  if (!proto || !host) return undefined;
+  return `${proto}://${host}`;
+}
 
 type StreamEvent =
   | { type: "token"; content: string }
@@ -797,8 +810,7 @@ export function registerChatRoutes(
           }
         }
 
-        // Remote providers can't reach the gateway's MCP endpoint
-        const mcpServers = isRemote ? [] : [providerRegistry.buildJaitMcpServerRef(config)];
+        const mcpServers = [providerRegistry.buildJaitMcpServerRef(config, getRequestBaseUrl(request))];
 
         // ── Reuse an existing CLI session if one is alive for this Jait session ──
         const cachedCliSession = activeCliSessions.get(sessionId);

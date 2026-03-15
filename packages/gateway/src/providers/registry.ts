@@ -64,14 +64,15 @@ export class ProviderRegistry {
    * The gateway exposes an MCP-compatible SSE endpoint at /mcp/sse
    * that CLI agents can connect to.
    */
-  buildJaitMcpServerRef(config: { host: string; port: number }): McpServerRef {
+  buildJaitMcpServerRef(config: { host: string; port: number }, baseUrl?: string): McpServerRef {
+    const normalizedBaseUrl = baseUrl?.trim().replace(/\/+$/, "");
     const host = config.host === "0.0.0.0" ? "127.0.0.1" : config.host;
-    const baseUrl = `http://${host}:${config.port}`;
+    const resolvedBaseUrl = normalizedBaseUrl || `http://${host}:${config.port}`;
 
     return {
       name: "jait",
       transport: "sse",
-      url: `${baseUrl}/mcp/sse`,
+      url: `${resolvedBaseUrl}/mcp/sse`,
     };
   }
 }

@@ -19,7 +19,7 @@
  *   GET    /api/providers            — list available providers
  */
 
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { ThreadService } from "../services/threads.js";
 import type { ProviderRegistry } from "../providers/registry.js";
@@ -110,6 +110,19 @@ export function registerThreadRoutes(
   function getOwnedThread(threadId: string, userId: string) {
     const thread = threadService.getById(threadId);
     return thread?.userId === userId ? thread : null;
+  }
+
+  function getRequestBaseUrl(request: FastifyRequest): string | undefined {
+    const forwardedProto = request.headers["x-forwarded-proto"];
+    const proto = typeof forwardedProto === "string"
+      ? forwardedProto.split(",")[0]?.trim()
+      : request.protocol;
+    const forwardedHost = request.headers["x-forwarded-host"];
+    const host = typeof forwardedHost === "string"
+      ? forwardedHost.split(",")[0]?.trim()
+      : request.headers.host;
+    if (!proto || !host) return undefined;
+    return `${proto}://${host}`;
   }
 
   /**
@@ -376,7 +389,7 @@ export function registerThreadRoutes(
     }
 
     // Build MCP server references so CLI agents can call Jait's tools
-    const mcpServers = isRemote ? [] : [providerRegistry.buildJaitMcpServerRef(config)];
+    const mcpServers = [providerRegistry.buildJaitMcpServerRef(config, getRequestBaseUrl(request))];
 
     // Store remote provider for /send, /stop, /interrupt access
     if (isRemote && provider instanceof RemoteCliProvider) {
@@ -771,9 +784,7 @@ export function registerThreadRoutes(
           if (!resumed) {
             try {
               const wdir = thread.workingDirectory ?? process.cwd();
-              const mcpServers = !(provider instanceof RemoteCliProvider)
-                ? [providerRegistry.buildJaitMcpServerRef(config)]
-                : [];
+              const mcpServers = [providerRegistry.buildJaitMcpServerRef(config, getRequestBaseUrl(request))];
               const newSession = await provider.startSession({
                 threadId: id,
                 workingDirectory: wdir,
