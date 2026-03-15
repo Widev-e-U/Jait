@@ -97,6 +97,11 @@ import { agentsApi, type AgentThread, type ProviderId } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 
 const API_URL = getApiUrl()
+const VOICE_LEVEL_BAR_COUNT = 18
+
+function createSilentVoiceLevels(): number[] {
+  return Array.from({ length: VOICE_LEVEL_BAR_COUNT }, () => 0.08)
+}
 
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
 type CliProviderId = Exclude<ProviderId, 'jait'>
@@ -2316,9 +2321,94 @@ function App() {
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
   const [voiceTranscribing, setVoiceTranscribing] = useState(false)
+  const [voiceLevels, setVoiceLevels] = useState<number[]>(() => createSilentVoiceLevels())
   const mediaRecorderRef = useRef<MediaRecorder | null>(null)
   const audioChunksRef = useRef<Blob[]>([])
   const audioStreamRef = useRef<MediaStream | null>(null)
+  const voiceLevelsRef = useRef<number[]>(createSilentVoiceLevels())
+  const voiceAudioContextRef = useRef<AudioContext | null>(null)
+  const voiceAudioSourceRef = useRef<MediaStreamAudioSourceNode | null>(null)
+  const voiceAnalyserRef = useRef<AnalyserNode | null>(null)
+  const voiceLevelDataRef = useRef<Uint8Array<ArrayBuffer> | null>(null)
+  const voiceLevelFrameRef = useRef<number | null>(null)
+
+  const resetVoiceLevels = useCallback(() => {
+    const silent = createSilentVoiceLevels()
+    voiceLevelsRef.current = silent
+    setVoiceLevels(silent)
+  }, [])
+
+  const stopVoiceVisualizer = useCallback(() => {
+    if (voiceLevelFrameRef.current !== null) {
+      cancelAnimationFrame(voiceLevelFrameRef.current)
+      voiceLevelFrameRef.current = null
+    }
+    voiceAudioSourceRef.current?.disconnect()
+    voiceAudioSourceRef.current = null
+    voiceAnalyserRef.current = null
+    voiceLevelDataRef.current = null
+
+    const audioContext = voiceAudioContextRef.current
+    voiceAudioContextRef.current = null
+    if (audioContext && audioContext.state !== 'closed') {
+      void audioContext.close().catch(() => {})
+    }
+
+    resetVoiceLevels()
+  }, [resetVoiceLevels])
+
+  const startVoiceVisualizer = useCallback((stream: MediaStream) => {
+    stopVoiceVisualizer()
+
+    try {
+      const audioContext = new AudioContext()
+      const analyser = audioContext.createAnalyser()
+      analyser.fftSize = 256
+      analyser.smoothingTimeConstant = 0.78
+
+      const source = audioContext.createMediaStreamSource(stream)
+      source.connect(analyser)
+
+      const data = new Uint8Array(new ArrayBuffer(analyser.frequencyBinCount))
+      voiceAudioContextRef.current = audioContext
+      voiceAudioSourceRef.current = source
+      voiceAnalyserRef.current = analyser
+      voiceLevelDataRef.current = data
+
+      const tick = () => {
+        const analyserNode = voiceAnalyserRef.current
+        const samples = voiceLevelDataRef.current
+        if (!analyserNode || !samples) return
+
+        analyserNode.getByteTimeDomainData(samples)
+        const bucketSize = Math.max(1, Math.floor(samples.length / VOICE_LEVEL_BAR_COUNT))
+        const nextLevels = Array.from({ length: VOICE_LEVEL_BAR_COUNT }, (_, index) => {
+          const start = index * bucketSize
+          const end = Math.min(samples.length, start + bucketSize)
+          let total = 0
+          for (let sampleIndex = start; sampleIndex < end; sampleIndex++) {
+            total += Math.abs((samples[sampleIndex] - 128) / 128)
+          }
+          const average = end > start ? total / (end - start) : 0
+          return Math.min(1, Math.max(0.08, average * 3.4))
+        })
+
+        const smoothed = nextLevels.map((level, index) => {
+          const previous = voiceLevelsRef.current[index] ?? 0.08
+          return previous * 0.62 + level * 0.38
+        })
+
+        voiceLevelsRef.current = smoothed
+        setVoiceLevels(smoothed)
+        voiceLevelFrameRef.current = requestAnimationFrame(tick)
+      }
+
+      tick()
+    } catch (error) {
+      console.warn('Voice visualizer unavailable:', error)
+      resetVoiceLevels()
+    }
+  }, [resetVoiceLevels, stopVoiceVisualizer])
 
   /** Encode PCM samples from an AudioBuffer into a WAV Blob (16-bit, 16 kHz mono). */
   const buildWavBlob = useCallback((audioBuffer: AudioBuffer): Blob => {
@@ -2356,10 +2446,16 @@ function App() {
 
   const stopRecordingAndTranscribe = useCallback(async () => {
     setVoiceRecording(false)
+    stopVoiceVisualizer()
 
     // Stop MediaRecorder and collect audio
     const recorder = mediaRecorderRef.current
-    if (!recorder || recorder.state === 'inactive') return
+    if (!recorder || recorder.state === 'inactive') {
+      audioStreamRef.current?.getTracks().forEach((t) => t.stop())
+      audioStreamRef.current = null
+      mediaRecorderRef.current = null
+      return
+    }
 
     const audioBlob = await new Promise<Blob>((resolve) => {
       recorder.ondataavailable = (e) => {
@@ -2525,6 +2621,7 @@ function App() {
       })
       audioStreamRef.current = stream
       audioChunksRef.current = []
+      startVoiceVisualizer(stream)
 
       const recorder = new MediaRecorder(stream)
       mediaRecorderRef.current = recorder
@@ -2536,10 +2633,18 @@ function App() {
       recorder.start()
       setVoiceRecording(true)
     } catch (err) {
+      stopVoiceVisualizer()
       console.error('Microphone access denied:', err)
       window.alert('Microphone access is required for push-to-talk.')
     }
-  }, [activeSessionId, settings.stt_provider, submitVoiceTranscript, token])
+  }, [activeSessionId, settings.stt_provider, startVoiceVisualizer, stopVoiceVisualizer, submitVoiceTranscript, token])
+
+  useEffect(() => {
+    return () => {
+      stopVoiceVisualizer()
+      audioStreamRef.current?.getTracks().forEach((track) => track.stop())
+    }
+  }, [stopVoiceVisualizer])
 
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0 || isLoadingHistory
@@ -3259,6 +3364,7 @@ function App() {
                           placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
                           onVoiceInput={handleVoiceInput}
                           voiceRecording={voiceRecording}
+                          voiceLevels={voiceLevels}
                           voiceTranscribing={voiceTranscribing}
                           onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                           viewMode={viewMode}
@@ -3330,6 +3436,7 @@ function App() {
                             placeholder={managerPlaceholder}
                             onVoiceInput={handleVoiceInput}
                             voiceRecording={voiceRecording}
+                            voiceLevels={voiceLevels}
                             voiceTranscribing={voiceTranscribing}
                             onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                             viewMode={viewMode}
@@ -3443,6 +3550,7 @@ function App() {
                     isLoading={isLoading}
                     onVoiceInput={handleVoiceInput}
                     voiceRecording={voiceRecording}
+                    voiceLevels={voiceLevels}
                     voiceTranscribing={voiceTranscribing}
                     onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                     mode={chatMode}
@@ -3597,6 +3705,7 @@ function App() {
                       disabled={limitReached}
                       onVoiceInput={handleVoiceInput}
                       voiceRecording={voiceRecording}
+                      voiceLevels={voiceLevels}
                       voiceTranscribing={voiceTranscribing}
                       onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                       mode={chatMode}

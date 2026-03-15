@@ -47,6 +47,8 @@ interface PromptInputProps {
   onVoiceInput?: () => void
   /** True while mic is actively recording */
   voiceRecording?: boolean
+  /** Smoothed waveform values for the live mic preview */
+  voiceLevels?: number[]
   /** True while audio is being transcribed */
   voiceTranscribing?: boolean
   /** Called when user clicks "Done" to stop recording */
@@ -184,6 +186,26 @@ export interface PromptInputHandle {
   insertChip: (file: ReferencedFile) => void
 }
 
+function VoiceLevelMeter({ levels = [] }: { levels?: number[] }) {
+  const bars = levels.length > 0 ? levels : Array.from({ length: 18 }, () => 0.08)
+
+  return (
+    <span className="flex h-7 items-end gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1">
+      {bars.map((level, index) => (
+        <span
+          // Inline heights keep the waveform responsive without extra CSS files.
+          key={index}
+          className="w-1 rounded-full bg-red-500 transition-[height,opacity] duration-100 ease-out"
+          style={{
+            height: `${6 + level * 16}px`,
+            opacity: 0.35 + level * 0.65,
+          }}
+        />
+      ))}
+    </span>
+  )
+}
+
 /* ------------------------------------------------------------------ */
 /* Component                                                           */
 /* ------------------------------------------------------------------ */
@@ -202,6 +224,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   footerLeadingContent,
   onVoiceInput,
   voiceRecording,
+  voiceLevels,
   voiceTranscribing,
   onVoiceStop,
   viewMode,
@@ -759,11 +782,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </Button>
           )}
           {voiceRecording && onVoiceStop && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-2">
               <span className="flex items-center gap-1.5 text-xs text-red-500 font-medium">
                 <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                Recording...
+                Listening...
               </span>
+              <VoiceLevelMeter levels={voiceLevels} />
               <Button
                 type="button"
                 size="sm"
