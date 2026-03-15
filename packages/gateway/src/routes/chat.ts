@@ -73,6 +73,77 @@ const sessionHistory = new Map<string, ChatMessage[]>();
 const activeStreams = new Set<string>();
 const sessionAbortControllers = new Map<string, AbortController>();
 
+/**
+ * Live streaming accumulator — holds the current assistant message's partial
+ * content, tool calls, and segments while the stream is active.
+ * Without this, a page reload during streaming would lose the already-streamed
+ * content because the in-memory history only receives the assistant entry on
+ * completion.  The snapshot builder reads this to synthesize a partial
+ * assistant message for reconnecting clients.
+ */
+interface StreamingAccumulator {
+  content: string;
+  toolCalls: PersistedToolCall[];
+  segments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] }>;
+}
+const sessionStreamingState = new Map<string, StreamingAccumulator>();
+
+function getOrCreateAccumulator(sessionId: string): StreamingAccumulator {
+  let acc = sessionStreamingState.get(sessionId);
+  if (!acc) {
+    acc = { content: "", toolCalls: [], segments: [] };
+    sessionStreamingState.set(sessionId, acc);
+  }
+  return acc;
+}
+
+/** Append a text token to the streaming accumulator */
+function accumulateToken(sessionId: string, token: string): void {
+  const acc = getOrCreateAccumulator(sessionId);
+  acc.content += token;
+  const last = acc.segments[acc.segments.length - 1];
+  if (last?.type === "text") {
+    acc.segments[acc.segments.length - 1] = { type: "text", content: last.content + token };
+  } else {
+    acc.segments.push({ type: "text", content: token });
+  }
+}
+
+/** Record a tool call start in the streaming accumulator */
+function accumulateToolStart(sessionId: string, callId: string, tool: string, args: unknown): void {
+  const acc = getOrCreateAccumulator(sessionId);
+  acc.toolCalls.push({ callId, tool, args, ok: true, message: "", startedAt: Date.now() });
+  const last = acc.segments[acc.segments.length - 1];
+  if (last?.type === "toolGroup") {
+    if (!last.callIds.includes(callId)) {
+      acc.segments[acc.segments.length - 1] = { type: "toolGroup", callIds: [...last.callIds, callId] };
+    }
+  } else {
+    acc.segments.push({ type: "toolGroup", callIds: [callId] });
+  }
+}
+
+/** Record streaming output for a tool call */
+function accumulateToolOutput(sessionId: string, callId: string, content: string): void {
+  const acc = sessionStreamingState.get(sessionId);
+  if (!acc) return;
+  const tc = acc.toolCalls.find(t => t.callId === callId);
+  if (tc) tc.message = (tc.message || "") + content;
+}
+
+/** Record a tool call completion */
+function accumulateToolResult(sessionId: string, callId: string, ok: boolean, message: string, data?: unknown): void {
+  const acc = sessionStreamingState.get(sessionId);
+  if (!acc) return;
+  const tc = acc.toolCalls.find(t => t.callId === callId);
+  if (tc) {
+    tc.ok = ok;
+    tc.message = message;
+    tc.data = data;
+    tc.completedAt = Date.now();
+  }
+}
+
 /** Persistent CLI provider sessions — kept alive across turns so the agent retains conversation context */
 const activeCliSessions = new Map<string, { providerId: ProviderId; providerSessionId: string; provider: CliProviderAdapter }>();
 
@@ -263,13 +334,38 @@ function buildVisibleHistoryMessages(
   history: ChatMessage[],
   options?: { includePendingAssistantToolCalls?: boolean },
 ): UIMsg[] {
-  return buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls, segments }) => ({
+  const msgs = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls, segments }) => ({
     id,
     role,
     content,
     toolCalls,
     segments,
   }));
+
+  // If there is a live streaming accumulator for this session, inject a
+  // synthetic assistant message so that reconnecting clients see the partial
+  // content that has been streamed so far.
+  const acc = sessionStreamingState.get(sessionId);
+  if (acc && (acc.content || acc.toolCalls.length > 0)) {
+    const last = msgs[msgs.length - 1];
+    // Merge into the last assistant message if it exists and has no content yet
+    // (the snapshot builder may have emitted a stub). Otherwise append a new one.
+    if (last && last.role === "assistant" && !last.content && !last.toolCalls) {
+      last.content = acc.content;
+      last.toolCalls = acc.toolCalls.length > 0 ? mapPersistedToolCallsForUI(acc.toolCalls) : undefined;
+      last.segments = acc.segments.length > 0 ? acc.segments : undefined;
+    } else {
+      msgs.push({
+        id: `${sessionId}-streaming`,
+        role: "assistant",
+        content: acc.content,
+        toolCalls: acc.toolCalls.length > 0 ? mapPersistedToolCallsForUI(acc.toolCalls) : undefined,
+        segments: acc.segments.length > 0 ? acc.segments : undefined,
+      });
+    }
+  }
+
+  return msgs;
 }
 
 // ── System prompt ────────────────────────────────────────────────────
@@ -605,6 +701,8 @@ export function registerChatRoutes(
     let resultSegmentsJson: string | undefined;
     let hitMaxRounds = false;
     activeStreams.add(sessionId);
+    // Reset streaming accumulator for this turn so reload snapshots start fresh
+    sessionStreamingState.delete(sessionId);
 
     let clientDisconnected = false;
     reply.raw.on("close", () => { clientDisconnected = true; });
@@ -780,6 +878,7 @@ export function registerChatRoutes(
               contentChunks.push(event.content);
               tokenBytesThisBlock += event.content.length;
               lastSegmentWasText = false; // new text arrived
+              accumulateToken(sessionId, event.content);
               safeWrite(`data: ${JSON.stringify({ type: "token", content: event.content })}\n\n`);
               emitToSubscribers(sessionId, { type: "token", content: event.content } as StreamEvent);
               break;
@@ -810,6 +909,7 @@ export function registerChatRoutes(
 
               safeWrite(`data: ${JSON.stringify({ type: "tool_start", call_id: callId, tool: event.tool, args: event.args })}\n\n`);
               emitToSubscribers(sessionId, { type: "tool_start", call_id: callId, tool: event.tool, args: event.args } as unknown as StreamEvent);
+              accumulateToolStart(sessionId, callId, event.tool, event.args ?? {});
               break;
             }
             case "tool.output": {
@@ -818,6 +918,7 @@ export function registerChatRoutes(
               if (tc) {
                 tc.message = (tc.message || "") + event.content;
               }
+              accumulateToolOutput(sessionId, event.callId ?? "", event.content);
               safeWrite(`data: ${JSON.stringify({ type: "tool_output", call_id: event.callId, content: event.content })}\n\n`);
               break;
             }
@@ -833,6 +934,7 @@ export function registerChatRoutes(
               }
               safeWrite(`data: ${JSON.stringify({ type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data })}\n\n`);
               emitToSubscribers(sessionId, { type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message } as unknown as StreamEvent);
+              accumulateToolResult(sessionId, resultCallId, event.ok, event.message || "", event.data);
 
               // Emit file_changed for successful edits → drives the keep/discard UI
               if (event.ok && event.tool === "edit") {
@@ -969,6 +1071,12 @@ export function registerChatRoutes(
           emitToSubscribers(sessionId, event as StreamEvent);
           safeWrite(`data: ${JSON.stringify(event)}\n\n`);
 
+          // ── Update streaming accumulator so reload snapshots include partial content ──
+          if (event.type === "token") accumulateToken(sessionId, event.content);
+          else if (event.type === "tool_start") accumulateToolStart(sessionId, event.call_id, event.tool, event.args);
+          else if (event.type === "tool_output") accumulateToolOutput(sessionId, event.call_id, event.content);
+          else if (event.type === "tool_result") accumulateToolResult(sessionId, event.call_id, event.ok, event.message, event.data);
+
           // ── Cross-client sync: persist & broadcast state changes ──
           const ev = event as Record<string, unknown>;
 
@@ -1081,6 +1189,7 @@ export function registerChatRoutes(
     activeStreams.delete(sessionId);
     sessionAbortControllers.delete(sessionId);
     sessionSteeringControllers.delete(sessionId);
+    sessionStreamingState.delete(sessionId);
 
     // Clean up in-memory history: remove any dangling assistant tool_calls
     // messages that never got a text response (e.g. cancelled mid-tool-call).

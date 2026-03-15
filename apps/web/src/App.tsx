@@ -3051,7 +3051,11 @@ function App() {
                         )}
                       </div>
                     )}
-                    <Conversation className="min-h-0 flex-1 border-b" loading={automation.loadingActivities}>
+                    <Conversation
+                      key={automation.selectedThread?.id ?? 'manager-empty'}
+                      className="min-h-0 flex-1 border-b"
+                      loading={automation.loadingActivities}
+                    >
                       {automationMessages.length === 0 && !automation.loadingActivities && (
                         <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
                       )}
@@ -3337,7 +3341,12 @@ function App() {
                     )}
                   </div>
                 )}
-                <Conversation className="min-h-0 flex-1 border-b" compact={showDesktopWorkspace} loading={isLoadingHistory}>
+                <Conversation
+                  key={activeSessionId ?? 'developer-empty'}
+                  className="min-h-0 flex-1 border-b"
+                  compact={showDesktopWorkspace}
+                  loading={isLoadingHistory}
+                >
                   {messages.map((msg, idx) => (
                     <Message
                       key={msg.id}

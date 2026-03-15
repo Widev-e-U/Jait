@@ -140,10 +140,10 @@ function preloadImage(src: string): HTMLImageElement {
 }
 
 const OS_IMAGES: Record<string, HTMLImageElement> = {
-  windows: preloadImage(buildSvgDataUri(WINDOWS_PATH, '#0078D4')),
+  windows: preloadImage(buildSvgDataUri(WINDOWS_PATH, '#ffffff')),
   macos: preloadImage(buildSvgDataUri(siApple.path, '#ffffff')),
-  linux: preloadImage(buildSvgDataUri(siLinux.path, '#FCC624')),
-  android: preloadImage(buildSvgDataUri(siAndroid.path, '#3DDC84')),
+  linux: preloadImage(buildSvgDataUri(siLinux.path, '#ffffff')),
+  android: preloadImage(buildSvgDataUri(siAndroid.path, '#ffffff')),
   ios: preloadImage(buildSvgDataUri(siApple.path, '#ffffff')),
 }
 
@@ -558,16 +558,13 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
   useEffect(() => {
     if (graphRef.current && graphData.nodes.length > 0 && !hasInitialZoomRef.current) {
       hasInitialZoomRef.current = true
+      // Wait for the force layout to settle before fitting
       setTimeout(() => {
         const fg = graphRef.current
         if (!fg) return
-        fg.zoomToFit(400, 160)
-        // Cap zoom so it doesn't fly in too close with few nodes
-        setTimeout(() => {
-          const currentZoom = fg.zoom()
-          if (currentZoom > 3) fg.zoom(3, 400)
-        }, 500)
-      }, 1200)
+        // zoomToFit with generous padding so it never zooms in too much
+        fg.zoomToFit(0, 200)
+      }, 1500)
     }
   }, [graphData.nodes.length])
 

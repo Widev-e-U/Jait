@@ -366,8 +366,13 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
   return 'Tool is still running...'
 }
 
+function isTerminalTool(tool: string): boolean {
+  const n = normalizeTool(tool)
+  return n.startsWith('terminal.') || n === 'execute'
+}
+
 function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className: string } | null {
-  if (!normalizeTool(call.tool).startsWith('terminal.')) return null
+  if (!isTerminalTool(call.tool)) return null
   if (call.status === 'running' || call.status === 'pending') return null
 
   const data = call.result?.data && typeof call.result.data === 'object'
@@ -897,12 +902,51 @@ interface ToolCallGroupProps {
   onOpenTerminal?: (terminalId: string | null) => void
 }
 
+/**
+ * Maximum number of completed tool calls to render individually.
+ * Older completed calls are collapsed into a summary row to keep the DOM light.
+ */
+const MAX_VISIBLE_COMPLETED = 6
+
 export function ToolCallGroup({ calls, onOpenTerminal }: ToolCallGroupProps) {
+  const [showAll, setShowAll] = useState(false)
   if (calls.length === 0) return null
+
+  // Split into active (pending/running) and completed (success/error)
+  const activeCalls = calls.filter(c => c.status === 'running' || c.status === 'pending')
+  const completedCalls = calls.filter(c => c.status !== 'running' && c.status !== 'pending')
+
+  // When too many completed calls, collapse the oldest ones unless expanded
+  const needsCollapse = !showAll && completedCalls.length > MAX_VISIBLE_COMPLETED
+  const hiddenCount = needsCollapse ? completedCalls.length - MAX_VISIBLE_COMPLETED : 0
+  const visibleCompleted = needsCollapse ? completedCalls.slice(-MAX_VISIBLE_COMPLETED) : completedCalls
+
+  const successCount = needsCollapse ? completedCalls.slice(0, hiddenCount).filter(c => c.status === 'success').length : 0
+  const errorCount = hiddenCount - successCount
 
   return (
     <div className="rounded-lg border bg-card my-2 divide-y">
-      {calls.map((call) => (
+      {needsCollapse && (
+        <button
+          type="button"
+          onClick={() => setShowAll(true)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+        >
+          <ChevronRight className="h-3 w-3" />
+          <span>
+            {hiddenCount} earlier tool call{hiddenCount !== 1 ? 's' : ''}
+            {successCount > 0 && <span className="text-green-500 ml-1">({successCount} passed)</span>}
+            {errorCount > 0 && <span className="text-red-500 ml-1">({errorCount} failed)</span>}
+          </span>
+        </button>
+      )}
+      {showAll && completedCalls.slice(0, hiddenCount).map((call) => (
+        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} />
+      ))}
+      {visibleCompleted.map((call) => (
+        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} />
+      ))}
+      {activeCalls.map((call) => (
         <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} />
       ))}
     </div>

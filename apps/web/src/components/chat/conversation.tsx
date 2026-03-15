@@ -1,4 +1,4 @@
-import { useLayoutEffect, useRef } from 'react'
+import { Children, useEffect, useLayoutEffect, useRef } from 'react'
 import { useStickToBottom } from 'use-stick-to-bottom'
 import { ArrowDown, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
@@ -12,26 +12,41 @@ interface ConversationProps {
 }
 
 export function Conversation({ children, className, compact, loading }: ConversationProps) {
-  const { scrollRef, contentRef, isAtBottom, scrollToBottom } = useStickToBottom({
+  const { scrollRef, contentRef, isAtBottom, isNearBottom, scrollToBottom } = useStickToBottom({
     initial: 'instant',
+    resize: 'instant',
   })
 
   // Track previous child count to detect bulk history loads
   const prevChildCount = useRef(0)
+  const prevLoadingRef = useRef(loading)
 
-  // useLayoutEffect runs before paint — instantly jump to bottom
-  // when messages go from 0→N (history snapshot loaded)
+  // Jump to the bottom when a history load finishes or the list populates from empty.
   useLayoutEffect(() => {
-    const el = scrollRef.current
-    if (!el) return
-    const count = Array.isArray(children) ? children.length : children ? 1 : 0
+    const count = Children.count(children)
     const wasEmpty = prevChildCount.current === 0
-    prevChildCount.current = count
+    const finishedLoading = prevLoadingRef.current && !loading
 
-    if (wasEmpty && count > 0) {
-      el.scrollTop = el.scrollHeight
+    prevChildCount.current = count
+    prevLoadingRef.current = loading
+
+    if (!loading && count > 0 && (wasEmpty || finishedLoading)) {
+      void scrollToBottom('instant')
     }
-  }, [children, scrollRef])
+  }, [children, loading, scrollToBottom])
+
+  // Keep the viewport pinned during streaming updates if the user is already
+  // following the conversation. This covers tool-call output growth that can
+  // otherwise lag a frame behind.
+  useEffect(() => {
+    if (loading || (!isAtBottom && !isNearBottom)) return
+
+    const frameId = window.requestAnimationFrame(() => {
+      void scrollToBottom('instant')
+    })
+
+    return () => window.cancelAnimationFrame(frameId)
+  }, [children, loading, isAtBottom, isNearBottom, scrollToBottom])
 
   return (
     <div className={cn('relative flex-1 overflow-hidden', className)}>
