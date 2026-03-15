@@ -267,7 +267,7 @@ export class ThreadService {
           threadId,
           event.ok ? "tool.result" : "tool.error",
           `${event.tool}: ${event.message}`,
-          { tool: event.tool, ok: event.ok, message: event.message, callId: event.callId },
+          { tool: event.tool, ok: event.ok, message: event.message, callId: event.callId, data: event.data },
         );
       case "tool.output":
         // Don't persist per-delta output — too noisy (like tokens).

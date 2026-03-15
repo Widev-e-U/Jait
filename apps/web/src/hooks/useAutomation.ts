@@ -12,6 +12,7 @@ import {
   agentsApi,
   type AgentThread,
   type ThreadActivity,
+  type ThreadMessageMetadata,
   type ProviderInfo,
   type ProviderId,
   type AutomationRepo,
@@ -536,54 +537,73 @@ export function useAutomation(enabled = true) {
 
   // ── Thread lifecycle ───────────────────────────────────────────
 
-  const handleSend = useCallback(
-    async (text: string, providerId: ProviderId = 'jait', model?: string | null) => {
+  const sendThreadMessage = useCallback(
+    async (
+      threadId: string | null,
+      text: string,
+      providerId: ProviderId = 'jait',
+      model?: string | null,
+      metadata: ThreadMessageMetadata = {},
+    ) => {
       if (!text.trim()) return
+      const targetThread = threadId
+        ? threads.find((thread) => thread.id === threadId) ?? null
+        : selectedThread
+      const targetRepo = targetThread ? getRepositoryForThread(targetThread) : selectedRepo
 
-      if (selectedThread && (selectedThread.status === 'running' || selectedThread.providerSessionId)) {
+      if (targetThread && (targetThread.status === 'running' || targetThread.providerSessionId)) {
         // Follow-up turn — session is still alive
-        await agentsApi.sendTurn(selectedThread.id, text)
+        await agentsApi.sendTurn(targetThread.id, {
+          message: text,
+          ...metadata,
+        })
         void refresh()
       } else if (
-        selectedThread &&
-        (selectedThread.status === 'completed' ||
-          selectedThread.status === 'error' ||
-          selectedThread.status === 'interrupted')
+        targetThread &&
+        (targetThread.status === 'completed' ||
+          targetThread.status === 'error' ||
+          targetThread.status === 'interrupted')
       ) {
         // Re-start the existing thread (worktree is still available)
         try {
-          const updated = await agentsApi.startThread(selectedThread.id, text)
+          const updated = await agentsApi.startThread(targetThread.id, {
+            message: text,
+            ...metadata,
+          })
           setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
           void refresh()
         } catch (startErr) {
           const code = (startErr as Error & { code?: string }).code
-          if (code === 'NODE_OFFLINE' && selectedRepo) {
-            const githubUrl = (selectedRepo as { githubUrl?: string | null }).githubUrl
+          if (code === 'NODE_OFFLINE' && targetRepo) {
+            const githubUrl = (targetRepo as { githubUrl?: string | null }).githubUrl
             if (githubUrl && confirm(
               'The desktop app is not connected. Clone the repo to the gateway and run the thread there?',
             )) {
-              const updated = await agentsApi.startThread(selectedThread.id, {
+              const updated = await agentsApi.startThread(targetThread.id, {
                 message: text,
                 cloneToGateway: true,
                 repoUrl: githubUrl,
+                ...metadata,
               })
               setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
               void refresh()
             } else if (!githubUrl) {
-              setError(buildRepositoryFallbackUnavailableMessage(selectedRepo, getRuntimeInfoForRepository(selectedRepo)))
+              setError(buildRepositoryFallbackUnavailableMessage(targetRepo, getRuntimeInfoForRepository(targetRepo)))
             }
           } else {
             throw startErr
           }
         }
       } else {
-        if (!selectedRepo) return
+        if (!targetRepo) return
 
         // Deselect so the user gets a fresh input immediately
-        setSelectedThreadId(null)
+        if (!threadId) {
+          setSelectedThreadId(null)
+        }
 
         // Capture repo values before going async (avoid stale closure)
-        const repo = selectedRepo
+        const repo = targetRepo
 
         // Fire-and-forget: create worktree → thread → start → title in background.
         // The thread appears in the sidebar via WS `thread.created` event,
@@ -616,8 +636,9 @@ export function useAutomation(enabled = true) {
             try {
               await agentsApi.startThread(thread.id, {
                 message: text,
-                titleTask: text,
+                titleTask: metadata.displayContent?.trim() || text,
                 titlePrefix: `[${repo.name}] `,
+                ...metadata,
               })
             } catch (startErr) {
               // If the desktop app is offline, offer to clone the repo to the gateway
@@ -629,10 +650,11 @@ export function useAutomation(enabled = true) {
                 )) {
                   await agentsApi.startThread(thread.id, {
                     message: text,
-                    titleTask: text,
+                    titleTask: metadata.displayContent?.trim() || text,
                     titlePrefix: `[${repo.name}] `,
                     cloneToGateway: true,
                     repoUrl: githubUrl,
+                    ...metadata,
                   })
                 } else if (!githubUrl) {
                   setError(buildRepositoryFallbackUnavailableMessage(repo, getRuntimeInfoForRepository(repo)))
@@ -648,7 +670,21 @@ export function useAutomation(enabled = true) {
         })()
       }
     },
-    [getRuntimeInfoForRepository, refresh, selectedRepo, selectedThread],
+    [getRuntimeInfoForRepository, getRepositoryForThread, refresh, selectedRepo, selectedThread, threads],
+  )
+
+  const handleSend = useCallback(
+    async (text: string, providerId: ProviderId = 'jait', model?: string | null, metadata?: ThreadMessageMetadata) => {
+      await sendThreadMessage(selectedThread?.id ?? null, text, providerId, model, metadata)
+    },
+    [selectedThread?.id, sendThreadMessage],
+  )
+
+  const handleSendToThread = useCallback(
+    async (threadId: string, text: string, providerId: ProviderId = 'jait', model?: string | null, metadata?: ThreadMessageMetadata) => {
+      await sendThreadMessage(threadId, text, providerId, model, metadata)
+    },
+    [sendThreadMessage],
   )
 
   const handleStop = useCallback(
@@ -711,6 +747,7 @@ export function useAutomation(enabled = true) {
     // Actions
     refresh,
     handleSend,
+    handleSendToThread,
     handleStop,
     handleDelete,
 

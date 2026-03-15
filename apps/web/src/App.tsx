@@ -54,6 +54,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
+import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ContextIndicator } from '@/components/chat/context-indicator'
 import { ConsentQueue } from '@/components/consent'
@@ -93,6 +94,12 @@ import { gitApi } from '@/lib/git-api'
 const API_URL = getApiUrl()
 
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
+
+type ManagerQueuedMessage = QueuedChatMessage & {
+  fullContent: string
+  referencedFiles?: ReferencedFile[]
+  attachments?: string[]
+}
 
 const suggestions = [
   'What can you help me with?',
@@ -877,6 +884,8 @@ function App() {
     setOnChangedFilesSync,
     refreshMessages,
   } = useChat(activeSessionId, token, onLoginRequired)
+  const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
+  const managerQueueProcessingRef = useRef(new Set<string>())
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals()
   const { provider, model } = useModelInfo()
 
@@ -911,6 +920,10 @@ function App() {
   const activeManagerThreads = useMemo(
     () => managerThreads.filter((thread) => thread.status === 'running'),
     [managerThreads],
+  )
+  const selectedManagerQueue = useMemo(
+    () => (automation.selectedThread ? managerMessageQueues[automation.selectedThread.id] ?? [] : []),
+    [automation.selectedThread, managerMessageQueues],
   )
   const managerCanCreateThread = automation.selectedRepo != null
   const managerComposerDisabled = automation.creating || !managerCanCreateThread
@@ -1270,11 +1283,12 @@ function App() {
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
-  const openRemoteWorkspaceOnGateway = useCallback(async (dirPath: string, nodeId?: string) => {
+  const openRemoteWorkspaceOnGateway = useCallback(async (dirPath: string, nodeId?: string, sessionIdOverride?: string | null) => {
+    const sessionId = sessionIdOverride ?? activeSessionId
     const res = await fetch(`${API_URL}/api/workspace/open`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ path: dirPath, sessionId: activeSessionId, nodeId: nodeId || 'gateway' }),
+      body: JSON.stringify({ path: dirPath, sessionId, nodeId: nodeId || 'gateway' }),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ message: 'Unknown error' }))
@@ -1295,6 +1309,27 @@ function App() {
       return
     }
 
+    if (viewMode === 'manager' && automation.selectedThread) {
+      const threadWorkspace = automation.selectedThread.workingDirectory ?? selectedThreadRepo?.localPath
+      if (threadWorkspace) {
+        if (activeWorkspace?.workspaceRoot === threadWorkspace) {
+          setShowWorkspace(true)
+          const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId }
+          setSavedWorkspace(state)
+          sendUIState('workspace.panel', state, activeSessionId)
+          return
+        }
+        let workspaceSessionId = activeSessionId
+        if (!workspaceSessionId) {
+          const session = await createSession()
+          workspaceSessionId = session?.id ?? null
+        }
+        if (!workspaceSessionId) return
+        await openRemoteWorkspaceOnGateway(threadWorkspace, selectedThreadRepo?.deviceId ?? undefined, workspaceSessionId)
+        return
+      }
+    }
+
     // If there's an existing remote workspace, just reopen the panel
     if (activeWorkspace) {
       setShowWorkspace(true)
@@ -1306,7 +1341,20 @@ function App() {
 
     // ── Open the folder picker dialog (browses the gateway's filesystem) ──
     setFolderPickerOpen(true)
-  }, [showWorkspace, activeWorkspace, closeWorkspacePanel, setSavedWorkspace, sendUIState, activeSessionId, openRemoteWorkspaceOnGateway, changedFiles.length])
+  }, [
+    showWorkspace,
+    activeWorkspace,
+    closeWorkspacePanel,
+    setSavedWorkspace,
+    sendUIState,
+    activeSessionId,
+    openRemoteWorkspaceOnGateway,
+    changedFiles.length,
+    viewMode,
+    automation.selectedThread,
+    selectedThreadRepo,
+    createSession,
+  ])
 
   // Auto-open workspace panel when a filesystem surface starts
   useEffect(() => {
@@ -1651,6 +1699,47 @@ function App() {
     return workspaceRef.current?.searchFiles(query, limit, signal) ?? []
   }, [])
 
+  const preparePromptSubmission = useCallback(async (rawValue: string, chipFiles?: ReferencedFile[]) => {
+    const text = rawValue.trim()
+    if (!text && (!chipFiles || chipFiles.length === 0)) return null
+
+    const fileContents: { path: string; content: string }[] = []
+    const attachments = new Set<string>()
+
+    if (chipFiles?.length) {
+      const seen = new Set<string>()
+      for (const chip of chipFiles) {
+        if (seen.has(chip.path)) continue
+        seen.add(chip.path)
+        attachments.add(chip.path)
+
+        const cached = workspaceFiles.find((file) => file.path === chip.path)
+        if (cached) {
+          fileContents.push({ path: cached.path, content: cached.content })
+          continue
+        }
+
+        const file = await workspaceRef.current?.readFileByPath(chip.path)
+        if (file) {
+          fileContents.push({ path: file.path, content: file.content })
+        }
+      }
+    }
+
+    const promptWithReferences = fileContents.length > 0
+      ? `${text}${text ? '\n\n' : ''}Referenced files:\n${fileContents
+        .map((file) => `- ${file.path}\n\`\`\`\n${file.content.slice(0, 2000)}\n\`\`\``)
+        .join('\n')}`
+      : text
+
+    return {
+      promptWithReferences,
+      displayContent: text,
+      referencedFiles: chipFiles?.length ? chipFiles.map((file) => ({ path: file.path, name: file.name })) : undefined,
+      attachments: attachments.size > 0 ? [...attachments] : undefined,
+    }
+  }, [workspaceFiles])
+
   /** Explicitly queue a message while the agent is busy. */
   const handleQueue = useCallback((_chipFiles?: ReferencedFile[]) => {
     if (!inputValue.trim()) return
@@ -1661,9 +1750,10 @@ function App() {
 
   const handleSubmit = async (chipFiles?: ReferencedFile[]) => {
     if (viewMode === 'manager') {
-      return handleManagerSubmit()
+      return handleManagerSubmit(chipFiles)
     }
-    if (!inputValue.trim() && (!chipFiles || chipFiles.length === 0)) return
+    const prepared = await preparePromptSubmission(inputValue, chipFiles)
+    if (!prepared) return
     if (!token) {
       setShowLoginDialog(true)
       return
@@ -1676,59 +1766,152 @@ function App() {
     }
     if (!sid) return
 
-    // Lazy-read content for inline chip files (@ mentions and drag-dropped)
-    const fileContents: { path: string; content: string }[] = []
-    if (chipFiles?.length) {
-      const seen = new Set<string>()
-      for (const chip of chipFiles) {
-        if (seen.has(chip.path)) continue
-        seen.add(chip.path)
-        // Check workspace files cache first
-        const cached = workspaceFiles.find((f) => f.path === chip.path)
-        if (cached) {
-          fileContents.push({ path: cached.path, content: cached.content })
-        } else {
-          // Lazy read from the filesystem via workspace panel
-          const file = await workspaceRef.current?.readFileByPath(chip.path)
-          if (file) {
-            fileContents.push({ path: file.path, content: file.content })
-          }
-        }
-      }
-    }
-
-    const promptWithReferences = fileContents.length > 0
-      ? `${inputValue.trim()}
-
-Referenced files:
-${fileContents
-        .map((file) => `- ${file.path}
-\`\`\`
-${file.content.slice(0, 2000)}
-\`\`\``)
-        .join('\n')}`
-      : inputValue.trim()
-    const displayContent = inputValue.trim()
-    const refs = chipFiles?.length ? chipFiles.map(f => ({ path: f.path, name: f.name })) : undefined
-    sendMessage(promptWithReferences, {
+    sendMessage(prepared.promptWithReferences, {
       token,
       sessionId: sid,
       mode: chatMode,
       provider: chatProvider,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
-      ...(refs ? { displayContent, referencedFiles: refs } : {}),
+      ...(prepared.referencedFiles ? {
+        displayContent: prepared.displayContent || prepared.promptWithReferences,
+        referencedFiles: prepared.referencedFiles,
+      } : {}),
     })
     setInputValue('')
   }
 
   /** Submit for Manager mode — delegate to the automation hook. */
-  const handleManagerSubmit = async () => {
-    const text = inputValue.trim()
-    if (!text || managerComposerDisabled) return
+  const handleManagerSubmit = async (chipFiles?: ReferencedFile[]) => {
+    const prepared = await preparePromptSubmission(inputValue, chipFiles)
+    if (!prepared || managerComposerDisabled) return
     setInputValue('')
-    await automation.handleSend(text, chatProvider, chatProvider !== 'jait' ? cliModel : undefined)
+    await automation.handleSend(
+      prepared.promptWithReferences,
+      chatProvider,
+      chatProvider !== 'jait' ? cliModel : undefined,
+      {
+        displayContent: prepared.displayContent || prepared.promptWithReferences,
+        referencedFiles: prepared.referencedFiles,
+        attachments: prepared.attachments,
+      },
+    )
   }
+
+  const enqueueManagerMessage = useCallback((threadId: string, item: ManagerQueuedMessage) => {
+    setManagerMessageQueues((prev) => ({
+      ...prev,
+      [threadId]: [...(prev[threadId] ?? []), item],
+    }))
+  }, [])
+
+  const dequeueManagerMessage = useCallback((threadId: string, id: string) => {
+    setManagerMessageQueues((prev) => {
+      const existing = prev[threadId] ?? []
+      const nextQueue = existing.filter((item) => item.id !== id)
+      if (nextQueue.length === existing.length) return prev
+      if (nextQueue.length === 0) {
+        const { [threadId]: _removed, ...rest } = prev
+        return rest
+      }
+      return { ...prev, [threadId]: nextQueue }
+    })
+  }, [])
+
+  const updateManagerQueueItem = useCallback((threadId: string, id: string, content: string) => {
+    const trimmed = content.trim()
+    if (!trimmed) return
+    setManagerMessageQueues((prev) => {
+      const existing = prev[threadId] ?? []
+      if (existing.length === 0) return prev
+      return {
+        ...prev,
+        [threadId]: existing.map((item) => item.id === id
+          ? {
+            ...item,
+            content: trimmed,
+            fullContent: trimmed,
+            referencedFiles: undefined,
+            attachments: undefined,
+          }
+          : item),
+      }
+    })
+  }, [])
+
+  const handleManagerQueue = useCallback(async (chipFiles?: ReferencedFile[]) => {
+    const thread = automation.selectedThread
+    if (!thread) return
+    const prepared = await preparePromptSubmission(inputValue, chipFiles)
+    if (!prepared) return
+    enqueueManagerMessage(thread.id, {
+      id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      content: prepared.displayContent || prepared.promptWithReferences,
+      fullContent: prepared.promptWithReferences,
+      referencedFiles: prepared.referencedFiles,
+      attachments: prepared.attachments,
+      queuedAt: Date.now(),
+    })
+    setInputValue('')
+  }, [automation.selectedThread, enqueueManagerMessage, inputValue, preparePromptSubmission])
+
+  useEffect(() => {
+    for (const [threadId, queue] of Object.entries(managerMessageQueues)) {
+      if (queue.length === 0 || managerQueueProcessingRef.current.has(threadId)) continue
+
+      const thread = automation.threads.find((candidate) => candidate.id === threadId)
+      if (!thread) {
+        setManagerMessageQueues((prev) => {
+          if (!(threadId in prev)) return prev
+          const { [threadId]: _removed, ...rest } = prev
+          return rest
+        })
+        continue
+      }
+      if (thread.status === 'running') continue
+
+      const [nextItem] = queue
+      if (!nextItem) continue
+
+      managerQueueProcessingRef.current.add(threadId)
+      setManagerMessageQueues((prev) => {
+        const existing = prev[threadId] ?? []
+        const [, ...restQueue] = existing
+        if (restQueue.length === 0) {
+          const { [threadId]: _removed, ...rest } = prev
+          return rest
+        }
+        return { ...prev, [threadId]: restQueue }
+      })
+
+      void automation.handleSendToThread(
+        threadId,
+        nextItem.fullContent,
+        chatProvider,
+        chatProvider !== 'jait' ? cliModel : undefined,
+        {
+          displayContent: nextItem.content,
+          referencedFiles: nextItem.referencedFiles,
+          attachments: nextItem.attachments,
+        },
+      ).catch((err) => {
+        setManagerMessageQueues((prev) => ({
+          ...prev,
+          [threadId]: [nextItem, ...(prev[threadId] ?? [])],
+        }))
+        automation.setError(err instanceof Error ? err.message : 'Failed to process queued thread message')
+      }).finally(() => {
+        managerQueueProcessingRef.current.delete(threadId)
+      })
+    }
+  }, [
+    automation.handleSendToThread,
+    automation.setError,
+    automation.threads,
+    chatProvider,
+    cliModel,
+    managerMessageQueues,
+  ])
 
   /** Move the selected repo to run on the gateway instead of its current device. */
   const handleMoveRepoToGateway = useCallback(async () => {
@@ -2374,23 +2557,25 @@ ${file.content.slice(0, 2000)}
               </Tooltip>
             )}
 
-            {/* Developer-only buttons */}
-            {viewMode === 'developer' && (
+            {/* Chat workspace / terminal controls */}
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && (
               <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={showTerminal ? 'secondary' : 'ghost'}
-                      size="sm"
-                      className="h-6 text-[11px] px-2 shrink-0"
-                      onClick={() => { void handleToggleTerminal() }}
-                    >
-                      <TerminalIcon className="h-3 w-3 mr-1" />
-                      Terminal
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
-                </Tooltip>
+                {viewMode === 'developer' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={showTerminal ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-6 text-[11px] px-2 shrink-0"
+                        onClick={() => { void handleToggleTerminal() }}
+                      >
+                        <TerminalIcon className="h-3 w-3 mr-1" />
+                        Terminal
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
+                  </Tooltip>
+                )}
 
                 {/* Workspace button with close-confirmation popover */}
                 <div className="relative flex items-center shrink-0">
@@ -2632,7 +2817,7 @@ ${file.content.slice(0, 2000)}
               </aside>
             )}
 
-            {viewMode === 'developer' && showDesktopWorkspace && !activeDiff && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && !activeDiff && (
               <WorkspacePanel
                 ref={workspaceRef}
                 autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
@@ -2652,7 +2837,7 @@ ${file.content.slice(0, 2000)}
               />
             )}
 
-            {viewMode === 'developer' && showDesktopWorkspace && activeDiff && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && activeDiff && (
               <aside className="flex-[4] min-w-0 border-r bg-background overflow-hidden flex flex-col">
                 <DiffView
                   filePath={activeDiff.filePath}
@@ -2667,7 +2852,7 @@ ${file.content.slice(0, 2000)}
 
 
 
-            {viewMode === 'developer' && showMobileWorkspace && !activeDiff && (showWorkspaceTree || showWorkspaceEditor) && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && !activeDiff && (showWorkspaceTree || showWorkspaceEditor) && (
               <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
                 <WorkspacePanel
                   ref={workspaceRef}
@@ -2690,7 +2875,7 @@ ${file.content.slice(0, 2000)}
             )}
 
             {/* Mobile: sticky show-panel buttons when workspace panels are hidden */}
-            {viewMode === 'developer' && showMobileWorkspace && !activeDiff && (!showWorkspaceTree || !showWorkspaceEditor) && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && !activeDiff && (!showWorkspaceTree || !showWorkspaceEditor) && (
               <div className="flex items-center gap-1 px-2 py-1.5 border-b bg-muted/20 shrink-0">
                 {!showWorkspaceTree && (
                   <button
@@ -2715,7 +2900,7 @@ ${file.content.slice(0, 2000)}
               </div>
             )}
 
-            {viewMode === 'developer' && showMobileWorkspace && activeDiff && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && activeDiff && (
               <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
                 <DiffView
                   filePath={activeDiff.filePath}
@@ -2733,7 +2918,41 @@ ${file.content.slice(0, 2000)}
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
                 {automation.selectedThread ? (
                   <>
-                    <Conversation className="min-h-0 flex-1 border-b" compact loading={automation.loadingActivities}>
+                    {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
+                      <div className="flex items-center gap-1 px-2 py-1 border-b bg-muted/20 shrink-0">
+                        {!showWorkspaceTree && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={showWorkspaceTreePanel}
+                                className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              >
+                                <Eye className="h-3 w-3" />
+                                <FolderTree className="h-3 w-3" />
+                                Show Files
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">Show file tree</TooltipContent>
+                          </Tooltip>
+                        )}
+                        {!showWorkspaceEditor && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <button
+                                onClick={showWorkspaceEditorPanel}
+                                className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                              >
+                                <Eye className="h-3 w-3" />
+                                <Code className="h-3 w-3" />
+                                Show Editor
+                              </button>
+                            </TooltipTrigger>
+                            <TooltipContent side="bottom">Show editor</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
+                    )}
+                    <Conversation className="min-h-0 flex-1 border-b" loading={automation.loadingActivities}>
                       {automationMessages.length === 0 && !automation.loadingActivities && (
                         <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
                       )}
@@ -2761,11 +2980,20 @@ ${file.content.slice(0, 2000)}
                             <span className="min-w-0 break-words">{automation.error}</span>
                           </div>
                         )}
+                        {selectedManagerQueue.length > 0 && automation.selectedThread && (
+                          <MessageQueue
+                            items={selectedManagerQueue}
+                            onRemove={(id) => dequeueManagerMessage(automation.selectedThread!.id, id)}
+                            onEdit={(id, content) => updateManagerQueueItem(automation.selectedThread!.id, id, content)}
+                            className="mb-2"
+                          />
+                        )}
                         <PromptInput
                           ref={promptInputRef}
                           value={inputValue}
                           onChange={setInputValue}
                           onSubmit={handleSubmit}
+                          onQueue={handleManagerQueue}
                           onStop={() => { if (automation.selectedThread) void automation.handleStop(automation.selectedThread.id) }}
                           isLoading={automation.selectedThread?.status === 'running'}
                           disabled={automation.creating}
@@ -2782,6 +3010,9 @@ ${file.content.slice(0, 2000)}
                           onCliModelChange={setCliModel}
                           repoRuntime={selectedThreadRepoRuntime}
                           onMoveToGateway={handleMoveRepoToGateway}
+                          availableFiles={availableFilesForMention}
+                          onSearchFiles={handleSearchFiles}
+                          workspaceOpen={showWorkspace}
                         />
                         <div className="flex items-center gap-2 px-1 mt-1.5">
                           {selectedThreadRepoRuntime && (
