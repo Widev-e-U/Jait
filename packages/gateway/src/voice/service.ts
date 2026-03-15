@@ -91,6 +91,30 @@ export class VoiceService {
   }
 
   /**
+   * Transcribe audio via a local Faster Whisper HTTP server.
+   * The server exposes POST /transcribe accepting raw WAV body.
+   * Returns the transcribed text or null on failure.
+   */
+  async transcribeViaWhisper(input: {
+    audioBase64: string;
+    whisperUrl: string;
+  }): Promise<string | null> {
+    const baseUrl = input.whisperUrl.replace(/\/+$/, "");
+    const url = `${baseUrl}/transcribe`;
+    const audioBuffer = Buffer.from(input.audioBase64, "base64");
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "audio/wav" },
+      body: audioBuffer,
+    });
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as { text?: string };
+    return data.text ?? null;
+  }
+
+  /**
    * Forward audio to a Home Assistant Wyoming/Whisper STT endpoint.
    * Returns the transcribed text or null on failure.
    */

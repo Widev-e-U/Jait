@@ -67,7 +67,35 @@ export function registerVoiceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "audioBase64 is required" });
     }
 
+    const sttProvider = typeof body["provider"] === "string" ? body["provider"] : "wyoming";
     const settings = users.getSettings(authUser.id);
+
+    if (sttProvider === "whisper") {
+      // ── Local Faster Whisper server transcription ─────────────
+      const whisperUrl = settings.apiKeys["WHISPER_URL"] || config.whisperUrl;
+
+      if (!whisperUrl) {
+        return reply.status(400).send({
+          error: "NOT_CONFIGURED",
+          details: "WHISPER_URL must be set in Settings → API keys or environment (default: http://localhost:8178)",
+        });
+      }
+
+      try {
+        const text = await voice.transcribeViaWhisper({ audioBase64, whisperUrl });
+        if (!text) {
+          return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: "No text returned from Faster Whisper" });
+        }
+
+        voice.transcribe({ sessionId, transcript: text });
+        return { text };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: msg });
+      }
+    }
+
+    // ── Wyoming / Home Assistant STT (default) ──────────────────
     const haUrl = settings.apiKeys["HA_URL"];
     const haToken = settings.apiKeys["HA_TOKEN"];
     const sttEntity = settings.apiKeys["HA_STT_ENTITY"] || undefined;

@@ -39,6 +39,7 @@ const API_KEY_FIELDS = [
   'PERPLEXITY_OPENROUTER_MODEL',
   'GROK_MODEL',
   'GEMINI_MODEL',
+  'WHISPER_URL',
   'HA_URL',
   'HA_TOKEN',
   'HA_STT_ENTITY',
@@ -414,10 +415,20 @@ export function SettingsPage({
             <SelectContent>
               <SelectItem value="simulated">Simuliert (Eingabe-Prompt)</SelectItem>
               <SelectItem value="browser">Browser (Web Speech API)</SelectItem>
+              <SelectItem value="whisper">Faster Whisper (lokal)</SelectItem>
               <SelectItem value="wyoming">Wyoming / Whisper (Home Assistant)</SelectItem>
             </SelectContent>
           </Select>
         </div>
+        {sttProvider === 'whisper' && (
+          <div className="space-y-3 max-w-sm border-l-2 border-primary/20 pl-4">
+            <p className="text-xs text-muted-foreground">
+              Uses a local Faster Whisper server for free, offline transcription.
+              Start the server with <code className="bg-muted px-1 py-0.5 rounded text-[10px]">python whisper-server/server.py</code> from the gateway package.
+              Optionally set <code className="bg-muted px-1 py-0.5 rounded text-[10px]">WHISPER_URL</code> in API keys below (defaults to <code className="bg-muted px-1 py-0.5 rounded text-[10px]">http://localhost:8178</code>).
+            </p>
+          </div>
+        )}
         {sttProvider === 'wyoming' && (
           <div className="space-y-3 max-w-sm border-l-2 border-primary/20 pl-4">
             <p className="text-xs text-muted-foreground">

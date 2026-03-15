@@ -43,6 +43,8 @@ export interface AppConfig {
   contextWindow: number;
   hookSecret: string;
   heartbeatCron: string;
+  /** URL of the local Faster Whisper server (default http://localhost:8178) */
+  whisperUrl: string;
 }
 
 /** Infer context window size from model name. Conservative defaults. */
@@ -89,5 +91,6 @@ export function loadConfig(): AppConfig {
     ) || inferContextWindow(process.env["OPENAI_MODEL"] ?? "gpt-4o"),
     hookSecret: process.env["HOOK_SECRET"] ?? "jait-hook-secret",
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
+    whisperUrl: process.env["WHISPER_URL"] ?? "http://192.168.178.60:8178",
   };
 }

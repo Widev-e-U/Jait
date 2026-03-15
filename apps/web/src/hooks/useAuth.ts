@@ -4,7 +4,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 const API_URL = getApiUrl()
 
 export type ThemeMode = 'light' | 'dark' | 'system'
-export type SttProvider = 'simulated' | 'browser' | 'wyoming'
+export type SttProvider = 'simulated' | 'browser' | 'wyoming' | 'whisper'
 export type ChatProvider = 'jait' | 'codex' | 'claude-code'
 
 interface User {

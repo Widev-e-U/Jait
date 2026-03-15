@@ -2378,8 +2378,8 @@ function App() {
 
     if (audioBlob.size === 0) return
 
-    if (settings.stt_provider === 'wyoming') {
-      // Convert to WAV and send to Wyoming/HA via backend
+    if (settings.stt_provider === 'wyoming' || settings.stt_provider === 'whisper') {
+      // Convert to WAV and send to backend
       setVoiceTranscribing(true)
       try {
         // Decode the webm blob to raw PCM, then re-encode as WAV
@@ -2402,17 +2402,21 @@ function App() {
             'Content-Type': 'application/json',
             Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({ audioBase64, sessionId: activeSessionId ?? 'voice-input' }),
+          body: JSON.stringify({
+            audioBase64,
+            sessionId: activeSessionId ?? 'voice-input',
+            provider: settings.stt_provider,
+          }),
         })
         const data = (await res.json()) as { text?: string; error?: string; details?: string }
         if (data.text) {
           const transcript = data.text
           setInputValue((prev) => (prev ? prev + ' ' + transcript : transcript))
         } else {
-          console.warn('Wyoming transcription failed:', data.details ?? data.error)
+          console.warn('Transcription failed:', data.details ?? data.error)
         }
       } catch (err) {
-        console.error('Wyoming transcription error:', err)
+        console.error('Transcription error:', err)
       } finally {
         setVoiceTranscribing(false)
       }
@@ -2514,7 +2518,7 @@ function App() {
       return
     }
 
-    // Wyoming provider: push-to-talk with MediaRecorder
+    // Wyoming / Whisper provider: push-to-talk with MediaRecorder
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
