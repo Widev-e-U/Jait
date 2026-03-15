@@ -87,6 +87,11 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
+import {
+  clampFloatingScreenSharePosition,
+  clampFloatingScreenShareSize,
+  getDefaultFloatingScreenSharePosition,
+} from '@/lib/floating-screen-share'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { agentsApi, type AgentThread, type ProviderId } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
@@ -732,8 +737,8 @@ function App() {
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
-  const floatingDragRef = useRef<{ startX: number; startY: number; posX: number; posY: number } | null>(null)
-  const floatingResizeRef = useRef<{ startX: number; startY: number; w: number; h: number } | null>(null)
+  const floatingDragRef = useRef<{ pointerId: number; startX: number; startY: number; posX: number; posY: number } | null>(null)
+  const floatingResizeRef = useRef<{ pointerId: number; startX: number; startY: number; w: number; h: number } | null>(null)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
   const [chatProvider, setChatProvider] = useState<ProviderId>(() => getStoredChatProvider())
@@ -791,58 +796,156 @@ function App() {
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
 
-  const getDefaultFloatingPos = useCallback(() => ({
-    x: window.innerWidth - floatingSSSize.w - 16,
-    y: window.innerHeight - floatingSSSize.h - 16,
-  }), [floatingSSSize])
+  const getFloatingViewport = useCallback(() => ({
+    width: window.innerWidth,
+    height: window.innerHeight,
+  }), [])
 
-  const onFloatingDragStart = useCallback((e: React.MouseEvent) => {
+  const getDefaultFloatingPos = useCallback((size = floatingSSSize) => (
+    getDefaultFloatingScreenSharePosition({
+      size,
+      viewport: getFloatingViewport(),
+    })
+  ), [floatingSSSize, getFloatingViewport])
+
+  const onFloatingDragStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'touch' && e.button !== 0) return
     e.preventDefault()
-    const pos = floatingSSPos.x < 0 ? getDefaultFloatingPos() : floatingSSPos
-    floatingDragRef.current = { startX: e.clientX, startY: e.clientY, posX: pos.x, posY: pos.y }
-    const onMove = (ev: MouseEvent) => {
-      if (!floatingDragRef.current) return
-      setFloatingSSPos({
-        x: Math.max(0, Math.min(window.innerWidth - 100, floatingDragRef.current.posX + ev.clientX - floatingDragRef.current.startX)),
-        y: Math.max(0, Math.min(window.innerHeight - 40, floatingDragRef.current.posY + ev.clientY - floatingDragRef.current.startY)),
-      })
+
+    const viewport = getFloatingViewport()
+    const nextSize = clampFloatingScreenShareSize({ size: floatingSSSize, viewport })
+    const nextPos = floatingSSPos.x < 0 || floatingSSPos.y < 0
+      ? getDefaultFloatingPos(nextSize)
+      : clampFloatingScreenSharePosition({ position: floatingSSPos, size: nextSize, viewport })
+
+    if (nextSize.w !== floatingSSSize.w || nextSize.h !== floatingSSSize.h) {
+      setFloatingSSSize(nextSize)
     }
-    const onUp = () => {
+    if (nextPos.x !== floatingSSPos.x || nextPos.y !== floatingSSPos.y) {
+      setFloatingSSPos(nextPos)
+    }
+
+    floatingDragRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      posX: nextPos.x,
+      posY: nextPos.y,
+    }
+
+    const onMove = (ev: PointerEvent) => {
+      if (!floatingDragRef.current || floatingDragRef.current.pointerId !== ev.pointerId) return
+      setFloatingSSPos(clampFloatingScreenSharePosition({
+        position: {
+          x: floatingDragRef.current.posX + ev.clientX - floatingDragRef.current.startX,
+          y: floatingDragRef.current.posY + ev.clientY - floatingDragRef.current.startY,
+        },
+        size: nextSize,
+        viewport: getFloatingViewport(),
+      }))
+    }
+    const onUp = (ev: PointerEvent) => {
+      if (!floatingDragRef.current || floatingDragRef.current.pointerId !== ev.pointerId) return
       floatingDragRef.current = null
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-    document.body.style.cursor = 'move'
-    document.body.style.userSelect = 'none'
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }, [floatingSSPos, getDefaultFloatingPos])
 
-  const onFloatingResizeStart = useCallback((e: React.MouseEvent) => {
+    if (e.pointerType !== 'touch') {
+      document.body.style.cursor = 'move'
+    }
+    document.body.style.userSelect = 'none'
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
+  }, [floatingSSPos, floatingSSSize, getDefaultFloatingPos, getFloatingViewport])
+
+  const onFloatingResizeStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== 'touch' && e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
-    floatingResizeRef.current = { startX: e.clientX, startY: e.clientY, w: floatingSSSize.w, h: floatingSSSize.h }
-    const onMove = (ev: MouseEvent) => {
-      if (!floatingResizeRef.current) return
-      setFloatingSSSize({
-        w: Math.max(280, Math.min(window.innerWidth - 40, floatingResizeRef.current.w + ev.clientX - floatingResizeRef.current.startX)),
-        h: Math.max(200, Math.min(window.innerHeight - 40, floatingResizeRef.current.h + ev.clientY - floatingResizeRef.current.startY)),
-      })
+
+    const viewport = getFloatingViewport()
+    const nextSize = clampFloatingScreenShareSize({ size: floatingSSSize, viewport })
+    if (nextSize.w !== floatingSSSize.w || nextSize.h !== floatingSSSize.h) {
+      setFloatingSSSize(nextSize)
     }
-    const onUp = () => {
+
+    floatingResizeRef.current = {
+      pointerId: e.pointerId,
+      startX: e.clientX,
+      startY: e.clientY,
+      w: nextSize.w,
+      h: nextSize.h,
+    }
+
+    const onMove = (ev: PointerEvent) => {
+      if (!floatingResizeRef.current || floatingResizeRef.current.pointerId !== ev.pointerId) return
+      const resized = clampFloatingScreenShareSize({
+        size: {
+          w: floatingResizeRef.current.w + ev.clientX - floatingResizeRef.current.startX,
+          h: floatingResizeRef.current.h + ev.clientY - floatingResizeRef.current.startY,
+        },
+        viewport: getFloatingViewport(),
+      })
+      setFloatingSSSize(resized)
+      setFloatingSSPos((prev) => (
+        prev.x < 0 || prev.y < 0
+          ? prev
+          : clampFloatingScreenSharePosition({
+            position: prev,
+            size: resized,
+            viewport: getFloatingViewport(),
+          })
+      ))
+    }
+    const onUp = (ev: PointerEvent) => {
+      if (!floatingResizeRef.current || floatingResizeRef.current.pointerId !== ev.pointerId) return
       floatingResizeRef.current = null
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
+      document.removeEventListener('pointermove', onMove)
+      document.removeEventListener('pointerup', onUp)
+      document.removeEventListener('pointercancel', onUp)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
     }
-    document.body.style.cursor = 'nwse-resize'
+
+    if (e.pointerType !== 'touch') {
+      document.body.style.cursor = 'nwse-resize'
+    }
     document.body.style.userSelect = 'none'
-    document.addEventListener('mousemove', onMove)
-    document.addEventListener('mouseup', onUp)
-  }, [floatingSSSize])
+    document.addEventListener('pointermove', onMove)
+    document.addEventListener('pointerup', onUp)
+    document.addEventListener('pointercancel', onUp)
+  }, [floatingSSSize, getFloatingViewport])
+
+  useEffect(() => {
+    if (!showScreenShare) return
+
+    const syncFloatingScreenShareBounds = () => {
+      const viewport = getFloatingViewport()
+      const nextSize = clampFloatingScreenShareSize({ size: floatingSSSize, viewport })
+      if (nextSize.w !== floatingSSSize.w || nextSize.h !== floatingSSSize.h) {
+        setFloatingSSSize(nextSize)
+      }
+      if (floatingSSPos.x >= 0 && floatingSSPos.y >= 0) {
+        const nextPos = clampFloatingScreenSharePosition({
+          position: floatingSSPos,
+          size: nextSize,
+          viewport,
+        })
+        if (nextPos.x !== floatingSSPos.x || nextPos.y !== floatingSSPos.y) {
+          setFloatingSSPos(nextPos)
+        }
+      }
+    }
+
+    syncFloatingScreenShareBounds()
+    window.addEventListener('resize', syncFloatingScreenShareBounds)
+    return () => window.removeEventListener('resize', syncFloatingScreenShareBounds)
+  }, [showScreenShare, floatingSSPos, floatingSSSize, getFloatingViewport])
 
   const {
     user,
