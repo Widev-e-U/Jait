@@ -28,6 +28,13 @@
     --scrollbar-track: 210 18% 88%;
     --scrollbar-thumb: 210 10% 62%;
     --scrollbar-thumb-hover: 210 12% 50%;
+    --toast-bg: 210 22% 97% / 0.96;
+    --toast-border: 210 16% 80% / 0.92;
+    --toast-shadow: 0 18px 44px -24px hsl(215 32% 22% / 0.24), 0 10px 22px -18px hsl(215 28% 18% / 0.16);
+    --toast-success-accent: 142 59% 40%;
+    --toast-info-accent: 217 91% 60%;
+    --toast-warning-accent: 35 92% 52%;
+    --toast-error-accent: 0 76% 57%;
 
     /* Context indicator category colors */
     --ctx-system: #6366f1;
@@ -60,6 +67,13 @@
     --scrollbar-track: 0 0% 17%;
     --scrollbar-thumb: 0 0% 36%;
     --scrollbar-thumb-hover: 0 0% 48%;
+    --toast-bg: 0 0% 18% / 0.97;
+    --toast-border: 0 0% 27% / 0.94;
+    --toast-shadow: 0 24px 60px -30px hsl(0 0% 0% / 0.68), 0 12px 28px -20px hsl(0 0% 0% / 0.5);
+    --toast-success-accent: 142 45% 54%;
+    --toast-info-accent: 214 90% 67%;
+    --toast-warning-accent: 38 92% 58%;
+    --toast-error-accent: 0 72% 64%;
 
     /* Context indicator category colors — brighter for dark bg */
     --ctx-system: #818cf8;
@@ -104,21 +118,100 @@
   }
 
   [data-sonner-toaster] {
-    --normal-bg: hsl(var(--popover));
-    --normal-border: hsl(var(--border));
+    --normal-bg: hsl(var(--toast-bg));
+    --normal-border: hsl(var(--toast-border));
     --normal-text: hsl(var(--popover-foreground));
-    --success-bg: hsl(var(--popover));
-    --success-border: hsl(var(--border));
+    --success-bg: hsl(var(--toast-bg));
+    --success-border: hsl(var(--toast-success-accent) / 0.34);
     --success-text: hsl(var(--popover-foreground));
-    --info-bg: hsl(var(--popover));
-    --info-border: hsl(var(--border));
+    --info-bg: hsl(var(--toast-bg));
+    --info-border: hsl(var(--toast-info-accent) / 0.34);
     --info-text: hsl(var(--popover-foreground));
-    --warning-bg: hsl(var(--popover));
-    --warning-border: hsl(var(--border));
+    --warning-bg: hsl(var(--toast-bg));
+    --warning-border: hsl(var(--toast-warning-accent) / 0.38);
     --warning-text: hsl(var(--popover-foreground));
-    --error-bg: hsl(var(--popover));
-    --error-border: hsl(var(--destructive) / 0.45);
+    --error-bg: hsl(var(--toast-bg));
+    --error-border: hsl(var(--toast-error-accent) / 0.42);
     --error-text: hsl(var(--popover-foreground));
+  }
+
+  [data-sonner-toast] {
+    position: relative;
+    border-radius: calc(var(--radius) + 0.25rem) !important;
+    border-color: hsl(var(--toast-border)) !important;
+    background: hsl(var(--toast-bg)) !important;
+    box-shadow: var(--toast-shadow) !important;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+  }
+
+  [data-sonner-toast]::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    width: 4px;
+    border-radius: inherit;
+    background: hsl(var(--border));
+    opacity: 0.7;
+  }
+
+  [data-sonner-toast][data-type='success']::before {
+    background: hsl(var(--toast-success-accent));
+  }
+
+  [data-sonner-toast][data-type='info']::before {
+    background: hsl(var(--toast-info-accent));
+  }
+
+  [data-sonner-toast][data-type='warning']::before {
+    background: hsl(var(--toast-warning-accent));
+  }
+
+  [data-sonner-toast][data-type='error']::before {
+    background: hsl(var(--toast-error-accent));
+  }
+
+  [data-sonner-toast] [data-title] {
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  [data-sonner-toast] [data-description] {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+
+  [data-sonner-toast] [data-icon] {
+    color: hsl(var(--muted-foreground));
+  }
+
+  [data-sonner-toast][data-type='success'] [data-icon] {
+    color: hsl(var(--toast-success-accent));
+  }
+
+  [data-sonner-toast][data-type='info'] [data-icon] {
+    color: hsl(var(--toast-info-accent));
+  }
+
+  [data-sonner-toast][data-type='warning'] [data-icon] {
+    color: hsl(var(--toast-warning-accent));
+  }
+
+  [data-sonner-toast][data-type='error'] [data-icon] {
+    color: hsl(var(--toast-error-accent));
+  }
+
+  [data-sonner-toast] [data-button],
+  [data-sonner-toast] [data-cancel] {
+    border-radius: calc(var(--radius) - 0.05rem) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    background: hsl(var(--secondary)) !important;
+    color: hsl(var(--secondary-foreground)) !important;
+  }
+
+  [data-sonner-toast] [data-close-button] {
+    border: 1px solid hsl(var(--border)) !important;
+    background: hsl(var(--secondary)) !important;
+    color: hsl(var(--muted-foreground)) !important;
   }
 
   /* Safe-area inset utilities for devices with camera cutouts / notches */
