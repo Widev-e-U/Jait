@@ -373,12 +373,17 @@ export function useAutomation(enabled = true) {
   const repoThreads = useMemo(
     () =>
       selectedRepo
-        ? threads.filter((t) => threadBelongsToRepository(t, selectedRepo))
+        ? threads
+            .filter((t) => threadBelongsToRepository(t, selectedRepo))
+            .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime())
         : [],
     [threads, selectedRepo],
   )
 
   const prStateRequestRef = useRef(0)
+
+  /** Max threads to poll for PR state — keeps FsNode / gh load bounded. */
+  const PR_POLL_LIMIT = 10
 
   useEffect(() => {
     if (!enabled || !selectedRepo) {
@@ -388,7 +393,10 @@ export function useAutomation(enabled = true) {
 
     const requestId = ++prStateRequestRef.current
     const repoPath = selectedRepo.localPath
-    const threadsWithBranch = repoThreads.filter((t) => typeof t.branch === 'string' && t.branch.length > 0)
+    // Only poll the N most recent threads that have a branch
+    const threadsWithBranch = repoThreads
+      .filter((t) => typeof t.branch === 'string' && t.branch.length > 0)
+      .slice(0, PR_POLL_LIMIT)
 
     const loadPrStates = async () => {
       if (threadsWithBranch.length === 0) {

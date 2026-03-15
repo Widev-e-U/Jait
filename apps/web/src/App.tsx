@@ -905,6 +905,13 @@ function App() {
     () => [...automation.threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [automation.threads],
   )
+  const THREAD_DISPLAY_LIMIT = 10
+  const [showAllThreads, setShowAllThreads] = useState(false)
+  const visibleManagerThreads = useMemo(
+    () => showAllThreads ? managerThreads : managerThreads.slice(0, THREAD_DISPLAY_LIMIT),
+    [managerThreads, showAllThreads],
+  )
+  const hasHiddenThreads = managerThreads.length > THREAD_DISPLAY_LIMIT && !showAllThreads
   const selectedRepoRuntime = useMemo(
     () => (automation.selectedRepo ? automation.getRuntimeInfoForRepository(automation.selectedRepo) : null),
     [automation.getRuntimeInfoForRepository, automation.selectedRepo],
@@ -3123,7 +3130,7 @@ function App() {
                             </div>
                           ) : (
                             <div className="flex flex-col">
-                              {managerThreads.map((thread) => {
+                              {visibleManagerThreads.map((thread) => {
                                 const threadRepo = automation.getRepositoryForThread(thread)
                                 const repoName = threadRepo?.name ?? inferThreadRepositoryName(thread) ?? 'Unknown repo'
                                 return (
@@ -3140,6 +3147,22 @@ function App() {
                                   />
                                 )
                               })}
+                              {hasHiddenThreads && (
+                                <button
+                                  className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  onClick={() => setShowAllThreads(true)}
+                                >
+                                  Show {managerThreads.length - THREAD_DISPLAY_LIMIT} more threads
+                                </button>
+                              )}
+                              {showAllThreads && managerThreads.length > THREAD_DISPLAY_LIMIT && (
+                                <button
+                                  className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  onClick={() => setShowAllThreads(false)}
+                                >
+                                  Show less
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
