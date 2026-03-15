@@ -110,7 +110,7 @@ export function Conversation({ children, className, compact, loading }: Conversa
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
-                  <div className={cn('mx-auto', compact ? 'max-w-none px-4' : 'max-w-3xl px-4')}>
+                  <div className={cn('mx-auto', 'max-w-3xl px-4')}>
                     {child}
                   </div>
                 </div>
