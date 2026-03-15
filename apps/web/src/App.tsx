@@ -502,6 +502,21 @@ function ManagerThreadListItem({
               <span className="truncate font-mono">{thread.branch}</span>
             </>
           )}
+          {thread.providerId && thread.providerId !== 'jait' && (
+            <>
+              <span>·</span>
+              <span className="truncate">{thread.providerId}</span>
+            </>
+          )}
+          {thread.executionNodeName && (
+            <>
+              <span>·</span>
+              <span className="truncate text-blue-500 dark:text-blue-400">
+                <Monitor className="inline h-3 w-3 mr-0.5 -mt-px" />
+                {thread.executionNodeName}
+              </span>
+            </>
+          )}
           {prState && (
             <>
               <span>·</span>
@@ -638,6 +653,17 @@ function ManagerActiveThreadsMenu({
                     {thread.branch && (
                       <Badge variant="outline" className="h-4 px-1 py-0 font-mono text-[9px]">
                         {thread.branch}
+                      </Badge>
+                    )}
+                    {thread.providerId && thread.providerId !== 'jait' && (
+                      <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
+                        {thread.providerId}
+                      </Badge>
+                    )}
+                    {thread.executionNodeName && (
+                      <Badge variant="outline" className="h-4 px-1 py-0 text-[9px] text-blue-500 dark:text-blue-400 border-blue-200 dark:border-blue-800">
+                        <Monitor className="inline h-2.5 w-2.5 mr-0.5" />
+                        {thread.executionNodeName}
                       </Badge>
                     )}
                     <ThreadPrBadge prState={thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState} />
@@ -911,6 +937,7 @@ function App() {
     changedFiles,
     messageQueue,
     contextUsage,
+    sessionInfo,
     sendMessage,
     restartFromMessage,
     cancelRequest,
@@ -2912,6 +2939,7 @@ function App() {
                   onSelect={switchSession}
                   onCreate={() => createSession()}
                   onArchive={archiveSession}
+                  sessionInfo={sessionInfo}
                 />
               </aside>
             )}
@@ -3301,6 +3329,7 @@ function App() {
                     availableFiles={availableFilesForMention}
                     onSearchFiles={handleSearchFiles}
                     workspaceOpen={showWorkspace}
+                    sessionInfo={sessionInfo}
                   />
                 </div>
               </div>
@@ -3453,6 +3482,7 @@ function App() {
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}
                       workspaceOpen={showWorkspace}
+                      sessionInfo={sessionInfo}
                     />
                     <div className="flex items-center justify-between gap-2 px-1">
                       <div className="flex items-center gap-2 min-w-0">

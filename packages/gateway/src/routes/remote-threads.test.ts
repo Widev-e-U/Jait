@@ -1,25 +1,23 @@
 /**
- * End-to-end test for the remote workspace sync flow.
+ * End-to-end test for the remote provider flow.
  *
- * Simulates a scenario where the gateway runs on Linux (.60) and a
- * desktop node is connected via WS with files at a Windows path.
- * CLI providers (codex) run locally on the gateway against a workspace
- * mirror pulled via WorkspaceSync.
+ * Simulates a scenario where the gateway runs on Linux (.60) and the
+ * Codex provider runs on a remote Windows desktop connected via WS.
  *
  * The mock WsControlPlane fakes:
  *  - A remote FsNode (Windows, platform "windows", has "codex" provider)
- *  - proxyFsOp: handles git operations and file operations (list, stat, read, write)
- *
- * The mock codex provider fires events locally (no remote provider proxy).
+ *  - proxyFsOp: handles git operations (create-branch, create-worktree, status)
+ *  - proxyProviderOp: handles start-session, send-turn, stop-session
+ *  - onRemoteProviderEvent: callback that receives events from the "child process"
  *
  * The test verifies the complete lifecycle:
  *  1. Create a branch on the remote device via git route
  *  2. Create a worktree on the remote device via git route
  *  3. Create a thread pointing to the remote working directory
- *  4. Start the thread → gateway syncs workspace via WorkspaceSync → starts local provider
+ *  4. Start the thread → gateway creates RemoteCliProvider → proxies to remote
  *  5. Title generation turn fires events → title updates
  *  6. Coding turn fires events → activities logged
- *  7. turn.completed → thread marked completed, files pushed back
+ *  7. turn.completed → thread marked completed
  *  8. Activities are persisted and retrievable
  */
 
@@ -34,14 +32,13 @@ import { registerThreadRoutes } from "./threads.js";
 import { registerGitRoutes } from "./git.js";
 import type { FsNode } from "@jait/shared";
 import type { WsControlPlane } from "../ws.js";
-import type { CliProviderAdapter, ProviderEvent, ProviderSession, ProviderInfo, ProviderId, StartSessionOptions } from "../providers/contracts.js";
 
 // ── Mock WsControlPlane ──────────────────────────────────────────────
 
 /**
  * Creates a mock WsControlPlane that simulates a remote Windows desktop
- * node. The mock intercepts fs proxy calls for git and file operations
- * (used by WorkspaceSync).
+ * node with a codex provider. The mock intercepts proxy calls and fires
+ * provider events to simulate the full remote flow.
  */
 function createMockWsControlPlane() {
   const remoteNodeId = "desktop-win-001";
@@ -55,14 +52,15 @@ function createMockWsControlPlane() {
     registeredAt: new Date().toISOString(),
   };
 
-  // Track proxy calls for assertions
+  // Track the onRemoteProviderEvent callback — RemoteCliProvider sets this
+  let onRemoteProviderEvent: ((sessionId: string, event: unknown) => void) | undefined;
+
+  // Track pending provider ops for assertions
+  const providerOpCalls: Array<{ op: string; params: Record<string, unknown> }> = [];
   const fsOpCalls: Array<{ op: string; params: Record<string, unknown> }> = [];
 
-  // Fake remote filesystem: map of path → content
-  const remoteFiles: Map<string, string> = new Map([
-    ["E:\\Projects\\MyApp\\package.json", '{"name":"my-app","version":"1.0.0"}'],
-    ["E:\\Projects\\MyApp\\src\\index.ts", 'console.log("hello");'],
-  ]);
+  // State: which provider thread ID was returned
+  let currentProviderThreadId = "remote-thread-123";
 
   const mock = {
     // ── FsNode queries ─────────────────────────────────────────────
@@ -107,130 +105,75 @@ function createMockWsControlPlane() {
             branch: newBranch,
           } as T;
         }
-        // ── File operations for WorkspaceSync ────────────────────────
-        case "list": {
-          const dirPath = String(params.path);
-          const entries: string[] = [];
-          const seen = new Set<string>();
-          for (const key of remoteFiles.keys()) {
-            if (!key.startsWith(dirPath + "\\")) continue;
-            const rel = key.slice(dirPath.length + 1);
-            const parts = rel.split("\\");
-            const entry = parts[0]!;
-            if (seen.has(entry)) continue;
-            seen.add(entry);
-            // If there are more parts, it's a directory
-            entries.push(parts.length > 1 ? entry + "/" : entry);
-          }
-          return entries as T;
-        }
-        case "stat": {
-          const filePath = String(params.path);
-          const content = remoteFiles.get(filePath);
-          if (content !== undefined) {
-            return { size: content.length } as T;
-          }
-          throw new Error(`ENOENT: ${filePath}`);
-        }
-        case "read": {
-          const filePath = String(params.path);
-          const content = remoteFiles.get(filePath);
-          if (content !== undefined) {
-            return { content } as T;
-          }
-          throw new Error(`ENOENT: ${filePath}`);
-        }
-        case "write": {
-          const filePath = String(params.path);
-          const content = String(params.content);
-          remoteFiles.set(filePath, content);
-          return { ok: true } as T;
-        }
         default:
           throw new Error(`Unexpected fs op in test: ${op}`);
       }
     }),
 
+    // ── Provider operation proxy ───────────────────────────────────
+    proxyProviderOp: vi.fn(async <T = unknown>(
+      _nodeId: string,
+      op: string,
+      params: Record<string, unknown>,
+      _timeoutMs?: number,
+    ): Promise<T> => {
+      providerOpCalls.push({ op, params });
+
+      switch (op) {
+        case "list-models":
+          return [] as T;
+
+        case "start-session":
+          return {
+            ok: true,
+            providerThreadId: currentProviderThreadId,
+          } as T;
+
+        case "send-turn":
+          // The mock doesn't auto-fire events here — tests call
+          // fireRemoteEvents() to simulate the child process emitting.
+          return { ok: true } as T;
+
+        case "stop-session":
+          return { ok: true } as T;
+
+        default:
+          throw new Error(`Unexpected provider op in test: ${op}`);
+      }
+    }),
+
+    // ── Provider event callback ────────────────────────────────────
+    get onRemoteProviderEvent() { return onRemoteProviderEvent; },
+    set onRemoteProviderEvent(fn: ((sessionId: string, event: unknown) => void) | undefined) {
+      onRemoteProviderEvent = fn;
+    },
+
     // ── Broadcasting (no-op for tests) ─────────────────────────────
     broadcastAll: vi.fn(),
 
     // ── Test helpers ───────────────────────────────────────────────
+
+    /** Simulate the remote child process emitting events */
+    fireRemoteEvents(sessionId: string, events: Array<{ method: string; params?: Record<string, unknown> }>) {
+      for (const event of events) {
+        if (onRemoteProviderEvent) {
+          onRemoteProviderEvent(sessionId, event);
+        }
+      }
+    },
+
+    /** Access recorded calls for assertions */
+    providerOpCalls,
     fsOpCalls,
     remoteNodeId,
-    remoteFiles,
   } as unknown as WsControlPlane & {
+    fireRemoteEvents: (sessionId: string, events: Array<{ method: string; params?: Record<string, unknown> }>) => void;
+    providerOpCalls: Array<{ op: string; params: Record<string, unknown> }>;
     fsOpCalls: Array<{ op: string; params: Record<string, unknown> }>;
     remoteNodeId: string;
-    remoteFiles: Map<string, string>;
   };
 
   return mock;
-}
-
-/**
- * Creates a mock CliProviderAdapter that simulates a local codex provider.
- * Events can be fired programmatically via fireEvent().
- */
-function createMockProvider(id: ProviderId = "codex" as ProviderId) {
-  const eventHandlers: Array<(event: ProviderEvent) => void> = [];
-  let sessionCounter = 0;
-
-  const provider: CliProviderAdapter & {
-    fireEvent: (event: ProviderEvent) => void;
-    startCalls: StartSessionOptions[];
-    sendCalls: Array<{ sessionId: string; message: string }>;
-  } = {
-    id,
-    info: {
-      id,
-      name: "Mock Codex",
-      description: "Mock provider",
-      available: true,
-      modes: ["full-access", "supervised"],
-    } as ProviderInfo,
-
-    startCalls: [],
-    sendCalls: [],
-
-    async checkAvailability() {
-      return true;
-    },
-
-    async startSession(options: StartSessionOptions): Promise<ProviderSession> {
-      provider.startCalls.push(options);
-      sessionCounter++;
-      const sessionId = `mock-session-${sessionCounter}`;
-      return {
-        id: sessionId,
-        providerId: id,
-        threadId: options.threadId,
-      };
-    },
-
-    async sendTurn(sessionId: string, message: string) {
-      provider.sendCalls.push({ sessionId, message });
-    },
-
-    async interruptTurn() {},
-    async respondToApproval() {},
-    async stopSession() {},
-
-    onEvent(handler: (event: ProviderEvent) => void) {
-      eventHandlers.push(handler);
-      return () => {
-        const idx = eventHandlers.indexOf(handler);
-        if (idx >= 0) eventHandlers.splice(idx, 1);
-      };
-    },
-
-    fireEvent(event: ProviderEvent) {
-      for (const handler of eventHandlers) {
-        handler(event);
-      }
-    },
-  };
-
-  return provider;
 }
 
 // ── Test setup ───────────────────────────────────────────────────────
@@ -248,7 +191,6 @@ describe("remote provider e2e flow", () => {
   let sqlite: ReturnType<typeof openDatabase>["sqlite"];
   let threadService: ThreadService;
   let mockWs: ReturnType<typeof createMockWsControlPlane>;
-  let mockProvider: ReturnType<typeof createMockProvider>;
   let headers: Record<string, string>;
   let config: ReturnType<typeof loadConfig> & { jwtSecret: string };
 
@@ -261,11 +203,10 @@ describe("remote provider e2e flow", () => {
     config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" } as typeof config;
     threadService = new ThreadService(opened.db);
     mockWs = createMockWsControlPlane();
-    mockProvider = createMockProvider();
 
     const providerRegistry = new ProviderRegistry();
-    // Register a local mock codex provider — CLI providers always run on the gateway
-    providerRegistry.register(mockProvider);
+    // Note: NOT registering a local codex provider — the remote provider
+    // should be created dynamically in the /start handler.
 
     registerThreadRoutes(app, config, {
       threadService,
@@ -356,7 +297,7 @@ describe("remote provider e2e flow", () => {
 
   // ── Test: Full thread lifecycle with remote provider ─────────────
 
-  it("runs a complete remote thread lifecycle: start → sync → events → activities → complete", async () => {
+  it("runs a complete remote thread lifecycle: start → events → activities → complete", async () => {
     // Step 1: Create a thread pointing to a remote Windows path
     const createRes = await app.inject({
       method: "POST",
@@ -373,7 +314,7 @@ describe("remote provider e2e flow", () => {
     expect(createRes.statusCode).toBe(201);
     const thread = createRes.json() as { id: string };
 
-    // Step 2: Start the thread → should sync workspace locally and start local provider
+    // Step 2: Start the thread → should create a RemoteCliProvider
     const startRes = await app.inject({
       method: "POST",
       url: `/api/threads/${thread.id}/start`,
@@ -392,59 +333,57 @@ describe("remote provider e2e flow", () => {
 
     const sessionId = started.providerSessionId;
 
-    // Verify workspace was synced (list/read calls were made to remote node)
-    const listCalls = mockWs.fsOpCalls.filter((c) => c.op === "list");
-    expect(listCalls.length).toBeGreaterThan(0);
-    const readCalls = mockWs.fsOpCalls.filter((c) => c.op === "read");
-    expect(readCalls.length).toBeGreaterThan(0);
+    // Verify provider operations were proxied: start-session was called
+    const startCalls = mockWs.providerOpCalls.filter((c) => c.op === "start-session");
+    expect(startCalls.length).toBe(1);
+    expect(startCalls[0]!.params.workingDirectory).toBe(REMOTE_CWD);
+    expect(startCalls[0]!.params.providerId).toBe("codex");
 
-    // Verify provider was started locally with the synced local path
-    expect(mockProvider.startCalls.length).toBe(1);
-    // The working directory should be the local mirror, not the remote path
-    expect(mockProvider.startCalls[0]!.workingDirectory).not.toBe(REMOTE_CWD);
-    expect(mockProvider.startCalls[0]!.workingDirectory).toContain(".jait");
-
-    // Wait for background title gen + coding turn to fire send-turn
+    // The /start handler fires title generation + coding turn in background.
+    // Wait a tick for the async background task to call send-turn.
     await new Promise((r) => setTimeout(r, 100));
 
-    // Verify send-turn was called locally (title gen is the first turn for codex)
-    expect(mockProvider.sendCalls.length).toBeGreaterThanOrEqual(1);
+    // Verify send-turn was called (title gen is the first turn for codex)
+    const sendCalls = mockWs.providerOpCalls.filter((c) => c.op === "send-turn");
+    expect(sendCalls.length).toBeGreaterThanOrEqual(1);
 
-    // Step 3: Simulate title generation turn events from the local provider
-    mockProvider.fireEvent({ type: "token", sessionId, content: "Add Error " });
-    mockProvider.fireEvent({ type: "token", sessionId, content: "Handling" });
-    mockProvider.fireEvent({ type: "turn.completed", sessionId });
+    // Step 3: Simulate title generation turn events from the remote child
+    mockWs.fireRemoteEvents(sessionId, [
+      { method: "item/agentMessage/delta", params: { delta: "Add Error " } },
+      { method: "item/agentMessage/delta", params: { delta: "Handling" } },
+      { method: "turn/completed" },
+    ]);
 
     // Allow time for title gen to complete and coding turn to fire
     await new Promise((r) => setTimeout(r, 200));
 
     // The title turn's turn.completed should have been suppressed (not marking thread completed).
     // The coding turn send-turn should have been called.
-    expect(mockProvider.sendCalls.length).toBe(2); // title gen turn + coding turn
+    const allSendCalls = mockWs.providerOpCalls.filter((c) => c.op === "send-turn");
+    expect(allSendCalls.length).toBe(2); // title gen turn + coding turn
 
     // Verify title was updated (normalized from "Add Error Handling")
     const threadAfterTitle = threadService.getById(thread.id);
     expect(threadAfterTitle?.title).toContain("[MyApp]");
     expect(threadAfterTitle?.title).toContain("Error Handling");
 
-    // Step 4: Simulate coding turn events from the local provider
-    mockProvider.fireEvent({
-      type: "tool.start",
-      sessionId,
-      tool: "terminal.run",
-      args: { command: "echo hello" },
-      callId: "call-1",
-    });
-    mockProvider.fireEvent({
-      type: "tool.result",
-      sessionId,
-      tool: "terminal.run",
-      ok: true,
-      result: "hello",
-      callId: "call-1",
-    });
-    mockProvider.fireEvent({ type: "token", sessionId, content: "I've added error handling." });
-    mockProvider.fireEvent({ type: "turn.completed", sessionId });
+    // Step 4: Simulate coding turn events from the remote child
+    mockWs.fireRemoteEvents(sessionId, [
+      {
+        method: "item/started",
+        params: { item: { id: "call-1", type: "commandExecution", command: "echo hello" } },
+      },
+      {
+        method: "item/commandExecution/outputDelta",
+        params: { itemId: "call-1", delta: "hello" },
+      },
+      {
+        method: "item/completed",
+        params: { item: { id: "call-1", type: "commandExecution", status: "completed", output: "hello" } },
+      },
+      { method: "item/agentMessage/delta", params: { delta: "I've added error handling." } },
+      { method: "turn/completed" },
+    ]);
 
     // Allow time for events to propagate
     await new Promise((r) => setTimeout(r, 50));
@@ -482,7 +421,7 @@ describe("remote provider e2e flow", () => {
 
   // ── Test: Session.completed from remote cleans up properly ───────
 
-  it("handles session.completed from local provider after workspace sync", async () => {
+  it("handles session.completed from remote child process exit", async () => {
     const createRes = await app.inject({
       method: "POST",
       url: "/api/threads",
@@ -503,20 +442,25 @@ describe("remote provider e2e flow", () => {
       payload: { message: "Do something" },
     });
 
-    expect(startRes.statusCode).toBe(200);
     const started = startRes.json() as { providerSessionId: string };
     await new Promise((r) => setTimeout(r, 100));
 
     // Simulate the title gen turn completing, then the coding turn completing
-    mockProvider.fireEvent({ type: "turn.completed", sessionId: started.providerSessionId });
+    mockWs.fireRemoteEvents(started.providerSessionId, [
+      { method: "turn/completed" },
+    ]);
     await new Promise((r) => setTimeout(r, 200));
 
     // Now coding turn has started, simulate coding + session exit
-    mockProvider.fireEvent({ type: "turn.completed", sessionId: started.providerSessionId });
+    mockWs.fireRemoteEvents(started.providerSessionId, [
+      { method: "turn/completed" },
+    ]);
     await new Promise((r) => setTimeout(r, 50));
 
-    // Then provider session ends
-    mockProvider.fireEvent({ type: "session.completed", sessionId: started.providerSessionId });
+    // Then child exits
+    mockWs.fireRemoteEvents(started.providerSessionId, [
+      { method: "session/completed" },
+    ]);
     await new Promise((r) => setTimeout(r, 50));
 
     const threadAfter = threadService.getById(thread.id);

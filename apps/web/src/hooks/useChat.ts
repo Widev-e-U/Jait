@@ -53,6 +53,14 @@ interface ChatState {
   hitMaxRounds: boolean
 }
 
+/** Execution context info sent by the gateway at the start of a CLI session */
+export interface SessionInfo {
+  provider: string
+  workspacePath: string
+  isRemote: boolean
+  remoteNode?: { nodeId: string; nodeName: string; platform: string }
+}
+
 export type ChatMode = 'ask' | 'agent' | 'plan'
 
 /** Context window usage breakdown from the gateway */
@@ -139,6 +147,7 @@ export function useChat(
   const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([])
   const [messageQueue, setMessageQueue] = useState<QueuedChatMessage[]>([])
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
+  const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
   const processingQueueRef = useRef(false)
 
   const abortControllerRef = useRef<AbortController | null>(null)
@@ -461,6 +470,14 @@ export function useChat(
                 setTodoList(items)
               } else if (data.type === 'context_usage') {
                 setContextUsage(data as unknown as ContextUsage)
+              } else if (data.type === 'session_info') {
+                // Execution context info from the gateway
+                setSessionInfo({
+                  provider: data.provider as string,
+                  workspacePath: data.workspacePath as string,
+                  isRemote: data.isRemote as boolean,
+                  remoteNode: data.remoteNode as SessionInfo['remoteNode'],
+                })
               } else if (data.type === 'file_changed') {
                 // AI reported a file change
                 const filePath = data.path as string
@@ -768,6 +785,13 @@ export function useChat(
               setTodoList(items)
             } else if (data.type === 'context_usage') {
               setContextUsage(data as unknown as ContextUsage)
+            } else if (data.type === 'session_info') {
+              setSessionInfo({
+                provider: data.provider as string,
+                workspacePath: data.workspacePath as string,
+                isRemote: data.isRemote as boolean,
+                remoteNode: data.remoteNode as SessionInfo['remoteNode'],
+              })
             } else if (data.type === 'file_changed') {
               // AI reported a file change
               const filePath = data.path as string
@@ -1251,6 +1275,7 @@ export function useChat(
     changedFiles,
     messageQueue,
     contextUsage,
+    sessionInfo,
     sendMessage,
     restartFromMessage,
     cancelRequest,

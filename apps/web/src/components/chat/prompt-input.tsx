@@ -16,6 +16,7 @@ import { ProviderSelector } from '@/components/chat/provider-selector'
 import { CliModelSelector } from '@/components/chat/cli-model-selector'
 import type { ProviderId } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
+import type { SessionInfo } from '@/hooks/useChat'
 import { FileIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
@@ -63,6 +64,8 @@ interface PromptInputProps {
   repoRuntime?: RepositoryRuntimeInfo | null
   /** Called when user wants to move the repo to the gateway. */
   onMoveToGateway?: () => void
+  /** Active session info — shows where the current session is running. */
+  sessionInfo?: SessionInfo | null
   /** All files available for @ mention (pre-loaded from visible tree) */
   availableFiles?: ReferencedFile[]
   /** Lazy search across the entire workspace directory */
@@ -209,6 +212,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onCliModelChange,
   repoRuntime,
   onMoveToGateway,
+  sessionInfo,
   availableFiles = EMPTY_FILES,
   onSearchFiles,
   workspaceOpen = false,
@@ -725,6 +729,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   iconOnly={isMobile}
                   repoRuntime={repoRuntime}
                   onMoveToGateway={onMoveToGateway}
+                  sessionInfo={sessionInfo}
                 />
               )}
               {showCliModelSelector && (

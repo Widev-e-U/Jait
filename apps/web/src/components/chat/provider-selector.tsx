@@ -4,7 +4,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2 } from 'lucide-react'
+import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import {
@@ -28,6 +28,8 @@ interface ProviderSelectorProps {
   repoRuntime?: RepositoryRuntimeInfo | null
   /** Called when user wants to move the repo to the gateway. */
   onMoveToGateway?: () => void
+  /** Active session info — shows where the current session is running. */
+  sessionInfo?: { isRemote: boolean; remoteNode?: { nodeName: string; platform: string } } | null
 }
 
 /** Wrap @lobehub/icons so they conform to the same {className} interface as lucide icons. */
@@ -68,7 +70,7 @@ function summariseReason(reason: string): string {
   return 'unavailable'
 }
 
-export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false, repoRuntime, onMoveToGateway }: ProviderSelectorProps) {
+export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false, repoRuntime, onMoveToGateway, sessionInfo }: ProviderSelectorProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
 
@@ -93,6 +95,13 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   const current = PROVIDER_DEFS.find((p) => p.value === provider) ?? PROVIDER_DEFS[0]
   const CurrentIcon = current.icon
 
+  // Determine location label for the trigger button
+  const locationLabel = scopedToRepo
+    ? (repoIsGateway ? 'Gateway' : repoRuntime?.locationLabel)
+    : sessionInfo?.isRemote && sessionInfo.remoteNode
+      ? sessionInfo.remoteNode.nodeName
+      : undefined
+
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild disabled={disabled}>
@@ -105,11 +114,17 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
             'disabled:pointer-events-none disabled:opacity-50',
             className,
           )}
-          title={`Provider: ${current.label}`}
-          aria-label={`Provider: ${current.label}`}
+          title={`Provider: ${current.label}${locationLabel ? ` · ${locationLabel}` : ''}`}
+          aria-label={`Provider: ${current.label}${locationLabel ? ` on ${locationLabel}` : ''}`}
         >
           <CurrentIcon className="h-4 w-4" />
           {!iconOnly && <span>{current.label}</span>}
+          {!iconOnly && locationLabel && (
+            <span className="flex items-center gap-0.5 text-[10px] text-blue-500">
+              <Monitor className="h-3 w-3" />
+              {locationLabel}
+            </span>
+          )}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </DropdownMenuTrigger>
@@ -182,9 +197,16 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
               <div className="flex-1 min-w-0">
                 <div className="text-sm font-medium flex items-center gap-1.5">
                   {p.label}
-                  {!scopedToRepo && !status?.available && remoteNode && (
-                    <span className="text-[10px] text-blue-500 flex items-center gap-0.5">
-                      remote · {remoteNode.nodeName}
+                  {isAvailable && scopedToRepo && (
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                      <Monitor className="h-3 w-3" />
+                      {p.value === 'jait' ? 'Gateway' : (repoIsGateway ? 'Gateway' : repoRuntime?.locationLabel ?? 'device')}
+                    </span>
+                  )}
+                  {isAvailable && !scopedToRepo && (
+                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                      <Monitor className="h-3 w-3" />
+                      {!status?.available && remoteNode ? remoteNode.nodeName : 'Gateway'}
                     </span>
                   )}
                   {!isAvailable && (

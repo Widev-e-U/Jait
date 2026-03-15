@@ -1,8 +1,9 @@
-import { Plus, Archive, Check } from 'lucide-react'
+import { Plus, Archive, Check, Monitor } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { Session } from '@/hooks/useSessions'
+import type { SessionInfo } from '@/hooks/useChat'
 
 interface SessionSelectorProps {
   sessions: Session[]
@@ -10,6 +11,8 @@ interface SessionSelectorProps {
   onSelect: (sessionId: string) => void
   onCreate: () => void
   onArchive: (sessionId: string) => void
+  /** Info about the currently active session's execution context. */
+  sessionInfo?: SessionInfo | null
 }
 
 function formatTime(iso: string) {
@@ -28,6 +31,7 @@ export function SessionSelector({
   onSelect,
   onCreate,
   onArchive,
+  sessionInfo,
 }: SessionSelectorProps) {
   return (
     <div className="flex flex-col h-full">
@@ -73,8 +77,19 @@ export function SessionSelector({
                   <div className="truncate text-xs font-medium">
                     {session.name || 'Untitled'}
                   </div>
-                  <div className="text-[10px] text-muted-foreground">
+                  <div className="text-[10px] text-muted-foreground flex items-center gap-1">
                     {formatTime(session.lastActiveAt)}
+                    {session.id === activeSessionId && sessionInfo && (
+                      <span className="inline-flex items-center gap-0.5 text-blue-500">
+                        · {sessionInfo.provider}
+                        {sessionInfo.isRemote && sessionInfo.remoteNode && (
+                          <><Monitor className="h-2.5 w-2.5" /> {sessionInfo.remoteNode.nodeName}</>
+                        )}
+                        {!sessionInfo.isRemote && (
+                          <><Monitor className="h-2.5 w-2.5" /> Gateway</>
+                        )}
+                      </span>
+                    )}
                   </div>
                 </div>
                 <Tooltip>

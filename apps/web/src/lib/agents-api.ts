@@ -30,6 +30,8 @@ export interface AgentThread {
   prNumber: number | null
   prTitle: string | null
   prState: 'open' | 'closed' | 'merged' | null
+  executionNodeId: string | null
+  executionNodeName: string | null
   createdAt: string
   updatedAt: string
   completedAt: string | null

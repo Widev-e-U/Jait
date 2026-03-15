@@ -180,6 +180,8 @@ export const agentThreads = sqliteTable(
     prNumber: integer("pr_number"),
     prTitle: text("pr_title"),
     prState: text("pr_state"), // open | closed | merged
+    executionNodeId: text("execution_node_id"),   // Id of the FsNode executing this thread
+    executionNodeName: text("execution_node_name"), // Human-readable node name
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     completedAt: text("completed_at"),

@@ -389,6 +389,15 @@ export const migrations: Migration[] = [
 
   // ─── 015: Network hosts table (persistent scan results) ──────────
   {
+    id: 17,
+    name: "agent_threads_execution_node",
+    run(db) {
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN execution_node_id TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN execution_node_name TEXT`); } catch { /* exists */ }
+    },
+  },
+
+  {
     id: 15,
     name: "network_hosts_table",
     run(db) {

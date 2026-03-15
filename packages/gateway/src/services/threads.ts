@@ -49,6 +49,8 @@ export interface UpdateThreadParams {
   providerSessionId?: string | null;
   error?: string | null;
   completedAt?: string | null;
+  executionNodeId?: string | null;
+  executionNodeName?: string | null;
 }
 
 export interface ThreadActivity {
