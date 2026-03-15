@@ -1,12 +1,15 @@
 /**
- * Tests that prove the PR state persistence bug:
+ * Tests for PR state persistence:
  *
  * 1. When create-pr finds an existing PR ("opened_existing"), the thread's
  *    prUrl / prState MUST be persisted to the DB and returned in the response.
  *
- * 2. A subsequent PATCH that clears prState (as the frontend PR-state polling
- *    effect does when it can't reach gh) must NOT erase a freshly written prUrl
- *    — the polling sync code should guard against stale-clear races.
+ * 2. The backend PATCH route accepts explicit null values for prUrl/prState
+ *    (needed for legitimate clearing). The real race-condition fix is in
+ *    the frontend (useAutomation.ts) which no longer clears PR state when
+ *    gh polling can't find a PR.
+ *
+ * 3. PATCH prState → "merged" triggers clearSession.
  */
 import { describe, expect, it } from "vitest";
 import { loadConfig } from "./config.js";
@@ -189,16 +192,15 @@ describe("PR state persistence", () => {
       });
       expect(patchRes.statusCode).toBe(200);
 
-      // ── BUG: the PATCH unconditionally clears prUrl and prState,
-      //    erasing the data that was just written by create-pr. ──
+      // ── BUG FIX: the PATCH with null should not erase create-pr data,
+      //    but since the PATCH route itself is intentionally permissive,
+      //    the real fix is in the frontend polling (useAutomation.ts) which
+      //    no longer sends prState: null when gh finds no PR.
+      //    This test verifies the backend PATCH still accepts explicit nulls
+      //    (for legitimate use-cases), so we confirm the DB was cleared. ──
       const after = threadService.getById(thread.id);
-
-      // This is what SHOULD happen: PR data should be preserved.
-      // But currently the PATCH wipes it out — this test documents the bug.
-      // When the poll clears prState, the thread's prUrl disappears,
-      // causing the button to flip from "Open PR" back to "Create Pull Request".
-      expect(after?.prUrl).toBeNull();      // BUG: should still be prUrl
-      expect(after?.prState).toBeNull();    // BUG: should still be "open"
+      expect(after?.prUrl).toBeNull();
+      expect(after?.prState).toBeNull();
     } finally {
       await app.close();
       sqlite.close();

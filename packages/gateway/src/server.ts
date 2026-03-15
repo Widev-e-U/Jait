@@ -92,6 +92,7 @@ export interface ServerDeps {
   notifications?: import("./services/notifications.js").NotificationService;
   providerRegistry?: ProviderRegistry;
   shutdown?: () => Promise<void>;
+  gitService?: import("./routes/threads.js").ThreadRouteDeps["gitService"];
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -187,6 +188,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       userService: deps.userService,
       repoService: deps.repoService,
       ws: deps.ws,
+      gitService: deps.gitService,
     });
   }
 
