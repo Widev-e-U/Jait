@@ -181,6 +181,15 @@ export class RemoteCliProvider implements CliProviderAdapter {
   private handleRemoteEvent(sessionId: string, event: unknown): void {
     if (!this.sessions.has(sessionId)) return;
 
+    const directEvent = this.parseDirectProviderEvent(event, sessionId);
+    if (directEvent) {
+      this.emit(directEvent);
+      if (directEvent.type === "session.completed" || directEvent.type === "session.error") {
+        this.sessions.delete(sessionId);
+      }
+      return;
+    }
+
     const e = event as { method?: string; params?: Record<string, unknown> };
     if (!e.method) return;
 
@@ -193,5 +202,15 @@ export class RemoteCliProvider implements CliProviderAdapter {
         this.sessions.delete(sessionId);
       }
     }
+  }
+
+  private parseDirectProviderEvent(event: unknown, sessionId: string): ProviderEvent | null {
+    if (!event || typeof event !== "object") return null;
+
+    const candidate = event as Partial<ProviderEvent> & { type?: unknown; sessionId?: unknown };
+    if (typeof candidate.type !== "string") return null;
+    if (typeof candidate.sessionId === "string" && candidate.sessionId !== sessionId) return null;
+
+    return { ...candidate, sessionId } as ProviderEvent;
   }
 }

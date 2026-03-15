@@ -299,15 +299,26 @@ ipcMain.handle("desktop:detect-providers", () => detectCliProviders());
 // Each session spawns a child process and streams JSON-RPC events back.
 
 interface RemoteProviderSession {
-  child: ChildProcess;
+  child: ChildProcess | null;
   pendingRpc: Map<number, { resolve: (v: unknown) => void; reject: (e: Error) => void; timer: ReturnType<typeof setTimeout> }>;
   nextRpcId: number;
   sessionId: string;
+  providerId: "codex" | "claude-code";
+  kind: "rpc" | "claude-print";
+  workingDirectory: string;
+  mode: string;
+  model: string | null;
+  env: Record<string, string>;
+  stopRequested: boolean;
 }
 
 const remoteProviderSessions = new Map<string, RemoteProviderSession>();
 
 function rpcSend(session: RemoteProviderSession, method: string, params?: unknown, timeoutMs = 60_000): Promise<unknown> {
+  if (!session.child?.stdin?.writable) {
+    return Promise.reject(new Error(`Remote provider session ${session.sessionId} is not connected`));
+  }
+  const child = session.child;
   const id = session.nextRpcId++;
   return new Promise((resolve, reject) => {
     const timer = setTimeout(() => {
@@ -316,13 +327,182 @@ function rpcSend(session: RemoteProviderSession, method: string, params?: unknow
     }, timeoutMs);
     session.pendingRpc.set(id, { resolve, reject, timer });
     const msg = JSON.stringify({ method, id, params }) + "\n";
-    session.child.stdin?.write(msg);
+    child.stdin?.write(msg);
   });
 }
 
 function rpcNotify(session: RemoteProviderSession, method: string, params?: unknown) {
+  if (!session.child?.stdin?.writable) return;
   const msg = JSON.stringify({ method, params }) + "\n";
   session.child.stdin?.write(msg);
+}
+
+function sendProviderEvent(sessionId: string, notification: unknown) {
+  mainWindow?.webContents.send("gateway:event", {
+    type: "provider.event-from-child",
+    sessionId,
+    notification,
+  });
+}
+
+function getClaudeModelOptions() {
+  return [
+    { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
+    { id: "sonnet", name: "Sonnet", description: "Claude Sonnet alias for day-to-day coding" },
+    { id: "opus", name: "Opus", description: "Claude Opus alias for the most capable model" },
+    { id: "haiku", name: "Haiku", description: "Claude Haiku alias for faster lightweight tasks" },
+    { id: "opusplan", name: "Opus Plan", description: "Planning-focused Claude alias" },
+  ];
+}
+
+function mapClaudeStreamEvent(sessionId: string, event: Record<string, unknown>) {
+  const type = typeof event.type === "string" ? event.type : "";
+  switch (type) {
+    case "assistant": {
+      const message = event.message as Record<string, unknown> | undefined;
+      const content = message?.content;
+      if (typeof content === "string" && content) {
+        return [{ type: "token", sessionId, content }];
+      }
+      if (Array.isArray(content)) {
+        return content
+          .filter((block) => (block as Record<string, unknown>)?.type === "text")
+          .map((block) => ({
+            type: "token",
+            sessionId,
+            content: String((block as Record<string, unknown>).text ?? ""),
+          }));
+      }
+      return [];
+    }
+    case "content_block_delta": {
+      const delta = event.delta as Record<string, unknown> | undefined;
+      if (delta?.type === "text_delta") {
+        return [{ type: "token", sessionId, content: String(delta.text ?? "") }];
+      }
+      return [];
+    }
+    case "tool_use":
+      return [{
+        type: "tool.start",
+        sessionId,
+        tool: String(event.name ?? event.tool ?? ""),
+        args: event.input ?? {},
+      }];
+    case "tool_result":
+      return [{
+        type: "tool.result",
+        sessionId,
+        tool: String(event.tool ?? ""),
+        ok: event.is_error !== true,
+        message: String(event.content ?? event.output ?? ""),
+      }];
+    case "result": {
+      const resultContent = typeof event.result === "string" ? event.result : "";
+      return resultContent
+        ? [{ type: "message", sessionId, role: "assistant", content: resultContent }]
+        : [];
+    }
+    default:
+      return [{
+        type: "activity",
+        sessionId,
+        kind: type || "unknown",
+        summary: `Claude Code: ${type || "unknown"}`,
+        payload: event,
+      }];
+  }
+}
+
+function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): Promise<void> {
+  if (session.child) {
+    return Promise.reject(new Error("Claude Code turn already running"));
+  }
+
+  const args = [
+    "--print",
+    "--output-format", "stream-json",
+    "--include-partial-messages",
+    "--verbose",
+    "--session-id", session.sessionId,
+  ];
+
+  if (session.mode === "full-access") {
+    args.push("--dangerously-skip-permissions");
+  } else {
+    args.push("--permission-mode", "default");
+  }
+
+  if (session.model) {
+    args.push("--model", session.model);
+  }
+
+  args.push(message);
+
+  const child = spawn("claude", args, {
+    cwd: session.workingDirectory,
+    env: session.env,
+    stdio: ["pipe", "pipe", "pipe"],
+    shell: true,
+  });
+
+  session.child = child;
+  session.stopRequested = false;
+  sendProviderEvent(session.sessionId, { type: "turn.started", sessionId: session.sessionId });
+
+  let buffer = "";
+  child.stdout?.on("data", (data: Buffer) => {
+    buffer += data.toString();
+    const lines = buffer.split("\n");
+    buffer = lines.pop() ?? "";
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+
+      try {
+        const event = JSON.parse(trimmed) as Record<string, unknown>;
+        for (const mapped of mapClaudeStreamEvent(session.sessionId, event)) {
+          sendProviderEvent(session.sessionId, mapped);
+        }
+      } catch {
+        // Ignore non-JSON output.
+      }
+    }
+  });
+
+  child.stderr?.on("data", (data: Buffer) => {
+    const text = data.toString().trim();
+    if (text) {
+      console.error(`[claude-remote:${session.sessionId}] stderr: ${text}`);
+    }
+  });
+
+  return new Promise((resolve, reject) => {
+    child.on("exit", (code, signal) => {
+      session.child = null;
+      if (session.stopRequested) {
+        session.stopRequested = false;
+        sendProviderEvent(session.sessionId, { type: "session.completed", sessionId: session.sessionId });
+        resolve();
+        return;
+      }
+      if (code === 0) {
+        sendProviderEvent(session.sessionId, { type: "turn.completed", sessionId: session.sessionId });
+        resolve();
+        return;
+      }
+      const error = `Claude Code exited with code ${code}${signal ? ` (signal=${signal})` : ""}`;
+      sendProviderEvent(session.sessionId, { type: "session.error", sessionId: session.sessionId, error });
+      reject(new Error(error));
+    });
+
+    child.on("error", (err) => {
+      session.child = null;
+      sendProviderEvent(session.sessionId, { type: "session.error", sessionId: session.sessionId, error: err.message });
+      reject(err);
+    });
+  });
 }
 
 ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<string, unknown>) => {
@@ -333,8 +513,25 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         mode: string; model?: string; env?: Record<string, string>;
       };
 
-      const cmd = providerId === "claude-code" ? "claude" : "codex";
-      const args = providerId === "claude-code" ? ["--json"] : ["app-server"];
+      if (providerId === "claude-code") {
+        remoteProviderSessions.set(sessionId, {
+          child: null,
+          pendingRpc: new Map(),
+          nextRpcId: 1,
+          sessionId,
+          providerId: "claude-code",
+          kind: "claude-print",
+          workingDirectory,
+          mode,
+          model: model ?? null,
+          env: { ...process.env, ...extraEnv } as Record<string, string>,
+          stopRequested: false,
+        });
+        return { ok: true, providerThreadId: sessionId };
+      }
+
+      const cmd = "codex";
+      const args = ["app-server"];
 
       const child = spawn(cmd, args, {
         cwd: workingDirectory,
@@ -348,6 +545,13 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         pendingRpc: new Map(),
         nextRpcId: 1,
         sessionId,
+        providerId: "codex",
+        kind: "rpc",
+        workingDirectory,
+        mode,
+        model: model ?? null,
+        env: { ...process.env, ...extraEnv } as Record<string, string>,
+        stopRequested: false,
       };
       remoteProviderSessions.set(sessionId, sess);
 
@@ -368,22 +572,14 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
           }
           // Notification (provider event) — relay to renderer for WS forwarding
           if (msg.method && !msg.id) {
-            mainWindow?.webContents.send("gateway:event", {
-              type: "provider.event-from-child",
-              sessionId,
-              notification: msg,
-            });
+            sendProviderEvent(sessionId, msg);
           }
         } catch { /* non-JSON */ }
       });
 
       child.on("exit", () => {
         remoteProviderSessions.delete(sessionId);
-        mainWindow?.webContents.send("gateway:event", {
-          type: "provider.event-from-child",
-          sessionId,
-          notification: { method: "session/completed" },
-        });
+        sendProviderEvent(sessionId, { method: "session/completed" });
       });
 
       // Initialize handshake
@@ -419,6 +615,10 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       };
       const sess = remoteProviderSessions.get(sessionId);
       if (!sess) throw new Error("Session not found");
+      if (sess.kind === "claude-print") {
+        await runClaudeRemoteTurn(sess, message);
+        return { ok: true };
+      }
       await rpcSend(sess, "turn/start", {
         threadId: providerThreadId,
         input: [{ type: "text", text: message, text_elements: [] }],
@@ -429,7 +629,8 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       const { sessionId } = params as { sessionId: string };
       const sess = remoteProviderSessions.get(sessionId);
       if (sess) {
-        sess.child.kill("SIGTERM");
+        sess.stopRequested = true;
+        sess.child?.kill("SIGTERM");
         for (const p of sess.pendingRpc.values()) {
           clearTimeout(p.timer);
           p.reject(new Error("Session stopped"));
@@ -440,8 +641,12 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
     }
     case "list-models": {
       const { providerId } = params as { providerId: string };
-      const cmd = providerId === "claude-code" ? "claude" : "codex";
-      const args = providerId === "claude-code" ? ["--json"] : ["app-server"];
+      if (providerId === "claude-code") {
+        return getClaudeModelOptions();
+      }
+
+      const cmd = "codex";
+      const args = ["app-server"];
 
       const child = spawn(cmd, args, {
         cwd: process.cwd(),
@@ -455,6 +660,13 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         pendingRpc: new Map(),
         nextRpcId: 1,
         sessionId: "tmp-model-list",
+        providerId: "codex",
+        kind: "rpc",
+        workingDirectory: process.cwd(),
+        mode: "full-access",
+        model: null,
+        env: process.env as Record<string, string>,
+        stopRequested: false,
       };
 
       const rl = createInterface({ input: child.stdout! });

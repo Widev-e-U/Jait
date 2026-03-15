@@ -1,10 +1,11 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, ChevronRight, Loader2, Pencil, X } from 'lucide-react'
+import { Check, ChevronRight, GripVertical, ListPlus, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface QueuedMessage {
   id: string
   content: string
+  displayContent?: string
   /** timestamp when queued */
   queuedAt: number
 }
@@ -13,6 +14,7 @@ interface MessageQueueProps {
   items: QueuedMessage[]
   onRemove?: (id: string) => void
   onEdit?: (id: string, newContent: string) => void
+  onReorder?: (sourceId: string, targetId: string) => void
   className?: string
 }
 
@@ -23,14 +25,17 @@ function QueueItem({
   index,
   onRemove,
   onEdit,
+  onReorder,
 }: {
   item: QueuedMessage
   index: number
   onRemove?: (id: string) => void
   onEdit?: (id: string, content: string) => void
+  onReorder?: (sourceId: string, targetId: string) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [draft, setDraft] = useState(item.content)
+  const [dragOver, setDragOver] = useState(false)
+  const [draft, setDraft] = useState(item.displayContent ?? item.content)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
   // Focus the textarea when entering edit mode
@@ -46,21 +51,22 @@ function QueueItem({
 
   // Keep draft in sync if the item changes externally
   useEffect(() => {
-    if (!editing) setDraft(item.content)
-  }, [item.content, editing])
+    if (!editing) setDraft(item.displayContent ?? item.content)
+  }, [item.content, item.displayContent, editing])
 
   const commitEdit = useCallback(() => {
     const trimmed = draft.trim()
-    if (trimmed && trimmed !== item.content) {
+    const displayed = item.displayContent ?? item.content
+    if (trimmed && trimmed !== displayed) {
       onEdit?.(item.id, trimmed)
     }
     setEditing(false)
-  }, [draft, item.content, item.id, onEdit])
+  }, [draft, item.content, item.displayContent, item.id, onEdit])
 
   const cancelEdit = useCallback(() => {
-    setDraft(item.content)
+    setDraft(item.displayContent ?? item.content)
     setEditing(false)
-  }, [item.content])
+  }, [item.content, item.displayContent])
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     if (e.key === 'Enter' && !e.shiftKey) {
@@ -71,16 +77,66 @@ function QueueItem({
     }
   }, [commitEdit, cancelEdit])
 
+  const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (editing || !onReorder) {
+      e.preventDefault()
+      return
+    }
+    e.dataTransfer.effectAllowed = 'move'
+    e.dataTransfer.setData('text/jait-queue-id', item.id)
+  }, [editing, item.id, onReorder])
+
+  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (editing || !onReorder) return
+    e.preventDefault()
+    e.dataTransfer.dropEffect = 'move'
+    setDragOver(true)
+  }, [editing, onReorder])
+
+  const handleDragLeave = useCallback(() => {
+    setDragOver(false)
+  }, [])
+
+  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
+    if (editing || !onReorder) return
+    e.preventDefault()
+    const sourceId = e.dataTransfer.getData('text/jait-queue-id')
+    setDragOver(false)
+    if (!sourceId || sourceId === item.id) return
+    onReorder(sourceId, item.id)
+  }, [editing, item.id, onReorder])
+
   return (
-    <div className="group flex items-start gap-2 rounded-lg bg-muted/50 border border-border/40 px-3 py-2 text-sm transition-colors hover:bg-muted/70">
+    <div
+      className={cn(
+        'group flex items-start gap-2 rounded-lg bg-muted/50 border border-border/40 px-3 py-2 text-sm transition-colors hover:bg-muted/70',
+        dragOver && 'border-primary/50 bg-primary/5',
+      )}
+      draggable={!editing && Boolean(onReorder)}
+      onDragStart={handleDragStart}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {/* Position indicator */}
       <div className="mt-0.5 shrink-0">
         {index === 0 ? (
-          <Loader2 className="h-3.5 w-3.5 text-primary animate-spin" />
+          <ListPlus className="h-3.5 w-3.5 text-primary" />
         ) : (
           <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
         )}
       </div>
+
+      {onReorder && !editing && (
+        <button
+          type="button"
+          className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+        >
+          <GripVertical className="h-3.5 w-3.5" />
+        </button>
+      )}
 
       {/* Content: read-only or editable */}
       <div className="flex-1 min-w-0">
@@ -105,7 +161,7 @@ function QueueItem({
             className="w-full resize-none rounded border border-primary/30 bg-background px-2 py-1 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
           />
         ) : (
-          <span className="whitespace-pre-wrap break-words text-foreground">{item.content}</span>
+          <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
         )}
       </div>
 
@@ -159,7 +215,7 @@ function QueueItem({
 
 /* ── Queue container ────────────────────────────────────────────────── */
 
-export function MessageQueue({ items, onRemove, onEdit, className }: MessageQueueProps) {
+export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: MessageQueueProps) {
   if (items.length === 0) return null
 
   return (
@@ -176,6 +232,7 @@ export function MessageQueue({ items, onRemove, onEdit, className }: MessageQueu
           index={i}
           onRemove={onRemove}
           onEdit={onEdit}
+          onReorder={onReorder}
         />
       ))}
     </div>

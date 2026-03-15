@@ -88,17 +88,31 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import { agentsApi, type AgentThread } from '@/lib/agents-api'
+import { agentsApi, type AgentThread, type ProviderId } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 
 const API_URL = getApiUrl()
 
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
+type CliProviderId = Exclude<ProviderId, 'jait'>
 
 type ManagerQueuedMessage = QueuedChatMessage & {
   fullContent: string
   referencedFiles?: ReferencedFile[]
   attachments?: string[]
+  providerId: ProviderId
+  model?: string | null
+}
+
+function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
+  const sourceIndex = items.findIndex((item) => item.id === sourceId)
+  const targetIndex = items.findIndex((item) => item.id === targetId)
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items
+
+  const next = [...items]
+  const [moved] = next.splice(sourceIndex, 1)
+  next.splice(targetIndex, 0, moved!)
+  return next
 }
 
 const suggestions = [
@@ -107,6 +121,40 @@ const suggestions = [
   'Write a Python script',
   'What time is it?',
 ]
+
+function getStoredChatProvider(): ProviderId {
+  const stored = localStorage.getItem('chatProvider')
+  if (stored === 'codex' || stored === 'claude-code' || stored === 'jait') {
+    return stored
+  }
+  return 'jait'
+}
+
+function loadStoredCliModelsByProvider(currentProvider: ProviderId): Partial<Record<CliProviderId, string | null>> {
+  const models: Partial<Record<CliProviderId, string | null>> = {}
+
+  try {
+    const raw = localStorage.getItem('cliModelsByProvider')
+    if (raw) {
+      const parsed = JSON.parse(raw) as Record<string, unknown>
+      for (const providerId of ['codex', 'claude-code'] as const) {
+        const value = parsed[providerId]
+        if (typeof value === 'string' && value.trim()) {
+          models[providerId] = value
+        }
+      }
+    }
+  } catch {
+    // Ignore invalid persisted data and fall back to an empty map.
+  }
+
+  const legacyModel = localStorage.getItem('cliModel')
+  if (legacyModel && currentProvider !== 'jait' && !models[currentProvider]) {
+    models[currentProvider] = legacyModel
+  }
+
+  return models
+}
 
 function applyTheme(mode: ThemeMode) {
   const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
@@ -662,12 +710,11 @@ function App() {
   const floatingResizeRef = useRef<{ startX: number; startY: number; w: number; h: number } | null>(null)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
-  const [chatProvider, setChatProvider] = useState<import('@/lib/agents-api').ProviderId>(
-    () => (localStorage.getItem('chatProvider') as import('@/lib/agents-api').ProviderId) || 'jait'
+  const [chatProvider, setChatProvider] = useState<ProviderId>(() => getStoredChatProvider())
+  const [cliModelsByProvider, setCliModelsByProvider] = useState<Partial<Record<CliProviderId, string | null>>>(
+    () => loadStoredCliModelsByProvider(getStoredChatProvider())
   )
-  const [cliModel, setCliModel] = useState<string | null>(
-    () => localStorage.getItem('cliModel') || null
-  )
+  const cliModel = chatProvider === 'jait' ? null : (cliModelsByProvider[chatProvider] ?? null)
   const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('viewMode') as ViewMode) || 'developer')
   const [managerAnimPhase, setManagerAnimPhase] = useState<'idle' | 'center' | 'top'>('idle')
   const [developerAnimPhase, setDeveloperAnimPhase] = useState<'idle' | 'animating'>('idle')
@@ -874,6 +921,7 @@ function App() {
     enqueueMessage,
     dequeueMessage,
     updateQueueItem,
+    reorderQueueItem,
     acceptFile,
     rejectFile,
     acceptAllFiles,
@@ -1178,10 +1226,34 @@ function App() {
     localStorage.setItem('chatMode', chatMode)
   }, [chatMode])
 
+  const handleChatProviderChange = useCallback((provider: ProviderId) => {
+    setChatProvider(provider)
+  }, [])
+
+  const handleCliModelChange = useCallback((model: string | null) => {
+    if (chatProvider === 'jait') return
+    setCliModelsByProvider((current) => ({
+      ...current,
+      [chatProvider]: model,
+    }))
+  }, [chatProvider])
+
   useEffect(() => {
-    if (cliModel) localStorage.setItem('cliModel', cliModel)
-    else localStorage.removeItem('cliModel')
-  }, [cliModel])
+    const nextModels: Partial<Record<CliProviderId, string>> = {}
+    for (const providerId of ['codex', 'claude-code'] as const) {
+      const value = cliModelsByProvider[providerId]
+      if (typeof value === 'string' && value.trim()) {
+        nextModels[providerId] = value
+      }
+    }
+
+    if (Object.keys(nextModels).length > 0) {
+      localStorage.setItem('cliModelsByProvider', JSON.stringify(nextModels))
+    } else {
+      localStorage.removeItem('cliModelsByProvider')
+    }
+    localStorage.removeItem('cliModel')
+  }, [cliModelsByProvider])
 
   // Track whether the initial server sync has happened so we don't PATCH on mount
   const chatProviderInitialized = useRef(false)
@@ -1417,7 +1489,7 @@ function App() {
   useEffect(() => {
     if (authLoading) return
     if (settings.chat_provider && settings.chat_provider !== chatProvider) {
-      setChatProvider(settings.chat_provider as import('@/lib/agents-api').ProviderId)
+      setChatProvider(settings.chat_provider as ProviderId)
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [settings.chat_provider, authLoading])
@@ -1748,11 +1820,19 @@ function App() {
   }, [workspaceFiles])
 
   /** Explicitly queue a message while the agent is busy. */
-  const handleQueue = useCallback((_chipFiles?: ReferencedFile[]) => {
-    if (!inputValue.trim()) return
-    enqueueMessage(inputValue.trim())
+  const handleQueue = useCallback(async (chipFiles?: ReferencedFile[]) => {
+    const prepared = await preparePromptSubmission(inputValue, chipFiles)
+    if (!prepared) return
+    enqueueMessage({
+      content: prepared.promptWithReferences,
+      displayContent: prepared.displayContent || prepared.promptWithReferences,
+      mode: chatMode,
+      provider: chatProvider,
+      model: chatProvider !== 'jait' ? cliModel : undefined,
+      referencedFiles: prepared.referencedFiles,
+    })
     setInputValue('')
-  }, [inputValue, enqueueMessage])
+  }, [chatMode, chatProvider, cliModel, enqueueMessage, inputValue, preparePromptSubmission])
 
 
   const handleSubmit = async (chipFiles?: ReferencedFile[]) => {
@@ -1837,12 +1917,23 @@ function App() {
           ? {
             ...item,
             content: trimmed,
+            displayContent: trimmed,
             fullContent: trimmed,
             referencedFiles: undefined,
             attachments: undefined,
           }
           : item),
       }
+    })
+  }, [])
+
+  const reorderManagerQueueItem = useCallback((threadId: string, sourceId: string, targetId: string) => {
+    setManagerMessageQueues((prev) => {
+      const existing = prev[threadId] ?? []
+      if (existing.length === 0) return prev
+      const nextQueue = reorderById(existing, sourceId, targetId)
+      if (nextQueue === existing) return prev
+      return { ...prev, [threadId]: nextQueue }
     })
   }, [])
 
@@ -1854,13 +1945,16 @@ function App() {
     enqueueManagerMessage(thread.id, {
       id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       content: prepared.displayContent || prepared.promptWithReferences,
+      displayContent: prepared.displayContent || prepared.promptWithReferences,
       fullContent: prepared.promptWithReferences,
       referencedFiles: prepared.referencedFiles,
       attachments: prepared.attachments,
+      providerId: chatProvider,
+      model: chatProvider !== 'jait' ? cliModel : undefined,
       queuedAt: Date.now(),
     })
     setInputValue('')
-  }, [automation.selectedThread, enqueueManagerMessage, inputValue, preparePromptSubmission])
+  }, [automation.selectedThread, chatProvider, cliModel, enqueueManagerMessage, inputValue, preparePromptSubmission])
 
   useEffect(() => {
     for (const [threadId, queue] of Object.entries(managerMessageQueues)) {
@@ -1894,10 +1988,10 @@ function App() {
       void automation.handleSendToThread(
         threadId,
         nextItem.fullContent,
-        chatProvider,
-        chatProvider !== 'jait' ? cliModel : undefined,
+        nextItem.providerId,
+        nextItem.model,
         {
-          displayContent: nextItem.content,
+          displayContent: nextItem.displayContent ?? nextItem.content,
           referencedFiles: nextItem.referencedFiles,
           attachments: nextItem.attachments,
         },
@@ -1915,8 +2009,6 @@ function App() {
     automation.handleSendToThread,
     automation.setError,
     automation.threads,
-    chatProvider,
-    cliModel,
     managerMessageQueues,
   ])
 
@@ -2992,6 +3084,7 @@ function App() {
                             items={selectedManagerQueue}
                             onRemove={(id) => dequeueManagerMessage(automation.selectedThread!.id, id)}
                             onEdit={(id, content) => updateManagerQueueItem(automation.selectedThread!.id, id, content)}
+                            onReorder={(sourceId, targetId) => reorderManagerQueueItem(automation.selectedThread!.id, sourceId, targetId)}
                             className="mb-2"
                           />
                         )}
@@ -3012,9 +3105,9 @@ function App() {
                           viewMode={viewMode}
                           onViewModeChange={setViewMode}
                           provider={chatProvider}
-                          onProviderChange={setChatProvider}
+                          onProviderChange={handleChatProviderChange}
                           cliModel={cliModel}
-                          onCliModelChange={setCliModel}
+                          onCliModelChange={handleCliModelChange}
                           repoRuntime={selectedThreadRepoRuntime}
                           onMoveToGateway={handleMoveRepoToGateway}
                           availableFiles={availableFilesForMention}
@@ -3083,9 +3176,9 @@ function App() {
                             viewMode={viewMode}
                             onViewModeChange={setViewMode}
                             provider={chatProvider}
-                            onProviderChange={setChatProvider}
+                            onProviderChange={handleChatProviderChange}
                             cliModel={cliModel}
-                            onCliModelChange={setCliModel}
+                            onCliModelChange={handleCliModelChange}
                             repoRuntime={selectedRepoRuntime}
                             onMoveToGateway={handleMoveRepoToGateway}
                             footerLeadingContent={(
@@ -3196,9 +3289,9 @@ function App() {
                     mode={chatMode}
                     onModeChange={setChatMode}
                     provider={chatProvider}
-                    onProviderChange={setChatProvider}
+                    onProviderChange={handleChatProviderChange}
                     cliModel={cliModel}
-                    onCliModelChange={setCliModel}
+                    onCliModelChange={handleCliModelChange}
                     viewMode={viewMode}
                     onViewModeChange={setViewMode}
                     availableFiles={availableFilesForMention}
@@ -3324,6 +3417,7 @@ function App() {
                         items={messageQueue}
                         onRemove={dequeueMessage}
                         onEdit={updateQueueItem}
+                        onReorder={reorderQueueItem}
                       />
                     )}
                     <PromptInput
@@ -3342,9 +3436,9 @@ function App() {
                       mode={chatMode}
                       onModeChange={setChatMode}
                       provider={chatProvider}
-                      onProviderChange={setChatProvider}
+                      onProviderChange={handleChatProviderChange}
                       cliModel={cliModel}
-                      onCliModelChange={setCliModel}
+                      onCliModelChange={handleCliModelChange}
                       viewMode={viewMode}
                       onViewModeChange={setViewMode}
                       availableFiles={availableFilesForMention}

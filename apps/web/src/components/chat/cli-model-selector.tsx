@@ -4,7 +4,7 @@
  * Auto-selects the provider's default model on load.
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
 import { ChevronDown, Check, Loader2 } from 'lucide-react'
 import {
   DropdownMenu,
@@ -35,25 +35,42 @@ interface ModelDef {
 export function CliModelSelector({ provider, model, onChange, disabled, className }: CliModelSelectorProps) {
   const [models, setModels] = useState<ModelDef[]>([])
   const [loading, setLoading] = useState(false)
-  const fetchedProvider = useRef<string | null>(null)
 
   useEffect(() => {
-    if (provider === 'jait') return
-    if (fetchedProvider.current === provider) return
-    fetchedProvider.current = provider
+    setModels([])
+    if (provider === 'jait') {
+      setLoading(false)
+      return
+    }
+
+    let cancelled = false
     setLoading(true)
     agentsApi.listProviderModels(provider)
       .then((result) => {
-        setModels(result)
-        // Auto-select the default model if no model is currently selected
-        if (!model) {
-          const defaultModel = result.find((m) => m.isDefault)
-          if (defaultModel) onChange(defaultModel.id)
-        }
+        if (!cancelled) setModels(result)
       })
-      .catch(() => setModels([]))
-      .finally(() => setLoading(false))
+      .catch(() => {
+        if (!cancelled) setModels([])
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false)
+      })
+
+    return () => {
+      cancelled = true
+    }
   }, [provider])
+
+  useEffect(() => {
+    if (provider === 'jait' || loading || models.length === 0) return
+    if (model && models.some((entry) => entry.id === model)) return
+
+    const defaultModel = models.find((entry) => entry.isDefault) ?? models[0] ?? null
+    const nextModel = defaultModel?.id ?? null
+    if (nextModel !== model) {
+      onChange(nextModel)
+    }
+  }, [provider, loading, model, models, onChange])
 
   const displayLabel = model
     ? (models.find((m) => m.id === model)?.name ?? model)

@@ -722,7 +722,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   provider={provider!}
                   onChange={onProviderChange!}
                   disabled={selectorsDisabled}
-                  iconOnly
+                  iconOnly={isMobile}
                   repoRuntime={repoRuntime}
                   onMoveToGateway={onMoveToGateway}
                 />

@@ -11,11 +11,11 @@
  *   { type: "result", ... }
  */
 
-import { spawn, type ChildProcess } from "node:child_process";
+import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, writeFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
-import { tmpdir } from "node:os";
+import { homedir, tmpdir } from "node:os";
 import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
@@ -35,6 +35,8 @@ interface ClaudeSessionState {
   workingDirectory: string;
   env: Record<string, string>;
   model?: string;
+  mcpConfigPath?: string;
+  exitMode: "normal" | "interrupt" | "stop";
 }
 
 // ── Provider implementation ──────────────────────────────────────────
@@ -64,9 +66,23 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
           return true;
         }
       }
-      this.info.available = false;
-      this.info.unavailableReason = "Claude Code CLI not found. Install from https://docs.anthropic.com/en/docs/claude-code";
-      return false;
+      if (!this.claudePath) {
+        this.info.available = false;
+        this.info.unavailableReason = "Claude Code CLI not found. Install from https://docs.anthropic.com/en/docs/claude-code";
+        return false;
+      }
+
+      const hasApiKey = !!process.env.ANTHROPIC_API_KEY?.trim();
+      const hasClaudeConfig = this.hasClaudeConfig();
+      if (!hasApiKey && !hasClaudeConfig) {
+        this.info.available = false;
+        this.info.unavailableReason = "Claude Code is not configured. Run `claude` once or set ANTHROPIC_API_KEY.";
+        return false;
+      }
+
+      this.info.available = true;
+      this.info.unavailableReason = undefined;
+      return true;
     } catch {
       this.info.available = false;
       this.info.unavailableReason = "Failed to check Claude Code CLI availability";
@@ -76,14 +92,15 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
 
   /**
    * Claude Code doesn't expose a model listing API.
-   * Return known model aliases — the CLI accepts both aliases and full names.
+   * Prefer stable aliases over dated full model names so the picker doesn't go stale.
    */
   async listModels(): Promise<ProviderModelInfo[]> {
     return [
-      { id: "sonnet", name: "Sonnet", description: "Claude Sonnet — fast & capable (alias)", isDefault: true },
-      { id: "opus", name: "Opus", description: "Claude Opus — most capable (alias)" },
-      { id: "claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Claude Sonnet 4 (full name)" },
-      { id: "claude-opus-4-20250514", name: "Claude Opus 4", description: "Claude Opus 4 (full name)" },
+      { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
+      { id: "sonnet", name: "Sonnet", description: "Claude Sonnet alias for day-to-day coding" },
+      { id: "opus", name: "Opus", description: "Claude Opus alias for the most capable model" },
+      { id: "haiku", name: "Haiku", description: "Claude Haiku alias for faster lightweight tasks" },
+      { id: "opusplan", name: "Opus Plan", description: "Planning-focused Claude alias" },
     ];
   }
 
@@ -104,14 +121,6 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       ...options.env,
     };
 
-    // Inject MCP server config via Claude Code's config file
-    if (options.mcpServers && options.mcpServers.length > 0) {
-      const mcpConfig = this.buildClaudeMcpConfig(options.mcpServers, sessionId);
-      if (mcpConfig) {
-        env["CLAUDE_CODE_MCP_CONFIG"] = mcpConfig;
-      }
-    }
-
     const state: ClaudeSessionState = {
       session,
       process: null,
@@ -119,6 +128,8 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       workingDirectory: options.workingDirectory,
       env,
       model: options.model,
+      mcpConfigPath: this.buildClaudeMcpConfig(options.mcpServers, sessionId),
+      exitMode: "normal",
     };
 
     this.sessions.set(sessionId, state);
@@ -130,24 +141,32 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
 
   async sendTurn(sessionId: string, message: string, _attachments?: string[]): Promise<void> {
     const state = this.getState(sessionId);
-
-    const args: string[] = [
-      "--output-format", "stream-json",
-      "--verbose",
-    ];
-
-    // Runtime mode
-    if (state.session.runtimeMode === "full-access") {
-      args.push("--dangerously-skip-permissions");
+    if (state.process) {
+      throw new Error("Claude Code turn already running");
     }
 
-    // Model
+    const args: string[] = [
+      "--print",
+      "--output-format", "stream-json",
+      "--include-partial-messages",
+      "--verbose",
+      "--session-id", state.session.id,
+    ];
+
+    if (state.session.runtimeMode === "full-access") {
+      args.push("--dangerously-skip-permissions");
+    } else {
+      args.push("--permission-mode", "default");
+    }
+
     if (state.model) {
       args.push("--model", state.model);
     }
 
-    // Add the prompt
-    args.push("--print");
+    if (state.mcpConfigPath) {
+      args.push("--mcp-config", state.mcpConfigPath);
+    }
+
     args.push(message);
 
     const cmd = this.claudePath ?? "claude";
@@ -160,6 +179,9 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
 
     state.process = child;
     state.buffer = "";
+    state.exitMode = "normal";
+    state.session.status = "running";
+    this.emit({ type: "turn.started", sessionId });
 
     child.stdout?.on("data", (data: Buffer) => {
       state.buffer += data.toString();
@@ -174,23 +196,44 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     });
 
     return new Promise<void>((resolve, reject) => {
-      child.on("exit", (code) => {
+      child.on("exit", (code, signal) => {
         state.process = null;
-        if (code === 0) {
-          state.session.status = "running"; // Ready for next turn
+        const exitMode = state.exitMode;
+        state.exitMode = "normal";
+
+        if (exitMode === "stop") {
+          state.session.status = "completed";
+          state.session.completedAt = new Date().toISOString();
           this.emit({ type: "session.completed", sessionId });
           resolve();
-        } else {
-          const error = `Claude Code exited with code ${code}`;
-          state.session.status = "error";
-          state.session.error = error;
-          this.emit({ type: "session.error", sessionId, error });
-          reject(new Error(error));
+          return;
         }
+
+        if (exitMode === "interrupt") {
+          state.session.status = "interrupted";
+          this.emit({ type: "turn.completed", sessionId });
+          resolve();
+          return;
+        }
+
+        if (code === 0) {
+          state.session.status = "idle";
+          state.session.error = undefined;
+          this.emit({ type: "turn.completed", sessionId });
+          resolve();
+          return;
+        }
+
+        const error = `Claude Code exited with code ${code}${signal ? ` (signal=${signal})` : ""}`;
+        state.session.status = "error";
+        state.session.error = error;
+        this.emit({ type: "session.error", sessionId, error });
+        reject(new Error(error));
       });
 
       child.on("error", (err) => {
         state.process = null;
+        state.exitMode = "normal";
         state.session.status = "error";
         state.session.error = err.message;
         this.emit({ type: "session.error", sessionId, error: err.message });
@@ -202,8 +245,8 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
   async interruptTurn(sessionId: string): Promise<void> {
     const state = this.getState(sessionId);
     if (state.process) {
-      state.process.kill("SIGINT");
-      state.session.status = "interrupted";
+      state.exitMode = "interrupt";
+      killChildTree(state.process, "SIGINT");
     }
   }
 
@@ -218,10 +261,13 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     if (!state) return;
 
     if (state.process) {
-      state.process.kill("SIGTERM");
+      state.exitMode = "stop";
+      killChildTree(state.process, "SIGTERM");
       await new Promise<void>((resolve) => {
         const timeout = setTimeout(() => {
-          state.process?.kill("SIGKILL");
+          if (state.process) {
+            killChildTree(state.process, "SIGKILL");
+          }
           resolve();
         }, 3000);
         state.process?.on("exit", () => {
@@ -229,10 +275,12 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
           resolve();
         });
       });
+    } else {
+      state.session.status = "completed";
+      state.session.completedAt = new Date().toISOString();
+      this.emit({ type: "session.completed", sessionId });
     }
 
-    state.session.status = "completed";
-    state.session.completedAt = new Date().toISOString();
     this.sessions.delete(sessionId);
   }
 
@@ -368,6 +416,12 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     return configPath;
   }
 
+  private hasClaudeConfig(): boolean {
+    const claudeDir = join(homedir(), ".claude");
+    const claudeState = join(homedir(), ".claude.json");
+    return existsSync(claudeDir) || existsSync(claudeState);
+  }
+
   private testCommand(cmd: string): Promise<boolean> {
     return new Promise((resolve) => {
       const child = spawn(cmd, ["--version"], {
@@ -379,4 +433,19 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       child.on("error", () => { clearTimeout(timer); resolve(false); });
     });
   }
+}
+
+function killChildTree(child: ChildProcess, signal: "SIGINT" | "SIGTERM" | "SIGKILL" = "SIGTERM"): void {
+  if (process.platform === "win32" && child.pid !== undefined) {
+    try {
+      const taskkillArgs = signal === "SIGINT"
+        ? ["/pid", String(child.pid), "/T", "/F"]
+        : ["/pid", String(child.pid), "/T", "/F"];
+      spawnSync("taskkill", taskkillArgs, { stdio: "ignore" });
+      return;
+    } catch {
+      // Fall through to the default kill path.
+    }
+  }
+  child.kill(signal);
 }

@@ -98,6 +98,24 @@ interface SendMessageOptions {
   referencedFiles?: { path: string; name: string }[]
 }
 
+interface QueuedChatMessage extends QueuedMessage {
+  provider?: string
+  model?: string | null
+  mode?: ChatMode
+  referencedFiles?: { path: string; name: string }[]
+}
+
+function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
+  const sourceIndex = items.findIndex((item) => item.id === sourceId)
+  const targetIndex = items.findIndex((item) => item.id === targetId)
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items
+
+  const next = [...items]
+  const [moved] = next.splice(sourceIndex, 1)
+  next.splice(targetIndex, 0, moved!)
+  return next
+}
+
 /**
  * @param sessionId - externally managed session ID (from useSessions)
  */
@@ -119,7 +137,7 @@ export function useChat(
   const [pendingPlan, setPendingPlan] = useState<PlanData | null>(null)
   const [todoList, setTodoList] = useState<TodoItem[]>([])
   const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([])
-  const [messageQueue, setMessageQueue] = useState<QueuedMessage[]>([])
+  const [messageQueue, setMessageQueue] = useState<QueuedChatMessage[]>([])
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const processingQueueRef = useRef(false)
 
@@ -835,13 +853,13 @@ export function useChat(
   }, [authToken, onLoginRequired, sessionId])
 
   // --- Message queue (queueing & steering) ---
-  const enqueueMessage = useCallback((content: string) => {
-    const item: QueuedMessage = {
+  const enqueueMessage = useCallback((item: Omit<QueuedChatMessage, 'id' | 'queuedAt'>) => {
+    const queueItem: QueuedChatMessage = {
       id: `q-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-      content,
+      ...item,
       queuedAt: Date.now(),
     }
-    setMessageQueue(prev => [...prev, item])
+    setMessageQueue(prev => [...prev, queueItem])
   }, [])
 
   const dequeueMessage = useCallback((id: string) => {
@@ -850,7 +868,20 @@ export function useChat(
 
   /** Update the content of a queued message (inline edit). */
   const updateQueueItem = useCallback((id: string, content: string) => {
-    setMessageQueue(prev => prev.map(q => q.id === id ? { ...q, content } : q))
+    const trimmed = content.trim()
+    if (!trimmed) return
+    setMessageQueue(prev => prev.map(q => q.id === id
+      ? {
+        ...q,
+        content: trimmed,
+        displayContent: trimmed,
+        referencedFiles: undefined,
+      }
+      : q))
+  }, [])
+
+  const reorderQueueItem = useCallback((sourceId: string, targetId: string) => {
+    setMessageQueue(prev => reorderById(prev, sourceId, targetId))
   }, [])
 
   // Process the next queued message when the model finishes
@@ -865,7 +896,14 @@ export function useChat(
       }
       const [next, ...rest] = prev
       // Send the message (fire-and-forget; sendMessage sets isLoading)
-      sendMessage(next!.content, options)
+      sendMessage(next!.content, {
+        ...options,
+        ...(next?.mode ? { mode: next.mode } : {}),
+        ...(next?.provider ? { provider: next.provider } : {}),
+        ...(next?.model !== undefined ? { model: next.model } : {}),
+        ...(next?.displayContent ? { displayContent: next.displayContent } : {}),
+        ...(next?.referencedFiles?.length ? { referencedFiles: next.referencedFiles } : {}),
+      })
       return rest
     })
     processingQueueRef.current = false
@@ -1223,6 +1261,7 @@ export function useChat(
     enqueueMessage,
     dequeueMessage,
     updateQueueItem,
+    reorderQueueItem,
     acceptFile,
     rejectFile,
     acceptAllFiles,
