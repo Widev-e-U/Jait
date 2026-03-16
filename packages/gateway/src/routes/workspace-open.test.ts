@@ -19,6 +19,8 @@ import { WsControlPlane } from "../ws.js";
 import { UserService } from "../services/users.js";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { mkdtemp, mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
 
 // Use a known directory that exists on the system
 const TEST_DIR = join(homedir(), ".jait");
@@ -29,6 +31,8 @@ describe("POST /api/workspace/open", () => {
   const sessionId = "test-session-" + Date.now();
   let sessionState: SessionStateService;
   let surfaceRegistry: SurfaceRegistry;
+  let writableTestRoot: string;
+  let writableTestFile: string;
 
   beforeAll(async () => {
     const config = loadConfig();
@@ -78,11 +82,17 @@ describe("POST /api/workspace/open", () => {
     await app.listen({ port: 0, host: "127.0.0.1" });
     const addr = app.server.address();
     address = typeof addr === "string" ? addr : `http://127.0.0.1:${addr?.port}`;
+
+    writableTestRoot = await mkdtemp(join(tmpdir(), "jait-workspace-route-"));
+    await mkdir(join(writableTestRoot, "nested"), { recursive: true });
+    writableTestFile = join(writableTestRoot, "nested", "editable.txt");
+    await writeFile(writableTestFile, "before", "utf-8");
   });
 
   afterAll(async () => {
     await surfaceRegistry.stopAll("test-cleanup");
     await app?.close();
+    await rm(writableTestRoot, { recursive: true, force: true });
   });
 
   it("should create a filesystem surface and return surfaceId", async () => {
@@ -167,6 +177,43 @@ describe("POST /api/workspace/open", () => {
 
     expect(applyRes.status).toBe(400);
     const data = (await applyRes.json()) as { error: string };
+    expect(data.error).toBe("VALIDATION_ERROR");
+  });
+
+  it("should write files via POST /api/workspace/write", async () => {
+    const openRes = await fetch(`${address}/api/workspace/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
+    });
+    const { surfaceId } = (await openRes.json()) as { surfaceId: string };
+
+    const writeRes = await fetch(`${address}/api/workspace/write`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestFile, content: "after", surfaceId }),
+    });
+
+    expect(writeRes.ok).toBe(true);
+    await expect(readFile(writableTestFile, "utf-8")).resolves.toBe("after");
+  });
+
+  it("should reject path traversal in POST /api/workspace/write", async () => {
+    const openRes = await fetch(`${address}/api/workspace/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId }),
+    });
+    const { surfaceId } = (await openRes.json()) as { surfaceId: string };
+
+    const writeRes = await fetch(`${address}/api/workspace/write`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: "../outside.txt", content: "blocked", surfaceId }),
+    });
+
+    expect(writeRes.status).toBe(400);
+    const data = (await writeRes.json()) as { error: string };
     expect(data.error).toBe("VALIDATION_ERROR");
   });
 

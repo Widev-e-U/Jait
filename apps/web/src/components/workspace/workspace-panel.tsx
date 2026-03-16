@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Save, Send, Sparkles, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -203,6 +203,18 @@ async function remoteReadFile(filePath: string, surfaceId?: string | null): Prom
   return data.content
 }
 
+async function remoteWriteFile(filePath: string, content: string, surfaceId?: string | null): Promise<void> {
+  const res = await fetch(`${API_URL}/api/workspace/write`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ path: filePath, content, surfaceId }),
+  })
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({})) as { message?: string }
+    throw new Error(data.message || `Failed to write file: ${res.statusText}`)
+  }
+}
+
 /** Lightweight stat call — returns mtime ISO string (or null on error). */
 async function remoteStatFile(filePath: string, surfaceId?: string | null): Promise<string | null> {
   let url = `${API_URL}/api/workspace/stat?path=${encodeURIComponent(filePath)}`
@@ -264,6 +276,10 @@ function buildDirChangesSet(gitStatusMap: Map<string, string>): Set<string> {
 
 const gitApi = gitApiImport
 
+function isEditableWorkspaceTab(tab: EditorTab | null): boolean {
+  return Boolean(tab && tab.type === 'file' && tab.id.startsWith('file:'))
+}
+
 /* ------------------------------------------------------------------ */
 /*  Editor tab model                                                   */
 /* ------------------------------------------------------------------ */
@@ -281,6 +297,10 @@ interface EditorTab {
   modifiedContent?: string | null
   /** Preview tabs are italic and get replaced on next open */
   isPreview?: boolean
+  savedContent?: string | null
+  isDirty?: boolean
+  isSaving?: boolean
+  saveError?: string | null
 }
 
 export interface WorkspaceTabsState {
@@ -552,6 +572,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
+  const activeTabEditable = isEditableWorkspaceTab(activeTab)
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null)
   const [tabContextMenu, setTabContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const restoredTabsRootRef = useRef<string | null>(null)
@@ -594,6 +615,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             path: t.path,
             label: t.label || (t.path.split('/').pop() ?? t.path),
             content,
+            savedContent: content,
             language: inferLanguage(t.path),
           })
         } catch {
@@ -753,7 +775,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       remoteReadFile(activeNativePath, surfaceId).then(
         (content) => {
           setPreviewContent(content)
-          setOpenTabs(prev => prev.map(t => t.id === `file:${activeNativePath}` ? { ...t, content } : t))
+          setOpenTabs(prev => prev.map(t => {
+            if (t.id !== `file:${activeNativePath}` || t.isDirty) return t
+            return { ...t, content, savedContent: content, saveError: null }
+          }))
         },
       ).catch(() => { /* keep stale content */ })
     }
@@ -793,7 +818,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           if (!cancelled) {
             setPreviewContent(content)
             // Also update the matching open tab
-            setOpenTabs(prev => prev.map(t => t.id === `file:${path}` ? { ...t, content } : t))
+            setOpenTabs(prev => prev.map(t => {
+              if (t.id !== `file:${path}` || t.isDirty) return t
+              return { ...t, content, savedContent: content, saveError: null }
+            }))
           }
         } catch { /* keep stale content */ }
       } else if (!lastMtimeRef.current) {
@@ -828,6 +856,94 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     onAvailableFilesChange(collected)
   }, [lazyTree, treeVersion, files, onAvailableFilesChange])
   const activeExtFile = useMemo(() => files.find((f) => f.id === activeFileId) ?? null, [files, activeFileId])
+
+  const findLazyFileNode = useCallback((path: string): LazyFile | null => {
+    const walk = (nodes: LazyNode[]): LazyFile | null => {
+      for (const node of nodes) {
+        if (node.kind === 'file' && node.path === path) return node
+        if (node.kind === 'dir' && node.children) {
+          const found = walk(node.children)
+          if (found) return found
+        }
+      }
+      return null
+    }
+    return walk(lazyTree)
+  }, [lazyTree])
+
+  const setTabLoadedContent = useCallback((tabId: string, content: string) => {
+    setOpenTabs((prev) => prev.map((tab) => (
+      tab.id === tabId
+        ? { ...tab, content, savedContent: content, isDirty: false, isSaving: false, saveError: null }
+        : tab
+    )))
+  }, [])
+
+  const handleTabContentChange = useCallback((tabId: string, nextContent: string | undefined) => {
+    setOpenTabs((prev) => prev.map((tab) => {
+      if (tab.id !== tabId || !isEditableWorkspaceTab(tab)) return tab
+      const content = nextContent ?? ''
+      const savedContent = tab.savedContent ?? ''
+      return {
+        ...tab,
+        content,
+        isDirty: content !== savedContent,
+        saveError: null,
+      }
+    }))
+    if (activeTabId === tabId && activeNativePath) {
+      setPreviewContent(nextContent ?? '')
+    }
+  }, [activeNativePath, activeTabId])
+
+  const handleSaveTab = useCallback(async (tabId: string) => {
+    const tab = openTabs.find((entry) => entry.id === tabId)
+    if (!tab || !isEditableWorkspaceTab(tab)) return
+    const nextContent = tab.content ?? ''
+
+    setOpenTabs((prev) => prev.map((entry) => (
+      entry.id === tabId ? { ...entry, isSaving: true, saveError: null } : entry
+    )))
+
+    try {
+      if (remoteRoot) {
+        await remoteWriteFile(tab.path, nextContent, surfaceId)
+      } else {
+        const node = findLazyFileNode(tab.path)
+        if (!node?.handle) throw new Error('Local file handle is unavailable')
+        const writable = await node.handle.createWritable()
+        await writable.write(nextContent)
+        await writable.close()
+      }
+
+      setOpenTabs((prev) => prev.map((entry) => (
+        entry.id === tabId
+          ? { ...entry, content: nextContent, savedContent: nextContent, isDirty: false, isSaving: false, saveError: null }
+          : entry
+      )))
+      if (activeTabId === tabId) {
+        setPreviewContent(nextContent)
+      }
+      bumpTree()
+      if (remoteRoot) void fetchGitStatus()
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to save file'
+      setOpenTabs((prev) => prev.map((entry) => (
+        entry.id === tabId ? { ...entry, isSaving: false, saveError: message } : entry
+      )))
+    }
+  }, [activeTabId, bumpTree, fetchGitStatus, findLazyFileNode, openTabs, remoteRoot, surfaceId])
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (!(event.metaKey || event.ctrlKey) || event.key.toLowerCase() !== 's') return
+      if (!activeTabEditable || !activeTabId) return
+      event.preventDefault()
+      void handleSaveTab(activeTabId)
+    }
+    window.addEventListener('keydown', onKeyDown)
+    return () => window.removeEventListener('keydown', onKeyDown)
+  }, [activeTabEditable, activeTabId, handleSaveTab])
 
   const editorFile = activeTab?.type === 'file'
     ? { path: activeTab.path, language: activeTab.language ?? 'plaintext', content: activeTab.content ?? '' }
@@ -1047,6 +1163,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         path: fileNode.path,
         label: fileNode.name,
         content: null,
+        savedContent: null,
         language: inferLanguage(fileNode.path),
       }
       return [...prev, newTab]
@@ -1060,14 +1177,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     try {
       const content = fileNode.handle ? await readFileHandle(fileNode.handle) : await remoteReadFile(fileNode.path, surfaceId)
       setPreviewContent(content)
-      setOpenTabs((prev) => prev.map((t) => t.id === tabId ? { ...t, content } : t))
+      setTabLoadedContent(tabId, content)
     } catch {
       setPreviewContent('// Failed to read file')
-      setOpenTabs((prev) => prev.map((t) => t.id === tabId ? { ...t, content: '// Failed to read file' } : t))
+      setTabLoadedContent(tabId, '// Failed to read file')
     }
     setLoadingFile(false)
     return true
-  }, [bumpTree, lazyTree, onActiveFileChange, remoteRoot, surfaceId])
+  }, [bumpTree, lazyTree, onActiveFileChange, remoteRoot, setTabLoadedContent, surfaceId])
 
   /* ---- Toggle directory ---- */
   const handleToggleDir = useCallback(async (node: LazyDir) => {
@@ -1102,6 +1219,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         path: node.path,
         label: node.name,
         content: null,
+        savedContent: null,
         language: inferLanguage(node.path),
       }
       return [...prev, newTab]
@@ -1116,13 +1234,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       const content = node.handle ? await readFileHandle(node.handle) : await remoteReadFile(node.path, surfaceId)
       setPreviewContent(content)
       // Update tab content
-      setOpenTabs(prev => prev.map(t => t.id === tabId ? { ...t, content } : t))
+      setTabLoadedContent(tabId, content)
     } catch {
       setPreviewContent('// Failed to read file')
-      setOpenTabs(prev => prev.map(t => t.id === tabId ? { ...t, content: '// Failed to read file' } : t))
+      setTabLoadedContent(tabId, '// Failed to read file')
     }
     setLoadingFile(false)
-  }, [onActiveFileChange, surfaceId])
+  }, [onActiveFileChange, setTabLoadedContent, surfaceId])
 
   /* ---- Context / reference ---- */
   const handleContextNativeFile = useCallback(async (node: LazyFile) => {
@@ -1272,6 +1390,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         path: extFile.path,
         label: extFile.name,
         content: extFile.content,
+        savedContent: extFile.content,
         language: extFile.language,
       }
       return [...prev, newTab]
@@ -1783,9 +1902,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         style={{ width: tree.size }}
       >
         {/* Tab bar: Files | Source Control */}
-        <div className="flex items-center h-7 border-b bg-muted/20 shrink-0 px-1 gap-0.5">
+        <div className="flex items-center h-[35px] border-b bg-muted/20 shrink-0 px-1 gap-0.5">
           <button
-            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+            className={`flex h-7 items-center gap-1 px-2 rounded text-[11px] font-medium transition-colors ${
               treeTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => { setTreeTab('files'); setScDiffFile(null) }}
@@ -1794,7 +1913,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             Files
           </button>
           <button
-            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+            className={`flex h-7 items-center gap-1 px-2 rounded text-[11px] font-medium transition-colors ${
               treeTab === 'git' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => { setTreeTab('git'); setScDiffFile(null) }}
@@ -1811,7 +1930,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           {onToggleTree && (
             <button
               onClick={onToggleTree}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1 py-0.5 hover:bg-muted"
+              className="flex h-7 items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1 hover:bg-muted"
             >
               <EyeOff className="h-3 w-3" />
             </button>
@@ -2112,6 +2231,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   ) : (
                     <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
                   )}
+                  {tab.isDirty && <span className="shrink-0 text-[10px] leading-none text-primary">*</span>}
                   <span className="truncate max-w-[140px]">
                     {tab.label}
                   </span>
@@ -2128,15 +2248,34 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )
             })}
           </div>
-          {onToggleEditor && (
-            <button
-              onClick={onToggleEditor}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 mx-1"
-            >
-              <EyeOff className="h-3 w-3" />
-            </button>
+          {(activeTabEditable || onToggleEditor) && (
+            <div className="flex items-center shrink-0">
+              {activeTabEditable && (
+                <button
+                  onClick={() => { if (activeTabId) void handleSaveTab(activeTabId) }}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  title={activeTab?.isSaving ? 'Saving...' : 'Save file (Ctrl/Cmd+S)'}
+                  disabled={activeTab?.isSaving}
+                >
+                  <Save className={`h-3 w-3 ${activeTab?.isSaving ? 'animate-pulse' : ''}`} />
+                </button>
+              )}
+              {onToggleEditor && (
+                <button
+                  onClick={onToggleEditor}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 mx-1"
+                >
+                  <EyeOff className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           )}
         </div>
+        {activeTabEditable && activeTab?.saveError && (
+          <div className="border-b bg-destructive/5 px-3 py-1 text-[11px] text-destructive shrink-0">
+            {activeTab.saveError}
+          </div>
+        )}
         {/* Editor content area */}
         <div className="flex-1 min-h-0">
         {scDiffLoading ? (
@@ -2182,8 +2321,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             path={activeTab.path}
             language={activeTab.language ?? 'plaintext'}
             value={activeTab.content ?? ''}
+            onChange={(value) => handleTabContentChange(activeTab.id, value)}
             options={{
-              readOnly: true,
+              readOnly: !isEditableWorkspaceTab(activeTab),
               minimap: { enabled: false },
               fontSize: 13,
               automaticLayout: true,

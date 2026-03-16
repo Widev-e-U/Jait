@@ -182,6 +182,42 @@ export function registerWorkspaceRoutes(
     }
   });
 
+  // POST /api/workspace/write — write a file while preserving undo backups
+  app.post("/api/workspace/write", async (req, reply) => {
+    const body = req.body as { path?: string; content?: string; surfaceId?: string } | null;
+    const filePath = body?.path;
+    const content = body?.content;
+    if (!filePath) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
+    }
+    if (typeof content !== "string") {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", message: "content must be a string" });
+    }
+
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    if (!fs) {
+      return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
+    }
+
+    try {
+      await fs.write(filePath, content);
+      return { ok: true, path: filePath };
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to write file";
+      const isValidationError = err instanceof PathTraversalError || (err instanceof Error && (
+        message.includes("outside workspace root")
+        || message.includes("refers to a symlink")
+        || message.includes("must be relative")
+        || message.includes("escapes workspace boundary")
+        || message.includes("path traversal")
+      ));
+      return reply.status(isValidationError ? 400 : 500).send({
+        error: isValidationError ? "VALIDATION_ERROR" : "WRITE_FAILED",
+        message,
+      });
+    }
+  });
+
   // GET /api/workspace/stat?path=&surfaceId= — stat a file or directory
   app.get("/api/workspace/stat", async (req, reply) => {
     const { path: targetPath, surfaceId } = req.query as { path?: string; surfaceId?: string };
