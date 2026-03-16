@@ -14,6 +14,7 @@
 import { platform } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
+import { existsSync } from "node:fs";
 import type {
   Surface,
   SurfaceStartInput,
@@ -40,15 +41,10 @@ interface PTYInstance {
 
 declare const Bun: unknown;
 
-function spawnPty(shell: string, shellArgs: string[], opts: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string | undefined> }): PTYInstance {
-  // Bun runtime path
-  if (typeof Bun !== "undefined") {
-    const bunPty = require("bun-pty") as { spawn: (shell: string, args: string[], options: typeof opts) => PTYInstance };
-    return bunPty.spawn(shell, shellArgs, opts);
-  }
+let warnedAboutBunPtyFallback = false;
 
-  // Node/Vitest fallback path
-  const nodePty = require("node-pty") as {
+function loadNodePty() {
+  return require("node-pty") as {
     spawn: (shell: string, args: string[], options: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string | undefined> }) => {
       pid: number;
       onData(cb: (data: string) => void): void;
@@ -58,6 +54,28 @@ function spawnPty(shell: string, shellArgs: string[], opts: { name: string; cols
       kill(signal?: string): void;
     };
   };
+}
+
+function spawnPty(shell: string, shellArgs: string[], opts: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string | undefined> }): PTYInstance {
+  // Bun runtime path. Fall back to node-pty when bun-pty is not installed.
+  if (typeof Bun !== "undefined") {
+    try {
+      const bunPty = require("bun-pty") as { spawn: (shell: string, args: string[], options: typeof opts) => PTYInstance };
+      return bunPty.spawn(shell, shellArgs, opts);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      if (!/bun-pty/i.test(message)) {
+        throw err;
+      }
+      if (!warnedAboutBunPtyFallback) {
+        warnedAboutBunPtyFallback = true;
+        console.warn("bun-pty not installed; falling back to node-pty");
+      }
+    }
+  }
+
+  // Node/Vitest fallback path
+  const nodePty = loadNodePty();
   return nodePty.spawn(shell, shellArgs, opts);
 }
 
@@ -81,14 +99,18 @@ function defaultShell(): string {
 /** Detect which integration script to source based on the shell binary */
 function shellIntegrationScript(shell: string): { path: string; type: "pwsh" | "bash" | "zsh" } | null {
   const name = shell.toLowerCase().replace(/\.exe$/, "");
+  const resolveScript = (filename: string, type: "pwsh" | "bash" | "zsh") => {
+    const path = join(SHELL_INTEGRATION_DIR, filename);
+    return existsSync(path) ? { path, type } : null;
+  };
   if (name.includes("pwsh") || name.includes("powershell")) {
-    return { path: join(SHELL_INTEGRATION_DIR, "pwsh.ps1"), type: "pwsh" };
+    return resolveScript("pwsh.ps1", "pwsh");
   }
   if (name.includes("zsh")) {
-    return { path: join(SHELL_INTEGRATION_DIR, "zsh.sh"), type: "zsh" };
+    return resolveScript("zsh.sh", "zsh");
   }
   if (name.includes("bash") || name.includes("sh")) {
-    return { path: join(SHELL_INTEGRATION_DIR, "bash.sh"), type: "bash" };
+    return resolveScript("bash.sh", "bash");
   }
   return null;
 }
