@@ -125,11 +125,14 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
     // Pre-check gh for PR actions
     if (action === 'commit_push_pr' && !skipGhCheck.current) {
       try {
-        const ghStatus = await gitApi.ghStatus(cwd)
-        if (!ghStatus.installed || !ghStatus.authenticated) {
-          pendingPrAction.current = { action, opts }
-          setGhSetupOpen(true)
-          return
+        const status = await gitApi.status(cwd)
+        if (status.prProvider === 'github') {
+          const ghStatus = await gitApi.ghStatus(cwd)
+          if (!ghStatus.installed || !ghStatus.authenticated) {
+            pendingPrAction.current = { action, opts }
+            setGhSetupOpen(true)
+            return
+          }
         }
       } catch {
         // If check fails, proceed anyway

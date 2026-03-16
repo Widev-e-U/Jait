@@ -49,6 +49,8 @@ export interface GitStatusResult {
   pr: GitStatusPr | null;
   /** Whether GitHub CLI (`gh`) is installed and authenticated. */
   ghAvailable: boolean;
+  /** Hosting provider inferred from the preferred remote URL. */
+  prProvider: GitRemoteProvider;
   /** HTTPS remote URL for the primary remote (origin/Jait/etc.) */
   remoteUrl: string | null;
 }
@@ -109,6 +111,25 @@ export interface PrCheck {
   detailsUrl: string;
 }
 
+export type GitRemoteProvider =
+  | "github"
+  | "azure-devops"
+  | "gitlab"
+  | "bitbucket"
+  | "gitea"
+  | "unknown"
+  | "none";
+
+interface ParsedRemote {
+  provider: Exclude<GitRemoteProvider, "none" | "unknown">;
+  host: string;
+  normalizedUrl: string;
+  repo: string;
+  owner?: string;
+  organization?: string;
+  project?: string;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
@@ -136,22 +157,102 @@ async function ghAvailable(cwd: string): Promise<boolean> {
 }
 
 function parseGithubRemote(raw: string | null): { host: string; owner: string; repo: string } | null {
+  const parsed = parseGitRemote(raw);
+  if (!parsed || parsed.provider !== "github" || !parsed.owner) return null;
+  return { host: parsed.host, owner: parsed.owner, repo: parsed.repo };
+}
+
+export function parseGitRemote(raw: string | null): ParsedRemote | null {
   if (!raw) return null;
-  // Normalise to https URL
-  let url = raw.replace(/\.git$/, "");
-  url = url.replace(/^git@([^:]+):(.+)$/, "https://$1/$2");
-  url = url.replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
+
+  const normalized = raw
+    .trim()
+    .replace(/\.git$/, "")
+    .replace(/^git@ssh\.dev\.azure\.com:v3\/([^/]+)\/([^/]+)\/(.+)$/, "https://dev.azure.com/$1/$2/_git/$3")
+    .replace(/^git@([^:]+):(.+)$/, "https://$1/$2")
+    .replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
 
   try {
-    const u = new URL(url);
-    const parts = u.pathname.replace(/^\/+|\/+$/g, "").split("/");
-    if (!u.hostname.includes("github") || parts.length < 2) return null;
-    const repo = parts.pop()!;
-    const owner = parts.pop()!;
-    return { host: u.hostname, owner, repo };
+    const url = new URL(normalized);
+    const host = url.hostname.toLowerCase();
+    const parts = url.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+
+    if (host.includes("github")) {
+      if (parts.length < 2) return null;
+      return {
+        provider: "github",
+        host,
+        normalizedUrl: `https://${host}/${parts[0]}/${parts[1]}`,
+        owner: parts[0],
+        repo: parts[1]!,
+      };
+    }
+
+    if (host === "dev.azure.com") {
+      if (parts.length < 4 || parts[2] !== "_git") return null;
+      return {
+        provider: "azure-devops",
+        host,
+        normalizedUrl: `https://${host}/${parts[0]}/${parts[1]}/_git/${parts[3]}`,
+        organization: parts[0],
+        project: parts[1],
+        repo: parts[3]!,
+      };
+    }
+
+    if (host.endsWith(".visualstudio.com")) {
+      if (parts.length < 3 || parts[1] !== "_git") return null;
+      return {
+        provider: "azure-devops",
+        host,
+        normalizedUrl: `https://${host}/${parts[0]}/_git/${parts[2]}`,
+        organization: host.replace(/\.visualstudio\.com$/, ""),
+        project: parts[0],
+        repo: parts[2]!,
+      };
+    }
+
+    if (host.includes("gitlab")) {
+      if (parts.length < 2) return null;
+      return {
+        provider: "gitlab",
+        host,
+        normalizedUrl: `https://${host}/${parts.join("/")}`,
+        owner: parts.slice(0, -1).join("/"),
+        repo: parts[parts.length - 1]!,
+      };
+    }
+
+    if (host.includes("bitbucket")) {
+      if (parts.length < 2) return null;
+      return {
+        provider: "bitbucket",
+        host,
+        normalizedUrl: `https://${host}/${parts[0]}/${parts[1]}`,
+        owner: parts[0],
+        repo: parts[1]!,
+      };
+    }
+
+    if (host.includes("gitea")) {
+      if (parts.length < 2) return null;
+      return {
+        provider: "gitea",
+        host,
+        normalizedUrl: `https://${host}/${parts[0]}/${parts[1]}`,
+        owner: parts[0],
+        repo: parts[1]!,
+      };
+    }
   } catch {
     return null;
   }
+
+  return null;
+}
+
+export function detectGitRemoteProvider(raw: string | null): GitRemoteProvider {
+  return parseGitRemote(raw)?.provider ?? (raw ? "unknown" : "none");
 }
 
 function resolveGithubToken(explicit?: string): string | null {
@@ -202,6 +303,20 @@ async function resolveGithubTokenWithFallback(explicit?: string): Promise<string
   return resolveGitCredentialToken();
 }
 
+async function azAvailable(cwd: string): Promise<boolean> {
+  try {
+    await exec("az version", { cwd, timeout: 5_000 });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function azExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
+  const { stdout } = await exec(`az ${args}`, { cwd, timeout });
+  return stdout.trim();
+}
+
 // ── Service ────────────────────────────────────────────────────────
 
 export class GitService {
@@ -231,6 +346,7 @@ export class GitService {
         behindCount: 0,
         pr: null,
         ghAvailable: false,
+        prProvider: "none",
         remoteUrl: null,
       };
     }
@@ -332,9 +448,11 @@ export class GitService {
 
     // Resolve remote URL
     let remoteUrl: string | null = null;
+    let prProvider: GitRemoteProvider = "none";
     try {
       const preferredRemote = await this.getPreferredRemote(cwd, branch ?? undefined);
       remoteUrl = await this.getRemoteUrl(cwd, preferredRemote ?? "origin");
+      prProvider = detectGitRemoteProvider(remoteUrl);
     } catch { /* no remote */ }
 
     return {
@@ -346,6 +464,7 @@ export class GitService {
       behindCount,
       pr,
       ghAvailable: ghIsAvailable,
+      prProvider,
       remoteUrl,
     };
   }
@@ -508,7 +627,7 @@ export class GitService {
       // Attach a "create PR" URL so the frontend can link to it
       if (result.push.status === "pushed" && currentBranch) {
         const upstreamRemote = result.push.upstreamBranch?.split("/")[0];
-        result.push.createPrUrl = await this.buildCreatePrUrl(cwd, currentBranch, upstreamRemote);
+        result.push.createPrUrl = await this.buildCreatePrUrl(cwd, currentBranch, upstreamRemote, baseBranch);
       }
     }
 
@@ -518,15 +637,18 @@ export class GitService {
         const hasGh = await ghAvailable(cwd);
         const preferredRemote = await this.getPreferredRemote(cwd, currentBranch);
         const remoteUrl = await this.getRemoteUrl(cwd, preferredRemote ?? "");
+        const parsedRemote = parseGitRemote(remoteUrl);
         const githubRemote = parseGithubRemote(remoteUrl);
+        const manualUrl = result.push.createPrUrl ?? (preferredRemote
+          ? await this.buildCreatePrUrl(cwd, currentBranch, preferredRemote, baseBranch)
+          : undefined);
 
-        if (!hasGh && !effectiveToken) {
-          const manualUrl = result.push.createPrUrl ?? (preferredRemote ? await this.buildCreatePrUrl(cwd, currentBranch, preferredRemote) : undefined);
+        if (parsedRemote?.provider === "github" && !hasGh && !effectiveToken) {
           const hint = manualUrl ? ` Open ${manualUrl} to create the PR manually.` : "";
           throw new Error(`Cannot create pull request automatically because GitHub CLI is not installed and no GITHUB_TOKEN is configured.${hint}`);
         }
 
-        if (hasGh) {
+        if (parsedRemote?.provider === "github" && hasGh) {
           // Check if PR already exists
           try {
             const existing = await ghExec(
@@ -614,7 +736,7 @@ export class GitService {
             // Clean up temp file
             await unlink(bodyFile).catch(() => {});
           }
-        } else if (githubRemote && effectiveToken) {
+        } else if (parsedRemote?.provider === "github" && githubRemote && effectiveToken) {
           const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
@@ -633,8 +755,39 @@ export class GitService {
             headBranch: apiResult.headBranch,
             title: apiResult.title,
           };
+        } else if (parsedRemote?.provider === "azure-devops") {
+          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
+          const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
+          const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
+          let apiResult: GitStepResult["pr"] | null = null;
+          try {
+            apiResult = await this.createAzureDevopsPr(parsedRemote, cwd, {
+              title: prTitle,
+              baseBranch: resolvedBase,
+              headBranch: currentBranch,
+              body: prBody,
+            });
+          } catch {
+            apiResult = null;
+          }
+
+          result.pr = apiResult ?? {
+            status: "skipped_no_remote",
+            ...(manualUrl ? { url: manualUrl } : {}),
+            baseBranch: resolvedBase,
+            headBranch: currentBranch,
+            title: prTitle,
+          };
         } else {
-          result.pr = { status: "skipped_not_requested" };
+          result.pr = manualUrl
+            ? {
+                status: "skipped_no_remote",
+                url: manualUrl,
+                baseBranch: baseBranch ?? undefined,
+                headBranch: currentBranch,
+                title: result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`,
+              }
+            : { status: "skipped_not_requested" };
         }
       } catch (err) {
         // PR creation failed — report as error with details
@@ -861,6 +1014,74 @@ export class GitService {
     }
   }
 
+  private async createAzureDevopsPr(
+    remote: ParsedRemote & { provider: "azure-devops" },
+    cwd: string,
+    input: { title: string; baseBranch: string; headBranch: string; body: string },
+  ): Promise<GitStepResult["pr"] | null> {
+    if (!await azAvailable(cwd)) return null;
+
+    const bodyFile = join(tmpdir(), `jait-az-pr-body-${Date.now()}.md`);
+    await writeFile(bodyFile, input.body, "utf-8");
+
+    const organizationUrl = remote.host === "dev.azure.com"
+      ? `https://dev.azure.com/${remote.organization}`
+      : `https://${remote.host}`;
+
+    try {
+      try {
+        const existingRaw = await azExec(
+          cwd,
+          `repos pr list --organization "${organizationUrl}" --project "${remote.project}" --repository "${remote.repo}" --source-branch "${input.headBranch}" --status active --output json`,
+          30_000,
+        );
+        const existing = JSON.parse(existingRaw) as Array<Record<string, unknown>>;
+        const first = existing[0];
+        if (first) {
+          const pullRequestId = Number(first.pullRequestId ?? 0);
+          return {
+            status: "opened_existing",
+            url: this.buildAzurePrUrl(remote, pullRequestId),
+            number: pullRequestId,
+            baseBranch: String(first.targetRefName ?? input.baseBranch).replace(/^refs\/heads\//, ""),
+            headBranch: String(first.sourceRefName ?? input.headBranch).replace(/^refs\/heads\//, ""),
+            title: String(first.title ?? input.title),
+          };
+        }
+      } catch {
+        // best-effort existing PR lookup
+      }
+
+      const createdRaw = await azExec(
+        cwd,
+        `repos pr create --organization "${organizationUrl}" --project "${remote.project}" --repository "${remote.repo}" --source-branch "${input.headBranch}" --target-branch "${input.baseBranch}" --title "${input.title.replace(/"/g, '\\"')}" --description @"${bodyFile}" --output json`,
+        60_000,
+      );
+      const created = JSON.parse(createdRaw) as Record<string, unknown>;
+      const pullRequestId = Number(created.pullRequestId ?? 0);
+      return {
+        status: "created",
+        url: this.buildAzurePrUrl(remote, pullRequestId),
+        number: pullRequestId,
+        baseBranch: String(created.targetRefName ?? input.baseBranch).replace(/^refs\/heads\//, ""),
+        headBranch: String(created.sourceRefName ?? input.headBranch).replace(/^refs\/heads\//, ""),
+        title: String(created.title ?? input.title),
+      };
+    } finally {
+      await unlink(bodyFile).catch(() => {});
+    }
+  }
+
+  private buildAzurePrUrl(
+    remote: ParsedRemote & { provider: "azure-devops" },
+    pullRequestId: number,
+  ): string {
+    const base = remote.host === "dev.azure.com"
+      ? `https://dev.azure.com/${remote.organization}/${remote.project}/_git/${remote.repo}`
+      : `https://${remote.host}/${remote.project}/_git/${remote.repo}`;
+    return `${base}/pullrequest/${pullRequestId}`;
+  }
+
   private async createGithubPrViaApi(
     remote: { host: string; owner: string; repo: string },
     token: string,
@@ -1035,33 +1256,28 @@ export class GitService {
    * Build a URL to create a new pull request on the hosting provider.
    * Supports GitHub, GitLab, Bitbucket, and Azure DevOps remote URLs.
    */
-  async buildCreatePrUrl(cwd: string, branch: string, remoteName?: string): Promise<string | undefined> {
+  async buildCreatePrUrl(cwd: string, branch: string, remoteName?: string, baseBranch?: string): Promise<string | undefined> {
     const preferredRemote = remoteName ?? await this.getPreferredRemote(cwd, branch);
     if (!preferredRemote) return undefined;
     const raw = await this.getRemoteUrl(cwd, preferredRemote);
     if (!raw) return undefined;
+    const parsed = parseGitRemote(raw);
+    if (!parsed) return undefined;
 
-    // Normalise SSH / HTTPS remote URL → "https://host/owner/repo"
-    let url = raw
-      .replace(/\.git$/, "")
-      .replace(/^git@([^:]+):(.+)$/, "https://$1/$2")
-      .replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
-
-    // GitHub
-    if (url.includes("github.com")) {
-      return `${url}/compare/${encodeURIComponent(branch)}?expand=1`;
+    if (parsed.provider === "github") {
+      return `${parsed.normalizedUrl}/compare/${encodeURIComponent(branch)}?expand=1`;
     }
-    // GitLab
-    if (url.includes("gitlab")) {
-      return `${url}/-/merge_requests/new?merge_request[source_branch]=${encodeURIComponent(branch)}`;
+    if (parsed.provider === "gitlab") {
+      return `${parsed.normalizedUrl}/-/merge_requests/new?merge_request[source_branch]=${encodeURIComponent(branch)}`;
     }
-    // Bitbucket
-    if (url.includes("bitbucket")) {
-      return `${url}/pull-requests/new?source=${encodeURIComponent(branch)}`;
+    if (parsed.provider === "bitbucket") {
+      return `${parsed.normalizedUrl}/pull-requests/new?source=${encodeURIComponent(branch)}`;
     }
-    // Azure DevOps
-    if (url.includes("dev.azure.com") || url.includes("visualstudio.com")) {
-      return `${url}/pullrequestcreate?sourceRef=${encodeURIComponent(branch)}`;
+    if (parsed.provider === "azure-devops") {
+      return `${parsed.normalizedUrl}/pullrequestcreate?sourceRef=${encodeURIComponent(`refs/heads/${branch}`)}${baseBranch ? `&targetRef=${encodeURIComponent(`refs/heads/${baseBranch}`)}` : ""}`;
+    }
+    if (parsed.provider === "gitea") {
+      return `${parsed.normalizedUrl}/compare/${encodeURIComponent(baseBranch ?? "main")}...${encodeURIComponent(branch)}`;
     }
 
     return undefined;

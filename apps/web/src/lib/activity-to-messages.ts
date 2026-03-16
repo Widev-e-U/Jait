@@ -16,6 +16,91 @@ import type { ThreadActivity } from '@/lib/agents-api'
 import type { ChatMessage, MessageSegment } from '@/hooks/useChat'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : null
+}
+
+function asString(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() ? value : null
+}
+
+function parseJsonObject(value: unknown): Record<string, unknown> | null {
+  if (typeof value !== 'string') return null
+  try {
+    const parsed = JSON.parse(value) as unknown
+    return asRecord(parsed)
+  } catch {
+    return null
+  }
+}
+
+function mergeArgs(...sources: Array<Record<string, unknown> | null | undefined>): Record<string, unknown> {
+  const merged: Record<string, unknown> = {}
+  for (const source of sources) {
+    if (!source) continue
+    for (const [key, value] of Object.entries(source)) {
+      if (value !== undefined && value !== null && value !== '') {
+        merged[key] = value
+      }
+    }
+  }
+  return merged
+}
+
+function extractToolArgs(payload: Record<string, unknown>, tool: string): Record<string, unknown> {
+  const args = asRecord(payload.args)
+  const data = asRecord(payload.data)
+  const parsedMessage = parseJsonObject(payload.message)
+  const normalizedTool = tool.replace('_', '.')
+
+  const fallback = mergeArgs(data, parsedMessage)
+  if (Object.keys(args ?? {}).length > 0) {
+    return mergeArgs(fallback, args)
+  }
+
+  if (normalizedTool === 'edit' || normalizedTool.startsWith('file.')) {
+    return mergeArgs(fallback, {
+      path: asString(payload.path) ?? asString(payload.file) ?? asString(payload.name) ?? asString(data?.path) ?? asString(data?.file) ?? '',
+      search: payload.search ?? data?.search,
+      replace: payload.replace ?? data?.replace,
+      content: payload.content ?? data?.content,
+    })
+  }
+
+  if (normalizedTool === 'web' || normalizedTool.startsWith('web.') || normalizedTool.startsWith('browser.')) {
+    return mergeArgs(fallback, {
+      url: asString(payload.url) ?? asString(data?.url) ?? asString(data?.finalUrl) ?? '',
+      query: asString(payload.query) ?? asString(payload.name) ?? asString(data?.query) ?? '',
+      content: payload.content ?? data?.content,
+    })
+  }
+
+  return fallback
+}
+
+function extractToolResultMessage(payload: Record<string, unknown>, summary: string): string {
+  const direct =
+    asString(payload.message) ??
+    asString(payload.output) ??
+    asString(payload.content) ??
+    asString(payload.text) ??
+    asString(payload.summary)
+  if (direct) return direct
+
+  const data = asRecord(payload.data)
+  const nested =
+    asString(data?.message) ??
+    asString(data?.output) ??
+    asString(data?.content) ??
+    asString(data?.text) ??
+    asString(data?.summary)
+  if (nested) return nested
+
+  return summary
+}
+
 export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[] {
   const messages: ChatMessage[] = []
   let current: ChatMessage | null = null
@@ -104,12 +189,13 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
       case 'tool.start': {
         const msg = ensureAssistant(act.id)
         const callId = (payload.callId as string) ?? act.id
+        const tool = (payload.tool as string) ?? 'unknown'
         // Deduplicate: if we already have a tool call with this callId, skip
         if (toolCallMap.has(callId)) break
         const tc: ToolCallInfo = {
           callId,
-          tool: (payload.tool as string) ?? 'unknown',
-          args: (payload.args as Record<string, unknown>) ?? {},
+          tool,
+          args: extractToolArgs(payload, tool),
           status: 'running',
           startedAt: new Date(act.createdAt).getTime(),
         }
@@ -132,16 +218,36 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
       case 'tool.result':
       case 'tool.error': {
         const callId = payload.callId as string | undefined
-        if (callId && toolCallMap.has(callId)) {
-          const tc = toolCallMap.get(callId)!
-          tc.status = (payload.ok as boolean) ? 'success' : 'error'
-          tc.result = {
-            ok: (payload.ok as boolean) ?? false,
-            message: (payload.message as string) ?? act.summary,
-            ...(payload.data !== undefined ? { data: payload.data } : {}),
+        const tool = (payload.tool as string) ?? 'unknown'
+        const ok = typeof payload.ok === 'boolean' ? payload.ok : act.kind === 'tool.result'
+        const message = extractToolResultMessage(payload, act.summary)
+        const resultData = payload.data !== undefined ? payload.data : parseJsonObject(payload.message)
+        let tc = callId ? toolCallMap.get(callId) : undefined
+
+        if (!tc) {
+          const msg = ensureAssistant(act.id)
+          const synthesizedCallId = callId ?? act.id
+          tc = {
+            callId: synthesizedCallId,
+            tool,
+            args: extractToolArgs(payload, tool),
+            status: ok ? 'success' : 'error',
+            startedAt: new Date(act.createdAt).getTime(),
           }
-          tc.completedAt = new Date(act.createdAt).getTime()
+          msg.toolCalls = msg.toolCalls ?? []
+          msg.toolCalls.push(tc)
+          toolCallMap.set(synthesizedCallId, tc)
+          currentToolGroupIds.push(synthesizedCallId)
         }
+
+        tc.args = mergeArgs(tc.args, extractToolArgs(payload, tool))
+        tc.status = ok ? 'success' : 'error'
+        tc.result = {
+          ok,
+          message,
+          ...(resultData !== undefined ? { data: resultData } : {}),
+        }
+        tc.completedAt = new Date(act.createdAt).getTime()
         break
       }
 

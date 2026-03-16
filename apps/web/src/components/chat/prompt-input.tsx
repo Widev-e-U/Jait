@@ -1,13 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef, type ReactNode } from 'react'
-import { ArrowUp, ChevronDown, ListPlus, Mic, MicOff, Square, Loader2 } from 'lucide-react'
+import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2 } from 'lucide-react'
 import { getIconForFile, DEFAULT_FILE } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
@@ -36,7 +30,7 @@ interface PromptInputProps {
   onChange: (value: string) => void
   onSubmit: (chipFiles?: ReferencedFile[]) => void
   onStop?: () => void
-  /** Queue a message while the agent is busy (shown as dropdown option). */
+  /** Queue a message while the agent is busy. */
   onQueue?: (chipFiles?: ReferencedFile[]) => void
   isLoading?: boolean
   disabled?: boolean
@@ -769,7 +763,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           </div>
         )}
         <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterControls ? 'pl-1' : 'ml-auto')}>
-          {onVoiceInput && !isLoading && !voiceRecording && !voiceTranscribing && (
+          {onVoiceInput && !voiceRecording && !voiceTranscribing && (
             <Button
               type="button"
               size="icon"
@@ -818,60 +812,22 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               <Square className="h-3.5 w-3.5 fill-current" />
             </Button>
           )}
-          {/* Split send button: primary action + dropdown with Send / Queue */}
           {isLoading && onQueue ? (
-            <div className="flex items-center">
-              <Button
-                type="button"
-                size="icon"
-                className="h-8 w-8 shrink-0 rounded-lg rounded-r-none border-r-0"
-                disabled={isEmpty || composerDisabled}
-                title="Queue message"
-                onClick={() => {
-                  const el = editableRef.current
-                  const chips = el ? getChipFiles(el) : []
-                  onQueue(chips)
-                }}
-              >
-                <ArrowUp className="h-4 w-4" />
-              </Button>
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button
-                    type="button"
-                    size="icon"
-                    className="h-8 w-5 shrink-0 rounded-lg rounded-l-none px-0"
-                    disabled={isEmpty || composerDisabled}
-                  >
-                    <ChevronDown className="h-3 w-3" />
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" side="top" className="min-w-[160px]">
-                  <DropdownMenuItem
-                    disabled={isEmpty || composerDisabled}
-                    onSelect={() => {
-                      const el = editableRef.current
-                      const chips = el ? getChipFiles(el) : []
-                      onSubmit(chips)
-                    }}
-                  >
-                    <ArrowUp className="h-3.5 w-3.5 mr-2" />
-                    Send now
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    disabled={isEmpty || composerDisabled}
-                    onSelect={() => {
-                      const el = editableRef.current
-                      const chips = el ? getChipFiles(el) : []
-                      onQueue(chips)
-                    }}
-                  >
-                    <ListPlus className="h-3.5 w-3.5 mr-2" />
-                    Add to queue
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            </div>
+            <Button
+              type="button"
+              size="icon"
+              variant="secondary"
+              className="h-8 w-8 shrink-0 rounded-lg"
+              disabled={isEmpty || composerDisabled}
+              title="Add to queue"
+              onClick={() => {
+                const el = editableRef.current
+                const chips = el ? getChipFiles(el) : []
+                onQueue(chips)
+              }}
+            >
+              <ListPlus className="h-4 w-4" />
+            </Button>
           ) : !isLoading ? (
             <Button
               type="button"
