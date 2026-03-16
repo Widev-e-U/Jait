@@ -1272,7 +1272,11 @@ function App() {
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
     if (savedCliModels && Object.keys(savedCliModels).length > 0) {
-      setCliModelsByProvider(savedCliModels)
+      setCliModelsByProvider(prev => {
+        const keys = Object.keys(savedCliModels) as CliProviderId[]
+        if (keys.length === Object.keys(prev).length && keys.every(k => prev[k] === savedCliModels[k])) return prev
+        return savedCliModels
+      })
       return
     }
 
@@ -1292,8 +1296,12 @@ function App() {
     setWorkspaceTabsState(savedWorkspaceTabs ?? null)
   }, [savedWorkspaceTabs])
 
+  const prevSavedQueuedRef = useRef<string | null>(null)
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
+    const serialized = JSON.stringify(savedQueuedMessages ?? [])
+    if (serialized === prevSavedQueuedRef.current) return
+    prevSavedQueuedRef.current = serialized
     setMessageQueueState((savedQueuedMessages ?? []) as SavedQueuedMessage[])
   }, [savedQueuedMessages, setMessageQueueState])
 
@@ -1561,9 +1569,14 @@ function App() {
     sendUIState('chat.view', viewMode, activeSessionId)
   }, [viewMode, setSavedChatView, sendUIState, activeSessionId, loadingChatView, token])
 
+  const prevQueuePayloadRef = useRef<string | null>(null)
   useEffect(() => {
-    setSavedQueuedMessages((messageQueue as SavedQueuedMessage[]).length > 0 ? (messageQueue as SavedQueuedMessage[]) : null)
-    sendUIState('queued_messages', messageQueue.length > 0 ? messageQueue : null, activeSessionId)
+    const payload = (messageQueue as SavedQueuedMessage[]).length > 0 ? (messageQueue as SavedQueuedMessage[]) : null
+    const serialized = JSON.stringify(payload)
+    if (serialized === prevQueuePayloadRef.current) return
+    prevQueuePayloadRef.current = serialized
+    setSavedQueuedMessages(payload)
+    sendUIState('queued_messages', payload, activeSessionId)
   }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId])
 
   // Register broadcast callback: when file decisions change, sync to other clients
@@ -1594,6 +1607,7 @@ function App() {
     }))
   }, [chatProvider])
 
+  const prevCliModelsPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingCliModels) return
     const nextModels: Partial<Record<CliProviderId, string | null>> = {}
@@ -1605,6 +1619,9 @@ function App() {
     }
 
     const payload = Object.keys(nextModels).length > 0 ? nextModels : null
+    const serialized = JSON.stringify(payload)
+    if (serialized === prevCliModelsPayloadRef.current) return
+    prevCliModelsPayloadRef.current = serialized
     setSavedCliModels(payload)
     sendUIState('chat.cliModels', payload, activeSessionId)
 
