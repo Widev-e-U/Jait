@@ -455,7 +455,7 @@ function MessageInner({
               'relative rounded-lg px-4 py-3 bg-muted',
               compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
             )}>
-              <div className="whitespace-pre-wrap">{userDisplayText}</div>
+              <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{userDisplayText}</div>
               {userFiles.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-foreground/5">
                   {userFiles.map((f) => (
