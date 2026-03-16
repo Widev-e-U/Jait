@@ -454,6 +454,25 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
   const [hoveredNode, setHoveredNode] = useState<string | null>(null)
   const [deployIp, setDeployIp] = useState<string | null>(null)
 
+  const fitGraphToViewport = useCallback(() => {
+    const fg = graphRef.current
+    if (!fg || dimensions.width <= 0 || dimensions.height <= 0) return
+
+    // Keep some breathing room without shrinking the graph into an unreadable overview.
+    const padding = Math.max(48, Math.min(96, Math.min(dimensions.width, dimensions.height) * 0.08))
+    const minReadableZoom = dimensions.width < 768 ? 0.95 : 0.85
+
+    fg.zoomToFit(250, padding)
+
+    // zoomToFit can still leave sparse graphs looking tiny on larger screens.
+    setTimeout(() => {
+      const currentZoom = fg.zoom()
+      if (typeof currentZoom === 'number' && currentZoom < minReadableZoom) {
+        fg.zoom(minReadableZoom, 250)
+      }
+    }, 300)
+  }, [dimensions.height, dimensions.width])
+
   const headers = useCallback((): Record<string, string> => {
     const h: Record<string, string> = {}
     if (token) h['Authorization'] = `Bearer ${token}`
@@ -558,15 +577,12 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
   useEffect(() => {
     if (graphRef.current && graphData.nodes.length > 0 && !hasInitialZoomRef.current) {
       hasInitialZoomRef.current = true
-      // Wait for the force layout to settle before fitting
+      // Wait for the force layout to settle before fitting.
       setTimeout(() => {
-        const fg = graphRef.current
-        if (!fg) return
-        // zoomToFit with generous padding so it never zooms in too much
-        fg.zoomToFit(0, 200)
+        fitGraphToViewport()
       }, 1500)
     }
-  }, [graphData.nodes.length])
+  }, [fitGraphToViewport, graphData.nodes.length])
 
   // Draw node
   const drawNode = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -801,6 +817,8 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
             cooldownTicks={80}
             d3VelocityDecay={0.3}
             d3AlphaDecay={0.02}
+            minZoom={0.65}
+            maxZoom={3}
             enableNodeDrag
             enableZoomInteraction
             enablePanInteraction

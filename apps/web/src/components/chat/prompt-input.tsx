@@ -180,19 +180,28 @@ export interface PromptInputHandle {
   insertChip: (file: ReferencedFile) => void
 }
 
-function VoiceLevelMeter({ levels = [] }: { levels?: number[] }) {
+function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
   const bars = levels.length > 0 ? levels : Array.from({ length: 18 }, () => 0.08)
+  const visibleBars = compact ? bars.slice(-12) : bars
+  const meterHeight = compact ? 28 : 34
 
   return (
-    <span className="flex h-7 items-end gap-1 rounded-full border border-red-500/20 bg-red-500/10 px-2.5 py-1">
-      {bars.map((level, index) => (
+    <span
+      className={cn(
+        'flex min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-full border border-black/10 bg-gradient-to-b from-black/5 via-black/10 to-black/5 px-2 py-1 dark:border-white/10 dark:from-white/5 dark:via-white/10 dark:to-white/5',
+        compact ? 'h-8 max-w-[140px]' : 'h-9 max-w-[220px]',
+      )}
+    >
+      {visibleBars.map((level, index) => (
         <span
-          // Inline heights keep the waveform responsive without extra CSS files.
           key={index}
-          className="w-1 rounded-full bg-red-500 transition-[height,opacity] duration-100 ease-out"
+          className={cn(
+            'block flex-1 rounded-full bg-black/75 transition-[height,opacity] duration-200 ease-out dark:bg-white/80',
+            compact ? 'min-w-[3px]' : 'min-w-[4px]',
+          )}
           style={{
-            height: `${6 + level * 16}px`,
-            opacity: 0.35 + level * 0.65,
+            height: `${8 + level * meterHeight}px`,
+            opacity: 0.28 + level * 0.72,
           }}
         />
       ))}
@@ -776,21 +785,21 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </Button>
           )}
           {voiceRecording && onVoiceStop && (
-            <div className="flex items-center gap-2">
-              <span className="flex items-center gap-1.5 text-xs text-red-500 font-medium">
-                <span className="h-2 w-2 rounded-full bg-red-500 animate-pulse" />
-                Listening...
+            <div className="flex min-w-0 items-center gap-2">
+              <span className="flex shrink-0 items-center gap-1.5 text-xs font-medium text-foreground/80">
+                <span className="h-2 w-2 rounded-full bg-foreground/70 animate-pulse" />
+                {!isMobile && 'Listening...'}
               </span>
-              <VoiceLevelMeter levels={voiceLevels} />
+              <VoiceLevelMeter levels={voiceLevels} compact={isMobile} />
               <Button
                 type="button"
                 size="sm"
-                variant="destructive"
-                className="h-7 px-2.5 rounded-lg text-xs"
+                variant="outline"
+                className={cn('h-7 shrink-0 rounded-lg text-xs', isMobile ? 'px-2' : 'px-2.5')}
                 onClick={onVoiceStop}
               >
-                <MicOff className="h-3.5 w-3.5 mr-1" />
-                Done
+                <MicOff className={cn('h-3.5 w-3.5', !isMobile && 'mr-1')} />
+                {!isMobile && 'Done'}
               </Button>
             </div>
           )}

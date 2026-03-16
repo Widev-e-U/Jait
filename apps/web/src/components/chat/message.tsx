@@ -62,8 +62,8 @@ interface MessageProps {
 
 function proseClassName(compact?: boolean) {
   return compact
-    ? 'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none prose-sm prose-p:leading-normal'
-    : 'prose dark:prose-invert max-w-none prose-pre:bg-muted prose-pre:border prose-code:before:content-none prose-code:after:content-none prose-base prose-p:leading-relaxed'
+    ? 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-sm prose-p:leading-normal'
+    : 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-base prose-p:leading-relaxed'
 }
 
 function buildMarkdownComponents(
@@ -369,7 +369,7 @@ function MessageInner({
 
   return (
     <div className={cn('group/message flex gap-3', compact ? 'py-2' : 'py-4', isUser && 'justify-end')}>
-      <div className={cn('max-w-[85%] space-y-2', isUser && 'order-1')}>
+      <div className={cn('min-w-0 max-w-[85%] space-y-2', isUser && 'order-1')}>
         {!isUser && thinking && (
           <Reasoning
             content={thinking}
@@ -452,10 +452,10 @@ function MessageInner({
             </div>
           ) : isUser ? (
             <div ref={userBubbleRef} className={cn(
-              'relative rounded-lg px-4 py-3 bg-muted',
+              'relative min-w-0 overflow-hidden rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
               compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
             )}>
-              <div className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{userDisplayText}</div>
+              <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{userDisplayText}</div>
               {userFiles.length > 0 && (
                 <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-foreground/5">
                   {userFiles.map((f) => (
@@ -473,7 +473,7 @@ function MessageInner({
               {renderActions()}
             </div>
           ) : (
-            <div className="relative">
+            <div className="relative min-w-0 break-words [overflow-wrap:anywhere]">
               <AssistantMarkdown
                 content={content}
                 compact={compact}
