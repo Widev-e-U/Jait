@@ -971,26 +971,27 @@ function App() {
 
     const syncFloatingScreenShareBounds = () => {
       const viewport = getFloatingViewport()
-      const nextSize = clampFloatingScreenShareSize({ size: floatingSSSize, viewport })
-      if (nextSize.w !== floatingSSSize.w || nextSize.h !== floatingSSSize.h) {
-        setFloatingSSSize(nextSize)
-      }
-      if (floatingSSPos.x >= 0 && floatingSSPos.y >= 0) {
-        const nextPos = clampFloatingScreenSharePosition({
-          position: floatingSSPos,
-          size: nextSize,
+      let clampedSize: { w: number; h: number } | undefined
+      setFloatingSSSize(prev => {
+        const next = clampFloatingScreenShareSize({ size: prev, viewport })
+        clampedSize = next
+        return (next.w === prev.w && next.h === prev.h) ? prev : next
+      })
+      setFloatingSSPos(prev => {
+        if (prev.x < 0 && prev.y < 0) return prev
+        const next = clampFloatingScreenSharePosition({
+          position: prev,
+          size: clampedSize!,
           viewport,
         })
-        if (nextPos.x !== floatingSSPos.x || nextPos.y !== floatingSSPos.y) {
-          setFloatingSSPos(nextPos)
-        }
-      }
+        return (next.x === prev.x && next.y === prev.y) ? prev : next
+      })
     }
 
     syncFloatingScreenShareBounds()
     window.addEventListener('resize', syncFloatingScreenShareBounds)
     return () => window.removeEventListener('resize', syncFloatingScreenShareBounds)
-  }, [showScreenShare, floatingSSPos, floatingSSSize, getFloatingViewport])
+  }, [showScreenShare, getFloatingViewport])
 
   const {
     user,

@@ -1,6 +1,6 @@
 {
   "name": "@jait/web",
-  "version": "0.1.71",
+"version": "0.1.72"
   "private": true,
   "description": "Jait web frontend — bundled into @jait/gateway at build time",
   "type": "module",
