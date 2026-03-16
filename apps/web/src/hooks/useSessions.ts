@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
 
 const API_URL = getApiUrl()
+const SESSION_LIST_LIMIT = 10
 
 export interface Session {
   id: string
@@ -21,27 +22,31 @@ function authHeaders(token?: string | null): Record<string, string> {
 export function useSessions(token?: string | null, onLoginRequired?: () => void) {
   const [sessions, setSessions] = useState<Session[]>([])
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
+  const [visibleLimit, setVisibleLimit] = useState(SESSION_LIST_LIMIT)
+  const [hasMoreSessions, setHasMoreSessions] = useState(false)
   const [loading, setLoading] = useState(true)
 
   const fetchSessions = useCallback(async () => {
     if (!token) {
       setSessions(prev => prev.length === 0 ? prev : [])
       setActiveSessionId(null)
+      setHasMoreSessions(false)
       setLoading(false)
       return
     }
     setLoading(true)
     try {
       const [sessionsRes, lastActiveRes] = await Promise.all([
-        fetch(`${API_URL}/api/sessions?status=active`, { headers: authHeaders(token) }),
+        fetch(`${API_URL}/api/sessions?status=active&limit=${visibleLimit}`, { headers: authHeaders(token) }),
         fetch(`${API_URL}/api/sessions/last-active`, { headers: authHeaders(token) }),
       ])
       if (sessionsRes.status === 401 || lastActiveRes.status === 401) {
         onLoginRequired?.()
       }
       if (sessionsRes.ok) {
-        const data = (await sessionsRes.json()) as { sessions: Session[] }
+        const data = (await sessionsRes.json()) as { sessions: Session[]; hasMore?: boolean }
         setSessions(data.sessions)
+        setHasMoreSessions(Boolean(data.hasMore))
       }
       if (lastActiveRes.ok) {
         const data = (await lastActiveRes.json()) as { session: Session | null }
@@ -54,7 +59,7 @@ export function useSessions(token?: string | null, onLoginRequired?: () => void)
     } finally {
       setLoading(false)
     }
-  }, [onLoginRequired, token])
+  }, [onLoginRequired, token, visibleLimit])
 
   const createSession = useCallback(async (name?: string) => {
     if (!token) {
@@ -73,7 +78,7 @@ export function useSessions(token?: string | null, onLoginRequired?: () => void)
       }
       if (res.ok) {
         const session = (await res.json()) as Session
-        setSessions((prev) => [session, ...prev])
+        setSessions((prev) => [session, ...prev].slice(0, visibleLimit))
         setActiveSessionId(session.id)
         return session
       }
@@ -101,14 +106,22 @@ export function useSessions(token?: string | null, onLoginRequired?: () => void)
         onLoginRequired?.()
         return
       }
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId))
+      await fetchSessions()
       if (activeSessionId === sessionId) {
         setActiveSessionId(null)
       }
     } catch (err) {
       console.error('Failed to archive session:', err)
     }
-  }, [activeSessionId, onLoginRequired, token])
+  }, [activeSessionId, fetchSessions, onLoginRequired, token])
+
+  const showMoreSessions = useCallback(() => {
+    setVisibleLimit((prev) => prev + SESSION_LIST_LIMIT)
+  }, [])
+
+  const showFewerSessions = useCallback(() => {
+    setVisibleLimit(SESSION_LIST_LIMIT)
+  }, [])
 
   // Load sessions on mount
   useEffect(() => {
@@ -119,9 +132,13 @@ export function useSessions(token?: string | null, onLoginRequired?: () => void)
     sessions,
     activeSessionId,
     loading,
+    hasMoreSessions,
     fetchSessions,
     createSession,
     switchSession,
     archiveSession,
+    showMoreSessions,
+    showFewerSessions,
+    sessionListLimit: SESSION_LIST_LIMIT,
   }
 }

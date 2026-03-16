@@ -125,6 +125,13 @@ export function registerThreadRoutes(
     return `${proto}://${host}`;
   }
 
+  function parseThreadListLimit(value: unknown): number | undefined {
+    if (typeof value !== "string") return undefined;
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return undefined;
+    return Math.min(parsed, 100);
+  }
+
   /**
    * Find a connected remote node that can run a provider for a given path.
    * Matches the path's platform format (e.g. Windows drive letter) to a
@@ -159,10 +166,30 @@ export function registerThreadRoutes(
     if (!authUser) return;
     const query = request.query as Record<string, string>;
     const sessionId = query["sessionId"];
-    const threads = sessionId
-      ? threadService.listBySession(sessionId).filter((thread) => thread.userId === authUser.id)
-      : threadService.list(authUser.id);
-    return { threads };
+    const limit = parseThreadListLimit(query["limit"]);
+    if (sessionId) {
+      if (!limit) {
+        return {
+          threads: threadService.listBySession(sessionId).filter((thread) => thread.userId === authUser.id),
+          hasMore: false,
+        };
+      }
+      const threads = threadService
+        .listBySession(sessionId, limit + 1)
+        .filter((thread) => thread.userId === authUser.id);
+      return {
+        threads: threads.slice(0, limit),
+        hasMore: threads.length > limit,
+      };
+    }
+    if (!limit) {
+      return { threads: threadService.list(authUser.id), hasMore: false };
+    }
+    const threads = threadService.list(authUser.id, limit + 1);
+    return {
+      threads: threads.slice(0, limit),
+      hasMore: threads.length > limit,
+    };
   });
 
   /** Create a new thread */

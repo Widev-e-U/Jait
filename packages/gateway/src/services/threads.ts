@@ -102,24 +102,33 @@ export class ThreadService {
       .get();
   }
 
-  list(userId?: string): ThreadRow[] {
+  list(userId?: string, limit?: number): ThreadRow[] {
+    const normalizedLimit =
+      typeof limit === "number" && Number.isFinite(limit) && limit > 0
+        ? Math.floor(limit)
+        : undefined;
     const base = this.db.select().from(agentThreads);
     if (userId) {
-      return base
+      const query = base
         .where(eq(agentThreads.userId, userId))
-        .orderBy(desc(agentThreads.updatedAt))
-        .all();
+        .orderBy(desc(agentThreads.updatedAt));
+      return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
     }
-    return base.orderBy(desc(agentThreads.updatedAt)).all();
+    const query = base.orderBy(desc(agentThreads.updatedAt));
+    return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
   }
 
-  listBySession(sessionId: string): ThreadRow[] {
-    return this.db
+  listBySession(sessionId: string, limit?: number): ThreadRow[] {
+    const normalizedLimit =
+      typeof limit === "number" && Number.isFinite(limit) && limit > 0
+        ? Math.floor(limit)
+        : undefined;
+    const query = this.db
       .select()
       .from(agentThreads)
       .where(eq(agentThreads.sessionId, sessionId))
-      .orderBy(desc(agentThreads.updatedAt))
-      .all();
+      .orderBy(desc(agentThreads.updatedAt));
+    return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
   }
 
   listRunning(): ThreadRow[] {

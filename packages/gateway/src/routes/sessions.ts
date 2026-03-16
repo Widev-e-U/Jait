@@ -25,6 +25,13 @@ export function registerSessionRoutes(
   hooks?: HookBus,
   sessionState?: SessionStateService,
 ) {
+  const parseSessionListLimit = (value: unknown) => {
+    if (typeof value !== "string") return undefined;
+    const parsed = Number.parseInt(value, 10);
+    if (!Number.isFinite(parsed) || parsed < 1) return undefined;
+    return Math.min(parsed, 100);
+  };
+
   // Create session
   app.post("/api/sessions", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
@@ -62,7 +69,15 @@ export function registerSessionRoutes(
     const query = request.query as Record<string, unknown>;
     const status =
       typeof query["status"] === "string" ? query["status"] : undefined;
-    return { sessions: sessionService.list(status, authUser.id) };
+    const limit = parseSessionListLimit(query["limit"]);
+    if (!limit) {
+      return { sessions: sessionService.list(status, authUser.id), hasMore: false };
+    }
+    const sessions = sessionService.list(status, authUser.id, limit + 1);
+    return {
+      sessions: sessions.slice(0, limit),
+      hasMore: sessions.length > limit,
+    };
   });
 
   // Get the most recently active session

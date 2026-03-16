@@ -32,6 +32,7 @@ import { generateDeviceId } from '@/lib/device-id'
 export type RepositoryConnection = AutomationRepository
 
 export type ThreadPrState = GitStatusPr['state'] | null
+const THREAD_LIST_LIMIT = 10
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -91,6 +92,8 @@ export function useAutomation(enabled = true) {
 
   // Threads
   const [threads, setThreads] = useState<AgentThread[]>([])
+  const [threadListLimit, setThreadListLimit] = useState(THREAD_LIST_LIMIT)
+  const [hasMoreThreads, setHasMoreThreads] = useState(false)
   const [selectedThreadId, setSelectedThreadId] = useState<string | null>(null)
   const [activities, setActivities] = useState<ThreadActivity[]>([])
   const [threadPrStates, setThreadPrStates] = useState<Record<string, ThreadPrState>>({})
@@ -164,11 +167,12 @@ export function useAutomation(enabled = true) {
     setLoading(true)
     try {
       const [ts, provResult, repos] = await Promise.all([
-        agentsApi.listThreads(),
+        agentsApi.listThreadsPage({ limit: threadListLimit }),
         agentsApi.listProviders(),
         agentsApi.listRepos(),
       ])
-      setThreads(ts)
+      setThreads(ts.threads)
+      setHasMoreThreads(ts.hasMore)
       setProviders(provResult.providers)
       setRemoteProviders(provResult.remoteProviders)
       setProvidersLoaded(true)
@@ -179,7 +183,7 @@ export function useAutomation(enabled = true) {
     } finally {
       setLoading(false)
     }
-  }, [localDeviceId])
+  }, [localDeviceId, threadListLimit])
 
   /** Lightweight refresh of just providers + repos (used when FsNodes connect/disconnect). */
   const refreshProviders = useCallback(async () => {
@@ -733,6 +737,14 @@ export function useAutomation(enabled = true) {
     [selectedThreadId],
   )
 
+  const showMoreThreads = useCallback(() => {
+    setThreadListLimit((prev) => prev + THREAD_LIST_LIMIT)
+  }, [])
+
+  const showFewerThreads = useCallback(() => {
+    setThreadListLimit(THREAD_LIST_LIMIT)
+  }, [])
+
   return {
     // Repos
     repositories,
@@ -746,6 +758,10 @@ export function useAutomation(enabled = true) {
 
     // Threads
     threads,
+    hasMoreThreads,
+    threadListLimit,
+    showMoreThreads,
+    showFewerThreads,
     repoThreads,
     selectedThreadId,
     setSelectedThreadId,

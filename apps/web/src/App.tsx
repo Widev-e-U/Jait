@@ -1031,7 +1031,18 @@ function App() {
 
   const onLoginRequired = useCallback(() => setShowLoginDialog(true), [])
 
-  const { sessions, activeSessionId, createSession, switchSession, archiveSession, fetchSessions } = useSessions(
+  const {
+    sessions,
+    activeSessionId,
+    createSession,
+    switchSession,
+    archiveSession,
+    fetchSessions,
+    hasMoreSessions,
+    showMoreSessions,
+    showFewerSessions,
+    sessionListLimit,
+  } = useSessions(
     token,
     onLoginRequired,
   )
@@ -1090,13 +1101,6 @@ function App() {
     () => [...automation.threads].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()),
     [automation.threads],
   )
-  const THREAD_DISPLAY_LIMIT = 10
-  const [showAllThreads, setShowAllThreads] = useState(false)
-  const visibleManagerThreads = useMemo(
-    () => showAllThreads ? managerThreads : managerThreads.slice(0, THREAD_DISPLAY_LIMIT),
-    [managerThreads, showAllThreads],
-  )
-  const hasHiddenThreads = managerThreads.length > THREAD_DISPLAY_LIMIT && !showAllThreads
   const selectedRepoRuntime = useMemo(
     () => (automation.selectedRepo ? automation.getRuntimeInfoForRepository(automation.selectedRepo) : null),
     [automation.getRuntimeInfoForRepository, automation.selectedRepo],
@@ -3247,9 +3251,13 @@ function App() {
                 <SessionSelector
                   sessions={sessions}
                   activeSessionId={activeSessionId}
+                  hasMoreSessions={hasMoreSessions}
+                  showFewerSessions={sessions.length > sessionListLimit}
                   onSelect={switchSession}
                   onCreate={() => createSession()}
                   onArchive={archiveSession}
+                  onShowMore={showMoreSessions}
+                  onShowFewer={showFewerSessions}
                   sessionInfo={sessionInfo}
                 />
               </aside>
@@ -3569,7 +3577,7 @@ function App() {
                             </div>
                           ) : (
                             <div className="flex flex-col">
-                              {visibleManagerThreads.map((thread) => {
+                              {managerThreads.map((thread) => {
                                 const threadRepo = automation.getRepositoryForThread(thread)
                                 const repoName = threadRepo?.name ?? inferThreadRepositoryName(thread) ?? 'Unknown repo'
                                 return (
@@ -3586,18 +3594,18 @@ function App() {
                                   />
                                 )
                               })}
-                              {hasHiddenThreads && (
+                              {automation.hasMoreThreads && (
                                 <button
                                   className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                                  onClick={() => setShowAllThreads(true)}
+                                  onClick={automation.showMoreThreads}
                                 >
-                                  Show {managerThreads.length - THREAD_DISPLAY_LIMIT} more threads
+                                  Show more threads
                                 </button>
                               )}
-                              {showAllThreads && managerThreads.length > THREAD_DISPLAY_LIMIT && (
+                              {managerThreads.length > automation.threadListLimit && (
                                 <button
                                   className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
-                                  onClick={() => setShowAllThreads(false)}
+                                  onClick={automation.showFewerThreads}
                                 >
                                   Show less
                                 </button>

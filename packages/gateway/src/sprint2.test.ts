@@ -348,6 +348,35 @@ describeDb("Session REST routes (with DB)", () => {
     expect(body.sessions.length).toBe(0);
   });
 
+  it("GET /api/sessions?limit=N returns a bounded page and hasMore", async () => {
+    await app.inject({
+      method: "POST",
+      url: "/api/sessions",
+      payload: { name: "Session 1" },
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/sessions",
+      payload: { name: "Session 2" },
+    });
+    await app.inject({
+      method: "POST",
+      url: "/api/sessions",
+      payload: { name: "Session 3" },
+    });
+
+    const res = await app.inject({
+      method: "GET",
+      url: "/api/sessions?limit=2",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.sessions).toHaveLength(2);
+    expect(body.hasMore).toBe(true);
+    expect(body.sessions[0].name).toBe("Session 3");
+    expect(body.sessions[1].name).toBe("Session 2");
+  });
+
   it("GET /api/sessions/:id returns session", async () => {
     const createRes = await app.inject({
       method: "POST",

@@ -229,13 +229,21 @@ export class AgentsApi {
   // ── Threads CRUD ───────────────────────────────────────────────
 
   async listThreads(sessionId?: string): Promise<AgentThread[]> {
-    const params = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''
-    const res = await fetch(`${API_URL}/api/threads${params}`, {
+    const data = await this.listThreadsPage({ sessionId })
+    return data.threads
+  }
+
+  async listThreadsPage(options: { sessionId?: string; limit?: number } = {}): Promise<{ threads: AgentThread[]; hasMore: boolean }> {
+    const params = new URLSearchParams()
+    if (options.sessionId) params.set('sessionId', options.sessionId)
+    if (typeof options.limit === 'number') params.set('limit', String(options.limit))
+    const query = params.toString()
+    const res = await fetch(`${API_URL}/api/threads${query ? `?${query}` : ''}`, {
       headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to list threads: ${res.statusText}`)
-    const data = await res.json() as { threads: AgentThread[] }
-    return data.threads
+    const data = await res.json() as { threads: AgentThread[]; hasMore?: boolean }
+    return { threads: data.threads, hasMore: Boolean(data.hasMore) }
   }
 
   async getThread(id: string): Promise<AgentThread> {

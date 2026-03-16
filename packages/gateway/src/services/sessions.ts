@@ -36,36 +36,41 @@ export class SessionService {
   }
 
   /** List all sessions, newest first. Optionally filter by status. */
-  list(status?: string, userId?: string) {
+  list(status?: string, userId?: string, limit?: number) {
+    const normalizedLimit =
+      typeof limit === "number" && Number.isFinite(limit) && limit > 0
+        ? Math.floor(limit)
+        : undefined;
+
     if (status) {
       if (userId) {
-        return this.db
+        const query = this.db
           .select()
           .from(sessions)
           .where(and(eq(sessions.status, status), eq(sessions.userId, userId)))
-          .orderBy(desc(sessions.lastActiveAt))
-          .all();
+          .orderBy(desc(sessions.lastActiveAt));
+        return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
       }
-      return this.db
+      const query = this.db
         .select()
         .from(sessions)
         .where(eq(sessions.status, status))
-        .orderBy(desc(sessions.lastActiveAt))
-        .all();
+        .orderBy(desc(sessions.lastActiveAt));
+      return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
     }
     if (userId) {
-      return this.db
+      const query = this.db
         .select()
         .from(sessions)
         .where(eq(sessions.userId, userId))
-        .orderBy(desc(sessions.lastActiveAt))
-        .all();
+        .orderBy(desc(sessions.lastActiveAt));
+      return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
     }
-    return this.db
+    const query = this.db
       .select()
       .from(sessions)
-      .orderBy(desc(sessions.lastActiveAt))
-      .all();
+      .orderBy(desc(sessions.lastActiveAt));
+    return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
   }
 
   /** Get a single session by ID. */

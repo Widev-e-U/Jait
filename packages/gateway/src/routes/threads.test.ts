@@ -78,6 +78,43 @@ class MockThreadProvider implements CliProviderAdapter {
 }
 
 describe("thread routes", () => {
+  it("lists threads with a bounded page and hasMore", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry: new ProviderRegistry(),
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    threadService.create({ userId: "user-1", title: "Thread 1", providerId: "codex" });
+    threadService.create({ userId: "user-1", title: "Thread 2", providerId: "codex" });
+    threadService.create({ userId: "user-1", title: "Thread 3", providerId: "codex" });
+
+    const response = await app.inject({
+      method: "GET",
+      url: "/api/threads?limit=2",
+      headers,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({
+      hasMore: true,
+      threads: [
+        { title: "Thread 3" },
+        { title: "Thread 2" },
+      ],
+    });
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("rejects create-pr while a thread is not completed", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

@@ -983,5 +983,19 @@ function ToolCallGroupInner({ calls, onOpenTerminal }: ToolCallGroupProps) {
   )
 }
 
-export const ToolCallGroup = memo(ToolCallGroupInner)
+function areToolCallListsEqual(prevCalls: ToolCallInfo[], nextCalls: ToolCallInfo[]): boolean {
+  if (prevCalls === nextCalls) return true
+  if (prevCalls.length !== nextCalls.length) return false
+  for (let i = 0; i < prevCalls.length; i++) {
+    if (prevCalls[i] !== nextCalls[i]) return false
+  }
+  return true
+}
+
+export const ToolCallGroup = memo(
+  ToolCallGroupInner,
+  (prevProps, nextProps) =>
+    prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
+    areToolCallListsEqual(prevProps.calls, nextProps.calls),
+)
 ToolCallGroup.displayName = 'ToolCallGroup'
