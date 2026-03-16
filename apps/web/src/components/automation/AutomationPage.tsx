@@ -36,6 +36,7 @@ import {
   type ThreadActivity,
   type ProviderInfo,
   type ProviderId,
+  type AutomationRepo,
 } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
@@ -50,21 +51,13 @@ interface RepositoryConnection {
   localPath: string
 }
 
-// ── Persistence helpers ──────────────────────────────────────────────
-
-const REPOS_STORAGE_KEY = 'jait_automation_repos'
-
-function loadRepos(): RepositoryConnection[] {
-  try {
-    const raw = localStorage.getItem(REPOS_STORAGE_KEY)
-    return raw ? (JSON.parse(raw) as RepositoryConnection[]) : []
-  } catch {
-    return []
+function dbRepoToConnection(repo: AutomationRepo): RepositoryConnection {
+  return {
+    id: repo.id,
+    name: repo.name,
+    defaultBranch: repo.defaultBranch,
+    localPath: repo.localPath,
   }
-}
-
-function saveRepos(repos: RepositoryConnection[]) {
-  localStorage.setItem(REPOS_STORAGE_KEY, JSON.stringify(repos))
 }
 
 // ── Status helpers ───────────────────────────────────────────────────
@@ -104,7 +97,7 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
 
 export function AutomationPage() {
   // Repositories
-  const [repositories, setRepositories] = useState<RepositoryConnection[]>(loadRepos)
+  const [repositories, setRepositories] = useState<RepositoryConnection[]>([])
   const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null)
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
 
@@ -141,12 +134,6 @@ export function AutomationPage() {
     [selectedThread, selectedRepo],
   )
 
-  // ── Persistence ──────────────────────────────────────────────────────
-
-  useEffect(() => {
-    saveRepos(repositories)
-  }, [repositories])
-
   // Auto-select first repo
   useEffect(() => {
     if (!selectedRepoId && repositories.length > 0) {
@@ -161,9 +148,14 @@ export function AutomationPage() {
 
   const refresh = useCallback(async () => {
     try {
-      const [ts, provResult] = await Promise.all([agentsApi.listThreads(), agentsApi.listProviders()])
+      const [ts, provResult, repos] = await Promise.all([
+        agentsApi.listThreads(),
+        agentsApi.listProviders(),
+        agentsApi.listRepos(),
+      ])
       setThreads(ts)
       setProviders(provResult.providers)
+      setRepositories(repos.map(dbRepoToConnection))
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
     } finally {
@@ -236,13 +228,12 @@ export function AutomationPage() {
         /* fall back to 'main' */
       }
 
-      const repo: RepositoryConnection = {
-        id: crypto.randomUUID(),
+      const repo = dbRepoToConnection(await agentsApi.createRepo({
         name: folderName(path),
         defaultBranch: branch,
         localPath: path,
-      }
-      setRepositories((prev) => [repo, ...prev])
+      }))
+      setRepositories((prev) => [repo, ...prev.filter((existing) => existing.id !== repo.id)])
       setSelectedRepoId(repo.id)
       setError(null)
     },
@@ -250,7 +241,8 @@ export function AutomationPage() {
   )
 
   const removeRepository = useCallback(
-    (id: string) => {
+    async (id: string) => {
+      await agentsApi.deleteRepo(id)
       setRepositories((prev) => prev.filter((r) => r.id !== id))
       if (selectedRepoId === id) setSelectedRepoId(null)
     },

@@ -16,13 +16,19 @@ export interface TerminalInfo {
   metadata: Record<string, unknown>
 }
 
-export function useTerminals() {
+function authHeaders(token?: string | null): Record<string, string> {
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+export function useTerminals(token?: string | null) {
   const [terminals, setTerminals] = useState<TerminalInfo[]>([])
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null)
 
   const refresh = useCallback(async () => {
     try {
-      const res = await fetch(`${GATEWAY}/api/terminals`)
+      const res = await fetch(`${GATEWAY}/api/terminals`, {
+        headers: authHeaders(token),
+      })
       const data = (await res.json()) as { terminals: TerminalInfo[] }
       setTerminals(data.terminals)
       return data.terminals
@@ -30,13 +36,16 @@ export function useTerminals() {
       // gateway down
       return []
     }
-  }, [])
+  }, [token])
 
   const createTerminal = useCallback(
     async (sessionId: string, workspaceRoot?: string) => {
       const res = await fetch(`${GATEWAY}/api/terminals`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(token),
+        },
         body: JSON.stringify({ sessionId, workspaceRoot }),
       })
       const info = (await res.json()) as TerminalInfo
@@ -44,14 +53,17 @@ export function useTerminals() {
       setActiveTerminalId(info.id)
       return info
     },
-    [],
+    [token],
   )
 
   const killTerminal = useCallback(async (id: string) => {
-    await fetch(`${GATEWAY}/api/terminals/${id}`, { method: 'DELETE' })
+    await fetch(`${GATEWAY}/api/terminals/${id}`, {
+      method: 'DELETE',
+      headers: authHeaders(token),
+    })
     setTerminals((prev) => prev.filter((t) => t.id !== id))
     setActiveTerminalId((prev) => (prev === id ? null : prev))
-  }, [])
+  }, [token])
 
   useEffect(() => {
     void refresh()
@@ -63,9 +75,10 @@ export function useTerminals() {
 interface TerminalViewProps {
   terminalId: string
   className?: string
+  token?: string | null
 }
 
-export function TerminalView({ terminalId, className }: TerminalViewProps) {
+export function TerminalView({ terminalId, className, token }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
@@ -110,7 +123,8 @@ export function TerminalView({ terminalId, className }: TerminalViewProps) {
 
     function connect() {
       if (disposed) return
-      ws = new WebSocket(`${WS_URL}?token=dev`)
+      const query = token ? `?token=${encodeURIComponent(token)}` : ''
+      ws = new WebSocket(`${WS_URL}${query}`)
       wsRef.current = ws
 
       ws.onopen = () => {
@@ -155,7 +169,10 @@ export function TerminalView({ terminalId, className }: TerminalViewProps) {
       }
       void fetch(`${GATEWAY}/api/terminals/${terminalId}/resize`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          ...authHeaders(token),
+        },
         body: JSON.stringify({ cols, rows }),
       })
     })
@@ -176,7 +193,7 @@ export function TerminalView({ terminalId, className }: TerminalViewProps) {
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId])
+  }, [terminalId, token])
 
   return (
     <div className={`w-full overflow-hidden ${className ?? ''}`} onClick={() => termRef.current?.focus()}>

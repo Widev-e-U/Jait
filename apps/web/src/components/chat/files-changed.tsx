@@ -38,8 +38,8 @@ export function FilesChanged({
   return (
     <div className={cn('rounded-lg border bg-muted/30 overflow-hidden', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b bg-muted/20">
-        <div className="flex items-center gap-1.5">
+      <div className="flex flex-col gap-2 px-3 py-2 border-b bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex items-center gap-1.5 min-w-0">
           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="text-xs font-medium">
             Files changed ({files.length})
@@ -51,7 +51,7 @@ export function FilesChanged({
           )}
         </div>
         {undecided > 0 && (
-          <div className="flex items-center gap-1">
+          <div className="flex flex-wrap items-center gap-1">
             <Button
               size="sm"
               variant="ghost"
@@ -80,7 +80,7 @@ export function FilesChanged({
           <div
             key={file.path}
             className={cn(
-              'flex items-center gap-2 px-3 py-1.5 text-xs',
+              'flex flex-wrap items-center gap-2 px-3 py-1.5 text-xs sm:flex-nowrap',
               file.state === 'accepted' && 'bg-green-500/5',
               file.state === 'rejected' && 'bg-red-500/5 text-muted-foreground',
             )}
@@ -89,7 +89,7 @@ export function FilesChanged({
             <button
               type="button"
               className={cn(
-                'truncate flex-1 text-left hover:underline cursor-pointer',
+                'min-w-0 flex-1 text-left hover:underline cursor-pointer break-all sm:truncate',
                 file.state === 'rejected' && 'line-through',
               )}
               title={`Review diff for ${file.path}`}
@@ -99,7 +99,7 @@ export function FilesChanged({
             </button>
 
             {file.state === 'undecided' && (
-              <div className="flex items-center gap-0.5 shrink-0">
+              <div className="ml-auto flex items-center gap-0.5 shrink-0">
                 <button
                   type="button"
                   className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"

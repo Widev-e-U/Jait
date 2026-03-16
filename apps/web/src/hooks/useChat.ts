@@ -103,6 +103,8 @@ interface SendMessageOptions {
   displayContent?: string
   /** File references to attach as metadata on the user message */
   referencedFiles?: { path: string; name: string }[]
+  /** True when the message originates from the local queue and should roll back on send failure. */
+  queued?: boolean
 }
 
 interface QueuedChatMessage extends QueuedMessage {
@@ -155,6 +157,12 @@ export function useChat(
   const requestVersionRef = useRef(0)
   const restartInFlightRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
+
+  const resumeSessionStream = useCallback(() => {
+    if (!sessionId) return
+    prevSessionIdRef.current = null
+    setRefreshTrigger(n => n + 1)
+  }, [sessionId])
 
   // When sessionId changes, load history / resume active stream via SSE
   useEffect(() => {
@@ -538,14 +546,13 @@ export function useChat(
   const refreshMessages = useCallback(() => {
     // Skip if no active session or already loading / streaming
     if (!sessionId || state.isLoading) return
-    prevSessionIdRef.current = null
-    setRefreshTrigger(n => n + 1)
-  }, [sessionId, state.isLoading])
+    resumeSessionStream()
+  }, [resumeSessionStream, sessionId, state.isLoading])
 
   const sendMessage = useCallback(async (
     content: string,
     options: SendMessageOptions = {}
-  ) => {
+  ): Promise<boolean> => {
     const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired } = options
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
@@ -605,11 +612,13 @@ export function useChat(
             isLoading: false,
             error: data.detail,
             messages: prev.messages.filter(m =>
-              !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+              options.queued
+                ? m.id !== assistantId && m.id !== userMessage.id
+                : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
             ),
           }))
           if (data.detail === 'login_required') notifyLoginRequired?.()
-          return
+          return false
         }
       }
 
@@ -848,6 +857,7 @@ export function useChat(
                       ),
                 }))
               }
+              return true
             } else if (data.type === 'error') {
               throw new Error(data.message)
             }
@@ -871,7 +881,9 @@ export function useChat(
             isLoading: false,
             messages: prev.messages
               .filter(m =>
-                !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+                options.queued
+                  ? m.id !== assistantId && m.id !== userMessage.id
+                  : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
               )
               .map(m => {
                 if (!m.toolCalls?.some(tc => tc.status === 'running')) return m
@@ -886,7 +898,7 @@ export function useChat(
               }),
           }))
         }
-        return
+        return false
       }
       if (!isStale()) {
         setState(prev => ({
@@ -894,11 +906,15 @@ export function useChat(
           isLoading: false,
           error: error instanceof Error ? error.message : 'An error occurred',
           messages: prev.messages.filter(m =>
-            !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+            options.queued
+              ? m.id !== assistantId && m.id !== userMessage.id
+              : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
           ),
         }))
       }
+      return false
     }
+    return true
   }, [authToken, onLoginRequired, sessionId])
 
   // --- Message queue (queueing & steering) ---
@@ -933,38 +949,40 @@ export function useChat(
     setMessageQueue(prev => reorderById(prev, sourceId, targetId))
   }, [])
 
+  const setMessageQueueState = useCallback((items: QueuedChatMessage[]) => {
+    setMessageQueue(items)
+  }, [])
+
   // Process the next queued message when the model finishes
   const processQueue = useCallback(async (options: SendMessageOptions = {}) => {
-    if (processingQueueRef.current) return
-    processingQueueRef.current = true
-    // Drain one item at a time
-    setMessageQueue(prev => {
-      if (prev.length === 0) {
-        processingQueueRef.current = false
-        return prev
-      }
-      const [next, ...rest] = prev
-      // Send the message (fire-and-forget; sendMessage sets isLoading)
-      sendMessage(next!.content, {
-        ...options,
-        ...(next?.mode ? { mode: next.mode } : {}),
-        ...(next?.provider ? { provider: next.provider } : {}),
-        ...(next?.model !== undefined ? { model: next.model } : {}),
-        ...(next?.displayContent ? { displayContent: next.displayContent } : {}),
-        ...(next?.referencedFiles?.length ? { referencedFiles: next.referencedFiles } : {}),
-      })
-      return rest
-    })
-    processingQueueRef.current = false
-  }, [sendMessage])
+    if (processingQueueRef.current || state.isLoading || messageQueue.length === 0) return
+    if (typeof document !== 'undefined' && document.hidden) return
 
-  // Auto-process queue when model finishes and queue is non-empty
-  const prevIsLoadingRef = useRef(false)
+    const next = messageQueue[0]
+    if (!next) return
+
+    processingQueueRef.current = true
+    try {
+      const ok = await sendMessage(next.content, {
+        ...options,
+        queued: true,
+        ...(next.mode ? { mode: next.mode } : {}),
+        ...(next.provider ? { provider: next.provider } : {}),
+        ...(next.model !== undefined ? { model: next.model } : {}),
+        ...(next.displayContent ? { displayContent: next.displayContent } : {}),
+        ...(next.referencedFiles?.length ? { referencedFiles: next.referencedFiles } : {}),
+      })
+      if (ok) {
+        setMessageQueue(prev => prev.filter(item => item.id !== next.id))
+      }
+    } finally {
+      processingQueueRef.current = false
+    }
+  }, [messageQueue, sendMessage, state.isLoading])
+
+  // Auto-process queue when idle and the page is visible
   useEffect(() => {
-    const wasLoading = prevIsLoadingRef.current
-    prevIsLoadingRef.current = state.isLoading
-    // Only trigger when transitioning from loading → not loading
-    if (wasLoading && !state.isLoading && messageQueue.length > 0) {
+    if (!state.isLoading && messageQueue.length > 0 && !processingQueueRef.current && !document.hidden) {
       const sid = prevSessionIdRef.current
       processQueue({
         token: authToken,
@@ -972,7 +990,52 @@ export function useChat(
         onLoginRequired,
       })
     }
-  }, [state.isLoading, messageQueue.length, processQueue, authToken, onLoginRequired])
+  }, [state.isLoading, messageQueue, processQueue, authToken, onLoginRequired])
+
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (!document.hidden) {
+        resumeSessionStream()
+        if (!state.isLoading && messageQueue.length > 0 && !processingQueueRef.current) {
+          const sid = prevSessionIdRef.current
+          void processQueue({
+            token: authToken,
+            sessionId: sid,
+            onLoginRequired,
+          })
+        }
+      }
+    }
+
+    document.addEventListener('visibilitychange', handleVisibilityChange)
+    return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
+  }, [state.isLoading, messageQueue, processQueue, authToken, onLoginRequired, resumeSessionStream])
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    const handleResume = () => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      resumeSessionStream()
+      if (!state.isLoading && messageQueue.length > 0 && !processingQueueRef.current) {
+        const sid = prevSessionIdRef.current
+        void processQueue({
+          token: authToken,
+          sessionId: sid,
+          onLoginRequired,
+        })
+      }
+    }
+
+    window.addEventListener('focus', handleResume)
+    window.addEventListener('pageshow', handleResume)
+    window.addEventListener('online', handleResume)
+    return () => {
+      window.removeEventListener('focus', handleResume)
+      window.removeEventListener('pageshow', handleResume)
+      window.removeEventListener('online', handleResume)
+    }
+  }, [state.isLoading, messageQueue, processQueue, authToken, onLoginRequired, resumeSessionStream])
 
   // --- File change callbacks ---
   // Ref for broadcasting changed files to other clients
@@ -1312,6 +1375,7 @@ export function useChat(
     dequeueMessage,
     updateQueueItem,
     reorderQueueItem,
+    setMessageQueueState,
     acceptFile,
     rejectFile,
     acceptAllFiles,

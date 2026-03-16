@@ -3,6 +3,7 @@
  */
 
 import type { GitStepResult } from './git-api'
+import { getAuthToken } from './auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 
 const API_URL = getApiUrl()
@@ -191,7 +192,7 @@ export interface UpdatePlanRequest {
 
 export class AgentsApi {
   private getToken(): string | null {
-    return localStorage.getItem('token')
+    return getAuthToken()
   }
 
   private getHeaders(withJsonBody = false): HeadersInit {

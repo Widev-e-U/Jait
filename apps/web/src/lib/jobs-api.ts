@@ -2,6 +2,7 @@
  * API client for scheduled jobs
  */
 
+import { getAuthToken } from './auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 
 const API_URL = getApiUrl()
@@ -75,7 +76,7 @@ export interface PaginatedResult<T> {
 
 export class JobsApi {
   private getToken(): string | null {
-    return localStorage.getItem('token')
+    return getAuthToken()
   }
 
   private getHeaders(withJsonBody = false): HeadersInit {

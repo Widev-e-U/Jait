@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, ChevronRight, GripVertical, ListPlus, Pencil, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, GripVertical, ListPlus, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface QueuedMessage {
@@ -79,6 +79,7 @@ function QueueItem({
   onDragStart?: (id: string, event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const [editing, setEditing] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
   const [draft, setDraft] = useState(item.displayContent ?? item.content)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -131,13 +132,21 @@ function QueueItem({
       )}
     >
       {/* Position indicator */}
-      <div className="mt-0.5 shrink-0">
-        {index === 0 ? (
+      <button
+        type="button"
+        className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
+        onClick={() => setCollapsed((prev) => !prev)}
+        aria-label={collapsed ? 'Expand queued message' : 'Collapse queued message'}
+        title={collapsed ? 'Expand queued message' : 'Collapse queued message'}
+      >
+        {collapsed ? (
+          <ChevronRight className="h-3.5 w-3.5" />
+        ) : index === 0 ? (
           <ListPlus className="h-3.5 w-3.5 text-primary" />
         ) : (
-          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
         )}
-      </div>
+      </button>
 
       {onReorder && !editing && (
         <button
@@ -173,6 +182,14 @@ function QueueItem({
             rows={Math.min(draft.split('\n').length, 5)}
             className="w-full resize-none rounded border border-primary/30 bg-background px-2 py-1 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
           />
+        ) : collapsed ? (
+          <button
+            type="button"
+            className="block w-full text-left"
+            onClick={() => setCollapsed(false)}
+          >
+            <span className="block truncate text-foreground">{item.displayContent ?? item.content}</span>
+          </button>
         ) : (
           <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
         )}

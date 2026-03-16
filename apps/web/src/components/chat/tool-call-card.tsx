@@ -544,24 +544,7 @@ function BrowserScreenshotView({ path }: { path: string }) {
   )
 }
 
-function isTerminalCreationCall(call: ToolCallInfo): boolean {
-  const normalizedTool = normalizeTool(call.tool)
-  if (normalizedTool === 'execute') return true
-  if (normalizedTool.startsWith('terminal.')) return true
-  if (normalizedTool !== 'surfaces.start') return false
-
-  if (call.args.type === 'terminal') return true
-
-  const data = call.result?.data
-  if (data && typeof data === 'object') {
-    const record = data as Record<string, unknown>
-    if (record.type === 'terminal') return true
-  }
-
-  return false
-}
-
-function getTerminalId(call: ToolCallInfo): string | null {
+function getStructuredTerminalId(call: ToolCallInfo): string | null {
   const argTerminalId = typeof call.args.terminalId === 'string' ? call.args.terminalId : null
   if (argTerminalId) return argTerminalId
 
@@ -574,25 +557,29 @@ function getTerminalId(call: ToolCallInfo): string | null {
     if (dataId) return dataId
     const dataSurfaceId = typeof record.surfaceId === 'string' ? record.surfaceId : null
     if (dataSurfaceId) return dataSurfaceId
-
-    const output = record.output
-    if (typeof output === 'string') {
-      try {
-        const parsed = JSON.parse(output) as Record<string, unknown>
-        if (typeof parsed.terminalId === 'string') return parsed.terminalId
-        if (typeof parsed.id === 'string') return parsed.id
-        if (typeof parsed.surfaceId === 'string') return parsed.surfaceId
-      } catch {
-        // output is plain text, not JSON
-      }
-
-      const outputMatch = output.match(/\b(?:term|terminal)-[A-Za-z0-9-]+\b/)
-      if (outputMatch) return outputMatch[0]
-    }
   }
 
-  const messageMatch = call.result?.message?.match(/\b(?:term|terminal)-[A-Za-z0-9-]+\b/)
-  return messageMatch ? messageMatch[0] : null
+  return null
+}
+
+function isTerminalCreationCall(call: ToolCallInfo): boolean {
+  const normalizedTool = normalizeTool(call.tool)
+  if (normalizedTool === 'surfaces.start') {
+    if (call.args.type === 'terminal') return getStructuredTerminalId(call) !== null
+
+    const data = call.result?.data
+    if (data && typeof data === 'object') {
+      const record = data as Record<string, unknown>
+      if (record.type === 'terminal') return getStructuredTerminalId(call) !== null
+    }
+    return false
+  }
+
+  if (normalizedTool === 'execute' || normalizedTool.startsWith('terminal.')) {
+    return getStructuredTerminalId(call) !== null
+  }
+
+  return false
 }
 
 // ── Pending tool call components ─────────────────────────────────
@@ -774,7 +761,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
-  const terminalId = canOpenTerminal ? getTerminalId(call) : null
+  const terminalId = canOpenTerminal ? getStructuredTerminalId(call) : null
   const runningHint = getRunningHint(normalizedTool, normalizedArgs)
   const isPending = call.status === 'pending'
   const terminalScrollRef = useAutoScroll(displayOutput)

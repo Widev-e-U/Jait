@@ -325,7 +325,7 @@ function MessageInner({
       <div
         className={cn(
           'absolute z-10 flex items-center gap-1 rounded-md border bg-background/90 p-0.5 shadow-sm',
-          outsideBubble ? 'right-0 top-full mt-1' : 'bottom-1.5 right-1.5',
+          outsideBubble ? 'right-0 top-full mt-0.5' : 'bottom-1.5 right-1.5',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
           copied && 'opacity-100',
         )}
@@ -460,7 +460,7 @@ function MessageInner({
               </div>
             </div>
           ) : isUser ? (
-            <div className={cn('relative w-fit max-w-full pb-8', USER_MESSAGE_MIN_WIDTH_CLASS)}>
+            <div className={cn('relative w-fit max-w-full pb-6', USER_MESSAGE_MIN_WIDTH_CLASS)}>
               <div ref={userBubbleRef} className={cn(
                 'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
                 compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',

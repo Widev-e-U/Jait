@@ -4,6 +4,7 @@
  * Mirrors the t3code gitReactQuery pattern but uses HTTP instead of IPC.
  */
 
+import { getAuthToken } from './auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 export { isMissingGitIdentityError } from './git-errors'
 
@@ -126,7 +127,7 @@ export interface PrCheck {
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function getToken(): string | null {
-  return localStorage.getItem('token')
+  return getAuthToken()
 }
 
 function authHeaders(json = false): HeadersInit {

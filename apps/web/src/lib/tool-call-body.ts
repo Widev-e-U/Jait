@@ -31,6 +31,19 @@ function firstObject(...values: unknown[]): Record<string, unknown> | undefined 
   return undefined
 }
 
+function parseJsonObject(value: unknown): Record<string, unknown> | undefined {
+  if (typeof value !== 'string') return undefined
+  try {
+    const parsed = JSON.parse(value) as unknown
+    if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+      return parsed as Record<string, unknown>
+    }
+  } catch {
+    // ignore malformed provider payloads
+  }
+  return undefined
+}
+
 export function normalizeToolName(name: string): string {
   const idx = name.indexOf('_')
   return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
@@ -47,12 +60,19 @@ export function normalizeToolArgs(
     args.action,
     args.input,
     args.arguments,
+    parseJsonObject(args.action),
+    parseJsonObject(args.input),
+    parseJsonObject(args.arguments),
     resultData?.result,
     resultData,
     resultData?.input,
     resultData?.arguments,
+    parseJsonObject(resultData?.input),
+    parseJsonObject(resultData?.arguments),
     firstObject(resultData?.result)?.input,
     firstObject(resultData?.result)?.arguments,
+    parseJsonObject(firstObject(resultData?.result)?.input),
+    parseJsonObject(firstObject(resultData?.result)?.arguments),
   )
 
   if (normalizedTool === 'edit' || normalizedTool === 'file.write' || normalizedTool === 'file.patch' || normalizedTool === 'read' || normalizedTool === 'file.read') {
@@ -65,6 +85,8 @@ export function normalizeToolArgs(
       merged.target_file,
       merged.targetFile,
       merged.relative_path,
+      merged.name,
+      merged.title,
       nested?.path,
       nested?.file_path,
       nested?.filePath,
@@ -72,6 +94,9 @@ export function normalizeToolArgs(
       nested?.filename,
       nested?.target_file,
       nested?.targetFile,
+      nested?.relative_path,
+      nested?.name,
+      nested?.title,
     ) ?? merged.path
   }
 

@@ -11,6 +11,7 @@ import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Loader2, X, FileCode, FilePlus, FileX, FileEdit } from 'lucide-react'
 import { gitApi, type FileDiffEntry } from '@/lib/git-api'
+import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { workspaceLanguageForPath } from '@/components/workspace'
 
 interface GitDiffViewerProps {
@@ -48,6 +49,8 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
   const [files, setFiles] = useState<FileDiffEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedIndex, setSelectedIndex] = useState(0)
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 960)
+  const theme = useResolvedTheme()
 
   useEffect(() => {
     let cancelled = false
@@ -63,6 +66,13 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
     })
     return () => { cancelled = true }
   }, [cwd])
+
+  useEffect(() => {
+    const update = () => setIsNarrow(window.innerWidth < 960)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
 
   const selected = files[selectedIndex] ?? null
   const language = selected ? workspaceLanguageForPath(selected.path) : 'plaintext'
@@ -112,9 +122,9 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
             No changes detected.
           </div>
         ) : (
-          <div className="flex-1 flex min-h-0">
+          <div className={cn('flex-1 flex min-h-0', isNarrow && 'flex-col')}>
             {/* File list sidebar */}
-            <div className="w-56 border-r flex flex-col shrink-0 bg-muted/20">
+            <div className={cn('border-r flex flex-col shrink-0 bg-muted/20', isNarrow ? 'w-full border-r-0 border-b max-h-40' : 'w-56')}>
               <div className="px-3 py-2 border-b">
                 <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Files</span>
               </div>
@@ -160,10 +170,10 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
                     original={selected.original}
                     modified={selected.modified}
                     language={language}
-                    theme="vs-dark"
+                    theme={theme === 'dark' ? 'vs-dark' : 'vs'}
                     options={{
                       readOnly: true,
-                      renderSideBySide: true,
+                      renderSideBySide: !isNarrow,
                       minimap: { enabled: false },
                       fontSize: 13,
                       automaticLayout: true,

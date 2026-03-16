@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBra
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
+import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { DiffView } from './diff-view'
 
 /* ------------------------------------------------------------------ */
@@ -488,6 +489,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onTabsStateChange,
   onApplyDiff,
 }, ref) {
+  const resolvedTheme = useResolvedTheme()
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
   /** When non-null, we're in remote (server-backed) mode */
   const [remoteRoot, setRemoteRoot] = useState<string | null>(null)
@@ -1389,8 +1391,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     return (
       <div className="flex flex-col h-full min-h-0">
-        {/* Tab bar — only show when both tabs are available */}
-        {showTreeProp && showEditorProp && (
+        {/* Tab bar — keep Files/Changes available whenever the tree pane exists */}
+        {showTreeProp && (
         <div className="flex items-center h-8 border-b bg-muted/30 shrink-0 px-1 gap-0.5">
           <button
             className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
@@ -1415,6 +1417,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </span>
             )}
           </button>
+          {showEditorProp && (
           <button
             className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
               effectiveMobileTab === 'editor' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
@@ -1428,14 +1431,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </span>
             )}
           </button>
+          )}
         </div>
         )}
 
-        {/* Single-pane header when only one tab is visible */}
-        {!(showTreeProp && showEditorProp) && (
+        {/* Single-pane header when only the editor pane is visible */}
+        {!showTreeProp && showEditorProp && (
           <div className="flex items-center justify-between h-8 border-b bg-muted/30 shrink-0 px-2">
             <span className="text-[11px] font-medium text-muted-foreground">
-              {showTreeProp ? 'Files' : 'Editor'}
+              Editor
             </span>
           </div>
         )}
@@ -1724,7 +1728,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
                   modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
                   language={activeTab.language ?? 'plaintext'}
-                  theme="vs-dark"
+                  theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
                   options={{
                     readOnly: true,
                     renderSideBySide: false,
@@ -2141,7 +2145,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           <DiffEditor
             key={activeTab.id}
             height="100%"
-            theme="vs-dark"
+            theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
             original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
             modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
             language={activeTab.language ?? inferLanguage(activeTab.path)}
@@ -2150,7 +2154,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               minimap: { enabled: false },
               fontSize: 13,
               automaticLayout: true,
-              renderSideBySide: true,
+              renderSideBySide: !isMobile,
             }}
           />
         ) : loadingFile && activeTab?.id === activeTabId ? (
@@ -2162,7 +2166,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           <Editor
             key={activeTab.id}
             height="100%"
-            theme="vs-dark"
+            theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
             path={activeTab.path}
             language={activeTab.language ?? 'plaintext'}
             value={activeTab.content ?? ''}
@@ -2176,7 +2180,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         ) : editorFile ? (
           <Editor
             height="100%"
-            theme="vs-dark"
+            theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
             path={editorFile.path}
             language={editorFile.language}
             value={editorFile.content}

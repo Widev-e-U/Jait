@@ -163,9 +163,9 @@ export function EditDiffView({
   if (diffLines.length === 0) return null
 
   return (
-    <div className={cn('rounded-md border overflow-hidden', className)}>
+    <div className={cn('rounded-md border bg-background overflow-hidden', className)}>
       {/* File header */}
-      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/50 border-b">
+      <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/40 border-b">
         <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
         <span className="text-xs font-mono text-muted-foreground truncate">
           {filePath}
@@ -173,27 +173,27 @@ export function EditDiffView({
       </div>
 
       {/* Diff body */}
-      <div className="overflow-x-auto max-h-80 overflow-y-auto">
-        <table className="w-full text-xs font-mono leading-5 border-collapse">
+      <div className="overflow-x-auto max-h-80 overflow-y-auto bg-background">
+        <table className="w-max min-w-full text-xs font-mono leading-5 border-collapse">
           <tbody>
             {diffLines.map((line, i) => (
               <tr
                 key={i}
                 className={cn(
-                  line.type === 'add' && 'bg-green-500/10',
-                  line.type === 'remove' && 'bg-red-500/10',
-                  line.type === 'header' && 'bg-blue-500/10',
+                  line.type === 'add' && 'bg-emerald-500/10',
+                  line.type === 'remove' && 'bg-rose-500/10',
+                  line.type === 'header' && 'bg-muted/60',
                 )}
               >
                 {/* Line numbers */}
-                <td className="select-none text-right px-2 text-muted-foreground/40 w-10 align-top shrink-0 border-r border-muted/30">
+                <td className="select-none text-right px-2 text-muted-foreground/50 w-11 sm:w-12 align-top shrink-0 border-r border-border/60">
                   {line.type === 'header'
                     ? ''
                     : line.type === 'add'
                       ? ''
                       : (line.oldLineNo ?? '')}
                 </td>
-                <td className="select-none text-right px-2 text-muted-foreground/40 w-10 align-top shrink-0 border-r border-muted/30">
+                <td className="select-none text-right px-2 text-muted-foreground/50 w-11 sm:w-12 align-top shrink-0 border-r border-border/60">
                   {line.type === 'header'
                     ? ''
                     : line.type === 'remove'
@@ -204,9 +204,9 @@ export function EditDiffView({
                 <td
                   className={cn(
                     'px-1 w-4 select-none text-center align-top',
-                    line.type === 'add' && 'text-green-500',
-                    line.type === 'remove' && 'text-red-500',
-                    line.type === 'header' && 'text-blue-500',
+                    line.type === 'add' && 'text-emerald-600 dark:text-emerald-400',
+                    line.type === 'remove' && 'text-rose-600 dark:text-rose-400',
+                    line.type === 'header' && 'text-muted-foreground',
                   )}
                 >
                   {line.type === 'add'
@@ -218,14 +218,15 @@ export function EditDiffView({
                         : ' '}
                 </td>
                 {/* Content */}
-                <td className="px-2 whitespace-pre-wrap break-all">
+                <td className="min-w-[22rem] px-2 whitespace-pre-wrap break-all sm:min-w-[36rem]">
                   {line.type === 'header' ? (
-                    <span className="text-blue-500/80 italic">{line.content}</span>
+                    <span className="italic text-muted-foreground">{line.content}</span>
                   ) : (
                     <span
                       className={cn(
-                        line.type === 'add' && 'text-green-600 dark:text-green-400',
-                        line.type === 'remove' && 'text-red-600 dark:text-red-400 line-through opacity-70',
+                        line.type === 'add' && 'text-emerald-700 dark:text-emerald-300',
+                        line.type === 'remove' && 'text-rose-700 dark:text-rose-300 line-through opacity-80',
+                        line.type === 'context' && 'text-foreground',
                       )}
                     >
                       {line.content || '\u00A0'}

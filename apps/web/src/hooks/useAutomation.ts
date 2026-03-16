@@ -7,6 +7,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { getAuthToken } from '@/lib/auth-token'
 import {
   type RemoteProviderInfo,
   agentsApi,
@@ -163,7 +164,7 @@ export function useAutomation(enabled = true) {
   // ── Data fetching ──────────────────────────────────────────────
 
   const refresh = useCallback(async () => {
-    if (!localStorage.getItem('token')) return // skip when not authenticated
+    if (!getAuthToken()) return // skip when not authenticated
     setLoading(true)
     try {
       const [ts, provResult, repos] = await Promise.all([
@@ -187,7 +188,7 @@ export function useAutomation(enabled = true) {
 
   /** Lightweight refresh of just providers + repos (used when FsNodes connect/disconnect). */
   const refreshProviders = useCallback(async () => {
-    if (!localStorage.getItem('token')) return
+    if (!getAuthToken()) return
     try {
       const [provResult, repos] = await Promise.all([
         agentsApi.listProviders(),
@@ -346,7 +347,7 @@ export function useAutomation(enabled = true) {
     setLoadingActivities(true)
     let cancelled = false
     const fetchActivities = async () => {
-      if (!localStorage.getItem('token')) return
+      if (!getAuthToken()) return
       try {
         const acts = await agentsApi.getActivities(selectedThreadId)
         if (!cancelled) {

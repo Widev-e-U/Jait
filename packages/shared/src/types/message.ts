@@ -119,10 +119,15 @@ export interface FsChangesPayload {
 export type UIStateKey =
   | "workspace.panel"
   | "workspace.tabs"
+  | "workspace.layout"
   | "screen-share.panel"
   | "terminal.panel"
+  | "chat.mode"
+  | "chat.cliModels"
+  | "chat.view"
   | "todo_list"
-  | "changed_files";
+  | "changed_files"
+  | "queued_messages";
 
 /** Payload sent inside a `ui.state` client→server WS message */
 export interface UIStateUpdate {

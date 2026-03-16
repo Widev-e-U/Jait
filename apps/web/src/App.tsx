@@ -11,6 +11,7 @@ import {
   Eye,
   FolderTree,
   FolderOpen,
+  GitBranch,
   LogOut,
   MessageSquare,
   Monitor,
@@ -105,6 +106,17 @@ function createSilentVoiceLevels(): number[] {
   return Array.from({ length: VOICE_LEVEL_BAR_COUNT }, () => VOICE_LEVEL_FLOOR)
 }
 
+function normalizeTranscript(text: string): string {
+  return text.trim()
+}
+
+function appendTranscript(prev: string, transcript: string): string {
+  const normalizedPrev = prev.trim()
+  const normalizedTranscript = normalizeTranscript(transcript)
+  if (!normalizedTranscript) return normalizedPrev
+  return normalizedPrev ? `${normalizedPrev} ${normalizedTranscript}` : normalizedTranscript
+}
+
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
 type CliProviderId = Exclude<ProviderId, 'jait'>
 
@@ -114,6 +126,13 @@ type ManagerQueuedMessage = QueuedChatMessage & {
   attachments?: string[]
   providerId: ProviderId
   model?: string | null
+}
+
+type SavedQueuedMessage = QueuedChatMessage & {
+  mode?: ChatMode
+  provider?: string
+  model?: string | null
+  referencedFiles?: { path: string; name: string }[]
 }
 
 function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
@@ -134,15 +153,7 @@ const suggestions = [
   'What time is it?',
 ]
 
-function getStoredChatProvider(): ProviderId {
-  const stored = localStorage.getItem('chatProvider')
-  if (stored === 'codex' || stored === 'claude-code' || stored === 'jait') {
-    return stored
-  }
-  return 'jait'
-}
-
-function loadStoredCliModelsByProvider(currentProvider: ProviderId): Partial<Record<CliProviderId, string | null>> {
+function loadLegacyCliModelsByProvider(currentProvider: ProviderId): Partial<Record<CliProviderId, string | null>> {
   const models: Partial<Record<CliProviderId, string | null>> = {}
 
   try {
@@ -736,8 +747,8 @@ function App() {
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showScreenShare, setShowScreenShare] = useState(false)
-  const [showWorkspaceTree, setShowWorkspaceTree] = useState(() => localStorage.getItem('showWorkspaceTree') !== 'false')
-  const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(() => localStorage.getItem('showWorkspaceEditor') !== 'false')
+  const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
+  const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
   const [showCloseWorkspaceConfirm, setShowCloseWorkspaceConfirm] = useState(false)
   const closeConfirmRef = useRef<HTMLDivElement>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
@@ -749,13 +760,13 @@ function App() {
   const floatingDragCleanupRef = useRef<(() => void) | null>(null)
   const floatingResizeCleanupRef = useRef<(() => void) | null>(null)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
-  const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
-  const [chatProvider, setChatProvider] = useState<ProviderId>(() => getStoredChatProvider())
+  const [chatMode, setChatMode] = useState<ChatMode>('agent')
+  const [chatProvider, setChatProvider] = useState<ProviderId>('jait')
   const [cliModelsByProvider, setCliModelsByProvider] = useState<Partial<Record<CliProviderId, string | null>>>(
-    () => loadStoredCliModelsByProvider(getStoredChatProvider())
+    () => loadLegacyCliModelsByProvider('jait')
   )
   const cliModel = chatProvider === 'jait' ? null : (cliModelsByProvider[chatProvider] ?? null)
-  const [viewMode, setViewMode] = useState<ViewMode>(() => (localStorage.getItem('viewMode') as ViewMode) || 'developer')
+  const [viewMode, setViewMode] = useState<ViewMode>('developer')
   const [managerAnimPhase, setManagerAnimPhase] = useState<'idle' | 'center' | 'top'>('idle')
   const [developerAnimPhase, setDeveloperAnimPhase] = useState<'idle' | 'animating'>('idle')
   const prevViewModeRef = useRef<ViewMode>(viewMode)
@@ -1097,6 +1108,7 @@ function App() {
     dequeueMessage,
     updateQueueItem,
     reorderQueueItem,
+    setMessageQueueState,
     acceptFile,
     rejectFile,
     acceptAllFiles,
@@ -1109,7 +1121,7 @@ function App() {
   } = useChat(activeSessionId, token, onLoginRequired)
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
   const managerQueueProcessingRef = useRef(new Set<string>())
-  const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals()
+  const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals(token)
   const { provider, model } = useModelInfo()
 
   // ── Screen share (always active so Electron auto-registers) ───────
@@ -1189,8 +1201,23 @@ function App() {
   const [savedTerminal, setSavedTerminal] = useSessionState<{ open: boolean }>(
     activeSessionId, 'terminal.panel', token,
   )
+  const [savedWorkspaceLayout, setSavedWorkspaceLayout, loadingWorkspaceLayout] = useSessionState<{ tree: boolean; editor: boolean }>(
+    activeSessionId, 'workspace.layout', token,
+  )
+  const [savedChatMode, setSavedChatMode, loadingChatMode] = useSessionState<ChatMode>(
+    activeSessionId, 'chat.mode', token,
+  )
+  const [savedCliModels, setSavedCliModels, loadingCliModels] = useSessionState<Partial<Record<CliProviderId, string | null>>>(
+    activeSessionId, 'chat.cliModels', token,
+  )
+  const [savedChatView, setSavedChatView, loadingChatView] = useSessionState<ViewMode>(
+    activeSessionId, 'chat.view', token,
+  )
   const [savedWorkspaceTabs, setSavedWorkspaceTabs] = useSessionState<WorkspaceTabsState>(
     activeSessionId, 'workspace.tabs', token,
+  )
+  const [savedQueuedMessages, setSavedQueuedMessages] = useSessionState<SavedQueuedMessage[]>(
+    activeSessionId, 'queued_messages', token,
   )
   const [workspaceTabsState, setWorkspaceTabsState] = useState<WorkspaceTabsState | null>(null)
 
@@ -1230,8 +1257,44 @@ function App() {
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
+    if (savedWorkspaceLayout) {
+      setShowWorkspaceTree(savedWorkspaceLayout.tree !== false)
+      setShowWorkspaceEditor(savedWorkspaceLayout.editor !== false)
+    }
+  }, [savedWorkspaceLayout])
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedChatMode) setChatMode(savedChatMode)
+  }, [savedChatMode])
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedCliModels && Object.keys(savedCliModels).length > 0) {
+      setCliModelsByProvider(savedCliModels)
+      return
+    }
+
+    const migrated = loadLegacyCliModelsByProvider(chatProvider)
+    if (Object.keys(migrated).length > 0) {
+      setCliModelsByProvider(migrated)
+    }
+  }, [savedCliModels, chatProvider])
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedChatView) setViewMode(savedChatView)
+  }, [savedChatView])
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
     setWorkspaceTabsState(savedWorkspaceTabs ?? null)
   }, [savedWorkspaceTabs])
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    setMessageQueueState((savedQueuedMessages ?? []) as SavedQueuedMessage[])
+  }, [savedQueuedMessages, setMessageQueueState])
 
   // Restore todos and changed files (REST fallback)
   useEffect(() => {
@@ -1278,6 +1341,34 @@ function App() {
           setShowTerminal(v.open !== false)
         }
         break
+      case 'workspace.layout': {
+        const layout = value as { tree?: boolean; editor?: boolean } | null
+        if (!layout) {
+          setShowWorkspaceTree(true)
+          setShowWorkspaceEditor(true)
+        } else {
+          setShowWorkspaceTree(layout.tree !== false)
+          setShowWorkspaceEditor(layout.editor !== false)
+        }
+        break
+      }
+      case 'chat.mode':
+        if (value === 'ask' || value === 'agent' || value === 'plan') {
+          setChatMode(value)
+        }
+        break
+      case 'chat.cliModels':
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          setCliModelsByProvider(value as Partial<Record<CliProviderId, string | null>>)
+        } else if (value === null) {
+          setCliModelsByProvider({})
+        }
+        break
+      case 'chat.view':
+        if (value === 'developer' || value === 'manager') {
+          setViewMode(value)
+        }
+        break
       case 'todo_list':
         if (Array.isArray(value)) setTodoList(value)
         break
@@ -1300,8 +1391,16 @@ function App() {
         setWorkspaceTabsState(next)
         break
       }
+      case 'queued_messages': {
+        if (Array.isArray(value)) {
+          setMessageQueueState(value as SavedQueuedMessage[])
+        } else if (value === null) {
+          setMessageQueueState([])
+        }
+        break
+      }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles])
+  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   const handleFullState = useCallback((state: Record<string, unknown>) => {
@@ -1333,6 +1432,33 @@ function App() {
       setShowTerminal(false)
     }
 
+    const wl = state['workspace.layout'] as { tree?: boolean; editor?: boolean } | null | undefined
+    if (wl) {
+      setShowWorkspaceTree(wl.tree !== false)
+      setShowWorkspaceEditor(wl.editor !== false)
+    } else {
+      setShowWorkspaceTree(true)
+      setShowWorkspaceEditor(true)
+    }
+
+    const cm = state['chat.mode']
+    if (cm === 'ask' || cm === 'agent' || cm === 'plan') {
+      setChatMode(cm)
+    }
+
+    const ccm = state['chat.cliModels']
+    if (ccm && typeof ccm === 'object' && !Array.isArray(ccm)) {
+      setCliModelsByProvider(ccm as Partial<Record<CliProviderId, string | null>>)
+    } else {
+      const migrated = loadLegacyCliModelsByProvider(chatProvider)
+      setCliModelsByProvider(migrated)
+    }
+
+    const cv = state['chat.view']
+    if (cv === 'developer' || cv === 'manager') {
+      setViewMode(cv)
+    }
+
     // Todo list
     const tl = state['todo_list']
     if (Array.isArray(tl) && tl.length > 0) {
@@ -1352,7 +1478,14 @@ function App() {
     } else {
       setWorkspaceTabsState(null)
     }
-  }, [setTodoList, setChangedFiles])
+
+    const qm = state['queued_messages']
+    if (Array.isArray(qm)) {
+      setMessageQueueState(qm as SavedQueuedMessage[])
+    } else {
+      setMessageQueueState([])
+    }
+  }, [setTodoList, setChangedFiles, setMessageQueueState])
 
   const { sendUIState } = useUICommands({
     sessionId: activeSessionId,
@@ -1408,6 +1541,30 @@ function App() {
     sendUIState('workspace.tabs', state, activeSessionId)
   }, [setSavedWorkspaceTabs, sendUIState, activeSessionId])
 
+  useEffect(() => {
+    if (activeSessionId && token && loadingWorkspaceLayout) return
+    const layout = { tree: showWorkspaceTree, editor: showWorkspaceEditor }
+    setSavedWorkspaceLayout(layout)
+    sendUIState('workspace.layout', layout, activeSessionId)
+  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, sendUIState, activeSessionId, loadingWorkspaceLayout, token])
+
+  useEffect(() => {
+    if (activeSessionId && token && loadingChatMode) return
+    setSavedChatMode(chatMode)
+    sendUIState('chat.mode', chatMode, activeSessionId)
+  }, [chatMode, setSavedChatMode, sendUIState, activeSessionId, loadingChatMode, token])
+
+  useEffect(() => {
+    if (activeSessionId && token && loadingChatView) return
+    setSavedChatView(viewMode)
+    sendUIState('chat.view', viewMode, activeSessionId)
+  }, [viewMode, setSavedChatView, sendUIState, activeSessionId, loadingChatView, token])
+
+  useEffect(() => {
+    setSavedQueuedMessages((messageQueue as SavedQueuedMessage[]).length > 0 ? (messageQueue as SavedQueuedMessage[]) : null)
+    sendUIState('queued_messages', messageQueue.length > 0 ? messageQueue : null, activeSessionId)
+  }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId])
+
   // Register broadcast callback: when file decisions change, sync to other clients
   useEffect(() => {
     setOnChangedFilesSync((files: ChangedFile[]) => {
@@ -1424,10 +1581,6 @@ function App() {
     localStorage.setItem('showDebugPanel', showDebugPanel ? 'true' : 'false')
   }, [showDebugPanel])
 
-  useEffect(() => {
-    localStorage.setItem('chatMode', chatMode)
-  }, [chatMode])
-
   const handleChatProviderChange = useCallback((provider: ProviderId) => {
     setChatProvider(provider)
   }, [])
@@ -1441,7 +1594,8 @@ function App() {
   }, [chatProvider])
 
   useEffect(() => {
-    const nextModels: Partial<Record<CliProviderId, string>> = {}
+    if (activeSessionId && token && loadingCliModels) return
+    const nextModels: Partial<Record<CliProviderId, string | null>> = {}
     for (const providerId of ['codex', 'claude-code'] as const) {
       const value = cliModelsByProvider[providerId]
       if (typeof value === 'string' && value.trim()) {
@@ -1449,19 +1603,18 @@ function App() {
       }
     }
 
-    if (Object.keys(nextModels).length > 0) {
-      localStorage.setItem('cliModelsByProvider', JSON.stringify(nextModels))
-    } else {
-      localStorage.removeItem('cliModelsByProvider')
-    }
+    const payload = Object.keys(nextModels).length > 0 ? nextModels : null
+    setSavedCliModels(payload)
+    sendUIState('chat.cliModels', payload, activeSessionId)
+
+    localStorage.removeItem('cliModelsByProvider')
     localStorage.removeItem('cliModel')
-  }, [cliModelsByProvider])
+  }, [cliModelsByProvider, activeSessionId, loadingCliModels, sendUIState, setSavedCliModels, token])
 
   // Track whether the initial server sync has happened so we don't PATCH on mount
   const chatProviderInitialized = useRef(false)
 
   useEffect(() => {
-    localStorage.setItem('chatProvider', chatProvider)
     // Only persist to server after the first render (user-initiated change)
     if (!chatProviderInitialized.current) {
       chatProviderInitialized.current = true
@@ -1472,10 +1625,6 @@ function App() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [chatProvider])
-
-  useEffect(() => {
-    localStorage.setItem('viewMode', viewMode)
-  }, [viewMode])
 
   useEffect(() => {
     if (prevViewModeRef.current !== 'manager' && viewMode === 'manager') {
@@ -1538,28 +1687,22 @@ function App() {
 
   const toggleWorkspaceTree = useCallback(() => {
     setShowWorkspaceTree(prev => {
-      const next = !prev
-      localStorage.setItem('showWorkspaceTree', String(next))
-      return next
+      return !prev
     })
   }, [])
 
   const toggleWorkspaceEditor = useCallback(() => {
     setShowWorkspaceEditor(prev => {
-      const next = !prev
-      localStorage.setItem('showWorkspaceEditor', String(next))
-      return next
+      return !prev
     })
   }, [])
 
   const showWorkspaceTreePanel = useCallback(() => {
     setShowWorkspaceTree(true)
-    localStorage.setItem('showWorkspaceTree', 'true')
   }, [])
 
   const showWorkspaceEditorPanel = useCallback(() => {
     setShowWorkspaceEditor(true)
-    localStorage.setItem('showWorkspaceEditor', 'true')
   }, [])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
@@ -2426,16 +2569,17 @@ function App() {
   }, [activeSessionId])
 
   const submitVoiceTranscript = useCallback(async (transcript: string) => {
-    if (!transcript) return
+    const normalizedTranscript = normalizeTranscript(transcript)
+    if (!normalizedTranscript) return
 
     if (viewMode === 'manager') {
       const thread = automation.selectedThread
       if (thread?.status === 'running') {
         enqueueManagerMessage(thread.id, {
           id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-          content: transcript,
-          displayContent: transcript,
-          fullContent: transcript,
+          content: normalizedTranscript,
+          displayContent: normalizedTranscript,
+          fullContent: normalizedTranscript,
           referencedFiles: undefined,
           attachments: undefined,
           providerId: chatProvider,
@@ -2445,7 +2589,7 @@ function App() {
         return
       }
       await automation.handleSend(
-        transcript,
+        normalizedTranscript,
         chatProvider,
         chatProvider !== 'jait' ? cliModel : undefined,
       )
@@ -2461,8 +2605,8 @@ function App() {
 
     if (isLoading) {
       enqueueMessage({
-        content: transcript,
-        displayContent: transcript,
+        content: normalizedTranscript,
+        displayContent: normalizedTranscript,
         mode: chatMode,
         provider: chatProvider,
         model: chatProvider !== 'jait' ? cliModel : undefined,
@@ -2470,7 +2614,7 @@ function App() {
       return
     }
 
-    sendMessage(transcript, {
+    sendMessage(normalizedTranscript, {
       token,
       sessionId: sid,
       onLoginRequired: () => setShowLoginDialog(true),
@@ -2662,8 +2806,7 @@ function App() {
         })
         const data = (await res.json()) as { text?: string; error?: string; details?: string }
         if (data.text) {
-          const transcript = data.text
-          setInputValue((prev) => (prev ? prev + ' ' + transcript : transcript))
+          setInputValue((prev) => appendTranscript(prev, data.text ?? ''))
         } else {
           console.warn('Transcription failed:', data.details ?? data.error)
         }
@@ -2694,7 +2837,7 @@ function App() {
       // simulated — show a prompt
       const transcript = window.prompt('Transcription (simulated):')?.trim() ?? ''
       if (transcript) {
-        setInputValue((prev) => (prev ? prev + ' ' + transcript : transcript))
+        setInputValue((prev) => appendTranscript(prev, transcript))
       }
     }
   }, [activeSessionId, buildWavBlob, settings.stt_provider, token])
@@ -3396,7 +3539,8 @@ function App() {
                   >
                     <Eye className="h-3.5 w-3.5" />
                     <FolderTree className="h-3.5 w-3.5" />
-                    {!isMobile && 'Show Files'}
+                    <GitBranch className="h-3.5 w-3.5" />
+                    {!isMobile && 'Show Files + Changes'}
                   </button>
                 )}
                 {!showWorkspaceEditor && (
@@ -3428,10 +3572,11 @@ function App() {
                               >
                                 <Eye className="h-3 w-3" />
                                 <FolderTree className="h-3 w-3" />
-                                Show Files
+                                <GitBranch className="h-3 w-3" />
+                                Show Files + Changes
                               </button>
                             </TooltipTrigger>
-                            <TooltipContent side="bottom">Show file tree</TooltipContent>
+                            <TooltipContent side="bottom">Show files and source control</TooltipContent>
                           </Tooltip>
                         )}
                         {!showWorkspaceEditor && (
@@ -3725,10 +3870,11 @@ function App() {
                           >
                             <Eye className="h-3 w-3" />
                             <FolderTree className="h-3 w-3" />
-                            Show Files
+                            <GitBranch className="h-3 w-3" />
+                            Show Files + Changes
                           </button>
                         </TooltipTrigger>
-                        <TooltipContent side="bottom">Show file tree</TooltipContent>
+                        <TooltipContent side="bottom">Show files and source control</TooltipContent>
                       </Tooltip>
                     )}
                     {!showWorkspaceEditor && (
@@ -3927,7 +4073,7 @@ function App() {
               </button>
             </div>
             {activeTerminalId ? (
-              <TerminalView terminalId={activeTerminalId} className="h-[calc(100%-2rem)]" />
+              <TerminalView terminalId={activeTerminalId} className="h-[calc(100%-2rem)]" token={token} />
             ) : (
               <div className="flex items-center justify-center h-[calc(100%-2rem)] text-sm text-muted-foreground">
                 <button

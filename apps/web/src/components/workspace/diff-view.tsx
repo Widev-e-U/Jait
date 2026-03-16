@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { DiffEditor } from '@monaco-editor/react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
@@ -103,8 +104,17 @@ export function DiffView({
 
   const [hunks, setHunks] = useState<DiffHunk[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
+  const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
+  const theme = useResolvedTheme()
 
   const fileName = filePath.split(/[/\\]/).pop() ?? filePath
+
+  useEffect(() => {
+    const update = () => setIsNarrow(window.innerWidth < 768)
+    update()
+    window.addEventListener('resize', update)
+    return () => window.removeEventListener('resize', update)
+  }, [])
 
   /* ---- Monaco mount ---- */
   const handleMount = useCallback((editor: any, monaco: any) => {
@@ -261,7 +271,7 @@ export function DiffView({
   return (
     <div className="flex flex-col h-full bg-background">
       {/* Top toolbar */}
-      <div className="flex items-center justify-between h-10 px-3 border-b bg-muted/30 shrink-0">
+      <div className="flex flex-col gap-2 px-3 py-2 border-b bg-muted/30 shrink-0 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-center gap-2 min-w-0">
           <span className="text-xs font-medium truncate" title={filePath}>
             {fileName}
@@ -276,7 +286,7 @@ export function DiffView({
           )}
         </div>
 
-        <div className="flex items-center gap-1 shrink-0">
+        <div className="flex flex-wrap items-center gap-1 shrink-0">
           <Button
             size="sm"
             variant="ghost"
@@ -314,7 +324,7 @@ export function DiffView({
           original={originalContent}
           modified={modifiedContent}
           language={language}
-          theme="vs-dark"
+          theme={theme === 'dark' ? 'vs-dark' : 'vs'}
           onMount={handleMount}
           options={{
             readOnly: true,
@@ -323,7 +333,7 @@ export function DiffView({
             fontSize: 13,
             automaticLayout: true,
             scrollBeyondLastLine: false,
-            renderOverviewRuler: true,
+            renderOverviewRuler: !isNarrow,
             ignoreTrimWhitespace: false,
           }}
         />
@@ -360,9 +370,9 @@ export function DiffView({
 
       {/* Bottom hunk navigation bar */}
       {hunks.length > 0 && (
-        <div className="flex items-center justify-between h-11 px-3 border-t bg-muted/20 shrink-0 gap-2">
+        <div className="flex flex-col gap-2 px-3 py-2 border-t bg-muted/20 shrink-0 md:flex-row md:items-center md:justify-between">
           {/* Hunk counter & navigation */}
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <Button
               size="sm"
               variant="ghost"
@@ -397,7 +407,7 @@ export function DiffView({
           </div>
 
           {/* Status & per-hunk actions */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             {activeHunk && activeHunk.state !== 'undecided' && (
               <span className={cn(
                 'text-xs font-medium',

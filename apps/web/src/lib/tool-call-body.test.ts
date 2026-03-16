@@ -77,6 +77,32 @@ describe('tool call body helpers', () => {
     })
   })
 
+  it('uses provider title/name fields as edit path fallback', () => {
+    expect(
+      normalizeToolArgs('edit', {
+        title: 'apps/web/src/components/chat/tool-call-card.tsx',
+      }),
+    ).toMatchObject({
+      path: 'apps/web/src/components/chat/tool-call-card.tsx',
+    })
+  })
+
+  it('parses stringified nested edit input payloads', () => {
+    expect(
+      normalizeToolArgs('edit', {
+        input: JSON.stringify({
+          file_path: 'apps/web/src/App.tsx',
+          old_string: 'before',
+          new_string: 'after',
+        }),
+      }),
+    ).toMatchObject({
+      path: 'apps/web/src/App.tsx',
+      search: 'before',
+      replace: 'after',
+    })
+  })
+
   it('normalizes provider-specific web argument aliases', () => {
     expect(
       normalizeToolArgs('web', {

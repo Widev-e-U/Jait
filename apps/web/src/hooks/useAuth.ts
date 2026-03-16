@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
+import { clearAuthToken, getAuthToken, setAuthToken } from '@/lib/auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 
 const API_URL = getApiUrl()
@@ -75,7 +76,7 @@ export function useAuth() {
       })
 
       if (!response.ok) {
-        localStorage.removeItem('token')
+        clearAuthToken()
         setState({ user: null, token: null, settings: null, isLoading: false })
         return
       }
@@ -89,13 +90,13 @@ export function useAuth() {
         isLoading: false,
       })
     } catch {
-      localStorage.removeItem('token')
+      clearAuthToken()
       setState({ user: null, token: null, settings: null, isLoading: false })
     }
   }, [])
 
   useEffect(() => {
-    const token = localStorage.getItem('token')
+    const token = getAuthToken()
     if (token) {
       void loadFromToken(token)
       return
@@ -104,7 +105,7 @@ export function useAuth() {
   }, [loadFromToken])
 
   const persistAuth = useCallback(async (payload: AuthResponse) => {
-    localStorage.setItem('token', payload.access_token)
+    setAuthToken(payload.access_token)
     const settings = await fetchSettings(payload.access_token)
     setState({
       user: payload.user,
@@ -145,7 +146,7 @@ export function useAuth() {
   }, [persistAuth])
 
   const logout = useCallback(() => {
-    localStorage.removeItem('token')
+    clearAuthToken()
     setState({ user: null, token: null, settings: null, isLoading: false })
   }, [])
 
