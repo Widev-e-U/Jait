@@ -4,10 +4,10 @@ import { buildCodexMcpConfigArgs } from "./codex-provider.js";
 describe("buildCodexMcpConfigArgs", () => {
   it("maps streamable HTTP MCP servers to Codex config overrides", () => {
     expect(buildCodexMcpConfigArgs([
-      { name: "jait", transport: "sse", url: "http://gateway.test/mcp/sse" },
+      { name: "jait", transport: "sse", url: "http://gateway.test/mcp" },
     ])).toEqual([
       "-c",
-      'mcp_servers.jait.url="http://gateway.test/mcp/sse"',
+      'mcp_servers.jait.url="http://gateway.test/mcp"',
     ]);
   });
 

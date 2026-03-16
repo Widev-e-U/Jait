@@ -15,6 +15,7 @@
 import type { ThreadActivity } from '@/lib/agents-api'
 import type { ChatMessage, MessageSegment } from '@/hooks/useChat'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
+import { normalizeToolArgs } from '@/lib/tool-call-body'
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   return value && typeof value === 'object' && !Array.isArray(value)
@@ -195,7 +196,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const tc: ToolCallInfo = {
           callId,
           tool,
-          args: extractToolArgs(payload, tool),
+          args: normalizeToolArgs(tool, extractToolArgs(payload, tool)),
           status: 'running',
           startedAt: new Date(act.createdAt).getTime(),
         }
@@ -230,7 +231,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
           tc = {
             callId: synthesizedCallId,
             tool,
-            args: extractToolArgs(payload, tool),
+            args: normalizeToolArgs(tool, extractToolArgs(payload, tool), asRecord(resultData) ?? undefined),
             status: ok ? 'success' : 'error',
             startedAt: new Date(act.createdAt).getTime(),
           }
@@ -240,7 +241,11 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
           currentToolGroupIds.push(synthesizedCallId)
         }
 
-        tc.args = mergeArgs(tc.args, extractToolArgs(payload, tool))
+        tc.args = normalizeToolArgs(
+          tc.tool,
+          mergeArgs(tc.args, extractToolArgs(payload, tool)),
+          asRecord(resultData) ?? undefined,
+        )
         tc.status = ok ? 'success' : 'error'
         tc.result = {
           ok,
@@ -257,7 +262,10 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const tc: ToolCallInfo = {
           callId,
           tool: (payload.tool as string) ?? 'unknown',
-          args: (payload.args as Record<string, unknown>) ?? {},
+          args: normalizeToolArgs(
+            String(payload.tool ?? 'unknown'),
+            (payload.args as Record<string, unknown>) ?? {},
+          ),
           status: 'pending',
           startedAt: new Date(act.createdAt).getTime(),
         }

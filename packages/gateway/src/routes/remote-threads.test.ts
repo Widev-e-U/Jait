@@ -342,7 +342,7 @@ describe("remote provider e2e flow", () => {
       expect.objectContaining({
         name: "jait",
         transport: "sse",
-        url: expect.stringMatching(/\/mcp\/sse$/),
+        url: expect.stringMatching(/\/mcp(?:\/sse)?$/),
       }),
     ]);
 

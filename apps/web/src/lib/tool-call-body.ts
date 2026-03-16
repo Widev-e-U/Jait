@@ -17,24 +17,138 @@ export type ToolCallBodyKind =
   | 'runningHint'
   | 'none'
 
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return undefined
+}
+
+function firstObject(...values: unknown[]): Record<string, unknown> | undefined {
+  for (const value of values) {
+    if (value && typeof value === 'object' && !Array.isArray(value)) return value as Record<string, unknown>
+  }
+  return undefined
+}
+
 export function normalizeToolName(name: string): string {
   const idx = name.indexOf('_')
   return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
 }
 
+export function normalizeToolArgs(
+  tool: string,
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalizedTool = normalizeToolName(tool)
+  const merged = { ...args }
+  const nested = firstObject(
+    args.action,
+    args.input,
+    args.arguments,
+    resultData,
+    resultData?.input,
+    resultData?.arguments,
+  )
+
+  if (normalizedTool === 'edit' || normalizedTool === 'file.write' || normalizedTool === 'file.patch' || normalizedTool === 'read' || normalizedTool === 'file.read') {
+    merged.path = firstNonEmptyString(
+      merged.path,
+      merged.file_path,
+      merged.filePath,
+      merged.file,
+      merged.filename,
+      merged.target_file,
+      merged.targetFile,
+      merged.relative_path,
+      nested?.path,
+      nested?.file_path,
+      nested?.filePath,
+      nested?.file,
+      nested?.filename,
+      nested?.target_file,
+      nested?.targetFile,
+    ) ?? merged.path
+  }
+
+  if (normalizedTool === 'edit' || normalizedTool === 'file.patch') {
+    merged.search = firstNonEmptyString(
+      merged.search,
+      merged.old_string,
+      merged.oldString,
+      merged.old_text,
+      merged.oldText,
+      nested?.search,
+      nested?.old_string,
+      nested?.oldString,
+      nested?.old_text,
+      nested?.oldText,
+    ) ?? merged.search
+    merged.replace = firstNonEmptyString(
+      merged.replace,
+      merged.new_string,
+      merged.newString,
+      merged.new_text,
+      merged.newText,
+      merged.replacement,
+      nested?.replace,
+      nested?.new_string,
+      nested?.newString,
+      nested?.new_text,
+      nested?.newText,
+      nested?.replacement,
+    ) ?? merged.replace
+    merged.content = firstNonEmptyString(
+      merged.content,
+      merged.new_file_contents,
+      merged.newFileContents,
+      merged.writtenContent,
+      nested?.content,
+      nested?.new_file_contents,
+      nested?.newFileContents,
+      nested?.writtenContent,
+    ) ?? merged.content
+  }
+
+  if (normalizedTool === 'web' || normalizedTool === 'web.search' || normalizedTool === 'browser.search' || normalizedTool === 'browser.fetch' || normalizedTool === 'web.fetch') {
+    merged.query = firstNonEmptyString(
+      merged.query,
+      merged.search_query,
+      merged.searchQuery,
+      merged.q,
+      nested?.query,
+      nested?.search_query,
+      nested?.searchQuery,
+      nested?.q,
+    ) ?? merged.query
+    merged.url = firstNonEmptyString(
+      merged.url,
+      merged.uri,
+      merged.href,
+      nested?.url,
+      nested?.uri,
+      nested?.href,
+    ) ?? merged.url
+  }
+
+  return merged
+}
+
 export function canRenderEditDiff(tool: string, args: Record<string, unknown>): boolean {
   const normalizedTool = normalizeToolName(tool)
+  const normalizedArgs = normalizeToolArgs(normalizedTool, args)
 
   if (normalizedTool === 'file.write') {
-    return args.content != null
+    return normalizedArgs.content != null
   }
 
   if (normalizedTool === 'file.patch') {
-    return args.search != null && args.replace != null
+    return normalizedArgs.search != null && normalizedArgs.replace != null
   }
 
   if (normalizedTool === 'edit') {
-    return args.content != null || (args.search != null && args.replace != null)
+    return normalizedArgs.content != null || (normalizedArgs.search != null && normalizedArgs.replace != null)
   }
 
   return false

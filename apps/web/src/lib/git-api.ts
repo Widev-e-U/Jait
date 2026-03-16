@@ -5,6 +5,7 @@
  */
 
 import { getApiUrl } from '@/lib/gateway-url'
+export { isMissingGitIdentityError } from './git-errors'
 
 const API_URL = getApiUrl()
 
@@ -104,6 +105,11 @@ export interface GhStatusResult {
 export interface GhAuthResult {
   ok: boolean
   username: string | null
+}
+
+export interface GitIdentity {
+  name: string | null
+  email: string | null
 }
 
 export interface PrCheck {
@@ -217,6 +223,14 @@ export const gitApi = {
 
   ghAuth(token: string, cwd?: string): Promise<GhAuthResult> {
     return gitPost<GhAuthResult>('gh-auth', { token, ...(cwd ? { cwd } : {}) })
+  },
+
+  identity(cwd: string): Promise<GitIdentity> {
+    return gitPost<GitIdentity>('identity', { cwd })
+  },
+
+  setIdentity(cwd: string, name: string, email: string): Promise<GitIdentity> {
+    return gitPost<GitIdentity>('identity', { cwd, name, email })
   },
 
   prChecks(cwd: string, branch: string): Promise<PrCheck[]> {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRenderEditDiff, getToolCallBodyKind } from './tool-call-body'
+import { canRenderEditDiff, getToolCallBodyKind, normalizeToolArgs } from './tool-call-body'
 
 describe('tool call body helpers', () => {
   it('does not force a diff view for codex edit calls that only provide a path', () => {
@@ -41,5 +41,29 @@ describe('tool call body helpers', () => {
         screenshotPath: null,
       }),
     ).toBe('editDiff')
+  })
+
+  it('normalizes provider-specific edit argument aliases', () => {
+    expect(
+      normalizeToolArgs('edit', {
+        file_path: 'apps/web/src/App.tsx',
+        old_string: 'before',
+        new_string: 'after',
+      }),
+    ).toMatchObject({
+      path: 'apps/web/src/App.tsx',
+      search: 'before',
+      replace: 'after',
+    })
+  })
+
+  it('normalizes provider-specific web argument aliases', () => {
+    expect(
+      normalizeToolArgs('web', {
+        searchQuery: 'openai codex',
+      }),
+    ).toMatchObject({
+      query: 'openai codex',
+    })
   })
 })

@@ -102,6 +102,11 @@ export interface GitWorktreeResult {
   branch: string;
 }
 
+export interface GitIdentity {
+  name: string | null;
+  email: string | null;
+}
+
 export interface PrCheck {
   name: string;
   state: string;
@@ -331,6 +336,26 @@ export class GitService {
 
   async init(cwd: string): Promise<void> {
     await gitExec(cwd, "init");
+  }
+
+  async getIdentity(cwd: string): Promise<GitIdentity> {
+    const [name, email] = await Promise.all([
+      gitExec(cwd, "config --get user.name").catch(() => ""),
+      gitExec(cwd, "config --get user.email").catch(() => ""),
+    ]);
+
+    return {
+      name: name.trim() || null,
+      email: email.trim() || null,
+    };
+  }
+
+  async setIdentity(cwd: string, name: string, email: string): Promise<GitIdentity> {
+    const safeName = name.replace(/"/g, '\\"');
+    const safeEmail = email.replace(/"/g, '\\"');
+    await gitExec(cwd, `config user.name "${safeName}"`);
+    await gitExec(cwd, `config user.email "${safeEmail}"`);
+    return this.getIdentity(cwd);
   }
 
   async status(cwd: string, requestedBranch?: string, githubToken?: string): Promise<GitStatusResult> {

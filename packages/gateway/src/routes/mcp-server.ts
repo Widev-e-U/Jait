@@ -1,15 +1,9 @@
 /**
- * MCP SSE Server — exposes Jait's tool registry as an MCP-compatible endpoint.
+ * MCP HTTP Server — exposes Jait's tool registry as MCP-compatible endpoints.
  *
- * External CLI agents (Codex, Claude Code) connect to this SSE endpoint
- * to discover and execute Jait's custom tools (memory, cron, todo, etc.).
- *
- * Protocol: Server-Sent Events (SSE) for server→client, POST for client→server.
- * Follows the MCP transport specification for HTTP/SSE.
- *
- * Endpoints:
- *   GET  /mcp/sse       — SSE connection (tool list + event stream)
- *   POST /mcp/messages   — JSON-RPC requests from the connected client
+ * Modern clients such as recent Codex builds expect Streamable HTTP at a
+ * single `/mcp` endpoint. Older clients may still use the deprecated split
+ * HTTP+SSE transport (`/mcp/sse` + `/mcp/messages`), so we keep both.
  */
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
@@ -27,16 +21,42 @@ interface McpDeps {
 
 interface McpRequest {
   jsonrpc: "2.0";
-  id: number | string;
+  id?: number | string;
   method: string;
   params?: Record<string, unknown>;
 }
 
 interface McpResponse {
   jsonrpc: "2.0";
-  id: number | string;
+  id: number | string | null;
   result?: unknown;
   error?: { code: number; message: string; data?: unknown };
+}
+
+const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
+  "2024-11-05",
+  "2025-03-26",
+  "2025-06-18",
+  "2025-11-25",
+]);
+const DEFAULT_MCP_PROTOCOL_VERSION = "2025-03-26";
+
+function normalizeMcpProtocolVersion(value: unknown): string | null {
+  if (typeof value !== "string" || !value.trim()) return null;
+  return SUPPORTED_MCP_PROTOCOL_VERSIONS.has(value) ? value : null;
+}
+
+function resolveRequestedProtocolVersion(request: McpRequest, headers?: Record<string, unknown>): string | null {
+  const headerValue = normalizeMcpProtocolVersion(headers?.["mcp-protocol-version"]);
+  if (headerValue) return headerValue;
+  return normalizeMcpProtocolVersion(request.params?.["protocolVersion"]);
+}
+
+function applyMcpProtocolVersionHeader(
+  reply: { header: (name: string, value: string) => unknown },
+  version: string,
+): void {
+  reply.header("MCP-Protocol-Version", version);
 }
 
 // ── Connected client tracking ────────────────────────────────────────
@@ -92,6 +112,52 @@ export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
   const { toolRegistry, config } = deps;
+
+  app.get("/mcp", async (_request, reply) => {
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      Connection: "keep-alive",
+      "X-Accel-Buffering": "no",
+    });
+    reply.raw.write(": connected\n\n");
+
+    const interval = setInterval(() => {
+      try {
+        reply.raw.write(": keepalive\n\n");
+      } catch {
+        clearInterval(interval);
+      }
+    }, 15_000);
+
+    reply.raw.on("close", () => {
+      clearInterval(interval);
+    });
+  });
+
+  app.post("/mcp", async (request, reply) => {
+    const body = request.body as McpRequest | undefined;
+    if (!body || body.jsonrpc !== "2.0" || !body.method) {
+      return reply.status(400).send({ error: "Invalid JSON-RPC request" });
+    }
+
+    const requestedVersion = resolveRequestedProtocolVersion(body, request.headers as Record<string, unknown>);
+    const hasProtocolHeader = request.headers["mcp-protocol-version"] != null;
+    if (hasProtocolHeader && !requestedVersion) {
+      return reply.status(400).send({ error: "Invalid or unsupported MCP-Protocol-Version" });
+    }
+
+    const negotiatedVersion = requestedVersion ?? DEFAULT_MCP_PROTOCOL_VERSION;
+    applyMcpProtocolVersionHeader(reply, negotiatedVersion);
+
+    const response = await handleMcpRequest(body, toolRegistry, negotiatedVersion);
+    if (body.id == null) {
+      return reply.status(202).send();
+    }
+    return reply.send(response);
+  });
+
+  app.delete("/mcp", async (_request, reply) => reply.status(405).send({ error: "Session termination not supported" }));
 
   /**
    * GET /mcp/sse — SSE connection endpoint.
@@ -158,7 +224,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       return reply.status(400).send({ error: "Invalid JSON-RPC request" });
     }
 
-    const response = await handleMcpRequest(body, toolRegistry);
+    const response = await handleMcpRequest(body, toolRegistry, DEFAULT_MCP_PROTOCOL_VERSION);
 
     // Also push the response via SSE to the connected client
     const client = clients.get(clientId);
@@ -169,7 +235,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
     return reply.send(response);
   });
 
-  app.log.info("MCP SSE server routes registered at /mcp/sse and /mcp/messages");
+  app.log.info("MCP routes registered at /mcp, /mcp/sse and /mcp/messages");
 }
 
 // ── Request handler ──────────────────────────────────────────────────
@@ -177,14 +243,15 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
 export async function handleMcpRequest(
   request: McpRequest,
   toolRegistry: ToolRegistry,
+  protocolVersion = DEFAULT_MCP_PROTOCOL_VERSION,
 ): Promise<McpResponse> {
   switch (request.method) {
     case "initialize":
       return {
         jsonrpc: "2.0",
-        id: request.id,
+        id: request.id ?? null,
         result: {
-          protocolVersion: "2024-11-05",
+          protocolVersion,
           capabilities: {
             tools: { listChanged: false },
           },
@@ -198,7 +265,7 @@ export async function handleMcpRequest(
     case "tools/list":
       return {
         jsonrpc: "2.0",
-        id: request.id,
+        id: request.id ?? null,
         result: {
           tools: listToolsForMcp(toolRegistry).map((tool) => ({
               name: tool.name,
@@ -220,7 +287,7 @@ export async function handleMcpRequest(
       if (!tool) {
         return {
           jsonrpc: "2.0",
-          id: request.id,
+          id: request.id ?? null,
           result: {
             content: [{ type: "text", text: `Unknown tool: ${toolName}` }],
             isError: true,
@@ -239,7 +306,7 @@ export async function handleMcpRequest(
         const result = await tool.execute(args, context);
         return {
           jsonrpc: "2.0",
-          id: request.id,
+          id: request.id ?? null,
           result: {
             content: [
               {
@@ -255,7 +322,7 @@ export async function handleMcpRequest(
       } catch (err) {
         return {
           jsonrpc: "2.0",
-          id: request.id,
+          id: request.id ?? null,
           result: {
             content: [{ type: "text", text: `Tool execution error: ${err instanceof Error ? err.message : String(err)}` }],
             isError: true,
@@ -264,10 +331,19 @@ export async function handleMcpRequest(
       }
     }
 
+    case "notifications/initialized":
+    case "initialized":
+    case "ping":
+      return {
+        jsonrpc: "2.0",
+        id: request.id ?? null,
+        result: {},
+      };
+
     default:
       return {
         jsonrpc: "2.0",
-        id: request.id,
+        id: request.id ?? null,
         error: { code: -32601, message: `Method not found: ${request.method}` },
       };
   }

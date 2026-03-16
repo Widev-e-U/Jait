@@ -10,6 +10,7 @@
  *   POST   /api/git/run-stacked-action    — commit / push / create PR
  *   POST   /api/git/checkout              — checkout a branch
  *   POST   /api/git/init                  — git init
+ *   POST   /api/git/identity              — get/set local git author identity
  */
 
 import type { FastifyInstance } from "fastify";
@@ -219,6 +220,56 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
       return result;
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Action failed" });
+    }
+  });
+
+  /** Get or set repo-local git author identity */
+  app.post("/api/git/identity", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as Record<string, unknown>;
+    const cwd = typeof body["cwd"] === "string" ? body["cwd"] : "";
+    const name = typeof body["name"] === "string" ? body["name"].trim() : undefined;
+    const email = typeof body["email"] === "string" ? body["email"].trim() : undefined;
+
+    if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
+
+    try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      if (remoteNodeId && ws) {
+        const readConfig = async (key: string) => {
+          try {
+            const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args: `config --get ${key}` }, 15_000);
+            return r.stdout.trim() || null;
+          } catch {
+            return null;
+          }
+        };
+
+        if (name || email) {
+          if (!name || !email) {
+            return reply.status(400).send({ error: "Both name and email are required" });
+          }
+          await ws.proxyFsOp(remoteNodeId, "git", { cwd, args: `config user.name "${name.replace(/"/g, '\\"')}"` }, 15_000);
+          await ws.proxyFsOp(remoteNodeId, "git", { cwd, args: `config user.email "${email.replace(/"/g, '\\"')}"` }, 15_000);
+        }
+
+        return {
+          name: await readConfig("user.name"),
+          email: await readConfig("user.email"),
+        };
+      }
+
+      if (name || email) {
+        if (!name || !email) {
+          return reply.status(400).send({ error: "Both name and email are required" });
+        }
+        return await git.setIdentity(cwd, name, email);
+      }
+
+      return await git.getIdentity(cwd);
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Git identity request failed" });
     }
   });
 
