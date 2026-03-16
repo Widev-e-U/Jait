@@ -26,15 +26,20 @@ function QueueItem({
   onRemove,
   onEdit,
   onReorder,
+  dragActive,
+  dragOver,
+  onDragStart,
 }: {
   item: QueuedMessage
   index: number
   onRemove?: (id: string) => void
   onEdit?: (id: string, content: string) => void
   onReorder?: (sourceId: string, targetId: string) => void
+  dragActive?: boolean
+  dragOver?: boolean
+  onDragStart?: (id: string) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [dragOver, setDragOver] = useState(false)
   const [draft, setDraft] = useState(item.displayContent ?? item.content)
   const inputRef = useRef<HTMLTextAreaElement>(null)
 
@@ -77,46 +82,14 @@ function QueueItem({
     }
   }, [commitEdit, cancelEdit])
 
-  const handleDragStart = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (editing || !onReorder) {
-      e.preventDefault()
-      return
-    }
-    e.dataTransfer.effectAllowed = 'move'
-    e.dataTransfer.setData('text/jait-queue-id', item.id)
-  }, [editing, item.id, onReorder])
-
-  const handleDragOver = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (editing || !onReorder) return
-    e.preventDefault()
-    e.dataTransfer.dropEffect = 'move'
-    setDragOver(true)
-  }, [editing, onReorder])
-
-  const handleDragLeave = useCallback(() => {
-    setDragOver(false)
-  }, [])
-
-  const handleDrop = useCallback((e: React.DragEvent<HTMLDivElement>) => {
-    if (editing || !onReorder) return
-    e.preventDefault()
-    const sourceId = e.dataTransfer.getData('text/jait-queue-id')
-    setDragOver(false)
-    if (!sourceId || sourceId === item.id) return
-    onReorder(sourceId, item.id)
-  }, [editing, item.id, onReorder])
-
   return (
     <div
+      data-queue-id={item.id}
       className={cn(
         'group flex items-start gap-2 rounded-lg bg-muted/50 border border-border/40 px-3 py-2 text-sm transition-colors hover:bg-muted/70',
+        dragActive && 'opacity-70',
         dragOver && 'border-primary/50 bg-primary/5',
       )}
-      draggable={!editing && Boolean(onReorder)}
-      onDragStart={handleDragStart}
-      onDragOver={handleDragOver}
-      onDragLeave={handleDragLeave}
-      onDrop={handleDrop}
     >
       {/* Position indicator */}
       <div className="mt-0.5 shrink-0">
@@ -130,9 +103,10 @@ function QueueItem({
       {onReorder && !editing && (
         <button
           type="button"
-          className="mt-0.5 shrink-0 cursor-grab rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
+          className="mt-0.5 shrink-0 cursor-grab touch-none select-none rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
           title="Drag to reorder"
           aria-label="Drag to reorder"
+          onPointerDown={() => onDragStart?.(item.id)}
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
@@ -216,6 +190,47 @@ function QueueItem({
 /* ── Queue container ────────────────────────────────────────────────── */
 
 export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: MessageQueueProps) {
+  const [dragSourceId, setDragSourceId] = useState<string | null>(null)
+  const [dragTargetId, setDragTargetId] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!dragSourceId) return
+
+    const updateTarget = (clientX: number, clientY: number) => {
+      const element = document.elementFromPoint(clientX, clientY)
+      const row = element instanceof HTMLElement ? element.closest<HTMLElement>('[data-queue-id]') : null
+      setDragTargetId(row?.dataset.queueId ?? null)
+    }
+
+    const handlePointerMove = (event: PointerEvent) => {
+      updateTarget(event.clientX, event.clientY)
+    }
+
+    const finishDrag = () => {
+      if (dragSourceId && dragTargetId && dragSourceId !== dragTargetId) {
+        onReorder?.(dragSourceId, dragTargetId)
+      }
+      setDragSourceId(null)
+      setDragTargetId(null)
+    }
+
+    window.addEventListener('pointermove', handlePointerMove)
+    window.addEventListener('pointerup', finishDrag)
+    window.addEventListener('pointercancel', finishDrag)
+
+    return () => {
+      window.removeEventListener('pointermove', handlePointerMove)
+      window.removeEventListener('pointerup', finishDrag)
+      window.removeEventListener('pointercancel', finishDrag)
+    }
+  }, [dragSourceId, dragTargetId, onReorder])
+
+  const handleDragStart = useCallback((id: string) => {
+    if (!onReorder) return
+    setDragSourceId(id)
+    setDragTargetId(id)
+  }, [onReorder])
+
   if (items.length === 0) return null
 
   return (
@@ -233,6 +248,9 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
           onRemove={onRemove}
           onEdit={onEdit}
           onReorder={onReorder}
+          dragActive={dragSourceId === item.id}
+          dragOver={Boolean(dragSourceId && dragTargetId === item.id && dragSourceId !== item.id)}
+          onDragStart={handleDragStart}
         />
       ))}
     </div>
