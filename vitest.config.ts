@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   resolve: {
     alias: {
+      "@": fileURLToPath(new URL("./apps/web/src", import.meta.url)),
       "bun:sqlite": fileURLToPath(new URL("./test-shims/bun-sqlite.ts", import.meta.url)),
       "drizzle-orm/bun-sqlite": "drizzle-orm/better-sqlite3",
       "@jait/shared": fileURLToPath(new URL("./packages/shared/src/index.ts", import.meta.url)),
