@@ -1,6 +1,6 @@
 {
   "name": "@jait/screen-share",
-  "version": "0.1.18",
+  "version": "0.1.19",
   "description": "Screen-share service for Jait gateway",
   "type": "module",
   "main": "dist/index.js",
