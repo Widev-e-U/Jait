@@ -1843,6 +1843,11 @@ function App() {
       }
 
       // No backup — fall back to opening the file normally in the workspace editor
+      const opened = await workspaceRef.current?.openFileByPath(filePath)
+      if (opened) {
+        if (!showWorkspace) setShowWorkspace(true)
+        return
+      }
       const file = await workspaceRef.current?.readFileByPath(filePath)
       if (file) {
         mergeWorkspaceFiles([file])
@@ -1882,6 +1887,13 @@ function App() {
 
       if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
         await openRemoteWorkspaceOnGateway(targetWorkspaceRoot, activeWorkspace?.nodeId, activeSessionId)
+      }
+
+      const openedInTree = await workspaceRef.current?.openFileByPath(filePath)
+      if (openedInTree) {
+        if (!showWorkspace) setShowWorkspace(true)
+        showWorkspaceEditorPanel()
+        return
       }
 
       const existing = workspaceFiles.find((file) => file.path === filePath)

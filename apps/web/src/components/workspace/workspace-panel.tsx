@@ -51,6 +51,8 @@ export interface WorkspacePanelHandle {
   openDirectory: (handle?: FileSystemDirectoryHandle) => Promise<void>
   /** Open a remote (server-side) workspace by root path. Uses /api/workspace/* endpoints. */
   openRemoteWorkspace: (rootPath: string) => Promise<void>
+  /** Expand ancestor folders and open a file directly from the tree. */
+  openFileByPath: (path: string) => Promise<boolean>
   /** Read a file from the lazy tree by path and return a WorkspaceFile, or null. */
   readFileByPath: (path: string) => Promise<WorkspaceFile | null>
   /** Lazily search the entire directory for files matching a query. Cancellable via AbortSignal. */
@@ -135,6 +137,10 @@ async function readFileHandle(handle: FileSystemFileHandle): Promise<string> {
   const file = await handle.getFile()
   if (file.size > 2 * 1024 * 1024) return '// File too large to preview'
   return file.text()
+}
+
+function normalizePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
 /* ------------------------------------------------------------------ */
@@ -811,12 +817,73 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     return results
   }, [lazyTree, remoteRoot])
 
+  const handleOpenFileByPath = useCallback(async (path: string): Promise<boolean> => {
+    const targetPath = normalizePath(path)
+    const rootPath = remoteRoot ? normalizePath(remoteRoot) : null
+    const parts = rootPath && (targetPath === rootPath || targetPath.startsWith(`${rootPath}/`))
+      ? targetPath.slice(rootPath.length).replace(/^\/+/, '').split('/').filter(Boolean)
+      : targetPath.split('/').filter(Boolean)
+
+    if (parts.length === 0) return false
+
+    let currentNodes = lazyTree
+    let currentPath = rootPath ?? ''
+    const dirsToExpand: string[] = []
+
+    for (const part of parts.slice(0, -1)) {
+      currentPath = currentPath ? `${currentPath}/${part}` : part
+      const dirNode = currentNodes.find((node): node is LazyDir =>
+        node.kind === 'dir' && normalizePath(node.path) === currentPath,
+      )
+      if (!dirNode) return false
+      if (dirNode.children === null) {
+        dirNode.childrenLoading = true
+        bumpTree()
+        dirNode.children = dirNode.handle
+          ? await scanDir(dirNode.handle, dirNode.path)
+          : await remoteScanDir(dirNode.path, surfaceId)
+        dirNode.childrenLoading = false
+        bumpTree()
+      }
+      dirsToExpand.push(currentPath)
+      currentNodes = dirNode.children ?? []
+    }
+
+    if (dirsToExpand.length > 0) {
+      setExpandedDirs((prev) => {
+        const next = new Set(prev)
+        for (const dirPath of dirsToExpand) next.add(dirPath)
+        return next
+      })
+    }
+
+    const fileNode = currentNodes.find((node): node is LazyFile =>
+      node.kind === 'file' && normalizePath(node.path) === targetPath,
+    )
+    if (!fileNode) return false
+
+    onActiveFileChange('')
+    setActiveNativePath(fileNode.path)
+    setPreviewPath(fileNode.path)
+    setPreviewLanguage(inferLanguage(fileNode.path))
+    setLoadingFile(true)
+    try {
+      const content = fileNode.handle ? await readFileHandle(fileNode.handle) : await remoteReadFile(fileNode.path, surfaceId)
+      setPreviewContent(content)
+    } catch {
+      setPreviewContent('// Failed to read file')
+    }
+    setLoadingFile(false)
+    return true
+  }, [bumpTree, lazyTree, onActiveFileChange, remoteRoot, surfaceId])
+
   useImperativeHandle(ref, () => ({
     openDirectory: handleOpenDirectory,
     openRemoteWorkspace: handleOpenRemoteWorkspace,
+    openFileByPath: handleOpenFileByPath,
     readFileByPath: handleReadFileByPath,
     searchFiles: handleSearchFiles,
-  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleReadFileByPath, handleSearchFiles])
+  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleSearchFiles])
 
   /* ---- Toggle directory ---- */
   const handleToggleDir = useCallback(async (node: LazyDir) => {
