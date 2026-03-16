@@ -1550,21 +1550,31 @@ function App() {
     sendUIState('workspace.tabs', state, activeSessionId)
   }, [setSavedWorkspaceTabs, sendUIState, activeSessionId])
 
+  const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingWorkspaceLayout) return
     const layout = { tree: showWorkspaceTree, editor: showWorkspaceEditor }
+    const serialized = JSON.stringify(layout)
+    if (serialized === prevWorkspaceLayoutPayloadRef.current) return
+    prevWorkspaceLayoutPayloadRef.current = serialized
     setSavedWorkspaceLayout(layout)
     sendUIState('workspace.layout', layout, activeSessionId)
   }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, sendUIState, activeSessionId, loadingWorkspaceLayout, token])
 
+  const prevChatModePayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingChatMode) return
+    if (chatMode === prevChatModePayloadRef.current) return
+    prevChatModePayloadRef.current = chatMode
     setSavedChatMode(chatMode)
     sendUIState('chat.mode', chatMode, activeSessionId)
   }, [chatMode, setSavedChatMode, sendUIState, activeSessionId, loadingChatMode, token])
 
+  const prevChatViewPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingChatView) return
+    if (viewMode === prevChatViewPayloadRef.current) return
+    prevChatViewPayloadRef.current = viewMode
     setSavedChatView(viewMode)
     sendUIState('chat.view', viewMode, activeSessionId)
   }, [viewMode, setSavedChatView, sendUIState, activeSessionId, loadingChatView, token])
