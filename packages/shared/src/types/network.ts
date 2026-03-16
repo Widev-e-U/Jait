@@ -5,6 +5,8 @@ export interface NetworkHost {
   mac: string | null
   hostname: string | null
   vendor: string | null
+  /** True when this host is inferred to be the local network router/default gateway */
+  isRouter?: boolean
   /** Whether the host responded to ping / ARP */
   alive: boolean
   /** Open ports discovered (e.g. 22, 80, 443) */
@@ -24,6 +26,8 @@ export interface NetworkHost {
 export interface NetworkScanResult {
   subnet: string
   hosts: NetworkHost[]
+  /** Inferred default-gateway IP for the scanned network, if detected */
+  routerIp?: string | null
   scannedAt: string
   /** Duration of the scan in ms */
   durationMs: number

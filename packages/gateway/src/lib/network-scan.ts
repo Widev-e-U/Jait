@@ -71,6 +71,31 @@ function normalizeIps(ips: string[] | undefined): string[] {
   )];
 }
 
+async function detectDefaultGatewayIp(): Promise<string | null> {
+  try {
+    if (platform() === "win32") {
+      const { stdout } = await execAsync(
+        "powershell -NoProfile -Command \"Get-NetRoute -DestinationPrefix '0.0.0.0/0' | Sort-Object RouteMetric,InterfaceMetric | Select-Object -First 1 -ExpandProperty NextHop\"",
+        { timeout: 4000 },
+      );
+      const ip = stdout.trim().split(/\r?\n/).find(isValidIpv4);
+      return ip ?? null;
+    }
+
+    if (platform() === "darwin") {
+      const { stdout } = await execAsync("route -n get default 2>/dev/null", { timeout: 4000, shell: "/bin/bash" });
+      const match = stdout.match(/gateway:\s+(\d{1,3}(?:\.\d{1,3}){3})/i);
+      return match?.[1] && isValidIpv4(match[1]) ? match[1] : null;
+    }
+
+    const { stdout } = await execAsync("ip route show default 2>/dev/null || true", { timeout: 4000, shell: "/bin/bash" });
+    const match = stdout.match(/default via (\d{1,3}(?:\.\d{1,3}){3})/i);
+    return match?.[1] && isValidIpv4(match[1]) ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
+
 function parseArpTable(output: string): HostEntry[] {
   const results: HostEntry[] = [];
   const lineRegex =
@@ -290,6 +315,7 @@ export async function scanNetwork(options: NetworkScanOptions = {}): Promise<Net
   const includeIpSet = new Set(includeIps);
   const start = Date.now();
   const deepScan = options.deep !== false;
+  const routerIp = await detectDefaultGatewayIp();
 
   let entries = mergeEntries([
     ...(await readArpEntries()),
@@ -394,6 +420,7 @@ export async function scanNetwork(options: NetworkScanOptions = {}): Promise<Net
       mac: entry.mac,
       hostname,
       vendor: null,
+      isRouter: routerIp === entry.ip,
       alive,
       openPorts,
       sshReachable,
@@ -413,6 +440,7 @@ export async function scanNetwork(options: NetworkScanOptions = {}): Promise<Net
   return {
     subnet: subnets.map((subnet) => `${subnet}.0/24`).join(", "),
     hosts,
+    routerIp,
     scannedAt: new Date().toISOString(),
     durationMs: Date.now() - start,
   };

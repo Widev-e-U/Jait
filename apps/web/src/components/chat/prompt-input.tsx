@@ -181,27 +181,28 @@ export interface PromptInputHandle {
 }
 
 function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
-  const bars = levels.length > 0 ? levels : Array.from({ length: 18 }, () => 0.08)
-  const visibleBars = compact ? bars.slice(-12) : bars
-  const meterHeight = compact ? 28 : 34
+  const bars = levels.length > 0 ? levels : Array.from({ length: 28 }, () => 0.05)
+  const visibleBars = compact ? bars.slice(-16) : bars
+  const meterHeight = compact ? 24 : 30
 
   return (
     <span
       className={cn(
-        'flex min-w-0 flex-1 items-center gap-1 overflow-hidden rounded-full border border-black/10 bg-gradient-to-b from-black/5 via-black/10 to-black/5 px-2 py-1 dark:border-white/10 dark:from-white/5 dark:via-white/10 dark:to-white/5',
-        compact ? 'h-8 max-w-[140px]' : 'h-9 max-w-[220px]',
+        'flex min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-full border border-black/10 bg-gradient-to-b from-black/5 via-black/10 to-black/5 px-3 py-1 dark:border-white/10 dark:from-white/5 dark:via-white/10 dark:to-white/5',
+        compact ? 'h-8 max-w-[210px]' : 'h-10 max-w-[320px]',
       )}
     >
       {visibleBars.map((level, index) => (
         <span
           key={index}
           className={cn(
-            'block flex-1 rounded-full bg-black/75 transition-[height,opacity] duration-200 ease-out dark:bg-white/80',
-            compact ? 'min-w-[3px]' : 'min-w-[4px]',
+            'block shrink-0 rounded-full bg-black/75 transition-[height,opacity,transform] duration-300 ease-out dark:bg-white/80',
+            compact ? 'w-[2px]' : 'w-[3px]',
           )}
           style={{
-            height: `${8 + level * meterHeight}px`,
-            opacity: 0.28 + level * 0.72,
+            height: `${6 + level * meterHeight}px`,
+            opacity: 0.18 + level * 0.82,
+            transform: `translateY(${(1 - level) * 1.5}px)`,
           }}
         />
       ))}
@@ -588,9 +589,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const el = editableRef.current
       const text = el ? getTextFromEditable(el).trim() : value.trim()
       const chips = el ? getChipFiles(el) : []
-      if ((text || chips.length > 0) && !isLoading) onSubmit(chips)
+      if (!(text || chips.length > 0)) return
+      if (isLoading && onQueue) {
+        onQueue(chips)
+        return
+      }
+      if (!isLoading) onSubmit(chips)
     }
-  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onSubmit])
+  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit])
 
   // Prevent pasting HTML — paste as plain text only
   const handlePaste = useCallback((e: React.ClipboardEvent) => {

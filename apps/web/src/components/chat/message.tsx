@@ -147,7 +147,7 @@ function StreamingMarkdown({
   )
 }
 
-function AssistantMarkdown({
+const AssistantMarkdown = memo(function AssistantMarkdown({
   content,
   compact,
   isStreaming,
@@ -165,7 +165,8 @@ function AssistantMarkdown({
   }
 
   return <StaticMarkdown content={content} compact={compact} onOpenPath={onOpenPath} />
-}
+})
+AssistantMarkdown.displayName = 'AssistantMarkdown'
 
 function MessageInner({
   messageId,

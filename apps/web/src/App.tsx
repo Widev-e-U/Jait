@@ -98,8 +98,8 @@ import { gitApi } from '@/lib/git-api'
 import { getWorkspaceRootForPath, isPathWithinWorkspace } from '@/lib/workspace-links'
 
 const API_URL = getApiUrl()
-const VOICE_LEVEL_BAR_COUNT = 18
-const VOICE_LEVEL_FLOOR = 0.08
+const VOICE_LEVEL_BAR_COUNT = 28
+const VOICE_LEVEL_FLOOR = 0.05
 
 function createSilentVoiceLevels(): number[] {
   return Array.from({ length: VOICE_LEVEL_BAR_COUNT }, () => VOICE_LEVEL_FLOOR)
@@ -2451,7 +2451,7 @@ function App() {
       const audioContext = new AudioContext()
       const analyser = audioContext.createAnalyser()
       analyser.fftSize = 256
-      analyser.smoothingTimeConstant = 0.78
+      analyser.smoothingTimeConstant = 0.58
 
       const source = audioContext.createMediaStreamSource(stream)
       source.connect(analyser)
@@ -2473,9 +2473,10 @@ function App() {
           total += Math.abs((samples[sampleIndex] - 128) / 128)
         }
         const average = samples.length > 0 ? total / samples.length : 0
-        const targetLevel = Math.min(1, Math.max(VOICE_LEVEL_FLOOR, average * 4.2))
+        const boostedLevel = Math.pow(Math.min(1, average * 6.8), 0.78)
+        const targetLevel = Math.min(1, Math.max(VOICE_LEVEL_FLOOR, boostedLevel))
         const previousTail = voiceLevelsRef.current[voiceLevelsRef.current.length - 1] ?? VOICE_LEVEL_FLOOR
-        const nextLevel = previousTail * 0.45 + targetLevel * 0.55
+        const nextLevel = previousTail * 0.2 + targetLevel * 0.8
         const timeline = [
           ...voiceLevelsRef.current.slice(-(VOICE_LEVEL_BAR_COUNT - 1)),
           nextLevel,

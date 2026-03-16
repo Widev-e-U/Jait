@@ -18,6 +18,45 @@ interface MessageQueueProps {
   className?: string
 }
 
+interface DragPreviewState {
+  id: string
+  pointerId: number
+  x: number
+  y: number
+  offsetX: number
+  offsetY: number
+  width: number
+}
+
+function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number }) {
+  return (
+    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 text-sm shadow-lg">
+      <div className="mt-0.5 shrink-0">
+        {index === 0 ? (
+          <ListPlus className="h-3.5 w-3.5 text-primary" />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+        )}
+      </div>
+      <div className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground">
+        <GripVertical className="h-3.5 w-3.5" />
+      </div>
+      <div className="min-w-0 flex-1">
+        {index === 0 ? (
+          <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wider text-primary/70">
+            Next
+          </span>
+        ) : (
+          <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+            Queued #{index + 1}
+          </span>
+        )}
+        <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
+      </div>
+    </div>
+  )
+}
+
 /* ── Inline-editable queued message row ─────────────────────────────── */
 
 function QueueItem({
@@ -37,7 +76,7 @@ function QueueItem({
   onReorder?: (sourceId: string, targetId: string) => void
   dragActive?: boolean
   dragOver?: boolean
-  onDragStart?: (id: string) => void
+  onDragStart?: (id: string, event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [draft, setDraft] = useState(item.displayContent ?? item.content)
@@ -87,7 +126,7 @@ function QueueItem({
       data-queue-id={item.id}
       className={cn(
         'group flex items-start gap-2 rounded-lg bg-muted/50 border border-border/40 px-3 py-2 text-sm transition-colors hover:bg-muted/70',
-        dragActive && 'opacity-70',
+        dragActive && 'opacity-35',
         dragOver && 'border-primary/50 bg-primary/5',
       )}
     >
@@ -106,7 +145,7 @@ function QueueItem({
           className="mt-0.5 shrink-0 cursor-grab touch-none select-none rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
           title="Drag to reorder"
           aria-label="Drag to reorder"
-          onPointerDown={() => onDragStart?.(item.id)}
+          onPointerDown={(event) => onDragStart?.(item.id, event)}
         >
           <GripVertical className="h-3.5 w-3.5" />
         </button>
@@ -192,9 +231,10 @@ function QueueItem({
 export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: MessageQueueProps) {
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
   const [dragTargetId, setDragTargetId] = useState<string | null>(null)
+  const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
 
   useEffect(() => {
-    if (!dragSourceId) return
+    if (!dragSourceId || !dragPreview) return
 
     const updateTarget = (clientX: number, clientY: number) => {
       const element = document.elementFromPoint(clientX, clientY)
@@ -203,15 +243,19 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
     }
 
     const handlePointerMove = (event: PointerEvent) => {
+      if (event.pointerId !== dragPreview.pointerId) return
+      setDragPreview(prev => prev ? { ...prev, x: event.clientX, y: event.clientY } : prev)
       updateTarget(event.clientX, event.clientY)
     }
 
-    const finishDrag = () => {
+    const finishDrag = (event?: PointerEvent) => {
+      if (event && event.pointerId !== dragPreview.pointerId) return
       if (dragSourceId && dragTargetId && dragSourceId !== dragTargetId) {
         onReorder?.(dragSourceId, dragTargetId)
       }
       setDragSourceId(null)
       setDragTargetId(null)
+      setDragPreview(null)
     }
 
     window.addEventListener('pointermove', handlePointerMove)
@@ -223,15 +267,32 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
       window.removeEventListener('pointerup', finishDrag)
       window.removeEventListener('pointercancel', finishDrag)
     }
-  }, [dragSourceId, dragTargetId, onReorder])
+  }, [dragPreview, dragSourceId, dragTargetId, onReorder])
 
-  const handleDragStart = useCallback((id: string) => {
+  const handleDragStart = useCallback((id: string, event: React.PointerEvent<HTMLButtonElement>) => {
     if (!onReorder) return
+    if (event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') return
+    event.preventDefault()
+    const row = event.currentTarget.closest<HTMLElement>('[data-queue-id]')
+    if (!row) return
+    const rect = row.getBoundingClientRect()
     setDragSourceId(id)
     setDragTargetId(id)
+    setDragPreview({
+      id,
+      pointerId: event.pointerId,
+      x: event.clientX,
+      y: event.clientY,
+      offsetX: event.clientX - rect.left,
+      offsetY: event.clientY - rect.top,
+      width: rect.width,
+    })
   }, [onReorder])
 
   if (items.length === 0) return null
+
+  const dragItemIndex = dragPreview ? items.findIndex(item => item.id === dragPreview.id) : -1
+  const dragItem = dragItemIndex >= 0 ? items[dragItemIndex] : null
 
   return (
     <div className={cn('space-y-1.5', className)}>
@@ -253,6 +314,20 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
           onDragStart={handleDragStart}
         />
       ))}
+      {dragPreview && dragItem && (
+        <div
+          className="pointer-events-none fixed z-50"
+          style={{
+            left: `${dragPreview.x - dragPreview.offsetX}px`,
+            top: `${dragPreview.y - dragPreview.offsetY}px`,
+            width: `${dragPreview.width}px`,
+          }}
+        >
+          <div className="scale-[1.01] opacity-95">
+            <QueueItemPreview item={dragItem} index={dragItemIndex} />
+          </div>
+        </div>
+      )}
     </div>
   )
 }

@@ -12,6 +12,7 @@ export interface NetworkHost {
   mac: string | null
   hostname: string | null
   vendor: string | null
+  isRouter?: boolean
   alive: boolean
   openPorts: number[]
   sshReachable: boolean
@@ -23,6 +24,7 @@ export interface NetworkHost {
 export interface NetworkScanResult {
   subnet: string
   hosts: NetworkHost[]
+  routerIp?: string | null
   scannedAt: string
   durationMs: number
 }

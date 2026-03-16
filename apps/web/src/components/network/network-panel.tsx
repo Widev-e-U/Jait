@@ -59,6 +59,7 @@ interface TopologyHost {
   name: string
   ip: string
   mac: string | null
+  isRouter?: boolean
   openPorts: number[]
   sshReachable: boolean
   agentStatus: string
@@ -85,6 +86,7 @@ interface TopologyResponse {
   devices: TopologyDevice[]
   hosts: TopologyHost[]
   meshNodes: TopologyMeshNode[]
+  routerIp?: string | null
   scannedAt: string | null
 }
 
@@ -182,6 +184,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
   const Icon = node.type === 'gateway' ? Server
     : node.type === 'device' ? ('platform' in node && (node.platform === 'android' || node.platform === 'ios') ? Smartphone : Monitor)
       : node.type === 'mesh' ? Globe
+        : ('isRouter' in node && node.isRouter) ? Wifi
         : Monitor
 
   const color = NODE_COLORS[node.type] ?? '#6b7280'
@@ -201,7 +204,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
             </div>
             <div className="min-w-0">
               <div className="truncate">{node.name}</div>
-              <div className="text-xs font-normal text-muted-foreground capitalize">{node.type}</div>
+              <div className="text-xs font-normal text-muted-foreground capitalize">{'isRouter' in node && node.isRouter ? 'router' : node.type}</div>
             </div>
           </DialogTitle>
         </DialogHeader>
@@ -226,6 +229,13 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
             <div className="flex items-center justify-between">
               <span className="text-muted-foreground">IP Address</span>
               <code className="text-xs bg-muted px-2 py-0.5 rounded">{node.ip}</code>
+            </div>
+          )}
+
+          {'isRouter' in node && node.isRouter && (
+            <div className="flex items-center justify-between">
+              <span className="text-muted-foreground">Role</span>
+              <Badge variant="secondary" className="text-[10px]">Router</Badge>
             </div>
           )}
 
@@ -658,6 +668,10 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       ctx.font = `bold ${Math.max(3, 8 / globalScale)}px -apple-system, BlinkMacSystemFont, sans-serif`
       ctx.fillStyle = '#22c55e'
       ctx.fillText('GATEWAY', x, y + size + 3 + fontSize + 2)
+    } else if (data.type === 'host' && 'isRouter' in data && data.isRouter) {
+      ctx.font = `bold ${Math.max(3, 8 / globalScale)}px -apple-system, BlinkMacSystemFont, sans-serif`
+      ctx.fillStyle = '#f59e0b'
+      ctx.fillText('ROUTER', x, y + size + 3 + fontSize + 2)
     }
 
     // Providers label below name (for devices and hosts with providers)
@@ -720,12 +734,12 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
   return (
     <div className="h-full flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b shrink-0">
-        <div className="flex items-center gap-2">
+      <div className="flex items-center justify-between gap-2 border-b px-4 py-3 shrink-0">
+        <div className="flex min-w-0 items-center gap-2">
           <Wifi className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">Network</h2>
           {deviceCount > 0 && (
-            <Badge variant="secondary" className="text-[10px]">
+            <Badge variant="secondary" className="w-[4.75rem] justify-center px-1 text-[10px] tabular-nums">
               {deviceCount} {deviceCount === 1 ? 'node' : 'nodes'}
             </Badge>
           )}
@@ -735,27 +749,27 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1.5">
-          <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => void fetchTopology()}>
-            <RefreshCw className="h-3 w-3 mr-1" />
-            Refresh
+        <div className="flex shrink-0 items-center gap-1.5">
+          <Button size="sm" variant="outline" className="h-7 px-2 text-xs sm:px-2.5" onClick={() => void fetchTopology()}>
+            <RefreshCw className="h-3 w-3 sm:mr-1" />
+            <span className="hidden sm:inline">Refresh</span>
           </Button>
           <Button
             size="sm"
             variant="default"
-            className="h-7 text-xs"
+            className="h-7 px-2 text-xs sm:px-2.5"
             onClick={() => void handleScan()}
             disabled={scanning}
           >
             {scanning ? (
               <>
-                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
-                Scanning...
+                <Loader2 className="h-3 w-3 animate-spin sm:mr-1" />
+                <span className="hidden sm:inline">Scanning...</span>
               </>
             ) : (
               <>
-                <Search className="h-3 w-3 mr-1" />
-                {topology?.scannedAt ? 'Rescan Network' : 'Discover Devices'}
+                <Search className="h-3 w-3 sm:mr-1" />
+                <span className="hidden sm:inline">{topology?.scannedAt ? 'Rescan Network' : 'Discover Devices'}</span>
               </>
             )}
           </Button>

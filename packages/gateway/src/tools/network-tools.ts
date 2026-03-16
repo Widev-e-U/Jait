@@ -9,6 +9,7 @@ export interface NetworkScanHost {
   ip: string;
   mac: string | null;
   hostname: string | null;
+  isRouter?: boolean;
   alive: boolean;
   openPorts: number[];
   sshReachable: boolean;
@@ -21,6 +22,7 @@ export interface NetworkScanHost {
 export interface NetworkScanData {
   subnet: string;
   hosts: NetworkScanHost[];
+  routerIp?: string | null;
   scannedAt: string;
   durationMs: number;
 }

@@ -92,6 +92,7 @@ function readHostsFromDb(sqlite: SqliteDatabase): { hosts: NetworkHost[]; scanne
       mac: r.mac,
       hostname: r.hostname,
       vendor: null,
+      isRouter: false,
       alive: true,
       openPorts: JSON.parse(r.open_ports) as number[],
       sshReachable: r.ssh_reachable === 1,
@@ -138,7 +139,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
     if (sqlite) {
       const { hosts, scannedAt } = readHostsFromDb(sqlite);
       if (hosts.length > 0) {
-        return { subnet: "", hosts, scannedAt: scannedAt ?? new Date().toISOString(), durationMs: 0 };
+        return { subnet: "", hosts, routerIp: null, scannedAt: scannedAt ?? new Date().toISOString(), durationMs: 0 };
       }
     }
     return { ok: false, message: "No scan results yet. Trigger a scan or wait for the scheduled job." };
@@ -420,7 +421,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
 
     // Scanned network hosts — prefer in-memory cache, fall back to DB
     const scan = getLatestNetworkScan();
-    let hostSource: { ip: string; mac: string | null; hostname: string | null; alive?: boolean; openPorts: number[]; sshReachable: boolean; agentStatus: string; osVersion?: string | null; providers?: string[] }[] =
+    let hostSource: { ip: string; mac: string | null; hostname: string | null; isRouter?: boolean; alive?: boolean; openPorts: number[]; sshReachable: boolean; agentStatus: string; osVersion?: string | null; providers?: string[] }[] =
       scan?.hosts ?? [];
     let scannedAt: string | null = scan?.scannedAt ?? null;
 
@@ -430,12 +431,14 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       scannedAt = dbData.scannedAt;
     }
 
+    const routerIp = scan?.routerIp ?? null;
     const scannedHosts = hostSource.map(h => ({
       id: `host-${h.ip}`,
       type: "host" as const,
-      name: h.hostname ?? h.ip,
+      name: h.isRouter || h.ip === routerIp ? (h.hostname ?? "Router") : (h.hostname ?? h.ip),
       ip: h.ip,
       mac: h.mac,
+      isRouter: Boolean(h.isRouter || h.ip === routerIp),
       openPorts: h.openPorts,
       sshReachable: h.sshReachable,
       agentStatus: h.agentStatus,
@@ -461,6 +464,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       devices: connectedDevices,
       hosts: scannedHosts,
       meshNodes,
+      routerIp,
       scannedAt,
     };
   });
