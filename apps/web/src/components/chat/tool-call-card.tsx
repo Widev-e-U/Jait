@@ -631,8 +631,8 @@ function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs
   if (meta && isTerminalTool && command) {
     // Terminal with partial command — show like the running state
     return (
-      <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-blue-500/30 bg-muted/60 px-2 py-0.5 text-foreground">
-        <span className="shrink-0 text-[10px] text-emerald-400">$</span>
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-foreground">
+        <span className="shrink-0 text-xs text-emerald-500 dark:text-emerald-400 font-mono">$</span>
         <code className="min-w-0 truncate text-xs font-mono">{command}</code>
         <span className="inline-block w-1 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
       </span>
@@ -835,7 +835,9 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
     snapshotText,
     screenshotPath,
   })
-  const hasExpandableContent = bodyKind !== 'none'
+  const hasExpandableContent = bodyKind === 'terminal'
+    ? (!!displayOutput || call.status === 'running')
+    : bodyKind !== 'none'
 
   const StatusIcon = call.status === 'pending'
     ? Loader2
@@ -882,8 +884,8 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
         {isPending ? (
           <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
         ) : isTerminal ? (
-          <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-border bg-muted/60 px-2 py-0.5 text-foreground">
-            <span className="shrink-0 text-[10px] text-emerald-400">$</span>
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-foreground">
+            <span className="shrink-0 text-xs text-emerald-500 dark:text-emerald-400 font-mono">$</span>
             <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
           </span>
         ) : showFileSummary ? (
@@ -928,10 +930,10 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
       'bg-muted/40 text-foreground',
       call.result && !call.result.ok && 'text-red-500 dark:text-red-400'
     )}>
-      <span className="text-emerald-400">$ </span>
-      {summary}
-      {(displayOutput || call.status === 'running') && '\n'}
       {displayOutput}
+      {call.status === 'running' && !displayOutput && (
+        <span className="text-muted-foreground">Running...</span>
+      )}
       {call.status === 'running' && (
         <span className="inline-block w-1.5 h-3.5 bg-foreground animate-pulse ml-0.5 align-text-bottom" />
       )}
