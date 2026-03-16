@@ -94,6 +94,38 @@ function truncate(value: string, max = 64): string {
   return `${trimmed.slice(0, max - 1)}…`
 }
 
+function countLines(value: string): number {
+  if (!value) return 0
+  return value.split('\n').length
+}
+
+function getEditDiffCountLabel(tool: string, args: Record<string, unknown>): string | null {
+  const normalized = normalizeTool(tool)
+  const normalizedArgs = normalizeToolArgs(normalized, args)
+  const search = typeof normalizedArgs.search === 'string' ? normalizedArgs.search : ''
+  const replace = typeof normalizedArgs.replace === 'string' ? normalizedArgs.replace : ''
+  const content = typeof normalizedArgs.content === 'string' ? normalizedArgs.content : ''
+
+  if (normalized === 'file.write') {
+    const added = countLines(content)
+    return added > 0 ? `+${added}` : null
+  }
+
+  if (normalized === 'file.patch' || normalized === 'edit') {
+    if (search || replace) {
+      const removed = countLines(search)
+      const added = countLines(replace)
+      return `+${added} -${removed}`
+    }
+    if (content) {
+      const added = countLines(content)
+      return added > 0 ? `+${added}` : null
+    }
+  }
+
+  return null
+}
+
 /** Format a tool call's primary display text (e.g. the command or file path) */
 function getCallSummary(tool: string, args: Record<string, unknown>): string {
   const normalized = normalizeTool(tool)
@@ -102,7 +134,9 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (normalized === 'read') return String(normalizedArgs.path ?? '')
   if (normalized === 'edit') {
     const path = String(normalizedArgs.path ?? '')
-    if (normalizedArgs.search) return `${path} (patch)`
+    const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
+    if (normalizedArgs.search) return `${path}${diffCount ? ` (${diffCount})` : ' (patch)'}`
+    if (diffCount) return `${path} (${diffCount})`
     return path
   }
   if (normalized === 'execute') return String(normalizedArgs.command ?? args.command ?? '')
@@ -132,6 +166,11 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   }
   // ── Legacy tools ─────────────────────────────────────────
   if (normalized.startsWith('terminal.')) return String(normalizedArgs.command ?? args.command ?? '')
+  if (normalized === 'file.write' || normalized === 'file.patch') {
+    const path = String(normalizedArgs.path ?? '')
+    const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
+    return diffCount ? `${path} (${diffCount})` : path
+  }
   if (normalized.startsWith('file.')) return String(normalizedArgs.path ?? '')
   if (normalized === 'memory.save') {
     const scope = String(args.scope ?? 'memory')
@@ -724,6 +763,7 @@ function ToolCallCardInner({ call, onOpenTerminal }: ToolCallCardProps) {
   const meta = getToolMeta(normalizedTool)
   const Icon = meta.icon
   const summary = getCallSummary(normalizedTool, normalizedArgs)
+  const editDiffCount = getEditDiffCountLabel(normalizedTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, normalizedTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
@@ -804,6 +844,11 @@ function ToolCallCardInner({ call, onOpenTerminal }: ToolCallCardProps) {
       <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
         <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
       </span>
+      {editDiffCount && (
+        <span className="rounded border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-500 shrink-0">
+          {editDiffCount}
+        </span>
+      )}
       {terminalOutcomeBadge && (
         <span
           className={cn(
