@@ -33,6 +33,7 @@ on:
     paths:
       - packages/gateway/package.json
       - packages/shared/package.json
+      - apps/web/package.json
       - packages/screen-share/package.json
       - apps/desktop/package.json
       - apps/mobile/package.json
@@ -73,7 +74,7 @@ jobs:
 
           # Check if ANY watched package.json version changed
           CHANGED=false
-          for PKG in packages/gateway/package.json packages/shared/package.json apps/desktop/package.json apps/mobile/package.json; do
+          for PKG in packages/gateway/package.json packages/shared/package.json apps/web/package.json packages/screen-share/package.json apps/desktop/package.json apps/mobile/package.json; do
             NEW=$(jq -r '.version' "$PKG" 2>/dev/null || echo "")
             OLD=$(git show HEAD~1:"$PKG" 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
             if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
