@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
@@ -248,6 +248,22 @@ function buildDirChangesSet(gitStatusMap: Map<string, string>): Set<string> {
 }
 
 const gitApi = gitApiImport
+
+/* ------------------------------------------------------------------ */
+/*  Editor tab model                                                   */
+/* ------------------------------------------------------------------ */
+
+interface EditorTab {
+  id: string
+  type: 'file' | 'diff'
+  path: string
+  label: string
+  content?: string | null
+  language?: string
+  diffEntry?: FileDiffEntry | null
+  /** Preview tabs are italic and get replaced on next open */
+  isPreview?: boolean
+}
 
 /* ------------------------------------------------------------------ */
 /*  Drag resize hook                                                   */
@@ -498,6 +514,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [gitActionBusy, setGitActionBusy] = useState(false)
   const [gitActionError, setGitActionError] = useState<string | null>(null)
 
+  // ── Editor tabs state ──
+  const [openTabs, setOpenTabs] = useState<EditorTab[]>([])
+  const [activeTabId, setActiveTabId] = useState<string | null>(null)
+  const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
+
   const fetchGitStatus = useCallback(async () => {
     if (!remoteRoot) return
     setGitStatusLoading(true)
@@ -585,7 +606,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     // Also re-fetch the currently open file in case it was modified externally
     if (activeNativePath && remoteRoot) {
       remoteReadFile(activeNativePath, surfaceId).then(
-        (content) => setPreviewContent(content),
+        (content) => {
+          setPreviewContent(content)
+          setOpenTabs(prev => prev.map(t => t.id === `file:${activeNativePath}` ? { ...t, content } : t))
+        },
       ).catch(() => { /* keep stale content */ })
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -621,7 +645,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         bumpTree()
         try {
           const content = await remoteReadFile(path, sid)
-          if (!cancelled) setPreviewContent(content)
+          if (!cancelled) {
+            setPreviewContent(content)
+            // Also update the matching open tab
+            setOpenTabs(prev => prev.map(t => t.id === `file:${path}` ? { ...t, content } : t))
+          }
         } catch { /* keep stale content */ }
       } else if (!lastMtimeRef.current) {
         lastMtimeRef.current = mt
@@ -656,11 +684,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [lazyTree, treeVersion, files, onAvailableFilesChange])
   const activeExtFile = useMemo(() => files.find((f) => f.id === activeFileId) ?? null, [files, activeFileId])
 
-  const editorFile = activeNativePath
-    ? { path: previewPath ?? '', language: previewLanguage, content: previewContent ?? '' }
-    : activeExtFile
-      ? { path: activeExtFile.path, language: activeExtFile.language, content: activeExtFile.content }
-      : null
+  const editorFile = activeTab?.type === 'file'
+    ? { path: activeTab.path, language: activeTab.language ?? 'plaintext', content: activeTab.content ?? '' }
+    : activeNativePath
+      ? { path: previewPath ?? '', language: previewLanguage, content: previewContent ?? '' }
+      : activeExtFile
+        ? { path: activeExtFile.path, language: activeExtFile.language, content: activeExtFile.content }
+        : null
 
   /* ---- Open directory ---- */
   const handleOpenDirectory = useCallback(async (handle?: FileSystemDirectoryHandle) => {
@@ -907,6 +937,30 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- Select native file ---- */
   const handleSelectNativeFile = useCallback(async (node: LazyFile) => {
+    const tabId = `file:${node.path}`
+    // If tab already open, just activate it
+    setOpenTabs(prev => {
+      const existing = prev.find(t => t.id === tabId)
+      if (existing) return prev // will activate below
+      const newTab: EditorTab = {
+        id: tabId,
+        type: 'file',
+        path: node.path,
+        label: node.name,
+        content: null,
+        language: inferLanguage(node.path),
+        isPreview: true,
+      }
+      // Replace existing preview tab of same type, or append
+      const previewIdx = prev.findIndex(t => t.isPreview && t.type === 'file')
+      if (previewIdx >= 0) {
+        const next = [...prev]
+        next[previewIdx] = newTab
+        return next
+      }
+      return [...prev, newTab]
+    })
+    setActiveTabId(tabId)
     onActiveFileChange('')
     setActiveNativePath(node.path)
     setPreviewPath(node.path)
@@ -915,8 +969,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     try {
       const content = node.handle ? await readFileHandle(node.handle) : await remoteReadFile(node.path, surfaceId)
       setPreviewContent(content)
+      // Update tab content
+      setOpenTabs(prev => prev.map(t => t.id === tabId ? { ...t, content } : t))
     } catch {
       setPreviewContent('// Failed to read file')
+      setOpenTabs(prev => prev.map(t => t.id === tabId ? { ...t, content: '// Failed to read file' } : t))
     }
     setLoadingFile(false)
   }, [onActiveFileChange, surfaceId])
@@ -932,6 +989,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /* ---- Open diff from source control ---- */
   const handleScOpenDiff = useCallback(async (filePath: string) => {
     if (!remoteRoot) return
+    const tabId = `diff:${filePath}`
+    // If diff tab already open, just activate it
+    const existingTab = openTabs.find(t => t.id === tabId)
+    if (existingTab) {
+      setActiveTabId(tabId)
+      setScDiffFile(existingTab.diffEntry ?? null)
+      return
+    }
     setScDiffLoading(true)
     try {
       const diffs = await gitApi.fileDiffs(remoteRoot)
@@ -940,10 +1005,20 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         diffs.find((d) => filePath.replace(/\\/g, '/').endsWith('/' + d.path))
       if (entry) {
         setScDiffFile(entry)
+        const fileName = filePath.split('/').pop() ?? filePath
+        const newTab: EditorTab = {
+          id: tabId,
+          type: 'diff',
+          path: filePath,
+          label: fileName,
+          diffEntry: entry,
+        }
+        setOpenTabs(prev => [...prev, newTab])
+        setActiveTabId(tabId)
       }
     } catch { /* ignore */ }
     setScDiffLoading(false)
-  }, [remoteRoot])
+  }, [remoteRoot, openTabs])
 
   /* ---- Git commit / push actions ---- */
   const handleGitAction = useCallback(async (action: GitStackedAction) => {
@@ -956,20 +1031,106 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       })
       setCommitMessage('')
       setScDiffFile(null)
+      // Close all diff tabs (diffs are stale after commit)
+      setOpenTabs(prev => {
+        const cleaned = prev.filter(t => t.type !== 'diff')
+        return cleaned
+      })
+      setActiveTabId(prev => {
+        const tabs = openTabs.filter(t => t.type !== 'diff')
+        if (prev && tabs.some(t => t.id === prev)) return prev
+        return tabs[tabs.length - 1]?.id ?? null
+      })
       // Refresh status after action
       await fetchGitStatus()
     } catch (err) {
       setGitActionError(err instanceof Error ? err.message : 'Git action failed')
     }
     setGitActionBusy(false)
-  }, [remoteRoot, gitActionBusy, commitMessage, fetchGitStatus])
+  }, [remoteRoot, gitActionBusy, commitMessage, fetchGitStatus, openTabs])
 
   /* ---- Select external file ---- */
   const handleSelectExtFile = useCallback((id: string) => {
+    const extFile = files.find(f => f.id === id)
+    if (!extFile) return
+    const tabId = `ext:${id}`
+    setOpenTabs(prev => {
+      const existing = prev.find(t => t.id === tabId)
+      if (existing) return prev
+      const newTab: EditorTab = {
+        id: tabId,
+        type: 'file',
+        path: extFile.path,
+        label: extFile.name,
+        content: extFile.content,
+        language: extFile.language,
+        isPreview: true,
+      }
+      const previewIdx = prev.findIndex(t => t.isPreview && t.type === 'file')
+      if (previewIdx >= 0) {
+        const next = [...prev]
+        next[previewIdx] = newTab
+        return next
+      }
+      return [...prev, newTab]
+    })
+    setActiveTabId(tabId)
     setActiveNativePath(null)
     setPreviewContent(null)
     onActiveFileChange(id)
-  }, [onActiveFileChange])
+  }, [onActiveFileChange, files])
+
+  /* ---- Tab management ---- */
+  const handleCloseTab = useCallback((tabId: string) => {
+    setOpenTabs(prev => {
+      const idx = prev.findIndex(t => t.id === tabId)
+      if (idx < 0) return prev
+      const next = prev.filter(t => t.id !== tabId)
+      // If closing the active tab, activate the nearest neighbor
+      if (tabId === activeTabId) {
+        const neighbor = next[Math.min(idx, next.length - 1)]
+        const newActiveId = neighbor?.id ?? null
+        // Use setTimeout to avoid setActiveTabId during render
+        setTimeout(() => {
+          setActiveTabId(newActiveId)
+          if (!newActiveId) {
+            setActiveNativePath(null)
+            setPreviewContent(null)
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'file') {
+            setActiveNativePath(neighbor.path)
+            setPreviewContent(neighbor.content ?? null)
+            setPreviewLanguage(neighbor.language ?? 'plaintext')
+            setPreviewPath(neighbor.path)
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'diff') {
+            setScDiffFile(neighbor.diffEntry ?? null)
+          }
+        }, 0)
+      }
+      return next
+    })
+  }, [activeTabId])
+
+  const handleSwitchTab = useCallback((tabId: string) => {
+    const tab = openTabs.find(t => t.id === tabId)
+    if (!tab) return
+    setActiveTabId(tabId)
+    if (tab.type === 'file') {
+      setActiveNativePath(tab.path)
+      setPreviewContent(tab.content ?? null)
+      setPreviewLanguage(tab.language ?? 'plaintext')
+      setPreviewPath(tab.path)
+      setScDiffFile(null)
+      onActiveFileChange(tab.id.startsWith('ext:') ? tab.id.slice(4) : '')
+    } else if (tab.type === 'diff') {
+      setScDiffFile(tab.diffEntry ?? null)
+    }
+  }, [openTabs, onActiveFileChange])
+
+  const handlePinTab = useCallback((tabId: string) => {
+    setOpenTabs(prev => prev.map(t => t.id === tabId ? { ...t, isPreview: false } : t))
+  }, [])
 
   const hasNativeTree = lazyTree.length > 0
   const hasExtFiles = files.length > 0
@@ -1223,50 +1384,95 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         {/* Editor tab */}
         {effectiveMobileTab === 'editor' && showEditorProp && (
           <div className="flex-1 flex flex-col min-h-0">
-            <div className="flex items-center gap-1.5 h-7 px-2 border-b bg-muted/20 shrink-0">
-              {(editorFile || scDiffFile) && showTreeProp && (
+            {/* Mobile tab bar */}
+            {openTabs.length > 0 && (
+            <div className="flex items-center h-8 bg-muted/30 border-b shrink-0 overflow-x-auto overflow-y-hidden">
+              {showTreeProp && (
                 <button
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-                  onClick={() => { setScDiffFile(null); setMobileTab(scDiffFile ? 'git' : 'files') }}
+                  className="flex items-center px-2 text-muted-foreground hover:text-foreground shrink-0"
+                  onClick={() => { setMobileTab(scDiffFile ? 'git' : 'files') }}
                 >
-                  <ArrowLeft className="h-3 w-3" />
+                  <ArrowLeft className="h-3.5 w-3.5" />
                 </button>
               )}
-              {scDiffFile && <GitStatusBadge status={scDiffFile.status} className="text-[10px]" />}
-              {scDiffFile ? (
-                <span className="text-[11px] text-muted-foreground truncate flex-1">{scDiffFile.path}</span>
-              ) : editorFile ? (
-                <>
-                  <FileIcon filename={editorFile.path} className="h-3 w-3" />
-                  <span className="text-[11px] text-muted-foreground truncate flex-1">{editorFile.path}</span>
-                </>
-              ) : (
-                <span className="text-[11px] text-muted-foreground flex-1">Editor</span>
-              )}
+              {openTabs.map((tab) => {
+                const isActive = tab.id === activeTabId
+                return (
+                  <div
+                    key={tab.id}
+                    className={`group relative flex items-center gap-1 h-8 px-2.5 border-r border-border/40 cursor-pointer shrink-0 text-xs ${
+                      isActive ? 'bg-background text-foreground' : 'text-muted-foreground'
+                    }`}
+                    onClick={() => handleSwitchTab(tab.id)}
+                  >
+                    {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
+                    {tab.type === 'diff' && tab.diffEntry ? (
+                      <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
+                    ) : (
+                      <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span className={`truncate max-w-[100px] ${tab.isPreview ? 'italic' : ''}`}>{tab.label}</span>
+                    <button
+                      className="p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 opacity-60"
+                      onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id) }}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )
+              })}
+              <div className="flex-1" />
               {onToggleEditor && (
                 <button
                   onClick={onToggleEditor}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted ml-auto"
+                  className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
                 >
                   <EyeOff className="h-3 w-3" />
                 </button>
               )}
             </div>
+            )}
+            {/* Fallback header when no tabs */}
+            {openTabs.length === 0 && (
+            <div className="flex items-center gap-1.5 h-7 px-2 border-b bg-muted/20 shrink-0">
+              {showTreeProp && (
+                <button
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={() => setMobileTab('files')}
+                >
+                  <ArrowLeft className="h-3 w-3" />
+                </button>
+              )}
+              <span className="text-[11px] text-muted-foreground flex-1">Editor</span>
+              {onToggleEditor && (
+                <button
+                  onClick={onToggleEditor}
+                  className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5"
+                >
+                  <EyeOff className="h-3 w-3" />
+                </button>
+              )}
+            </div>
+            )}
             <div className="flex-1 min-h-0 overflow-auto">
               {scDiffLoading ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading diff...
                 </div>
-              ) : scDiffFile ? (
+              ) : activeTab?.type === 'diff' && activeTab.diffEntry ? (
                 <pre className="text-[11px] leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
-                  <code>{scDiffFile.modified || scDiffFile.original || '(empty file)'}</code>
+                  <code>{activeTab.diffEntry.modified || activeTab.diffEntry.original || '(empty file)'}</code>
                 </pre>
               ) : loadingFile ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading...
                 </div>
+              ) : activeTab?.type === 'file' && activeTab.content ? (
+                <pre className="text-[11px] leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
+                  <code>{activeTab.content}</code>
+                </pre>
               ) : editorFile ? (
                 <pre className="text-[11px] leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
                   <code>{editorFile.content}</code>
@@ -1532,46 +1738,72 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {/* Editor pane */}
       {showEditorProp && (
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
-        {/* Editor header with hide button */}
-        <div className="flex items-center justify-between h-7 px-2 border-b bg-muted/20 shrink-0">
-          <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
-            {scDiffFile && (
-              <button
-                className="text-[11px] text-muted-foreground hover:text-foreground shrink-0"
-                onClick={() => setScDiffFile(null)}
-                title="Close diff"
-              >
-                <ArrowLeft className="h-3 w-3" />
-              </button>
-            )}
-            {scDiffFile && <GitStatusBadge status={scDiffFile.status} />}
-            <span className="text-[11px] text-muted-foreground truncate">
-              {scDiffFile ? scDiffFile.path : editorFile ? editorFile.path.split('/').pop() : 'Editor'}
-            </span>
+        {/* Tab bar — VS Code style */}
+        <div className="flex items-center h-[35px] bg-[var(--tab-bg,hsl(var(--muted)/0.3))] border-b shrink-0 overflow-hidden">
+          <div className="flex items-center flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-none">
+            {openTabs.map((tab) => {
+              const isActive = tab.id === activeTabId
+              const gitStatus4tab = tab.type === 'diff' && tab.diffEntry ? tab.diffEntry.status : undefined
+              return (
+                <div
+                  key={tab.id}
+                  className={`group relative flex items-center gap-1.5 h-[35px] px-3 border-r border-border/40 cursor-pointer shrink-0 text-xs select-none transition-colors ${
+                    isActive
+                      ? 'bg-background text-foreground'
+                      : 'text-muted-foreground hover:bg-muted/50'
+                  }`}
+                  onClick={() => handleSwitchTab(tab.id)}
+                  onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); handleCloseTab(tab.id) } }}
+                  onDoubleClick={() => handlePinTab(tab.id)}
+                  title={tab.path}
+                >
+                  {/* Active tab bottom highlight */}
+                  {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
+                  {gitStatus4tab ? (
+                    <GitStatusBadge status={gitStatus4tab} className="text-[9px]" />
+                  ) : (
+                    <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
+                  )}
+                  <span className={`truncate max-w-[140px] ${tab.isPreview ? 'italic' : ''}`}>
+                    {tab.label}
+                  </span>
+                  <button
+                    className={`p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 transition-opacity ${
+                      isActive ? 'opacity-50 hover:opacity-100' : 'opacity-0 group-hover:opacity-50 hover:!opacity-100'
+                    }`}
+                    onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id) }}
+                    title="Close (Middle-click)"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              )
+            })}
           </div>
           {onToggleEditor && (
             <button
               onClick={onToggleEditor}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1 py-0.5 hover:bg-muted"
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 mx-1"
             >
               <EyeOff className="h-3 w-3" />
-              Hide
             </button>
           )}
         </div>
+        {/* Editor content area */}
         <div className="flex-1 min-h-0">
         {scDiffLoading ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading diff...
           </div>
-        ) : scDiffFile ? (
+        ) : activeTab?.type === 'diff' && activeTab.diffEntry ? (
           <DiffEditor
+            key={activeTab.id}
             height="100%"
             theme="vs-dark"
-            original={scDiffFile.original}
-            modified={scDiffFile.modified}
-            language={inferLanguage(scDiffFile.path)}
+            original={activeTab.diffEntry.original}
+            modified={activeTab.diffEntry.modified}
+            language={inferLanguage(activeTab.path)}
             options={{
               readOnly: true,
               minimap: { enabled: false },
@@ -1580,11 +1812,26 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               renderSideBySide: true,
             }}
           />
-        ) : loadingFile ? (
+        ) : loadingFile && activeTab?.id === activeTabId ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading...
           </div>
+        ) : activeTab?.type === 'file' ? (
+          <Editor
+            key={activeTab.id}
+            height="100%"
+            theme="vs-dark"
+            path={activeTab.path}
+            language={activeTab.language ?? 'plaintext'}
+            value={activeTab.content ?? ''}
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              fontSize: 13,
+              automaticLayout: true,
+            }}
+          />
         ) : editorFile ? (
           <Editor
             height="100%"

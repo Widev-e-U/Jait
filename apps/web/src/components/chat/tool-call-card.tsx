@@ -749,9 +749,10 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
 interface ToolCallCardProps {
   call: ToolCallInfo
   onOpenTerminal?: (terminalId: string | null) => void
+  onOpenDiff?: (filePath: string) => void
 }
 
-function ToolCallCardInner({ call, onOpenTerminal }: ToolCallCardProps) {
+function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardProps) {
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending')
   const [now, setNow] = useState(() => Date.now())
   const prevStatusRef = useRef(call.status)
@@ -955,6 +956,26 @@ function ToolCallCardInner({ call, onOpenTerminal }: ToolCallCardProps) {
             <TooltipContent side="top">Open terminal</TooltipContent>
           </Tooltip>
         )}
+        {bodyKind === 'editDiff' && onOpenDiff && call.status === 'success' && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={(e) => {
+                  e.preventDefault()
+                  e.stopPropagation()
+                  onOpenDiff(String(normalizedArgs.path ?? ''))
+                }}
+              >
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Open diff in editor</TooltipContent>
+          </Tooltip>
+        )}
       </div>
 
       {hasExpandableContent && (
@@ -975,6 +996,7 @@ ToolCallCard.displayName = 'ToolCallCard'
 interface ToolCallGroupProps {
   calls: ToolCallInfo[]
   onOpenTerminal?: (terminalId: string | null) => void
+  onOpenDiff?: (filePath: string) => void
 }
 
 /**
@@ -983,7 +1005,7 @@ interface ToolCallGroupProps {
  */
 const MAX_VISIBLE_COMPLETED = 6
 
-function ToolCallGroupInner({ calls, onOpenTerminal }: ToolCallGroupProps) {
+function ToolCallGroupInner({ calls, onOpenTerminal, onOpenDiff }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
   if (calls.length === 0) return null
 
@@ -1016,13 +1038,13 @@ function ToolCallGroupInner({ calls, onOpenTerminal }: ToolCallGroupProps) {
         </button>
       )}
       {showAll && completedCalls.slice(0, hiddenCount).map((call) => (
-        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} />
+        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
       ))}
       {visibleCompleted.map((call) => (
-        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} />
+        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
       ))}
       {activeCalls.map((call) => (
-        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} />
+        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
       ))}
     </div>
   )
@@ -1041,6 +1063,7 @@ export const ToolCallGroup = memo(
   ToolCallGroupInner,
   (prevProps, nextProps) =>
     prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
+    prevProps.onOpenDiff === nextProps.onOpenDiff &&
     areToolCallListsEqual(prevProps.calls, nextProps.calls),
 )
 ToolCallGroup.displayName = 'ToolCallGroup'

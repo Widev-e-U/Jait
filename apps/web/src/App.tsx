@@ -3433,6 +3433,7 @@ function App() {
                           compact
                           preferLlmUi={false}
                           onOpenPath={handleOpenMessagePath}
+                          onOpenDiff={handleChangedFileClick}
                         />
                       ))}
                     </Conversation>
@@ -3733,6 +3734,7 @@ function App() {
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
                       onOpenPath={handleOpenMessagePath}
+                      onOpenDiff={handleChangedFileClick}
                     />
                   ))}
                 </Conversation>

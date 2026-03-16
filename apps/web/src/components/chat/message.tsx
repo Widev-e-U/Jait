@@ -58,6 +58,7 @@ interface MessageProps {
     messageFromEnd?: number,
   ) => Promise<void> | void
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
+  onOpenDiff?: (filePath: string) => void
 }
 
 const USER_MESSAGE_MIN_WIDTH_PX = 320
@@ -186,6 +187,7 @@ function MessageInner({
   onOpenTerminal,
   onEditMessage,
   onOpenPath,
+  onOpenDiff,
 }: MessageProps) {
   const isUser = role === 'user'
 
@@ -392,7 +394,7 @@ function MessageInner({
               if (seg.type === 'toolGroup') {
                 const calls = (toolCalls ?? []).filter(tc => seg.callIds.includes(tc.callId))
                 return calls.length > 0 ? (
-                  <ToolCallGroup key={`tg-${i}`} calls={calls} onOpenTerminal={onOpenTerminal} />
+                  <ToolCallGroup key={`tg-${i}`} calls={calls} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
                 ) : null
               }
               // text segment
@@ -422,7 +424,7 @@ function MessageInner({
           /* Fallback: old layout for historical messages without segments */
           <>
             {toolCalls && toolCalls.length > 0 && (
-              <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} />
+              <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
             )}
 
         {content ? (
