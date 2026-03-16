@@ -625,7 +625,7 @@ function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs
   if (meta && isTerminalTool && command) {
     // Terminal with partial command — show like the running state
     return (
-      <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-blue-500/30 bg-[#0b0f14] px-2 py-0.5 text-[#c9d1d9]">
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-blue-500/30 bg-muted/60 px-2 py-0.5 text-foreground">
         <span className="shrink-0 text-[10px] text-emerald-400">$</span>
         <code className="min-w-0 truncate text-xs font-mono">{command}</code>
         <span className="inline-block w-1 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
@@ -664,7 +664,7 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
     return (
       <pre ref={scrollRef} className={cn(
         'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
-        'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+        'bg-muted/40 text-foreground',
       )}>
         <span className="text-emerald-400">$ </span>
         {command}
@@ -679,7 +679,7 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
     return (
       <div className={cn(
         'rounded-md border px-3 py-2 text-xs',
-        'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+        'bg-muted/40 text-foreground',
       )}>
         <div className="flex items-center gap-2">
           <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
@@ -697,7 +697,7 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
     return (
       <div className={cn(
         'rounded-md border px-3 py-2 text-xs',
-        'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+        'bg-muted/40 text-foreground',
       )}>
         <div className="flex items-center gap-2">
           <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
@@ -719,7 +719,7 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
     return (
       <pre ref={scrollRef} className={cn(
         'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-36 overflow-y-auto whitespace-pre-wrap break-all',
-        'bg-[#1e1e1e] text-[#8b949e] dark:bg-[#0d1117] dark:text-[#8b949e]',
+        'bg-muted/40 text-muted-foreground',
       )}>
         {streamingArgs}
         <span className="inline-block w-1.5 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
@@ -731,7 +731,7 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
   return (
     <div className={cn(
       'rounded-md border px-3 py-2 text-xs',
-      'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+      'bg-muted/40 text-foreground',
     )}>
       <div className="flex items-center gap-2">
         <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
@@ -829,7 +829,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
         {isPending ? (
           <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
         ) : isTerminal ? (
-          <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-zinc-700/60 bg-[#0b0f14] px-2 py-0.5 text-[#c9d1d9]">
+          <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-border bg-muted/60 px-2 py-0.5 text-foreground">
             <span className="shrink-0 text-[10px] text-emerald-400">$</span>
             <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
           </span>
@@ -863,15 +863,15 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   ) : bodyKind === 'terminal' ? (
     <pre ref={terminalScrollRef} className={cn(
       'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
-      'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
-      call.result && !call.result.ok && 'text-red-400 dark:text-red-400'
+      'bg-muted/40 text-foreground',
+      call.result && !call.result.ok && 'text-red-500 dark:text-red-400'
     )}>
       <span className="text-emerald-400">$ </span>
       {summary}
       {(displayOutput || call.status === 'running') && '\n'}
       {displayOutput}
       {call.status === 'running' && (
-        <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
+        <span className="inline-block w-1.5 h-3.5 bg-foreground animate-pulse ml-0.5 align-text-bottom" />
       )}
     </pre>
   ) : bodyKind === 'browserSnapshot' ? (
@@ -889,19 +889,19 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   ) : bodyKind === 'output' ? (
     <pre className={cn(
       'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
-      'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
-      call.result && !call.result.ok && 'text-red-400 dark:text-red-400'
+      'bg-muted/40 text-foreground',
+      call.result && !call.result.ok && 'text-red-500 dark:text-red-400'
     )}>
       {displayOutput}
       {call.status === 'running' && (
-        <span className="inline-block w-1.5 h-3.5 bg-[#cccccc] dark:bg-[#c9d1d9] animate-pulse ml-0.5 align-text-bottom" />
+        <span className="inline-block w-1.5 h-3.5 bg-foreground animate-pulse ml-0.5 align-text-bottom" />
       )}
     </pre>
   ) : bodyKind === 'runningHint' ? (
     <div
       className={cn(
         'rounded-md border px-3 py-2 text-xs',
-        'bg-[#1e1e1e] text-[#cccccc] dark:bg-[#0d1117] dark:text-[#c9d1d9]',
+        'bg-muted/40 text-foreground',
       )}
     >
       <div className="flex items-center gap-2">
