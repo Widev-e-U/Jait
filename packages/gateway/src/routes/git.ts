@@ -71,7 +71,20 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
         try { currentBranch = await gitProxy("rev-parse --abbrev-ref HEAD"); if (currentBranch === "HEAD") currentBranch = null; } catch { /* */ }
         const porcelain = await gitProxy("status --porcelain").catch(() => "");
         const hasChanges = porcelain.length > 0;
-        const files: { path: string; insertions: number; deletions: number }[] = [];
+        // Build per-file status map from porcelain
+        const statusMap = new Map<string, string>();
+        for (const pLine of porcelain.split("\n").filter(Boolean)) {
+          const xy = pLine.slice(0, 2);
+          let fp = pLine.slice(3).trim();
+          if (fp.includes(" -> ")) fp = fp.split(" -> ").pop()!.trim();
+          let st = "M";
+          if (xy.includes("?")) st = "?";
+          else if (xy.includes("A")) st = "A";
+          else if (xy.includes("D")) st = "D";
+          else if (xy.includes("R")) st = "R";
+          if (fp) statusMap.set(fp, st);
+        }
+        const files: { path: string; insertions: number; deletions: number; status: string }[] = [];
         if (hasChanges) {
           try {
             const diffStat = await gitProxy("diff --numstat HEAD").catch(() => gitProxy("diff --numstat"));
@@ -79,7 +92,13 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
               const [ins, del, filePath] = line.split("\t");
               const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
               const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
-              if (filePath) files.push({ path: filePath, insertions, deletions });
+              if (filePath) files.push({ path: filePath, insertions, deletions, status: statusMap.get(filePath) ?? "M" });
+            }
+            // Also count untracked files
+            for (const [fp, st] of statusMap) {
+              if (st === "?" && !files.some((f) => f.path === fp)) {
+                files.push({ path: fp, insertions: 0, deletions: 0, status: "?" });
+              }
             }
           } catch { /* */ }
         }

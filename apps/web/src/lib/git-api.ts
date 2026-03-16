@@ -18,6 +18,8 @@ export interface GitStatusFile {
   path: string
   insertions: number
   deletions: number
+  /** 'A' = added, 'M' = modified, 'D' = deleted, 'R' = renamed, '?' = untracked */
+  status: string
 }
 
 export interface GitStatusPr {

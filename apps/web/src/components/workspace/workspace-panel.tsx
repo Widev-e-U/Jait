@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
-import Editor from '@monaco-editor/react'
-import { ArrowLeft, ChevronRight, EyeOff, FolderOpen, Loader2, Send } from 'lucide-react'
+import Editor, { DiffEditor } from '@monaco-editor/react'
+import { ArrowLeft, ChevronRight, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send } from 'lucide-react'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
+import { gitApi, type GitStatusResult, type FileDiffEntry } from '@/lib/git-api'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -196,6 +197,38 @@ async function remoteStatFile(filePath: string, surfaceId?: string | null): Prom
 }
 
 /* ------------------------------------------------------------------ */
+/*  Git status badge                                                   */
+/* ------------------------------------------------------------------ */
+
+const STATUS_COLORS: Record<string, string> = {
+  A: 'text-green-500',
+  M: 'text-yellow-500',
+  D: 'text-red-500',
+  R: 'text-blue-500',
+  '?': 'text-green-400',
+}
+
+const STATUS_LABELS: Record<string, string> = {
+  A: 'Added',
+  M: 'Modified',
+  D: 'Deleted',
+  R: 'Renamed',
+  '?': 'Untracked',
+}
+
+function GitStatusBadge({ status, className = '' }: { status: string; className?: string }) {
+  const label = status === '?' ? 'U' : status
+  return (
+    <span
+      className={`text-[9px] font-bold leading-none shrink-0 ${STATUS_COLORS[status] ?? 'text-muted-foreground'} ${className}`}
+      title={STATUS_LABELS[status] ?? status}
+    >
+      {label}
+    </span>
+  )
+}
+
+/* ------------------------------------------------------------------ */
 /*  Drag resize hook                                                   */
 /* ------------------------------------------------------------------ */
 
@@ -252,6 +285,7 @@ function TreeNodeRow({
   onSelectFile,
   onContextFile,
   isMobile,
+  gitStatusMap,
 }: {
   node: LazyNode
   depth: number
@@ -261,6 +295,7 @@ function TreeNodeRow({
   onSelectFile: (node: LazyFile) => void
   onContextFile: (node: LazyFile) => void
   isMobile?: boolean
+  gitStatusMap?: Map<string, string>
 }) {
   const paddingLeft = isMobile ? 6 + depth * 12 : 8 + depth * 14
 
@@ -297,6 +332,7 @@ function TreeNodeRow({
             onSelectFile={onSelectFile}
             onContextFile={onContextFile}
             isMobile={isMobile}
+            gitStatusMap={gitStatusMap}
           />
         ))}
       </>
@@ -304,6 +340,16 @@ function TreeNodeRow({
   }
 
   const isActive = activeFilePath === node.path
+  const fileGitStatus = gitStatusMap?.get(node.name) ?? gitStatusMap?.get(node.path)
+  // Try matching against relative path from workspace root
+  const relPath = node.path.replace(/\\/g, '/')
+  const matchedStatus = fileGitStatus ?? (() => {
+    if (!gitStatusMap) return undefined
+    for (const [k, v] of gitStatusMap) {
+      if (relPath.endsWith('/' + k) || relPath === k) return v
+    }
+    return undefined
+  })()
   return (
     <div
       className={`group flex items-center gap-1.5 rounded px-1 cursor-pointer ${
@@ -321,7 +367,8 @@ function TreeNodeRow({
       }}
     >
       <FileIcon filename={node.name} className={`${isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5'}`} />
-      <span className="truncate flex-1" title={node.path}>{node.name}</span>
+      <span className={`truncate flex-1 ${matchedStatus === 'D' ? 'line-through text-muted-foreground' : ''}`} title={node.path}>{node.name}</span>
+      {matchedStatus && <GitStatusBadge status={matchedStatus} />}
       <button
         type="button"
         className={`${
@@ -378,6 +425,41 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const [treeVersion, setTreeVersion] = useState(0)
   const bumpTree = useCallback(() => setTreeVersion((v) => v + 1), [])
+
+  // ── Git status state ──
+  const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
+  const [gitStatusLoading, setGitStatusLoading] = useState(false)
+  /** Map of relative file path → status code (A/M/D/R/?) */
+  const gitStatusMap = useMemo(() => {
+    if (!gitStatus?.workingTree.files.length) return new Map<string, string>()
+    const m = new Map<string, string>()
+    for (const f of gitStatus.workingTree.files) {
+      m.set(f.path, (f as { status?: string }).status ?? 'M')
+    }
+    return m
+  }, [gitStatus])
+  /** Tree pane active tab */
+  const [treeTab, setTreeTab] = useState<'files' | 'git'>('files')
+  /** Currently viewing diff for a file in the source control tab */
+  const [scDiffFile, setScDiffFile] = useState<FileDiffEntry | null>(null)
+  const [scDiffLoading, setScDiffLoading] = useState(false)
+
+  const fetchGitStatus = useCallback(async () => {
+    if (!remoteRoot) return
+    setGitStatusLoading(true)
+    try {
+      const status = await gitApi.status(remoteRoot)
+      setGitStatus(status)
+    } catch {
+      setGitStatus(null)
+    }
+    setGitStatusLoading(false)
+  }, [remoteRoot])
+
+  // Fetch git status when workspace opens and on fs changes
+  useEffect(() => {
+    if (remoteRoot) fetchGitStatus()
+  }, [remoteRoot, fsWatcherVersion, fetchGitStatus])
 
   // Bump the file tree when new agent-modified paths appear
   const prevChangedPathsRef = useRef<Set<string>>(new Set())
@@ -732,6 +814,20 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } catch { /* ignore */ }
   }, [onReferenceFile, surfaceId])
 
+  /* ---- Open diff from source control ---- */
+  const handleScOpenDiff = useCallback(async (filePath: string) => {
+    if (!remoteRoot) return
+    setScDiffLoading(true)
+    try {
+      const diffs = await gitApi.fileDiffs(remoteRoot)
+      const entry = diffs.find((d) => d.path === filePath)
+      if (entry) {
+        setScDiffFile(entry)
+      }
+    } catch { /* ignore */ }
+    setScDiffLoading(false)
+  }, [remoteRoot])
+
   /* ---- Select external file ---- */
   const handleSelectExtFile = useCallback((id: string) => {
     setActiveNativePath(null)
@@ -742,8 +838,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const hasNativeTree = lazyTree.length > 0
   const hasExtFiles = files.length > 0
 
-  // Mobile: tab-based view (Files vs Editor)
-  const [mobileTab, setMobileTab] = useState<'files' | 'editor'>('files')
+  // Mobile: tab-based view (Files vs Git vs Editor)
+  const [mobileTab, setMobileTab] = useState<'files' | 'git' | 'editor'>('files')
+  const changedFileCount = gitStatus?.workingTree.files.length ?? 0
 
   // Switch to editor tab when a file is selected on mobile
   const handleSelectNativeFileMobile = useCallback(async (node: LazyFile) => {
@@ -759,7 +856,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /* ---- Mobile layout ---- */
   if (isMobile) {
     // Auto-correct tab when its panel is hidden
-    const effectiveMobileTab = mobileTab === 'files' && !showTreeProp ? 'editor'
+    const effectiveMobileTab = (mobileTab === 'files' || mobileTab === 'git') && !showTreeProp ? 'editor'
       : mobileTab === 'editor' && !showEditorProp ? 'files'
       : mobileTab
 
@@ -779,6 +876,20 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           >
             <FolderOpen className="h-3 w-3" />
             Files
+          </button>
+          <button
+            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+              effectiveMobileTab === 'git' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+            }`}
+            onClick={() => setMobileTab('git')}
+          >
+            <GitBranch className="h-3 w-3" />
+            Changes
+            {changedFileCount > 0 && (
+              <span className="text-[9px] bg-primary/20 text-primary rounded-full px-1.5 leading-tight font-bold">
+                {changedFileCount}
+              </span>
+            )}
           </button>
           <button
             className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
@@ -832,6 +943,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   onSelectFile={handleSelectNativeFileMobile}
                   onContextFile={handleContextNativeFile}
                   isMobile
+                  gitStatusMap={gitStatusMap}
                 />
               ))}
 
@@ -868,25 +980,98 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </>
         )}
 
+        {/* Git Changes tab (mobile) */}
+        {effectiveMobileTab === 'git' && showTreeProp && (
+          <div className="flex-1 flex flex-col min-h-0">
+            <div className="flex items-center gap-1.5 h-7 px-2 border-b bg-muted/10 shrink-0">
+              {gitStatus?.branch && (
+                <span className="text-[11px] text-muted-foreground truncate flex-1">
+                  <GitBranch className="h-3 w-3 inline mr-0.5 -mt-px" />
+                  {gitStatus.branch}
+                </span>
+              )}
+              <button
+                className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                onClick={fetchGitStatus}
+                disabled={gitStatusLoading}
+              >
+                <RefreshCw className={`h-3.5 w-3.5 ${gitStatusLoading ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+            <ScrollArea className="flex-1 min-h-0">
+              {gitStatusLoading && !gitStatus && (
+                <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading...
+                </div>
+              )}
+              {gitStatus && changedFileCount === 0 && (
+                <div className="p-4 text-sm text-muted-foreground text-center">No changes detected.</div>
+              )}
+              {gitStatus && changedFileCount > 0 && (
+                <div className="p-1">
+                  <div className="text-[11px] text-muted-foreground px-2 py-1.5 font-medium">
+                    Changes ({changedFileCount})
+                    <span className="ml-1">
+                      <span className="text-green-500">+{gitStatus.workingTree.insertions}</span>
+                      {' '}
+                      <span className="text-red-500">-{gitStatus.workingTree.deletions}</span>
+                    </span>
+                  </div>
+                  {gitStatus.workingTree.files.map((f) => {
+                    const fileStatus = (f as { status?: string }).status ?? 'M'
+                    const fileName = f.path.split('/').pop() ?? f.path
+                    return (
+                      <div
+                        key={f.path}
+                        className="flex items-center gap-1.5 rounded px-2 py-2 cursor-pointer text-sm hover:bg-muted"
+                        onClick={() => {
+                          handleScOpenDiff(f.path)
+                          setMobileTab('editor')
+                        }}
+                      >
+                        <GitStatusBadge status={fileStatus} className="text-[10px]" />
+                        <FileIcon filename={fileName} className="h-4 w-4 shrink-0" />
+                        <span className={`truncate flex-1 ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
+                          {fileName}
+                        </span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+              {!remoteRoot && (
+                <div className="p-4 text-sm text-muted-foreground text-center">
+                  Open a workspace to see git changes.
+                </div>
+              )}
+            </ScrollArea>
+          </div>
+        )}
+
         {/* Editor tab */}
         {effectiveMobileTab === 'editor' && showEditorProp && (
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex items-center gap-1.5 h-7 px-2 border-b bg-muted/20 shrink-0">
-              {editorFile && showTreeProp && (
+              {(editorFile || scDiffFile) && showTreeProp && (
                 <button
                   className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-                  onClick={() => setMobileTab('files')}
+                  onClick={() => { setScDiffFile(null); setMobileTab(scDiffFile ? 'git' : 'files') }}
                 >
                   <ArrowLeft className="h-3 w-3" />
                 </button>
               )}
-              {editorFile && (
+              {scDiffFile && <GitStatusBadge status={scDiffFile.status} className="text-[10px]" />}
+              {scDiffFile ? (
+                <span className="text-[11px] text-muted-foreground truncate flex-1">{scDiffFile.path}</span>
+              ) : editorFile ? (
                 <>
                   <FileIcon filename={editorFile.path} className="h-3 w-3" />
                   <span className="text-[11px] text-muted-foreground truncate flex-1">{editorFile.path}</span>
                 </>
+              ) : (
+                <span className="text-[11px] text-muted-foreground flex-1">Editor</span>
               )}
-              {!editorFile && <span className="text-[11px] text-muted-foreground flex-1">Editor</span>}
               {onToggleEditor && (
                 <button
                   onClick={onToggleEditor}
@@ -897,7 +1082,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )}
             </div>
             <div className="flex-1 min-h-0 overflow-auto">
-              {loadingFile ? (
+              {scDiffLoading ? (
+                <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading diff...
+                </div>
+              ) : scDiffFile ? (
+                <pre className="text-[11px] leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
+                  <code>{scDiffFile.modified || scDiffFile.original || '(empty file)'}</code>
+                </pre>
+              ) : loadingFile ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading...
@@ -919,6 +1113,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }
 
   /* ---- Desktop layout ---- */
+
   return (
     <aside className="border-r bg-muted/20 flex min-h-0 shrink-0" style={{ width: !showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size, maxWidth: '70vw' }}>
       {/* File explorer pane */}
@@ -927,19 +1122,44 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         className={`border-r bg-background transition-colors flex flex-col shrink-0`}
         style={{ width: tree.size }}
       >
-        {/* Tree header with hide button */}
-        <div className="flex items-center justify-between h-7 px-2 border-b bg-muted/20 shrink-0">
-          <span className="text-[11px] font-medium text-muted-foreground">Files</span>
+        {/* Tab bar: Files | Source Control */}
+        <div className="flex items-center h-7 border-b bg-muted/20 shrink-0 px-1 gap-0.5">
+          <button
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              treeTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => { setTreeTab('files'); setScDiffFile(null) }}
+          >
+            <FolderOpen className="h-3 w-3" />
+            Files
+          </button>
+          <button
+            className={`flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-medium transition-colors ${
+              treeTab === 'git' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => { setTreeTab('git'); setScDiffFile(null) }}
+          >
+            <GitBranch className="h-3 w-3" />
+            Source Control
+            {changedFileCount > 0 && (
+              <span className="ml-0.5 text-[9px] bg-primary/20 text-primary rounded-full px-1.5 leading-tight font-bold">
+                {changedFileCount}
+              </span>
+            )}
+          </button>
+          <div className="flex-1" />
           {onToggleTree && (
             <button
               onClick={onToggleTree}
               className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1 py-0.5 hover:bg-muted"
             >
               <EyeOff className="h-3 w-3" />
-              Hide
             </button>
           )}
         </div>
+
+        {/* Files tab */}
+        {treeTab === 'files' && (
         <ScrollArea className="flex-1 min-h-0">
           <div className="p-1">
             {hasNativeTree && lazyTree.map((node) => (
@@ -952,6 +1172,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 onToggleDir={handleToggleDir}
                 onSelectFile={handleSelectNativeFile}
                 onContextFile={handleContextNativeFile}
+                gitStatusMap={gitStatusMap}
               />
             ))}
 
@@ -992,6 +1213,95 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
           </div>
         </ScrollArea>
+        )}
+
+        {/* Source Control tab */}
+        {treeTab === 'git' && (
+        <div className="flex-1 min-h-0 flex flex-col">
+          {/* Branch + refresh header */}
+          <div className="flex items-center gap-1.5 px-2 py-1 border-b bg-muted/10 shrink-0">
+            {gitStatus?.branch && (
+              <span className="text-[10px] text-muted-foreground truncate flex-1" title={gitStatus.branch}>
+                <GitBranch className="h-3 w-3 inline mr-0.5 -mt-px" />
+                {gitStatus.branch}
+              </span>
+            )}
+            {!gitStatus?.branch && <span className="text-[10px] text-muted-foreground flex-1">No repo</span>}
+            <button
+              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              onClick={fetchGitStatus}
+              disabled={gitStatusLoading}
+              title="Refresh git status"
+            >
+              <RefreshCw className={`h-3 w-3 ${gitStatusLoading ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+
+          {/* Changed files list */}
+          <ScrollArea className="flex-1 min-h-0">
+            {gitStatusLoading && !gitStatus && (
+              <div className="flex items-center justify-center gap-2 p-4 text-xs text-muted-foreground">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Loading...
+              </div>
+            )}
+            {gitStatus && changedFileCount === 0 && (
+              <div className="p-3 text-xs text-muted-foreground text-center">
+                No changes detected.
+              </div>
+            )}
+            {gitStatus && changedFileCount > 0 && (
+              <div className="p-1">
+                <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1 font-medium">
+                  Changes ({changedFileCount})
+                  <span className="normal-case tracking-normal ml-1">
+                    <span className="text-green-500">+{gitStatus.workingTree.insertions}</span>
+                    {' '}
+                    <span className="text-red-500">-{gitStatus.workingTree.deletions}</span>
+                  </span>
+                </div>
+                {gitStatus.workingTree.files.map((f) => {
+                  const fileStatus = (f as { status?: string }).status ?? 'M'
+                  const fileName = f.path.split('/').pop() ?? f.path
+                  const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
+                  const isActiveDiff = scDiffFile?.path === f.path
+                  return (
+                    <div
+                      key={f.path}
+                      className={`group flex items-center gap-1.5 rounded px-1 py-1 cursor-pointer text-xs ${
+                        isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
+                      }`}
+                      style={{ paddingLeft: 8 }}
+                      onClick={() => handleScOpenDiff(f.path)}
+                      title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
+                    >
+                      <GitStatusBadge status={fileStatus} />
+                      <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
+                      <span className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
+                        {fileName}
+                      </span>
+                      {dirPath && (
+                        <span className="text-[10px] text-muted-foreground truncate ml-auto shrink-0 max-w-[40%]">
+                          {dirPath}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground shrink-0 ml-1">
+                        {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
+                        {f.deletions > 0 && <span className="text-red-500 ml-0.5">-{f.deletions}</span>}
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+            {!remoteRoot && (
+              <div className="p-3 text-xs text-muted-foreground text-center">
+                Open a workspace to see git changes.
+              </div>
+            )}
+          </ScrollArea>
+        </div>
+        )}
 
       </div>
       )}
@@ -1009,9 +1319,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Editor header with hide button */}
         <div className="flex items-center justify-between h-7 px-2 border-b bg-muted/20 shrink-0">
-          <span className="text-[11px] text-muted-foreground truncate">
-            {editorFile ? editorFile.path.split('/').pop() : 'Editor'}
-          </span>
+          <div className="flex items-center gap-1.5 truncate flex-1 min-w-0">
+            {scDiffFile && (
+              <button
+                className="text-[11px] text-muted-foreground hover:text-foreground shrink-0"
+                onClick={() => setScDiffFile(null)}
+                title="Close diff"
+              >
+                <ArrowLeft className="h-3 w-3" />
+              </button>
+            )}
+            {scDiffFile && <GitStatusBadge status={scDiffFile.status} />}
+            <span className="text-[11px] text-muted-foreground truncate">
+              {scDiffFile ? scDiffFile.path : editorFile ? editorFile.path.split('/').pop() : 'Editor'}
+            </span>
+          </div>
           {onToggleEditor && (
             <button
               onClick={onToggleEditor}
@@ -1023,7 +1345,27 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           )}
         </div>
         <div className="flex-1 min-h-0">
-        {loadingFile ? (
+        {scDiffLoading ? (
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            Loading diff...
+          </div>
+        ) : scDiffFile ? (
+          <DiffEditor
+            height="100%"
+            theme="vs-dark"
+            original={scDiffFile.original}
+            modified={scDiffFile.modified}
+            language={inferLanguage(scDiffFile.path)}
+            options={{
+              readOnly: true,
+              minimap: { enabled: false },
+              fontSize: 13,
+              automaticLayout: true,
+              renderSideBySide: true,
+            }}
+          />
+        ) : loadingFile ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading...

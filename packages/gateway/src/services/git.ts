@@ -24,6 +24,8 @@ export interface GitStatusFile {
   path: string;
   insertions: number;
   deletions: number;
+  /** 'A' = added, 'M' = modified, 'D' = deleted, 'R' = renamed, '?' = untracked */
+  status: string;
 }
 
 export interface GitStatusPr {
@@ -387,6 +389,20 @@ export class GitService {
     const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
     const hasChanges = porcelain.length > 0;
 
+    // Build per-file status map from porcelain output
+    const statusMap = new Map<string, string>();
+    for (const line of porcelain.split("\n").filter(Boolean)) {
+      const xy = line.slice(0, 2);
+      let fp = line.slice(3).trim();
+      if (fp.includes(" -> ")) fp = fp.split(" -> ").pop()!.trim();
+      let st = "M";
+      if (xy.includes("?")) st = "?";
+      else if (xy.includes("A")) st = "A";
+      else if (xy.includes("D")) st = "D";
+      else if (xy.includes("R")) st = "R";
+      if (fp) statusMap.set(fp, st);
+    }
+
     // Diff stats for changed files
     const files: GitStatusFile[] = [];
     let totalInsertions = 0;
@@ -399,7 +415,7 @@ export class GitService {
           const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
           const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
           if (filePath) {
-            files.push({ path: filePath, insertions, deletions });
+            files.push({ path: filePath, insertions, deletions, status: statusMap.get(filePath) ?? "M" });
             totalInsertions += insertions;
             totalDeletions += deletions;
           }
@@ -409,7 +425,7 @@ export class GitService {
         for (const line of untracked) {
           const filePath = line.slice(3).trim();
           if (filePath && !files.some((f) => f.path === filePath)) {
-            files.push({ path: filePath, insertions: 0, deletions: 0 });
+            files.push({ path: filePath, insertions: 0, deletions: 0, status: "?" });
           }
         }
       } catch { /* ignore diff failures */ }
