@@ -56,7 +56,7 @@ describe("route ownership guards", () => {
     });
 
     expect(listResponse.statusCode).toBe(200);
-    expect(listResponse.json()).toEqual({ threads: [] });
+    expect(listResponse.json()).toEqual({ threads: [], hasMore: false });
 
     await app.close();
     sqlite.close();
