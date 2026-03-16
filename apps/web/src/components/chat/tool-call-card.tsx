@@ -4,6 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
+import { FileIcon } from '@/components/icons/file-icons'
 import { getToolCallBodyKind, normalizeToolArgs, normalizeToolName } from '@/lib/tool-call-body'
 import { cn } from '@/lib/utils'
 
@@ -104,6 +105,11 @@ function getBaseName(path: string): string {
   if (!normalized) return ''
   const parts = normalized.split('/')
   return parts[parts.length - 1] ?? normalized
+}
+
+function isEditLikeTool(tool: string): boolean {
+  const normalized = normalizeTool(tool)
+  return normalized === 'edit' || normalized === 'file.write' || normalized === 'file.patch'
 }
 
 function getEditDiffCountLabel(tool: string, args: Record<string, unknown>): string | null {
@@ -747,6 +753,51 @@ interface ToolCallCardProps {
   onOpenDiff?: (filePath: string) => void
 }
 
+function FileSummaryButton({
+  path,
+  onOpenDiff,
+  disabled,
+}: {
+  path: string
+  onOpenDiff?: (filePath: string) => void
+  disabled?: boolean
+}) {
+  const fileName = getBaseName(path)
+  const interactive = !!onOpenDiff && !disabled
+  const content = (
+    <>
+      <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
+      <span className="max-w-[220px] truncate">{fileName}</span>
+    </>
+  )
+
+  if (!interactive) {
+    return (
+      <span
+        className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground"
+        title={path}
+      >
+        {content}
+      </span>
+    )
+  }
+
+  return (
+    <button
+      type="button"
+      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground transition-colors hover:bg-muted"
+      title={`Open diff for ${path}`}
+      onClick={(event) => {
+        event.preventDefault()
+        event.stopPropagation()
+        onOpenDiff(path)
+      }}
+    >
+      {content}
+    </button>
+  )
+}
+
 function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardProps) {
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending')
   const [now, setNow] = useState(() => Date.now())
@@ -772,6 +823,8 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   const terminalId = canOpenTerminal ? getStructuredTerminalId(call) : null
   const runningHint = getRunningHint(normalizedTool, normalizedArgs)
   const isPending = call.status === 'pending'
+  const filePath = typeof normalizedArgs.path === 'string' ? normalizedArgs.path.trim() : ''
+  const showFileSummary = !!filePath && isEditLikeTool(normalizedTool)
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
   const bodyKind = getToolCallBodyKind({
@@ -832,6 +885,15 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
           <span className="inline-flex max-w-full min-w-0 items-center gap-1 rounded-sm border border-border bg-muted/60 px-2 py-0.5 text-foreground">
             <span className="shrink-0 text-[10px] text-emerald-400">$</span>
             <code className="min-w-0 truncate text-xs font-mono" title={summary}>{summary}</code>
+          </span>
+        ) : showFileSummary ? (
+          <span className="inline-flex min-w-0 max-w-full items-center gap-2">
+            <span>{meta.label}:</span>
+            <FileSummaryButton
+              path={filePath}
+              onOpenDiff={onOpenDiff}
+              disabled={call.status !== 'success'}
+            />
           </span>
         ) : (
           <span>{meta.label}: <code className="text-xs font-mono">{summary}</code></span>

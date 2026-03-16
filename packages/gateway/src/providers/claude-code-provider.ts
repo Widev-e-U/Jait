@@ -37,6 +37,15 @@ interface ClaudeSessionState {
   model?: string;
   mcpConfigPath?: string;
   exitMode: "normal" | "interrupt" | "stop";
+  pendingToolCalls: ClaudePendingToolCall[];
+}
+
+interface ClaudePendingToolCall {
+  callId: string;
+  rawTool: string;
+  normalizedTool: string;
+  args: Record<string, unknown>;
+  providerCallId?: string;
 }
 
 // ── Provider implementation ──────────────────────────────────────────
@@ -130,6 +139,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       model: options.model,
       mcpConfigPath: this.buildClaudeMcpConfig(options.mcpServers, sessionId),
       exitMode: "normal",
+      pendingToolCalls: [],
     };
 
     this.sessions.set(sessionId, state);
@@ -301,7 +311,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     return state;
   }
 
-  private processBuffer(sessionId: string, state: ClaudeSessionState): void {
+  private processBuffer(_sessionId: string, state: ClaudeSessionState): void {
     const lines = state.buffer.split("\n");
     state.buffer = lines.pop() ?? "";
 
@@ -311,14 +321,15 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
 
       try {
         const event = JSON.parse(trimmed) as Record<string, unknown>;
-        this.handleEvent(sessionId, event);
+        this.handleEvent(state, event);
       } catch {
         // Not JSON — could be status output
       }
     }
   }
 
-  private handleEvent(sessionId: string, event: Record<string, unknown>): void {
+  private handleEvent(state: ClaudeSessionState, event: Record<string, unknown>): void {
+    const sessionId = state.session.id;
     const type = event["type"] as string;
 
     switch (type) {
@@ -347,23 +358,36 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
 
       case "tool_use": {
         const rawTool = String(event["name"] ?? event["tool"] ?? "")
+        const normalizedTool = normalizeClaudeToolName(rawTool)
+        const args = normalizeClaudeToolArgs(rawTool, (event["input"] as Record<string, unknown> | undefined) ?? {})
+        const callId = extractClaudeToolCallId(event) ?? uuidv7()
+        state.pendingToolCalls.push({
+          callId,
+          rawTool,
+          normalizedTool,
+          args,
+          ...(extractClaudeProviderToolId(event) ? { providerCallId: extractClaudeProviderToolId(event) } : {}),
+        })
         this.emit({
           type: "tool.start",
           sessionId,
-          tool: normalizeClaudeToolName(rawTool),
-          args: normalizeClaudeToolArgs(rawTool, (event["input"] as Record<string, unknown> | undefined) ?? {}),
+          tool: normalizedTool,
+          args,
+          callId,
         });
         break;
       }
 
       case "tool_result": {
-        const rawTool = String(event["tool"] ?? "")
+        const match = resolveClaudePendingToolCall(state.pendingToolCalls, event)
+        const rawTool = String(event["tool"] ?? match?.rawTool ?? "")
         this.emit({
           type: "tool.result",
           sessionId,
           tool: normalizeClaudeToolName(rawTool),
           ok: event["is_error"] !== true,
           message: String(event["content"] ?? event["output"] ?? ""),
+          ...(match ? { callId: match.callId, data: match.args } : {}),
         });
         break;
       }
@@ -472,6 +496,52 @@ function normalizeClaudeToolArgs(
   }
 
   return input;
+}
+
+function extractClaudeToolCallId(event: Record<string, unknown>): string | undefined {
+  const direct =
+    asNonEmptyString(event["callId"]) ??
+    asNonEmptyString(event["call_id"]) ??
+    asNonEmptyString(event["toolCallId"]) ??
+    asNonEmptyString(event["tool_call_id"]);
+  if (direct) return direct;
+  return extractClaudeProviderToolId(event);
+}
+
+function extractClaudeProviderToolId(event: Record<string, unknown>): string | undefined {
+  return (
+    asNonEmptyString(event["id"]) ??
+    asNonEmptyString(event["toolUseId"]) ??
+    asNonEmptyString(event["tool_use_id"]) ??
+    asNonEmptyString(event["toolId"]) ??
+    asNonEmptyString(event["tool_id"])
+  );
+}
+
+function resolveClaudePendingToolCall(
+  pending: ClaudePendingToolCall[],
+  event: Record<string, unknown>,
+): ClaudePendingToolCall | undefined {
+  if (pending.length === 0) return undefined;
+
+  const directId = extractClaudeToolCallId(event);
+  if (directId) {
+    const directIdx = pending.findIndex((entry) => entry.callId === directId || entry.providerCallId === directId);
+    if (directIdx !== -1) return pending.splice(directIdx, 1)[0];
+  }
+
+  const rawTool = asNonEmptyString(event["tool"]);
+  if (rawTool) {
+    const normalizedTool = normalizeClaudeToolName(rawTool);
+    const toolIdx = pending.findIndex((entry) => entry.rawTool === rawTool || entry.normalizedTool === normalizedTool);
+    if (toolIdx !== -1) return pending.splice(toolIdx, 1)[0];
+  }
+
+  return pending.shift();
+}
+
+function asNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
 }
 
 function killChildTree(child: ChildProcess, signal: "SIGINT" | "SIGTERM" | "SIGKILL" = "SIGTERM"): void {

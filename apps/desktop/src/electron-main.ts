@@ -312,6 +312,15 @@ interface RemoteProviderSession {
   mcpServers?: DesktopMcpServerRef[];
   mcpConfigPath?: string;
   stopRequested: boolean;
+  pendingToolCalls: DesktopClaudePendingToolCall[];
+}
+
+interface DesktopClaudePendingToolCall {
+  callId: string;
+  rawTool: string;
+  normalizedTool: string;
+  args: Record<string, unknown>;
+  providerCallId?: string;
 }
 
 const remoteProviderSessions = new Map<string, RemoteProviderSession>();
@@ -422,7 +431,8 @@ function getClaudeModelOptions() {
   ];
 }
 
-function mapClaudeStreamEvent(sessionId: string, event: Record<string, unknown>) {
+function mapClaudeStreamEvent(session: RemoteProviderSession, event: Record<string, unknown>) {
+  const sessionId = session.sessionId;
   const type = typeof event.type === "string" ? event.type : "";
   switch (type) {
     case "assistant": {
@@ -449,21 +459,38 @@ function mapClaudeStreamEvent(sessionId: string, event: Record<string, unknown>)
       }
       return [];
     }
-    case "tool_use":
+    case "tool_use": {
+      const rawTool = String(event.name ?? event.tool ?? "");
+      const normalizedTool = normalizeDesktopClaudeToolName(rawTool);
+      const args = normalizeDesktopClaudeToolArgs(rawTool, (event.input as Record<string, unknown> | undefined) ?? {});
+      const callId = extractDesktopClaudeToolCallId(event) ?? `${sessionId}-tool-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      session.pendingToolCalls.push({
+        callId,
+        rawTool,
+        normalizedTool,
+        args,
+        ...(extractDesktopClaudeProviderToolId(event) ? { providerCallId: extractDesktopClaudeProviderToolId(event) } : {}),
+      });
       return [{
         type: "tool.start",
         sessionId,
-        tool: String(event.name ?? event.tool ?? ""),
-        args: event.input ?? {},
+        tool: normalizedTool,
+        args,
+        callId,
       }];
-    case "tool_result":
+    }
+    case "tool_result": {
+      const match = resolveDesktopClaudePendingToolCall(session.pendingToolCalls, event);
+      const rawTool = String(event.tool ?? match?.rawTool ?? "");
       return [{
         type: "tool.result",
         sessionId,
-        tool: String(event.tool ?? ""),
+        tool: normalizeDesktopClaudeToolName(rawTool),
         ok: event.is_error !== true,
         message: String(event.content ?? event.output ?? ""),
+        ...(match ? { callId: match.callId, data: match.args } : {}),
       }];
+    }
     case "result": {
       const resultContent = typeof event.result === "string" ? event.result : "";
       return resultContent
@@ -533,7 +560,7 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
 
       try {
         const event = JSON.parse(trimmed) as Record<string, unknown>;
-        for (const mapped of mapClaudeStreamEvent(session.sessionId, event)) {
+        for (const mapped of mapClaudeStreamEvent(session, event)) {
           sendProviderEvent(session.sessionId, mapped);
         }
       } catch {
@@ -576,6 +603,85 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
   });
 }
 
+function normalizeDesktopClaudeToolName(tool: string): string {
+  const normalized = tool.trim().toLowerCase();
+  if (normalized === "edit" || normalized === "multiedit") return "edit";
+  if (normalized === "write") return "file.write";
+  if (normalized === "read") return "read";
+  if (normalized === "websearch") return "web";
+  return tool;
+}
+
+function normalizeDesktopClaudeToolArgs(tool: string, input: Record<string, unknown>): Record<string, unknown> {
+  const normalized = normalizeDesktopClaudeToolName(tool);
+  if (normalized === "edit" || normalized === "file.write" || normalized === "read") {
+    return {
+      path: String(input.path ?? input.file_path ?? input.filePath ?? input.file ?? ""),
+      ...(input.old_string != null ? { search: input.old_string } : {}),
+      ...(input.new_string != null ? { replace: input.new_string } : {}),
+      ...(input.content != null ? { content: input.content } : {}),
+      ...(input.new_file_contents != null ? { content: input.new_file_contents } : {}),
+      ...input,
+    };
+  }
+
+  if (normalized === "web") {
+    return {
+      query: String(input.query ?? input.search_query ?? input.q ?? ""),
+      ...(input.url != null ? { url: input.url } : {}),
+      ...input,
+    };
+  }
+
+  return input;
+}
+
+function extractDesktopClaudeToolCallId(event: Record<string, unknown>): string | undefined {
+  return (
+    asDesktopNonEmptyString(event.callId) ??
+    asDesktopNonEmptyString(event.call_id) ??
+    asDesktopNonEmptyString(event.toolCallId) ??
+    asDesktopNonEmptyString(event.tool_call_id) ??
+    extractDesktopClaudeProviderToolId(event)
+  );
+}
+
+function extractDesktopClaudeProviderToolId(event: Record<string, unknown>): string | undefined {
+  return (
+    asDesktopNonEmptyString(event.id) ??
+    asDesktopNonEmptyString(event.toolUseId) ??
+    asDesktopNonEmptyString(event.tool_use_id) ??
+    asDesktopNonEmptyString(event.toolId) ??
+    asDesktopNonEmptyString(event.tool_id)
+  );
+}
+
+function resolveDesktopClaudePendingToolCall(
+  pending: DesktopClaudePendingToolCall[],
+  event: Record<string, unknown>,
+): DesktopClaudePendingToolCall | undefined {
+  if (pending.length === 0) return undefined;
+
+  const directId = extractDesktopClaudeToolCallId(event);
+  if (directId) {
+    const directIdx = pending.findIndex((entry) => entry.callId === directId || entry.providerCallId === directId);
+    if (directIdx !== -1) return pending.splice(directIdx, 1)[0];
+  }
+
+  const rawTool = asDesktopNonEmptyString(event.tool);
+  if (rawTool) {
+    const normalizedTool = normalizeDesktopClaudeToolName(rawTool);
+    const toolIdx = pending.findIndex((entry) => entry.rawTool === rawTool || entry.normalizedTool === normalizedTool);
+    if (toolIdx !== -1) return pending.splice(toolIdx, 1)[0];
+  }
+
+  return pending.shift();
+}
+
+function asDesktopNonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.trim() ? value : undefined;
+}
+
 ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<string, unknown>) => {
   switch (op) {
     case "start-session": {
@@ -600,6 +706,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
           mcpServers: resolvedMcpServers,
           mcpConfigPath: buildDesktopClaudeMcpConfig(sessionId, resolvedMcpServers),
           stopRequested: false,
+          pendingToolCalls: [],
         });
         return { ok: true, providerThreadId: sessionId };
       }
@@ -627,6 +734,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         env: { ...process.env, ...extraEnv } as Record<string, string>,
         mcpServers: resolvedMcpServers,
         stopRequested: false,
+        pendingToolCalls: [],
       };
       remoteProviderSessions.set(sessionId, sess);
 
@@ -742,6 +850,7 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         model: null,
         env: process.env as Record<string, string>,
         stopRequested: false,
+        pendingToolCalls: [],
       };
 
       const rl = createInterface({ input: child.stdout! });
