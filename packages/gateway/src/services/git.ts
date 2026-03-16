@@ -781,12 +781,13 @@ export class GitService {
             title: apiResult.title,
           };
         } else if (parsedRemote?.provider === "azure-devops") {
+          const azureRemote = parsedRemote as ParsedRemote & { provider: "azure-devops" };
           const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
           let apiResult: GitStepResult["pr"] | null = null;
           try {
-            apiResult = await this.createAzureDevopsPr(parsedRemote, cwd, {
+            apiResult = await this.createAzureDevopsPr(azureRemote, cwd, {
               title: prTitle,
               baseBranch: resolvedBase,
               headBranch: currentBranch,
