@@ -12,6 +12,7 @@ const API_URL = getApiUrl()
 // ── Types (matching gateway GitService) ──────────────────────────────
 
 export type GitStackedAction = 'commit' | 'commit_push' | 'commit_push_pr'
+export type GitRemoteProvider = 'github' | 'azure-devops' | 'gitlab' | 'bitbucket' | 'gitea' | 'unknown' | 'none'
 
 export interface GitStatusFile {
   path: string
@@ -42,6 +43,8 @@ export interface GitStatusResult {
   pr: GitStatusPr | null
   /** Whether GitHub CLI (`gh`) is installed and authenticated on the server. */
   ghAvailable: boolean
+  /** Hosting provider inferred from the preferred remote URL. */
+  prProvider: GitRemoteProvider
   /** HTTPS remote URL for the primary remote. */
   remoteUrl: string | null
 }

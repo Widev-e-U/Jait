@@ -16,7 +16,7 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
-import { GitService } from "../services/git.js";
+import { GitService, detectGitRemoteProvider } from "../services/git.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
 
@@ -89,6 +89,11 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
           const ghCheck = await ws.proxyFsOp<{ installed: boolean; authenticated: boolean }>(remoteNodeId, "gh-check", {}, 10_000);
           ghAvailable = ghCheck.installed && ghCheck.authenticated;
         } catch { /* fallback to false */ }
+        let remoteUrl: string | null = null;
+        try {
+          const preferredRemote = await gitProxy("remote").then((out) => out.split("\n").map((line) => line.trim()).find(Boolean) ?? "origin");
+          remoteUrl = await gitProxy(`remote get-url ${preferredRemote}`).catch(() => null as string | null);
+        } catch { /* ignore */ }
         // Check PR status via remote node's gh cli
         let pr: { number: number; title: string; url: string; baseBranch: string; headBranch: string; state: "open" | "closed" | "merged" } | null = null;
         const prBranch = branch ?? currentBranch;
@@ -109,6 +114,8 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
           behindCount: 0,
           pr,
           ghAvailable,
+          prProvider: detectGitRemoteProvider(remoteUrl),
+          remoteUrl,
         };
       }
       const status = await git.status(cwd, branch, githubToken);

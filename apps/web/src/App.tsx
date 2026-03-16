@@ -99,9 +99,10 @@ import { getWorkspaceRootForPath, isPathWithinWorkspace } from '@/lib/workspace-
 
 const API_URL = getApiUrl()
 const VOICE_LEVEL_BAR_COUNT = 18
+const VOICE_LEVEL_FLOOR = 0.08
 
 function createSilentVoiceLevels(): number[] {
-  return Array.from({ length: VOICE_LEVEL_BAR_COUNT }, () => 0.08)
+  return Array.from({ length: VOICE_LEVEL_BAR_COUNT }, () => VOICE_LEVEL_FLOOR)
 }
 
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
@@ -2352,6 +2353,21 @@ function App() {
     if (!transcript) return
 
     if (viewMode === 'manager') {
+      const thread = automation.selectedThread
+      if (thread?.status === 'running') {
+        enqueueManagerMessage(thread.id, {
+          id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          content: transcript,
+          displayContent: transcript,
+          fullContent: transcript,
+          referencedFiles: undefined,
+          attachments: undefined,
+          providerId: chatProvider,
+          model: chatProvider !== 'jait' ? cliModel : undefined,
+          queuedAt: Date.now(),
+        })
+        return
+      }
       await automation.handleSend(
         transcript,
         chatProvider,
@@ -2367,12 +2383,23 @@ function App() {
     }
     if (!sid || !token) return
 
+    if (isLoading) {
+      enqueueMessage({
+        content: transcript,
+        displayContent: transcript,
+        mode: chatMode,
+        provider: chatProvider,
+        model: chatProvider !== 'jait' ? cliModel : undefined,
+      })
+      return
+    }
+
     sendMessage(transcript, {
       token,
       sessionId: sid,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, automation.handleSend, chatProvider, cliModel, createSession, sendMessage, token, viewMode])
+  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, cliModel, createSession, enqueueManagerMessage, enqueueMessage, isLoading, sendMessage, token, viewMode])
 
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
@@ -2437,25 +2464,21 @@ function App() {
         if (!analyserNode || !samples) return
 
         analyserNode.getByteTimeDomainData(samples)
-        const bucketSize = Math.max(1, Math.floor(samples.length / VOICE_LEVEL_BAR_COUNT))
-        const nextLevels = Array.from({ length: VOICE_LEVEL_BAR_COUNT }, (_, index) => {
-          const start = index * bucketSize
-          const end = Math.min(samples.length, start + bucketSize)
-          let total = 0
-          for (let sampleIndex = start; sampleIndex < end; sampleIndex++) {
-            total += Math.abs((samples[sampleIndex] - 128) / 128)
-          }
-          const average = end > start ? total / (end - start) : 0
-          return Math.min(1, Math.max(0.08, average * 3.4))
-        })
+        let total = 0
+        for (let sampleIndex = 0; sampleIndex < samples.length; sampleIndex++) {
+          total += Math.abs((samples[sampleIndex] - 128) / 128)
+        }
+        const average = samples.length > 0 ? total / samples.length : 0
+        const targetLevel = Math.min(1, Math.max(VOICE_LEVEL_FLOOR, average * 4.2))
+        const previousTail = voiceLevelsRef.current[voiceLevelsRef.current.length - 1] ?? VOICE_LEVEL_FLOOR
+        const nextLevel = previousTail * 0.45 + targetLevel * 0.55
+        const timeline = [
+          ...voiceLevelsRef.current.slice(-(VOICE_LEVEL_BAR_COUNT - 1)),
+          nextLevel,
+        ]
 
-        const smoothed = nextLevels.map((level, index) => {
-          const previous = voiceLevelsRef.current[index] ?? 0.08
-          return previous * 0.62 + level * 0.38
-        })
-
-        voiceLevelsRef.current = smoothed
-        setVoiceLevels(smoothed)
+        voiceLevelsRef.current = timeline
+        setVoiceLevels(timeline)
         voiceLevelFrameRef.current = requestAnimationFrame(tick)
       }
 

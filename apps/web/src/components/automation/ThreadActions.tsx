@@ -1,7 +1,7 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Eye, GitPullRequest, Loader2, AlertTriangle, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { Eye, GitPullRequest, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { gitApi, type PrCheck } from '@/lib/git-api'
 import { agentsApi, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
@@ -24,7 +24,7 @@ interface ThreadActionsProps {
   prUrl?: string | null
   /** Current PR state synced from GitHub (open, merged, closed). */
   prState?: 'open' | 'closed' | 'merged' | null
-  /** Whether GitHub CLI is available on the server. */
+  /** Legacy flag from repo polling; retained for prop compatibility. */
   ghAvailable?: boolean
   /** Current thread lifecycle status. */
   threadStatus: ThreadStatus
@@ -40,7 +40,6 @@ export function ThreadActions({
   threadTitle,
   prUrl,
   prState,
-  ghAvailable = true,
   threadStatus,
   showStatusBadge = true,
 }: ThreadActionsProps) {
@@ -120,12 +119,15 @@ export function ThreadActions({
     setBusy(true)
     if (!skipGhCheck.current) {
       try {
-        const ghStatus = await gitApi.ghStatus(cwd)
-        if (!ghStatus.installed || !ghStatus.authenticated) {
-          setBusy(false)
-          pendingPrAction.current = true
-          setGhSetupOpen(true)
-          return
+        const status = await gitApi.status(cwd)
+        if (status.prProvider === 'github') {
+          const ghStatus = await gitApi.ghStatus(cwd)
+          if (!ghStatus.installed || !ghStatus.authenticated) {
+            setBusy(false)
+            pendingPrAction.current = true
+            setGhSetupOpen(true)
+            return
+          }
         }
       } catch {
         // If check fails, proceed anyway — the PR creation will give a specific error
@@ -239,14 +241,6 @@ export function ThreadActions({
             {checksStatus === 'failing' ? <XCircle className="h-3 w-3" /> : checksStatus === 'pending' ? <Clock className="h-3 w-3" /> : <CheckCircle2 className="h-3 w-3" />}
             {checksStatus === 'failing' ? 'Checks failing' : checksStatus === 'pending' ? 'Checks pending' : 'Checks passed'}
           </Badge>
-        )}
-        {!ghAvailable && !existingPrLink && (
-          <span
-            className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 cursor-help"
-            title="GitHub CLI (gh) is not installed. Install it or configure a GitHub token to enable PR creation and status tracking."
-          >
-            <AlertTriangle className="h-3 w-3" />
-          </span>
         )}
       </div>
 
