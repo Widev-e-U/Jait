@@ -470,6 +470,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
   /** When non-null, we're in remote (server-backed) mode */
   const [remoteRoot, setRemoteRoot] = useState<string | null>(null)
+  /** Ref to the desktop tab scroll container — used to auto-reveal the active tab */
+  const tabScrollRef = useRef<HTMLDivElement | null>(null)
 
   // Resizable: file tree width + total panel width
   // Target a 4:2 (workspace:chat) ratio of the space after the sidebar (~224px)
@@ -518,6 +520,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
+
+  // Auto-scroll active tab into view (VS Code behaviour)
+  useEffect(() => {
+    if (!activeTabId) return
+    const container = tabScrollRef.current
+    if (!container) return
+    const tabEl = container.querySelector<HTMLElement>(`[data-tab-id="${CSS.escape(activeTabId)}"]`)
+    if (!tabEl) return
+    const { scrollLeft, clientWidth } = container
+    const tabLeft = tabEl.offsetLeft
+    const tabRight = tabLeft + tabEl.offsetWidth
+    if (tabLeft < scrollLeft) {
+      container.scrollLeft = tabLeft
+    } else if (tabRight > scrollLeft + clientWidth) {
+      container.scrollLeft = tabRight - clientWidth
+    }
+  }, [activeTabId, openTabs.length])
 
   const fetchGitStatus = useCallback(async () => {
     if (!remoteRoot) return
@@ -1720,14 +1739,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {showEditorProp && (
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Tab bar — VS Code style */}
-        <div className="flex items-center h-[35px] bg-[var(--tab-bg,hsl(var(--muted)/0.3))] border-b shrink-0 overflow-hidden">
-          <div className="flex items-center flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-none">
+        <div className="flex items-center h-[35px] bg-[var(--tab-bg,hsl(var(--muted)/0.3))] border-b shrink-0 min-w-0">
+          <div
+            ref={tabScrollRef}
+            className="flex items-center flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-none"
+            onWheel={(e) => {
+              if (e.deltaY === 0) return
+              e.preventDefault()
+              if (tabScrollRef.current) tabScrollRef.current.scrollLeft += e.deltaY
+            }}
+          >
             {openTabs.map((tab) => {
               const isActive = tab.id === activeTabId
               const gitStatus4tab = tab.type === 'diff' && tab.diffEntry ? tab.diffEntry.status : undefined
               return (
                 <div
                   key={tab.id}
+                  data-tab-id={tab.id}
                   className={`group relative flex items-center gap-1.5 h-[35px] px-3 border-r border-border/40 cursor-pointer shrink-0 text-xs select-none transition-colors ${
                     isActive
                       ? 'bg-background text-foreground'
