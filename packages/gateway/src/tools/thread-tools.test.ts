@@ -1,11 +1,70 @@
+import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { openDatabase, migrateDatabase } from "../db/index.js";
+import type {
+  CliProviderAdapter,
+  ProviderEvent,
+  ProviderInfo,
+  ProviderSession,
+  StartSessionOptions,
+} from "../providers/contracts.js";
 import type { GitStepResult } from "../services/git.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { ThreadService } from "../services/threads.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { createToolRegistry } from "./index.js";
 import { createThreadControlTool } from "./thread-tools.js";
+
+class MockThreadProvider implements CliProviderAdapter {
+  readonly id = "jait" as const;
+  readonly info: ProviderInfo = {
+    id: "jait",
+    name: "Mock Jait",
+    description: "Test provider",
+    available: true,
+    modes: ["full-access", "supervised"],
+  };
+
+  private emitter = new EventEmitter();
+
+  async checkAvailability(): Promise<boolean> {
+    return true;
+  }
+
+  async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    const sessionId = "mock-session-1";
+    this.emitter.emit("event", { type: "session.started", sessionId } satisfies ProviderEvent);
+    return {
+      id: sessionId,
+      providerId: this.id,
+      threadId: options.threadId,
+      status: "running",
+      runtimeMode: options.mode,
+      startedAt: new Date().toISOString(),
+    };
+  }
+
+  async sendTurn(): Promise<void> {
+    return;
+  }
+
+  async interruptTurn(): Promise<void> {
+    return;
+  }
+
+  async respondToApproval(): Promise<void> {
+    return;
+  }
+
+  async stopSession(): Promise<void> {
+    return;
+  }
+
+  onEvent(handler: (event: ProviderEvent) => void): () => void {
+    this.emitter.on("event", handler);
+    return () => this.emitter.off("event", handler);
+  }
+}
 
 function makeContext(userId = "user-1") {
   return {
@@ -18,6 +77,39 @@ function makeContext(userId = "user-1") {
 }
 
 describe("thread.control tool", () => {
+  it("creates and starts a thread in one call", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider());
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Run tests",
+          providerId: "jait",
+          start: true,
+          message: "bun run test",
+        },
+        makeContext(),
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.message).toBe("Thread created and started");
+      const data = result.data as { thread: { providerSessionId: string | null; status: string } };
+      expect(data.thread.providerSessionId).toBe("mock-session-1");
+      expect(data.thread.status).toBe("running");
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("creates multiple threads in one call", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

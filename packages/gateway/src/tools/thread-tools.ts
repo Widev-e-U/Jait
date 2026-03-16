@@ -116,7 +116,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     message?: string,
     attachments?: string[],
   ): Promise<StartThreadResult> => {
-    if (thread.status === "running") {
+    if (thread.status === "running" && thread.providerSessionId) {
       return { ok: false, message: "Thread is already running" };
     }
 
