@@ -41,6 +41,8 @@ export const userSettings = sqliteTable("user_settings", {
   disabledTools: text("disabled_tools"), // JSON string[] of disabled tool names
   sttProvider: text("stt_provider").notNull().default("simulated"), // 'simulated' | 'browser'
   chatProvider: text("chat_provider").notNull().default("jait"), // 'jait' | 'codex' | 'claude-code'
+  workspacePickerPath: text("workspace_picker_path"),
+  workspacePickerNodeId: text("workspace_picker_node_id"),
   updatedAt: text("updated_at").notNull(),
 });
 

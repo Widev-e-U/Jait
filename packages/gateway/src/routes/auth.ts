@@ -100,6 +100,8 @@ export function registerAuthRoutes(
       disabled_tools: settings.disabledTools,
       stt_provider: settings.sttProvider,
       chat_provider: settings.chatProvider,
+      workspace_picker_path: settings.workspacePickerPath,
+      workspace_picker_node_id: settings.workspacePickerNodeId,
       updated_at: settings.updatedAt,
     };
   });
@@ -108,7 +110,15 @@ export function registerAuthRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
-    const patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[]; sttProvider?: SttProvider; chatProvider?: ChatProvider } = {};
+    const patch: {
+      theme?: ThemeMode;
+      apiKeys?: Record<string, string>;
+      disabledTools?: string[];
+      sttProvider?: SttProvider;
+      chatProvider?: ChatProvider;
+      workspacePickerPath?: string | null;
+      workspacePickerNodeId?: string | null;
+    } = {};
 
     if (typeof body.theme === "string" && THEME_VALUES.has(body.theme as ThemeMode)) {
       patch.theme = body.theme as ThemeMode;
@@ -131,6 +141,18 @@ export function registerAuthRoutes(
       patch.chatProvider = body.chat_provider as ChatProvider;
     }
 
+    if (typeof body.workspace_picker_path === "string" || body.workspace_picker_path === null) {
+      patch.workspacePickerPath = typeof body.workspace_picker_path === "string"
+        ? body.workspace_picker_path.trim() || null
+        : null;
+    }
+
+    if (typeof body.workspace_picker_node_id === "string" || body.workspace_picker_node_id === null) {
+      patch.workspacePickerNodeId = typeof body.workspace_picker_node_id === "string"
+        ? body.workspace_picker_node_id.trim() || null
+        : null;
+    }
+
     const updated = users.updateSettings(authUser.id, patch);
     return {
       theme: updated.theme,
@@ -138,6 +160,8 @@ export function registerAuthRoutes(
       disabled_tools: updated.disabledTools,
       stt_provider: updated.sttProvider,
       chat_provider: updated.chatProvider,
+      workspace_picker_path: updated.workspacePickerPath,
+      workspace_picker_node_id: updated.workspacePickerNodeId,
       updated_at: updated.updatedAt,
     };
   });
@@ -266,4 +290,3 @@ export function registerAuthRoutes(
     };
   });
 }
-

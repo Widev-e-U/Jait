@@ -1575,9 +1575,17 @@ function App() {
       const err = await res.json().catch(() => ({ message: 'Unknown error' }))
       throw new Error((err as { message?: string }).message ?? 'Failed to open workspace')
     }
+    if (token) {
+      void updateSettings({
+        workspace_picker_path: dirPath,
+        workspace_picker_node_id: nodeId || 'gateway',
+      }).catch(() => {
+        // Best-effort persistence only; workspace open already succeeded.
+      })
+    }
     // The gateway broadcasts `workspace.open` via WS and persists state.
     // All clients (including this one) will receive it and hydrate automatically.
-  }, [activeSessionId])
+  }, [activeSessionId, token, updateSettings])
 
   const handleOpenWorkspace = useCallback(async () => {
     if (showWorkspace) {
@@ -4081,6 +4089,8 @@ function App() {
         <FolderPickerDialog
           open={folderPickerOpen}
           onOpenChange={setFolderPickerOpen}
+          initialPath={settings.workspace_picker_path}
+          initialNodeId={settings.workspace_picker_node_id}
           onSelect={(path, nodeId) => {
             void openRemoteWorkspaceOnGateway(path, nodeId).catch((err) => {
               console.error('Failed to open workspace:', err)

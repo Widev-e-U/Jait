@@ -22,6 +22,8 @@ export interface UserSettingsRecord {
   disabledTools: string[];
   sttProvider: SttProvider;
   chatProvider: ChatProvider;
+  workspacePickerPath: string | null;
+  workspacePickerNodeId: string | null;
   updatedAt: string;
 }
 
@@ -119,6 +121,8 @@ export class UserService {
       theme: "system",
       apiKeys: JSON.stringify({}),
       sttProvider: "simulated",
+      workspacePickerPath: null,
+      workspacePickerNodeId: null,
       updatedAt: now,
     }).run();
     return this.findById(id)!;
@@ -148,6 +152,8 @@ export class UserService {
         disabledTools: JSON.stringify([]),
         sttProvider: "simulated",
         chatProvider: "jait",
+        workspacePickerPath: null,
+        workspacePickerNodeId: null,
         updatedAt: now,
       }).run();
       return {
@@ -157,6 +163,8 @@ export class UserService {
         disabledTools: [],
         sttProvider: "simulated",
         chatProvider: "jait",
+        workspacePickerPath: null,
+        workspacePickerNodeId: null,
         updatedAt: now,
       };
     }
@@ -167,13 +175,23 @@ export class UserService {
       disabledTools: parseStringArray((row as any).disabledTools ?? null),
       sttProvider: ((row as any).sttProvider as SttProvider) || "simulated",
       chatProvider: ((row as any).chatProvider as ChatProvider) || "jait",
+      workspacePickerPath: typeof (row as any).workspacePickerPath === "string" ? (row as any).workspacePickerPath : null,
+      workspacePickerNodeId: typeof (row as any).workspacePickerNodeId === "string" ? (row as any).workspacePickerNodeId : null,
       updatedAt: row.updatedAt,
     };
   }
 
   updateSettings(
     userId: string,
-    patch: { theme?: ThemeMode; apiKeys?: Record<string, string>; disabledTools?: string[]; sttProvider?: SttProvider; chatProvider?: ChatProvider },
+    patch: {
+      theme?: ThemeMode;
+      apiKeys?: Record<string, string>;
+      disabledTools?: string[];
+      sttProvider?: SttProvider;
+      chatProvider?: ChatProvider;
+      workspacePickerPath?: string | null;
+      workspacePickerNodeId?: string | null;
+    },
   ): UserSettingsRecord {
     const existing = this.getSettings(userId);
     const theme = patch.theme ?? existing.theme;
@@ -181,6 +199,12 @@ export class UserService {
     const disabledTools = patch.disabledTools ?? existing.disabledTools;
     const sttProvider = patch.sttProvider ?? existing.sttProvider;
     const chatProvider = patch.chatProvider ?? existing.chatProvider;
+    const workspacePickerPath = patch.workspacePickerPath !== undefined
+      ? patch.workspacePickerPath
+      : existing.workspacePickerPath;
+    const workspacePickerNodeId = patch.workspacePickerNodeId !== undefined
+      ? patch.workspacePickerNodeId
+      : existing.workspacePickerNodeId;
     const now = new Date().toISOString();
     this.db
       .update(userSettings)
@@ -190,6 +214,8 @@ export class UserService {
         disabledTools: JSON.stringify(disabledTools),
         sttProvider,
         chatProvider,
+        workspacePickerPath,
+        workspacePickerNodeId,
         updatedAt: now,
       } as any)
       .where(eq(userSettings.userId, userId))

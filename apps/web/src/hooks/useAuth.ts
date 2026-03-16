@@ -17,6 +17,8 @@ interface UserSettings {
   api_keys: Record<string, string>
   stt_provider: SttProvider
   chat_provider: ChatProvider
+  workspace_picker_path: string | null
+  workspace_picker_node_id: string | null
   updated_at: string
 }
 
@@ -37,6 +39,8 @@ const EMPTY_SETTINGS: UserSettings = {
   api_keys: {},
   stt_provider: 'simulated',
   chat_provider: 'jait',
+  workspace_picker_path: null,
+  workspace_picker_node_id: null,
   updated_at: new Date(0).toISOString(),
 }
 
@@ -160,6 +164,8 @@ export function useAuth() {
     api_keys?: Record<string, string>
     stt_provider?: SttProvider
     chat_provider?: ChatProvider
+    workspace_picker_path?: string | null
+    workspace_picker_node_id?: string | null
   }) => {
     if (!state.token) throw new Error('Not authenticated')
     const response = await fetch(`${API_URL}/auth/settings`, {

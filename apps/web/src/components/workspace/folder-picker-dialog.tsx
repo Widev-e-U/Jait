@@ -47,9 +47,24 @@ interface FolderPickerDialogProps {
   onSelect: (path: string, nodeId: string) => void
   /** When true, only browse the gateway's filesystem (no device selector). */
   gatewayOnly?: boolean
+  initialPath?: string | null
+  initialNodeId?: string | null
 }
 
-export function FolderPickerDialog({ open, onOpenChange, onSelect, gatewayOnly }: FolderPickerDialogProps) {
+interface BrowseResponse {
+  path: string
+  parent: string | null
+  entries: FsBrowseEntry[]
+}
+
+export function FolderPickerDialog({
+  open,
+  onOpenChange,
+  onSelect,
+  gatewayOnly,
+  initialPath,
+  initialNodeId,
+}: FolderPickerDialogProps) {
   const [currentPath, setCurrentPath] = useState<string | null>(null)
   const [parentPath, setParentPath] = useState<string | null>(null)
   const [entries, setEntries] = useState<FsBrowseEntry[]>([])
@@ -63,44 +78,24 @@ export function FolderPickerDialog({ open, onOpenChange, onSelect, gatewayOnly }
   const [nodes, setNodes] = useState<FsNode[]>([])
   const [selectedNodeId, setSelectedNodeId] = useState<string>('gateway')
 
-  // Load nodes + roots on first open
-  useEffect(() => {
-    if (!open) return
-    if (gatewayOnly) {
-      // Skip node discovery — go straight to gateway roots
-      setSelectedNodeId('gateway')
-      void loadRoots('gateway')
-      return
-    }
-    void loadNodes()
-  }, [open, gatewayOnly])
-
-  const loadNodes = useCallback(async () => {
-    try {
-      const res = await fetch(`${API_URL}/api/filesystem/nodes`)
-      if (!res.ok) throw new Error('Failed to load nodes')
-      const data = (await res.json()) as { nodes: FsNode[] }
-      setNodes(data.nodes)
-
-      // Auto-select the matching device node, or fall back to gateway
-      const platform = detectPlatform()
-      let defaultNodeId = 'gateway'
-
-      if (platform === 'electron' || platform === 'capacitor') {
-        const deviceId = generateDeviceId()
-        const myNode = data.nodes.find(n => n.id === deviceId)
-        if (myNode) defaultNodeId = myNode.id
-      }
-
-      setSelectedNodeId(defaultNodeId)
-      // Load roots for the selected node
-      await loadRoots(defaultNodeId)
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load nodes')
-    }
+  const applyBrowseData = useCallback((data: BrowseResponse) => {
+    setCurrentPath(data.path)
+    setParentPath(data.parent)
+    setEntries(data.entries)
+    setManualPath(data.path)
   }, [])
 
-  const loadRoots = useCallback(async (nodeId: string) => {
+  const browsePath = useCallback(async (dirPath: string, nodeId: string): Promise<BrowseResponse> => {
+    const url = `${API_URL}/api/filesystem/browse?path=${encodeURIComponent(dirPath)}&nodeId=${encodeURIComponent(nodeId)}`
+    const res = await fetch(url)
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({ message: 'Failed to browse' }))
+      throw new Error((body as { message?: string }).message ?? 'Failed to browse')
+    }
+    return await res.json() as BrowseResponse
+  }, [])
+
+  const loadRoots = useCallback(async (nodeId: string, preferredPath?: string | null) => {
     try {
       setLoading(true)
       setError(null)
@@ -112,42 +107,81 @@ export function FolderPickerDialog({ open, onOpenChange, onSelect, gatewayOnly }
       if (!res.ok) throw new Error('Failed to load roots')
       const data = (await res.json()) as { roots: FsBrowseEntry[] }
       setRoots(data.roots)
-      // Auto-navigate to home
-      const home = data.roots.find(r => r.name === 'Home')
-      if (home) {
-        await browse(home.path, nodeId)
-      } else if (data.roots.length > 0) {
-        await browse(data.roots[0].path, nodeId)
+
+      if (preferredPath) {
+        try {
+          const preferred = await browsePath(preferredPath, nodeId)
+          applyBrowseData(preferred)
+          return
+        } catch {
+          // Fall back to roots/home if the saved path no longer exists.
+        }
+      }
+
+      const fallback = data.roots.find(r => r.name === 'Home') ?? data.roots[0]
+      if (fallback) {
+        const rootData = await browsePath(fallback.path, nodeId)
+        applyBrowseData(rootData)
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load')
     } finally {
       setLoading(false)
     }
-  }, [])
+  }, [applyBrowseData, browsePath])
+
+  const loadNodes = useCallback(async (preferredNodeId?: string | null, preferredPath?: string | null) => {
+    try {
+      const res = await fetch(`${API_URL}/api/filesystem/nodes`)
+      if (!res.ok) throw new Error('Failed to load nodes')
+      const data = (await res.json()) as { nodes: FsNode[] }
+      setNodes(data.nodes)
+
+      // Auto-select the matching device node, or fall back to gateway
+      const platform = detectPlatform()
+      let defaultNodeId = 'gateway'
+
+      if (preferredNodeId && data.nodes.some(n => n.id === preferredNodeId)) {
+        defaultNodeId = preferredNodeId
+      }
+
+      if (defaultNodeId === 'gateway' && (platform === 'electron' || platform === 'capacitor')) {
+        const deviceId = generateDeviceId()
+        const myNode = data.nodes.find(n => n.id === deviceId)
+        if (myNode) defaultNodeId = myNode.id
+      }
+
+      setSelectedNodeId(defaultNodeId)
+      await loadRoots(defaultNodeId, preferredNodeId === defaultNodeId ? preferredPath : null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load nodes')
+    }
+  }, [loadRoots])
+
+  // Load nodes + roots on first open
+  useEffect(() => {
+    if (!open) return
+    if (gatewayOnly) {
+      setSelectedNodeId('gateway')
+      void loadRoots('gateway', initialPath)
+      return
+    }
+    void loadNodes(initialNodeId, initialPath)
+  }, [open, gatewayOnly, initialNodeId, initialPath, loadNodes, loadRoots])
 
   const browse = useCallback(async (dirPath: string, nodeId?: string) => {
     const nid = nodeId ?? selectedNodeId
     try {
       setLoading(true)
       setError(null)
-      const url = `${API_URL}/api/filesystem/browse?path=${encodeURIComponent(dirPath)}&nodeId=${encodeURIComponent(nid)}`
-      const res = await fetch(url)
-      if (!res.ok) {
-        const body = await res.json().catch(() => ({ message: 'Failed to browse' }))
-        throw new Error((body as { message?: string }).message ?? 'Failed to browse')
-      }
-      const data = (await res.json()) as { path: string; parent: string | null; entries: FsBrowseEntry[] }
-      setCurrentPath(data.path)
-      setParentPath(data.parent)
-      setEntries(data.entries)
-      setManualPath(data.path)
+      const data = await browsePath(dirPath, nid)
+      applyBrowseData(data)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to browse')
     } finally {
       setLoading(false)
     }
-  }, [selectedNodeId])
+  }, [applyBrowseData, browsePath, selectedNodeId])
 
   const handleNodeChange = useCallback((nodeId: string) => {
     setSelectedNodeId(nodeId)

@@ -420,4 +420,14 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 018: Persist workspace picker location in user_settings ─────
+  {
+    id: 18,
+    name: "user_settings_workspace_picker_location",
+    run(db) {
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN workspace_picker_path TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN workspace_picker_node_id TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];
