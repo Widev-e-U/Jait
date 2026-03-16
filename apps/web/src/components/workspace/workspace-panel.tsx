@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { ArrowLeft, ChevronRight, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send } from 'lucide-react'
+import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
-import { gitApi, type GitStatusResult, type FileDiffEntry } from '@/lib/git-api'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -228,6 +228,21 @@ function GitStatusBadge({ status, className = '' }: { status: string; className?
   )
 }
 
+/** Build a set of directory prefixes that contain changed files */
+function buildDirChangesSet(gitStatusMap: Map<string, string>): Set<string> {
+  const dirs = new Set<string>()
+  for (const filePath of gitStatusMap.keys()) {
+    const parts = filePath.replace(/\\/g, '/').split('/')
+    // Walk up every parent directory segment
+    for (let i = 1; i < parts.length; i++) {
+      dirs.add(parts.slice(0, i).join('/'))
+    }
+  }
+  return dirs
+}
+
+const gitApi = gitApiImport
+
 /* ------------------------------------------------------------------ */
 /*  Drag resize hook                                                   */
 /* ------------------------------------------------------------------ */
@@ -286,6 +301,7 @@ function TreeNodeRow({
   onContextFile,
   isMobile,
   gitStatusMap,
+  dirChangesSet,
 }: {
   node: LazyNode
   depth: number
@@ -296,12 +312,21 @@ function TreeNodeRow({
   onContextFile: (node: LazyFile) => void
   isMobile?: boolean
   gitStatusMap?: Map<string, string>
+  dirChangesSet?: Set<string>
 }) {
   const paddingLeft = isMobile ? 6 + depth * 12 : 8 + depth * 14
 
   if (node.kind === 'dir') {
     const expanded = expandedDirs.has(node.path)
     const loading = node.childrenLoading
+    // Check if this folder (by relative path) contains any changed files
+    const dirRel = node.path.replace(/\\/g, '/')
+    const folderHasChanges = dirChangesSet ? (() => {
+      for (const d of dirChangesSet) {
+        if (dirRel.endsWith('/' + d) || dirRel === d) return true
+      }
+      return false
+    })() : false
     return (
       <>
         <div
@@ -319,7 +344,10 @@ function TreeNodeRow({
             />
           )}
           <FolderIcon name={node.name} open={expanded} className={`${isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
-          <span className="truncate flex-1">{node.name}</span>
+          <span className={`truncate flex-1 ${folderHasChanges ? 'text-yellow-600 dark:text-yellow-400' : ''}`}>{node.name}</span>
+          {folderHasChanges && (
+            <span className="h-1.5 w-1.5 rounded-full bg-yellow-500 shrink-0" title="Contains modified files" />
+          )}
         </div>
         {expanded && node.children?.map((child) => (
           <TreeNodeRow
@@ -333,6 +361,7 @@ function TreeNodeRow({
             onContextFile={onContextFile}
             isMobile={isMobile}
             gitStatusMap={gitStatusMap}
+            dirChangesSet={dirChangesSet}
           />
         ))}
       </>
@@ -438,11 +467,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
     return m
   }, [gitStatus])
+  /** Set of directory prefixes (relative) that contain changed files */
+  const dirChangesSet = useMemo(() => buildDirChangesSet(gitStatusMap), [gitStatusMap])
   /** Tree pane active tab */
   const [treeTab, setTreeTab] = useState<'files' | 'git'>('files')
   /** Currently viewing diff for a file in the source control tab */
   const [scDiffFile, setScDiffFile] = useState<FileDiffEntry | null>(null)
   const [scDiffLoading, setScDiffLoading] = useState(false)
+  /** Commit message input */
+  const [commitMessage, setCommitMessage] = useState('')
+  /** Whether a git action (commit/push) is in progress */
+  const [gitActionBusy, setGitActionBusy] = useState(false)
+  const [gitActionError, setGitActionError] = useState<string | null>(null)
 
   const fetchGitStatus = useCallback(async () => {
     if (!remoteRoot) return
@@ -820,13 +856,34 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setScDiffLoading(true)
     try {
       const diffs = await gitApi.fileDiffs(remoteRoot)
-      const entry = diffs.find((d) => d.path === filePath)
+      // Match by exact path or by suffix (git paths are relative, tree paths may be absolute)
+      const entry = diffs.find((d) => d.path === filePath) ??
+        diffs.find((d) => filePath.replace(/\\/g, '/').endsWith('/' + d.path))
       if (entry) {
         setScDiffFile(entry)
       }
     } catch { /* ignore */ }
     setScDiffLoading(false)
   }, [remoteRoot])
+
+  /* ---- Git commit / push actions ---- */
+  const handleGitAction = useCallback(async (action: GitStackedAction) => {
+    if (!remoteRoot || gitActionBusy) return
+    setGitActionBusy(true)
+    setGitActionError(null)
+    try {
+      await gitApi.runStackedAction(remoteRoot, action, {
+        commitMessage: commitMessage.trim() || undefined,
+      })
+      setCommitMessage('')
+      setScDiffFile(null)
+      // Refresh status after action
+      await fetchGitStatus()
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Git action failed')
+    }
+    setGitActionBusy(false)
+  }, [remoteRoot, gitActionBusy, commitMessage, fetchGitStatus])
 
   /* ---- Select external file ---- */
   const handleSelectExtFile = useCallback((id: string) => {
@@ -944,6 +1001,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   onContextFile={handleContextNativeFile}
                   isMobile
                   gitStatusMap={gitStatusMap}
+                  dirChangesSet={dirChangesSet}
                 />
               ))}
 
@@ -998,6 +1056,40 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 <RefreshCw className={`h-3.5 w-3.5 ${gitStatusLoading ? 'animate-spin' : ''}`} />
               </button>
             </div>
+            {/* Commit message + actions (mobile) */}
+            {remoteRoot && gitStatus && (
+            <div className="px-2 py-2 border-b bg-muted/5 shrink-0 space-y-2">
+              <textarea
+                className="w-full text-sm bg-background border rounded px-2 py-1.5 resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                rows={2}
+                placeholder="Commit message"
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                disabled={gitActionBusy}
+              />
+              <div className="flex items-center gap-1.5">
+                <button
+                  className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handleGitAction('commit')}
+                  disabled={gitActionBusy || changedFileCount === 0}
+                >
+                  {gitActionBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                  Commit
+                </button>
+                <button
+                  className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                  onClick={() => handleGitAction('commit_push')}
+                  disabled={gitActionBusy || changedFileCount === 0}
+                >
+                  <CloudUpload className="h-3.5 w-3.5" />
+                  Commit & Push
+                </button>
+              </div>
+              {gitActionError && (
+                <div className="text-xs text-red-500">{gitActionError}</div>
+              )}
+            </div>
+            )}
             <ScrollArea className="flex-1 min-h-0">
               {gitStatusLoading && !gitStatus && (
                 <div className="flex items-center justify-center gap-2 p-4 text-sm text-muted-foreground">
@@ -1173,6 +1265,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 onSelectFile={handleSelectNativeFile}
                 onContextFile={handleContextNativeFile}
                 gitStatusMap={gitStatusMap}
+                dirChangesSet={dirChangesSet}
               />
             ))}
 
@@ -1236,6 +1329,49 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <RefreshCw className={`h-3 w-3 ${gitStatusLoading ? 'animate-spin' : ''}`} />
             </button>
           </div>
+
+          {/* Commit message + actions */}
+          {remoteRoot && gitStatus && (
+          <div className="px-2 py-1.5 border-b bg-muted/5 shrink-0 space-y-1.5">
+            <textarea
+              className="w-full text-xs bg-background border rounded px-2 py-1.5 resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              rows={2}
+              placeholder="Commit message"
+              value={commitMessage}
+              onChange={(e) => setCommitMessage(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault()
+                  if (changedFileCount > 0) handleGitAction('commit')
+                }
+              }}
+              disabled={gitActionBusy}
+            />
+            <div className="flex items-center gap-1">
+              <button
+                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                onClick={() => handleGitAction('commit')}
+                disabled={gitActionBusy || changedFileCount === 0}
+                title="Commit all changes (Ctrl+Enter)"
+              >
+                {gitActionBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
+                Commit
+              </button>
+              <button
+                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                onClick={() => handleGitAction('commit_push')}
+                disabled={gitActionBusy || changedFileCount === 0}
+                title="Commit and push"
+              >
+                <CloudUpload className="h-3 w-3" />
+                Commit & Push
+              </button>
+            </div>
+            {gitActionError && (
+              <div className="text-[10px] text-red-500 px-0.5">{gitActionError}</div>
+            )}
+          </div>
+          )}
 
           {/* Changed files list */}
           <ScrollArea className="flex-1 min-h-0">
