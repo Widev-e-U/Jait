@@ -55,11 +55,11 @@ describe("POST /api/workspace/open", () => {
       }
     };
 
-    surfaceRegistry.onSurfaceStopped = (id, surface) => {
+    surfaceRegistry.onSurfaceStopped = (id, surface, context) => {
       if (surface.type === "filesystem") {
         const snap = surface.snapshot();
         const sid = snap.sessionId ?? "";
-        if (sid) {
+        if (sid && context?.reason !== "shutdown") {
           sessionState.set(sid, { "workspace.panel": null });
         }
       }
@@ -193,5 +193,24 @@ describe("POST /api/workspace/open", () => {
     const s = surfaceRegistry.getSurface(second);
     expect(s).toBeDefined();
     expect(s?.state).toBe("running");
+  });
+
+  it("should preserve workspace state during shutdown for restart restore", async () => {
+    const openRes = await fetch(`${address}/api/workspace/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: TEST_DIR, sessionId }),
+    });
+    const { surfaceId } = (await openRes.json()) as { surfaceId: string };
+
+    await surfaceRegistry.stopAll("shutdown");
+
+    const state = sessionState.get(sessionId, ["workspace.panel"]);
+    expect(state["workspace.panel"]).toEqual({
+      open: true,
+      remotePath: TEST_DIR,
+      surfaceId,
+      nodeId: "gateway",
+    });
   });
 });

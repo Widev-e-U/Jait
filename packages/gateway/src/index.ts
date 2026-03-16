@@ -170,7 +170,7 @@ async function main() {
     }
   };
 
-  surfaceRegistry.onSurfaceStopped = (id, surface) => {
+  surfaceRegistry.onSurfaceStopped = (id, surface, context) => {
     if (surface.type === "filesystem" || surface.type === "remote-filesystem") {
       // Stop the file watcher if it was watching this surface
       if (watcherSurfaceId === id) {
@@ -197,8 +197,8 @@ async function main() {
         timestamp: new Date().toISOString(),
         payload: { key: "workspace.panel", value: null },
       });
-      // Clear workspace state from DB
-      if (sid) {
+      // Preserve DB state on shutdown so the workspace can be restored after restart.
+      if (sid && context?.reason !== "shutdown") {
         try {
           sessionState.set(sid, { "workspace.panel": null });
         } catch (err) {
