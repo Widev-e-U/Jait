@@ -252,8 +252,15 @@ function useDragResize(
   min: number,
   max: number,
   direction: 'horizontal' | 'vertical' = 'horizontal',
+  storageKey?: string,
 ) {
-  const [size, setSize] = useState(initial)
+  const [size, setSize] = useState(() => {
+    if (!storageKey || typeof window === 'undefined') return initial
+    const raw = window.localStorage.getItem(storageKey)
+    const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+    if (!Number.isFinite(parsed)) return initial
+    return Math.min(max, Math.max(min, parsed))
+  })
   const dragging = useRef(false)
 
   const onMouseDown = useCallback(
@@ -283,6 +290,11 @@ function useDragResize(
     },
     [size, min, max, direction],
   )
+
+  useEffect(() => {
+    if (!storageKey || typeof window === 'undefined') return
+    window.localStorage.setItem(storageKey, String(size))
+  }, [size, storageKey])
 
   return { size, onMouseDown } as const
 }
@@ -439,9 +451,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Resizable: file tree width + total panel width
   // Target a 4:2 (workspace:chat) ratio of the space after the sidebar (~224px)
-  const tree = useDragResize(260, 180, 500, 'horizontal')
+  const tree = useDragResize(260, 180, 500, 'horizontal', 'workspaceTreePaneWidth')
   const initialPanel = Math.round((window.innerWidth - 224) * (4 / 6))
-  const panel = useDragResize(initialPanel, 400, 1800, 'horizontal')
+  const panel = useDragResize(initialPanel, 400, 1800, 'horizontal', 'workspacePanelWidth')
 
   // Lazy tree state
   const [lazyTree, setLazyTree] = useState<LazyNode[]>([])
