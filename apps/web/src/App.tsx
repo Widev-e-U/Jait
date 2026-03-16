@@ -746,6 +746,8 @@ function App() {
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
   const floatingDragRef = useRef<{ pointerId: number; startX: number; startY: number; posX: number; posY: number } | null>(null)
   const floatingResizeRef = useRef<{ pointerId: number; startX: number; startY: number; w: number; h: number } | null>(null)
+  const floatingDragCleanupRef = useRef<(() => void) | null>(null)
+  const floatingResizeCleanupRef = useRef<(() => void) | null>(null)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>(() => (localStorage.getItem('chatMode') as ChatMode) || 'agent')
   const [chatProvider, setChatProvider] = useState<ProviderId>(() => getStoredChatProvider())
@@ -851,20 +853,26 @@ function App() {
         viewport: getFloatingViewport(),
       }))
     }
-    const onUp = (ev: PointerEvent) => {
-      if (!floatingDragRef.current || floatingDragRef.current.pointerId !== ev.pointerId) return
-      floatingDragRef.current = null
+    const cleanup = () => {
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
+      floatingDragCleanupRef.current = null
+    }
+    const onUp = (ev: PointerEvent) => {
+      if (!floatingDragRef.current || floatingDragRef.current.pointerId !== ev.pointerId) return
+      floatingDragRef.current = null
+      cleanup()
     }
 
     if (e.pointerType !== 'touch') {
       document.body.style.cursor = 'move'
     }
     document.body.style.userSelect = 'none'
+    floatingDragCleanupRef.current?.()
+    floatingDragCleanupRef.current = cleanup
     document.addEventListener('pointermove', onMove)
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
@@ -909,24 +917,49 @@ function App() {
           })
       ))
     }
-    const onUp = (ev: PointerEvent) => {
-      if (!floatingResizeRef.current || floatingResizeRef.current.pointerId !== ev.pointerId) return
-      floatingResizeRef.current = null
+    const cleanup = () => {
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
       document.body.style.cursor = ''
       document.body.style.userSelect = ''
+      floatingResizeCleanupRef.current = null
+    }
+    const onUp = (ev: PointerEvent) => {
+      if (!floatingResizeRef.current || floatingResizeRef.current.pointerId !== ev.pointerId) return
+      floatingResizeRef.current = null
+      cleanup()
     }
 
     if (e.pointerType !== 'touch') {
       document.body.style.cursor = 'nwse-resize'
     }
     document.body.style.userSelect = 'none'
+    floatingResizeCleanupRef.current?.()
+    floatingResizeCleanupRef.current = cleanup
     document.addEventListener('pointermove', onMove)
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
   }, [floatingSSSize, getFloatingViewport])
+
+  useEffect(() => {
+    if (showScreenShare) return
+    floatingDragRef.current = null
+    floatingResizeRef.current = null
+    floatingDragCleanupRef.current?.()
+    floatingResizeCleanupRef.current?.()
+    document.body.style.cursor = ''
+    document.body.style.userSelect = ''
+  }, [showScreenShare])
+
+  useEffect(() => {
+    return () => {
+      floatingDragCleanupRef.current?.()
+      floatingResizeCleanupRef.current?.()
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+  }, [])
 
   useEffect(() => {
     if (!showScreenShare) return
@@ -4173,7 +4206,8 @@ function App() {
           >
             <div
               className="flex items-center justify-between h-8 px-3 border-b bg-muted/30 shrink-0 cursor-move select-none"
-              onMouseDown={onFloatingDragStart}
+              onPointerDown={onFloatingDragStart}
+              style={{ touchAction: 'none' }}
             >
               <span className="text-xs font-medium flex items-center gap-1.5">
                 <Cast className="h-3 w-3" /> Screen Share
@@ -4186,7 +4220,8 @@ function App() {
             {/* Resize handle */}
             <div
               className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize opacity-50 hover:opacity-100"
-              onMouseDown={onFloatingResizeStart}
+              onPointerDown={onFloatingResizeStart}
+              style={{ touchAction: 'none' }}
             >
               <svg width="12" height="12" viewBox="0 0 12 12" className="text-muted-foreground">
                 <path d="M10 2L2 10M10 6L6 10M10 10L10 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
