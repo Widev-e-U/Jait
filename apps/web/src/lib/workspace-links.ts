@@ -15,6 +15,16 @@ export function isAbsoluteWorkspacePath(value: string): boolean {
   return WINDOWS_ABS_PATH_RE.test(value) || UNIX_ABS_PATH_RE.test(value)
 }
 
+function isLikelyWorkspaceFilePath(path: string, fragment: string): boolean {
+  const normalized = path.replace(/\\/g, '/')
+  if (!normalized || normalized === '/') return false
+
+  if (/^L\d+(?:C\d+)?$/i.test(fragment)) return true
+
+  const baseName = normalized.split('/').pop() ?? ''
+  return /\.[A-Za-z0-9]+$/.test(baseName)
+}
+
 export function parseWorkspaceLinkTarget(href?: string | null): WorkspaceLinkTarget | null {
   if (!href) return null
 
@@ -23,10 +33,25 @@ export function parseWorkspaceLinkTarget(href?: string | null): WorkspaceLinkTar
 
   let pathPart = trimmed
   let fragment = ''
-  const hashIndex = trimmed.indexOf('#')
-  if (hashIndex >= 0) {
-    pathPart = trimmed.slice(0, hashIndex)
-    fragment = trimmed.slice(hashIndex + 1)
+  try {
+    const url = new URL(trimmed)
+    if (url.protocol === 'http:' || url.protocol === 'https:') {
+      pathPart = url.pathname
+      fragment = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash
+      if (!isLikelyWorkspaceFilePath(pathPart, fragment)) return null
+    } else {
+      const hashIndex = trimmed.indexOf('#')
+      if (hashIndex >= 0) {
+        pathPart = trimmed.slice(0, hashIndex)
+        fragment = trimmed.slice(hashIndex + 1)
+      }
+    }
+  } catch {
+    const hashIndex = trimmed.indexOf('#')
+    if (hashIndex >= 0) {
+      pathPart = trimmed.slice(0, hashIndex)
+      fragment = trimmed.slice(hashIndex + 1)
+    }
   }
 
   const decodedPath = decodeURIComponent(pathPart)

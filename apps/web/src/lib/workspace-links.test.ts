@@ -24,6 +24,10 @@ describe('workspace-links', () => {
       path: '/workspace/Jait/apps/web/src/App.tsx',
       line: 10,
     })
+    expect(parseWorkspaceLinkTarget('https://jait.basenetwork.net/home/jakob/jait/apps/web/src/components/chat/message.tsx#L116')).toEqual({
+      path: '/home/jakob/jait/apps/web/src/components/chat/message.tsx',
+      line: 116,
+    })
     expect(parseWorkspaceLinkTarget('https://example.com')).toBeNull()
   })
 
