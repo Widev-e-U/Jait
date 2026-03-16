@@ -69,7 +69,7 @@ import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
-import { WorkspacePanel, workspaceLanguageForPath, DiffView, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
+import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
@@ -788,12 +788,6 @@ function App() {
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
   const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
   const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string }[]>([])
-  const [activeDiff, setActiveDiff] = useState<{
-    filePath: string
-    originalContent: string
-    modifiedContent: string
-    language: string
-  } | null>(null)
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
   const isDragging = useRef(false)
   const workspaceRef = useRef<WorkspacePanelHandle>(null)
@@ -1897,13 +1891,14 @@ function App() {
           currentContent: string
         }
         const name = filePath.split(/[\/\\]/).pop() ?? filePath
-        setActiveDiff({
-          filePath: data.path,
+        await workspaceRef.current?.openReviewDiff({
+          path: data.path,
           originalContent: data.originalContent ?? '',
           modifiedContent: data.currentContent,
           language: workspaceLanguageForPath(name),
         })
         if (!showWorkspace) setShowWorkspace(true)
+        showWorkspaceEditorPanel()
         return
       }
 
@@ -1941,7 +1936,7 @@ function App() {
     } catch {
       // silently ignore
     }
-  }, [token, showWorkspace, mergeWorkspaceFiles])
+  }, [token, showWorkspace, mergeWorkspaceFiles, showWorkspaceEditorPanel])
 
   const handleOpenMessagePath = useCallback(async (filePath: string) => {
     try {
@@ -2005,15 +2000,8 @@ function App() {
     workspaceFiles,
   ])
 
-  /** Close the diff view */
-  const handleDiffClose = useCallback(() => {
-    setActiveDiff(null)
-  }, [])
-
   /** Apply the merged diff result — write to server and clear backup */
-  const handleDiffApply = useCallback(async (resultContent: string) => {
-    if (!activeDiff) return
-    const filePath = activeDiff.filePath
+  const handleApplyWorkspaceDiff = useCallback(async (filePath: string, resultContent: string) => {
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (token) headers['Authorization'] = `Bearer ${token}`
@@ -2023,10 +2011,9 @@ function App() {
         body: JSON.stringify({ path: filePath, content: resultContent }),
       })
     } catch { /* ignore */ }
-    // Mark the file as accepted in the changed-files list, then close diff view
+    // Mark the file as accepted in the changed-files list.
     acceptFile(filePath)
-    setActiveDiff(null)
-  }, [activeDiff, token, acceptFile])
+  }, [token, acceptFile])
 
   const handleFileDrop = useCallback(async (dropped: FileList | File[]) => {
     const list = Array.from(dropped)
@@ -3341,7 +3328,7 @@ function App() {
               </aside>
             )}
 
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && !activeDiff && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
               <WorkspacePanel
                 ref={workspaceRef}
                 autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
@@ -3360,25 +3347,13 @@ function App() {
                 fsWatcherVersion={fsWatcherVersion}
                 savedTabsState={workspaceTabsState}
                 onTabsStateChange={handleWorkspaceTabsStateChange}
+                onApplyDiff={handleApplyWorkspaceDiff}
               />
             )}
 
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && activeDiff && (
-              <aside className="flex-[4] min-w-0 border-r bg-background overflow-hidden flex flex-col">
-                <DiffView
-                  filePath={activeDiff.filePath}
-                  originalContent={activeDiff.originalContent}
-                  modifiedContent={activeDiff.modifiedContent}
-                  language={activeDiff.language}
-                  onClose={handleDiffClose}
-                  onApply={(result) => { void handleDiffApply(result) }}
-                />
-              </aside>
-            )}
 
 
-
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && !activeDiff && (showWorkspaceTree || showWorkspaceEditor) && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && (showWorkspaceTree || showWorkspaceEditor) && (
               <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
                 <WorkspacePanel
                   ref={workspaceRef}
@@ -3398,12 +3373,13 @@ function App() {
                   isMobile
                   savedTabsState={workspaceTabsState}
                   onTabsStateChange={handleWorkspaceTabsStateChange}
+                  onApplyDiff={handleApplyWorkspaceDiff}
                 />
               </section>
             )}
 
             {/* Mobile: sticky show-panel buttons when workspace panels are hidden */}
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && !activeDiff && (!showWorkspaceTree || !showWorkspaceEditor) && (
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && (
               <div className="flex items-center gap-1 px-2 py-1.5 border-b bg-muted/20 shrink-0">
                 {!showWorkspaceTree && (
                   <button
@@ -3426,19 +3402,6 @@ function App() {
                   </button>
                 )}
               </div>
-            )}
-
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && activeDiff && (
-              <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
-                <DiffView
-                  filePath={activeDiff.filePath}
-                  originalContent={activeDiff.originalContent}
-                  modifiedContent={activeDiff.modifiedContent}
-                  language={activeDiff.language}
-                  onClose={handleDiffClose}
-                  onApply={(result) => { void handleDiffApply(result) }}
-                />
-              </section>
             )}
 
             {viewMode === 'manager' ? (

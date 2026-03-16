@@ -4,6 +4,7 @@ import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBra
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
+import { DiffView } from './diff-view'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -48,6 +49,8 @@ interface WorkspacePanelProps {
   savedTabsState?: WorkspaceTabsState | null
   /** Called when open tabs/active tab change (for DB + WS sync) */
   onTabsStateChange?: (state: WorkspaceTabsState | null) => void
+  /** Apply a merged review diff result to the backing file. */
+  onApplyDiff?: (filePath: string, resultContent: string) => void | Promise<void>
 }
 
 export interface WorkspacePanelHandle {
@@ -59,6 +62,8 @@ export interface WorkspacePanelHandle {
   openFileByPath: (path: string) => Promise<boolean>
   /** Read a file from the lazy tree by path and return a WorkspaceFile, or null. */
   readFileByPath: (path: string) => Promise<WorkspaceFile | null>
+  /** Open a review diff tab with original/modified content. */
+  openReviewDiff: (input: { path: string; originalContent: string; modifiedContent: string; language?: string }) => Promise<boolean>
   /** Lazily search the entire directory for files matching a query. Cancellable via AbortSignal. */
   searchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<{ path: string; name: string }[]>
 }
@@ -264,7 +269,10 @@ interface EditorTab {
   label: string
   content?: string | null
   language?: string
+  diffMode?: 'git' | 'review'
   diffEntry?: FileDiffEntry | null
+  originalContent?: string | null
+  modifiedContent?: string | null
   /** Preview tabs are italic and get replaced on next open */
   isPreview?: boolean
 }
@@ -478,6 +486,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   fsWatcherVersion,
   savedTabsState,
   onTabsStateChange,
+  onApplyDiff,
 }, ref) {
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
   /** When non-null, we're in remote (server-backed) mode */
@@ -1019,6 +1028,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     )
     if (!fileNode) return false
 
+    const tabId = `file:${fileNode.path}`
+    setOpenTabs((prev) => {
+      const existing = prev.find((t) => t.id === tabId)
+      if (existing) return prev
+      const newTab: EditorTab = {
+        id: tabId,
+        type: 'file',
+        path: fileNode.path,
+        label: fileNode.name,
+        content: null,
+        language: inferLanguage(fileNode.path),
+      }
+      return [...prev, newTab]
+    })
+    setActiveTabId(tabId)
     onActiveFileChange('')
     setActiveNativePath(fileNode.path)
     setPreviewPath(fileNode.path)
@@ -1027,20 +1051,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     try {
       const content = fileNode.handle ? await readFileHandle(fileNode.handle) : await remoteReadFile(fileNode.path, surfaceId)
       setPreviewContent(content)
+      setOpenTabs((prev) => prev.map((t) => t.id === tabId ? { ...t, content } : t))
     } catch {
       setPreviewContent('// Failed to read file')
+      setOpenTabs((prev) => prev.map((t) => t.id === tabId ? { ...t, content: '// Failed to read file' } : t))
     }
     setLoadingFile(false)
     return true
   }, [bumpTree, lazyTree, onActiveFileChange, remoteRoot, surfaceId])
-
-  useImperativeHandle(ref, () => ({
-    openDirectory: handleOpenDirectory,
-    openRemoteWorkspace: handleOpenRemoteWorkspace,
-    openFileByPath: handleOpenFileByPath,
-    readFileByPath: handleReadFileByPath,
-    searchFiles: handleSearchFiles,
-  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleSearchFiles])
 
   /* ---- Toggle directory ---- */
   const handleToggleDir = useCallback(async (node: LazyDir) => {
@@ -1108,7 +1126,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /* ---- Open diff from source control ---- */
   const handleScOpenDiff = useCallback(async (filePath: string) => {
     if (!remoteRoot) return
-    const tabId = `diff:${filePath}`
+    const tabId = `git-diff:${filePath}`
     // If diff tab already open, just activate it
     const existingTab = openTabs.find(t => t.id === tabId)
     if (existingTab) {
@@ -1130,6 +1148,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           type: 'diff',
           path: filePath,
           label: fileName,
+          diffMode: 'git',
+          language: inferLanguage(filePath),
+          originalContent: entry.original,
+          modifiedContent: entry.modified,
           diffEntry: entry,
         }
         setOpenTabs(prev => [...prev, newTab])
@@ -1138,6 +1160,52 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } catch { /* ignore */ }
     setScDiffLoading(false)
   }, [remoteRoot, openTabs])
+
+  const handleOpenReviewDiff = useCallback(async ({
+    path,
+    originalContent,
+    modifiedContent,
+    language,
+  }: {
+    path: string
+    originalContent: string
+    modifiedContent: string
+    language?: string
+  }): Promise<boolean> => {
+    const tabId = `review-diff:${path}`
+    const label = path.split(/[\\/]/).pop() ?? path
+    const nextTab: EditorTab = {
+      id: tabId,
+      type: 'diff',
+      path,
+      label,
+      diffMode: 'review',
+      language: language ?? inferLanguage(path),
+      originalContent,
+      modifiedContent,
+    }
+    setOpenTabs((prev) => {
+      const existing = prev.find((t) => t.id === tabId)
+      if (existing) return prev.map((t) => t.id === tabId ? { ...t, ...nextTab } : t)
+      return [...prev, nextTab]
+    })
+    setActiveTabId(tabId)
+    setScDiffFile(null)
+    setActiveNativePath(null)
+    setPreviewContent(null)
+    setPreviewPath(path)
+    setPreviewLanguage(language ?? inferLanguage(path))
+    return true
+  }, [])
+
+  useImperativeHandle(ref, () => ({
+    openDirectory: handleOpenDirectory,
+    openRemoteWorkspace: handleOpenRemoteWorkspace,
+    openFileByPath: handleOpenFileByPath,
+    readFileByPath: handleReadFileByPath,
+    openReviewDiff: handleOpenReviewDiff,
+    searchFiles: handleSearchFiles,
+  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleSearchFiles])
 
   /* ---- Git commit / push actions ---- */
   const handleGitAction = useCallback(async (action: GitStackedAction) => {
@@ -1229,7 +1297,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             setPreviewPath(neighbor.path)
             setScDiffFile(null)
           } else if (neighbor?.type === 'diff') {
-            setScDiffFile(neighbor.diffEntry ?? null)
+            setScDiffFile(neighbor.diffMode === 'git' ? (neighbor.diffEntry ?? null) : null)
           }
         }, 0)
       }
@@ -1249,7 +1317,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       setScDiffFile(null)
       onActiveFileChange(tab.id.startsWith('ext:') ? tab.id.slice(4) : '')
     } else if (tab.type === 'diff') {
-      setScDiffFile(tab.diffEntry ?? null)
+      setScDiffFile(tab.diffMode === 'git' ? (tab.diffEntry ?? null) : null)
     }
   }, [openTabs, onActiveFileChange])
 
@@ -1588,7 +1656,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     onClick={() => handleSwitchTab(tab.id)}
                   >
                     {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
-                    {tab.type === 'diff' && tab.diffEntry ? (
+                    {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
                       <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
                     ) : (
                       <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
@@ -1642,10 +1710,30 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading diff...
                 </div>
-              ) : activeTab?.type === 'diff' && activeTab.diffEntry ? (
-                <pre className="text-[11px] leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
-                  <code>{activeTab.diffEntry.modified || activeTab.diffEntry.original || '(empty file)'}</code>
-                </pre>
+              ) : activeTab?.type === 'diff' && activeTab.diffMode === 'review' ? (
+                <DiffView
+                  filePath={activeTab.path}
+                  originalContent={activeTab.originalContent ?? ''}
+                  modifiedContent={activeTab.modifiedContent ?? ''}
+                  language={activeTab.language ?? 'plaintext'}
+                  onClose={() => handleCloseTab(activeTab.id)}
+                  onApply={(result) => { void onApplyDiff?.(activeTab.path, result) }}
+                />
+              ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
+                <DiffEditor
+                  original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
+                  modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
+                  language={activeTab.language ?? 'plaintext'}
+                  theme="vs-dark"
+                  options={{
+                    readOnly: true,
+                    renderSideBySide: false,
+                    minimap: { enabled: false },
+                    lineNumbers: 'on',
+                    wordWrap: 'on',
+                    scrollBeyondLastLine: false,
+                  }}
+                />
               ) : loadingFile ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -1956,7 +2044,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           >
             {openTabs.map((tab) => {
               const isActive = tab.id === activeTabId
-              const gitStatus4tab = tab.type === 'diff' && tab.diffEntry ? tab.diffEntry.status : undefined
+              const gitStatus4tab = tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? tab.diffEntry.status : undefined
               return (
                 <div
                   key={tab.id}
@@ -2040,14 +2128,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading diff...
           </div>
-        ) : activeTab?.type === 'diff' && activeTab.diffEntry ? (
+        ) : activeTab?.type === 'diff' && activeTab.diffMode === 'review' ? (
+          <DiffView
+            filePath={activeTab.path}
+            originalContent={activeTab.originalContent ?? ''}
+            modifiedContent={activeTab.modifiedContent ?? ''}
+            language={activeTab.language ?? 'plaintext'}
+            onClose={() => handleCloseTab(activeTab.id)}
+            onApply={(result) => { void onApplyDiff?.(activeTab.path, result) }}
+          />
+        ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
           <DiffEditor
             key={activeTab.id}
             height="100%"
             theme="vs-dark"
-            original={activeTab.diffEntry.original}
-            modified={activeTab.diffEntry.modified}
-            language={inferLanguage(activeTab.path)}
+            original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
+            modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
+            language={activeTab.language ?? inferLanguage(activeTab.path)}
             options={{
               readOnly: true,
               minimap: { enabled: false },

@@ -57,6 +57,26 @@ describe('tool call body helpers', () => {
     })
   })
 
+  it('backfills edit aliases from nested result payloads', () => {
+    expect(
+      normalizeToolArgs(
+        'edit',
+        {},
+        {
+          result: {
+            file_path: 'apps/web/src/App.tsx',
+            old_string: 'before',
+            new_string: 'after',
+          },
+        },
+      ),
+    ).toMatchObject({
+      path: 'apps/web/src/App.tsx',
+      search: 'before',
+      replace: 'after',
+    })
+  })
+
   it('normalizes provider-specific web argument aliases', () => {
     expect(
       normalizeToolArgs('web', {

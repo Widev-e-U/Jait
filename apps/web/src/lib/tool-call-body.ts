@@ -47,9 +47,12 @@ export function normalizeToolArgs(
     args.action,
     args.input,
     args.arguments,
+    resultData?.result,
     resultData,
     resultData?.input,
     resultData?.arguments,
+    firstObject(resultData?.result)?.input,
+    firstObject(resultData?.result)?.arguments,
   )
 
   if (normalizedTool === 'edit' || normalizedTool === 'file.write' || normalizedTool === 'file.patch' || normalizedTool === 'read' || normalizedTool === 'file.read') {
