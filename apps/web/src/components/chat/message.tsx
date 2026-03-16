@@ -70,29 +70,63 @@ function proseClassName(compact?: boolean) {
     : 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-base prose-p:leading-relaxed'
 }
 
+function getFileLinkLabel(path: string): string {
+  const normalized = path.replace(/\\/g, '/')
+  const parts = normalized.split('/')
+  return parts[parts.length - 1] ?? normalized
+}
+
+function WorkspacePathLink({
+  href,
+  target,
+  onOpenPath,
+}: {
+  href?: string
+  target: NonNullable<ReturnType<typeof parseWorkspaceLinkTarget>>
+  onOpenPath: NonNullable<MessageProps['onOpenPath']>
+}) {
+  const fileName = getFileLinkLabel(target.path)
+  const location = target.line
+    ? `L${target.line}${target.column ? `:${target.column}` : ''}`
+    : null
+
+  return (
+    <a
+      href={href}
+      className={cn(
+        'not-prose inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle text-[12px] font-medium leading-none text-foreground no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+      )}
+      title={target.path}
+      onClick={(event) => {
+        event.preventDefault()
+        void onOpenPath(target.path, target.line, target.column)
+      }}
+    >
+      <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
+      <span className="max-w-[220px] truncate">{fileName}</span>
+      {location ? (
+        <span className="shrink-0 rounded bg-background/80 px-1 py-0.5 text-[10px] text-muted-foreground">
+          {location}
+        </span>
+      ) : null}
+    </a>
+  )
+}
+
 function buildMarkdownComponents(
   onOpenPath?: MessageProps['onOpenPath'],
 ): Components | undefined {
   if (!onOpenPath) return undefined
 
   return {
-    a: ({ href, children, ref: _ref, ...props }) => {
+    a: ({ href, ref: _ref, ...props }) => {
       const target = parseWorkspaceLinkTarget(href)
       if (!target) {
-        return <a href={href} {...props}>{children}</a>
+        return <a href={href} {...props}>{props.children}</a>
       }
 
       return (
-        <a
-          href={href}
-          {...props}
-          onClick={(event) => {
-            event.preventDefault()
-            void onOpenPath(target.path, target.line, target.column)
-          }}
-        >
-          {children}
-        </a>
+        <WorkspacePathLink href={href} target={target} onOpenPath={onOpenPath} />
       )
     },
   }
