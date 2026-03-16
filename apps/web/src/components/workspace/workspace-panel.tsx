@@ -534,6 +534,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
+  const [draggingTabId, setDraggingTabId] = useState<string | null>(null)
+  const [tabContextMenu, setTabContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const restoredTabsRootRef = useRef<string | null>(null)
   const lastPersistedTabsRef = useRef<string>('')
 
@@ -635,6 +637,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     lastPersistedTabsRef.current = serialized
     onTabsStateChange(nextState)
   }, [openTabs, activeTab, remoteRoot, onTabsStateChange])
+
+  // Close tab context menu on outside click.
+  useEffect(() => {
+    if (!tabContextMenu) return
+    const onPointerDown = () => setTabContextMenu(null)
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [tabContextMenu])
 
   const fetchGitStatus = useCallback(async () => {
     if (!remoteRoot) return
@@ -1243,12 +1253,50 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
   }, [openTabs, onActiveFileChange])
 
+  const handleCloseAllTabs = useCallback(() => {
+    setOpenTabs([])
+    setActiveTabId(null)
+    setActiveNativePath(null)
+    setPreviewContent(null)
+    setScDiffFile(null)
+    setTabContextMenu(null)
+  }, [])
+
+  const handleCloseOtherTabs = useCallback((tabId: string) => {
+    setOpenTabs((prev) => prev.filter((t) => t.id === tabId))
+    setActiveTabId(tabId)
+    setTabContextMenu(null)
+  }, [])
+
+  const handleCloseTabsToRight = useCallback((tabId: string) => {
+    setOpenTabs((prev) => {
+      const idx = prev.findIndex((t) => t.id === tabId)
+      if (idx < 0) return prev
+      return prev.slice(0, idx + 1)
+    })
+    setTabContextMenu(null)
+  }, [])
+
+  const handleReorderTabs = useCallback((dragId: string, targetId: string) => {
+    if (dragId === targetId) return
+    setOpenTabs((prev) => {
+      const from = prev.findIndex((t) => t.id === dragId)
+      const to = prev.findIndex((t) => t.id === targetId)
+      if (from < 0 || to < 0 || from === to) return prev
+      const next = [...prev]
+      const [moved] = next.splice(from, 1)
+      next.splice(to, 0, moved)
+      return next
+    })
+  }, [])
+
   const hasNativeTree = lazyTree.length > 0
   const hasExtFiles = files.length > 0
 
   // Mobile: tab-based view (Files vs Git vs Editor)
   const [mobileTab, setMobileTab] = useState<'files' | 'git' | 'editor'>('files')
   const changedFileCount = gitStatus?.workingTree.files.length ?? 0
+  const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
 
   // Switch to editor tab when a file is selected on mobile
   const handleSelectNativeFileMobile = useCallback(async (node: LazyFile) => {
@@ -1919,11 +1967,42 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       : 'text-muted-foreground hover:bg-muted/50'
                   }`}
                   onClick={() => handleSwitchTab(tab.id)}
+                  onContextMenu={(e) => {
+                    e.preventDefault()
+                    setTabContextMenu({ tabId: tab.id, x: e.clientX, y: e.clientY })
+                  }}
                   onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); handleCloseTab(tab.id) } }}
+                  draggable
+                  onDragStart={(e) => {
+                    setDraggingTabId(tab.id)
+                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.setData('text/jait-tab', tab.id)
+                  }}
+                  onDragEnd={() => setDraggingTabId(null)}
+                  onDragOver={(e) => {
+                    if (!draggingTabId || draggingTabId === tab.id) return
+                    e.preventDefault()
+                    e.dataTransfer.dropEffect = 'move'
+                  }}
+                  onDrop={(e) => {
+                    e.preventDefault()
+                    const dragId = e.dataTransfer.getData('text/jait-tab') || draggingTabId
+                    if (!dragId) return
+                    handleReorderTabs(dragId, tab.id)
+                    setDraggingTabId(null)
+                  }}
+                  onDragEnter={(e) => {
+                    if (!draggingTabId || draggingTabId === tab.id) return
+                    e.preventDefault()
+                    handleReorderTabs(draggingTabId, tab.id)
+                  }}
                   title={tab.path}
                 >
                   {/* Active tab bottom highlight */}
                   {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
+                  {draggingTabId === tab.id && (
+                    <div className="absolute inset-0 border border-primary/60 pointer-events-none" />
+                  )}
                   {gitStatus4tab ? (
                     <GitStatusBadge status={gitStatus4tab} className="text-[9px]" />
                   ) : (
@@ -2017,6 +2096,43 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
         )}
         </div>
+      </div>
+      )}
+
+      {tabContextMenu && (
+      <div
+        className="fixed z-50 min-w-[170px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+        style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        <button
+          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted"
+          onClick={() => handleCloseTab(tabContextMenu.tabId)}
+        >
+          Close
+        </button>
+        <button
+          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40"
+          disabled={openTabs.length <= 1}
+          onClick={() => handleCloseOtherTabs(tabContextMenu.tabId)}
+        >
+          Close Others
+        </button>
+        <button
+          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40"
+          disabled={contextTabIndex < 0 || contextTabIndex >= openTabs.length - 1}
+          onClick={() => handleCloseTabsToRight(tabContextMenu.tabId)}
+        >
+          Close to the Right
+        </button>
+        <div className="my-1 h-px bg-border" />
+        <button
+          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40"
+          disabled={openTabs.length === 0}
+          onClick={handleCloseAllTabs}
+        >
+          Close All
+        </button>
       </div>
       )}
 
