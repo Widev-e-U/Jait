@@ -14,11 +14,16 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
 import { GitService, detectGitRemoteProvider } from "../services/git.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
+import type { UserService } from "../services/users.js";
+import type { ProviderRegistry } from "../providers/registry.js";
+import type { ProviderId, CliProviderAdapter, ProviderEvent } from "../providers/contracts.js";
+import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 
 /**
  * Find a connected remote FsNode that matches a working directory path.
@@ -50,8 +55,57 @@ function findAnyRemoteNode(ws: WsControlPlane | undefined): string | null {
   return null;
 }
 
-export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: WsControlPlane): void {
+interface GitRouteDeps {
+  ws?: WsControlPlane;
+  userService?: UserService;
+  providerRegistry?: ProviderRegistry;
+}
+
+function normalizeGitRouteDeps(deps?: WsControlPlane | GitRouteDeps): GitRouteDeps {
+  if (!deps) return {};
+  if (typeof (deps as WsControlPlane).getFsNodes === "function") return { ws: deps as WsControlPlane };
+  return deps as GitRouteDeps;
+}
+
+async function generateCommitMessageWithCliProvider(
+  provider: CliProviderAdapter,
+  cwd: string,
+  prompt: string,
+  model?: string,
+): Promise<string> {
+  const session = await provider.startSession({
+    threadId: `git-commit-${randomUUID()}`,
+    workingDirectory: cwd,
+    mode: "full-access",
+    ...(model ? { model } : {}),
+  });
+
+  let tokenContent = "";
+  let messageContent = "";
+  let sessionError: string | null = null;
+
+  const unsubscribe = provider.onEvent((event: ProviderEvent) => {
+    if (event.sessionId !== session.id) return;
+    if (event.type === "token") tokenContent += event.content;
+    if (event.type === "message" && event.role === "assistant") {
+      messageContent += event.content;
+    }
+    if (event.type === "session.error") sessionError = event.error;
+  });
+
+  try {
+    await provider.sendTurn(session.id, prompt);
+    if (sessionError) throw new Error(sessionError);
+    return (tokenContent || messageContent).trim();
+  } finally {
+    unsubscribe();
+    try { await provider.stopSession(session.id); } catch { /* best effort */ }
+  }
+}
+
+export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?: WsControlPlane | GitRouteDeps): void {
   const git = new GitService();
+  const { ws, userService, providerRegistry } = normalizeGitRouteDeps(deps);
 
   /** Git status for a given cwd */
   app.post("/api/git/status", async (request, reply) => {
@@ -583,7 +637,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
   app.post("/api/git/generate-commit-message", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    const { cwd } = request.body as { cwd?: string };
+    const { cwd, provider, model } = request.body as { cwd?: string; provider?: ProviderId; model?: string };
     if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
 
     try {
@@ -613,48 +667,90 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
         diffText = diffText.slice(0, MAX_DIFF_CHARS) + "\n... (truncated)";
       }
 
-      // Resolve model + endpoint based on configured LLM provider
-      const isOllama = config.llmProvider === "ollama";
-      const baseUrl = isOllama ? `${config.ollamaUrl}/v1` : config.openaiBaseUrl;
-      const model = isOllama ? config.ollamaModel : config.openaiModel;
-      const apiKey = isOllama ? "ollama" : config.openaiApiKey;
+      const prompt =
+        "Generate a concise git commit message in the imperative mood. " +
+        "Subject line must be 72 characters or less. " +
+        "Optionally follow with a blank line and brief bullet points for significant details. " +
+        "Output only the commit message.\n\n" +
+        `Changes:\n\n\`\`\`diff\n${diffText}\n\`\`\``;
 
-      const llmRes = await fetch(`${baseUrl}/chat/completions`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          "Authorization": `Bearer ${apiKey}`,
-        },
-        body: JSON.stringify({
-          model,
-          messages: [
-            {
-              role: "system",
-              content:
-                "You are an expert developer. Generate a concise git commit message in the imperative mood " +
-                "(e.g. 'Add feature' not 'Added feature'). " +
-                "Subject line must be 72 characters or less. " +
-                "Optionally follow with a blank line and brief bullet points for significant details. " +
-                "Output ONLY the commit message — no explanation, no backtick fences, no surrounding quotes.",
-            },
-            {
-              role: "user",
-              content: `Generate a git commit message for these changes:\n\n\`\`\`diff\n${diffText}\n\`\`\``,
-            },
-          ],
-          max_tokens: 256,
-          temperature: 0.3,
-        }),
-      });
+      const requestProvider = provider ?? "jait";
+      let message = "";
 
-      if (!llmRes.ok) {
-        const errBody = await llmRes.json().catch(() => ({})) as Record<string, unknown>;
-        const msg = (errBody["error"] as Record<string, unknown> | undefined)?.["message"] as string | undefined;
-        return reply.status(502).send({ error: msg ?? "LLM request failed" });
+      if (requestProvider === "jait") {
+        const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
+        const effectiveModel = model?.trim() || userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
+        const isOllama = !userApiKeys["OPENAI_API_KEY"]?.trim() && config.llmProvider === "ollama";
+        const baseUrl = isOllama ? `${config.ollamaUrl}/v1` : (userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl);
+        const apiKey = isOllama ? "ollama" : (userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey);
+
+        const llmRes = await fetch(`${baseUrl.replace(/\/+$/, "")}/chat/completions`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: effectiveModel,
+            messages: [
+              {
+                role: "system",
+                content:
+                  "You are an expert developer. Generate a concise git commit message in the imperative mood " +
+                  "(e.g. 'Add feature' not 'Added feature'). " +
+                  "Subject line must be 72 characters or less. " +
+                  "Optionally follow with a blank line and brief bullet points for significant details. " +
+                  "Output ONLY the commit message — no explanation, no backtick fences, no surrounding quotes.",
+              },
+              { role: "user", content: `Generate a git commit message for these changes:\n\n\`\`\`diff\n${diffText}\n\`\`\`` },
+            ],
+            max_tokens: 256,
+            temperature: 0.3,
+          }),
+        });
+
+        if (!llmRes.ok) {
+          const errBody = await llmRes.json().catch(() => ({})) as Record<string, unknown>;
+          const msg = (errBody["error"] as Record<string, unknown> | undefined)?.["message"] as string | undefined;
+          return reply.status(502).send({ error: msg ?? "LLM request failed" });
+        }
+
+        const data = await llmRes.json() as { choices?: Array<{ message?: { content?: string } }> };
+        message = data.choices?.[0]?.message?.content?.trim() ?? "";
+      } else {
+        if (!providerRegistry) {
+          return reply.status(501).send({ error: "CLI provider-backed commit generation is not configured" });
+        }
+
+        const pathExistsLocally = existsSync(cwd);
+        let cliProvider: CliProviderAdapter | null = null;
+
+        if (!pathExistsLocally && ws) {
+          const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(cwd);
+          const expectedPlatform = isWindowsPath ? "windows" : null;
+          for (const node of ws.getFsNodes()) {
+            if (node.isGateway) continue;
+            if (expectedPlatform && node.platform !== expectedPlatform) continue;
+            if (!node.providers?.includes(requestProvider)) continue;
+            cliProvider = new RemoteCliProvider(ws, node.id, requestProvider);
+            break;
+          }
+        }
+
+        if (!cliProvider) {
+          cliProvider = providerRegistry.get(requestProvider) ?? null;
+        }
+        if (!cliProvider) {
+          return reply.status(400).send({ error: `Unknown provider: ${requestProvider}` });
+        }
+        const available = await cliProvider.checkAvailability();
+        if (!available) {
+          return reply.status(400).send({ error: cliProvider.info.unavailableReason ?? `Provider ${requestProvider} is not available` });
+        }
+
+        message = await generateCommitMessageWithCliProvider(cliProvider, cwd, prompt, model?.trim() || undefined);
       }
 
-      const data = await llmRes.json() as { choices?: Array<{ message?: { content?: string } }> };
-      const message = data.choices?.[0]?.message?.content?.trim() ?? "";
       if (!message) return reply.status(502).send({ error: "LLM returned an empty response" });
 
       return { message };

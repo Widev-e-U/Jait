@@ -2284,6 +2284,19 @@ function App() {
     }
     if (!sid) return
 
+    if (isLoading || messageQueue.length > 0) {
+      enqueueMessage({
+        content: prepared.promptWithReferences,
+        displayContent: prepared.displayContent || prepared.promptWithReferences,
+        mode: chatMode,
+        provider: chatProvider,
+        model: chatProvider !== 'jait' ? cliModel : undefined,
+        referencedFiles: prepared.referencedFiles,
+      })
+      setInputValue('')
+      return
+    }
+
     sendMessage(prepared.promptWithReferences, {
       token,
       sessionId: sid,
@@ -2621,7 +2634,7 @@ function App() {
     }
     if (!sid || !token) return
 
-    if (isLoading) {
+    if (isLoading || messageQueue.length > 0) {
       enqueueMessage({
         content: normalizedTranscript,
         displayContent: normalizedTranscript,
@@ -2637,7 +2650,7 @@ function App() {
       sessionId: sid,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, cliModel, createSession, enqueueManagerMessage, enqueueMessage, isLoading, sendMessage, token, viewMode])
+  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, cliModel, createSession, enqueueManagerMessage, enqueueMessage, isLoading, messageQueue.length, sendMessage, token, viewMode])
 
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
@@ -3517,6 +3530,8 @@ function App() {
                 savedTabsState={workspaceTabsState}
                 onTabsStateChange={handleWorkspaceTabsStateChange}
                 onApplyDiff={handleApplyWorkspaceDiff}
+                provider={chatProvider}
+                cliModel={cliModel}
               />
             )}
 
@@ -3543,6 +3558,8 @@ function App() {
                   savedTabsState={workspaceTabsState}
                   onTabsStateChange={handleWorkspaceTabsStateChange}
                   onApplyDiff={handleApplyWorkspaceDiff}
+                  provider={chatProvider}
+                  cliModel={cliModel}
                 />
               </section>
             )}
@@ -3941,6 +3958,14 @@ function App() {
                       onOpenDiff={handleChangedFileClick}
                     />
                   ))}
+                  {messageQueue.length > 0 && (
+                    <MessageQueue
+                      items={messageQueue}
+                      onRemove={dequeueMessage}
+                      onEdit={updateQueueItem}
+                      onReorder={reorderQueueItem}
+                    />
+                  )}
                 </Conversation>
 
                 <div className={`shrink-0 py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}>
@@ -3992,14 +4017,6 @@ function App() {
                         onAcceptAll={acceptAllFiles}
                         onRejectAll={rejectAllFiles}
                         onFileClick={handleChangedFileClick}
-                      />
-                    )}
-                    {messageQueue.length > 0 && (
-                      <MessageQueue
-                        items={messageQueue}
-                        onRemove={dequeueMessage}
-                        onEdit={updateQueueItem}
-                        onReorder={reorderQueueItem}
                       />
                     )}
                     <PromptInput

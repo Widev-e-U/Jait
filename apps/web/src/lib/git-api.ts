@@ -6,6 +6,7 @@
 
 import { getAuthToken } from './auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
+import type { ProviderId } from './agents-api'
 export { isMissingGitIdentityError } from './git-errors'
 
 const API_URL = getApiUrl()
@@ -240,8 +241,12 @@ export const gitApi = {
     return gitPost<PrCheck[]>('pr-checks', { cwd, branch })
   },
 
-  generateCommitMessage(cwd: string): Promise<{ message: string }> {
-    return gitPost<{ message: string }>('generate-commit-message', { cwd })
+  generateCommitMessage(cwd: string, provider?: ProviderId, model?: string | null): Promise<{ message: string }> {
+    return gitPost<{ message: string }>('generate-commit-message', {
+      cwd,
+      ...(provider ? { provider } : {}),
+      ...(model ? { model } : {}),
+    })
   },
 }
 

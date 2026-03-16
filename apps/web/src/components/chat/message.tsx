@@ -460,7 +460,7 @@ function MessageInner({
               </div>
             </div>
           ) : isUser ? (
-            <div className={cn('relative w-fit max-w-full pb-6', USER_MESSAGE_MIN_WIDTH_CLASS)}>
+            <div className={cn('relative w-fit max-w-full', USER_MESSAGE_MIN_WIDTH_CLASS)}>
               <div ref={userBubbleRef} className={cn(
                 'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
                 compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
@@ -481,7 +481,7 @@ function MessageInner({
                   </div>
                 )}
               </div>
-              {renderActions(true)}
+              {renderActions()}
             </div>
           ) : (
             <div className="relative min-w-0 break-words [overflow-wrap:anywhere]">

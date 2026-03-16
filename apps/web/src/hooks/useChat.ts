@@ -955,13 +955,18 @@ export function useChat(
 
   // Process the next queued message when the model finishes
   const processQueue = useCallback(async (options: SendMessageOptions = {}) => {
-    if (processingQueueRef.current || state.isLoading || messageQueue.length === 0) return
+    if (processingQueueRef.current || state.isLoading || state.isLoadingHistory || messageQueue.length === 0) return
     if (typeof document !== 'undefined' && document.hidden) return
 
     const next = messageQueue[0]
     if (!next) return
 
     processingQueueRef.current = true
+    setMessageQueue(prev => {
+      if (prev.length === 0) return prev
+      if (prev[0]?.id === next.id) return prev.slice(1)
+      return prev.filter(item => item.id !== next.id)
+    })
     try {
       const ok = await sendMessage(next.content, {
         ...options,
@@ -972,17 +977,17 @@ export function useChat(
         ...(next.displayContent ? { displayContent: next.displayContent } : {}),
         ...(next.referencedFiles?.length ? { referencedFiles: next.referencedFiles } : {}),
       })
-      if (ok) {
-        setMessageQueue(prev => prev.filter(item => item.id !== next.id))
+      if (!ok) {
+        setMessageQueue(prev => (prev.some(item => item.id === next.id) ? prev : [next, ...prev]))
       }
     } finally {
       processingQueueRef.current = false
     }
-  }, [messageQueue, sendMessage, state.isLoading])
+  }, [messageQueue, sendMessage, state.isLoading, state.isLoadingHistory])
 
   // Auto-process queue when idle and the page is visible
   useEffect(() => {
-    if (!state.isLoading && messageQueue.length > 0 && !processingQueueRef.current && !document.hidden) {
+    if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current && !document.hidden) {
       const sid = prevSessionIdRef.current
       processQueue({
         token: authToken,
@@ -990,13 +995,13 @@ export function useChat(
         onLoginRequired,
       })
     }
-  }, [state.isLoading, messageQueue, processQueue, authToken, onLoginRequired])
+  }, [state.isLoading, state.isLoadingHistory, messageQueue, processQueue, authToken, onLoginRequired])
 
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         resumeSessionStream()
-        if (!state.isLoading && messageQueue.length > 0 && !processingQueueRef.current) {
+        if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
           const sid = prevSessionIdRef.current
           void processQueue({
             token: authToken,
@@ -1009,7 +1014,7 @@ export function useChat(
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [state.isLoading, messageQueue, processQueue, authToken, onLoginRequired, resumeSessionStream])
+  }, [state.isLoading, state.isLoadingHistory, messageQueue, processQueue, authToken, onLoginRequired, resumeSessionStream])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1017,7 +1022,7 @@ export function useChat(
     const handleResume = () => {
       if (typeof document !== 'undefined' && document.hidden) return
       resumeSessionStream()
-      if (!state.isLoading && messageQueue.length > 0 && !processingQueueRef.current) {
+      if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
         const sid = prevSessionIdRef.current
         void processQueue({
           token: authToken,
@@ -1035,7 +1040,7 @@ export function useChat(
       window.removeEventListener('pageshow', handleResume)
       window.removeEventListener('online', handleResume)
     }
-  }, [state.isLoading, messageQueue, processQueue, authToken, onLoginRequired, resumeSessionStream])
+  }, [state.isLoading, state.isLoadingHistory, messageQueue, processQueue, authToken, onLoginRequired, resumeSessionStream])
 
   // --- File change callbacks ---
   // Ref for broadcasting changed files to other clients

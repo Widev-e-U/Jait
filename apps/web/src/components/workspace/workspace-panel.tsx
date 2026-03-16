@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImper
 import Editor, { DiffEditor } from '@monaco-editor/react'
 import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send, Sparkles, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
+import type { ProviderId } from '@/lib/agents-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
@@ -52,6 +53,10 @@ interface WorkspacePanelProps {
   onTabsStateChange?: (state: WorkspaceTabsState | null) => void
   /** Apply a merged review diff result to the backing file. */
   onApplyDiff?: (filePath: string, resultContent: string) => void | Promise<void>
+  /** Active chat provider used for AI-powered git actions. */
+  provider?: ProviderId
+  /** Active provider model override from the chat composer. */
+  cliModel?: string | null
 }
 
 export interface WorkspacePanelHandle {
@@ -488,6 +493,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   savedTabsState,
   onTabsStateChange,
   onApplyDiff,
+  provider,
+  cliModel,
 }, ref) {
   const resolvedTheme = useResolvedTheme()
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
@@ -1240,16 +1247,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- Generate commit message via AI ---- */
   const handleGenerateCommitMessage = useCallback(async () => {
-    if (!remoteRoot || commitMsgGenerating || gitActionBusy) return
+    if (!remoteRoot || !gitStatus?.workingTree.files.length || commitMsgGenerating || gitActionBusy) return
     setCommitMsgGenerating(true)
     try {
-      const { message } = await gitApi.generateCommitMessage(remoteRoot)
+      const { message } = await gitApi.generateCommitMessage(remoteRoot, provider, cliModel)
       if (message) setCommitMessage(message)
     } catch {
       // fail silently — user can type manually
     }
     setCommitMsgGenerating(false)
-  }, [remoteRoot, commitMsgGenerating, gitActionBusy])
+  }, [remoteRoot, gitStatus, commitMsgGenerating, gitActionBusy, provider, cliModel])
 
   /* ---- Select external file ---- */
   const handleSelectExtFile = useCallback((id: string) => {
@@ -1366,6 +1373,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // Mobile: tab-based view (Files vs Git vs Editor)
   const [mobileTab, setMobileTab] = useState<'files' | 'git' | 'editor'>('files')
   const changedFileCount = gitStatus?.workingTree.files.length ?? 0
+  const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
 
   // Switch to editor tab when a file is selected on mobile
@@ -1542,7 +1550,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 <button
                   className="absolute top-1.5 right-1.5 p-0.5 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   onClick={handleGenerateCommitMessage}
-                  disabled={commitMsgGenerating || gitActionBusy}
+                  disabled={!canGenerateCommitMessage}
                   title="Generate commit message with AI"
                 >
                   {commitMsgGenerating
@@ -1725,6 +1733,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 />
               ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
                 <DiffEditor
+                  key={activeTab.id}
                   original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
                   modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
                   language={activeTab.language ?? 'plaintext'}
@@ -1910,7 +1919,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <button
                 className="absolute top-1 right-1 p-0.5 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                 onClick={handleGenerateCommitMessage}
-                disabled={commitMsgGenerating || gitActionBusy}
+                disabled={!canGenerateCommitMessage}
                 title="Generate commit message with AI"
               >
                 {commitMsgGenerating
@@ -2067,8 +2076,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   draggable
                   onDragStart={(e) => {
                     setDraggingTabId(tab.id)
-                    e.dataTransfer.effectAllowed = 'move'
+                    e.dataTransfer.effectAllowed = tab.type === 'file' ? 'copyMove' : 'move'
                     e.dataTransfer.setData('text/jait-tab', tab.id)
+                    if (tab.type === 'file') {
+                      e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: tab.path, name: tab.label }))
+                    }
                   }}
                   onDragEnd={() => setDraggingTabId(null)}
                   onDragOver={(e) => {
