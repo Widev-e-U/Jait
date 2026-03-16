@@ -836,7 +836,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
     screenshotPath,
   })
   const hasExpandableContent = bodyKind === 'terminal'
-    ? (!!displayOutput || call.status === 'running')
+    ? true
     : bodyKind !== 'none'
 
   const StatusIcon = call.status === 'pending'
@@ -930,6 +930,9 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
       'bg-muted/40 text-foreground',
       call.result && !call.result.ok && 'text-red-500 dark:text-red-400'
     )}>
+      {!displayOutput && call.status !== 'running' && (
+        <span className="text-muted-foreground"><span className="text-emerald-500 dark:text-emerald-400">$ </span>{summary}</span>
+      )}
       {displayOutput}
       {call.status === 'running' && !displayOutput && (
         <span className="text-muted-foreground">Running...</span>
