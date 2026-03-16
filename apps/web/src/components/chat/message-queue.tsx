@@ -26,12 +26,13 @@ interface DragPreviewState {
   offsetX: number
   offsetY: number
   width: number
+  height: number
 }
 
 function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number }) {
   return (
-    <div className="flex items-start gap-2 rounded-lg border border-border/60 bg-background px-3 py-2 text-sm shadow-lg">
-      <div className="mt-0.5 shrink-0">
+    <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-background px-3 py-2 text-sm shadow-2xl ring-1 ring-primary/10">
+      <div className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground">
         {index === 0 ? (
           <ListPlus className="h-3.5 w-3.5 text-primary" />
         ) : (
@@ -82,6 +83,7 @@ function QueueItem({
   const [collapsed, setCollapsed] = useState(false)
   const [draft, setDraft] = useState(item.displayContent ?? item.content)
   const inputRef = useRef<HTMLTextAreaElement>(null)
+  const showActions = editing || !dragActive
 
   // Focus the textarea when entering edit mode
   useEffect(() => {
@@ -127,7 +129,7 @@ function QueueItem({
       data-queue-id={item.id}
       className={cn(
         'group flex items-start gap-2 rounded-lg bg-muted/50 border border-border/40 px-3 py-2 text-sm transition-colors hover:bg-muted/70',
-        dragActive && 'opacity-35',
+        dragActive && 'opacity-0',
         dragOver && 'border-primary/50 bg-primary/5',
       )}
     >
@@ -196,7 +198,10 @@ function QueueItem({
       </div>
 
       {/* Action buttons */}
-      <div className="flex items-center gap-0.5 shrink-0 mt-0.5 opacity-0 group-hover:opacity-100 transition-opacity">
+      <div className={cn(
+        'flex items-center gap-0.5 shrink-0 mt-0.5 transition-opacity',
+        showActions ? 'opacity-0 group-hover:opacity-100' : 'opacity-0',
+      )}>
         {editing ? (
           <>
             <button
@@ -253,6 +258,8 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
   useEffect(() => {
     if (!dragSourceId || !dragPreview) return
 
+    document.body.style.cursor = 'grabbing'
+
     const updateTarget = (clientX: number, clientY: number) => {
       const element = document.elementFromPoint(clientX, clientY)
       const row = element instanceof HTMLElement ? element.closest<HTMLElement>('[data-queue-id]') : null
@@ -280,6 +287,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
     window.addEventListener('pointercancel', finishDrag)
 
     return () => {
+      document.body.style.cursor = ''
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', finishDrag)
       window.removeEventListener('pointercancel', finishDrag)
@@ -303,6 +311,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
       offsetX: event.clientX - rect.left,
       offsetY: event.clientY - rect.top,
       width: rect.width,
+      height: rect.height,
     })
   }, [onReorder])
 
@@ -338,6 +347,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
             left: `${dragPreview.x - dragPreview.offsetX}px`,
             top: `${dragPreview.y - dragPreview.offsetY}px`,
             width: `${dragPreview.width}px`,
+            minHeight: `${dragPreview.height}px`,
           }}
         >
           <div className="scale-[1.01] opacity-95">
