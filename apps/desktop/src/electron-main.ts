@@ -330,7 +330,7 @@ function getDesktopJaitMcpServers(servers?: DesktopMcpServerRef[]): DesktopMcpSe
   return [{
     name: "jait",
     transport: "sse",
-    url: new URL("/mcp/sse", `${GATEWAY_URL.replace(/\/+$/, "")}/`).toString(),
+    url: new URL("/mcp", `${GATEWAY_URL.replace(/\/+$/, "")}/`).toString(),
   }];
 }
 

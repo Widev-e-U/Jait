@@ -1,10 +1,19 @@
-import { describe, expect, it } from "vitest";
+import Fastify from "fastify";
+import { afterEach, describe, expect, it } from "vitest";
 import { ToolRegistry } from "../tools/registry.js";
 import {
   handleMcpRequest,
   listToolsForMcp,
+  registerMcpRoutes,
   resolveMcpBaseUrl,
 } from "./mcp-server.js";
+
+let appsToClose: Array<ReturnType<typeof Fastify>> = [];
+
+afterEach(async () => {
+  await Promise.all(appsToClose.map((app) => app.close()));
+  appsToClose = [];
+});
 
 describe("mcp-server", () => {
   it("exposes only non-core builtin tools over MCP", async () => {
@@ -98,5 +107,81 @@ describe("mcp-server", () => {
       protocol: "http",
       hostname: "127.0.0.1",
     }, { host: "0.0.0.0", port: 3000 })).toBe("http://127.0.0.1:4111");
+  });
+
+  it("serves initialize over streamable HTTP MCP", async () => {
+    const registry = new ToolRegistry();
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      config: {
+        host: "127.0.0.1",
+        port: 3000,
+      } as any,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        "content-type": "application/json",
+        "mcp-protocol-version": "2025-03-26",
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "initialize",
+        params: {
+          protocolVersion: "2025-03-26",
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.headers["mcp-protocol-version"]).toBe("2025-03-26");
+    expect(response.json()).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        protocolVersion: "2025-03-26",
+        capabilities: {
+          tools: { listChanged: false },
+        },
+        serverInfo: {
+          name: "jait-gateway",
+          version: "1.0.0",
+        },
+      },
+    });
+  });
+
+  it("accepts initialized notifications over streamable HTTP MCP", async () => {
+    const registry = new ToolRegistry();
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      config: {
+        host: "127.0.0.1",
+        port: 3000,
+      } as any,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        "content-type": "application/json",
+      },
+      payload: {
+        jsonrpc: "2.0",
+        method: "notifications/initialized",
+        params: {},
+      },
+    });
+
+    expect(response.statusCode).toBe(202);
+    expect(response.body).toBe("");
   });
 });

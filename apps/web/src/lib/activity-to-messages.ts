@@ -15,6 +15,7 @@
 import type { ThreadActivity } from '@/lib/agents-api'
 import type { ChatMessage, MessageSegment } from '@/hooks/useChat'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
+import { normalizeToolArgs } from '@/lib/tool-call-body'
 
 export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[] {
   const messages: ChatMessage[] = []
@@ -109,7 +110,10 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const tc: ToolCallInfo = {
           callId,
           tool: (payload.tool as string) ?? 'unknown',
-          args: (payload.args as Record<string, unknown>) ?? {},
+          args: normalizeToolArgs(
+            String(payload.tool ?? 'unknown'),
+            (payload.args as Record<string, unknown>) ?? {},
+          ),
           status: 'running',
           startedAt: new Date(act.createdAt).getTime(),
         }
@@ -134,6 +138,10 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const callId = payload.callId as string | undefined
         if (callId && toolCallMap.has(callId)) {
           const tc = toolCallMap.get(callId)!
+          const resultData = payload.data && typeof payload.data === 'object'
+            ? payload.data as Record<string, unknown>
+            : undefined
+          tc.args = normalizeToolArgs(tc.tool, tc.args, resultData)
           tc.status = (payload.ok as boolean) ? 'success' : 'error'
           tc.result = {
             ok: (payload.ok as boolean) ?? false,
@@ -151,7 +159,10 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const tc: ToolCallInfo = {
           callId,
           tool: (payload.tool as string) ?? 'unknown',
-          args: (payload.args as Record<string, unknown>) ?? {},
+          args: normalizeToolArgs(
+            String(payload.tool ?? 'unknown'),
+            (payload.args as Record<string, unknown>) ?? {},
+          ),
           status: 'pending',
           startedAt: new Date(act.createdAt).getTime(),
         }

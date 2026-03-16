@@ -346,20 +346,22 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       }
 
       case "tool_use": {
+        const rawTool = String(event["name"] ?? event["tool"] ?? "")
         this.emit({
           type: "tool.start",
           sessionId,
-          tool: String(event["name"] ?? event["tool"] ?? ""),
-          args: event["input"] ?? {},
+          tool: normalizeClaudeToolName(rawTool),
+          args: normalizeClaudeToolArgs(rawTool, (event["input"] as Record<string, unknown> | undefined) ?? {}),
         });
         break;
       }
 
       case "tool_result": {
+        const rawTool = String(event["tool"] ?? "")
         this.emit({
           type: "tool.result",
           sessionId,
-          tool: String(event["tool"] ?? ""),
+          tool: normalizeClaudeToolName(rawTool),
           ok: event["is_error"] !== true,
           message: String(event["content"] ?? event["output"] ?? ""),
         });
@@ -433,6 +435,43 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       child.on("error", () => { clearTimeout(timer); resolve(false); });
     });
   }
+}
+
+function normalizeClaudeToolName(tool: string): string {
+  const normalized = tool.trim().toLowerCase();
+  if (normalized === "edit") return "edit";
+  if (normalized === "multiedit") return "edit";
+  if (normalized === "write") return "file.write";
+  if (normalized === "read") return "read";
+  if (normalized === "websearch") return "web";
+  return tool;
+}
+
+function normalizeClaudeToolArgs(
+  tool: string,
+  input: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalized = normalizeClaudeToolName(tool);
+  if (normalized === "edit" || normalized === "file.write" || normalized === "read") {
+    return {
+      path: String(input["path"] ?? input["file_path"] ?? input["filePath"] ?? input["file"] ?? ""),
+      ...(input["old_string"] != null ? { search: input["old_string"] } : {}),
+      ...(input["new_string"] != null ? { replace: input["new_string"] } : {}),
+      ...(input["content"] != null ? { content: input["content"] } : {}),
+      ...(input["new_file_contents"] != null ? { content: input["new_file_contents"] } : {}),
+      ...input,
+    };
+  }
+
+  if (normalized === "web") {
+    return {
+      query: String(input["query"] ?? input["search_query"] ?? input["q"] ?? ""),
+      ...(input["url"] != null ? { url: input["url"] } : {}),
+      ...input,
+    };
+  }
+
+  return input;
 }
 
 function killChildTree(child: ChildProcess, signal: "SIGINT" | "SIGTERM" | "SIGKILL" = "SIGTERM"): void {

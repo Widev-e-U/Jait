@@ -4,7 +4,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
-import { getToolCallBodyKind, normalizeToolName } from '@/lib/tool-call-body'
+import { getToolCallBodyKind, normalizeToolArgs, normalizeToolName } from '@/lib/tool-call-body'
 import { cn } from '@/lib/utils'
 
 /** Auto-scroll a container to the bottom when content changes */
@@ -97,23 +97,24 @@ function truncate(value: string, max = 64): string {
 /** Format a tool call's primary display text (e.g. the command or file path) */
 function getCallSummary(tool: string, args: Record<string, unknown>): string {
   const normalized = normalizeTool(tool)
+  const normalizedArgs = normalizeToolArgs(normalized, args)
   // ── Core tools ──────────────────────────────────────────
-  if (normalized === 'read') return String(args.path ?? '')
+  if (normalized === 'read') return String(normalizedArgs.path ?? '')
   if (normalized === 'edit') {
-    const path = String(args.path ?? '')
-    if (args.search) return `${path} (patch)`
+    const path = String(normalizedArgs.path ?? '')
+    if (normalizedArgs.search) return `${path} (patch)`
     return path
   }
-  if (normalized === 'execute') return String(args.command ?? '')
+  if (normalized === 'execute') return String(normalizedArgs.command ?? args.command ?? '')
   if (normalized === 'search') {
-    const pattern = String(args.pattern ?? '')
-    const mode = String(args.mode ?? 'content')
+    const pattern = String(normalizedArgs.pattern ?? args.pattern ?? '')
+    const mode = String(normalizedArgs.mode ?? args.mode ?? 'content')
     return mode === 'files' ? `Find: ${pattern}` : pattern
   }
   if (normalized === 'web') {
-    if (args.url) return String(args.url)
-    if (args.urls) return `${(args.urls as string[]).length} URLs`
-    return String(args.query ?? '')
+    if (normalizedArgs.url) return String(normalizedArgs.url)
+    if (Array.isArray(normalizedArgs.urls)) return `${normalizedArgs.urls.length} URLs`
+    return String(normalizedArgs.query ?? '')
   }
   if (normalized === 'agent') return truncate(String(args.description ?? args.prompt ?? ''), 80)
   if (normalized === 'todo') {
@@ -130,8 +131,8 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
     return action || 'jait'
   }
   // ── Legacy tools ─────────────────────────────────────────
-  if (normalized.startsWith('terminal.')) return String(args.command ?? '')
-  if (normalized.startsWith('file.')) return String(args.path ?? '')
+  if (normalized.startsWith('terminal.')) return String(normalizedArgs.command ?? args.command ?? '')
+  if (normalized.startsWith('file.')) return String(normalizedArgs.path ?? '')
   if (normalized === 'memory.save') {
     const scope = String(args.scope ?? 'memory')
     const content = String(args.content ?? '').trim()
@@ -156,7 +157,7 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (normalized === 'cron.list') return 'List cron jobs'
   if (tool === 'os.query') return String(args.query ?? '')
   if (tool === 'os.install') return String(args.package ?? '')
-  if (normalized === 'browser.navigate') return String(args.url ?? '')
+  if (normalized === 'browser.navigate') return String(normalizedArgs.url ?? '')
   if (normalized === 'browser.snapshot') return 'Describe page'
   if (normalized === 'browser.click') return String(args.selector ?? '')
   if (normalized === 'browser.type') return `${String(args.selector ?? '')} ← ${String(args.text ?? '')}`
@@ -164,8 +165,8 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (normalized === 'browser.select') return `${String(args.selector ?? '')} = ${String(args.value ?? '')}`
   if (normalized === 'browser.wait') return `${String(args.selector ?? '')} (${String(args.timeoutMs ?? 10000)}ms)`
   if (normalized === 'browser.screenshot') return String(args.path ?? 'auto path')
-  if (normalized === 'browser.search') return String(args.query ?? '')
-  if (normalized === 'browser.fetch') return String(args.url ?? '')
+  if (normalized === 'browser.search') return String(normalizedArgs.query ?? '')
+  if (normalized === 'browser.fetch') return String(normalizedArgs.url ?? '')
   if (normalized === 'surfaces.start') return `Start ${args.type ?? 'surface'}`
   if (normalized === 'surfaces.stop') return `Stop ${args.surfaceId ?? 'surface'}`
   if (normalized === 'surfaces.list') return 'List surfaces'
@@ -716,14 +717,15 @@ function ToolCallCardInner({ call, onOpenTerminal }: ToolCallCardProps) {
   const [now, setNow] = useState(() => Date.now())
   const prevStatusRef = useRef(call.status)
   const normalizedTool = normalizeTool(call.tool)
-  const meta = getToolMeta(normalizedTool)
-  const Icon = meta.icon
-  const summary = getCallSummary(normalizedTool, call.args)
-  const finalOutput = formatOutput(call.result, normalizedTool)
-  const displayOutput = finalOutput || call.streamingOutput || ''
   const resultData = call.result?.data && typeof call.result.data === 'object'
     ? call.result.data as Record<string, unknown>
     : undefined
+  const normalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
+  const meta = getToolMeta(normalizedTool)
+  const Icon = meta.icon
+  const summary = getCallSummary(normalizedTool, normalizedArgs)
+  const finalOutput = formatOutput(call.result, normalizedTool)
+  const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
   const screenshotPath = normalizedTool === 'browser.screenshot' && resultData?.result && typeof resultData.result === 'object'
     ? String((resultData.result as Record<string, unknown>).path ?? '')
@@ -732,13 +734,13 @@ function ToolCallCardInner({ call, onOpenTerminal }: ToolCallCardProps) {
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getTerminalId(call) : null
-  const runningHint = getRunningHint(normalizedTool, call.args)
+  const runningHint = getRunningHint(normalizedTool, normalizedArgs)
   const isPending = call.status === 'pending'
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
   const bodyKind = getToolCallBodyKind({
     tool: normalizedTool,
-    args: call.args,
+    args: normalizedArgs,
     status: call.status,
     displayOutput,
     snapshotText,
@@ -836,11 +838,11 @@ function ToolCallCardInner({ call, onOpenTerminal }: ToolCallCardProps) {
   ) : bodyKind === 'browserScreenshot' ? (
     <BrowserScreenshotView path={screenshotPath!} />
   ) : bodyKind === 'editDiff' ? (
-    <EditDiffView
-      filePath={String(call.args.path ?? '')}
-      oldText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && call.args.search != null) ? String(call.args.search ?? '') : undefined}
-      newText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && call.args.replace != null) ? String(call.args.replace ?? '') : undefined}
-      writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && call.args.content != null) ? String(call.args.content ?? '') : undefined}
+     <EditDiffView
+      filePath={String(normalizedArgs.path ?? '')}
+      oldText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && normalizedArgs.search != null) ? String(normalizedArgs.search ?? '') : undefined}
+      newText={normalizedTool === 'file.patch' || (normalizedTool === 'edit' && normalizedArgs.replace != null) ? String(normalizedArgs.replace ?? '') : undefined}
+      writtenContent={normalizedTool === 'file.write' || (normalizedTool === 'edit' && normalizedArgs.content != null) ? String(normalizedArgs.content ?? '') : undefined}
       isNewFile={normalizedTool === 'file.write'}
     />
   ) : bodyKind === 'output' ? (
