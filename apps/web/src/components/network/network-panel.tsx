@@ -123,6 +123,37 @@ const NODE_SIZES: Record<string, number> = {
   host: 8,
 }
 
+function assignInitialPositions(nodes: GraphNode[]) {
+  if (nodes.length === 0) return nodes
+
+  const rings: Array<{ type: TopologyNode['type']; radius: number }> = [
+    { type: 'device', radius: 120 },
+    { type: 'mesh', radius: 190 },
+    { type: 'host', radius: 265 },
+  ]
+
+  const positionedNodes = nodes.map((node) => {
+    if (node.data.type === 'gateway') {
+      return { ...node, x: 0, y: 0, fx: 0, fy: 0 }
+    }
+    return { ...node }
+  })
+
+  for (const { type, radius } of rings) {
+    const ringNodes = positionedNodes.filter((node) => node.data.type === type)
+    const count = ringNodes.length
+    if (count === 0) continue
+
+    ringNodes.forEach((node, index) => {
+      const angle = (-Math.PI / 2) + ((Math.PI * 2) / count) * index
+      node.x = Math.cos(angle) * radius
+      node.y = Math.sin(angle) * radius
+    })
+  }
+
+  return positionedNodes
+}
+
 // ---------------------------------------------------------------------------
 // OS icon images (pre-loaded SVG data URIs for canvas rendering)
 // ---------------------------------------------------------------------------
@@ -456,7 +487,7 @@ interface NetworkPanelProps {
 export function NetworkPanel({ token }: NetworkPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | undefined>(undefined)
-  const [dimensions, setDimensions] = useState({ width: 800, height: 600 })
+  const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
   const [topology, setTopology] = useState<TopologyResponse | null>(null)
   const [scanning, setScanning] = useState(false)
   const [selectedNode, setSelectedNode] = useState<TopologyNode | null>(null)
@@ -579,20 +610,25 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       links.push({ source: h.id, target: 'gateway', type: 'scanned' })
     }
 
-    return { nodes, links }
+    return { nodes: assignInitialPositions(nodes), links }
   }, [topology])
 
-  // Center on gateway once after first data load — avoid re-zooming on every scan
+  // Fit once after the first real render size is known.
   const hasInitialZoomRef = useRef(false)
   useEffect(() => {
-    if (graphRef.current && graphData.nodes.length > 0 && !hasInitialZoomRef.current) {
+    if (
+      graphRef.current
+      && graphData.nodes.length > 0
+      && dimensions.width > 0
+      && dimensions.height > 0
+      && !hasInitialZoomRef.current
+    ) {
       hasInitialZoomRef.current = true
-      // Wait for the force layout to settle before fitting.
-      setTimeout(() => {
+      requestAnimationFrame(() => {
         fitGraphToViewport()
-      }, 1500)
+      })
     }
-  }, [fitGraphToViewport, graphData.nodes.length])
+  }, [dimensions.height, dimensions.width, fitGraphToViewport, graphData.nodes.length])
 
   // Draw node
   const drawNode = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
@@ -810,7 +846,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
 
       {/* Graph */}
       <div ref={containerRef} className="flex-1 min-h-0 relative bg-background">
-        {graphData.nodes.length > 0 ? (
+        {graphData.nodes.length > 0 && dimensions.width > 0 && dimensions.height > 0 ? (
           <ForceGraph2D
             ref={graphRef as React.MutableRefObject<ForceGraphMethods<GraphNode, GraphLink> | undefined>}
             width={dimensions.width}
