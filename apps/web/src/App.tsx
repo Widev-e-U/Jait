@@ -2046,10 +2046,13 @@ function App() {
     try {
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
+      const surfaceQuery = activeWorkspace?.surfaceId
+        ? `&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`
+        : ''
 
       // Try to fetch the backup (original) content from the gateway
       const backupRes = await fetch(
-        `${API_URL}/api/workspace/backup?path=${encodeURIComponent(filePath)}`,
+        `${API_URL}/api/workspace/backup?path=${encodeURIComponent(filePath)}${surfaceQuery}`,
         { headers },
       )
 
@@ -2086,7 +2089,7 @@ function App() {
       }
       // Fallback: fetch from the workspace REST API
       const readRes = await fetch(
-        `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}`,
+        `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}${surfaceQuery}`,
         { headers },
       )
       if (!readRes.ok) return
@@ -2105,7 +2108,7 @@ function App() {
     } catch {
       // silently ignore
     }
-  }, [token, showWorkspace, mergeWorkspaceFiles, showWorkspaceEditorPanel])
+  }, [token, activeWorkspace?.surfaceId, showWorkspace, mergeWorkspaceFiles, showWorkspaceEditorPanel])
 
   const handleOpenMessagePath = useCallback(async (filePath: string) => {
     try {

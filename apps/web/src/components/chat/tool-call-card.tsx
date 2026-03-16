@@ -99,6 +99,13 @@ function countLines(value: string): number {
   return value.split('\n').length
 }
 
+function getBaseName(path: string): string {
+  const normalized = path.replace(/\\/g, '/').trim()
+  if (!normalized) return ''
+  const parts = normalized.split('/')
+  return parts[parts.length - 1] ?? normalized
+}
+
 function getEditDiffCountLabel(tool: string, args: Record<string, unknown>): string | null {
   const normalized = normalizeTool(tool)
   const normalizedArgs = normalizeToolArgs(normalized, args)
@@ -134,10 +141,11 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (normalized === 'read') return String(normalizedArgs.path ?? '')
   if (normalized === 'edit') {
     const path = String(normalizedArgs.path ?? '')
+    const fileName = getBaseName(path)
     const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
-    if (normalizedArgs.search) return `${path}${diffCount ? ` (${diffCount})` : ' (patch)'}`
-    if (diffCount) return `${path} (${diffCount})`
-    return path
+    if (normalizedArgs.search) return `${fileName}${diffCount ? ` (${diffCount})` : ' (patch)'}`
+    if (diffCount) return `${fileName} (${diffCount})`
+    return fileName
   }
   if (normalized === 'execute') return String(normalizedArgs.command ?? args.command ?? '')
   if (normalized === 'search') {

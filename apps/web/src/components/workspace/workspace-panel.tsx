@@ -289,6 +289,7 @@ interface EditorTab {
   type: 'file' | 'diff'
   path: string
   label: string
+  version?: number
   content?: string | null
   language?: string
   diffMode?: 'git' | 'review'
@@ -1306,6 +1307,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       type: 'diff',
       path,
       label,
+      version: 1,
       diffMode: 'review',
       language: language ?? inferLanguage(path),
       originalContent,
@@ -1313,7 +1315,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
     setOpenTabs((prev) => {
       const existing = prev.find((t) => t.id === tabId)
-      if (existing) return prev.map((t) => t.id === tabId ? { ...t, ...nextTab } : t)
+      if (existing) {
+        return prev.map((t) => t.id === tabId
+          ? { ...t, ...nextTab, version: (t.version ?? 0) + 1 }
+          : t)
+      }
       return [...prev, nextTab]
     })
     setActiveTabId(tabId)
@@ -1843,6 +1849,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </div>
               ) : activeTab?.type === 'diff' && activeTab.diffMode === 'review' ? (
                 <DiffView
+                  key={`${activeTab.id}:${activeTab.version ?? 0}`}
                   filePath={activeTab.path}
                   originalContent={activeTab.originalContent ?? ''}
                   modifiedContent={activeTab.modifiedContent ?? ''}
@@ -1999,7 +2006,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         {treeTab === 'git' && (
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Branch + refresh header */}
-          <div className="flex items-center gap-1.5 px-2 py-1 border-b bg-muted/10 shrink-0">
+          <div className="flex h-[35px] items-center gap-1.5 px-2 border-b bg-muted/10 shrink-0">
             {gitStatus?.branch && (
               <span className="text-[10px] text-muted-foreground truncate flex-1" title={gitStatus.branch}>
                 <GitBranch className="h-3 w-3 inline mr-0.5 -mt-px" />
@@ -2285,6 +2292,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
         ) : activeTab?.type === 'diff' && activeTab.diffMode === 'review' ? (
           <DiffView
+            key={`${activeTab.id}:${activeTab.version ?? 0}`}
             filePath={activeTab.path}
             originalContent={activeTab.originalContent ?? ''}
             modifiedContent={activeTab.modifiedContent ?? ''}

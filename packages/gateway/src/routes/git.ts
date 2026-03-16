@@ -83,6 +83,15 @@ async function generateCommitMessageWithCliProvider(
   let tokenContent = "";
   let messageContent = "";
   let sessionError: string | null = null;
+  let turnCompleted = false;
+
+  let resolveTurn: (() => void) | null = null;
+  let rejectTurn: ((error: Error) => void) | null = null;
+
+  const waitForTurn = new Promise<void>((resolve, reject) => {
+    resolveTurn = resolve;
+    rejectTurn = reject;
+  });
 
   const unsubscribe = provider.onEvent((event: ProviderEvent) => {
     if (event.sessionId !== session.id) return;
@@ -90,12 +99,29 @@ async function generateCommitMessageWithCliProvider(
     if (event.type === "message" && event.role === "assistant") {
       messageContent += event.content;
     }
-    if (event.type === "session.error") sessionError = event.error;
+    if (event.type === "session.error") {
+      sessionError = event.error;
+      rejectTurn?.(new Error(event.error));
+      return;
+    }
+    if (event.type === "turn.completed" || event.type === "session.completed") {
+      turnCompleted = true;
+      resolveTurn?.();
+    }
   });
 
   try {
     await provider.sendTurn(session.id, prompt);
+    await Promise.race([
+      waitForTurn,
+      new Promise<void>((_, reject) => {
+        setTimeout(() => reject(new Error("Timed out waiting for CLI provider response")), 60_000);
+      }),
+    ]);
     if (sessionError) throw new Error(sessionError);
+    if (!turnCompleted && !sessionError) {
+      throw new Error("CLI provider turn did not complete");
+    }
     return (tokenContent || messageContent).trim();
   } finally {
     unsubscribe();
