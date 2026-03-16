@@ -61,7 +61,7 @@ export class ProviderRegistry {
    * Build MCP server refs that point back to Jait's gateway.
    * CLI providers use these to discover and call Jait's custom tools.
    *
-   * The gateway exposes an MCP-compatible SSE endpoint at /mcp/sse
+   * The gateway exposes a Streamable HTTP MCP endpoint at /mcp.
    * that CLI agents can connect to.
    */
   buildJaitMcpServerRef(config: { host: string; port: number }, baseUrl?: string): McpServerRef {
@@ -72,7 +72,7 @@ export class ProviderRegistry {
     return {
       name: "jait",
       transport: "sse",
-      url: `${resolvedBaseUrl}/mcp/sse`,
+      url: `${resolvedBaseUrl}/mcp`,
     };
   }
 }

@@ -22,6 +22,7 @@ import {
   gitApi,
   buildMenuItems,
   resolveQuickAction,
+  isMissingGitIdentityError,
   type GitStatusResult,
   type GitStackedAction,
   type GitActionMenuItem,
@@ -30,6 +31,7 @@ import {
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
+import { GitIdentityDialog } from './GitIdentityDialog'
 
 interface GitActionsControlProps {
   /** Absolute path to the git repo working directory */
@@ -71,7 +73,9 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
   const [commitMessage, setCommitMessage] = useState('')
   const [diffOpen, setDiffOpen] = useState(false)
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
+  const [gitIdentityOpen, setGitIdentityOpen] = useState(false)
   const pendingPrAction = useRef<{ action: GitStackedAction; opts?: { commitMessage?: string; featureBranch?: boolean; forcePushOnly?: boolean } } | null>(null)
+  const pendingIdentityAction = useRef<{ action: GitStackedAction; opts?: { commitMessage?: string; featureBranch?: boolean; forcePushOnly?: boolean } } | null>(null)
   const skipGhCheck = useRef(false)
   const menuRef = useRef<HTMLDivElement>(null)
 
@@ -146,6 +150,11 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
       })
       await refreshStatus()
     } catch (err) {
+      if (isMissingGitIdentityError(err)) {
+        pendingIdentityAction.current = { action, opts }
+        setGitIdentityOpen(true)
+        return
+      }
       toast.error('Action failed', { description: err instanceof Error ? err.message : 'Unknown error' })
     } finally {
       setIsBusy(false)
@@ -227,6 +236,14 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
     }
   }, [runStackedAction])
 
+  const handleGitIdentityReady = useCallback(() => {
+    if (pendingIdentityAction.current) {
+      const { action, opts } = pendingIdentityAction.current
+      pendingIdentityAction.current = null
+      runStackedAction(action, opts)
+    }
+  }, [runStackedAction])
+
   // ── Render ─────────────────────────────────────────────────────
 
   if (isLoading) {
@@ -240,6 +257,12 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
         onOpenChange={setGhSetupOpen}
         cwd={cwd}
         onReady={handleGhReady}
+      />
+      <GitIdentityDialog
+        open={gitIdentityOpen}
+        onOpenChange={setGitIdentityOpen}
+        cwd={cwd}
+        onReady={handleGitIdentityReady}
       />
       {/* View changes button */}
       {gitStatus?.hasWorkingTreeChanges && (

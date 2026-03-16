@@ -307,25 +307,88 @@ function buildToolArgs(
   item: Record<string, unknown>,
   category: string,
 ): Record<string, unknown> {
+  const nested = firstObject(item.action, item.input, item.arguments)
   switch (category) {
     case "execute": {
       const cmd =
         asString(item.command) ??
+        asString(item.commandLine) ??
         (Array.isArray(item.command) ? (item.command as string[]).join(" ") : undefined) ??
+        asString(nested?.command) ??
         asString(item.name) ?? asString(item.title) ?? "";
       return { command: cmd, ...item };
     }
     case "edit":
     case "read": {
       const path =
-        asString(item.name) ?? asString(item.path) ?? asString(item.file) ?? asString(item.title) ?? "";
-      return { path, ...item };
+        asString(item.path) ??
+        asString(item.file_path) ??
+        asString(item.filePath) ??
+        asString(item.file) ??
+        asString(item.filename) ??
+        asString(item.target_file) ??
+        asString(item.targetFile) ??
+        asString(item.name) ??
+        asString(item.title) ??
+        asString(nested?.path) ??
+        asString(nested?.file_path) ??
+        asString(nested?.filePath) ??
+        asString(nested?.file) ??
+        asString(nested?.filename) ??
+        "";
+      const search =
+        asString(item.search) ??
+        asString(item.old_string) ??
+        asString(item.oldString) ??
+        asString(nested?.search) ??
+        asString(nested?.old_string) ??
+        asString(nested?.oldString);
+      const replace =
+        asString(item.replace) ??
+        asString(item.new_string) ??
+        asString(item.newString) ??
+        asString(nested?.replace) ??
+        asString(nested?.new_string) ??
+        asString(nested?.newString);
+      const content =
+        asString(item.content) ??
+        asString(item.new_file_contents) ??
+        asString(item.newFileContents) ??
+        asString(nested?.content) ??
+        asString(nested?.new_file_contents) ??
+        asString(nested?.newFileContents);
+      return { path, ...(search ? { search } : {}), ...(replace ? { replace } : {}), ...(content ? { content } : {}), ...item };
     }
     case "web": {
-      const query = asString(item.query) ?? asString(item.name) ?? asString(item.url) ?? "";
-      return { query, ...item };
+      const query =
+        asString(item.query) ??
+        asString(item.search_query) ??
+        asString(item.searchQuery) ??
+        asString(item.q) ??
+        asString(nested?.query) ??
+        asString(nested?.search_query) ??
+        asString(nested?.searchQuery) ??
+        asString(nested?.q) ??
+        asString(item.name) ??
+        "";
+      const url =
+        asString(item.url) ??
+        asString(item.uri) ??
+        asString(nested?.url) ??
+        asString(nested?.uri) ??
+        "";
+      return { ...(query ? { query } : {}), ...(url ? { url } : {}), ...item };
     }
     default:
       return { ...item };
   }
+}
+
+function firstObject(...values: unknown[]): Record<string, unknown> | undefined {
+  for (const value of values) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+  }
+  return undefined;
 }
