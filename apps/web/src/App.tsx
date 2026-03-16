@@ -69,7 +69,7 @@ import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
-import { WorkspacePanel, workspaceLanguageForPath, DiffView, type WorkspaceFile, type WorkspacePanelHandle } from '@/components/workspace'
+import { WorkspacePanel, workspaceLanguageForPath, DiffView, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
@@ -1162,6 +1162,14 @@ function App() {
   const [savedTerminal, setSavedTerminal] = useSessionState<{ open: boolean }>(
     activeSessionId, 'terminal.panel', token,
   )
+  const [savedWorkspaceTabs, setSavedWorkspaceTabs] = useSessionState<WorkspaceTabsState>(
+    activeSessionId, 'workspace.tabs', token,
+  )
+  const [workspaceTabsState, setWorkspaceTabsState] = useState<WorkspaceTabsState | null>(null)
+
+  useEffect(() => {
+    setWorkspaceTabsState(null)
+  }, [activeSessionId])
 
   // ── Persistent session state for todos & changed files ────────────
   type SavedTodo = { id: number; title: string; status: 'not-started' | 'in-progress' | 'completed' }
@@ -1192,6 +1200,11 @@ function App() {
     if (wsFullStateReceivedRef.current) return
     if (savedTerminal?.open) setShowTerminal(true)
   }, [savedTerminal]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    setWorkspaceTabsState(savedWorkspaceTabs ?? null)
+  }, [savedWorkspaceTabs])
 
   // Restore todos and changed files (REST fallback)
   useEffect(() => {
@@ -1255,6 +1268,11 @@ function App() {
         }
         break
       }
+      case 'workspace.tabs': {
+        const next = (value && typeof value === 'object') ? (value as WorkspaceTabsState) : null
+        setWorkspaceTabsState(next)
+        break
+      }
     }
   }, [setTodoList, addChangedFile, setChangedFiles])
 
@@ -1298,6 +1316,14 @@ function App() {
     const cf = state['changed_files']
     if (Array.isArray(cf)) {
       setChangedFiles(cf as ChangedFile[])
+    }
+
+    // Workspace editor tabs
+    const wt = state['workspace.tabs']
+    if (wt && typeof wt === 'object') {
+      setWorkspaceTabsState(wt as WorkspaceTabsState)
+    } else {
+      setWorkspaceTabsState(null)
     }
   }, [setTodoList, setChangedFiles])
 
@@ -1348,6 +1374,12 @@ function App() {
       }, [setSavedScreenShare]),
     },
   })
+
+  const handleWorkspaceTabsStateChange = useCallback((state: WorkspaceTabsState | null) => {
+    setWorkspaceTabsState(state)
+    setSavedWorkspaceTabs(state)
+    sendUIState('workspace.tabs', state, activeSessionId)
+  }, [setSavedWorkspaceTabs, sendUIState, activeSessionId])
 
   // Register broadcast callback: when file decisions change, sync to other clients
   useEffect(() => {
@@ -3293,6 +3325,8 @@ function App() {
                 onToggleEditor={toggleWorkspaceEditor}
                 changedPaths={changedPaths}
                 fsWatcherVersion={fsWatcherVersion}
+                savedTabsState={workspaceTabsState}
+                onTabsStateChange={handleWorkspaceTabsStateChange}
               />
             )}
 
@@ -3329,6 +3363,8 @@ function App() {
                   onToggleEditor={toggleWorkspaceEditor}
                   changedPaths={changedPaths}
                   isMobile
+                  savedTabsState={workspaceTabsState}
+                  onTabsStateChange={handleWorkspaceTabsStateChange}
                 />
               </section>
             )}

@@ -118,6 +118,7 @@ export interface FsChangesPayload {
  */
 export type UIStateKey =
   | "workspace.panel"
+  | "workspace.tabs"
   | "screen-share.panel"
   | "terminal.panel"
   | "todo_list"

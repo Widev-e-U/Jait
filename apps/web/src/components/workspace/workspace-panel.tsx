@@ -44,6 +44,10 @@ interface WorkspacePanelProps {
   changedPaths?: string[]
   /** Incremented by the server's native file watcher to signal external FS changes */
   fsWatcherVersion?: number
+  /** Persisted editor tab state for this session/workspace */
+  savedTabsState?: WorkspaceTabsState | null
+  /** Called when open tabs/active tab change (for DB + WS sync) */
+  onTabsStateChange?: (state: WorkspaceTabsState | null) => void
 }
 
 export interface WorkspacePanelHandle {
@@ -265,6 +269,12 @@ interface EditorTab {
   isPreview?: boolean
 }
 
+export interface WorkspaceTabsState {
+  remoteRoot: string
+  tabs: Array<{ path: string; label: string }>
+  activePath: string | null
+}
+
 /* ------------------------------------------------------------------ */
 /*  Drag resize hook                                                   */
 /* ------------------------------------------------------------------ */
@@ -466,6 +476,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onToggleEditor,
   changedPaths,
   fsWatcherVersion,
+  savedTabsState,
+  onTabsStateChange,
 }, ref) {
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
   /** When non-null, we're in remote (server-backed) mode */
@@ -522,6 +534,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([])
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
+  const restoredTabsRootRef = useRef<string | null>(null)
+  const lastPersistedTabsRef = useRef<string>('')
 
   // Auto-scroll active tab into view (VS Code behaviour)
   useEffect(() => {
@@ -539,6 +553,88 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       container.scrollLeft = tabRight - clientWidth
     }
   }, [activeTabId, openTabs.length])
+
+  // Restore saved file tabs for the current remote workspace once per root.
+  useEffect(() => {
+    if (!remoteRoot || !savedTabsState || savedTabsState.remoteRoot !== remoteRoot) return
+    if (restoredTabsRootRef.current === remoteRoot) return
+    restoredTabsRootRef.current = remoteRoot
+    if (savedTabsState.tabs.length === 0) return
+
+    let cancelled = false
+    const restore = async () => {
+      const restored: EditorTab[] = []
+      for (const t of savedTabsState.tabs) {
+        try {
+          const content = await remoteReadFile(t.path, surfaceId)
+          if (cancelled) return
+          restored.push({
+            id: `file:${t.path}`,
+            type: 'file',
+            path: t.path,
+            label: t.label || (t.path.split('/').pop() ?? t.path),
+            content,
+            language: inferLanguage(t.path),
+          })
+        } catch {
+          // Skip files that no longer exist or can't be read.
+        }
+      }
+      if (cancelled || restored.length === 0) return
+
+      setOpenTabs((prev) => {
+        const seen = new Set(prev.map((p) => p.id))
+        const add = restored.filter((tab) => !seen.has(tab.id))
+        return add.length > 0 ? [...prev, ...add] : prev
+      })
+
+      const preferred = savedTabsState.activePath ? `file:${savedTabsState.activePath}` : null
+      const active = preferred && restored.some((t) => t.id === preferred)
+        ? preferred
+        : restored[restored.length - 1]?.id ?? null
+
+      if (active) {
+        const activeFile = restored.find((t) => t.id === active)
+        setActiveTabId(active)
+        if (activeFile) {
+          setActiveNativePath(activeFile.path)
+          setPreviewPath(activeFile.path)
+          setPreviewLanguage(activeFile.language ?? 'plaintext')
+          setPreviewContent(activeFile.content ?? null)
+          onActiveFileChange('')
+        }
+      }
+    }
+
+    void restore()
+    return () => {
+      cancelled = true
+    }
+  }, [remoteRoot, savedTabsState, surfaceId, onActiveFileChange])
+
+  // Persist only regular workspace file tabs (exclude diff/ext tabs).
+  useEffect(() => {
+    if (!onTabsStateChange) return
+    if (!remoteRoot) {
+      if (lastPersistedTabsRef.current !== '') {
+        lastPersistedTabsRef.current = ''
+        onTabsStateChange(null)
+      }
+      return
+    }
+
+    const fileTabs = openTabs
+      .filter((t) => t.type === 'file' && t.id.startsWith('file:'))
+      .map((t) => ({ path: t.path, label: t.label }))
+    const activePath = activeTab && activeTab.type === 'file' && activeTab.id.startsWith('file:')
+      ? activeTab.path
+      : null
+    const nextState: WorkspaceTabsState = { remoteRoot, tabs: fileTabs, activePath }
+    const serialized = JSON.stringify(nextState)
+    if (serialized === lastPersistedTabsRef.current) return
+    lastPersistedTabsRef.current = serialized
+    onTabsStateChange(nextState)
+  }, [openTabs, activeTab, remoteRoot, onTabsStateChange])
 
   const fetchGitStatus = useCallback(async () => {
     if (!remoteRoot) return
