@@ -949,14 +949,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         label: node.name,
         content: null,
         language: inferLanguage(node.path),
-        isPreview: true,
-      }
-      // Replace existing preview tab of same type, or append
-      const previewIdx = prev.findIndex(t => t.isPreview && t.type === 'file')
-      if (previewIdx >= 0) {
-        const next = [...prev]
-        next[previewIdx] = newTab
-        return next
       }
       return [...prev, newTab]
     })
@@ -1064,13 +1056,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         label: extFile.name,
         content: extFile.content,
         language: extFile.language,
-        isPreview: true,
-      }
-      const previewIdx = prev.findIndex(t => t.isPreview && t.type === 'file')
-      if (previewIdx >= 0) {
-        const next = [...prev]
-        next[previewIdx] = newTab
-        return next
       }
       return [...prev, newTab]
     })
@@ -1127,10 +1112,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       setScDiffFile(tab.diffEntry ?? null)
     }
   }, [openTabs, onActiveFileChange])
-
-  const handlePinTab = useCallback((tabId: string) => {
-    setOpenTabs(prev => prev.map(t => t.id === tabId ? { ...t, isPreview: false } : t))
-  }, [])
 
   const hasNativeTree = lazyTree.length > 0
   const hasExtFiles = files.length > 0
@@ -1411,7 +1392,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     ) : (
                       <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
                     )}
-                    <span className={`truncate max-w-[100px] ${tab.isPreview ? 'italic' : ''}`}>{tab.label}</span>
+                    <span className="truncate max-w-[100px]">{tab.label}</span>
                     <button
                       className="p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 opacity-60"
                       onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id) }}
@@ -1754,7 +1735,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   }`}
                   onClick={() => handleSwitchTab(tab.id)}
                   onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); handleCloseTab(tab.id) } }}
-                  onDoubleClick={() => handlePinTab(tab.id)}
                   title={tab.path}
                 >
                   {/* Active tab bottom highlight */}
@@ -1764,7 +1744,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   ) : (
                     <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
                   )}
-                  <span className={`truncate max-w-[140px] ${tab.isPreview ? 'italic' : ''}`}>
+                  <span className="truncate max-w-[140px]">
                     {tab.label}
                   </span>
                   <button
