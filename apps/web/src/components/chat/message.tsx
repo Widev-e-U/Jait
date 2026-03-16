@@ -60,6 +60,9 @@ interface MessageProps {
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
 }
 
+const USER_MESSAGE_MIN_WIDTH_PX = 320
+const USER_MESSAGE_MIN_WIDTH_CLASS = 'min-w-[min(20rem,calc(100vw-5rem))]'
+
 function proseClassName(compact?: boolean) {
   return compact
     ? 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-sm prose-p:leading-normal'
@@ -276,7 +279,9 @@ function MessageInner({
   const startEditing = () => {
     const width = userBubbleRef.current?.getBoundingClientRect().width
     if (width && Number.isFinite(width)) {
-      setEditWidthPx(Math.round(width))
+      const viewportWidth = typeof window === 'undefined' ? USER_MESSAGE_MIN_WIDTH_PX : Math.max(window.innerWidth - 80, 0)
+      const minWidth = Math.min(USER_MESSAGE_MIN_WIDTH_PX, viewportWidth)
+      setEditWidthPx(Math.max(Math.round(width), minWidth))
     } else {
       setEditWidthPx(null)
     }
@@ -311,12 +316,13 @@ function MessageInner({
     }
   }
 
-  const renderActions = () => {
+  const renderActions = (outsideBubble?: boolean) => {
     if (!content || isEditing) return null
     return (
       <div
         className={cn(
-          'absolute bottom-1.5 right-1.5 z-10 flex items-center gap-1 rounded-md border bg-background/90 p-0.5 shadow-sm',
+          'absolute z-10 flex items-center gap-1 rounded-md border bg-background/90 p-0.5 shadow-sm',
+          outsideBubble ? 'right-0 top-full mt-1' : 'bottom-1.5 right-1.5',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
           copied && 'opacity-100',
         )}
@@ -421,7 +427,7 @@ function MessageInner({
         {content ? (
           isUser && isEditing ? (
             <div
-              className="max-w-full rounded-lg border bg-muted/40 p-3"
+              className={cn('max-w-full rounded-lg border bg-muted/40 p-3', USER_MESSAGE_MIN_WIDTH_CLASS)}
               style={editWidthPx ? { width: `${editWidthPx}px` } : undefined}
             >
               <textarea
@@ -451,26 +457,28 @@ function MessageInner({
               </div>
             </div>
           ) : isUser ? (
-            <div ref={userBubbleRef} className={cn(
-              'relative min-w-0 overflow-hidden rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
-              compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
-            )}>
-              <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{userDisplayText}</div>
-              {userFiles.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2 pt-2 border-t border-foreground/5">
-                  {userFiles.map((f) => (
-                    <span
-                      key={f.path}
-                      className="inline-flex items-center gap-1 text-[12px] leading-tight px-1.5 py-0.5 rounded bg-background/60 text-muted-foreground select-none"
-                      title={f.path}
-                    >
-                      <FileIcon filename={f.name} className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate max-w-[180px]">{f.name}</span>
-                    </span>
-                  ))}
-                </div>
-              )}
-              {renderActions()}
+            <div className={cn('relative w-fit max-w-full pb-8', USER_MESSAGE_MIN_WIDTH_CLASS)}>
+              <div ref={userBubbleRef} className={cn(
+                'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
+                compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
+              )}>
+                <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{userDisplayText}</div>
+                {userFiles.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1 border-t border-foreground/5 pt-2">
+                    {userFiles.map((f) => (
+                      <span
+                        key={f.path}
+                        className="inline-flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-[12px] leading-tight text-muted-foreground select-none"
+                        title={f.path}
+                      >
+                        <FileIcon filename={f.name} className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate max-w-[180px]">{f.name}</span>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+              {renderActions(true)}
             </div>
           ) : (
             <div className="relative min-w-0 break-words [overflow-wrap:anywhere]">
