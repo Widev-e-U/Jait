@@ -579,5 +579,89 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, ws?: 
     }
   });
 
+  /** Generate a commit message from current changes using AI */
+  app.post("/api/git/generate-commit-message", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { cwd } = request.body as { cwd?: string };
+    if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
+
+    try {
+      // Get the current diff text
+      let diffText = "";
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      if (remoteNodeId && ws) {
+        const gitProxy = async (args: string) => {
+          const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 30_000);
+          return r.stdout.trim();
+        };
+        const staged = await gitProxy("diff --cached").catch(() => "");
+        const unstaged = await gitProxy("diff HEAD").catch(() => "");
+        diffText = [staged, unstaged].filter(Boolean).join("\n");
+      } else {
+        const result = await git.diff(cwd);
+        diffText = result.diff;
+      }
+
+      if (!diffText) {
+        return reply.status(400).send({ error: "No changes to generate a commit message for" });
+      }
+
+      // Truncate diff to stay within token limits (~8 KB is plenty for a commit message)
+      const MAX_DIFF_CHARS = 8000;
+      if (diffText.length > MAX_DIFF_CHARS) {
+        diffText = diffText.slice(0, MAX_DIFF_CHARS) + "\n... (truncated)";
+      }
+
+      // Resolve model + endpoint based on configured LLM provider
+      const isOllama = config.llmProvider === "ollama";
+      const baseUrl = isOllama ? `${config.ollamaUrl}/v1` : config.openaiBaseUrl;
+      const model = isOllama ? config.ollamaModel : config.openaiModel;
+      const apiKey = isOllama ? "ollama" : config.openaiApiKey;
+
+      const llmRes = await fetch(`${baseUrl}/chat/completions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${apiKey}`,
+        },
+        body: JSON.stringify({
+          model,
+          messages: [
+            {
+              role: "system",
+              content:
+                "You are an expert developer. Generate a concise git commit message in the imperative mood " +
+                "(e.g. 'Add feature' not 'Added feature'). " +
+                "Subject line must be 72 characters or less. " +
+                "Optionally follow with a blank line and brief bullet points for significant details. " +
+                "Output ONLY the commit message — no explanation, no backtick fences, no surrounding quotes.",
+            },
+            {
+              role: "user",
+              content: `Generate a git commit message for these changes:\n\n\`\`\`diff\n${diffText}\n\`\`\``,
+            },
+          ],
+          max_tokens: 256,
+          temperature: 0.3,
+        }),
+      });
+
+      if (!llmRes.ok) {
+        const errBody = await llmRes.json().catch(() => ({})) as Record<string, unknown>;
+        const msg = (errBody["error"] as Record<string, unknown> | undefined)?.["message"] as string | undefined;
+        return reply.status(502).send({ error: msg ?? "LLM request failed" });
+      }
+
+      const data = await llmRes.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const message = data.choices?.[0]?.message?.content?.trim() ?? "";
+      if (!message) return reply.status(502).send({ error: "LLM returned an empty response" });
+
+      return { message };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Failed to generate commit message" });
+    }
+  });
+
   app.log.info("Git routes registered at /api/git/*");
 }

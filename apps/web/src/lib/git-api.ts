@@ -238,6 +238,10 @@ export const gitApi = {
   prChecks(cwd: string, branch: string): Promise<PrCheck[]> {
     return gitPost<PrCheck[]>('pr-checks', { cwd, branch })
   },
+
+  generateCommitMessage(cwd: string): Promise<{ message: string }> {
+    return gitPost<{ message: string }>('generate-commit-message', { cwd })
+  },
 }
 
 // ── Logic helpers (adapted from t3code GitActionsControl.logic) ──────

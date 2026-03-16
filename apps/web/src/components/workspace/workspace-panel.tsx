@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Send, Sparkles, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
@@ -512,6 +512,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [scDiffLoading, setScDiffLoading] = useState(false)
   /** Commit message input */
   const [commitMessage, setCommitMessage] = useState('')
+  /** Whether AI is generating a commit message */
+  const [commitMsgGenerating, setCommitMsgGenerating] = useState(false)
   /** Whether a git action (commit/push) is in progress */
   const [gitActionBusy, setGitActionBusy] = useState(false)
   const [gitActionError, setGitActionError] = useState<string | null>(null)
@@ -1060,6 +1062,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setGitActionBusy(false)
   }, [remoteRoot, gitActionBusy, commitMessage, fetchGitStatus, openTabs])
 
+  /* ---- Generate commit message via AI ---- */
+  const handleGenerateCommitMessage = useCallback(async () => {
+    if (!remoteRoot || commitMsgGenerating || gitActionBusy) return
+    setCommitMsgGenerating(true)
+    try {
+      const { message } = await gitApi.generateCommitMessage(remoteRoot)
+      if (message) setCommitMessage(message)
+    } catch {
+      // fail silently — user can type manually
+    }
+    setCommitMsgGenerating(false)
+  }, [remoteRoot, commitMsgGenerating, gitActionBusy])
+
   /* ---- Select external file ---- */
   const handleSelectExtFile = useCallback((id: string) => {
     const extFile = files.find(f => f.id === id)
@@ -1299,15 +1314,27 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             {/* Commit message + actions (mobile) */}
             {remoteRoot && gitStatus && (
             <div className="px-2 py-2 border-b bg-muted/5 shrink-0 space-y-2">
-              <textarea
-                className="w-full text-sm bg-background border rounded px-2 py-1.5 resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-                rows={2}
-                placeholder="Commit message"
-                value={commitMessage}
-                onChange={(e) => setCommitMessage(e.target.value)}
-                disabled={gitActionBusy}
-              />
-              <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <textarea
+                  className="w-full text-sm bg-background border rounded px-2 py-1.5 pr-8 resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                  rows={2}
+                  placeholder="Commit message"
+                  value={commitMessage}
+                  onChange={(e) => setCommitMessage(e.target.value)}
+                  disabled={gitActionBusy || commitMsgGenerating}
+                />
+                <button
+                  className="absolute top-1.5 right-1.5 p-0.5 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  onClick={handleGenerateCommitMessage}
+                  disabled={commitMsgGenerating || gitActionBusy}
+                  title="Generate commit message with AI"
+                >
+                  {commitMsgGenerating
+                    ? <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    : <Sparkles className="h-3.5 w-3.5" />}
+                </button>
+              </div>
+              <div className="flex items-center gap-1.5 flex-wrap">
                 <button
                   className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
                   onClick={() => handleGitAction('commit')}
@@ -1324,6 +1351,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   <CloudUpload className="h-3.5 w-3.5" />
                   Commit & Push
                 </button>
+                {(gitStatus.aheadCount > 0) && (
+                  <button
+                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={() => handleGitAction('commit_push')}
+                    disabled={gitActionBusy}
+                    title={`Push ${gitStatus.aheadCount} committed commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
+                  >
+                    <CloudUpload className="h-3.5 w-3.5" />
+                    Push ({gitStatus.aheadCount})
+                  </button>
+                )}
               </div>
               {gitActionError && (
                 <div className="text-xs text-red-500">{gitActionError}</div>
@@ -1618,21 +1656,33 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           {/* Commit message + actions */}
           {remoteRoot && gitStatus && (
           <div className="px-2 py-1.5 border-b bg-muted/5 shrink-0 space-y-1.5">
-            <textarea
-              className="w-full text-xs bg-background border rounded px-2 py-1.5 resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
-              rows={2}
-              placeholder="Commit message"
-              value={commitMessage}
-              onChange={(e) => setCommitMessage(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
-                  e.preventDefault()
-                  if (changedFileCount > 0) handleGitAction('commit')
-                }
-              }}
-              disabled={gitActionBusy}
-            />
-            <div className="flex items-center gap-1">
+            <div className="relative">
+              <textarea
+                className="w-full text-xs bg-background border rounded px-2 py-1.5 pr-7 resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+                rows={2}
+                placeholder="Commit message"
+                value={commitMessage}
+                onChange={(e) => setCommitMessage(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
+                    e.preventDefault()
+                    if (changedFileCount > 0) handleGitAction('commit')
+                  }
+                }}
+                disabled={gitActionBusy || commitMsgGenerating}
+              />
+              <button
+                className="absolute top-1 right-1 p-0.5 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                onClick={handleGenerateCommitMessage}
+                disabled={commitMsgGenerating || gitActionBusy}
+                title="Generate commit message with AI"
+              >
+                {commitMsgGenerating
+                  ? <Loader2 className="h-3 w-3 animate-spin" />
+                  : <Sparkles className="h-3 w-3" />}
+              </button>
+            </div>
+            <div className="flex items-center gap-1 flex-wrap">
               <button
                 className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                 onClick={() => handleGitAction('commit')}
@@ -1651,6 +1701,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 <CloudUpload className="h-3 w-3" />
                 Commit & Push
               </button>
+              {(gitStatus.aheadCount > 0) && (
+                <button
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={() => handleGitAction('commit_push')}
+                  disabled={gitActionBusy}
+                  title={`Push ${gitStatus.aheadCount} committed commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
+                >
+                  <CloudUpload className="h-3 w-3" />
+                  Push ({gitStatus.aheadCount})
+                </button>
+              )}
             </div>
             {gitActionError && (
               <div className="text-[10px] text-red-500 px-0.5">{gitActionError}</div>
