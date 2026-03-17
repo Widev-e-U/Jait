@@ -20,6 +20,7 @@ export type {
   WorkspaceCloseData,
   TerminalFocusData,
   FileHighlightData,
+  DevPreviewOpenData,
   ScreenShareOpenData,
   FsChangeType,
   FsChangeEvent,

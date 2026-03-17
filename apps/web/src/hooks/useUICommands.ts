@@ -7,6 +7,7 @@ import type {
   WorkspaceCloseData,
   TerminalFocusData,
   FileHighlightData,
+  DevPreviewOpenData,
   FsChangesPayload,
 } from '@jait/shared'
 
@@ -64,6 +65,7 @@ type CommandDataMap = {
   'workspace.close': WorkspaceCloseData
   'terminal.focus': TerminalFocusData
   'file.highlight': FileHighlightData
+  'dev-preview.open': DevPreviewOpenData
 }
 
 type UICommandListener<T extends UICommandType = UICommandType> =
@@ -74,6 +76,7 @@ interface Listeners {
   'workspace.close'?: UICommandListener<'workspace.close'>
   'terminal.focus'?: UICommandListener<'terminal.focus'>
   'file.highlight'?: UICommandListener<'file.highlight'>
+  'dev-preview.open'?: UICommandListener<'dev-preview.open'>
   'screen-share.open'?: (data: Record<string, unknown>) => void
   'screen-share.close'?: (data: Record<string, unknown>) => void
 }

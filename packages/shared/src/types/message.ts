@@ -61,6 +61,7 @@ export type UICommandType =
   | "workspace.close"
   | "terminal.focus"
   | "file.highlight"
+  | "dev-preview.open"
   | "screen-share.open"
   | "screen-share.close";
 
@@ -89,6 +90,10 @@ export interface TerminalFocusData {
 export interface FileHighlightData {
   path: string;
   line?: number;
+}
+
+export interface DevPreviewOpenData {
+  target: string;
 }
 
 export interface ScreenShareOpenData {

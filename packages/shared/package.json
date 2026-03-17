@@ -1,6 +1,6 @@
 {
   "name": "@jait/shared",
-  "version": "0.1.28",
+  "version": "0.1.29",
   "description": "Shared schemas, constants, and domain types for Jait",
   "type": "module",
   "main": "dist/index.js",

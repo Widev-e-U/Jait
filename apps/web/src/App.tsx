@@ -778,6 +778,8 @@ function App() {
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showDevPreview, setShowDevPreview] = useState(false)
+  const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
+  const [devPreviewAutoOpenKey, setDevPreviewAutoOpenKey] = useState(0)
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
@@ -1565,6 +1567,14 @@ function App() {
           })
         }
       }, [setSavedTerminal, setActiveTerminalId]),
+      'dev-preview.open': useCallback((data: { target?: string }) => {
+        const target = typeof data.target === 'string' ? data.target.trim() : ''
+        if (!target) return
+        setCurrentView('chat')
+        setDevPreviewTarget(target)
+        setDevPreviewAutoOpenKey((prev) => prev + 1)
+        setShowDevPreview(true)
+      }, []),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
         setSavedScreenShare({ open: true })
@@ -3970,7 +3980,11 @@ function App() {
             ) : (
               <div className="flex flex-col flex-1 min-w-0 min-h-0 transition-all duration-300 ease-out">
                 {showDevPreview && (
-                  <DevPreviewPanel onClose={() => setShowDevPreview(false)} />
+                  <DevPreviewPanel
+                    onClose={() => setShowDevPreview(false)}
+                    initialTarget={devPreviewTarget}
+                    autoOpenKey={devPreviewAutoOpenKey}
+                  />
                 )}
                 {/* Sticky show-panel buttons when workspace panels are hidden */}
                 {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (

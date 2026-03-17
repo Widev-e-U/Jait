@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
+import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
@@ -83,6 +84,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'browser.screenshot': { icon: Globe,  label: 'Screenshot', color: 'text-cyan-500' },
   'browser.search':   { icon: Globe,    label: 'Search',     color: 'text-cyan-500' },
   'browser.fetch':    { icon: Globe,    label: 'Fetch',      color: 'text-cyan-500' },
+  'preview.open':     { icon: Globe,    label: 'Preview',    color: 'text-cyan-500' },
 }
 
 function getToolMeta(tool: string) {
@@ -227,6 +229,7 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (normalized === 'browser.screenshot') return String(args.path ?? 'auto path')
   if (normalized === 'browser.search') return String(normalizedArgs.query ?? '')
   if (normalized === 'browser.fetch') return String(normalizedArgs.url ?? '')
+  if (normalized === 'preview.open') return String(normalizedArgs.target ?? args.target ?? '')
   if (normalized === 'surfaces.start') return `Start ${args.type ?? 'surface'}`
   if (normalized === 'surfaces.stop') return `Stop ${args.surfaceId ?? 'surface'}`
   if (normalized === 'surfaces.list') return 'List surfaces'
@@ -528,9 +531,7 @@ function BrowserScreenshotView({ path }: { path: string }) {
   const [coords, setCoords] = useState<{ x: number; y: number; xp: number; yp: number } | null>(null)
   const [loaded, setLoaded] = useState(false)
   const trimmedPath = path.trim()
-  const src = /^https?:\/\//.test(trimmedPath)
-    ? trimmedPath
-    : `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
+  const src = resolveChatImageUrl(trimmedPath) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
 
   return (
     <div className="space-y-2 rounded-md bg-muted/30 p-3 text-xs">
@@ -826,8 +827,16 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   const finalOutput = formatOutput(call.result, normalizedTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
-  const screenshotPath = normalizedTool === 'browser.screenshot' && resultData?.result && typeof resultData.result === 'object'
-    ? String((resultData.result as Record<string, unknown>).path ?? '')
+  const screenshotPath = normalizedTool === 'browser.screenshot'
+    ? (
+        typeof resultData?.path === 'string' && resultData.path.trim()
+          ? resultData.path.trim()
+          : resultData?.result && typeof resultData.result === 'object' && typeof (resultData.result as Record<string, unknown>).path === 'string'
+            ? String((resultData.result as Record<string, unknown>).path).trim()
+            : typeof normalizedArgs.path === 'string' && normalizedArgs.path.trim()
+              ? normalizedArgs.path.trim()
+              : null
+      )
     : null
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)

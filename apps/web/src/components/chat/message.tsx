@@ -10,6 +10,7 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
+import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
 
 /** Parse "Referenced files:" block from message content and return clean text + file paths. */
@@ -151,6 +152,28 @@ function buildMarkdownComponents(
 
       return (
         <WorkspacePathLink href={href} target={target} onOpenPath={onOpenPath} />
+      )
+    },
+    img: ({ src, alt, ref: _ref, ...props }) => {
+      const resolvedSrc = typeof src === 'string' ? resolveChatImageUrl(src) : null
+      if (!resolvedSrc) {
+        return (
+          <span className="inline-flex rounded-md border border-dashed border-border/70 px-2 py-1 text-xs text-muted-foreground">
+            image unavailable
+          </span>
+        )
+      }
+
+      return (
+        <a href={resolvedSrc} target="_blank" rel="noreferrer" className="not-prose block overflow-hidden rounded-xl border border-border/60 bg-muted/20 no-underline">
+          <img
+            src={resolvedSrc}
+            alt={alt ?? 'Chat image'}
+            loading="lazy"
+            className="max-h-[28rem] w-full object-contain bg-background/80"
+            {...props}
+          />
+        </a>
       )
     },
   }

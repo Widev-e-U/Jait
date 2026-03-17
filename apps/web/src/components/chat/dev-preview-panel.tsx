@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { ExternalLink, Globe, RefreshCw, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -6,6 +6,8 @@ import { getApiUrl } from '@/lib/gateway-url'
 
 interface DevPreviewPanelProps {
   onClose: () => void
+  initialTarget?: string | null
+  autoOpenKey?: number
 }
 
 interface ResolvedPreviewTarget {
@@ -13,7 +15,16 @@ interface ResolvedPreviewTarget {
   label: string
 }
 
-function resolvePreviewTarget(input: string): ResolvedPreviewTarget | null {
+function isLoopbackHost(hostname: string): boolean {
+  const normalized = hostname.trim().toLowerCase()
+  return normalized === 'localhost'
+    || normalized === '127.0.0.1'
+    || normalized === '0.0.0.0'
+    || normalized === '::1'
+    || normalized === '[::1]'
+}
+
+export function resolvePreviewTarget(input: string): ResolvedPreviewTarget | null {
   const trimmed = input.trim()
   if (!trimmed) return null
 
@@ -35,8 +46,7 @@ function resolvePreviewTarget(input: string): ResolvedPreviewTarget | null {
     return null
   }
 
-  const allowedHosts = new Set(['localhost', '127.0.0.1', '0.0.0.0', '[::1]', '::1'])
-  if (!allowedHosts.has(url.hostname)) return null
+  if (!isLoopbackHost(url.hostname)) return null
 
   const port = Number.parseInt(url.port, 10)
   if (!Number.isFinite(port) || port < 1 || port > 65535) return null
@@ -48,8 +58,8 @@ function resolvePreviewTarget(input: string): ResolvedPreviewTarget | null {
   }
 }
 
-export function DevPreviewPanel({ onClose }: DevPreviewPanelProps) {
-  const [input, setInput] = useState('3000')
+export function DevPreviewPanel({ onClose, initialTarget = null, autoOpenKey = 0 }: DevPreviewPanelProps) {
+  const [input, setInput] = useState(initialTarget?.trim() || '3000')
   const [activeSrc, setActiveSrc] = useState<string | null>(null)
   const [activeLabel, setActiveLabel] = useState<string | null>(null)
   const [frameKey, setFrameKey] = useState(0)
@@ -62,6 +72,21 @@ export function DevPreviewPanel({ onClose }: DevPreviewPanelProps) {
     setActiveLabel(resolved.label)
     setFrameKey((prev) => prev + 1)
   }
+
+  useEffect(() => {
+    const next = initialTarget?.trim()
+    if (!next) return
+    setInput(next)
+  }, [initialTarget])
+
+  useEffect(() => {
+    if (!initialTarget?.trim()) return
+    const nextResolved = resolvePreviewTarget(initialTarget)
+    if (!nextResolved) return
+    setActiveSrc(nextResolved.iframeSrc)
+    setActiveLabel(nextResolved.label)
+    setFrameKey((prev) => prev + 1)
+  }, [initialTarget, autoOpenKey])
 
   const reloadPreview = () => {
     if (!activeSrc) return
@@ -108,6 +133,12 @@ export function DevPreviewPanel({ onClose }: DevPreviewPanelProps) {
             onChange={(event) => setInput(event.target.value)}
             placeholder="3000 or http://localhost:3000"
             className="h-8"
+            onKeyDown={(event) => {
+              if (event.key === 'Enter' && resolved) {
+                event.preventDefault()
+                openPreview()
+              }
+            }}
           />
           <Button type="button" size="sm" className="h-8 shrink-0" onClick={openPreview} disabled={!resolved}>
             Open Preview

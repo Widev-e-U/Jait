@@ -956,7 +956,7 @@ export function registerChatRoutes(
                 tc.completedAt = Date.now();
               }
               safeWrite(`data: ${JSON.stringify({ type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data })}\n\n`);
-              emitToSubscribers(sessionId, { type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message } as unknown as StreamEvent);
+              emitToSubscribers(sessionId, { type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data } as StreamEvent);
               accumulateToolResult(sessionId, resultCallId, event.ok, event.message || "", event.data);
 
               // Emit file_changed for successful edits → drives the keep/discard UI
