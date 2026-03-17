@@ -29,6 +29,7 @@ interface ThreadControlInput {
   providerId?: ProviderId;
   model?: string;
   runtimeMode?: "full-access" | "supervised";
+  kind?: "delivery" | "delegation";
   workingDirectory?: string;
   branch?: string;
   message?: string;
@@ -54,6 +55,7 @@ interface ThreadCreateSpec {
   providerId?: ProviderId;
   model?: string;
   runtimeMode?: "full-access" | "supervised";
+  kind?: "delivery" | "delegation";
   workingDirectory?: string;
   branch?: string;
   sessionId?: string;
@@ -240,6 +242,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         providerId: { type: "string", enum: ["jait", "codex", "claude-code"], description: "Thread provider." },
         model: { type: "string", description: "Optional provider model." },
         runtimeMode: { type: "string", enum: ["full-access", "supervised"], description: "Execution mode for thread runs." },
+        kind: { type: "string", enum: ["delivery", "delegation"], description: "Thread kind. Delegation threads are helper workers and do not create PRs." },
         workingDirectory: { type: "string", description: "Working directory for the thread." },
         branch: { type: "string", description: "Git branch metadata for the thread." },
         message: { type: "string", description: "Initial or follow-up user message for start/send." },
@@ -259,6 +262,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               providerId: { type: "string", enum: ["jait", "codex", "claude-code"] },
               model: { type: "string" },
               runtimeMode: { type: "string", enum: ["full-access", "supervised"] },
+              kind: { type: "string", enum: ["delivery", "delegation"] },
               workingDirectory: { type: "string" },
               branch: { type: "string" },
               sessionId: { type: "string" },
@@ -318,6 +322,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               providerId,
               model: input.model,
               runtimeMode: input.runtimeMode ?? "full-access",
+              kind: input.kind === "delivery" ? "delivery" : "delegation",
               workingDirectory: input.workingDirectory,
               branch: input.branch,
             });
@@ -357,6 +362,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 providerId: spec.providerId ?? defaultProviderId,
                 model: spec.model ?? input.model,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? "full-access",
+                kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
                 workingDirectory: spec.workingDirectory ?? input.workingDirectory,
                 branch: spec.branch ?? input.branch,
               });
@@ -410,6 +416,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               title: input.title,
               model: input.model,
               runtimeMode: input.runtimeMode,
+              kind: input.kind === "delegation" ? "delegation" : input.kind === "delivery" ? "delivery" : undefined,
               workingDirectory: input.workingDirectory,
               branch: input.branch,
               prUrl: typeof input.prUrl === "string" ? input.prUrl : input.prUrl === null ? null : undefined,
@@ -556,6 +563,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return {
                 ok: false,
                 message: "Thread must be completed before creating a pull request.",
+              };
+            }
+            if (thread?.kind === "delegation") {
+              return {
+                ok: false,
+                message: "Delegation threads do not support PR creation.",
               };
             }
 

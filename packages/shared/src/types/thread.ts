@@ -19,6 +19,7 @@ export interface ProviderInfo {
 }
 
 export type RuntimeMode = "full-access" | "supervised";
+export type ThreadKind = "delivery" | "delegation";
 
 // ── Thread status ────────────────────────────────────────────────────
 
@@ -38,6 +39,7 @@ export interface ThreadInfo {
   providerId: ProviderId;
   model: string | null;
   runtimeMode: RuntimeMode;
+  kind: ThreadKind;
   workingDirectory: string | null;
   branch: string | null;
   status: ThreadStatus;
@@ -81,6 +83,7 @@ export interface CreateThreadParams {
   providerId: ProviderId;
   model?: string;
   runtimeMode?: RuntimeMode;
+  kind?: ThreadKind;
   workingDirectory?: string;
   branch?: string;
 }
@@ -89,6 +92,7 @@ export interface UpdateThreadParams {
   title?: string;
   model?: string;
   runtimeMode?: RuntimeMode;
+  kind?: ThreadKind;
   workingDirectory?: string;
   branch?: string;
   prUrl?: string | null;

@@ -350,6 +350,13 @@ function MessageInner({
     setIsEditing(true)
   }
 
+  const handleUserBubbleClick = () => {
+    if (!canEdit || isEditing) return
+    const selection = typeof window !== 'undefined' ? window.getSelection()?.toString().trim() : ''
+    if (selection) return
+    startEditing()
+  }
+
   const sendFromMessage = async (nextContent: string) => {
     if (!canEdit || !messageId || !onEditMessage) return
     const next = nextContent.trim()
@@ -519,10 +526,16 @@ function MessageInner({
             </div>
           ) : isUser ? (
             <div className={cn('relative w-fit max-w-full', USER_MESSAGE_MIN_WIDTH_CLASS)}>
-              <div ref={userBubbleRef} className={cn(
+              <div
+                ref={userBubbleRef}
+                className={cn(
                 'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
+                canEdit && 'cursor-text transition-colors hover:bg-muted/80',
                 compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
-              )}>
+              )}
+                onClick={handleUserBubbleClick}
+                title={canEdit ? 'Click to edit message' : undefined}
+              >
                 <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{userDisplayText}</div>
                 {userFiles.length > 0 && (
                   <div className="mt-2 flex flex-wrap gap-1 border-t border-foreground/5 pt-2">

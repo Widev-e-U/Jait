@@ -149,6 +149,7 @@ export function AgentsPage() {
       const thread = await agentsApi.createThread({
         title: newTitle,
         providerId: newProvider,
+        kind: 'delivery',
       })
       setThreads((prev) => [thread, ...prev])
       setSelectedId(thread.id)
@@ -348,6 +349,7 @@ export function AgentsPage() {
                 <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5">
                   <span>{PROVIDER_LABELS[selected.providerId]}</span>
                   {selected.model && <span>· {selected.model}</span>}
+                  <span>· {selected.kind === 'delegation' ? 'delegate' : 'delivery'}</span>
                   {selected.workingDirectory && <span>· {selected.workingDirectory}</span>}
                   {selected.branch && <span>· branch: {selected.branch}</span>}
                 </div>
@@ -363,14 +365,14 @@ export function AgentsPage() {
                     <Play className="w-3 h-3" /> Resume
                   </Button>
                 )}
-                {selected.status === 'running' && (
+                {selected.providerSessionId && (
                   <Button
                     size="sm"
                     variant="destructive"
                     onClick={() => handleStop(selected.id)}
                     className="gap-1"
                   >
-                    <Square className="w-3 h-3" /> Stop
+                    <Square className="w-3 h-3" /> {selected.kind === 'delegation' ? 'End helper' : 'Stop'}
                   </Button>
                 )}
                 {(selected.status === 'completed' || selected.status === 'error' || selected.status === 'interrupted') && (

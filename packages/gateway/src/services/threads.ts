@@ -31,6 +31,7 @@ export interface CreateThreadParams {
   providerId: ProviderId;
   model?: string;
   runtimeMode?: RuntimeMode;
+  kind?: "delivery" | "delegation";
   workingDirectory?: string;
   branch?: string;
 }
@@ -39,6 +40,7 @@ export interface UpdateThreadParams {
   title?: string;
   model?: string;
   runtimeMode?: RuntimeMode;
+  kind?: "delivery" | "delegation";
   workingDirectory?: string;
   branch?: string;
   prUrl?: string | null;
@@ -84,6 +86,7 @@ export class ThreadService {
         providerId: params.providerId,
         model: params.model ?? null,
         runtimeMode: params.runtimeMode ?? "full-access",
+        kind: params.kind ?? "delivery",
         workingDirectory: params.workingDirectory ?? null,
         branch: params.branch ?? null,
         status: "running",

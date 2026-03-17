@@ -129,8 +129,8 @@ function QueueItem({
       data-queue-id={item.id}
       className={cn(
         'group flex items-start gap-2 rounded-lg bg-muted/50 border border-border/40 px-3 py-2 text-sm transition-colors hover:bg-muted/70',
-        dragActive && 'opacity-0',
-        dragOver && 'border-primary/50 bg-primary/5',
+        dragActive && 'opacity-35',
+        dragOver && 'border-primary/60 bg-primary/7 ring-1 ring-primary/15',
       )}
     >
       {/* Position indicator */}
@@ -251,6 +251,7 @@ function QueueItem({
 /* ── Queue container ────────────────────────────────────────────────── */
 
 export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: MessageQueueProps) {
+  const containerRef = useRef<HTMLDivElement>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
   const [dragTargetId, setDragTargetId] = useState<string | null>(null)
   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
@@ -260,10 +261,31 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
 
     document.body.style.cursor = 'grabbing'
 
-    const updateTarget = (clientX: number, clientY: number) => {
-      const element = document.elementFromPoint(clientX, clientY)
-      const row = element instanceof HTMLElement ? element.closest<HTMLElement>('[data-queue-id]') : null
-      setDragTargetId(row?.dataset.queueId ?? null)
+    const updateTarget = (_clientX: number, clientY: number) => {
+      const rows = Array.from(
+        containerRef.current?.querySelectorAll<HTMLElement>('[data-queue-id]') ?? [],
+      )
+      if (rows.length === 0) {
+        setDragTargetId(null)
+        return
+      }
+
+      let nextTargetId: string | null = null
+      let smallestDistance = Number.POSITIVE_INFINITY
+
+      for (const row of rows) {
+        const rowId = row.dataset.queueId
+        if (!rowId || rowId === dragSourceId) continue
+        const rect = row.getBoundingClientRect()
+        const centerY = rect.top + rect.height / 2
+        const distance = Math.abs(clientY - centerY)
+        if (distance < smallestDistance) {
+          smallestDistance = distance
+          nextTargetId = rowId
+        }
+      }
+
+      setDragTargetId(nextTargetId ?? dragSourceId)
     }
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -298,6 +320,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
     if (!onReorder) return
     if (event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') return
     event.preventDefault()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
     const row = event.currentTarget.closest<HTMLElement>('[data-queue-id]')
     if (!row) return
     const rect = row.getBoundingClientRect()
@@ -321,7 +344,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
   const dragItem = dragItemIndex >= 0 ? items[dragItemIndex] : null
 
   return (
-    <div className={cn('space-y-1.5', className)}>
+    <div ref={containerRef} className={cn('space-y-1.5', className)}>
       <div className="flex items-center gap-1.5 px-0.5">
         <span className="text-[11px] font-medium text-muted-foreground">
           {items.length} queued message{items.length !== 1 ? 's' : ''}

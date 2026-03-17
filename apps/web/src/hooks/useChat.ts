@@ -579,10 +579,9 @@ export function useChat(
       hitMaxRounds: false,
     }))
 
-    // Clear the todo list and changed files for the new turn — the agent
-    // will push a fresh list if it uses the todo tool again.
+    // Clear the todo list for the new turn. Keep changed files so pending
+    // review state survives across follow-up prompts until the user decides.
     setTodoList([])
-    setChangedFiles([])
 
     const controller = new AbortController()
     abortControllerRef.current = controller

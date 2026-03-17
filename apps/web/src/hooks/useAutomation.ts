@@ -136,6 +136,7 @@ export function useAutomation(enabled = true) {
   const showGitActions = useMemo(
     () =>
       selectedThread != null &&
+      selectedThread.kind === 'delivery' &&
       selectedRepo != null &&
       (selectedThread.status === 'completed' || Boolean(selectedThread.prUrl)),
     [selectedThread, selectedRepo],
@@ -400,7 +401,7 @@ export function useAutomation(enabled = true) {
     const repoPath = selectedRepo.localPath
     // Only poll the N most recent threads that have a branch
     const threadsWithBranch = repoThreads
-      .filter((t) => typeof t.branch === 'string' && t.branch.length > 0)
+      .filter((t) => t.kind === 'delivery' && typeof t.branch === 'string' && t.branch.length > 0)
       .slice(0, PR_POLL_LIMIT)
 
     const loadPrStates = async () => {
@@ -656,6 +657,7 @@ export function useAutomation(enabled = true) {
               title: `[${repo.name}] Generating title…`,
               providerId,
               ...(model ? { model } : {}),
+              kind: 'delivery',
               workingDirectory: worktreePath ?? repo.localPath,
               branch: branchName,
             })
