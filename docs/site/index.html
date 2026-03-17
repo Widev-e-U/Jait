@@ -9,7 +9,7 @@
     :root {
       --bg: #09090b;
       --surface: rgba(20, 20, 24, 0.85);
-      --card: rgba(24, 24, 28, 0.85);
+      --card: rgba(24, 24, 28, 0.78);
       --border: rgba(38, 38, 42, 0.7);
       --text: #e5e5e5;
       --muted: #a1a1aa;
@@ -23,6 +23,7 @@
       --radius: 1.75rem;
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
     body {
       font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
       background: var(--bg);
@@ -30,8 +31,25 @@
       line-height: 1.6;
       min-height: 100vh;
       overflow-x: hidden;
+      position: relative;
     }
-    a { color: var(--accent); text-decoration: none; }
+    /* ── Full-page gradient orbs ───────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      z-index: 0;
+      background:
+        radial-gradient(ellipse 700px 500px at 5% 8%, rgba(56,189,248,0.08), transparent),
+        radial-gradient(ellipse 800px 600px at 95% 5%, rgba(34,211,238,0.06), transparent),
+        radial-gradient(ellipse 900px 700px at 20% 60%, rgba(52,211,153,0.06), transparent),
+        radial-gradient(ellipse 600px 400px at 80% 70%, rgba(59,130,246,0.05), transparent),
+        radial-gradient(ellipse 500px 500px at 50% 100%, rgba(139,92,246,0.04), transparent);
+    }
+    body > * { position: relative; z-index: 1; }
+
+    a { color: var(--accent); text-decoration: none; transition: color 0.15s; }
     a:hover { text-decoration: underline; }
     code {
       background: var(--surface);
@@ -52,23 +70,58 @@
       line-height: 1.5;
     }
     pre code { background: none; border: none; padding: 0; }
-    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+    .container { max-width: 1400px; margin: 0 auto; padding: 0 32px; }
 
-    /* ── Hero ──────────────────────────────────────── */
+    /* ── Animations ────────────────────────────── */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(24px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes fadeIn {
+      from { opacity: 0; }
+      to   { opacity: 1; }
+    }
+    @keyframes scaleIn {
+      from { opacity: 0; transform: scale(0.96); }
+      to   { opacity: 1; transform: scale(1); }
+    }
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.6s cubic-bezier(0.16,1,0.3,1), transform 0.6s cubic-bezier(0.16,1,0.3,1);
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal-stagger > .reveal { transition-delay: calc(var(--i, 0) * 80ms); }
+
+    /* Hero entrance animations */
+    .hero-badge   { animation: fadeInUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.1s both; }
+    .hero-logo    { animation: fadeInUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.2s both; }
+    .hero-tagline { animation: fadeInUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.3s both; }
+    .hero-desc    { animation: fadeInUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.4s both; }
+    .caps         { animation: fadeInUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.5s both; }
+    .hero-cta     { animation: fadeInUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.6s both; }
+    .feature-cards { animation: fadeInUp 0.7s cubic-bezier(0.16,1,0.3,1) 0.7s both; }
+    .control-surface { animation: scaleIn 0.8s cubic-bezier(0.16,1,0.3,1) 0.4s both; }
+
+    /* ── Hero ──────────────────────────────────── */
     .hero-wrapper {
       position: relative;
-      padding: 60px 24px 40px;
+      padding: 60px 32px 48px;
       display: flex;
       justify-content: center;
     }
     .hero-card {
       position: relative;
       width: 100%;
-      max-width: 1100px;
+      max-width: 1400px;
       overflow: hidden;
       border-radius: 2rem;
       border: 1px solid var(--border);
-      background: linear-gradient(135deg, var(--bg), var(--bg) 60%, rgba(38,38,42,0.4));
+      background: linear-gradient(135deg, rgba(9,9,11,0.95), rgba(9,9,11,0.85) 60%, rgba(38,38,42,0.35));
+      backdrop-filter: blur(20px);
       box-shadow: 0 36px 120px -64px rgba(15,23,42,0.5);
     }
     .hero-card::before {
@@ -77,18 +130,18 @@
       inset: 0;
       pointer-events: none;
       background:
-        radial-gradient(circle 280px at -8% -14%, rgba(56,189,248,0.12), transparent),
-        radial-gradient(circle 320px at 108% 10%, rgba(34,211,238,0.10), transparent),
-        radial-gradient(circle 360px at 28% 118%, rgba(52,211,153,0.10), transparent);
+        radial-gradient(circle 320px at -8% -14%, rgba(56,189,248,0.14), transparent),
+        radial-gradient(circle 360px at 108% 10%, rgba(34,211,238,0.12), transparent),
+        radial-gradient(circle 400px at 28% 118%, rgba(52,211,153,0.12), transparent);
     }
     .hero-grid {
       position: relative;
       display: grid;
       gap: 40px;
-      padding: 40px;
+      padding: 48px;
     }
-    @media (min-width: 960px) {
-      .hero-grid { grid-template-columns: minmax(0,1.15fr) minmax(320px,0.85fr); gap: 48px; padding: 48px; }
+    @media (min-width: 1024px) {
+      .hero-grid { grid-template-columns: minmax(0,1.15fr) minmax(360px,0.85fr); gap: 56px; padding: 56px; }
     }
     .hero-badge {
       display: inline-flex;
@@ -120,19 +173,19 @@
     .hero-logo .name { font-size: 1.8rem; font-weight: 600; letter-spacing: 0.18em; }
     .hero-logo .subtitle { font-size: 0.85rem; color: var(--muted); }
     .hero-tagline {
-      font-size: 2.4rem;
+      font-size: 2.6rem;
       font-weight: 600;
       letter-spacing: -0.02em;
       line-height: 1.15;
-      max-width: 640px;
+      max-width: 680px;
       margin-bottom: 14px;
     }
-    @media (min-width: 640px) { .hero-tagline { font-size: 3rem; } }
+    @media (min-width: 640px) { .hero-tagline { font-size: 3.2rem; } }
     .hero-desc {
-      font-size: 1.05rem;
+      font-size: 1.08rem;
       color: var(--muted);
       line-height: 1.7;
-      max-width: 540px;
+      max-width: 580px;
       margin-bottom: 20px;
     }
     .caps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
@@ -145,7 +198,9 @@
       background: rgba(9,9,11,0.7);
       backdrop-filter: blur(8px);
       color: var(--muted);
+      transition: border-color 0.2s, color 0.2s;
     }
+    .caps .cap:hover { border-color: rgba(56,189,248,0.4); color: var(--text); }
     .caps .cap svg { width: 14px; height: 14px; color: var(--text); }
     .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 32px; }
     .btn {
@@ -154,22 +209,23 @@
       border-radius: 999px;
       font-size: 0.95rem; font-weight: 500;
       cursor: pointer; border: none;
-      transition: all 0.15s;
+      transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
       text-decoration: none;
       font-family: inherit;
     }
-    .btn:hover { text-decoration: none; }
+    .btn:hover { text-decoration: none; transform: translateY(-1px); }
+    .btn:active { transform: translateY(0); }
     .btn-primary {
       background: var(--accent); color: #fff;
       box-shadow: 0 18px 40px -24px rgba(37,99,235,0.55);
     }
-    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-primary:hover { background: var(--accent-hover); box-shadow: 0 22px 48px -20px rgba(37,99,235,0.65); }
     .btn-outline {
       background: rgba(9,9,11,0.7); color: var(--text);
       border: 1px solid rgba(38,38,42,0.8);
       backdrop-filter: blur(8px);
     }
-    .btn-outline:hover { border-color: var(--muted); }
+    .btn-outline:hover { border-color: var(--muted); background: rgba(24,24,28,0.8); }
     .btn svg { width: 16px; height: 16px; }
 
     /* Feature cards */
@@ -179,9 +235,15 @@
       border-radius: var(--radius);
       border: 1px solid var(--border);
       background: var(--card);
-      padding: 20px;
+      padding: 22px;
+      backdrop-filter: blur(12px);
       box-shadow: 0 18px 60px -42px rgba(15,23,42,0.4);
-      backdrop-filter: blur(8px);
+      transition: border-color 0.25s, transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s;
+    }
+    .feature-card:hover {
+      border-color: rgba(56,189,248,0.3);
+      transform: translateY(-3px);
+      box-shadow: 0 24px 72px -36px rgba(15,23,42,0.5);
     }
     .feature-card .fc-icon {
       width: 40px; height: 40px;
@@ -195,7 +257,7 @@
     .feature-card h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; }
     .feature-card p { font-size: 0.85rem; color: var(--muted); margin: 0; line-height: 1.6; }
 
-    /* ── Control surface (right column) ────────────── */
+    /* ── Control surface (right column) ────────── */
     .control-surface { display: flex; min-width: 0; align-items: stretch; }
     .cs-panel {
       position: relative;
@@ -234,7 +296,9 @@
       border: 1px solid rgba(255,255,255,0.1);
       background: rgba(255,255,255,0.05);
       padding: 18px;
+      transition: border-color 0.2s;
     }
+    .cs-card:hover { border-color: rgba(255,255,255,0.18); }
     .cs-card-header {
       display: flex; align-items: center; justify-content: space-between;
       margin-bottom: 14px;
@@ -293,22 +357,74 @@
     .cs-flow-item .status-running { color: var(--amber); }
     .cs-flow-item .status-queued  { color: #64748b; }
 
-    /* ── Sections ──────────────────────────────────── */
-    .section { margin-bottom: 48px; }
-    .section h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 16px; letter-spacing: -0.01em; }
-    .section h3 { font-size: 1.1rem; font-weight: 600; margin: 24px 0 8px; }
-    .section p { color: var(--muted); margin-bottom: 12px; }
-
-    .quick-install {
-      border-radius: var(--radius);
+    /* ── Section cards (unified themed containers) ─ */
+    .section-card {
+      border-radius: 2rem;
       border: 1px solid var(--border);
-      background: var(--card);
-      backdrop-filter: blur(8px);
-      padding: 28px;
-      margin-bottom: 48px;
-      text-align: center;
+      background: linear-gradient(135deg, rgba(9,9,11,0.92), rgba(15,15,20,0.85) 60%, rgba(38,38,42,0.25));
+      backdrop-filter: blur(20px);
+      padding: 48px;
+      margin-bottom: 32px;
+      box-shadow: 0 24px 80px -48px rgba(2,6,23,0.6);
+      position: relative;
+      overflow: hidden;
     }
-    .quick-install h2 { font-size: 1.1rem; margin-bottom: 14px; font-weight: 600; }
+    .section-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.5;
+    }
+    .section-card > * { position: relative; }
+    .section-card.glow-sky::before {
+      background: radial-gradient(ellipse 400px 300px at 90% -10%, rgba(56,189,248,0.08), transparent);
+    }
+    .section-card.glow-emerald::before {
+      background: radial-gradient(ellipse 400px 300px at 10% 110%, rgba(52,211,153,0.08), transparent);
+    }
+    .section-card.glow-violet::before {
+      background: radial-gradient(ellipse 400px 300px at 50% -20%, rgba(139,92,246,0.08), transparent);
+    }
+    .section-card.glow-cyan::before {
+      background: radial-gradient(ellipse 400px 300px at 80% 100%, rgba(34,211,238,0.08), transparent);
+    }
+    .section-card h2 {
+      font-size: 1.6rem;
+      font-weight: 600;
+      margin-bottom: 8px;
+      letter-spacing: -0.01em;
+    }
+    .section-card .section-sub {
+      color: var(--muted);
+      margin-bottom: 28px;
+      font-size: 1rem;
+    }
+    .section-card h3 { font-size: 1.1rem; font-weight: 600; margin: 28px 0 10px; }
+    .section-card p { color: var(--muted); margin-bottom: 12px; }
+
+    /* ── Quick install banner ─────────────────── */
+    .quick-install {
+      border-radius: 2rem;
+      border: 1px solid var(--border);
+      background: linear-gradient(135deg, rgba(9,9,11,0.92), rgba(24,24,28,0.85));
+      backdrop-filter: blur(20px);
+      padding: 36px 40px;
+      margin-bottom: 32px;
+      text-align: center;
+      box-shadow: 0 24px 80px -48px rgba(2,6,23,0.6);
+      position: relative;
+      overflow: hidden;
+    }
+    .quick-install::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: radial-gradient(ellipse 500px 300px at 50% -30%, rgba(59,130,246,0.1), transparent);
+    }
+    .quick-install > * { position: relative; }
+    .quick-install h2 { font-size: 1.2rem; margin-bottom: 16px; font-weight: 600; }
     .install-cmd {
       display: inline-flex; align-items: center; gap: 12px;
       background: rgba(2,6,23,0.8);
@@ -318,7 +434,9 @@
       font-family: 'SF Mono', 'Fira Code', monospace;
       font-size: 1rem;
       user-select: all;
+      transition: border-color 0.2s;
     }
+    .install-cmd:hover { border-color: rgba(59,130,246,0.4); }
     .install-cmd .prefix { color: var(--green); }
     .copy-btn {
       background: none;
@@ -329,41 +447,56 @@
       cursor: pointer;
       font-size: 0.8rem;
       font-family: inherit;
+      transition: all 0.15s;
     }
     .copy-btn:hover { color: var(--text); border-color: var(--muted); }
 
-    .downloads-grid {
+    /* ── Method & download & step cards ────────── */
+    .method-grid {
       display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
       gap: 16px; margin-top: 16px;
     }
-    .download-card {
-      background: var(--card);
+    .method-card {
+      background: rgba(9,9,11,0.6);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      backdrop-filter: blur(8px);
-      padding: 22px;
-      display: flex; flex-direction: column; gap: 8px;
+      backdrop-filter: blur(12px);
+      padding: 24px;
+      transition: border-color 0.25s, transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s;
     }
-    .download-card .platform { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
-    .download-card h3 { font-size: 1rem; margin: 0; }
-    .download-card p { font-size: 0.9rem; margin: 0; }
-    .download-card .btn { margin-top: auto; text-align: center; justify-content: center; }
+    .method-card:hover {
+      border-color: rgba(56,189,248,0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 18px 60px -30px rgba(2,6,23,0.6);
+    }
+    .method-card h3 { font-size: 1rem; margin: 0 0 8px; }
+    .method-card p { font-size: 0.85rem; margin: 0 0 12px; }
 
-    .method-grid {
+    .downloads-grid {
       display: grid;
       grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
       gap: 16px; margin-top: 16px;
     }
-    .method-card {
-      background: var(--card);
+    .download-card {
+      background: rgba(9,9,11,0.6);
       border: 1px solid var(--border);
       border-radius: var(--radius);
-      backdrop-filter: blur(8px);
-      padding: 22px;
+      backdrop-filter: blur(12px);
+      padding: 24px;
+      display: flex; flex-direction: column; gap: 8px;
+      transition: border-color 0.25s, transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s;
     }
-    .method-card h3 { font-size: 1rem; margin: 0 0 8px; }
-    .method-card p { font-size: 0.85rem; margin: 0 0 12px; }
+    .download-card:hover {
+      border-color: rgba(52,211,153,0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 18px 60px -30px rgba(2,6,23,0.6);
+    }
+    .download-card .platform { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
+    .download-card h3 { font-size: 1rem; margin: 0; }
+    .download-card p { font-size: 0.9rem; margin: 0; }
+    .download-card .btn { margin-top: auto; text-align: center; justify-content: center; }
+
     .badge {
       display: inline-block;
       background: var(--accent); color: #fff;
@@ -376,18 +509,18 @@
       vertical-align: middle;
     }
 
-    .steps { counter-reset: step; margin-top: 16px; }
+    .steps { counter-reset: step; margin-top: 20px; }
     .step {
       counter-increment: step;
-      padding-left: 44px;
+      padding-left: 52px;
       position: relative;
-      margin-bottom: 24px;
+      margin-bottom: 28px;
     }
     .step::before {
       content: counter(step);
       position: absolute; left: 0; top: 0;
-      width: 30px; height: 30px;
-      background: var(--card);
+      width: 34px; height: 34px;
+      background: rgba(9,9,11,0.8);
       border: 1px solid var(--border);
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
@@ -396,18 +529,23 @@
     .step h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
     .step p { font-size: 0.9rem; margin-bottom: 8px; }
 
+    /* ── Footer ────────────────────────────────── */
     footer {
-      border-top: 1px solid var(--border);
-      padding: 36px 0;
+      padding: 40px 32px;
       text-align: center;
       color: var(--muted);
       font-size: 0.85rem;
     }
 
-    @media (max-width: 600px) {
+    /* ── Responsive ────────────────────────────── */
+    @media (max-width: 768px) {
+      .container { padding: 0 16px; }
+      .hero-wrapper { padding: 40px 16px 32px; }
       .hero-tagline { font-size: 1.8rem; }
       .hero-desc { font-size: 0.95rem; }
-      .hero-grid { padding: 24px; }
+      .hero-grid { padding: 28px; }
+      .section-card { padding: 28px; }
+      .quick-install { padding: 28px 20px; }
       .downloads-grid, .method-grid { grid-template-columns: 1fr; }
     }
   </style>
@@ -580,7 +718,7 @@
   <div class="container">
 
     <!-- ══════ Quick install ══════ -->
-    <div class="quick-install" id="install">
+    <div class="quick-install reveal" id="install">
       <h2>Install the gateway in seconds</h2>
       <div class="install-cmd">
         <span class="prefix">$</span>
@@ -593,23 +731,23 @@
     </div>
 
     <!-- ══════ Install methods ══════ -->
-    <section class="section">
+    <div class="section-card glow-sky reveal">
       <h2>Installation methods</h2>
-      <p>Choose the method that works best for your setup.</p>
-      <div class="method-grid">
-        <div class="method-card">
+      <p class="section-sub">Choose the method that works best for your setup.</p>
+      <div class="method-grid reveal-stagger">
+        <div class="method-card reveal" style="--i:0">
           <h3>npm / pnpm / bun <span class="badge">Recommended</span></h3>
           <p>Global install — the simplest way to get started.</p>
           <pre><code>npm install -g @jait/gateway
 jait</code></pre>
         </div>
-        <div class="method-card">
+        <div class="method-card reveal" style="--i:1">
           <h3>Docker</h3>
           <p>Run the full stack in containers.</p>
           <pre><code>docker compose up -d</code></pre>
           <p style="font-size: 0.8rem;">Images published to <code>ghcr.io/jakobwl/jait-gateway</code></p>
         </div>
-        <div class="method-card">
+        <div class="method-card reveal" style="--i:2">
           <h3>From source</h3>
           <p>Clone and build for development.</p>
           <pre><code>git clone https://github.com/JakobWl/Jait
@@ -617,7 +755,7 @@ cd jait
 bun install --frozen-lockfile
 bun run dev</code></pre>
         </div>
-        <div class="method-card">
+        <div class="method-card reveal" style="--i:3">
           <h3>Docker (one-liner)</h3>
           <p>Run the gateway without cloning.</p>
           <pre><code>docker run -d -p 8000:8000 \
@@ -625,84 +763,85 @@ bun run dev</code></pre>
   ghcr.io/jakobwl/jait-gateway</code></pre>
         </div>
       </div>
-    </section>
+    </div>
 
     <!-- ══════ Downloads ══════ -->
-    <section class="section" id="downloads">
+    <div class="section-card glow-emerald reveal" id="downloads">
       <h2>Downloads</h2>
-      <p>Pre-built apps and APKs for every platform.</p>
-      <div class="downloads-grid">
-        <div class="download-card">
+      <p class="section-sub">Pre-built apps and APKs for every platform.</p>
+      <div class="downloads-grid reveal-stagger">
+        <div class="download-card reveal" style="--i:0">
           <span class="platform">Windows</span>
           <h3>Desktop App</h3>
           <p>Installer for Windows 10/11 (x64)</p>
           <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-Setup-x64.exe" class="btn btn-outline">Download .exe</a>
         </div>
-        <div class="download-card">
+        <div class="download-card reveal" style="--i:1">
           <span class="platform">macOS</span>
           <h3>Desktop App</h3>
           <p>Universal binary (Intel + Apple Silicon)</p>
           <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-universal.dmg" class="btn btn-outline">Download .dmg</a>
         </div>
-        <div class="download-card">
+        <div class="download-card reveal" style="--i:2">
           <span class="platform">Linux</span>
           <h3>Desktop App</h3>
           <p>AppImage for any Linux distribution</p>
           <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-x86_64.AppImage" class="btn btn-outline">Download .AppImage</a>
         </div>
-        <div class="download-card">
+        <div class="download-card reveal" style="--i:3">
           <span class="platform">Android</span>
           <h3>Mobile App</h3>
           <p>APK for Android 10+ (arm64)</p>
           <a href="https://github.com/JakobWl/Jait/releases/latest/download/jait-arm64-v8a.apk" class="btn btn-outline">Download .apk</a>
         </div>
-        <div class="download-card">
+        <div class="download-card reveal" style="--i:4">
           <span class="platform">Web</span>
           <h3>Web App</h3>
           <p>Use Jait directly in the browser — no install needed</p>
           <a href="https://app.jait.dev" class="btn btn-primary">Open web app</a>
         </div>
-        <div class="download-card">
+        <div class="download-card reveal" style="--i:5">
           <span class="platform">Gateway</span>
           <h3>npm package</h3>
           <p>Install the gateway via npm</p>
           <a href="https://www.npmjs.com/package/@jait/gateway" class="btn btn-outline">View on npm</a>
         </div>
       </div>
-      <p style="margin-top: 16px; font-size: 0.85rem;">
+      <p style="margin-top: 20px; font-size: 0.85rem;">
         All releases: <a href="https://github.com/JakobWl/Jait/releases">github.com/JakobWl/Jait/releases</a>
       </p>
-    </section>
+    </div>
 
     <!-- ══════ Quick start ══════ -->
-    <section class="section">
+    <div class="section-card glow-violet reveal">
       <h2>Quick start</h2>
+      <p class="section-sub">Up and running in four steps.</p>
       <div class="steps">
-        <div class="step">
+        <div class="step reveal" style="--i:0">
           <h4>Install the gateway</h4>
           <p>The backend server that runs tools, manages sessions, and orchestrates the AI agent.</p>
           <pre><code>npm install -g @jait/gateway</code></pre>
         </div>
-        <div class="step">
+        <div class="step reveal" style="--i:1">
           <h4>Start the gateway</h4>
           <pre><code>jait</code></pre>
           <p>Starts on <code>http://localhost:8000</code> by default. Use <code>jait --port 9000</code> to change.</p>
         </div>
-        <div class="step">
+        <div class="step reveal" style="--i:2">
           <h4>Connect your client</h4>
           <p>Open the web app, desktop app, or mobile app and go to <strong>Settings &rarr; Gateway connection</strong> to enter your gateway's IP or domain.</p>
         </div>
-        <div class="step">
+        <div class="step reveal" style="--i:3">
           <h4>Start building</h4>
           <p>Chat with the AI, use tools, and let Jait handle the rest.</p>
         </div>
       </div>
-    </section>
+    </div>
 
     <!-- ══════ Docker setup ══════ -->
-    <section class="section">
+    <div class="section-card glow-cyan reveal">
       <h2>Docker setup</h2>
-      <p>For production or VPS deployments, Docker is the easiest way to run the full stack.</p>
+      <p class="section-sub">For production or VPS deployments, Docker is the easiest way to run the full stack.</p>
       <h3>docker-compose.yml</h3>
       <pre><code>services:
   gateway:
@@ -728,7 +867,7 @@ volumes:
       <h3>Run it</h3>
       <pre><code>docker compose up -d</code></pre>
       <p>The web UI will be available at <code>http://localhost:3000</code> and the gateway API at <code>http://localhost:8000</code>.</p>
-    </section>
+    </div>
   </div>
 
   <footer>
@@ -736,6 +875,19 @@ volumes:
       <p>Jait &mdash; Just Another Intelligent Tool &middot; <a href="https://github.com/JakobWl/Jait">GitHub</a> &middot; <a href="https://github.com/JakobWl/Jait/blob/main/LICENSE">MIT License</a></p>
     </div>
   </footer>
+
+  <script>
+    // Scroll-triggered reveal animations via IntersectionObserver
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add('visible');
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
 
 </body>
 </html>
