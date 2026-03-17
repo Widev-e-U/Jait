@@ -93,13 +93,11 @@
     }
     html.light .tut-step:hover { background: rgba(0,0,0,0.03); }
     html.light .tut-step.active { background: rgba(0,0,0,0.04); border-color: var(--border); }
-    html.light .tut-step .tut-num { background: rgba(255,255,255,0.9); }
+    html.light .tut-step .tut-num { background: rgba(255,255,255,0.95); color: #3f3f46; border-color: rgba(0,0,0,0.12); }
+    html.light .tut-step.active .tut-num { color: #fff; border-color: var(--accent); }
     html.light .tut-step.active .tut-info h4 { color: var(--text); }
     html.light .tut-progress { background: rgba(0,0,0,0.06); }
-    html.light .tut-screen {
-      background: linear-gradient(180deg, rgba(15,18,28,0.98), rgba(20,26,40,0.96));
-    }
-    html.light .step::before { background: rgba(255,255,255,0.9); }
+    html.light .step::before { background: rgba(255,255,255,0.95); border-color: rgba(0,0,0,0.1); }
     html.light code {
       background: rgba(235,238,242,0.9);
     }
@@ -137,6 +135,68 @@
     html.light .theme-toggle {
       background: rgba(255,255,255,0.85);
       box-shadow: 0 4px 20px -8px rgba(0,0,0,0.12);
+    }
+
+    /* ── CLI providers grid ───────────────────── */
+    .providers-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+      gap: 14px;
+      margin-top: 20px;
+    }
+    .provider-card {
+      display: flex; align-items: center; gap: 14px;
+      padding: 18px 20px;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: rgba(9,9,11,0.5);
+      backdrop-filter: blur(12px);
+      transition: border-color 0.25s, transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s;
+    }
+    .provider-card:hover {
+      border-color: rgba(56,189,248,0.3);
+      transform: translateY(-2px);
+      box-shadow: 0 12px 40px -20px rgba(2,6,23,0.5);
+    }
+    .provider-icon {
+      width: 40px; height: 40px; min-width: 40px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 0.75rem;
+      border: 1px solid var(--border);
+      background: rgba(9,9,11,0.7);
+    }
+    .provider-icon svg { width: 22px; height: 22px; }
+    .provider-info { min-width: 0; }
+    .provider-info .prov-name {
+      font-size: 0.9rem; font-weight: 600; color: var(--text);
+      display: flex; align-items: center; gap: 8px;
+    }
+    .provider-info .prov-desc {
+      font-size: 0.78rem; color: var(--muted); margin: 0; line-height: 1.4;
+    }
+    .prov-badge {
+      display: inline-block;
+      font-size: 0.6rem; font-weight: 600;
+      padding: 1px 7px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .prov-badge.live {
+      background: rgba(52,211,153,0.12); color: var(--emerald);
+      border: 1px solid rgba(52,211,153,0.2);
+    }
+    .prov-badge.soon {
+      background: rgba(251,191,36,0.1); color: var(--amber);
+      border: 1px solid rgba(251,191,36,0.2);
+    }
+    html.light .provider-card {
+      background: rgba(255,255,255,0.7);
+      box-shadow: 0 4px 20px -10px rgba(0,0,0,0.06);
+    }
+    html.light .provider-card:hover { box-shadow: 0 10px 36px -14px rgba(0,0,0,0.1); }
+    html.light .provider-icon {
+      background: rgba(245,247,250,0.9);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -750,151 +810,207 @@
       width: 100%;
     }
 
-    /* Simulated screen */
-    .tut-screen {
-      border-radius: var(--radius);
-      border: 1px solid var(--border);
-      background: linear-gradient(180deg, rgba(2,6,23,0.96), rgba(15,23,42,0.92));
+    /* ── Jait app mockup ─────────────────── */
+    .jait-app {
+      border-radius: 16px;
+      border: 1px solid #333;
+      background: #202020;
       overflow: hidden;
-      box-shadow: 0 30px 100px -56px rgba(2,6,23,0.95);
+      box-shadow: 0 30px 100px -40px rgba(0,0,0,0.9);
       min-height: 420px;
       display: flex; flex-direction: column;
     }
-    .tut-screen-bar {
-      display: flex; align-items: center; justify-content: space-between;
-      padding: 12px 18px;
-      border-bottom: 1px solid rgba(255,255,255,0.08);
+    .jait-header {
+      display: flex; align-items: center; gap: 8px;
+      padding: 8px 14px;
+      border-bottom: 1px solid #333;
+      background: #252525;
     }
-    .tut-screen-bar .dots { display: flex; gap: 6px; }
-    .tut-screen-bar .dots span { width: 10px; height: 10px; border-radius: 50%; }
-    .tut-screen-bar .dots .r { background: rgba(251,113,133,0.8); }
-    .tut-screen-bar .dots .a { background: rgba(251,191,36,0.8); }
-    .tut-screen-bar .dots .g { background: rgba(52,211,153,0.8); }
-    .tut-screen-bar .title {
-      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.18em; color: #64748b;
+    .jait-logo svg { width: 18px; height: 18px; color: #f2f2f2; }
+    .jait-nav { display: flex; gap: 2px; margin-left: 4px; }
+    .jait-nav-btn {
+      padding: 4px 10px; border-radius: 6px;
+      font-size: 0.68rem; font-weight: 500;
+      color: #666;
     }
-    .tut-screen-body {
-      flex: 1; padding: 20px; position: relative;
-      overflow: hidden;
+    .jait-nav-btn.active { background: #333; color: #f2f2f2; }
+    .jait-model-pill {
+      margin-left: auto;
+      padding: 3px 10px; border-radius: 6px;
+      background: rgba(255,255,255,0.06);
+      font-size: 0.62rem; color: #888;
+      display: flex; align-items: center; gap: 4px;
     }
-    .tut-scene {
-      position: absolute; inset: 20px;
-      opacity: 0; transform: translateY(12px);
+    .jait-model-pill .dot {
+      width: 5px; height: 5px; border-radius: 50%; background: #22c55e;
+    }
+    .jait-toolbar {
+      display: flex; align-items: center; gap: 2px;
+      padding: 4px 14px;
+      border-bottom: 1px solid #2a2a2a;
+      background: #252525;
+    }
+    .jait-tool-btn {
+      padding: 3px 8px; border-radius: 5px;
+      font-size: 0.6rem; color: #555;
+      display: flex; align-items: center; gap: 4px;
+    }
+    .jait-tool-btn svg { width: 12px; height: 12px; }
+    .jait-tool-btn.active { color: #999; }
+    .jait-body {
+      flex: 1; position: relative; overflow: hidden;
+      min-height: 300px;
+    }
+    .jait-scene {
+      position: absolute; inset: 0;
+      opacity: 0; transform: translateY(10px);
       transition: opacity 0.4s cubic-bezier(0.16,1,0.3,1), transform 0.4s cubic-bezier(0.16,1,0.3,1);
       pointer-events: none;
-      display: flex; flex-direction: column; gap: 14px;
+      display: flex; flex-direction: column;
     }
-    .tut-scene.active {
+    .jait-scene.active {
       opacity: 1; transform: translateY(0);
       pointer-events: auto;
     }
-    .tut-chat-row {
-      display: flex; gap: 10px; align-items: flex-start;
+    /* Terminal scene */
+    .jait-term {
+      flex: 1; padding: 16px 18px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.76rem; line-height: 1.9; color: #94a3b8;
     }
-    .tut-avatar {
-      width: 28px; height: 28px; min-width: 28px;
+    .jait-term .prompt { color: #34d399; }
+    .jait-term .output { color: #64748b; }
+    .jait-term .success { color: #22c55e; }
+    .jait-term .accent { color: #3b82f6; }
+    .jait-term .dim { color: #475569; }
+    .jait-term .box {
+      border: 1px solid #333; border-radius: 8px;
+      padding: 8px 14px; margin: 6px 0;
+      color: #e2e8f0;
+    }
+    /* Chat scene */
+    .jait-chat {
+      flex: 1; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 12px;
+      overflow: hidden;
+    }
+    .jait-msg { display: flex; gap: 10px; align-items: flex-start; }
+    .jait-msg-avatar {
+      width: 26px; height: 26px; min-width: 26px;
       border-radius: 50%;
       display: flex; align-items: center; justify-content: center;
-      font-size: 0.7rem; font-weight: 600;
+      font-size: 0.65rem; font-weight: 700;
     }
-    .tut-avatar.user { background: rgba(59,130,246,0.2); color: var(--sky); }
-    .tut-avatar.agent { background: rgba(52,211,153,0.2); color: var(--emerald); }
-    .tut-bubble {
-      border-radius: 1rem;
-      border: 1px solid rgba(255,255,255,0.1);
-      padding: 12px 16px;
-      font-size: 0.85rem;
-      line-height: 1.6;
-      color: #cbd5e1;
-      max-width: 85%;
+    .jait-msg-avatar.user { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .jait-msg-avatar.agent { background: rgba(52,211,153,0.15); color: #34d399; }
+    .jait-msg-body {
+      font-size: 0.82rem; line-height: 1.6; color: #cbd5e1;
+      max-width: 88%;
     }
-    .tut-bubble.user-msg { background: rgba(59,130,246,0.08); }
-    .tut-bubble.agent-msg { background: rgba(255,255,255,0.04); }
-    .tut-typing {
-      display: inline-flex; gap: 4px; align-items: center; padding: 4px 0;
+    .jait-msg-body p { margin: 0 0 6px; }
+    /* Tool call cards */
+    .jait-tool-call {
+      display: flex; align-items: center; gap: 10px;
+      padding: 8px 12px;
+      border-radius: 10px;
+      border: 1px solid #333;
+      background: #252525;
+      font-size: 0.75rem;
+      margin: 4px 0;
     }
-    .tut-typing span {
-      width: 6px; height: 6px; border-radius: 50%; background: #64748b;
-      animation: typingDot 1.2s ease-in-out infinite;
+    .jait-tool-call .tc-icon {
+      width: 20px; height: 20px; min-width: 20px;
+      border-radius: 5px;
+      display: flex; align-items: center; justify-content: center;
     }
-    .tut-typing span:nth-child(2) { animation-delay: 0.15s; }
-    .tut-typing span:nth-child(3) { animation-delay: 0.3s; }
-    @keyframes typingDot {
-      0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
-      30% { opacity: 1; transform: translateY(-3px); }
+    .jait-tool-call .tc-icon svg { width: 12px; height: 12px; }
+    .jait-tool-call .tc-icon.terminal { background: rgba(234,179,8,0.15); color: #eab308; }
+    .jait-tool-call .tc-icon.file { background: rgba(59,130,246,0.15); color: #60a5fa; }
+    .jait-tool-call .tc-text { color: #94a3b8; flex: 1; }
+    .jait-tool-call .tc-status { color: #22c55e; display: flex; }
+    .jait-tool-call .tc-status svg { width: 14px; height: 14px; }
+    /* Prompt bar */
+    .jait-prompt {
+      padding: 10px 14px;
+      border-top: 1px solid #333;
     }
-    .tut-terminal-block {
-      border-radius: 1rem;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(2,6,23,0.6);
-      padding: 14px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 0.78rem;
-      color: #94a3b8;
-      line-height: 1.8;
-    }
-    .tut-terminal-block .prompt { color: var(--emerald); }
-    .tut-terminal-block .output { color: #64748b; }
-    .tut-terminal-block .success { color: var(--green); }
-    .tut-terminal-block .warn { color: var(--amber); }
-    .tut-diff-block {
-      border-radius: 1rem;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(2,6,23,0.6);
-      padding: 14px;
-      font-family: 'SF Mono', 'Fira Code', monospace;
-      font-size: 0.78rem;
-      line-height: 1.8;
-    }
-    .tut-diff-block .diff-file {
-      color: #94a3b8; margin-bottom: 8px; font-size: 0.72rem;
-      padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
-    }
-    .tut-diff-block .diff-del { color: #fb7185; }
-    .tut-diff-block .diff-add { color: var(--emerald); }
-    .tut-diff-block .diff-ctx { color: #475569; }
-    .tut-file-tabs {
-      display: flex; gap: 2px; margin-bottom: 12px;
-    }
-    .tut-file-tab {
-      padding: 6px 14px; border-radius: 0.75rem 0.75rem 0 0;
-      font-size: 0.75rem; color: #64748b;
-      border: 1px solid transparent;
-      border-bottom: none;
-    }
-    .tut-file-tab.active {
-      background: rgba(2,6,23,0.6);
-      border-color: rgba(255,255,255,0.1);
-      color: #cbd5e1;
-    }
-    .tut-workspace-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-    @media (max-width: 600px) { .tut-workspace-grid { grid-template-columns: 1fr; } }
-    .tut-ws-panel {
-      border-radius: 1rem;
-      border: 1px solid rgba(255,255,255,0.1);
-      background: rgba(255,255,255,0.03);
-      padding: 14px;
-    }
-    .tut-ws-panel .panel-title {
-      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em;
-      color: #64748b; margin-bottom: 10px;
-    }
-    .tut-ws-item {
-      padding: 6px 10px; border-radius: 0.6rem;
-      font-size: 0.78rem; color: #94a3b8;
-      margin-bottom: 4px;
-    }
-    .tut-ws-item.hl { background: rgba(59,130,246,0.1); color: var(--sky); }
-    .tut-status-row {
+    .jait-prompt-inner {
       display: flex; align-items: center; gap: 8px;
       padding: 10px 14px;
-      border-radius: 1rem;
-      border: 1px solid rgba(52,211,153,0.15);
-      background: rgba(52,211,153,0.05);
-      font-size: 0.82rem;
-      color: var(--emerald);
+      border-radius: 10px;
+      border: 1px solid #333;
+      background: #202020;
     }
-    .tut-status-row svg { width: 16px; height: 16px; }
+    .jait-prompt-text {
+      flex: 1; font-size: 0.78rem; color: #555;
+    }
+    .jait-prompt-text.typed { color: #e2e8f0; }
+    .jait-prompt-caret {
+      display: inline-block; width: 1.5px; height: 14px;
+      background: #3b82f6; margin-left: 2px;
+      animation: caretBlink 1s step-end infinite;
+    }
+    @keyframes caretBlink { 50% { opacity: 0; } }
+    .jait-prompt-send {
+      width: 26px; height: 26px; min-width: 26px;
+      border-radius: 50%;
+      background: hsl(217 91% 60%);
+      display: flex; align-items: center; justify-content: center;
+    }
+    .jait-prompt-send svg { width: 12px; height: 12px; color: #fff; }
+    .jait-prompt-controls {
+      display: flex; align-items: center; gap: 6px;
+      margin-top: 6px;
+    }
+    .jait-prompt-pill {
+      padding: 2px 8px; border-radius: 5px;
+      font-size: 0.58rem; color: #666;
+      border: 1px solid #333;
+    }
+    .jait-prompt-pill.active {
+      background: rgba(59,130,246,0.1);
+      color: #60a5fa; border-color: rgba(59,130,246,0.3);
+    }
+    /* File tree */
+    .jait-files {
+      flex: 1; padding: 16px 18px;
+      display: flex; flex-direction: column; gap: 16px;
+    }
+    .jait-file-panel {
+      border-radius: 10px; border: 1px solid #333;
+      background: #252525; padding: 12px 14px;
+    }
+    .jait-file-panel .fp-title {
+      font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.12em;
+      color: #555; margin-bottom: 8px;
+    }
+    .jait-file-item {
+      display: flex; align-items: center; gap: 8px;
+      padding: 4px 8px; border-radius: 6px;
+      font-size: 0.75rem; color: #94a3b8;
+      margin-bottom: 2px;
+    }
+    .jait-file-item svg { width: 14px; height: 14px; min-width: 14px; }
+    .jait-file-item.new { color: #34d399; }
+    .jait-file-item.new svg { color: #34d399; }
+    .jait-file-item .diff-count { margin-left: auto; font-size: 0.65rem; color: #22c55e; }
+    .jait-success-bar {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px; border-radius: 10px;
+      border: 1px solid rgba(34,197,94,0.2);
+      background: rgba(34,197,94,0.05);
+      font-size: 0.78rem; color: #34d399;
+    }
+    .jait-success-bar svg { width: 16px; height: 16px; }
+    .jait-terminal-panel {
+      border-top: 1px solid #333;
+      padding: 10px 14px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.72rem; line-height: 1.7;
+      color: #94a3b8; background: #1a1a1a;
+    }
+    .jait-terminal-panel .prompt { color: #34d399; }
+    .jait-terminal-panel .success { color: #22c55e; }
 
     /* ── Footer ────────────────────────────────── */
     footer {
@@ -915,7 +1031,7 @@
       .quick-install { padding: 28px 20px; }
       .downloads-grid, .method-grid { grid-template-columns: 1fr; }
       .tutorial { gap: 24px; }
-      .tut-screen { min-height: 360px; }
+      .jait-app { min-height: 360px; }
     }
   </style>
 </head>
@@ -1092,156 +1208,230 @@
 
   <div class="container">
 
-    <!-- ══════ How it works — animated tutorial ══════ -->
+    <!-- ══════ From install to project — animated tutorial ══════ -->
     <div class="section-card glow-sky reveal" id="tutorial">
-      <h2>How it works</h2>
-      <p class="section-sub">A typical Jait session in five steps.</p>
+      <h2>From install to project</h2>
+      <p class="section-sub">Up and running in five steps — here's what it looks like.</p>
       <div class="tutorial">
         <div class="tut-steps" id="tutSteps">
           <div class="tut-step active" data-step="0">
             <div class="tut-num">1</div>
             <div class="tut-info">
-              <h4>Describe what you need</h4>
-              <p>Type a plain-language request in the chat input — anything from fixing a bug to scaffolding a new feature.</p>
+              <h4>Install the gateway</h4>
+              <p>One command to install Jait globally on your machine.</p>
             </div>
             <div class="tut-progress"><div class="tut-progress-bar"></div></div>
           </div>
           <div class="tut-step" data-step="1">
             <div class="tut-num">2</div>
             <div class="tut-info">
-              <h4>Agent plans and runs commands</h4>
-              <p>Jait reads your codebase, opens a terminal, and executes the commands needed to complete the task.</p>
+              <h4>Start the server</h4>
+              <p>The gateway boots up, loads tools, and waits for connections.</p>
             </div>
             <div class="tut-progress"><div class="tut-progress-bar"></div></div>
           </div>
           <div class="tut-step" data-step="2">
             <div class="tut-num">3</div>
             <div class="tut-info">
-              <h4>Review file changes</h4>
-              <p>Every edit is shown as a diff you can inspect before accepting — nothing is hidden from you.</p>
+              <h4>Open Jait &amp; connect</h4>
+              <p>Launch the web or desktop app and point it at your gateway.</p>
             </div>
             <div class="tut-progress"><div class="tut-progress-bar"></div></div>
           </div>
           <div class="tut-step" data-step="3">
             <div class="tut-num">4</div>
             <div class="tut-info">
-              <h4>Iterate with follow-ups</h4>
-              <p>Ask for adjustments in the same conversation. The agent keeps full context of everything it already did.</p>
+              <h4>Describe your project</h4>
+              <p>Tell the agent what to build — it handles scaffolding, deps, and config.</p>
             </div>
             <div class="tut-progress"><div class="tut-progress-bar"></div></div>
           </div>
           <div class="tut-step" data-step="4">
             <div class="tut-num">5</div>
             <div class="tut-info">
-              <h4>Ship it</h4>
-              <p>Run tests, commit, and deploy — all from the same workspace without switching tools.</p>
+              <h4>Project ready</h4>
+              <p>Files created, dependencies installed, tests passing.</p>
             </div>
             <div class="tut-progress"><div class="tut-progress-bar"></div></div>
           </div>
         </div>
 
-        <div class="tut-screen">
-          <div class="tut-screen-bar">
-            <div class="dots"><span class="r"></span><span class="a"></span><span class="g"></span></div>
-            <div class="title">Jait session</div>
-            <div style="width:42px"></div>
+        <div class="jait-app">
+          <div class="jait-header">
+            <div class="jait-logo"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 2.5v10c0 3-2 5-5.5 5"/><path d="M6.5 2.5v4"/></svg></div>
+            <div class="jait-nav">
+              <span class="jait-nav-btn active">Chat</span>
+              <span class="jait-nav-btn">Jobs</span>
+            </div>
+            <div class="jait-model-pill"><span class="dot"></span> claude-4-sonnet</div>
           </div>
-          <div class="tut-screen-body" id="tutScreen">
-            <!-- Scene 1: User message -->
-            <div class="tut-scene active" data-scene="0">
-              <div class="tut-chat-row">
-                <div class="tut-avatar user">U</div>
-                <div class="tut-bubble user-msg">Add a dark mode toggle to the settings page. It should persist the user's choice in localStorage.</div>
+          <div class="jait-toolbar">
+            <span class="jait-tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg> Sessions</span>
+            <span class="jait-tool-btn active"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg> Terminal</span>
+            <span class="jait-tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15 15 0 0 1 4 10 15 15 0 0 1-4 10 15 15 0 0 1-4-10 15 15 0 0 1 4-10z"/></svg> Preview</span>
+            <span class="jait-tool-btn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg> Workspace</span>
+          </div>
+          <div class="jait-body" id="tutScreen">
+            <!-- Scene 0: Install -->
+            <div class="jait-scene active" data-scene="0">
+              <div class="jait-term">
+                <div class="prompt">$ npm install -g @jait/gateway</div>
+                <div class="output"></div>
+                <div class="output">added 142 packages in 8s</div>
+                <div class="output"></div>
+                <div class="success">✓ @jait/gateway installed globally</div>
+                <div class="success">✓ jait command now available</div>
               </div>
-              <div class="tut-chat-row">
-                <div class="tut-avatar agent">J</div>
-                <div class="tut-bubble agent-msg">
-                  <div class="tut-typing"><span></span><span></span><span></span></div>
+            </div>
+
+            <!-- Scene 1: Launch -->
+            <div class="jait-scene" data-scene="1">
+              <div class="jait-term">
+                <div class="prompt">$ jait</div>
+                <div class="output"></div>
+                <div class="box" style="text-align:center">
+                  <span class="accent" style="font-weight:600">Jait Gateway</span> <span class="dim">v0.1.133</span><br>
+                  <span class="dim">http://localhost:</span><span class="accent">8000</span>
+                </div>
+                <div class="output"></div>
+                <div class="success">✓ Database ready</div>
+                <div class="success">✓ 23 tools loaded</div>
+                <div class="success">✓ Scheduler started</div>
+                <div class="output"></div>
+                <div class="dim">Waiting for connections...</div>
+              </div>
+            </div>
+
+            <!-- Scene 2: Connect -->
+            <div class="jait-scene" data-scene="2">
+              <div class="jait-chat" style="justify-content:center;align-items:center">
+                <svg viewBox="0 0 20 20" fill="none" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px"><path d="M13.5 2.5v10c0 3-2 5-5.5 5"/><path d="M6.5 2.5v4"/></svg>
+                <div style="font-size:0.85rem;color:#888;text-align:center;margin-top:8px">Connected to gateway</div>
+                <div style="font-size:0.75rem;color:#22c55e;margin-top:2px">● localhost:8000</div>
+              </div>
+              <div class="jait-prompt">
+                <div class="jait-prompt-inner">
+                  <div class="jait-prompt-text">Type a message...<span class="jait-prompt-caret"></span></div>
+                  <div class="jait-prompt-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+                </div>
+                <div class="jait-prompt-controls">
+                  <span class="jait-prompt-pill active">Agent</span>
+                  <span class="jait-prompt-pill">Plan</span>
+                  <span class="jait-prompt-pill">Ask</span>
                 </div>
               </div>
             </div>
 
-            <!-- Scene 2: Terminal execution -->
-            <div class="tut-scene" data-scene="1">
-              <div class="tut-chat-row">
-                <div class="tut-avatar agent">J</div>
-                <div class="tut-bubble agent-msg">I'll inspect the settings component and add a dark mode toggle. Let me check the current implementation first.</div>
-              </div>
-              <div class="tut-terminal-block">
-                <div class="prompt">$ grep -r "theme" src/settings/</div>
-                <div class="output">src/settings/Settings.tsx:  const [theme] = useState('light')</div>
-                <div class="output">src/settings/index.ts:  export { Settings }</div>
-                <div class="prompt" style="margin-top:6px">$ cat src/settings/Settings.tsx</div>
-                <div class="output">Reading file... <span class="success">done</span></div>
-              </div>
-            </div>
-
-            <!-- Scene 3: Diff view -->
-            <div class="tut-scene" data-scene="2">
-              <div class="tut-file-tabs">
-                <div class="tut-file-tab active">Settings.tsx</div>
-                <div class="tut-file-tab">theme-store.ts</div>
-              </div>
-              <div class="tut-diff-block">
-                <div class="diff-file">src/settings/Settings.tsx</div>
-                <div class="diff-ctx">&nbsp; export function Settings() {</div>
-                <div class="diff-del">-  const [theme] = useState('light')</div>
-                <div class="diff-add">+  const [theme, setTheme] = useThemeStore()</div>
-                <div class="diff-ctx">&nbsp;</div>
-                <div class="diff-ctx">&nbsp;  return (</div>
-                <div class="diff-ctx">&nbsp;    &lt;div className="settings"&gt;</div>
-                <div class="diff-add">+      &lt;ToggleRow</div>
-                <div class="diff-add">+        label="Dark mode"</div>
-                <div class="diff-add">+        checked={theme === 'dark'}</div>
-                <div class="diff-add">+        onChange={() =&gt; setTheme(</div>
-                <div class="diff-add">+          theme === 'dark' ? 'light' : 'dark'</div>
-                <div class="diff-add">+        )}</div>
-                <div class="diff-add">+      /&gt;</div>
-              </div>
-            </div>
-
-            <!-- Scene 4: Follow-up -->
-            <div class="tut-scene" data-scene="3">
-              <div class="tut-chat-row">
-                <div class="tut-avatar user">U</div>
-                <div class="tut-bubble user-msg">Looks good, but can you also add a system preference option that auto-detects?</div>
-              </div>
-              <div class="tut-chat-row">
-                <div class="tut-avatar agent">J</div>
-                <div class="tut-bubble agent-msg">Sure — I'll add a "System" option that uses <code style="background:rgba(255,255,255,0.1);border:none;padding:1px 5px;border-radius:3px;font-size:0.85em">prefers-color-scheme</code> and update the toggle to a three-way selector.</div>
-              </div>
-              <div class="tut-terminal-block">
-                <div class="prompt">$ editing src/settings/Settings.tsx</div>
-                <div class="success">✓ Applied 2 changes</div>
-                <div class="prompt">$ editing src/hooks/useThemeStore.ts</div>
-                <div class="success">✓ Applied 1 change</div>
-              </div>
-            </div>
-
-            <!-- Scene 5: Ship it -->
-            <div class="tut-scene" data-scene="4">
-              <div class="tut-workspace-grid">
-                <div class="tut-ws-panel">
-                  <div class="panel-title">Changed files</div>
-                  <div class="tut-ws-item hl">src/settings/Settings.tsx</div>
-                  <div class="tut-ws-item hl">src/hooks/useThemeStore.ts</div>
-                  <div class="tut-ws-item">src/settings/index.ts</div>
+            <!-- Scene 3: Build -->
+            <div class="jait-scene" data-scene="3">
+              <div class="jait-chat">
+                <div class="jait-msg">
+                  <div class="jait-msg-avatar user">U</div>
+                  <div class="jait-msg-body"><p>Create a new Express API with TypeScript, JWT auth, and a SQLite database</p></div>
                 </div>
-                <div class="tut-ws-panel">
-                  <div class="panel-title">Terminal</div>
-                  <div class="tut-terminal-block" style="border:none;padding:0;background:none">
-                    <div class="prompt">$ bun run test</div>
-                    <div class="success">✓ 47 tests passed</div>
-                    <div class="prompt" style="margin-top:4px">$ git commit -m "feat: dark mode toggle"</div>
-                    <div class="success">✓ [main a3f8c2d] feat: dark mode toggle</div>
+                <div class="jait-msg">
+                  <div class="jait-msg-avatar agent">J</div>
+                  <div class="jait-msg-body">
+                    <p>I'll scaffold the project and set up auth and database.</p>
+                    <div class="jait-tool-call">
+                      <div class="tc-icon terminal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+                      <span class="tc-text">mkdir -p src/{routes,middleware,db}</span>
+                      <span class="tc-status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+                    </div>
+                    <div class="jait-tool-call">
+                      <div class="tc-icon file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                      <span class="tc-text">src/routes/auth.ts <span style="color:#22c55e">(+48)</span></span>
+                      <span class="tc-status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+                    </div>
+                    <div class="jait-tool-call">
+                      <div class="tc-icon file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                      <span class="tc-text">src/db/schema.ts <span style="color:#22c55e">(+32)</span></span>
+                      <span class="tc-status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+                    </div>
+                    <div class="jait-tool-call">
+                      <div class="tc-icon terminal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+                      <span class="tc-text">npm install express jsonwebtoken better-sqlite3</span>
+                      <span class="tc-status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg></span>
+                    </div>
                   </div>
                 </div>
               </div>
-              <div class="tut-status-row">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-                All changes committed and pushed. Dark mode is live.
+              <div class="jait-prompt">
+                <div class="jait-prompt-inner">
+                  <div class="jait-prompt-text">Type a message...<span class="jait-prompt-caret"></span></div>
+                  <div class="jait-prompt-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
+                </div>
               </div>
             </div>
+
+            <!-- Scene 4: Project Ready -->
+            <div class="jait-scene" data-scene="4">
+              <div class="jait-files">
+                <div class="jait-file-panel">
+                  <div class="fp-title">Project files</div>
+                  <div class="jait-file-item new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> src/index.ts <span class="diff-count">+24</span></div>
+                  <div class="jait-file-item new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> src/routes/auth.ts <span class="diff-count">+48</span></div>
+                  <div class="jait-file-item new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> src/middleware/jwt.ts <span class="diff-count">+36</span></div>
+                  <div class="jait-file-item new"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> src/db/schema.ts <span class="diff-count">+32</span></div>
+                  <div class="jait-file-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> package.json</div>
+                  <div class="jait-file-item"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> tsconfig.json</div>
+                </div>
+                <div class="jait-success-bar">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                  All 12 tests passing — project ready to go
+                </div>
+              </div>
+              <div class="jait-terminal-panel">
+                <div class="prompt">$ npm test</div>
+                <div class="success">✓ 12 tests passed in 1.2s</div>
+                <div class="prompt">$ npm run dev</div>
+                <div class="success">✓ Server running on http://localhost:3000</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ══════ Works with ══════ -->
+    <div class="section-card glow-emerald reveal">
+      <h2>Wraps the AI CLIs you already use</h2>
+      <p class="section-sub">Jait isn't just its own agent — it's a unified workspace layer on top of the leading AI coding CLIs. Use any supported backend, switch freely, and keep the same tools, terminals, and file context.</p>
+      <div class="providers-grid reveal-stagger">
+        <div class="provider-card reveal" style="--i:0">
+          <div class="provider-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+          </div>
+          <div class="provider-info">
+            <div class="prov-name">OpenAI Codex <span class="prov-badge live">Live</span></div>
+            <p class="prov-desc">Full integration with codex CLI agent</p>
+          </div>
+        </div>
+        <div class="provider-card reveal" style="--i:1">
+          <div class="provider-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 12a4 4 0 0 1 8 0"/><path d="M8 12a4 4 0 0 0 8 0"/></svg>
+          </div>
+          <div class="provider-info">
+            <div class="prov-name">Claude Code <span class="prov-badge soon">Soon</span></div>
+            <p class="prov-desc">Anthropic's Claude CLI as a backend</p>
+          </div>
+        </div>
+        <div class="provider-card reveal" style="--i:2">
+          <div class="provider-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </div>
+          <div class="provider-info">
+            <div class="prov-name">Gemini CLI <span class="prov-badge soon">Soon</span></div>
+            <p class="prov-desc">Google's Gemini coding agent</p>
+          </div>
+        </div>
+        <div class="provider-card reveal" style="--i:3">
+          <div class="provider-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <div class="provider-info">
+            <div class="prov-name">OpenCode <span class="prov-badge soon">Soon</span></div>
+            <p class="prov-desc">Open-source AI coding CLI</p>
           </div>
         </div>
       </div>
@@ -1419,7 +1609,7 @@ volumes:
     (() => {
       const STEP_DURATION = 5000;
       const steps = document.querySelectorAll('.tut-step');
-      const scenes = document.querySelectorAll('.tut-scene');
+      const scenes = document.querySelectorAll('.jait-scene');
       let current = 0;
       let timer = null;
       let paused = false;
