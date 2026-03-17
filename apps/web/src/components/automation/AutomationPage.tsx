@@ -281,6 +281,7 @@ export function AutomationPage() {
         const thread = await agentsApi.createThread({
           title: `[${selectedRepo.name}] ${text.slice(0, 60)}`,
           providerId: selectedProvider,
+          kind: 'delivery',
           workingDirectory: selectedRepo.localPath,
           ...(branchName ? { branch: branchName } : {}),
         })
@@ -473,17 +474,25 @@ export function AutomationPage() {
                 <span className="text-xs text-muted-foreground truncate max-w-[250px]">
                   {selectedThread.title.replace(/^\[.*?\]\s*/, '')}
                 </span>
+                <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${
+                  selectedThread.kind === 'delegation'
+                    ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 dark:border-amber-400/30'
+                    : ''
+                }`}>
+                  {selectedThread.kind === 'delegation' ? 'Delegate' : 'Delivery'}
+                </Badge>
                 {selectedThread.branch && (
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-mono">
                     {selectedThread.branch}
                   </Badge>
                 )}
-                {selectedThread.status === 'running' && (
+                {selectedThread.providerSessionId && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-6 w-6"
                     onClick={() => void handleStop(selectedThread.id)}
+                    title={selectedThread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}
                   >
                     <Square className="h-3 w-3" />
                   </Button>

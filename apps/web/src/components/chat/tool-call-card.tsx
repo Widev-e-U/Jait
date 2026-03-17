@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
+import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 
 /** Auto-scroll a container to the bottom when content changes */
@@ -527,12 +528,14 @@ function BrowserScreenshotView({ path }: { path: string }) {
   const [coords, setCoords] = useState<{ x: number; y: number; xp: number; yp: number } | null>(null)
   const [loaded, setLoaded] = useState(false)
   const trimmedPath = path.trim()
-  const src = /^https?:\/\//.test(trimmedPath) ? trimmedPath : trimmedPath
+  const src = /^https?:\/\//.test(trimmedPath)
+    ? trimmedPath
+    : `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
 
   return (
-    <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
+    <div className="space-y-2 rounded-md bg-muted/30 p-3 text-xs">
       <div className="text-[11px] text-muted-foreground">Screenshot path: <span className="font-mono break-all">{trimmedPath}</span></div>
-      <div className="overflow-hidden rounded border bg-background">
+      <div className="overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
         <img
           src={src}
           alt="Browser screenshot"
@@ -1102,7 +1105,7 @@ function ToolCallGroupInner({ calls, onOpenTerminal, onOpenDiff }: ToolCallGroup
   const errorCount = hiddenCount - successCount
 
   return (
-    <div className="rounded-lg border bg-card my-2 divide-y">
+    <div className="my-2 overflow-hidden rounded-xl bg-muted/[0.18] divide-y divide-border/30">
       {needsCollapse && (
         <button
           type="button"

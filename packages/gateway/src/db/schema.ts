@@ -173,6 +173,7 @@ export const agentThreads = sqliteTable(
     providerId: text("provider_id").notNull(), // "jait" | "codex" | "claude-code"
     model: text("model"),
     runtimeMode: text("runtime_mode").notNull().default("full-access"), // "full-access" | "supervised"
+    kind: text("kind").notNull().default("delivery"), // delivery | delegation
     workingDirectory: text("working_directory"),
     branch: text("branch"), // Git branch name
     status: text("status").notNull().default("running"), // running | completed | error | interrupted

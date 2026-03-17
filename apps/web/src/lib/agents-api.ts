@@ -13,6 +13,7 @@ const API_URL = getApiUrl()
 export type ProviderId = 'jait' | 'codex' | 'claude-code'
 export type ThreadStatus = 'running' | 'completed' | 'error' | 'interrupted'
 export type RuntimeMode = 'full-access' | 'supervised'
+export type ThreadKind = 'delivery' | 'delegation'
 
 export interface AgentThread {
   id: string
@@ -22,6 +23,7 @@ export interface AgentThread {
   providerId: ProviderId
   model: string | null
   runtimeMode: RuntimeMode
+  kind: ThreadKind
   workingDirectory: string | null
   branch: string | null
   status: ThreadStatus
@@ -69,6 +71,7 @@ export interface CreateThreadRequest {
   providerId: ProviderId
   model?: string
   runtimeMode?: RuntimeMode
+  kind?: ThreadKind
   workingDirectory?: string
   branch?: string
 }
@@ -77,6 +80,7 @@ export interface UpdateThreadRequest {
   title?: string
   model?: string
   runtimeMode?: RuntimeMode
+  kind?: ThreadKind
   workingDirectory?: string
   branch?: string
   prUrl?: string | null

@@ -204,6 +204,7 @@ export function registerThreadRoutes(
       providerId: (body["providerId"] as ProviderId) ?? "jait",
       model: typeof body["model"] === "string" ? body["model"] : undefined,
       runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : "full-access",
+      kind: body["kind"] === "delegation" ? "delegation" : "delivery",
       workingDirectory: typeof body["workingDirectory"] === "string" ? body["workingDirectory"] : undefined,
       branch: typeof body["branch"] === "string" ? body["branch"] : undefined,
     });
@@ -239,6 +240,7 @@ export function registerThreadRoutes(
       title: typeof body["title"] === "string" ? body["title"] : undefined,
       model: typeof body["model"] === "string" ? body["model"] : undefined,
       runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : body["runtimeMode"] === "full-access" ? "full-access" : undefined,
+      kind: body["kind"] === "delegation" ? "delegation" : body["kind"] === "delivery" ? "delivery" : undefined,
       workingDirectory: typeof body["workingDirectory"] === "string" ? body["workingDirectory"] : undefined,
       branch: typeof body["branch"] === "string" ? body["branch"] : undefined,
       prUrl: typeof body["prUrl"] === "string" ? body["prUrl"] : body["prUrl"] === null ? null : undefined,
@@ -718,6 +720,11 @@ export function registerThreadRoutes(
     if (!thread.completedAt) {
       return reply.status(409).send({
         error: "Thread must be completed before creating a pull request.",
+      });
+    }
+    if (thread.kind === "delegation") {
+      return reply.status(400).send({
+        error: "Delegation threads do not support pull request creation.",
       });
     }
     if (!thread.workingDirectory) {

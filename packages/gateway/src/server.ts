@@ -1,15 +1,16 @@
-import Fastify from "fastify";
+import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
-import { join, dirname } from "node:path";
-import { readFile } from "node:fs/promises";
+import { join, dirname, extname, relative, resolve, sep } from "node:path";
+import { readFile, stat } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
 import { createRequire } from "node:module";
 import type { AppConfig } from "./config.js";
 
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require("../package.json") as { version: string };
+const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import { registerChatRoutes } from "./routes/chat.js";
@@ -172,6 +173,8 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
 
   registerFilesystemRoutes(app, deps.ws);
+  registerBrowserAssetRoutes(app);
+  registerDevProxyRoutes(app);
 
   if (deps.surfaceRegistry) {
     registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws);
@@ -268,6 +271,155 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
 
   return app;
+}
+
+function registerBrowserAssetRoutes(app: FastifyInstance): void {
+  app.get("/api/browser/screenshot", async (request, reply) => {
+    const { path } = request.query as { path?: string };
+    if (!path || !path.trim()) {
+      return reply.status(400).send({ error: "MISSING_PATH", message: "path is required" });
+    }
+
+    const resolvedPath = resolve(path);
+    if (!isPathWithin(resolve(process.cwd()), resolvedPath)) {
+      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Screenshot path must stay within the gateway workspace" });
+    }
+
+    const extension = extname(resolvedPath).toLowerCase();
+    if (!IMAGE_EXTENSIONS.has(extension)) {
+      return reply.status(400).send({ error: "UNSUPPORTED_FILE", message: "Only image screenshots can be served" });
+    }
+
+    try {
+      const fileInfo = await stat(resolvedPath);
+      if (!fileInfo.isFile()) {
+        return reply.status(404).send({ error: "NOT_FOUND", message: "Screenshot file not found" });
+      }
+
+      const contentType = extension === ".png"
+        ? "image/png"
+        : extension === ".webp"
+          ? "image/webp"
+          : extension === ".gif"
+            ? "image/gif"
+            : "image/jpeg";
+
+      const data = await readFile(resolvedPath);
+      return reply
+        .header("Cache-Control", "no-store")
+        .type(contentType)
+        .send(data);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return reply.status(404).send({ error: "NOT_FOUND", message: "Screenshot file not found" });
+      }
+      throw error;
+    }
+  });
+}
+
+function registerDevProxyRoutes(app: FastifyInstance): void {
+  const handler = async (request: any, reply: any) => {
+    const params = request.params as { port?: string; "*"?: string };
+    const port = normalizeProxyPort(params.port);
+    if (!port) {
+      return reply.status(400).send({ error: "INVALID_PORT", message: "A valid localhost port is required" });
+    }
+
+    const proxiedPath = params["*"] ? `/${params["*"]}` : "/";
+    const targetUrl = new URL(`http://127.0.0.1:${port}${proxiedPath}`);
+    const query = request.query as Record<string, string | string[] | undefined>;
+    for (const [key, value] of Object.entries(query)) {
+      if (Array.isArray(value)) {
+        for (const entry of value) targetUrl.searchParams.append(key, entry);
+      } else if (typeof value === "string") {
+        targetUrl.searchParams.set(key, value);
+      }
+    }
+
+    try {
+      const upstream = await fetch(targetUrl, {
+        method: request.method,
+        headers: buildProxyRequestHeaders(request.headers),
+        body: buildProxyRequestBody(request.method, request.body),
+        redirect: "follow",
+      });
+
+      reply.code(upstream.status);
+      const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+      for (const [key, value] of upstream.headers.entries()) {
+        const lower = key.toLowerCase();
+        if (lower === "content-length" || lower === "content-encoding" || lower === "transfer-encoding" || lower === "x-frame-options" || lower === "content-security-policy") {
+          continue;
+        }
+        reply.header(key, value);
+      }
+      reply.header("Cache-Control", "no-store");
+
+      if (contentType.includes("text/html")) {
+        const html = await upstream.text();
+        return reply.type("text/html; charset=utf-8").send(rewriteProxyHtml(html, port));
+      }
+
+      const body = Buffer.from(await upstream.arrayBuffer());
+      return reply.type(contentType).send(body);
+    } catch (error) {
+      return reply.status(502).send({
+        error: "DEV_PROXY_FAILED",
+        message: error instanceof Error ? error.message : "Failed to reach local dev server",
+      });
+    }
+  };
+
+  app.all("/api/dev-proxy/:port", handler);
+  app.all("/api/dev-proxy/:port/*", handler);
+}
+
+function normalizeProxyPort(value?: string): number | null {
+  if (!value) return null;
+  const port = Number.parseInt(value, 10);
+  if (!Number.isFinite(port) || port < 1 || port > 65535) return null;
+  return port;
+}
+
+function buildProxyRequestHeaders(input: Record<string, unknown>): Record<string, string> {
+  const headers: Record<string, string> = {};
+  for (const [key, value] of Object.entries(input)) {
+    const lower = key.toLowerCase();
+    if (lower === "host" || lower === "connection" || lower === "content-length" || lower === "accept-encoding" || lower === "origin" || lower === "referer") {
+      continue;
+    }
+    if (Array.isArray(value)) {
+      headers[key] = value.join(", ");
+    } else if (typeof value === "string") {
+      headers[key] = value;
+    }
+  }
+  return headers;
+}
+
+function buildProxyRequestBody(method: string, body: unknown): RequestInit["body"] | undefined {
+  if (method === "GET" || method === "HEAD" || body == null) return undefined;
+  if (typeof body === "string" || body instanceof Uint8Array || body instanceof ArrayBuffer) {
+    return body;
+  }
+  return JSON.stringify(body);
+}
+
+function rewriteProxyHtml(html: string, port: number): string {
+  const prefix = `/api/dev-proxy/${port}`;
+  let rewritten = html;
+  if (!/<base\b/i.test(rewritten)) {
+    rewritten = rewritten.replace(/<head([^>]*)>/i, `<head$1><base href="${prefix}/">`);
+  }
+  rewritten = rewritten.replace(/\b(src|href|action|poster)=("|')\/(?!\/)/gi, `$1=$2${prefix}/`);
+  rewritten = rewritten.replace(/\bcontent=("|')([^"']*url=)\/(?!\/)/gi, `content=$1$2${prefix}/`);
+  return rewritten;
+}
+
+function isPathWithin(root: string, target: string): boolean {
+  const rel = relative(root, target);
+  return rel === "" || (!rel.startsWith("..") && !rel.startsWith(`..${sep}`));
 }
 
 /** Resolve the directory containing the built web frontend. */

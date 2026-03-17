@@ -236,6 +236,7 @@ export const migrations: Migration[] = [
           provider_id TEXT NOT NULL,
           model TEXT,
           runtime_mode TEXT NOT NULL DEFAULT 'full-access',
+          kind TEXT NOT NULL DEFAULT 'delivery',
           working_directory TEXT,
           branch TEXT,
           status TEXT NOT NULL DEFAULT 'idle',
@@ -328,6 +329,18 @@ export const migrations: Migration[] = [
       try {
         db.exec(`ALTER TABLE automation_repositories ADD COLUMN github_url TEXT`);
       } catch { /* column already exists */ }
+    },
+  },
+  {
+    id: 13,
+    name: "agent_threads_kind",
+    run(db) {
+      try {
+        db.exec(`ALTER TABLE agent_threads ADD COLUMN kind TEXT NOT NULL DEFAULT 'delivery'`);
+      } catch { /* exists */ }
+      try {
+        db.exec(`UPDATE agent_threads SET kind = 'delivery' WHERE kind IS NULL OR kind = ''`);
+      } catch { /* best effort */ }
     },
   },
 

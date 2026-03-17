@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import {
   ArrowLeft,
+  ArrowRight,
   ArrowUpCircle,
   AlertTriangle,
   Calendar,
@@ -11,6 +12,7 @@ import {
   Eye,
   FolderTree,
   FolderOpen,
+  Globe,
   GitBranch,
   LogOut,
   MessageSquare,
@@ -37,6 +39,7 @@ import {
   Server,
   ScrollText,
   ListChecks,
+  Github,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -55,6 +58,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
+import { DevPreviewPanel } from '@/components/chat/dev-preview-panel'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ContextIndicator } from '@/components/chat/context-indicator'
@@ -153,6 +157,53 @@ const suggestions = [
   'What time is it?',
 ]
 
+const GITHUB_REPO_URL = 'https://github.com/JakobWl/Jait'
+
+const landingHighlights = [
+  {
+    icon: TerminalIcon,
+    title: 'Agent, terminal, and files in one loop',
+    description: 'Run commands, inspect repos, patch code, and keep the working context visible instead of hidden behind chat.',
+  },
+  {
+    icon: FolderTree,
+    title: 'Workspace-native editing',
+    description: 'Open real files, review diffs, and keep source control close to the conversation while the agent works.',
+  },
+  {
+    icon: Cast,
+    title: 'Browser and device reach',
+    description: 'Bridge screen share, browser control, and network-aware tools from the same interface when the task needs it.',
+  },
+]
+
+const landingCapabilities = [
+  { label: 'Local-first gateway', icon: Server },
+  { label: 'Screen share + browser control', icon: Globe },
+  { label: 'Strategy and todo planning', icon: ScrollText },
+  { label: 'Code workspace + diffs', icon: Code },
+]
+
+function LandingFeatureCard({
+  icon: Icon,
+  title,
+  description,
+}: {
+  icon: typeof TerminalIcon
+  title: string
+  description: string
+}) {
+  return (
+    <div className="rounded-3xl border border-border/70 bg-card/80 p-4 shadow-[0_18px_60px_-42px_rgba(15,23,42,0.4)] backdrop-blur-sm">
+      <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-2xl border border-border/70 bg-background/85">
+        <Icon className="h-4 w-4 text-foreground" />
+      </div>
+      <h3 className="text-sm font-semibold tracking-tight">{title}</h3>
+      <p className="mt-1 text-sm leading-6 text-muted-foreground">{description}</p>
+    </div>
+  )
+}
+
 function loadLegacyCliModelsByProvider(currentProvider: ProviderId): Partial<Record<CliProviderId, string | null>> {
   const models: Partial<Record<CliProviderId, string | null>> = {}
 
@@ -230,6 +281,25 @@ function ThreadPrBadge({ prState }: { prState: 'open' | 'closed' | 'merged' | nu
       {label}
     </Badge>
   )
+}
+
+function ThreadKindBadge({ kind }: { kind: 'delivery' | 'delegation' }) {
+  return (
+    <Badge
+      variant="outline"
+      className={`h-4 shrink-0 whitespace-nowrap px-1 py-0 text-[9px] ${
+        kind === 'delegation'
+          ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 dark:border-amber-400/30'
+          : 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300 dark:bg-blue-500/20 dark:border-blue-400/30'
+      }`}
+    >
+      {kind === 'delegation' ? 'Delegate' : 'Delivery'}
+    </Badge>
+  )
+}
+
+function hasLiveThreadSession(thread: Pick<AgentThread, 'providerSessionId'>): boolean {
+  return typeof thread.providerSessionId === 'string' && thread.providerSessionId.length > 0
 }
 
 const REPO_RUNTIME_PROVIDER_LABELS: Record<'codex' | 'claude-code', string> = {
@@ -490,13 +560,16 @@ function ManagerThreadListItem({
   onStop,
   onDelete,
 }: ManagerThreadListItemProps) {
-  const showThreadActions = repo != null && (thread.status === 'completed' || Boolean(thread.prUrl))
+  const showThreadActions = thread.kind === 'delivery' && repo != null && (thread.status === 'completed' || Boolean(thread.prUrl))
+  const canStopThread = hasLiveThreadSession(thread)
 
   return (
     <div
       role="button"
       tabIndex={0}
-      className="group relative grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-5 border-b px-3 py-3.5 text-sm transition-colors hover:bg-muted/40"
+      className={`group relative grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-5 border-b px-3 py-3.5 text-sm transition-colors hover:bg-muted/40 ${
+        thread.kind === 'delegation' ? 'bg-amber-500/[0.04]' : ''
+      }`}
       onClick={onOpen}
       onKeyDown={(event) => {
         if (event.target !== event.currentTarget) return
@@ -519,6 +592,10 @@ function ManagerThreadListItem({
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 pl-[calc(0.75rem+6px)] text-xs text-muted-foreground sm:flex-nowrap sm:gap-x-1 sm:gap-y-0">
           <span className="min-w-0 basis-full truncate sm:basis-auto">{repoName}</span>
+          <ThreadKindBadge kind={thread.kind} />
+          {thread.kind === 'delegation' && (
+            <span className="shrink-0 text-amber-700 dark:text-amber-300">Helper thread</span>
+          )}
           {thread.branch && (
             <>
               <span className="hidden sm:inline">·</span>
@@ -563,6 +640,7 @@ function ManagerThreadListItem({
               baseBranch={repo.defaultBranch}
               threadTitle={thread.title}
               threadStatus={thread.status}
+              threadKind={thread.kind}
               prUrl={thread.prUrl}
               prState={prState}
               ghAvailable={ghAvailable}
@@ -570,7 +648,7 @@ function ManagerThreadListItem({
             />
           </div>
         )}
-        {thread.status === 'running' && (
+        {canStopThread && (
           <Button
             variant="ghost"
             size="icon"
@@ -579,6 +657,7 @@ function ManagerThreadListItem({
               event.stopPropagation()
               onStop()
             }}
+            title={thread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}
           >
             <Square className="h-3 w-3" />
           </Button>
@@ -705,6 +784,7 @@ function ManagerActiveThreadsMenu({
                         baseBranch={repo.defaultBranch}
                         threadTitle={thread.title}
                         threadStatus={thread.status}
+                        threadKind={thread.kind}
                         prUrl={thread.prUrl}
                         prState={(thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
                         ghAvailable={ghAvailable}
@@ -746,6 +826,7 @@ function App() {
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
+  const [showDevPreview, setShowDevPreview] = useState(false)
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
@@ -2084,20 +2165,19 @@ function App() {
         return
       }
 
-      // No backup — fall back to opening the file normally in the workspace editor
-      const opened = await workspaceRef.current?.openFileByPath(filePath)
-      if (opened) {
-        if (!showWorkspace) setShowWorkspace(true)
-        return
-      }
       const file = await workspaceRef.current?.readFileByPath(filePath)
       if (file) {
-        mergeWorkspaceFiles([file])
-        setActiveWorkspaceFileId(file.id)
+        await workspaceRef.current?.openReviewDiff({
+          path: file.path,
+          originalContent: '',
+          modifiedContent: file.content,
+          language: file.language,
+        })
         if (!showWorkspace) setShowWorkspace(true)
+        showWorkspaceEditorPanel()
         return
       }
-      // Fallback: fetch from the workspace REST API
+      // Fallback: fetch from the workspace REST API and still open a review diff
       const readRes = await fetch(
         `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}${surfaceQuery}`,
         { headers },
@@ -2105,20 +2185,20 @@ function App() {
       if (!readRes.ok) return
       const readData = await readRes.json() as { path: string; content: string }
       const name = filePath.split('/').pop() ?? filePath
-      const wf: WorkspaceFile = {
-        id: `changed-${filePath}`,
-        name,
+      const language = workspaceLanguageForPath(name)
+      await workspaceRef.current?.openReviewDiff({
         path: readData.path,
-        content: readData.content,
-        language: workspaceLanguageForPath(name),
-      }
-      mergeWorkspaceFiles([wf])
-      setActiveWorkspaceFileId(wf.id)
+        originalContent: '',
+        modifiedContent: readData.content,
+        language,
+      })
       if (!showWorkspace) setShowWorkspace(true)
+      showWorkspaceEditorPanel()
+      return
     } catch {
       // silently ignore
     }
-  }, [token, activeWorkspace?.surfaceId, showWorkspace, mergeWorkspaceFiles, showWorkspaceEditorPanel])
+  }, [token, activeWorkspace?.surfaceId, showWorkspace, showWorkspaceEditorPanel])
 
   const handleOpenMessagePath = useCallback(async (filePath: string) => {
     try {
@@ -3266,6 +3346,23 @@ function App() {
                   </Tooltip>
                 )}
 
+                {viewMode === 'developer' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={showDevPreview ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-6 text-[11px] px-2 shrink-0"
+                        onClick={() => setShowDevPreview((prev) => !prev)}
+                      >
+                        <Globe className="h-3 w-3 mr-1" />
+                        Preview
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{showDevPreview ? 'Close dev preview' : 'Open dev preview'}</TooltipContent>
+                  </Tooltip>
+                )}
+
                 {/* Workspace button with close-confirmation popover */}
                 <div className="relative flex items-center shrink-0">
                   <Tooltip>
@@ -3428,6 +3525,7 @@ function App() {
                             {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
                           </span>
                         )}
+                        <ThreadKindBadge kind={automation.selectedThread.kind} />
                         {(automation.selectedRepo || (isMobile && automation.selectedThread.branch)) && (
                           <span className={`text-[10px] text-muted-foreground truncate ${isMobile ? 'mt-0.5 block' : 'max-w-[160px]'}`}>
                             {automation.selectedRepo
@@ -3446,8 +3544,14 @@ function App() {
                           {automation.selectedThread.branch}
                         </Badge>
                       )}
-                      {automation.selectedThread.status === 'running' && (
-                        <Button variant="ghost" size="icon" className="h-5 w-5" onClick={() => void automation.handleStop(automation.selectedThread!.id)}>
+                      {hasLiveThreadSession(automation.selectedThread) && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-5 w-5"
+                          onClick={() => void automation.handleStop(automation.selectedThread!.id)}
+                          title={automation.selectedThread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}
+                        >
                           <Square className="h-2.5 w-2.5" />
                         </Button>
                       )}
@@ -3460,6 +3564,7 @@ function App() {
                             baseBranch={automation.selectedRepo.defaultBranch}
                             threadTitle={automation.selectedThread.title}
                             threadStatus={automation.selectedThread.status}
+                            threadKind={automation.selectedThread.kind}
                             prUrl={automation.selectedThread.prUrl}
                             prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
                             ghAvailable={automation.ghAvailable}
@@ -3869,43 +3974,220 @@ function App() {
               <div className={`flex-1 min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
                 onAnimationEnd={() => setDeveloperAnimPhase('idle')}
               >
-                <div className="w-full max-w-3xl space-y-8">
-                  <div className="text-center">
-                    <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
-                    <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
+                <div className="relative w-full max-w-6xl overflow-hidden rounded-[2rem] border border-border/70 bg-gradient-to-br from-background via-background to-muted/40 shadow-[0_36px_120px_-64px_rgba(15,23,42,0.5)]">
+                  <div className="pointer-events-none absolute inset-0">
+                    <div className="absolute left-[-8%] top-[-14%] h-56 w-56 rounded-full bg-sky-500/12 blur-3xl" />
+                    <div className="absolute right-[-8%] top-[10%] h-64 w-64 rounded-full bg-cyan-500/10 blur-3xl" />
+                    <div className="absolute bottom-[-18%] left-[28%] h-72 w-72 rounded-full bg-emerald-500/10 blur-3xl" />
                   </div>
-                  <Suggestions suggestions={suggestions} onSelect={handleSuggestion} />
-                  <PromptInput
-                    ref={promptInputRef}
-                    value={inputValue}
-                    onChange={setInputValue}
-                    onSubmit={handleSubmit}
-                    onStop={cancelRequest}
-                    onQueue={handleQueue}
-                    isLoading={isLoading}
-                    onVoiceInput={handleVoiceInput}
-                    voiceRecording={voiceRecording}
-                    voiceLevels={voiceLevels}
-                    voiceTranscribing={voiceTranscribing}
-                    onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                    mode={chatMode}
-                    onModeChange={setChatMode}
-                    provider={chatProvider}
-                    onProviderChange={handleChatProviderChange}
-                    cliModel={cliModel}
-                    onCliModelChange={handleCliModelChange}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
-                    availableFiles={availableFilesForMention}
-                    onSearchFiles={handleSearchFiles}
-                    workspaceOpen={showWorkspace}
-                    sessionInfo={sessionInfo}
-                    workspaceNodeId={activeWorkspace?.nodeId}
-                  />
+                  <div className="relative grid gap-8 px-5 py-6 sm:px-8 sm:py-8 lg:grid-cols-[minmax(0,1.15fr)_minmax(320px,0.85fr)] lg:gap-10 lg:px-10 lg:py-10">
+                    <div className="space-y-6">
+                      <div className="space-y-4">
+                        <div className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[11px] font-medium uppercase tracking-[0.24em] text-muted-foreground backdrop-blur-sm">
+                          <span className="inline-flex h-2 w-2 rounded-full bg-emerald-500" />
+                          Local-first AI workstation
+                        </div>
+                        <div className="space-y-3">
+                          <div className="flex items-center gap-3">
+                            <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-border/70 bg-card/90 shadow-sm">
+                              <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" viewBox="0 0 1024 1024" className="shrink-0">
+                                <path d="M318 372 L430 486 L318 600" fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round" />
+                                <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715" fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round" />
+                              </svg>
+                            </div>
+                            <div>
+                              <div className="text-2xl font-semibold tracking-[0.18em] sm:text-3xl">JAIT</div>
+                              <p className="text-sm text-muted-foreground">Just Another Intelligent Tool</p>
+                            </div>
+                          </div>
+                          <h1 className="max-w-3xl text-4xl font-semibold tracking-tight text-foreground sm:text-5xl">
+                            An agent workspace that looks and behaves like an actual toolchain.
+                          </h1>
+                          <p className="max-w-2xl text-base leading-7 text-muted-foreground sm:text-lg">
+                            Jait combines chat, terminals, file editing, browser control, screen sharing, and automation threads in one local-first surface.
+                          </p>
+                        </div>
+                        <div className="flex flex-wrap gap-2">
+                          {landingCapabilities.map(({ label, icon: Icon }) => (
+                            <span
+                              key={label}
+                              className="inline-flex items-center gap-2 rounded-full border border-border/70 bg-background/70 px-3 py-1.5 text-xs text-muted-foreground backdrop-blur-sm"
+                            >
+                              <Icon className="h-3.5 w-3.5 text-foreground" />
+                              {label}
+                            </span>
+                          ))}
+                        </div>
+                        <div className="flex flex-wrap gap-3">
+                          <Button
+                            asChild
+                            size="lg"
+                            className="h-11 rounded-full px-5 shadow-[0_18px_40px_-24px_rgba(37,99,235,0.55)]"
+                          >
+                            <a href={GITHUB_REPO_URL} target="_blank" rel="noopener noreferrer">
+                              <Github className="h-4 w-4" />
+                              View on GitHub
+                              <ArrowRight className="h-4 w-4" />
+                            </a>
+                          </Button>
+                          <Button
+                            variant="outline"
+                            asChild
+                            size="lg"
+                            className="h-11 rounded-full border-border/80 bg-background/70 px-5 backdrop-blur-sm"
+                          >
+                            <a href="https://jait.dev" target="_blank" rel="noopener noreferrer">
+                              <Globe className="h-4 w-4" />
+                              jait.dev
+                            </a>
+                          </Button>
+                        </div>
+                      </div>
+
+                      <div className="grid gap-3 md:grid-cols-3">
+                        {landingHighlights.map((item) => (
+                          <LandingFeatureCard
+                            key={item.title}
+                            icon={item.icon}
+                            title={item.title}
+                            description={item.description}
+                          />
+                        ))}
+                      </div>
+
+                      <div className="rounded-[1.75rem] border border-border/70 bg-card/85 p-3 shadow-[0_24px_80px_-50px_rgba(15,23,42,0.55)] backdrop-blur-sm sm:p-4">
+                        <div className="mb-3 flex flex-wrap items-center justify-between gap-2 px-1">
+                          <div>
+                            <p className="text-sm font-medium tracking-tight">Start in the same surface you work in</p>
+                            <p className="text-xs text-muted-foreground">Prompt, tools, and repo context stay together.</p>
+                          </div>
+                          <div className="rounded-full border border-border/70 bg-background/80 px-3 py-1 text-[11px] text-muted-foreground">
+                            Developer mode
+                          </div>
+                        </div>
+                        <Suggestions suggestions={suggestions} onSelect={handleSuggestion} className="justify-start" />
+                        <div className="mt-3">
+                          <PromptInput
+                            ref={promptInputRef}
+                            value={inputValue}
+                            onChange={setInputValue}
+                            onSubmit={handleSubmit}
+                            onStop={cancelRequest}
+                            onQueue={handleQueue}
+                            isLoading={isLoading}
+                            onVoiceInput={handleVoiceInput}
+                            voiceRecording={voiceRecording}
+                            voiceLevels={voiceLevels}
+                            voiceTranscribing={voiceTranscribing}
+                            onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                            mode={chatMode}
+                            onModeChange={setChatMode}
+                            provider={chatProvider}
+                            onProviderChange={handleChatProviderChange}
+                            cliModel={cliModel}
+                            onCliModelChange={handleCliModelChange}
+                            viewMode={viewMode}
+                            onViewModeChange={setViewMode}
+                            availableFiles={availableFilesForMention}
+                            onSearchFiles={handleSearchFiles}
+                            workspaceOpen={showWorkspace}
+                            sessionInfo={sessionInfo}
+                            workspaceNodeId={activeWorkspace?.nodeId}
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex min-w-0 items-stretch">
+                      <div className="relative flex w-full min-w-0 flex-col overflow-hidden rounded-[1.75rem] border border-border/70 bg-[linear-gradient(180deg,rgba(2,6,23,0.96),rgba(15,23,42,0.92))] text-slate-100 shadow-[0_30px_100px_-56px_rgba(2,6,23,0.95)]">
+                        <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+                          <div className="flex items-center gap-2">
+                            <span className="h-2.5 w-2.5 rounded-full bg-rose-400/90" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-amber-300/90" />
+                            <span className="h-2.5 w-2.5 rounded-full bg-emerald-400/90" />
+                          </div>
+                          <div className="rounded-full border border-white/10 bg-white/5 px-3 py-1 text-[11px] uppercase tracking-[0.22em] text-slate-300">
+                            Control surface
+                          </div>
+                        </div>
+                        <div className="grid flex-1 gap-4 p-4">
+                          <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                            <div className="mb-3 flex items-center justify-between">
+                              <div>
+                                <p className="text-sm font-medium text-white">Live repo session</p>
+                                <p className="text-xs text-slate-400">`/workspace/jait` attached to chat and tools</p>
+                              </div>
+                              <div className="rounded-full border border-emerald-400/20 bg-emerald-400/10 px-2.5 py-1 text-[11px] text-emerald-300">
+                                gateway online
+                              </div>
+                            </div>
+                            <div className="space-y-2 rounded-2xl border border-white/10 bg-slate-950/60 p-3 font-mono text-xs text-slate-300">
+                              <div className="flex items-center gap-2 text-emerald-300">
+                                <TerminalIcon className="h-3.5 w-3.5" />
+                                <span>bun run typecheck</span>
+                              </div>
+                              <div className="text-slate-400">$ workspace diff opened in review mode</div>
+                              <div className="text-slate-400">$ browser preview attached for verification</div>
+                            </div>
+                          </div>
+
+                          <div className="grid gap-3 sm:grid-cols-2">
+                            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+                                <FolderTree className="h-4 w-4 text-sky-300" />
+                                Workspace
+                              </div>
+                              <div className="space-y-2 text-xs text-slate-300">
+                                <div className="rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2">apps/web/src/App.tsx</div>
+                                <div className="rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2 text-slate-400">packages/gateway/src/server.ts</div>
+                                <div className="rounded-2xl border border-dashed border-sky-300/30 bg-sky-400/10 px-3 py-2 text-sky-200">review diff ready</div>
+                              </div>
+                            </div>
+                            <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                              <div className="mb-3 flex items-center gap-2 text-sm font-medium text-white">
+                                <ListChecks className="h-4 w-4 text-cyan-300" />
+                                Thread flow
+                              </div>
+                              <div className="space-y-2 text-xs text-slate-300">
+                                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/50 px-3 py-2">
+                                  <span>Inspect current implementation</span>
+                                  <span className="text-emerald-300">done</span>
+                                </div>
+                                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/40 px-3 py-2">
+                                  <span>Patch landing page</span>
+                                  <span className="text-amber-200">running</span>
+                                </div>
+                                <div className="flex items-center justify-between rounded-2xl border border-white/10 bg-slate-950/30 px-3 py-2 text-slate-400">
+                                  <span>Typecheck and tests</span>
+                                  <span>queued</span>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="rounded-3xl border border-white/10 bg-white/5 p-4">
+                            <div className="mb-3 flex items-center justify-between">
+                              <div className="flex items-center gap-2 text-sm font-medium text-white">
+                                <Cast className="h-4 w-4 text-emerald-300" />
+                                Reach beyond chat
+                              </div>
+                              <div className="text-[11px] text-slate-400">screen · browser · network</div>
+                            </div>
+                            <p className="text-sm leading-6 text-slate-300">
+                              Jait is built for real operations, not just prompt exchange. Connect devices, inspect a live UI, and validate changes from the same session.
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             ) : (
               <div className="flex flex-col flex-1 min-w-0 min-h-0 transition-all duration-300 ease-out">
+                {showDevPreview && (
+                  <DevPreviewPanel onClose={() => setShowDevPreview(false)} />
+                )}
                 {/* Sticky show-panel buttons when workspace panels are hidden */}
                 {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
                   <div className="flex items-center gap-1 px-2 py-1 border-b bg-muted/20 shrink-0">
@@ -3963,7 +4245,7 @@ function App() {
                       toolCalls={msg.toolCalls}
                       segments={msg.segments}
                       isStreaming={isLoading && msg === messages[messages.length - 1]}
-                      compact={showWorkspace || showScreenShare}
+                      compact={showWorkspace || showScreenShare || showDevPreview}
                       preferLlmUi
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
@@ -4340,6 +4622,7 @@ function App() {
                 const thread = await agentsApi.createThread({
                   title: `[${repo.name}] ${task.title}`,
                   providerId: chatProvider,
+                  kind: 'delivery',
                   workingDirectory: worktreePath ?? repo.localPath,
                   branch: branchName,
                 })

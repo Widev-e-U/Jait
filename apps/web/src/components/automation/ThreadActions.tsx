@@ -3,7 +3,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Eye, GitPullRequest, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
 import { gitApi, type PrCheck } from '@/lib/git-api'
-import { agentsApi, type ThreadStatus } from '@/lib/agents-api'
+import { agentsApi, type ThreadKind, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
@@ -28,6 +28,8 @@ interface ThreadActionsProps {
   ghAvailable?: boolean
   /** Current thread lifecycle status. */
   threadStatus: ThreadStatus
+  /** Delivery threads can create PRs; delegation threads cannot. */
+  threadKind?: ThreadKind
   /** Whether to render the PR status badge next to the buttons. */
   showStatusBadge?: boolean
 }
@@ -41,6 +43,7 @@ export function ThreadActions({
   prUrl,
   prState,
   threadStatus,
+  threadKind = 'delivery',
   showStatusBadge = true,
 }: ThreadActionsProps) {
   const isMobile = useIsMobile()
@@ -102,7 +105,7 @@ export function ThreadActions({
       : 'Open PR Page'
     : 'Create Pull Request'
   const prButtonTitle = existingPrLink ? buttonLabel : 'Create pull request'
-  const canCreatePr = existingPrLink != null || threadStatus === 'completed'
+  const canCreatePr = threadKind === 'delivery' && (existingPrLink != null || threadStatus === 'completed')
 
   const handlePushAndPR = useCallback(async () => {
     // If PR already exists, just open it
@@ -112,6 +115,10 @@ export function ThreadActions({
     }
     if (threadStatus !== 'completed') {
       toast.error('Thread not completed', { description: 'Finish the thread before creating a pull request.' })
+      return
+    }
+    if (threadKind !== 'delivery') {
+      toast.error('PR creation unavailable', { description: 'Delegation threads are helper workers and do not create pull requests.' })
       return
     }
 
@@ -163,7 +170,7 @@ export function ThreadActions({
     } finally {
       setBusy(false)
     }
-  }, [baseBranch, cwd, threadId, threadStatus, threadTitle, existingPrLink])
+  }, [baseBranch, cwd, threadId, threadKind, threadStatus, threadTitle, existingPrLink])
 
   const handleGhReady = useCallback(() => {
     if (pendingPrAction.current) {
@@ -199,7 +206,11 @@ export function ThreadActions({
           className={`h-5 text-[10px] gap-1 ${isMobile ? 'px-1.5' : ''}`}
           disabled={busy || !canCreatePr}
           onClick={handlePushAndPR}
-          title={!existingPrLink && threadStatus !== 'completed' ? 'Finish the thread before creating a pull request.' : prButtonTitle}
+          title={threadKind !== 'delivery'
+            ? 'Delegation threads do not create pull requests.'
+            : !existingPrLink && threadStatus !== 'completed'
+              ? 'Finish the thread before creating a pull request.'
+              : prButtonTitle}
           aria-label={prButtonTitle}
         >
           {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitPullRequest className="h-3 w-3" />}

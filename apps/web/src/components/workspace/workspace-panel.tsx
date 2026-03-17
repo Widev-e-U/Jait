@@ -1737,13 +1737,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       <span className="text-red-500">-{gitStatus.workingTree.deletions}</span>
                     </span>
                   </div>
+                  <div className="mt-1">
                   {gitStatus.workingTree.files.map((f) => {
                     const fileStatus = (f as { status?: string }).status ?? 'M'
                     const fileName = f.path.split('/').pop() ?? f.path
                     return (
-                      <div
+                      <button
+                        type="button"
                         key={f.path}
-                        className="flex items-center gap-1.5 rounded px-2 py-2 cursor-pointer text-sm hover:bg-muted"
+                        className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm hover:bg-muted"
                         onClick={() => {
                           handleScOpenDiff(f.path)
                           setMobileTab('editor')
@@ -1754,9 +1756,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                         <span className={`truncate flex-1 ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
                           {fileName}
                         </span>
-                      </div>
+                      </button>
                     )
                   })}
+                  </div>
                 </div>
               )}
               {!remoteRoot && (
@@ -2113,15 +2116,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     <span className="text-red-500">-{gitStatus.workingTree.deletions}</span>
                   </span>
                 </div>
+                <div className="mt-1">
                 {gitStatus.workingTree.files.map((f) => {
                   const fileStatus = (f as { status?: string }).status ?? 'M'
                   const fileName = f.path.split('/').pop() ?? f.path
                   const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
                   const isActiveDiff = scDiffFile?.path === f.path
                   return (
-                    <div
+                    <button
+                      type="button"
                       key={f.path}
-                      className={`group flex items-center gap-1.5 rounded px-1 py-1 cursor-pointer text-xs ${
+                      className={`group flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-xs ${
                         isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
                       }`}
                       style={{ paddingLeft: 8 }}
@@ -2142,9 +2147,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                         {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
                         {f.deletions > 0 && <span className="text-red-500 ml-0.5">-{f.deletions}</span>}
                       </span>
-                    </div>
+                    </button>
                   )
                 })}
+                </div>
               </div>
             )}
             {!remoteRoot && (
