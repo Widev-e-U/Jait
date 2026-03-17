@@ -91,9 +91,53 @@
       background: rgba(255,255,255,0.8);
       border-color: var(--border);
     }
-    html.light .tut-step.active { background: rgba(0,0,0,0.03); }
+    html.light .tut-step:hover { background: rgba(0,0,0,0.03); }
+    html.light .tut-step.active { background: rgba(0,0,0,0.04); border-color: var(--border); }
     html.light .tut-step .tut-num { background: rgba(255,255,255,0.9); }
+    html.light .tut-step.active .tut-info h4 { color: var(--text); }
+    html.light .tut-progress { background: rgba(0,0,0,0.06); }
+    html.light .tut-screen {
+      background: linear-gradient(180deg, rgba(15,18,28,0.98), rgba(20,26,40,0.96));
+    }
     html.light .step::before { background: rgba(255,255,255,0.9); }
+    html.light code {
+      background: rgba(235,238,242,0.9);
+    }
+    html.light .section-card.glow-sky::before,
+    html.light .section-card.glow-emerald::before,
+    html.light .section-card.glow-violet::before,
+    html.light .section-card.glow-cyan::before { opacity: 0.35; }
+    html.light .quick-install::before { opacity: 0.4; }
+    html.light .copy-btn { border-color: var(--border); color: var(--muted); }
+    html.light .copy-btn:hover { color: var(--text); }
+    html.light .install-cmd .prefix { color: #16a34a; }
+    html.light footer { color: var(--muted); }
+    html.light .section-card h2,
+    html.light .section-card h3 { color: var(--text); }
+    html.light .section-card p,
+    html.light .section-card .section-sub { color: var(--muted); }
+    html.light .method-card h3,
+    html.light .download-card h3 { color: var(--text); }
+    html.light .method-card p,
+    html.light .download-card p,
+    html.light .download-card .platform { color: var(--muted); }
+    html.light .step h4 { color: var(--text); }
+    html.light .step p { color: var(--muted); }
+    html.light .badge { background: var(--accent); color: #fff; }
+    html.light .hero-logo .name { color: var(--text); }
+    html.light .hero-logo .subtitle { color: var(--muted); }
+    html.light .hero-tagline { color: var(--text); }
+    html.light .feature-card h3 { color: var(--text); }
+    html.light .feature-card .fc-icon {
+      background: rgba(245,247,250,0.9);
+      border-color: var(--border);
+    }
+    html.light .feature-card .fc-icon svg { color: var(--text); }
+    html.light .caps .cap svg { color: var(--muted); }
+    html.light .theme-toggle {
+      background: rgba(255,255,255,0.85);
+      box-shadow: 0 4px 20px -8px rgba(0,0,0,0.12);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
