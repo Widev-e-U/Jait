@@ -1,0 +1,741 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Jait — Just Another Intelligent Tool</title>
+  <meta name="description" content="An agent workspace that looks and behaves like an actual toolchain. Local-first AI with terminal, filesystem, browser control, and automation." />
+  <style>
+    :root {
+      --bg: #09090b;
+      --surface: rgba(20, 20, 24, 0.85);
+      --card: rgba(24, 24, 28, 0.85);
+      --border: rgba(38, 38, 42, 0.7);
+      --text: #e5e5e5;
+      --muted: #a1a1aa;
+      --accent: #3b82f6;
+      --accent-hover: #2563eb;
+      --green: #22c55e;
+      --amber: #fbbf24;
+      --sky: #38bdf8;
+      --cyan: #22d3ee;
+      --emerald: #34d399;
+      --radius: 1.75rem;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    a { color: var(--accent); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    code {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 0.9em;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+    }
+    pre {
+      background: rgba(2,6,23,0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 20px;
+      overflow-x: auto;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 0.9em;
+      line-height: 1.5;
+    }
+    pre code { background: none; border: none; padding: 0; }
+    .container { max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* ── Hero ──────────────────────────────────────── */
+    .hero-wrapper {
+      position: relative;
+      padding: 60px 24px 40px;
+      display: flex;
+      justify-content: center;
+    }
+    .hero-card {
+      position: relative;
+      width: 100%;
+      max-width: 1100px;
+      overflow: hidden;
+      border-radius: 2rem;
+      border: 1px solid var(--border);
+      background: linear-gradient(135deg, var(--bg), var(--bg) 60%, rgba(38,38,42,0.4));
+      box-shadow: 0 36px 120px -64px rgba(15,23,42,0.5);
+    }
+    .hero-card::before {
+      content: '';
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background:
+        radial-gradient(circle 280px at -8% -14%, rgba(56,189,248,0.12), transparent),
+        radial-gradient(circle 320px at 108% 10%, rgba(34,211,238,0.10), transparent),
+        radial-gradient(circle 360px at 28% 118%, rgba(52,211,153,0.10), transparent);
+    }
+    .hero-grid {
+      position: relative;
+      display: grid;
+      gap: 40px;
+      padding: 40px;
+    }
+    @media (min-width: 960px) {
+      .hero-grid { grid-template-columns: minmax(0,1.15fr) minmax(320px,0.85fr); gap: 48px; padding: 48px; }
+    }
+    .hero-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(9,9,11,0.8);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      font-size: 0.68rem;
+      font-weight: 500;
+      text-transform: uppercase;
+      letter-spacing: 0.24em;
+      color: var(--muted);
+      margin-bottom: 20px;
+    }
+    .hero-badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--emerald); }
+    .hero-logo { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+    .hero-logo .icon-box {
+      width: 48px; height: 48px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 1rem;
+      border: 1px solid var(--border);
+      background: var(--card);
+      box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    }
+    .hero-logo .icon-box svg { width: 28px; height: 28px; color: var(--text); }
+    .hero-logo .name { font-size: 1.8rem; font-weight: 600; letter-spacing: 0.18em; }
+    .hero-logo .subtitle { font-size: 0.85rem; color: var(--muted); }
+    .hero-tagline {
+      font-size: 2.4rem;
+      font-weight: 600;
+      letter-spacing: -0.02em;
+      line-height: 1.15;
+      max-width: 640px;
+      margin-bottom: 14px;
+    }
+    @media (min-width: 640px) { .hero-tagline { font-size: 3rem; } }
+    .hero-desc {
+      font-size: 1.05rem;
+      color: var(--muted);
+      line-height: 1.7;
+      max-width: 540px;
+      margin-bottom: 20px;
+    }
+    .caps { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 24px; }
+    .caps .cap {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 7px 14px;
+      font-size: 0.78rem;
+      border-radius: 999px;
+      border: 1px solid var(--border);
+      background: rgba(9,9,11,0.7);
+      backdrop-filter: blur(8px);
+      color: var(--muted);
+    }
+    .caps .cap svg { width: 14px; height: 14px; color: var(--text); }
+    .hero-cta { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 32px; }
+    .btn {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 12px 22px;
+      border-radius: 999px;
+      font-size: 0.95rem; font-weight: 500;
+      cursor: pointer; border: none;
+      transition: all 0.15s;
+      text-decoration: none;
+      font-family: inherit;
+    }
+    .btn:hover { text-decoration: none; }
+    .btn-primary {
+      background: var(--accent); color: #fff;
+      box-shadow: 0 18px 40px -24px rgba(37,99,235,0.55);
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-outline {
+      background: rgba(9,9,11,0.7); color: var(--text);
+      border: 1px solid rgba(38,38,42,0.8);
+      backdrop-filter: blur(8px);
+    }
+    .btn-outline:hover { border-color: var(--muted); }
+    .btn svg { width: 16px; height: 16px; }
+
+    /* Feature cards */
+    .feature-cards { display: grid; gap: 12px; }
+    @media (min-width: 768px) { .feature-cards { grid-template-columns: repeat(3,1fr); } }
+    .feature-card {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--card);
+      padding: 20px;
+      box-shadow: 0 18px 60px -42px rgba(15,23,42,0.4);
+      backdrop-filter: blur(8px);
+    }
+    .feature-card .fc-icon {
+      width: 40px; height: 40px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 1rem;
+      border: 1px solid var(--border);
+      background: rgba(9,9,11,0.85);
+      margin-bottom: 14px;
+    }
+    .feature-card .fc-icon svg { width: 18px; height: 18px; color: var(--text); }
+    .feature-card h3 { font-size: 0.9rem; font-weight: 600; margin-bottom: 6px; }
+    .feature-card p { font-size: 0.85rem; color: var(--muted); margin: 0; line-height: 1.6; }
+
+    /* ── Control surface (right column) ────────────── */
+    .control-surface { display: flex; min-width: 0; align-items: stretch; }
+    .cs-panel {
+      position: relative;
+      display: flex; flex-direction: column;
+      width: 100%; min-width: 0;
+      overflow: hidden;
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(2,6,23,0.96), rgba(15,23,42,0.92));
+      color: #cbd5e1;
+      box-shadow: 0 30px 100px -56px rgba(2,6,23,0.95);
+    }
+    .cs-titlebar {
+      display: flex; align-items: center; justify-content: space-between;
+      border-bottom: 1px solid rgba(255,255,255,0.1);
+      padding: 14px 18px;
+    }
+    .cs-dots { display: flex; gap: 6px; }
+    .cs-dots span { width: 10px; height: 10px; border-radius: 50%; }
+    .cs-dots .red   { background: rgba(251,113,133,0.9); }
+    .cs-dots .amber { background: rgba(251,191,36,0.9); }
+    .cs-dots .green { background: rgba(52,211,153,0.9); }
+    .cs-label {
+      border-radius: 999px;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
+      padding: 5px 14px;
+      font-size: 0.68rem;
+      text-transform: uppercase;
+      letter-spacing: 0.22em;
+      color: #94a3b8;
+    }
+    .cs-body { display: grid; gap: 16px; padding: 18px; flex: 1; }
+    .cs-card {
+      border-radius: var(--radius);
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.05);
+      padding: 18px;
+    }
+    .cs-card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .cs-card-title { font-size: 0.9rem; font-weight: 500; color: #fff; }
+    .cs-card-sub { font-size: 0.75rem; color: #64748b; }
+    .cs-status-pill {
+      border-radius: 999px; padding: 4px 10px; font-size: 0.68rem;
+    }
+    .cs-status-pill.online {
+      border: 1px solid rgba(52,211,153,0.2);
+      background: rgba(52,211,153,0.1);
+      color: #6ee7b7;
+    }
+    .cs-terminal {
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(2,6,23,0.6);
+      padding: 14px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      line-height: 1.8;
+    }
+    .cs-terminal .cmd { color: var(--emerald); display: flex; align-items: center; gap: 6px; }
+    .cs-terminal .cmd svg { width: 14px; height: 14px; }
+    .cs-mini-grid { display: grid; gap: 12px; }
+    @media (min-width: 480px) { .cs-mini-grid { grid-template-columns: 1fr 1fr; } }
+    .cs-card .label { display: flex; align-items: center; gap: 8px; font-size: 0.85rem; font-weight: 500; color: #fff; margin-bottom: 12px; }
+    .cs-card .label svg { width: 16px; height: 16px; }
+    .cs-file-list { list-style: none; }
+    .cs-file-list li {
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 8px 14px;
+      font-size: 0.78rem;
+      margin-bottom: 8px;
+    }
+    .cs-file-list li:last-child { margin-bottom: 0; }
+    .cs-file-list li.active { background: rgba(2,6,23,0.5); color: #cbd5e1; }
+    .cs-file-list li.muted  { background: rgba(2,6,23,0.4); color: #64748b; }
+    .cs-file-list li.diff   { border-style: dashed; border-color: rgba(56,189,248,0.3); background: rgba(56,189,248,0.1); color: #7dd3fc; }
+    .cs-flow-item {
+      display: flex; align-items: center; justify-content: space-between;
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 8px 14px;
+      font-size: 0.78rem;
+      margin-bottom: 8px;
+    }
+    .cs-flow-item:last-child { margin-bottom: 0; }
+    .cs-flow-item.done    { background: rgba(2,6,23,0.5); }
+    .cs-flow-item.running { background: rgba(2,6,23,0.4); }
+    .cs-flow-item.queued  { background: rgba(2,6,23,0.3); color: #64748b; }
+    .cs-flow-item .status-done    { color: var(--emerald); }
+    .cs-flow-item .status-running { color: var(--amber); }
+    .cs-flow-item .status-queued  { color: #64748b; }
+
+    /* ── Sections ──────────────────────────────────── */
+    .section { margin-bottom: 48px; }
+    .section h2 { font-size: 1.5rem; font-weight: 600; margin-bottom: 16px; letter-spacing: -0.01em; }
+    .section h3 { font-size: 1.1rem; font-weight: 600; margin: 24px 0 8px; }
+    .section p { color: var(--muted); margin-bottom: 12px; }
+
+    .quick-install {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: var(--card);
+      backdrop-filter: blur(8px);
+      padding: 28px;
+      margin-bottom: 48px;
+      text-align: center;
+    }
+    .quick-install h2 { font-size: 1.1rem; margin-bottom: 14px; font-weight: 600; }
+    .install-cmd {
+      display: inline-flex; align-items: center; gap: 12px;
+      background: rgba(2,6,23,0.8);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 14px 22px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 1rem;
+      user-select: all;
+    }
+    .install-cmd .prefix { color: var(--green); }
+    .copy-btn {
+      background: none;
+      border: 1px solid var(--border);
+      color: var(--muted);
+      padding: 4px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      font-family: inherit;
+    }
+    .copy-btn:hover { color: var(--text); border-color: var(--muted); }
+
+    .downloads-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 16px; margin-top: 16px;
+    }
+    .download-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(8px);
+      padding: 22px;
+      display: flex; flex-direction: column; gap: 8px;
+    }
+    .download-card .platform { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); }
+    .download-card h3 { font-size: 1rem; margin: 0; }
+    .download-card p { font-size: 0.9rem; margin: 0; }
+    .download-card .btn { margin-top: auto; text-align: center; justify-content: center; }
+
+    .method-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+      gap: 16px; margin-top: 16px;
+    }
+    .method-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      backdrop-filter: blur(8px);
+      padding: 22px;
+    }
+    .method-card h3 { font-size: 1rem; margin: 0 0 8px; }
+    .method-card p { font-size: 0.85rem; margin: 0 0 12px; }
+    .badge {
+      display: inline-block;
+      background: var(--accent); color: #fff;
+      font-size: 0.7rem; font-weight: 600;
+      padding: 2px 8px;
+      border-radius: 999px;
+      text-transform: uppercase;
+      letter-spacing: 0.03em;
+      margin-left: 8px;
+      vertical-align: middle;
+    }
+
+    .steps { counter-reset: step; margin-top: 16px; }
+    .step {
+      counter-increment: step;
+      padding-left: 44px;
+      position: relative;
+      margin-bottom: 24px;
+    }
+    .step::before {
+      content: counter(step);
+      position: absolute; left: 0; top: 0;
+      width: 30px; height: 30px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.8rem; font-weight: 600; color: var(--accent);
+    }
+    .step h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
+    .step p { font-size: 0.9rem; margin-bottom: 8px; }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 36px 0;
+      text-align: center;
+      color: var(--muted);
+      font-size: 0.85rem;
+    }
+
+    @media (max-width: 600px) {
+      .hero-tagline { font-size: 1.8rem; }
+      .hero-desc { font-size: 0.95rem; }
+      .hero-grid { padding: 24px; }
+      .downloads-grid, .method-grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ══════ Hero ══════ -->
+  <div class="hero-wrapper">
+    <div class="hero-card">
+      <div class="hero-grid">
+        <!-- Left column -->
+        <div>
+          <div class="hero-badge">
+            <span class="dot"></span>
+            Local-first AI workstation
+          </div>
+
+          <div class="hero-logo">
+            <div class="icon-box">
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+                <path d="M318 372 L430 486 L318 600" fill="none" stroke="currentColor" stroke-width="88" stroke-linecap="round" stroke-linejoin="round"/>
+                <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715" fill="none" stroke="currentColor" stroke-width="88" stroke-linecap="round" stroke-linejoin="round"/>
+              </svg>
+            </div>
+            <div>
+              <div class="name">JAIT</div>
+              <p class="subtitle">Just Another Intelligent Tool</p>
+            </div>
+          </div>
+
+          <h1 class="hero-tagline">An agent workspace that looks and behaves like an actual toolchain.</h1>
+          <p class="hero-desc">Jait combines chat, terminals, file editing, browser control, screen sharing, and automation threads in one local-first surface.</p>
+
+          <div class="caps">
+            <span class="cap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
+              Local-first gateway
+            </span>
+            <span class="cap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+              Screen share + browser
+            </span>
+            <span class="cap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              Strategy + planning
+            </span>
+            <span class="cap">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              Code workspace + diffs
+            </span>
+          </div>
+
+          <div class="hero-cta">
+            <a href="#install" class="btn btn-primary">
+              Get started
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+            </a>
+            <a href="https://github.com/JakobWl/Jait" class="btn btn-outline">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+              View on GitHub
+            </a>
+          </div>
+
+          <div class="feature-cards">
+            <div class="feature-card">
+              <div class="fc-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+              </div>
+              <h3>Agent, terminal, and files in one loop</h3>
+              <p>Run commands, inspect repos, patch code, and keep the working context visible instead of hidden behind chat.</p>
+            </div>
+            <div class="feature-card">
+              <div class="fc-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/><line x1="12" y1="11" x2="12" y2="17"/><line x1="9" y1="14" x2="15" y2="14"/></svg>
+              </div>
+              <h3>Workspace-native editing</h3>
+              <p>Open real files, review diffs, and keep source control close to the conversation while the agent works.</p>
+            </div>
+            <div class="feature-card">
+              <div class="fc-icon">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" y1="20" x2="2.01" y2="20"/></svg>
+              </div>
+              <h3>Browser and device reach</h3>
+              <p>Bridge screen share, browser control, and network-aware tools from the same interface when the task needs it.</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Right column — Control surface -->
+        <div class="control-surface">
+          <div class="cs-panel">
+            <div class="cs-titlebar">
+              <div class="cs-dots">
+                <span class="red"></span>
+                <span class="amber"></span>
+                <span class="green"></span>
+              </div>
+              <div class="cs-label">Control surface</div>
+            </div>
+            <div class="cs-body">
+              <div class="cs-card">
+                <div class="cs-card-header">
+                  <div>
+                    <p class="cs-card-title">Live repo session</p>
+                    <p class="cs-card-sub">/workspace/jait attached to chat and tools</p>
+                  </div>
+                  <span class="cs-status-pill online">gateway online</span>
+                </div>
+                <div class="cs-terminal">
+                  <div class="cmd">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                    <span>bun run typecheck</span>
+                  </div>
+                  <div>$ workspace diff opened in review mode</div>
+                  <div>$ browser preview attached for verification</div>
+                </div>
+              </div>
+
+              <div class="cs-mini-grid">
+                <div class="cs-card">
+                  <div class="label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sky)"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                    Workspace
+                  </div>
+                  <ul class="cs-file-list">
+                    <li class="active">apps/web/src/App.tsx</li>
+                    <li class="muted">packages/gateway/src/server.ts</li>
+                    <li class="diff">review diff ready</li>
+                  </ul>
+                </div>
+                <div class="cs-card">
+                  <div class="label">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--cyan)"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
+                    Thread flow
+                  </div>
+                  <div class="cs-flow-item done">
+                    <span>Inspect implementation</span>
+                    <span class="status-done">done</span>
+                  </div>
+                  <div class="cs-flow-item running">
+                    <span>Patch landing page</span>
+                    <span class="status-running">running</span>
+                  </div>
+                  <div class="cs-flow-item queued">
+                    <span>Typecheck and tests</span>
+                    <span class="status-queued">queued</span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="cs-card">
+                <div class="cs-card-header">
+                  <div class="label" style="margin-bottom:0">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--emerald)"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" y1="20" x2="2.01" y2="20"/></svg>
+                    Reach beyond chat
+                  </div>
+                  <span style="font-size:0.68rem;color:#64748b">screen &middot; browser &middot; network</span>
+                </div>
+                <p style="font-size:0.85rem;line-height:1.6;color:#cbd5e1;margin:0">
+                  Built for real operations, not just prompt exchange. Connect devices, inspect a live UI, and validate changes from the same session.
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="container">
+
+    <!-- ══════ Quick install ══════ -->
+    <div class="quick-install" id="install">
+      <h2>Install the gateway in seconds</h2>
+      <div class="install-cmd">
+        <span class="prefix">$</span>
+        <span>npm install -g @jait/gateway</span>
+        <button class="copy-btn" onclick="navigator.clipboard.writeText('npm install -g @jait/gateway')">Copy</button>
+      </div>
+      <p style="margin-top: 12px; color: var(--muted); font-size: 0.85rem;">
+        Requires Node.js 20+ &middot; Works on Windows, macOS, and Linux
+      </p>
+    </div>
+
+    <!-- ══════ Install methods ══════ -->
+    <section class="section">
+      <h2>Installation methods</h2>
+      <p>Choose the method that works best for your setup.</p>
+      <div class="method-grid">
+        <div class="method-card">
+          <h3>npm / pnpm / bun <span class="badge">Recommended</span></h3>
+          <p>Global install — the simplest way to get started.</p>
+          <pre><code>npm install -g @jait/gateway
+jait</code></pre>
+        </div>
+        <div class="method-card">
+          <h3>Docker</h3>
+          <p>Run the full stack in containers.</p>
+          <pre><code>docker compose up -d</code></pre>
+          <p style="font-size: 0.8rem;">Images published to <code>ghcr.io/jakobwl/jait-gateway</code></p>
+        </div>
+        <div class="method-card">
+          <h3>From source</h3>
+          <p>Clone and build for development.</p>
+          <pre><code>git clone https://github.com/JakobWl/Jait
+cd jait
+bun install --frozen-lockfile
+bun run dev</code></pre>
+        </div>
+        <div class="method-card">
+          <h3>Docker (one-liner)</h3>
+          <p>Run the gateway without cloning.</p>
+          <pre><code>docker run -d -p 8000:8000 \
+  -v jait-data:/data \
+  ghcr.io/jakobwl/jait-gateway</code></pre>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ Downloads ══════ -->
+    <section class="section" id="downloads">
+      <h2>Downloads</h2>
+      <p>Pre-built apps and APKs for every platform.</p>
+      <div class="downloads-grid">
+        <div class="download-card">
+          <span class="platform">Windows</span>
+          <h3>Desktop App</h3>
+          <p>Installer for Windows 10/11 (x64)</p>
+          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-Setup-x64.exe" class="btn btn-outline">Download .exe</a>
+        </div>
+        <div class="download-card">
+          <span class="platform">macOS</span>
+          <h3>Desktop App</h3>
+          <p>Universal binary (Intel + Apple Silicon)</p>
+          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-universal.dmg" class="btn btn-outline">Download .dmg</a>
+        </div>
+        <div class="download-card">
+          <span class="platform">Linux</span>
+          <h3>Desktop App</h3>
+          <p>AppImage for any Linux distribution</p>
+          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-x86_64.AppImage" class="btn btn-outline">Download .AppImage</a>
+        </div>
+        <div class="download-card">
+          <span class="platform">Android</span>
+          <h3>Mobile App</h3>
+          <p>APK for Android 10+ (arm64)</p>
+          <a href="https://github.com/JakobWl/Jait/releases/latest/download/jait-arm64-v8a.apk" class="btn btn-outline">Download .apk</a>
+        </div>
+        <div class="download-card">
+          <span class="platform">Web</span>
+          <h3>Web App</h3>
+          <p>Use Jait directly in the browser — no install needed</p>
+          <a href="https://app.jait.dev" class="btn btn-primary">Open web app</a>
+        </div>
+        <div class="download-card">
+          <span class="platform">Gateway</span>
+          <h3>npm package</h3>
+          <p>Install the gateway via npm</p>
+          <a href="https://www.npmjs.com/package/@jait/gateway" class="btn btn-outline">View on npm</a>
+        </div>
+      </div>
+      <p style="margin-top: 16px; font-size: 0.85rem;">
+        All releases: <a href="https://github.com/JakobWl/Jait/releases">github.com/JakobWl/Jait/releases</a>
+      </p>
+    </section>
+
+    <!-- ══════ Quick start ══════ -->
+    <section class="section">
+      <h2>Quick start</h2>
+      <div class="steps">
+        <div class="step">
+          <h4>Install the gateway</h4>
+          <p>The backend server that runs tools, manages sessions, and orchestrates the AI agent.</p>
+          <pre><code>npm install -g @jait/gateway</code></pre>
+        </div>
+        <div class="step">
+          <h4>Start the gateway</h4>
+          <pre><code>jait</code></pre>
+          <p>Starts on <code>http://localhost:8000</code> by default. Use <code>jait --port 9000</code> to change.</p>
+        </div>
+        <div class="step">
+          <h4>Connect your client</h4>
+          <p>Open the web app, desktop app, or mobile app and go to <strong>Settings &rarr; Gateway connection</strong> to enter your gateway's IP or domain.</p>
+        </div>
+        <div class="step">
+          <h4>Start building</h4>
+          <p>Chat with the AI, use tools, and let Jait handle the rest.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ══════ Docker setup ══════ -->
+    <section class="section">
+      <h2>Docker setup</h2>
+      <p>For production or VPS deployments, Docker is the easiest way to run the full stack.</p>
+      <h3>docker-compose.yml</h3>
+      <pre><code>services:
+  gateway:
+    image: ghcr.io/jakobwl/jait-gateway:latest
+    ports:
+      - "8000:8000"
+    volumes:
+      - jait-data:/data
+    environment:
+      - NODE_ENV=production
+    restart: unless-stopped
+
+  web:
+    image: ghcr.io/jakobwl/jait-web:latest
+    ports:
+      - "3000:3000"
+    depends_on:
+      - gateway
+    restart: unless-stopped
+
+volumes:
+  jait-data:</code></pre>
+      <h3>Run it</h3>
+      <pre><code>docker compose up -d</code></pre>
+      <p>The web UI will be available at <code>http://localhost:3000</code> and the gateway API at <code>http://localhost:8000</code>.</p>
+    </section>
+  </div>
+
+  <footer>
+    <div class="container">
+      <p>Jait &mdash; Just Another Intelligent Tool &middot; <a href="https://github.com/JakobWl/Jait">GitHub</a> &middot; <a href="https://github.com/JakobWl/Jait/blob/main/LICENSE">MIT License</a></p>
+    </div>
+  </footer>
+
+</body>
+</html>
