@@ -54,7 +54,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Conversation, Message, PromptInput, SessionSelector, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
+import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
 import { DevPreviewPanel } from '@/components/chat/dev-preview-panel'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
@@ -148,7 +148,12 @@ function reorderById<T extends { id: string }>(items: T[], sourceId: string, tar
   return next
 }
 
-
+const suggestions = [
+  'What can you help me with?',
+  'Explain quantum computing',
+  'Write a Python script',
+  'What time is it?',
+]
 
 function loadLegacyCliModelsByProvider(currentProvider: ProviderId): Partial<Record<CliProviderId, string | null>> {
   const models: Partial<Record<CliProviderId, string | null>> = {}
@@ -2507,7 +2512,19 @@ function App() {
     }
   }, [automation.selectedRepo, automation.refresh, automation.setError])
 
-
+  const handleSuggestion = async (suggestion: string) => {
+    if (!token) {
+      setShowLoginDialog(true)
+      return
+    }
+    let sid = activeSessionId
+    if (!sid) {
+      const session = await createSession()
+      sid = session?.id ?? null
+    }
+    if (!sid) return
+    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) })
+  }
 
   const handleEditPreviousMessage = useCallback(async (
     messageId: string,
@@ -3905,39 +3922,42 @@ function App() {
                 )}
               </div>
             ) : !hasMessages ? (
-              <div className={`flex-1 min-w-0 flex flex-col items-end justify-end px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
+              <div className={`flex-1 min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
                 onAnimationEnd={() => setDeveloperAnimPhase('idle')}
               >
-                <div className={`shrink-0 w-full py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}>
-                  <div className="mx-auto w-full max-w-3xl space-y-1.5">
-                    <PromptInput
-                      ref={promptInputRef}
-                      value={inputValue}
-                      onChange={setInputValue}
-                      onSubmit={handleSubmit}
-                      onStop={cancelRequest}
-                      onQueue={handleQueue}
-                      isLoading={isLoading}
-                      onVoiceInput={handleVoiceInput}
-                      voiceRecording={voiceRecording}
-                      voiceLevels={voiceLevels}
-                      voiceTranscribing={voiceTranscribing}
-                      onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                      mode={chatMode}
-                      onModeChange={setChatMode}
-                      provider={chatProvider}
-                      onProviderChange={handleChatProviderChange}
-                      cliModel={cliModel}
-                      onCliModelChange={handleCliModelChange}
-                      viewMode={viewMode}
-                      onViewModeChange={setViewMode}
-                      availableFiles={availableFilesForMention}
-                      onSearchFiles={handleSearchFiles}
-                      workspaceOpen={showWorkspace}
-                      sessionInfo={sessionInfo}
-                      workspaceNodeId={activeWorkspace?.nodeId}
-                    />
+                <div className="w-full max-w-3xl space-y-8">
+                  <div className="text-center">
+                    <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
+                    <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
                   </div>
+                  <Suggestions suggestions={suggestions} onSelect={handleSuggestion} />
+                  <PromptInput
+                    ref={promptInputRef}
+                    value={inputValue}
+                    onChange={setInputValue}
+                    onSubmit={handleSubmit}
+                    onStop={cancelRequest}
+                    onQueue={handleQueue}
+                    isLoading={isLoading}
+                    onVoiceInput={handleVoiceInput}
+                    voiceRecording={voiceRecording}
+                    voiceLevels={voiceLevels}
+                    voiceTranscribing={voiceTranscribing}
+                    onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                    mode={chatMode}
+                    onModeChange={setChatMode}
+                    provider={chatProvider}
+                    onProviderChange={handleChatProviderChange}
+                    cliModel={cliModel}
+                    onCliModelChange={handleCliModelChange}
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
+                    availableFiles={availableFilesForMention}
+                    onSearchFiles={handleSearchFiles}
+                    workspaceOpen={showWorkspace}
+                    sessionInfo={sessionInfo}
+                    workspaceNodeId={activeWorkspace?.nodeId}
+                  />
                 </div>
               </div>
             ) : (
