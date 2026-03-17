@@ -88,6 +88,10 @@ function extractPathLikeString(value: string): string | null {
   return null
 }
 
+function isImagePath(value: string): boolean {
+  return /\.(?:png|jpe?g|gif|webp)$/i.test(value.trim())
+}
+
 function firstPathFromChanges(value: unknown): string | undefined {
   if (!Array.isArray(value)) return undefined
   for (const entry of value) {
@@ -216,6 +220,46 @@ export function getToolFilePath(
   if (nestedPath) return nestedPath
 
   return resultMessage ? extractPathLikeString(resultMessage) : null
+}
+
+export function getToolImagePath(
+  tool: string,
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+  resultMessage?: string | null,
+): string | null {
+  const normalizedTool = normalizeToolName(tool)
+  const normalizedArgs = normalizeToolArgs(normalizedTool, args, resultData)
+  const nested = getInvocationObject(args, resultData)
+
+  const directPath = firstNonEmptyString(
+    resultData?.path,
+    firstObject(resultData?.result)?.path,
+    normalizedArgs.path,
+    normalizedArgs.file_path,
+    normalizedArgs.filePath,
+    normalizedArgs.file,
+    normalizedArgs.filename,
+    nested?.path,
+    nested?.file_path,
+    nested?.filePath,
+    nested?.file,
+    nested?.filename,
+  )
+  if (directPath && isImagePath(directPath)) return directPath
+
+  const outputPath = firstNonEmptyString(
+    resultData?.output,
+    resultData?.content,
+    firstObject(resultData?.result)?.output,
+    firstObject(resultData?.result)?.content,
+  )
+  if (outputPath && isImagePath(outputPath)) return outputPath
+
+  const messagePath = resultMessage ? extractPathLikeString(resultMessage) : null
+  if (messagePath && isImagePath(messagePath)) return messagePath
+
+  return null
 }
 
 export function normalizeToolName(name: string): string {

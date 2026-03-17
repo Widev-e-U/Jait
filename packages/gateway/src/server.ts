@@ -11,6 +11,7 @@ import type { AppConfig } from "./config.js";
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require("../package.json") as { version: string };
 const IMAGE_EXTENSIONS = new Set([".png", ".jpg", ".jpeg", ".webp", ".gif"]);
+const HTML_EXTENSIONS = new Set([".html", ".htm"]);
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 import { registerChatRoutes } from "./routes/chat.js";
@@ -174,6 +175,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   registerFilesystemRoutes(app, deps.ws);
   registerBrowserAssetRoutes(app);
+  registerWorkspacePreviewRoutes(app);
   registerDevProxyRoutes(app);
 
   if (deps.surfaceRegistry) {
@@ -318,6 +320,64 @@ function registerBrowserAssetRoutes(app: FastifyInstance): void {
   });
 }
 
+function registerWorkspacePreviewRoutes(app: FastifyInstance): void {
+  const handler = async (request: any, reply: any) => {
+    const params = request.params as { encodedPath?: string; "*"?: string };
+    const rootPath = decodePreviewFilePath(params.encodedPath);
+    if (!rootPath) {
+      return reply.status(400).send({ error: "INVALID_PATH", message: "A valid HTML file path is required" });
+    }
+
+    const workspaceRoot = resolve(process.cwd());
+    const resolvedRoot = resolve(rootPath);
+    if (!isPathWithin(workspaceRoot, resolvedRoot)) {
+      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Preview path must stay within the gateway workspace" });
+    }
+
+    const rootExtension = extname(resolvedRoot).toLowerCase();
+    if (!HTML_EXTENSIONS.has(rootExtension)) {
+      return reply.status(400).send({ error: "UNSUPPORTED_FILE", message: "Only HTML files can be opened in preview" });
+    }
+
+    const relativeAssetPath = typeof params["*"] === "string" ? params["*"] : "";
+    const targetPath = relativeAssetPath
+      ? resolve(dirname(resolvedRoot), relativeAssetPath)
+      : resolvedRoot;
+
+    if (relativeAssetPath && !isPathWithin(dirname(resolvedRoot), targetPath)) {
+      return reply.status(403).send({ error: "PATH_FORBIDDEN", message: "Preview asset path must stay within the HTML file directory" });
+    }
+
+    try {
+      const fileInfo = await stat(targetPath);
+      if (!fileInfo.isFile()) {
+        return reply.status(404).send({ error: "NOT_FOUND", message: "Preview file not found" });
+      }
+
+      const extension = extname(targetPath).toLowerCase();
+      const contentType = getPreviewContentType(extension);
+      const data = await readFile(targetPath);
+      reply.header("Cache-Control", "no-store");
+
+      if (HTML_EXTENSIONS.has(extension)) {
+        const html = data.toString("utf8");
+        const prefix = `/api/dev-file/${params.encodedPath}`;
+        return reply.type("text/html; charset=utf-8").send(rewritePreviewHtml(html, prefix));
+      }
+
+      return reply.type(contentType).send(data);
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+        return reply.status(404).send({ error: "NOT_FOUND", message: "Preview file not found" });
+      }
+      throw error;
+    }
+  };
+
+  app.get("/api/dev-file/:encodedPath", handler);
+  app.get("/api/dev-file/:encodedPath/*", handler);
+}
+
 function registerDevProxyRoutes(app: FastifyInstance): void {
   const handler = async (request: any, reply: any) => {
     const params = request.params as { port?: string; "*"?: string };
@@ -356,9 +416,19 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
       }
       reply.header("Cache-Control", "no-store");
 
-      if (contentType.includes("text/html")) {
-        const html = await upstream.text();
-        return reply.type("text/html; charset=utf-8").send(rewriteProxyHtml(html, port));
+      if (contentType.includes("text/html") && isModuleLikeProxyPath(proxiedPath)) {
+        return reply
+          .code(502)
+          .type("application/json; charset=utf-8")
+          .send({
+          error: "DEV_PROXY_MODULE_FALLBACK",
+          message: `Dev server returned HTML for module request ${proxiedPath}. Open the server root or fix absolute asset routing.`,
+        });
+      }
+
+      if (contentType.includes("text/html") || contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
+        const text = await upstream.text();
+        return reply.type(contentType).send(rewriteDevProxyText(text, contentType, `/api/dev-proxy/${port}`));
       }
 
       const body = Buffer.from(await upstream.arrayBuffer());
@@ -406,20 +476,82 @@ function buildProxyRequestBody(method: string, body: unknown): RequestInit["body
   return JSON.stringify(body);
 }
 
-function rewriteProxyHtml(html: string, port: number): string {
-  const prefix = `/api/dev-proxy/${port}`;
+function rewritePreviewHtml(html: string, prefix: string): string {
   let rewritten = html;
+  rewritten = rewritten.replace(/\b(src|href|action|poster)=("|')\/(?!\/)/gi, `$1=$2${prefix}/`);
+  rewritten = rewritten.replace(/\bcontent=("|')([^"']*url=)\/(?!\/)/gi, `content=$1$2${prefix}/`);
   if (!/<base\b/i.test(rewritten)) {
     rewritten = rewritten.replace(/<head([^>]*)>/i, `<head$1><base href="${prefix}/">`);
   }
-  rewritten = rewritten.replace(/\b(src|href|action|poster)=("|')\/(?!\/)/gi, `$1=$2${prefix}/`);
-  rewritten = rewritten.replace(/\bcontent=("|')([^"']*url=)\/(?!\/)/gi, `content=$1$2${prefix}/`);
   return rewritten;
+}
+
+function rewriteDevProxyText(body: string, contentType: string, prefix: string): string {
+  if (contentType.includes("text/html")) {
+    return rewritePreviewHtml(body, prefix);
+  }
+
+  if (contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
+    return body.replace(/(["'`(])\/(@fs\/|@vite\/|node_modules\/|src\/)/g, (_match, boundary: string, pathPrefix: string) => {
+      return `${boundary}${prefix}/${pathPrefix}`;
+    });
+  }
+
+  return body;
+}
+
+function isModuleLikeProxyPath(path: string): boolean {
+  return /^\/(?:@fs\/|@vite\/|node_modules\/|src\/)/.test(path)
+    || /\.(?:m?js|cjs|ts|tsx|jsx|css)(?:$|[?#])/.test(path);
 }
 
 function isPathWithin(root: string, target: string): boolean {
   const rel = relative(root, target);
   return rel === "" || (!rel.startsWith("..") && !rel.startsWith(`..${sep}`));
+}
+
+function decodePreviewFilePath(encodedPath?: string): string | null {
+  if (!encodedPath) return null;
+  try {
+    const normalized = encodedPath.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(normalized.length + ((4 - normalized.length % 4) % 4), "=");
+    const decoded = Buffer.from(padded, "base64").toString("utf8");
+    return decoded.startsWith("/") ? decoded : resolve(process.cwd(), decoded);
+  } catch {
+    return null;
+  }
+}
+
+function getPreviewContentType(extension: string): string {
+  switch (extension) {
+    case ".html":
+    case ".htm":
+      return "text/html; charset=utf-8";
+    case ".css":
+      return "text/css; charset=utf-8";
+    case ".js":
+    case ".mjs":
+      return "text/javascript; charset=utf-8";
+    case ".json":
+      return "application/json; charset=utf-8";
+    case ".svg":
+      return "image/svg+xml";
+    case ".png":
+      return "image/png";
+    case ".jpg":
+    case ".jpeg":
+      return "image/jpeg";
+    case ".gif":
+      return "image/gif";
+    case ".webp":
+      return "image/webp";
+    case ".ico":
+      return "image/x-icon";
+    case ".map":
+      return "application/json; charset=utf-8";
+    default:
+      return "application/octet-stream";
+  }
 }
 
 /** Resolve the directory containing the built web frontend. */

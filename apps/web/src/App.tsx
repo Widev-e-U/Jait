@@ -780,10 +780,12 @@ function App() {
   const [showDevPreview, setShowDevPreview] = useState(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [devPreviewAutoOpenKey, setDevPreviewAutoOpenKey] = useState(0)
+  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target: string; key: number } | null>(null)
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
   const [showCloseWorkspaceConfirm, setShowCloseWorkspaceConfirm] = useState(false)
+  const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
   const closeConfirmRef = useRef<HTMLDivElement>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [terminalHeight, setTerminalHeight] = useState(280)
@@ -843,6 +845,17 @@ function App() {
   const [fsWatcherVersion, setFsWatcherVersion] = useState(0)
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
+  const showWorkspaceEditorPanel = useCallback(() => {
+    setShowWorkspaceEditor(true)
+  }, [])
+  const routePreviewToWorkspace = useCallback((target?: string | null) => {
+    const trimmed = target?.trim()
+    if (!trimmed || !activeWorkspace) return false
+    if (!showWorkspace) setShowWorkspace(true)
+    showWorkspaceEditorPanel()
+    setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
+    return true
+  }, [activeWorkspace, showWorkspace, showWorkspaceEditorPanel])
 
   const getFloatingViewport = useCallback(() => ({
     width: window.innerWidth,
@@ -1203,9 +1216,6 @@ function App() {
     : 'Describe what you want to do...'
 
 
-  // ── UI command channel (server ↔ frontend via WebSocket) ──────────
-  const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
-
   // Detect Electron platform and listen for maximize/unmaximize (custom titlebar)
   useEffect(() => {
     const desktop = (window as any).jaitDesktop
@@ -1232,6 +1242,9 @@ function App() {
   )
   const [savedScreenShare, setSavedScreenShare] = useSessionState<{ open: boolean }>(
     activeSessionId, 'screen-share.panel', token,
+  )
+  const [savedDevPreview, setSavedDevPreview] = useSessionState<{ open: boolean; target?: string | null }>(
+    activeSessionId, 'dev-preview.panel', token,
   )
   const [savedTerminal, setSavedTerminal] = useSessionState<{ open: boolean }>(
     activeSessionId, 'terminal.panel', token,
@@ -1260,6 +1273,10 @@ function App() {
     setWorkspaceTabsState(null)
   }, [activeSessionId])
 
+  useEffect(() => {
+    setWorkspacePreviewRequest(null)
+  }, [activeSessionId])
+
   // ── Persistent session state for todos & changed files ────────────
   type SavedTodo = { id: number; title: string; status: 'not-started' | 'in-progress' | 'completed' }
   const [savedTodos] = useSessionState<SavedTodo[]>(activeSessionId, 'todo_list', token)
@@ -1284,6 +1301,23 @@ function App() {
     if (wsFullStateReceivedRef.current) return
     if (savedScreenShare?.open) setShowScreenShare(true)
   }, [savedScreenShare]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    const nextTarget = savedDevPreview?.target?.trim() || null
+    if (nextTarget) setDevPreviewTarget(nextTarget)
+    if (savedDevPreview?.open && routePreviewToWorkspace(nextTarget)) {
+      setShowDevPreview(false)
+      return
+    }
+    setShowDevPreview(savedDevPreview?.open === true)
+  }, [savedDevPreview, routePreviewToWorkspace])
+
+  useEffect(() => {
+    if (!showDevPreview) return
+    if (!routePreviewToWorkspace(devPreviewTarget)) return
+    setShowDevPreview(false)
+  }, [showDevPreview, devPreviewTarget, routePreviewToWorkspace])
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
@@ -1377,6 +1411,20 @@ function App() {
           setShowScreenShare(v.open !== false)
         }
         break
+      case 'dev-preview.panel':
+        if (!value) {
+          setShowDevPreview(false)
+        } else {
+          const v = value as { open?: boolean; target?: string | null }
+          const nextTarget = typeof v.target === 'string' ? v.target : null
+          if (nextTarget) setDevPreviewTarget(nextTarget)
+          if (v.open !== false && routePreviewToWorkspace(nextTarget)) {
+            setShowDevPreview(false)
+          } else {
+            setShowDevPreview(v.open !== false)
+          }
+        }
+        break
       case 'terminal.panel':
         if (!value) setShowTerminal(false)
         else {
@@ -1443,7 +1491,7 @@ function App() {
         break
       }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState])
+  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   const handleFullState = useCallback((state: Record<string, unknown>) => {
@@ -1465,6 +1513,19 @@ function App() {
       setShowScreenShare(true)
     } else {
       setShowScreenShare(false)
+    }
+
+    const dp = state['dev-preview.panel'] as { open?: boolean; target?: string | null } | null | undefined
+    if (dp && dp.open !== false) {
+      const nextTarget = typeof dp.target === 'string' ? dp.target : null
+      if (nextTarget) setDevPreviewTarget(nextTarget)
+      if (routePreviewToWorkspace(nextTarget)) {
+        setShowDevPreview(false)
+      } else {
+        setShowDevPreview(true)
+      }
+    } else {
+      setShowDevPreview(false)
     }
 
     // Terminal panel
@@ -1528,7 +1589,7 @@ function App() {
     } else {
       setMessageQueueState([])
     }
-  }, [setTodoList, setChangedFiles, setMessageQueueState])
+  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider])
 
   const { sendUIState } = useUICommands({
     sessionId: activeSessionId,
@@ -1574,7 +1635,8 @@ function App() {
         setDevPreviewTarget(target)
         setDevPreviewAutoOpenKey((prev) => prev + 1)
         setShowDevPreview(true)
-      }, []),
+        setSavedDevPreview({ open: true, target })
+      }, [setSavedDevPreview]),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
         setSavedScreenShare({ open: true })
@@ -1736,6 +1798,12 @@ function App() {
     sendUIState('screen-share.panel', null, activeSessionId)
   }, [setSavedScreenShare, sendUIState, activeSessionId])
 
+  const closeDevPreviewPanel = useCallback(() => {
+    setShowDevPreview(false)
+    setSavedDevPreview(null)
+    sendUIState('dev-preview.panel', null, activeSessionId)
+  }, [setSavedDevPreview, sendUIState, activeSessionId])
+
   const openTerminalPanel = useCallback(() => {
     setShowTerminal(true)
     setSavedTerminal({ open: true })
@@ -1771,9 +1839,21 @@ function App() {
     setShowWorkspaceTree(true)
   }, [])
 
-  const showWorkspaceEditorPanel = useCallback(() => {
-    setShowWorkspaceEditor(true)
-  }, [])
+  const openDevPreviewPanel = useCallback((target?: string | null) => {
+    setCurrentView('chat')
+    const nextTarget = target?.trim() || devPreviewTarget?.trim() || null
+    if (nextTarget) {
+      setDevPreviewTarget(nextTarget)
+    }
+    const state = { open: true, target: nextTarget }
+    setSavedDevPreview(state)
+    sendUIState('dev-preview.panel', state, activeSessionId)
+    if (routePreviewToWorkspace(nextTarget)) {
+      setShowDevPreview(false)
+      return
+    }
+    setShowDevPreview(true)
+  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget, routePreviewToWorkspace])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
@@ -3321,7 +3401,13 @@ function App() {
                         variant={showDevPreview ? 'secondary' : 'ghost'}
                         size="sm"
                         className="h-6 text-[11px] px-2 shrink-0"
-                        onClick={() => setShowDevPreview((prev) => !prev)}
+                        onClick={() => {
+                          if (showDevPreview) {
+                            closeDevPreviewPanel()
+                          } else {
+                            openDevPreviewPanel()
+                          }
+                        }}
                       >
                         <Globe className="h-3 w-3 mr-1" />
                         Preview
@@ -3614,6 +3700,7 @@ function App() {
                 changedPaths={changedPaths}
                 fsWatcherVersion={fsWatcherVersion}
                 savedTabsState={workspaceTabsState}
+                previewRequest={workspacePreviewRequest}
                 onTabsStateChange={handleWorkspaceTabsStateChange}
                 onApplyDiff={handleApplyWorkspaceDiff}
                 provider={chatProvider}
@@ -3642,6 +3729,7 @@ function App() {
                   changedPaths={changedPaths}
                   isMobile
                   savedTabsState={workspaceTabsState}
+                  previewRequest={workspacePreviewRequest}
                   onTabsStateChange={handleWorkspaceTabsStateChange}
                   onApplyDiff={handleApplyWorkspaceDiff}
                   provider={chatProvider}
@@ -3942,6 +4030,13 @@ function App() {
               <div className={`flex-1 min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
                 onAnimationEnd={() => setDeveloperAnimPhase('idle')}
               >
+                {showDevPreview && (
+                  <DevPreviewPanel
+                    onClose={closeDevPreviewPanel}
+                    initialTarget={devPreviewTarget}
+                    autoOpenKey={devPreviewAutoOpenKey}
+                  />
+                )}
                 <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
@@ -3981,7 +4076,7 @@ function App() {
               <div className="flex flex-col flex-1 min-w-0 min-h-0 transition-all duration-300 ease-out">
                 {showDevPreview && (
                   <DevPreviewPanel
-                    onClose={() => setShowDevPreview(false)}
+                    onClose={closeDevPreviewPanel}
                     initialTarget={devPreviewTarget}
                     autoOpenKey={devPreviewAutoOpenKey}
                   />

@@ -123,6 +123,7 @@ export interface FsChangesPayload {
  */
 export type UIStateKey =
   | "workspace.panel"
+  | "dev-preview.panel"
   | "workspace.tabs"
   | "workspace.layout"
   | "screen-share.panel"

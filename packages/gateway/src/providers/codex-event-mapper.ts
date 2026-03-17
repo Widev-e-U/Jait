@@ -73,7 +73,7 @@ export function mapCodexNotification(
         return [{
           type: "tool.result", sessionId, tool: category,
           ok: status !== "error" && status !== "failed",
-          message: output, callId: itemId,
+          message: output, callId: itemId, data: extractToolResultData(item),
         }];
       }
       // Non-tool item completed (e.g. agent message)
@@ -130,7 +130,7 @@ export function mapCodexNotification(
         return [{
           type: "tool.result", sessionId, tool: category,
           ok: status !== "error" && status !== "failed",
-          message: output, callId: itemId,
+          message: output, callId: itemId, data: extractToolResultData(msg),
         }];
       }
       // Non-tool item completed (e.g. agent message)
@@ -252,6 +252,32 @@ function extractCodexEventItemId(params: Record<string, unknown>): string {
 
 function asString(v: unknown): string | undefined {
   return typeof v === "string" && v.trim() ? v : undefined;
+}
+
+function asObject(v: unknown): Record<string, unknown> | undefined {
+  return v && typeof v === "object" && !Array.isArray(v) ? v as Record<string, unknown> : undefined;
+}
+
+function parseJsonObject(v: unknown): Record<string, unknown> | undefined {
+  if (typeof v !== "string") return undefined;
+  try {
+    const parsed = JSON.parse(v) as unknown;
+    return asObject(parsed);
+  } catch {
+    return undefined;
+  }
+}
+
+function extractToolResultData(item: Record<string, unknown>): unknown {
+  return (
+    asObject(item.result) ??
+    asObject(item.output) ??
+    asObject(item.data) ??
+    parseJsonObject(item.result) ??
+    parseJsonObject(item.output) ??
+    parseJsonObject(item.data) ??
+    undefined
+  );
 }
 
 function extractTextContent(item: Record<string, unknown>): string {

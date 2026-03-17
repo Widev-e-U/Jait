@@ -22,6 +22,13 @@ describe('resolvePreviewTarget', () => {
     })
   })
 
+  it('accepts local html files from the workspace', () => {
+    expect(resolvePreviewTarget('docs/site/index.html')).toEqual({
+      iframeSrc: 'http://localhost:8000/api/dev-file/ZG9jcy9zaXRlL2luZGV4Lmh0bWw',
+      label: 'docs/site/index.html',
+    })
+  })
+
   it('rejects non-loopback hosts', () => {
     expect(resolvePreviewTarget('https://example.com:3000')).toBeNull()
   })
