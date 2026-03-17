@@ -25,7 +25,75 @@
       --cyan: #22d3ee;
       --emerald: #34d399;
       --radius: 1.75rem;
+      color-scheme: dark;
     }
+    html.light {
+      --bg: #fafafa;
+      --surface: rgba(240, 240, 242, 0.9);
+      --card: rgba(255, 255, 255, 0.85);
+      --border: rgba(220, 220, 225, 0.8);
+      --text: #18181b;
+      --muted: #71717a;
+      color-scheme: light;
+    }
+    html.light body::before {
+      background:
+        radial-gradient(ellipse 700px 500px at 5% 8%, rgba(56,189,248,0.06), transparent),
+        radial-gradient(ellipse 800px 600px at 95% 5%, rgba(34,211,238,0.05), transparent),
+        radial-gradient(ellipse 900px 700px at 20% 60%, rgba(52,211,153,0.04), transparent),
+        radial-gradient(ellipse 600px 400px at 80% 70%, rgba(59,130,246,0.04), transparent),
+        radial-gradient(ellipse 500px 500px at 50% 100%, rgba(139,92,246,0.03), transparent);
+    }
+    html.light .hero-card {
+      background: linear-gradient(135deg, rgba(255,255,255,0.95), rgba(250,250,252,0.88) 60%, rgba(230,235,245,0.5));
+      box-shadow: 0 36px 120px -64px rgba(0,0,0,0.1);
+    }
+    html.light .hero-card::before {
+      background:
+        radial-gradient(circle 320px at -8% -14%, rgba(56,189,248,0.08), transparent),
+        radial-gradient(circle 360px at 108% 10%, rgba(34,211,238,0.06), transparent),
+        radial-gradient(circle 400px at 28% 118%, rgba(52,211,153,0.06), transparent);
+    }
+    html.light .section-card {
+      background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248,248,252,0.88) 60%, rgba(235,240,250,0.4));
+      box-shadow: 0 24px 80px -48px rgba(0,0,0,0.08);
+    }
+    html.light .quick-install {
+      background: linear-gradient(135deg, rgba(255,255,255,0.92), rgba(248,248,252,0.88));
+      box-shadow: 0 24px 80px -48px rgba(0,0,0,0.08);
+    }
+    html.light .feature-card {
+      background: rgba(255,255,255,0.8);
+      box-shadow: 0 8px 32px -16px rgba(0,0,0,0.08);
+    }
+    html.light .feature-card:hover { box-shadow: 0 16px 48px -20px rgba(0,0,0,0.12); }
+    html.light .method-card,
+    html.light .download-card {
+      background: rgba(255,255,255,0.7);
+      box-shadow: 0 4px 24px -12px rgba(0,0,0,0.06);
+    }
+    html.light .method-card:hover,
+    html.light .download-card:hover { box-shadow: 0 12px 40px -16px rgba(0,0,0,0.1); }
+    html.light pre {
+      background: rgba(245,247,250,0.9);
+    }
+    html.light .install-cmd {
+      background: rgba(245,247,250,0.9);
+    }
+    html.light .cs-panel {
+      background: linear-gradient(180deg, rgba(30,34,45,0.97), rgba(22,28,40,0.95));
+    }
+    html.light .hero-badge,
+    html.light .caps .cap {
+      background: rgba(255,255,255,0.8);
+    }
+    html.light .btn-outline {
+      background: rgba(255,255,255,0.8);
+      border-color: var(--border);
+    }
+    html.light .tut-step.active { background: rgba(0,0,0,0.03); }
+    html.light .tut-step .tut-num { background: rgba(255,255,255,0.9); }
+    html.light .step::before { background: rgba(255,255,255,0.9); }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html { scroll-behavior: smooth; }
     body {
@@ -446,14 +514,55 @@
       background: none;
       border: 1px solid var(--border);
       color: var(--muted);
-      padding: 4px 10px;
+      padding: 6px 8px;
       border-radius: 6px;
       cursor: pointer;
       font-size: 0.8rem;
       font-family: inherit;
-      transition: all 0.15s;
+      transition: all 0.2s cubic-bezier(0.16,1,0.3,1);
+      display: inline-flex; align-items: center; justify-content: center;
+      line-height: 1;
     }
     .copy-btn:hover { color: var(--text); border-color: var(--muted); }
+    .copy-btn svg { width: 16px; height: 16px; }
+    .copy-btn.copied {
+      border-color: var(--emerald);
+      color: var(--emerald);
+      transform: scale(1.1);
+    }
+
+    /* ── Theme toggle ────────────────────────── */
+    .theme-toggle {
+      position: fixed;
+      top: 20px;
+      right: 20px;
+      z-index: 100;
+      width: 42px; height: 42px;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: var(--card);
+      backdrop-filter: blur(16px);
+      cursor: pointer;
+      display: flex; align-items: center; justify-content: center;
+      color: var(--text);
+      box-shadow: 0 4px 20px -8px rgba(0,0,0,0.3);
+      transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
+      animation: fadeIn 0.5s 0.8s both;
+    }
+    .theme-toggle:hover {
+      transform: scale(1.08);
+      box-shadow: 0 6px 24px -8px rgba(0,0,0,0.4);
+    }
+    .theme-toggle:active { transform: scale(0.95); }
+    .theme-toggle svg {
+      width: 20px; height: 20px;
+      transition: transform 0.3s cubic-bezier(0.16,1,0.3,1);
+    }
+    .theme-toggle:hover svg { transform: rotate(15deg); }
+    .theme-toggle .icon-sun { display: none; }
+    .theme-toggle .icon-moon { display: block; }
+    html.light .theme-toggle .icon-sun { display: block; }
+    html.light .theme-toggle .icon-moon { display: none; }
 
     /* ── Method & download & step cards ────────── */
     .method-grid {
@@ -533,6 +642,216 @@
     .step h4 { font-size: 0.95rem; font-weight: 600; margin-bottom: 4px; }
     .step p { font-size: 0.9rem; margin-bottom: 8px; }
 
+    /* ── Tutorial walkthrough ─────────────────── */
+    .tutorial { display: grid; gap: 40px; }
+    @media (min-width: 960px) {
+      .tutorial { grid-template-columns: 340px 1fr; gap: 48px; }
+    }
+    .tut-steps { display: flex; flex-direction: column; gap: 4px; }
+    .tut-step {
+      display: flex; align-items: flex-start; gap: 16px;
+      padding: 16px 18px;
+      border-radius: var(--radius);
+      border: 1px solid transparent;
+      cursor: pointer;
+      transition: all 0.3s cubic-bezier(0.16,1,0.3,1);
+      position: relative;
+    }
+    .tut-step:hover { background: rgba(255,255,255,0.03); }
+    .tut-step.active {
+      background: rgba(255,255,255,0.05);
+      border-color: var(--border);
+    }
+    .tut-step .tut-num {
+      width: 32px; height: 32px; min-width: 32px;
+      display: flex; align-items: center; justify-content: center;
+      border-radius: 50%;
+      border: 1px solid var(--border);
+      background: rgba(9,9,11,0.8);
+      font-size: 0.78rem; font-weight: 600;
+      color: var(--muted);
+      transition: all 0.3s;
+    }
+    .tut-step.active .tut-num {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: #fff;
+    }
+    .tut-step .tut-info h4 {
+      font-size: 0.9rem; font-weight: 600; margin-bottom: 4px;
+      transition: color 0.3s;
+    }
+    .tut-step.active .tut-info h4 { color: #fff; }
+    .tut-step .tut-info p {
+      font-size: 0.82rem; color: var(--muted); margin: 0; line-height: 1.5;
+      opacity: 0; max-height: 0; overflow: hidden;
+      transition: opacity 0.3s, max-height 0.3s;
+    }
+    .tut-step.active .tut-info p {
+      opacity: 1; max-height: 80px;
+      margin-top: 2px;
+    }
+    .tut-progress {
+      position: absolute; bottom: 0; left: 18px; right: 18px; height: 2px;
+      background: rgba(255,255,255,0.06); border-radius: 1px;
+      overflow: hidden; opacity: 0;
+    }
+    .tut-step.active .tut-progress { opacity: 1; }
+    .tut-progress-bar {
+      height: 100%; width: 0; background: var(--accent);
+      border-radius: 1px;
+      transition: width linear;
+    }
+    .tut-step.active .tut-progress-bar {
+      width: 100%;
+    }
+
+    /* Simulated screen */
+    .tut-screen {
+      border-radius: var(--radius);
+      border: 1px solid var(--border);
+      background: linear-gradient(180deg, rgba(2,6,23,0.96), rgba(15,23,42,0.92));
+      overflow: hidden;
+      box-shadow: 0 30px 100px -56px rgba(2,6,23,0.95);
+      min-height: 420px;
+      display: flex; flex-direction: column;
+    }
+    .tut-screen-bar {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 12px 18px;
+      border-bottom: 1px solid rgba(255,255,255,0.08);
+    }
+    .tut-screen-bar .dots { display: flex; gap: 6px; }
+    .tut-screen-bar .dots span { width: 10px; height: 10px; border-radius: 50%; }
+    .tut-screen-bar .dots .r { background: rgba(251,113,133,0.8); }
+    .tut-screen-bar .dots .a { background: rgba(251,191,36,0.8); }
+    .tut-screen-bar .dots .g { background: rgba(52,211,153,0.8); }
+    .tut-screen-bar .title {
+      font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.18em; color: #64748b;
+    }
+    .tut-screen-body {
+      flex: 1; padding: 20px; position: relative;
+      overflow: hidden;
+    }
+    .tut-scene {
+      position: absolute; inset: 20px;
+      opacity: 0; transform: translateY(12px);
+      transition: opacity 0.4s cubic-bezier(0.16,1,0.3,1), transform 0.4s cubic-bezier(0.16,1,0.3,1);
+      pointer-events: none;
+      display: flex; flex-direction: column; gap: 14px;
+    }
+    .tut-scene.active {
+      opacity: 1; transform: translateY(0);
+      pointer-events: auto;
+    }
+    .tut-chat-row {
+      display: flex; gap: 10px; align-items: flex-start;
+    }
+    .tut-avatar {
+      width: 28px; height: 28px; min-width: 28px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 600;
+    }
+    .tut-avatar.user { background: rgba(59,130,246,0.2); color: var(--sky); }
+    .tut-avatar.agent { background: rgba(52,211,153,0.2); color: var(--emerald); }
+    .tut-bubble {
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      padding: 12px 16px;
+      font-size: 0.85rem;
+      line-height: 1.6;
+      color: #cbd5e1;
+      max-width: 85%;
+    }
+    .tut-bubble.user-msg { background: rgba(59,130,246,0.08); }
+    .tut-bubble.agent-msg { background: rgba(255,255,255,0.04); }
+    .tut-typing {
+      display: inline-flex; gap: 4px; align-items: center; padding: 4px 0;
+    }
+    .tut-typing span {
+      width: 6px; height: 6px; border-radius: 50%; background: #64748b;
+      animation: typingDot 1.2s ease-in-out infinite;
+    }
+    .tut-typing span:nth-child(2) { animation-delay: 0.15s; }
+    .tut-typing span:nth-child(3) { animation-delay: 0.3s; }
+    @keyframes typingDot {
+      0%, 60%, 100% { opacity: 0.3; transform: translateY(0); }
+      30% { opacity: 1; transform: translateY(-3px); }
+    }
+    .tut-terminal-block {
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(2,6,23,0.6);
+      padding: 14px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.78rem;
+      color: #94a3b8;
+      line-height: 1.8;
+    }
+    .tut-terminal-block .prompt { color: var(--emerald); }
+    .tut-terminal-block .output { color: #64748b; }
+    .tut-terminal-block .success { color: var(--green); }
+    .tut-terminal-block .warn { color: var(--amber); }
+    .tut-diff-block {
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(2,6,23,0.6);
+      padding: 14px;
+      font-family: 'SF Mono', 'Fira Code', monospace;
+      font-size: 0.78rem;
+      line-height: 1.8;
+    }
+    .tut-diff-block .diff-file {
+      color: #94a3b8; margin-bottom: 8px; font-size: 0.72rem;
+      padding-bottom: 8px; border-bottom: 1px solid rgba(255,255,255,0.06);
+    }
+    .tut-diff-block .diff-del { color: #fb7185; }
+    .tut-diff-block .diff-add { color: var(--emerald); }
+    .tut-diff-block .diff-ctx { color: #475569; }
+    .tut-file-tabs {
+      display: flex; gap: 2px; margin-bottom: 12px;
+    }
+    .tut-file-tab {
+      padding: 6px 14px; border-radius: 0.75rem 0.75rem 0 0;
+      font-size: 0.75rem; color: #64748b;
+      border: 1px solid transparent;
+      border-bottom: none;
+    }
+    .tut-file-tab.active {
+      background: rgba(2,6,23,0.6);
+      border-color: rgba(255,255,255,0.1);
+      color: #cbd5e1;
+    }
+    .tut-workspace-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    @media (max-width: 600px) { .tut-workspace-grid { grid-template-columns: 1fr; } }
+    .tut-ws-panel {
+      border-radius: 1rem;
+      border: 1px solid rgba(255,255,255,0.1);
+      background: rgba(255,255,255,0.03);
+      padding: 14px;
+    }
+    .tut-ws-panel .panel-title {
+      font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.12em;
+      color: #64748b; margin-bottom: 10px;
+    }
+    .tut-ws-item {
+      padding: 6px 10px; border-radius: 0.6rem;
+      font-size: 0.78rem; color: #94a3b8;
+      margin-bottom: 4px;
+    }
+    .tut-ws-item.hl { background: rgba(59,130,246,0.1); color: var(--sky); }
+    .tut-status-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 10px 14px;
+      border-radius: 1rem;
+      border: 1px solid rgba(52,211,153,0.15);
+      background: rgba(52,211,153,0.05);
+      font-size: 0.82rem;
+      color: var(--emerald);
+    }
+    .tut-status-row svg { width: 16px; height: 16px; }
+
     /* ── Footer ────────────────────────────────── */
     footer {
       padding: 40px 32px;
@@ -551,10 +870,18 @@
       .section-card { padding: 28px; }
       .quick-install { padding: 28px 20px; }
       .downloads-grid, .method-grid { grid-template-columns: 1fr; }
+      .tutorial { gap: 24px; }
+      .tut-screen { min-height: 360px; }
     }
   </style>
 </head>
 <body>
+
+  <!-- Theme toggle -->
+  <button class="theme-toggle" id="themeToggle" aria-label="Toggle light/dark mode">
+    <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+    <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+  </button>
 
   <!-- ══════ Hero ══════ -->
   <div class="hero-wrapper">
@@ -721,13 +1048,171 @@
 
   <div class="container">
 
+    <!-- ══════ How it works — animated tutorial ══════ -->
+    <div class="section-card glow-sky reveal" id="tutorial">
+      <h2>How it works</h2>
+      <p class="section-sub">A typical Jait session in five steps.</p>
+      <div class="tutorial">
+        <div class="tut-steps" id="tutSteps">
+          <div class="tut-step active" data-step="0">
+            <div class="tut-num">1</div>
+            <div class="tut-info">
+              <h4>Describe what you need</h4>
+              <p>Type a plain-language request in the chat input — anything from fixing a bug to scaffolding a new feature.</p>
+            </div>
+            <div class="tut-progress"><div class="tut-progress-bar"></div></div>
+          </div>
+          <div class="tut-step" data-step="1">
+            <div class="tut-num">2</div>
+            <div class="tut-info">
+              <h4>Agent plans and runs commands</h4>
+              <p>Jait reads your codebase, opens a terminal, and executes the commands needed to complete the task.</p>
+            </div>
+            <div class="tut-progress"><div class="tut-progress-bar"></div></div>
+          </div>
+          <div class="tut-step" data-step="2">
+            <div class="tut-num">3</div>
+            <div class="tut-info">
+              <h4>Review file changes</h4>
+              <p>Every edit is shown as a diff you can inspect before accepting — nothing is hidden from you.</p>
+            </div>
+            <div class="tut-progress"><div class="tut-progress-bar"></div></div>
+          </div>
+          <div class="tut-step" data-step="3">
+            <div class="tut-num">4</div>
+            <div class="tut-info">
+              <h4>Iterate with follow-ups</h4>
+              <p>Ask for adjustments in the same conversation. The agent keeps full context of everything it already did.</p>
+            </div>
+            <div class="tut-progress"><div class="tut-progress-bar"></div></div>
+          </div>
+          <div class="tut-step" data-step="4">
+            <div class="tut-num">5</div>
+            <div class="tut-info">
+              <h4>Ship it</h4>
+              <p>Run tests, commit, and deploy — all from the same workspace without switching tools.</p>
+            </div>
+            <div class="tut-progress"><div class="tut-progress-bar"></div></div>
+          </div>
+        </div>
+
+        <div class="tut-screen">
+          <div class="tut-screen-bar">
+            <div class="dots"><span class="r"></span><span class="a"></span><span class="g"></span></div>
+            <div class="title">Jait session</div>
+            <div style="width:42px"></div>
+          </div>
+          <div class="tut-screen-body" id="tutScreen">
+            <!-- Scene 1: User message -->
+            <div class="tut-scene active" data-scene="0">
+              <div class="tut-chat-row">
+                <div class="tut-avatar user">U</div>
+                <div class="tut-bubble user-msg">Add a dark mode toggle to the settings page. It should persist the user's choice in localStorage.</div>
+              </div>
+              <div class="tut-chat-row">
+                <div class="tut-avatar agent">J</div>
+                <div class="tut-bubble agent-msg">
+                  <div class="tut-typing"><span></span><span></span><span></span></div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scene 2: Terminal execution -->
+            <div class="tut-scene" data-scene="1">
+              <div class="tut-chat-row">
+                <div class="tut-avatar agent">J</div>
+                <div class="tut-bubble agent-msg">I'll inspect the settings component and add a dark mode toggle. Let me check the current implementation first.</div>
+              </div>
+              <div class="tut-terminal-block">
+                <div class="prompt">$ grep -r "theme" src/settings/</div>
+                <div class="output">src/settings/Settings.tsx:  const [theme] = useState('light')</div>
+                <div class="output">src/settings/index.ts:  export { Settings }</div>
+                <div class="prompt" style="margin-top:6px">$ cat src/settings/Settings.tsx</div>
+                <div class="output">Reading file... <span class="success">done</span></div>
+              </div>
+            </div>
+
+            <!-- Scene 3: Diff view -->
+            <div class="tut-scene" data-scene="2">
+              <div class="tut-file-tabs">
+                <div class="tut-file-tab active">Settings.tsx</div>
+                <div class="tut-file-tab">theme-store.ts</div>
+              </div>
+              <div class="tut-diff-block">
+                <div class="diff-file">src/settings/Settings.tsx</div>
+                <div class="diff-ctx">&nbsp; export function Settings() {</div>
+                <div class="diff-del">-  const [theme] = useState('light')</div>
+                <div class="diff-add">+  const [theme, setTheme] = useThemeStore()</div>
+                <div class="diff-ctx">&nbsp;</div>
+                <div class="diff-ctx">&nbsp;  return (</div>
+                <div class="diff-ctx">&nbsp;    &lt;div className="settings"&gt;</div>
+                <div class="diff-add">+      &lt;ToggleRow</div>
+                <div class="diff-add">+        label="Dark mode"</div>
+                <div class="diff-add">+        checked={theme === 'dark'}</div>
+                <div class="diff-add">+        onChange={() =&gt; setTheme(</div>
+                <div class="diff-add">+          theme === 'dark' ? 'light' : 'dark'</div>
+                <div class="diff-add">+        )}</div>
+                <div class="diff-add">+      /&gt;</div>
+              </div>
+            </div>
+
+            <!-- Scene 4: Follow-up -->
+            <div class="tut-scene" data-scene="3">
+              <div class="tut-chat-row">
+                <div class="tut-avatar user">U</div>
+                <div class="tut-bubble user-msg">Looks good, but can you also add a system preference option that auto-detects?</div>
+              </div>
+              <div class="tut-chat-row">
+                <div class="tut-avatar agent">J</div>
+                <div class="tut-bubble agent-msg">Sure — I'll add a "System" option that uses <code style="background:rgba(255,255,255,0.1);border:none;padding:1px 5px;border-radius:3px;font-size:0.85em">prefers-color-scheme</code> and update the toggle to a three-way selector.</div>
+              </div>
+              <div class="tut-terminal-block">
+                <div class="prompt">$ editing src/settings/Settings.tsx</div>
+                <div class="success">✓ Applied 2 changes</div>
+                <div class="prompt">$ editing src/hooks/useThemeStore.ts</div>
+                <div class="success">✓ Applied 1 change</div>
+              </div>
+            </div>
+
+            <!-- Scene 5: Ship it -->
+            <div class="tut-scene" data-scene="4">
+              <div class="tut-workspace-grid">
+                <div class="tut-ws-panel">
+                  <div class="panel-title">Changed files</div>
+                  <div class="tut-ws-item hl">src/settings/Settings.tsx</div>
+                  <div class="tut-ws-item hl">src/hooks/useThemeStore.ts</div>
+                  <div class="tut-ws-item">src/settings/index.ts</div>
+                </div>
+                <div class="tut-ws-panel">
+                  <div class="panel-title">Terminal</div>
+                  <div class="tut-terminal-block" style="border:none;padding:0;background:none">
+                    <div class="prompt">$ bun run test</div>
+                    <div class="success">✓ 47 tests passed</div>
+                    <div class="prompt" style="margin-top:4px">$ git commit -m "feat: dark mode toggle"</div>
+                    <div class="success">✓ [main a3f8c2d] feat: dark mode toggle</div>
+                  </div>
+                </div>
+              </div>
+              <div class="tut-status-row">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+                All changes committed and pushed. Dark mode is live.
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- ══════ Quick install ══════ -->
     <div class="quick-install reveal" id="install">
       <h2>Install the gateway in seconds</h2>
       <div class="install-cmd">
         <span class="prefix">$</span>
         <span>npm install -g @jait/gateway</span>
-        <button class="copy-btn" onclick="navigator.clipboard.writeText('npm install -g @jait/gateway')">Copy</button>
+        <button class="copy-btn" data-copy="npm install -g @jait/gateway" aria-label="Copy to clipboard">
+          <svg class="icon-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+          <svg class="icon-check" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+        </button>
       </div>
       <p style="margin-top: 12px; color: var(--muted); font-size: 0.85rem;">
         Requires Node.js 20+ &middot; Works on Windows, macOS, and Linux
@@ -885,6 +1370,114 @@ volumes:
       });
     }, { threshold: 0.08, rootMargin: '0px 0px -40px 0px' });
     document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    // ── Tutorial walkthrough auto-player ──────
+    (() => {
+      const STEP_DURATION = 5000;
+      const steps = document.querySelectorAll('.tut-step');
+      const scenes = document.querySelectorAll('.tut-scene');
+      let current = 0;
+      let timer = null;
+      let paused = false;
+
+      function goTo(idx) {
+        steps.forEach((s, i) => {
+          s.classList.toggle('active', i === idx);
+          const bar = s.querySelector('.tut-progress-bar');
+          if (bar) {
+            bar.style.transition = 'none';
+            bar.style.width = '0%';
+          }
+        });
+        scenes.forEach((s, i) => s.classList.toggle('active', i === idx));
+        current = idx;
+        // Start progress bar animation
+        requestAnimationFrame(() => {
+          const activeBar = steps[idx].querySelector('.tut-progress-bar');
+          if (activeBar) {
+            activeBar.style.transition = `width ${STEP_DURATION}ms linear`;
+            activeBar.style.width = '100%';
+          }
+        });
+      }
+
+      function next() {
+        goTo((current + 1) % steps.length);
+      }
+
+      function startTimer() {
+        clearInterval(timer);
+        timer = setInterval(() => { if (!paused) next(); }, STEP_DURATION);
+      }
+
+      steps.forEach((s, i) => {
+        s.addEventListener('click', () => {
+          goTo(i);
+          startTimer();
+        });
+      });
+
+      // Pause on hover
+      const tutEl = document.querySelector('.tutorial');
+      if (tutEl) {
+        tutEl.addEventListener('mouseenter', () => { paused = true; });
+        tutEl.addEventListener('mouseleave', () => { paused = false; });
+      }
+
+      // Only start when visible
+      const tutCard = document.getElementById('tutorial');
+      if (tutCard) {
+        const tutObs = new IntersectionObserver((entries) => {
+          if (entries[0].isIntersecting) {
+            goTo(0);
+            startTimer();
+            tutObs.disconnect();
+          }
+        }, { threshold: 0.2 });
+        tutObs.observe(tutCard);
+      }
+    })();
+
+    // ── Copy button with animation ──────
+    document.querySelectorAll('.copy-btn[data-copy]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const text = btn.getAttribute('data-copy');
+        navigator.clipboard.writeText(text).then(() => {
+          btn.classList.add('copied');
+          btn.querySelector('.icon-clipboard').style.display = 'none';
+          btn.querySelector('.icon-check').style.display = 'block';
+          setTimeout(() => {
+            btn.classList.remove('copied');
+            btn.querySelector('.icon-clipboard').style.display = '';
+            btn.querySelector('.icon-check').style.display = 'none';
+          }, 1500);
+        });
+      });
+    });
+
+    // ── Theme toggle ──────
+    (() => {
+      const KEY = 'jait-theme';
+      const toggle = document.getElementById('themeToggle');
+      const html = document.documentElement;
+
+      function apply(theme) {
+        html.classList.toggle('light', theme === 'light');
+        try { localStorage.setItem(KEY, theme); } catch(e) {}
+      }
+
+      // Init from stored preference or system
+      const stored = (() => { try { return localStorage.getItem(KEY); } catch(e) { return null; } })();
+      if (stored) {
+        apply(stored);
+      } else if (window.matchMedia('(prefers-color-scheme: light)').matches) {
+        apply('light');
+      }
+
+      toggle.addEventListener('click', () => {
+        apply(html.classList.contains('light') ? 'dark' : 'light');
+      });
+    })();
   </script>
 
 </body>
