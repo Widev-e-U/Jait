@@ -1233,6 +1233,9 @@ function App() {
   const [savedScreenShare, setSavedScreenShare] = useSessionState<{ open: boolean }>(
     activeSessionId, 'screen-share.panel', token,
   )
+  const [savedDevPreview, setSavedDevPreview] = useSessionState<{ open: boolean; target?: string | null }>(
+    activeSessionId, 'dev-preview.panel', token,
+  )
   const [savedTerminal, setSavedTerminal] = useSessionState<{ open: boolean }>(
     activeSessionId, 'terminal.panel', token,
   )
@@ -1284,6 +1287,12 @@ function App() {
     if (wsFullStateReceivedRef.current) return
     if (savedScreenShare?.open) setShowScreenShare(true)
   }, [savedScreenShare]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedDevPreview?.target) setDevPreviewTarget(savedDevPreview.target)
+    setShowDevPreview(savedDevPreview?.open === true)
+  }, [savedDevPreview])
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
@@ -1377,6 +1386,15 @@ function App() {
           setShowScreenShare(v.open !== false)
         }
         break
+      case 'dev-preview.panel':
+        if (!value) {
+          setShowDevPreview(false)
+        } else {
+          const v = value as { open?: boolean; target?: string | null }
+          if (typeof v.target === 'string') setDevPreviewTarget(v.target)
+          setShowDevPreview(v.open !== false)
+        }
+        break
       case 'terminal.panel':
         if (!value) setShowTerminal(false)
         else {
@@ -1465,6 +1483,14 @@ function App() {
       setShowScreenShare(true)
     } else {
       setShowScreenShare(false)
+    }
+
+    const dp = state['dev-preview.panel'] as { open?: boolean; target?: string | null } | null | undefined
+    if (dp && dp.open !== false) {
+      setShowDevPreview(true)
+      if (typeof dp.target === 'string') setDevPreviewTarget(dp.target)
+    } else {
+      setShowDevPreview(false)
     }
 
     // Terminal panel
@@ -1574,7 +1600,8 @@ function App() {
         setDevPreviewTarget(target)
         setDevPreviewAutoOpenKey((prev) => prev + 1)
         setShowDevPreview(true)
-      }, []),
+        setSavedDevPreview({ open: true, target })
+      }, [setSavedDevPreview]),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
         setSavedScreenShare({ open: true })
@@ -1735,6 +1762,23 @@ function App() {
     setSavedScreenShare(null)
     sendUIState('screen-share.panel', null, activeSessionId)
   }, [setSavedScreenShare, sendUIState, activeSessionId])
+
+  const openDevPreviewPanel = useCallback((target?: string | null) => {
+    setCurrentView('chat')
+    if (typeof target === 'string' && target.trim()) {
+      setDevPreviewTarget(target.trim())
+    }
+    setShowDevPreview(true)
+    const state = { open: true, target: target?.trim() || devPreviewTarget }
+    setSavedDevPreview(state)
+    sendUIState('dev-preview.panel', state, activeSessionId)
+  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget])
+
+  const closeDevPreviewPanel = useCallback(() => {
+    setShowDevPreview(false)
+    setSavedDevPreview(null)
+    sendUIState('dev-preview.panel', null, activeSessionId)
+  }, [setSavedDevPreview, sendUIState, activeSessionId])
 
   const openTerminalPanel = useCallback(() => {
     setShowTerminal(true)
@@ -3321,7 +3365,13 @@ function App() {
                         variant={showDevPreview ? 'secondary' : 'ghost'}
                         size="sm"
                         className="h-6 text-[11px] px-2 shrink-0"
-                        onClick={() => setShowDevPreview((prev) => !prev)}
+                        onClick={() => {
+                          if (showDevPreview) {
+                            closeDevPreviewPanel()
+                          } else {
+                            openDevPreviewPanel()
+                          }
+                        }}
                       >
                         <Globe className="h-3 w-3 mr-1" />
                         Preview
@@ -3944,7 +3994,7 @@ function App() {
               >
                 {showDevPreview && (
                   <DevPreviewPanel
-                    onClose={() => setShowDevPreview(false)}
+                    onClose={closeDevPreviewPanel}
                     initialTarget={devPreviewTarget}
                     autoOpenKey={devPreviewAutoOpenKey}
                   />
@@ -3988,7 +4038,7 @@ function App() {
               <div className="flex flex-col flex-1 min-w-0 min-h-0 transition-all duration-300 ease-out">
                 {showDevPreview && (
                   <DevPreviewPanel
-                    onClose={() => setShowDevPreview(false)}
+                    onClose={closeDevPreviewPanel}
                     initialTarget={devPreviewTarget}
                     autoOpenKey={devPreviewAutoOpenKey}
                   />
