@@ -93,11 +93,59 @@
     }
     html.light .tut-step:hover { background: rgba(0,0,0,0.03); }
     html.light .tut-step.active { background: rgba(0,0,0,0.04); border-color: var(--border); }
-    html.light .tut-step .tut-num { background: rgba(255,255,255,0.95); color: #3f3f46; border-color: rgba(0,0,0,0.12); }
-    html.light .tut-step.active .tut-num { color: #fff; border-color: var(--accent); }
+    html.light .tut-step .tut-num { background: #f4f4f5; color: #3f3f46; border-color: #d4d4d8; }
+    html.light .tut-step.active .tut-num { background: var(--accent); color: #fff; border-color: var(--accent); }
+    html.light .tut-step .tut-info h4 { color: #27272a; }
     html.light .tut-step.active .tut-info h4 { color: var(--text); }
     html.light .tut-progress { background: rgba(0,0,0,0.06); }
-    html.light .step::before { background: rgba(255,255,255,0.95); border-color: rgba(0,0,0,0.1); }
+    html.light .step::before { background: #f4f4f5; color: #3f3f46; border-color: #d4d4d8; }
+    /* Jait mockup light mode */
+    html.light .jait-app { background: #edeef2; border-color: #d4d4d8; box-shadow: 0 30px 100px -40px rgba(0,0,0,0.15); }
+    html.light .jait-header { background: #e4e5ea; border-color: #d4d4d8; }
+    html.light .jait-logo svg { color: #18181b; }
+    html.light .jait-nav-btn { color: #a1a1aa; }
+    html.light .jait-nav-btn.active { background: #d4d4d8; color: #18181b; }
+    html.light .jait-model-pill { background: rgba(0,0,0,0.05); color: #71717a; }
+    html.light .jait-toolbar { background: #e4e5ea; border-color: #d4d4d8; }
+    html.light .jait-tool-btn { color: #a1a1aa; }
+    html.light .jait-tool-btn.active { color: #52525b; }
+    html.light .jait-term { background: #e8e9ed; color: #52525b; }
+    html.light .jait-term .prompt { color: #16a34a; }
+    html.light .jait-term .output { color: #71717a; }
+    html.light .jait-term .success { color: #16a34a; }
+    html.light .jait-term .accent { color: #2563eb; }
+    html.light .jait-term .dim { color: #a1a1aa; }
+    html.light .jait-term .box { border-color: #d4d4d8; color: #18181b; }
+    html.light .jait-chat { background: #edeef2; }
+    html.light .jait-msg-body { color: #27272a; }
+    html.light .jait-msg-avatar.user { background: rgba(59,130,246,0.1); color: #2563eb; }
+    html.light .jait-msg-avatar.agent { background: rgba(22,163,74,0.1); color: #16a34a; }
+    html.light .jait-tool-call { background: #e4e5ea; border-color: #d4d4d8; }
+    html.light .jait-tool-call .tc-text { color: #52525b; }
+    html.light .jait-prompt { border-color: #d4d4d8; }
+    html.light .jait-prompt-inner { background: #f4f4f5; border-color: #d4d4d8; }
+    html.light .jait-prompt-text { color: #a1a1aa; }
+    html.light .jait-prompt-text.typed { color: #18181b; }
+    html.light .jait-prompt-pill { color: #71717a; border-color: #d4d4d8; }
+    html.light .jait-prompt-pill.active { background: rgba(59,130,246,0.08); color: #2563eb; border-color: rgba(59,130,246,0.25); }
+    html.light .jait-file-panel { background: #e4e5ea; border-color: #d4d4d8; }
+    html.light .jait-file-panel .fp-title { color: #71717a; }
+    html.light .jait-file-item { color: #52525b; }
+    html.light .jait-file-item.new { color: #16a34a; }
+    html.light .jait-file-item.new svg { color: #16a34a; }
+    html.light .jait-success-bar { background: rgba(22,163,74,0.06); border-color: rgba(22,163,74,0.2); color: #16a34a; }
+    html.light .jait-terminal-panel { background: #e4e5ea; border-color: #d4d4d8; color: #52525b; }
+    html.light .jait-terminal-panel .prompt { color: #16a34a; }
+    html.light .jait-terminal-panel .success { color: #16a34a; }
+    html.light .jait-dialog { background: #f4f4f5; border-color: #d4d4d8; }
+    html.light .jait-dialog h3 { color: #18181b; }
+    html.light .jait-dialog p { color: #71717a; }
+    html.light .jait-dialog label { color: #3f3f46; }
+    html.light .jait-dialog input { background: #fff; border-color: #d4d4d8; color: #18181b; }
+    html.light .jait-dialog input::placeholder { color: #a1a1aa; }
+    html.light .jait-dialog .status-ok { color: #16a34a; }
+    html.light .jait-tabs span { color: #a1a1aa; }
+    html.light .jait-tabs span.active { color: #18181b; border-color: #18181b; }
     html.light code {
       background: rgba(235,238,242,0.9);
     }
@@ -1011,6 +1059,57 @@
     }
     .jait-terminal-panel .prompt { color: #34d399; }
     .jait-terminal-panel .success { color: #22c55e; }
+    /* Dialog overlay for gateway/login scenes */
+    .jait-dialog-wrap {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      background: rgba(0,0,0,0.5); padding: 20px;
+    }
+    .jait-dialog {
+      width: 100%; max-width: 320px;
+      background: #252525; border: 1px solid #333;
+      border-radius: 14px; padding: 24px;
+    }
+    .jait-dialog h3 {
+      font-size: 0.9rem; font-weight: 600; color: #f2f2f2;
+      margin-bottom: 4px; display: flex; align-items: center; gap: 8px;
+    }
+    .jait-dialog h3 svg { width: 16px; height: 16px; color: #60a5fa; }
+    .jait-dialog p {
+      font-size: 0.75rem; color: #888; margin-bottom: 14px;
+    }
+    .jait-dialog label {
+      font-size: 0.68rem; font-weight: 500; color: #999;
+      display: block; margin-bottom: 4px;
+    }
+    .jait-dialog input {
+      width: 100%; box-sizing: border-box;
+      padding: 8px 12px; border-radius: 8px;
+      border: 1px solid #333; background: #202020;
+      color: #e2e8f0; font-size: 0.78rem;
+      margin-bottom: 10px; outline: none;
+    }
+    .jait-dialog input:focus { border-color: var(--accent); }
+    .jait-dialog .btn-dialog {
+      width: 100%; padding: 8px; border-radius: 8px;
+      background: hsl(217 91% 60%); color: #fff;
+      font-size: 0.78rem; font-weight: 500;
+      border: none; cursor: pointer; text-align: center;
+    }
+    .jait-dialog .status-ok {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 0.7rem; color: #22c55e; margin-bottom: 10px;
+    }
+    .jait-dialog .status-ok svg { width: 14px; height: 14px; }
+    .jait-tabs {
+      display: flex; gap: 0; margin-bottom: 16px;
+      border-bottom: 1px solid #333;
+    }
+    .jait-tabs span {
+      padding: 6px 16px; font-size: 0.72rem; font-weight: 500;
+      color: #666; border-bottom: 2px solid transparent;
+      cursor: pointer;
+    }
+    .jait-tabs span.active { color: #f2f2f2; border-color: #f2f2f2; }
 
     /* ── Footer ────────────────────────────────── */
     footer {
@@ -1211,7 +1310,7 @@
     <!-- ══════ From install to project — animated tutorial ══════ -->
     <div class="section-card glow-sky reveal" id="tutorial">
       <h2>From install to project</h2>
-      <p class="section-sub">Up and running in five steps — here's what it looks like.</p>
+      <p class="section-sub">From first install to a running project in six steps.</p>
       <div class="tutorial">
         <div class="tut-steps" id="tutSteps">
           <div class="tut-step active" data-step="0">
@@ -1233,21 +1332,29 @@
           <div class="tut-step" data-step="2">
             <div class="tut-num">3</div>
             <div class="tut-info">
-              <h4>Open Jait &amp; connect</h4>
-              <p>Launch the web or desktop app and point it at your gateway.</p>
+              <h4>Set gateway URL</h4>
+              <p>Open Jait and enter the URL of your running gateway.</p>
             </div>
             <div class="tut-progress"><div class="tut-progress-bar"></div></div>
           </div>
           <div class="tut-step" data-step="3">
             <div class="tut-num">4</div>
             <div class="tut-info">
-              <h4>Describe your project</h4>
-              <p>Tell the agent what to build — it handles scaffolding, deps, and config.</p>
+              <h4>Login or register</h4>
+              <p>Create an account on your gateway or log in with existing credentials.</p>
             </div>
             <div class="tut-progress"><div class="tut-progress-bar"></div></div>
           </div>
           <div class="tut-step" data-step="4">
             <div class="tut-num">5</div>
+            <div class="tut-info">
+              <h4>Describe your project</h4>
+              <p>Tell the agent what to build — it handles scaffolding, deps, and config.</p>
+            </div>
+            <div class="tut-progress"><div class="tut-progress-bar"></div></div>
+          </div>
+          <div class="tut-step" data-step="5">
+            <div class="tut-num">6</div>
             <div class="tut-info">
               <h4>Project ready</h4>
               <p>Files created, dependencies installed, tests passing.</p>
@@ -1258,7 +1365,7 @@
 
         <div class="jait-app">
           <div class="jait-header">
-            <div class="jait-logo"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M13.5 2.5v10c0 3-2 5-5.5 5"/><path d="M6.5 2.5v4"/></svg></div>
+            <div class="jait-logo"><svg viewBox="0 0 1024 1024" fill="none" stroke="currentColor" stroke-width="88" stroke-linecap="round" stroke-linejoin="round"><path d="M318 372 L430 486 L318 600"/><path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715"/></svg></div>
             <div class="jait-nav">
               <span class="jait-nav-btn active">Chat</span>
               <span class="jait-nav-btn">Jobs</span>
@@ -1302,28 +1409,41 @@
               </div>
             </div>
 
-            <!-- Scene 2: Connect -->
+            <!-- Scene 2: Gateway URL -->
             <div class="jait-scene" data-scene="2">
-              <div class="jait-chat" style="justify-content:center;align-items:center">
-                <svg viewBox="0 0 20 20" fill="none" stroke="#555" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" style="width:36px;height:36px"><path d="M13.5 2.5v10c0 3-2 5-5.5 5"/><path d="M6.5 2.5v4"/></svg>
-                <div style="font-size:0.85rem;color:#888;text-align:center;margin-top:8px">Connected to gateway</div>
-                <div style="font-size:0.75rem;color:#22c55e;margin-top:2px">● localhost:8000</div>
-              </div>
-              <div class="jait-prompt">
-                <div class="jait-prompt-inner">
-                  <div class="jait-prompt-text">Type a message...<span class="jait-prompt-caret"></span></div>
-                  <div class="jait-prompt-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
-                </div>
-                <div class="jait-prompt-controls">
-                  <span class="jait-prompt-pill active">Agent</span>
-                  <span class="jait-prompt-pill">Plan</span>
-                  <span class="jait-prompt-pill">Ask</span>
+              <div class="jait-dialog-wrap">
+                <div class="jait-dialog">
+                  <h3><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg> Connect to Gateway</h3>
+                  <p>Enter your Jait gateway URL to get started.</p>
+                  <label>Gateway URL</label>
+                  <input type="text" value="http://localhost:8000" readonly />
+                  <div class="status-ok"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg> Gateway reachable</div>
+                  <div class="btn-dialog">Connect</div>
                 </div>
               </div>
             </div>
 
-            <!-- Scene 3: Build -->
+            <!-- Scene 3: Login -->
             <div class="jait-scene" data-scene="3">
+              <div class="jait-dialog-wrap">
+                <div class="jait-dialog">
+                  <h3>Account</h3>
+                  <p style="display:flex;align-items:center;gap:6px"><svg viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="width:12px;height:12px;min-width:12px"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg> <code style="font-size:0.68rem;background:rgba(255,255,255,0.06);border-radius:4px;padding:1px 6px">localhost:8000</code></p>
+                  <div class="jait-tabs">
+                    <span class="active">Login</span>
+                    <span>Register</span>
+                  </div>
+                  <label>Username</label>
+                  <input type="text" value="jakob" readonly />
+                  <label>Password</label>
+                  <input type="password" value="••••••••" readonly />
+                  <div class="btn-dialog">Login</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Scene 4: Build -->
+            <div class="jait-scene" data-scene="4">
               <div class="jait-chat">
                 <div class="jait-msg">
                   <div class="jait-msg-avatar user">U</div>
@@ -1364,8 +1484,8 @@
               </div>
             </div>
 
-            <!-- Scene 4: Project Ready -->
-            <div class="jait-scene" data-scene="4">
+            <!-- Scene 5: Project Ready -->
+            <div class="jait-scene" data-scene="5">
               <div class="jait-files">
                 <div class="jait-file-panel">
                   <div class="fp-title">Project files</div>
@@ -1437,56 +1557,7 @@
       </div>
     </div>
 
-    <!-- ══════ Quick install ══════ -->
-    <div class="quick-install reveal" id="install">
-      <h2>Install the gateway in seconds</h2>
-      <div class="install-cmd">
-        <span class="prefix">$</span>
-        <span>npm install -g @jait/gateway</span>
-        <button class="copy-btn" data-copy="npm install -g @jait/gateway" aria-label="Copy to clipboard">
-          <svg class="icon-clipboard" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-          <svg class="icon-check" style="display:none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-        </button>
-      </div>
-      <p style="margin-top: 12px; color: var(--muted); font-size: 0.85rem;">
-        Requires Node.js 20+ &middot; Works on Windows, macOS, and Linux
-      </p>
-    </div>
 
-    <!-- ══════ Install methods ══════ -->
-    <div class="section-card glow-sky reveal">
-      <h2>Installation methods</h2>
-      <p class="section-sub">Choose the method that works best for your setup.</p>
-      <div class="method-grid reveal-stagger">
-        <div class="method-card reveal" style="--i:0">
-          <h3>npm / pnpm / bun <span class="badge">Recommended</span></h3>
-          <p>Global install — the simplest way to get started.</p>
-          <pre><code>npm install -g @jait/gateway
-jait</code></pre>
-        </div>
-        <div class="method-card reveal" style="--i:1">
-          <h3>Docker</h3>
-          <p>Run the full stack in containers.</p>
-          <pre><code>docker compose up -d</code></pre>
-          <p style="font-size: 0.8rem;">Images published to <code>ghcr.io/jakobwl/jait-gateway</code></p>
-        </div>
-        <div class="method-card reveal" style="--i:2">
-          <h3>From source</h3>
-          <p>Clone and build for development.</p>
-          <pre><code>git clone https://github.com/JakobWl/Jait
-cd jait
-bun install --frozen-lockfile
-bun run dev</code></pre>
-        </div>
-        <div class="method-card reveal" style="--i:3">
-          <h3>Docker (one-liner)</h3>
-          <p>Run the gateway without cloning.</p>
-          <pre><code>docker run -d -p 8000:8000 \
-  -v jait-data:/data \
-  ghcr.io/jakobwl/jait-gateway</code></pre>
-        </div>
-      </div>
-    </div>
 
     <!-- ══════ Downloads ══════ -->
     <div class="section-card glow-emerald reveal" id="downloads">
@@ -1529,62 +1600,7 @@ bun run dev</code></pre>
       </p>
     </div>
 
-    <!-- ══════ Quick start ══════ -->
-    <div class="section-card glow-violet reveal">
-      <h2>Quick start</h2>
-      <p class="section-sub">Up and running in four steps.</p>
-      <div class="steps">
-        <div class="step reveal" style="--i:0">
-          <h4>Install the gateway</h4>
-          <p>The backend server that runs tools, manages sessions, and orchestrates the AI agent.</p>
-          <pre><code>npm install -g @jait/gateway</code></pre>
-        </div>
-        <div class="step reveal" style="--i:1">
-          <h4>Start the gateway</h4>
-          <pre><code>jait</code></pre>
-          <p>Starts on <code>http://localhost:8000</code> by default. Use <code>jait --port 9000</code> to change.</p>
-        </div>
-        <div class="step reveal" style="--i:2">
-          <h4>Connect your client</h4>
-          <p>Open the web app, desktop app, or mobile app and go to <strong>Settings &rarr; Gateway connection</strong> to enter your gateway's IP or domain.</p>
-        </div>
-        <div class="step reveal" style="--i:3">
-          <h4>Start building</h4>
-          <p>Chat with the AI, use tools, and let Jait handle the rest.</p>
-        </div>
-      </div>
-    </div>
 
-    <!-- ══════ Docker setup ══════ -->
-    <div class="section-card glow-cyan reveal">
-      <h2>Docker setup</h2>
-      <p class="section-sub">For production or VPS deployments, Docker is the easiest way to run the full stack.</p>
-      <h3>docker-compose.yml</h3>
-      <pre><code>services:
-  gateway:
-    image: ghcr.io/jakobwl/jait-gateway:latest
-    ports:
-      - "8000:8000"
-    volumes:
-      - jait-data:/data
-    environment:
-      - NODE_ENV=production
-    restart: unless-stopped
-
-  web:
-    image: ghcr.io/jakobwl/jait-web:latest
-    ports:
-      - "3000:3000"
-    depends_on:
-      - gateway
-    restart: unless-stopped
-
-volumes:
-  jait-data:</code></pre>
-      <h3>Run it</h3>
-      <pre><code>docker compose up -d</code></pre>
-      <p>The web UI will be available at <code>http://localhost:3000</code> and the gateway API at <code>http://localhost:8000</code>.</p>
-    </div>
   </div>
 
   <footer>
