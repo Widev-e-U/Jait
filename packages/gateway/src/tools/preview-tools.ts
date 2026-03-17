@@ -31,22 +31,25 @@ export function createPreviewOpenTool(
       if (!target) return { ok: false, message: "target is required" };
       if (!ws) return { ok: false, message: "UI command channel is unavailable" };
       const panelState = { open: true, target };
+      const sessionId = context.sessionId && context.sessionId !== "mcp-session"
+        ? context.sessionId
+        : "";
 
       ws.sendUICommand(
         {
           command: "dev-preview.open",
           data: { target },
         },
-        context.sessionId,
+        sessionId,
       );
-      if (context.sessionId) {
-        ws.broadcast(context.sessionId, {
+      if (sessionId) {
+        ws.broadcast(sessionId, {
           type: "ui.state-sync",
-          sessionId: context.sessionId,
+          sessionId,
           timestamp: new Date().toISOString(),
           payload: { key: "dev-preview.panel", value: panelState },
         });
-        sessionState?.set(context.sessionId, { "dev-preview.panel": panelState });
+        sessionState?.set(sessionId, { "dev-preview.panel": panelState });
       }
 
       return {

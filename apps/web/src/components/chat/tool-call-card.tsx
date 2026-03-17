@@ -364,6 +364,25 @@ function formatCronAddResult(data: Record<string, unknown>): string | null {
   return lines.length > 0 ? lines.join('\n') : null
 }
 
+export function formatStructuredValue(value: unknown): string | null {
+  if (value == null) return null
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) {
+    const textBlocks = value.flatMap((entry) => {
+      if (!entry || typeof entry !== 'object') return []
+      const block = entry as Record<string, unknown>
+      return typeof block.text === 'string' ? [block.text] : []
+    })
+    if (textBlocks.length > 0) return textBlocks.join('\n\n')
+  }
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return String(value)
+  }
+}
+
 /** Format the output data from a tool result */
 function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
   if (!result) return ''
@@ -391,8 +410,8 @@ function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
     if (formatted) return formatted
   }
 
-  if (data?.output != null) return String(data.output)
-  if (data?.content != null) return String(data.content)
+  if (data?.output != null) return formatStructuredValue(data.output) ?? ''
+  if (data?.content != null) return formatStructuredValue(data.content) ?? ''
   if (data?.entries != null) {
     const raw = data.entries as Array<string | { name: string; isDirectory?: boolean }>
     return raw
