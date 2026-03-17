@@ -216,7 +216,14 @@
       transition: border-color 0.25s, background 0.25s;
     }
     .prov-pill:hover { border-color: rgba(56,189,248,0.25); }
+    .prov-pill.byom { color: var(--muted); }
     .prov-pill svg { width: 16px; height: 16px; flex-shrink: 0; }
+    .byom-note {
+      font-size: 0.78rem; color: var(--muted); line-height: 1.5;
+      margin: 8px 0 14px; max-width: 520px;
+      animation: pill-in 0.5s cubic-bezier(0.16,1,0.3,1) both;
+      animation-delay: 0.85s;
+    }
     @keyframes pill-in {
       from { opacity: 0; transform: translateY(10px); }
       to   { opacity: 1; transform: translateY(0); }
@@ -1192,7 +1199,12 @@
               <svg viewBox="0 0 24 24" fill="currentColor" style="color:#9a77db"><path d="M9.11 8.18a.75.75 0 0 1 1.06-.02l.82.78.82-.78a.75.75 0 1 1 1.03 1.09l-1.1 1.04 1.1 1.04a.75.75 0 0 1-1.03 1.09l-.82-.78-.82.78a.75.75 0 0 1-1.03-1.09l1.1-1.04-1.1-1.04a.75.75 0 0 1-.03-1.07Z"/><path d="M12 1C6.2 1 2.48 4.36 1.28 8.42a3.7 3.7 0 0 0-.3 1.75 3.55 3.55 0 0 0-.45 1.87c.06.86.49 1.6 1.1 2.13A3.49 3.49 0 0 0 2.4 16c.58 1.57 1.83 3 3.6 3h1v-1.5H5.98c-1.2 0-2.12-1-2.58-2.22a2 2 0 0 1-.53-1.21 1.99 1.99 0 0 1 .33-1.34.75.75 0 0 0 .15-.55c-.05-.49.06-.98.2-1.42C4.22 8.06 6.96 5.5 9.86 4.59a10 10 0 0 1 4.28 0c2.9.91 5.64 3.47 6.31 6.27.14.44.25.93.2 1.42a.75.75 0 0 0 .15.55c.22.37.35.83.33 1.34a2 2 0 0 1-.53 1.21c-.46 1.22-1.38 2.22-2.58 2.22H17V19h1c1.77 0 3.02-1.43 3.6-3a3.49 3.49 0 0 0 .77-1.83c.61-.53 1.04-1.27 1.1-2.13.06-.68-.12-1.32-.44-1.87a3.7 3.7 0 0 0-.31-1.75C21.52 4.36 17.8 1 12 1ZM8.5 15.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg>
               Copilot CLI <span class="prov-badge soon">Soon</span>
             </span>
+            <span class="prov-pill byom" style="--i:5;border-style:dashed">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>
+              Any model
+            </span>
           </div>
+          <p class="byom-note">Any model with the Jait infrastructure — bring your own local model via Ollama or LM Studio, connect any OpenAI-compatible endpoint, or use your existing trusted CLI providers.</p>
 
           <div class="caps">
             <span class="cap">
