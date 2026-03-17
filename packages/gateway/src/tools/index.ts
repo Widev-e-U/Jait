@@ -149,6 +149,7 @@ import type { VoiceService } from "../voice/service.js";
 import { type AppConfig, inferContextWindow } from "../config.js";
 import type { ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
+import type { SessionStateService } from "../services/session-state.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
@@ -177,6 +178,7 @@ export interface ToolRegistryDeps {
   threadService?: ThreadService;
   providerRegistry?: ProviderRegistry;
   userService?: UserService;
+  sessionState?: SessionStateService;
   maintenanceService?: import("../services/maintenance.js").MaintenanceService;
   notifications?: import("../services/notifications.js").NotificationService;
   /** Graceful shutdown callback — needed by the redeploy tool */
@@ -308,7 +310,7 @@ export function createToolRegistry(
   for (const tool of createBrowserInteractionTools(surfaceRegistry)) {
     tools.register(tool);
   }
-  tools.register(createPreviewOpenTool(deps.ws));
+  tools.register(createPreviewOpenTool(deps.ws, deps.sessionState));
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());

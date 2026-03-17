@@ -232,6 +232,7 @@ async function main() {
     threadService,
     providerRegistry,
     userService,
+    sessionState,
     maintenanceService,
     notifications,
   });

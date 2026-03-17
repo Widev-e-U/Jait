@@ -1,11 +1,15 @@
 import type { WsControlPlane } from "../ws.js";
+import type { SessionStateService } from "../services/session-state.js";
 import type { ToolDefinition } from "./contracts.js";
 
 interface PreviewOpenInput {
   target: string;
 }
 
-export function createPreviewOpenTool(ws?: WsControlPlane): ToolDefinition<PreviewOpenInput> {
+export function createPreviewOpenTool(
+  ws?: WsControlPlane,
+  sessionState?: SessionStateService,
+): ToolDefinition<PreviewOpenInput> {
   return {
     name: "preview.open",
     description: "Open the frontend Preview panel for a local loopback URL or port",
@@ -26,6 +30,7 @@ export function createPreviewOpenTool(ws?: WsControlPlane): ToolDefinition<Previ
       const target = input.target.trim();
       if (!target) return { ok: false, message: "target is required" };
       if (!ws) return { ok: false, message: "UI command channel is unavailable" };
+      const panelState = { open: true, target };
 
       ws.sendUICommand(
         {
@@ -34,6 +39,15 @@ export function createPreviewOpenTool(ws?: WsControlPlane): ToolDefinition<Previ
         },
         context.sessionId,
       );
+      if (context.sessionId) {
+        ws.broadcast(context.sessionId, {
+          type: "ui.state-sync",
+          sessionId: context.sessionId,
+          timestamp: new Date().toISOString(),
+          payload: { key: "dev-preview.panel", value: panelState },
+        });
+        sessionState?.set(context.sessionId, { "dev-preview.panel": panelState });
+      }
 
       return {
         ok: true,
