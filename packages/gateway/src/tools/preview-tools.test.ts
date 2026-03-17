@@ -3,13 +3,26 @@ import { createPreviewOpenTool } from "./preview-tools.js";
 import type { ToolContext } from "./contracts.js";
 
 describe("createPreviewOpenTool", () => {
-  it("broadcasts and persists dev preview panel state", async () => {
+  it("starts a managed preview and broadcasts panel state", async () => {
     const sendUICommand = vi.fn();
     const broadcast = vi.fn();
     const set = vi.fn();
+    const mockSession = {
+      id: "preview-session-123",
+      sessionId: "session-123",
+      status: "ready",
+      url: "http://127.0.0.1:5173/",
+      mode: "local",
+      logs: [],
+      browserEvents: [],
+    };
+    const previewService = {
+      start: vi.fn().mockResolvedValue(mockSession),
+    };
     const tool = createPreviewOpenTool(
       { sendUICommand, broadcast } as any,
       { set } as any,
+      previewService as any,
     );
 
     const context: ToolContext = {
@@ -21,11 +34,11 @@ describe("createPreviewOpenTool", () => {
     const result = await tool.execute({ target: "3000" }, context);
 
     expect(result.ok).toBe(true);
+    expect(previewService.start).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "session-123", target: "3000" }),
+    );
     expect(sendUICommand).toHaveBeenCalledWith(
-      {
-        command: "dev-preview.open",
-        data: { target: "3000" },
-      },
+      { command: "dev-preview.open", data: { target: null } },
       "session-123",
     );
     expect(broadcast).toHaveBeenCalledWith(
@@ -35,12 +48,12 @@ describe("createPreviewOpenTool", () => {
         sessionId: "session-123",
         payload: {
           key: "dev-preview.panel",
-          value: { open: true, target: "3000" },
+          value: { open: true, target: null },
         },
       }),
     );
     expect(set).toHaveBeenCalledWith("session-123", {
-      "dev-preview.panel": { open: true, target: "3000" },
+      "dev-preview.panel": { open: true, target: null },
     });
   });
 
@@ -48,9 +61,17 @@ describe("createPreviewOpenTool", () => {
     const sendUICommand = vi.fn();
     const broadcast = vi.fn();
     const set = vi.fn();
+    const previewService = {
+      start: vi.fn().mockResolvedValue({
+        status: "ready",
+        url: "http://127.0.0.1:8765/",
+        mode: "url",
+      }),
+    };
     const tool = createPreviewOpenTool(
       { sendUICommand, broadcast } as any,
       { set } as any,
+      previewService as any,
     );
 
     const context: ToolContext = {
@@ -61,14 +82,9 @@ describe("createPreviewOpenTool", () => {
 
     const result = await tool.execute({ target: "8765" }, context);
 
-    expect(result.ok).toBe(true);
-    expect(sendUICommand).toHaveBeenCalledWith(
-      {
-        command: "dev-preview.open",
-        data: { target: "8765" },
-      },
-      "",
-    );
+    // mcp-session is filtered out, so previewService.start should fail due to empty sessionId
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("session");
     expect(broadcast).not.toHaveBeenCalled();
     expect(set).not.toHaveBeenCalled();
   });

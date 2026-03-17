@@ -63,7 +63,8 @@ export type UICommandType =
   | "file.highlight"
   | "dev-preview.open"
   | "screen-share.open"
-  | "screen-share.close";
+  | "screen-share.close"
+  | "architecture.update";
 
 /** Payload sent inside a `ui.command` WsEvent */
 export interface UICommandPayload<T = Record<string, unknown>> {
@@ -99,6 +100,11 @@ export interface DevPreviewOpenData {
 export interface ScreenShareOpenData {
   sessionId: string;
   targetDeviceId: string;
+}
+
+export interface ArchitectureUpdateData {
+  /** Mermaid diagram source code */
+  diagram: string;
 }
 
 // ── Filesystem change events (server → client) ──────────────────────

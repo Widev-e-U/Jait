@@ -618,6 +618,57 @@ export class GitService {
     };
   }
 
+  /** Discard working-tree changes for specific files, or all files if paths is empty. */
+  async discardChanges(cwd: string, paths?: string[]): Promise<{ discardedCount: number }> {
+    if (!paths || paths.length === 0) {
+      // Discard all: reset tracked changes + clean untracked files
+      await gitExec(cwd, "checkout -- .");
+      await gitExec(cwd, "clean -fd");
+      return { discardedCount: -1 }; // -1 means "all"
+    }
+    let count = 0;
+    for (const p of paths) {
+      // Sanitize: reject filenames with shell-unsafe chars
+      if (/[;&|`$]/.test(p)) continue;
+      try {
+        // Try checkout (for tracked/modified files)
+        await gitExec(cwd, `checkout -- "${p}"`);
+        count++;
+      } catch {
+        // If checkout fails, try clean (for untracked files)
+        try {
+          await gitExec(cwd, `clean -fd -- "${p}"`);
+          count++;
+        } catch { /* file may not exist */ }
+      }
+    }
+    return { discardedCount: count };
+  }
+
+  /** Stage specific files, or all if paths is empty. */
+  async stage(cwd: string, paths?: string[]): Promise<void> {
+    if (!paths || paths.length === 0) {
+      await gitExec(cwd, "add -A");
+      return;
+    }
+    for (const p of paths) {
+      if (/[;&|`$]/.test(p)) continue;
+      await gitExec(cwd, `add "${p}"`);
+    }
+  }
+
+  /** Unstage specific files, or all if paths is empty. */
+  async unstage(cwd: string, paths?: string[]): Promise<void> {
+    if (!paths || paths.length === 0) {
+      await gitExec(cwd, "reset HEAD");
+      return;
+    }
+    for (const p of paths) {
+      if (/[;&|`$]/.test(p)) continue;
+      await gitExec(cwd, `reset HEAD -- "${p}"`);
+    }
+  }
+
   async runStackedAction(
     cwd: string,
     action: GitStackedAction,

@@ -206,6 +206,21 @@ export const gitApi = {
     return gitPost<{ ok: boolean; branch: string }>('create-branch', { cwd, branch, baseBranch })
   },
 
+  /** Discard changes for specific files, or all if paths is omitted/empty. */
+  discard(cwd: string, paths?: string[]): Promise<{ ok: boolean; discardedCount: number }> {
+    return gitPost<{ ok: boolean; discardedCount: number }>('discard', { cwd, paths })
+  },
+
+  /** Stage files (git add). Stages all if paths is omitted/empty. */
+  stage(cwd: string, paths?: string[]): Promise<{ ok: boolean }> {
+    return gitPost<{ ok: boolean }>('stage', { cwd, paths })
+  },
+
+  /** Unstage files (git reset). Unstages all if paths is omitted/empty. */
+  unstage(cwd: string, paths?: string[]): Promise<{ ok: boolean }> {
+    return gitPost<{ ok: boolean }>('unstage', { cwd, paths })
+  },
+
   init(cwd: string): Promise<void> {
     return gitPost<void>('init', { cwd })
   },

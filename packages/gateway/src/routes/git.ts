@@ -507,6 +507,100 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     }
   });
 
+  /** Discard changes for specific files or all changes */
+  app.post("/api/git/discard", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; paths?: string[] };
+    if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      if (remoteNodeId && ws) {
+        const gitProxy = async (args: string) => {
+          const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 30_000);
+          return r.stdout.trim();
+        };
+        if (!body.paths?.length) {
+          await gitProxy("checkout -- .").catch(() => "");
+          await gitProxy("clean -fd").catch(() => "");
+          return { ok: true, discardedCount: -1 };
+        }
+        let count = 0;
+        for (const p of body.paths) {
+          if (/[;&|`$]/.test(p)) continue;
+          try { await gitProxy(`checkout -- "${p}"`); count++; } catch {
+            try { await gitProxy(`clean -fd -- "${p}"`); count++; } catch { /* skip */ }
+          }
+        }
+        return { ok: true, discardedCount: count };
+      }
+      const result = await git.discardChanges(body.cwd, body.paths);
+      return { ok: true, ...result };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Discard failed" });
+    }
+  });
+
+  /** Stage files (git add) */
+  app.post("/api/git/stage", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; paths?: string[] };
+    if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      if (remoteNodeId && ws) {
+        const gitProxy = async (args: string) => {
+          const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
+          return r.stdout.trim();
+        };
+        if (!body.paths?.length) {
+          await gitProxy("add -A");
+        } else {
+          for (const p of body.paths) {
+            if (/[;&|`$]/.test(p)) continue;
+            await gitProxy(`add "${p}"`);
+          }
+        }
+        return { ok: true };
+      }
+      await git.stage(body.cwd, body.paths);
+      return { ok: true };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Stage failed" });
+    }
+  });
+
+  /** Unstage files (git reset) */
+  app.post("/api/git/unstage", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; paths?: string[] };
+    if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      if (remoteNodeId && ws) {
+        const gitProxy = async (args: string) => {
+          const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
+          return r.stdout.trim();
+        };
+        if (!body.paths?.length) {
+          await gitProxy("reset HEAD");
+        } else {
+          for (const p of body.paths) {
+            if (/[;&|`$]/.test(p)) continue;
+            await gitProxy(`reset HEAD -- "${p}"`);
+          }
+        }
+        return { ok: true };
+      }
+      await git.unstage(body.cwd, body.paths);
+      return { ok: true };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Unstage failed" });
+    }
+  });
+
   /** Git init */
   app.post("/api/git/init", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

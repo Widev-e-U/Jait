@@ -47,7 +47,16 @@ export { createThreadControlTool } from "./thread-tools.js";
 export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
 export { createRedeployTool } from "./redeploy-tools.js";
 export { createMaintenanceRunTool } from "./maintenance-tools.js";
-export { createPreviewOpenTool } from "./preview-tools.js";
+export { createArchitectureTool } from "./architecture-tools.js";
+export {
+  createPreviewOpenTool,
+  createPreviewStartTool,
+  createPreviewStopTool,
+  createPreviewRestartTool,
+  createPreviewStatusTool,
+  createPreviewLogsTool,
+  createPreviewInspectTool,
+} from "./preview-tools.js";
 export { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 export { McpManager, wrapMcpTool, registerMcpTools, unregisterMcpTools, type McpServerConfig, type McpConnection } from "./mcp-bridge.js";
 export { ToolName, type ToolNameValue } from "./tool-names.js";
@@ -143,7 +152,16 @@ import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
 import { createMaintenanceRunTool } from "./maintenance-tools.js";
-import { createPreviewOpenTool } from "./preview-tools.js";
+import { createArchitectureTool } from "./architecture-tools.js";
+import {
+  createPreviewOpenTool,
+  createPreviewStartTool,
+  createPreviewStopTool,
+  createPreviewRestartTool,
+  createPreviewStatusTool,
+  createPreviewLogsTool,
+  createPreviewInspectTool,
+} from "./preview-tools.js";
 import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import type { VoiceService } from "../voice/service.js";
 import { type AppConfig, inferContextWindow } from "../config.js";
@@ -313,12 +331,21 @@ export function createToolRegistry(
     tools.register(tool);
   }
   tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
+  tools.register(createPreviewStartTool(deps.ws, deps.sessionState, deps.previewService));
+  tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService));
+  tools.register(createPreviewRestartTool(deps.previewService));
+  tools.register(createPreviewStatusTool(deps.previewService));
+  tools.register(createPreviewLogsTool(deps.previewService));
+  tools.register(createPreviewInspectTool(deps.previewService));
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());
 
   // Network tools
   tools.register(createNetworkScanTool());
+
+  // Architecture tools
+  tools.register(createArchitectureTool(deps.ws));
 
   // Maintenance tools
   if (deps.maintenanceService) {

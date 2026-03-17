@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
-import { AlertCircle, ExternalLink, Globe, Play, RefreshCw, Square, TerminalSquare, X } from 'lucide-react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play, RefreshCw, Square, TerminalSquare, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getApiUrl } from '@/lib/gateway-url'
@@ -40,17 +40,19 @@ interface PreviewSessionState {
   id: string
   sessionId: string
   workspaceRoot: string | null
-  mode: 'local' | 'url'
-  status: 'idle' | 'starting' | 'ready' | 'error' | 'stopped'
+  mode: 'local' | 'docker' | 'url'
+  status: 'starting' | 'ready' | 'error' | 'stopped'
   target: string | null
   command: string | null
   port: number | null
   url: string | null
   browserId: string | null
+  processId: number | null
+  containerId: string | null
   logs: PreviewLogEntry[]
   browserEvents: PreviewBrowserEvent[]
   lastError: string | null
-  startedAt: string
+  createdAt: string
   updatedAt: string
 }
 
@@ -135,7 +137,10 @@ export function DevPreviewPanel({
   const [frameKey, setFrameKey] = useState(0)
   const [isBusy, setIsBusy] = useState(false)
   const [panelError, setPanelError] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'issues'>('preview')
+  const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues'>('preview')
+  const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const logsEndRef = useRef<HTMLDivElement>(null)
+  const consoleEndRef = useRef<HTMLDivElement>(null)
 
   const resolved = useMemo(() => resolvePreviewTarget(input), [input])
   const managedResolved = useMemo(
@@ -287,9 +292,41 @@ export function DevPreviewPanel({
   }, [autoOpenKey, initialTarget, startManagedPreview, workspaceRoot])
 
   const issueEvents = useMemo(
-    () => managedSession?.browserEvents.filter((event) => event.type !== 'console' || event.level === 'error' || event.level === 'warning') ?? [],
+    () => managedSession?.browserEvents.filter((event) =>
+      event.type === 'pageerror' || event.type === 'requestfailed' || (event.type === 'response' && (event.status ?? 0) >= 400),
+    ) ?? [],
     [managedSession?.browserEvents],
   )
+
+  const consoleEvents = useMemo(
+    () => managedSession?.browserEvents.filter((event) => event.type === 'console') ?? [],
+    [managedSession?.browserEvents],
+  )
+
+  const handleScreenshot = useCallback(async () => {
+    if (!sessionId || !token) return
+    try {
+      const response = await fetch(`${getApiUrl()}/api/preview/screenshot/${sessionId}`, {
+        headers: authHeaders(token),
+      })
+      if (!response.ok) return
+      const data = await response.json() as { screenshot: string | null }
+      if (data.screenshot) {
+        setScreenshotUrl(`data:image/png;base64,${data.screenshot}`)
+        setActiveTab('preview')
+      }
+    } catch {
+      // ignore
+    }
+  }, [sessionId, token])
+
+  // Auto-scroll logs and console
+  useEffect(() => {
+    if (activeTab === 'logs') logsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [managedSession?.logs.length, activeTab])
+  useEffect(() => {
+    if (activeTab === 'console') consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [consoleEvents.length, activeTab])
 
   const closePanel = useCallback(async () => {
     if (managedSession) {
@@ -305,9 +342,14 @@ export function DevPreviewPanel({
           <Globe className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">Managed Preview</span>
           {managedSession ? (
-            <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
-              {managedSession.status}
-            </span>
+            <>
+              <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {managedSession.status}
+              </span>
+              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {managedSession.mode}
+              </span>
+            </>
           ) : null}
           {previewLabel ? (
             <span className="truncate text-xs text-muted-foreground" title={previewLabel}>
@@ -318,6 +360,10 @@ export function DevPreviewPanel({
         <div className="ml-auto flex items-center gap-1">
           {managedSession ? (
             <>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => { void handleScreenshot() }} disabled={isBusy}>
+                <Camera className="mr-1 h-3 w-3" />
+                Screenshot
+              </Button>
               <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={handleRestart} disabled={isBusy}>
                 <RefreshCw className="mr-1 h-3 w-3" />
                 Restart
@@ -389,16 +435,27 @@ export function DevPreviewPanel({
             <TerminalSquare className="mr-1 h-3 w-3" />
             Logs
           </Button>
+          <Button type="button" variant={activeTab === 'console' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('console')}>
+            <MessageSquare className="mr-1 h-3 w-3" />
+            Console{consoleEvents.length > 0 ? ` (${consoleEvents.length})` : ''}
+          </Button>
           <Button type="button" variant={activeTab === 'issues' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('issues')}>
             <AlertCircle className="mr-1 h-3 w-3" />
-            Issues
+            Issues{issueEvents.length > 0 ? ` (${issueEvents.length})` : ''}
           </Button>
         </div>
       </div>
 
       <div className="h-[420px] bg-muted/5">
         {activeTab === 'preview' ? (
-          previewSrc ? (
+          screenshotUrl ? (
+            <div className="relative h-full">
+              <img src={screenshotUrl} alt="Preview screenshot" className="h-full w-full object-contain bg-white" />
+              <Button type="button" variant="secondary" size="sm" className="absolute top-2 right-2 h-7 px-2 text-[11px]" onClick={() => setScreenshotUrl(null)}>
+                Back to live
+              </Button>
+            </div>
+          ) : previewSrc ? (
             <iframe
               key={frameKey}
               src={previewSrc}
@@ -423,6 +480,26 @@ export function DevPreviewPanel({
             )) : (
               <div className="text-zinc-400">No preview logs yet.</div>
             )}
+            <div ref={logsEndRef} />
+          </div>
+        ) : activeTab === 'console' ? (
+          <div className="h-full overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
+            {consoleEvents.length > 0 ? consoleEvents.map((event) => (
+              <div key={event.id} className="mb-1 whitespace-pre-wrap break-words">
+                <span className={
+                  event.level === 'error' ? 'text-red-400'
+                    : event.level === 'warning' || event.level === 'warn' ? 'text-yellow-400'
+                    : event.level === 'info' ? 'text-sky-300'
+                    : 'text-zinc-300'
+                }>
+                  [{event.level ?? 'log'}]
+                </span>{' '}
+                {event.text}
+              </div>
+            )) : (
+              <div className="text-zinc-400">No console messages yet.</div>
+            )}
+            <div ref={consoleEndRef} />
           </div>
         ) : (
           <div className="h-full overflow-auto px-3 py-2 text-[12px]">

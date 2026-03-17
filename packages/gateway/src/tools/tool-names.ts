@@ -57,6 +57,15 @@ export const ToolName = {
   WebFetch: "web.fetch",
   WebSearch: "web.search",
 
+  // ── Preview ──
+  PreviewStart: "preview.start",
+  PreviewOpen: "preview.open",
+  PreviewStop: "preview.stop",
+  PreviewRestart: "preview.restart",
+  PreviewStatus: "preview.status",
+  PreviewLogs: "preview.logs",
+  PreviewInspect: "preview.inspect",
+
   // ── Memory ──
   MemorySave: "memory.save",
   MemorySearch: "memory.search",

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Globe, Loader2, RefreshCw, Save, Send, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
@@ -458,6 +458,7 @@ function TreeNodeRow({
   onToggleDir,
   onSelectFile,
   onContextFile,
+  onTreeContextMenu,
   isMobile,
   gitStatusMap,
   dirChangesSet,
@@ -469,16 +470,17 @@ function TreeNodeRow({
   onToggleDir: (node: LazyDir) => void
   onSelectFile: (node: LazyFile) => void
   onContextFile: (node: LazyFile) => void
+  onTreeContextMenu: (node: LazyNode, x: number, y: number) => void
   isMobile?: boolean
   gitStatusMap?: Map<string, string>
   dirChangesSet?: Set<string>
 }) {
   const paddingLeft = isMobile ? 6 + depth * 12 : 8 + depth * 14
+  const [dragOver, setDragOver] = useState(false)
 
   if (node.kind === 'dir') {
     const expanded = expandedDirs.has(node.path)
     const loading = node.childrenLoading
-    // Check if this folder (by relative path) contains any changed files
     const dirRel = node.path.replace(/\\/g, '/')
     const folderHasChanges = dirChangesSet ? (() => {
       for (const d of dirChangesSet) {
@@ -491,9 +493,41 @@ function TreeNodeRow({
         <div
           className={`group flex items-center gap-1.5 rounded px-1 cursor-pointer hover:bg-muted active:bg-muted ${
             isMobile ? 'py-2 text-sm' : 'py-1 text-xs'
-          }`}
+          } ${dragOver ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
           style={{ paddingLeft }}
           onClick={() => onToggleDir(node)}
+          onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTreeContextMenu(node, e.clientX, e.clientY) }}
+          onDragOver={(e) => {
+            const hasFile = e.dataTransfer.types.includes('text/jait-tree-node')
+            if (!hasFile) return
+            e.preventDefault()
+            e.dataTransfer.dropEffect = 'move'
+            setDragOver(true)
+          }}
+          onDragEnter={(e) => {
+            if (e.dataTransfer.types.includes('text/jait-tree-node')) {
+              e.preventDefault()
+              setDragOver(true)
+            }
+          }}
+          onDragLeave={() => setDragOver(false)}
+          onDrop={(e) => {
+            setDragOver(false)
+            const raw = e.dataTransfer.getData('text/jait-tree-node')
+            if (!raw) return
+            e.preventDefault()
+            e.stopPropagation()
+            const data = JSON.parse(raw) as { path: string; name: string; kind: string }
+            if (data.path !== node.path) {
+              // Dispatch custom event for move operation
+              window.dispatchEvent(new CustomEvent('jait-move-file', { detail: { srcPath: data.path, destDir: node.path } }))
+            }
+          }}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.setData('text/jait-tree-node', JSON.stringify({ path: node.path, name: node.name, kind: 'dir' }))
+            e.dataTransfer.effectAllowed = 'move'
+          }}
         >
           {loading ? (
             <Loader2 className={`${isMobile ? 'h-4 w-4' : 'h-3 w-3'} shrink-0 text-muted-foreground animate-spin`} />
@@ -518,6 +552,7 @@ function TreeNodeRow({
             onToggleDir={onToggleDir}
             onSelectFile={onSelectFile}
             onContextFile={onContextFile}
+            onTreeContextMenu={onTreeContextMenu}
             isMobile={isMobile}
             gitStatusMap={gitStatusMap}
             dirChangesSet={dirChangesSet}
@@ -529,7 +564,6 @@ function TreeNodeRow({
 
   const isActive = activeFilePath === node.path
   const fileGitStatus = gitStatusMap?.get(node.name) ?? gitStatusMap?.get(node.path)
-  // Try matching against relative path from workspace root
   const relPath = node.path.replace(/\\/g, '/')
   const matchedStatus = fileGitStatus ?? (() => {
     if (!gitStatusMap) return undefined
@@ -547,11 +581,12 @@ function TreeNodeRow({
       }`}
       style={{ paddingLeft: paddingLeft + (isMobile ? 12 : 14) }}
       onClick={() => onSelectFile(node)}
-      onContextMenu={(e) => { e.preventDefault(); onContextFile(node) }}
+      onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTreeContextMenu(node, e.clientX, e.clientY) }}
       draggable
       onDragStart={(e) => {
         e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: node.path, name: node.name }))
-        e.dataTransfer.effectAllowed = 'copy'
+        e.dataTransfer.setData('text/jait-tree-node', JSON.stringify({ path: node.path, name: node.name, kind: 'file' }))
+        e.dataTransfer.effectAllowed = 'copyMove'
       }}
     >
       <FileIcon filename={node.name} className={`${isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5'}`} />
@@ -664,6 +699,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const activeTabEditable = isEditableWorkspaceTab(activeTab)
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null)
   const [tabContextMenu, setTabContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
+  const [fileContextMenu, setFileContextMenu] = useState<{ node: LazyNode; x: number; y: number } | null>(null)
+  const [renameTarget, setRenameTarget] = useState<{ path: string; name: string; kind: 'file' | 'dir' } | null>(null)
+  const [renameValue, setRenameValue] = useState('')
+  const [newItemTarget, setNewItemTarget] = useState<{ parentDir: string; kind: 'file' | 'dir' } | null>(null)
+  const [newItemValue, setNewItemValue] = useState('')
+
+  // ── File search state ──
+  const [fileSearchQuery, setFileSearchQuery] = useState('')
+  const [fileSearchMode, setFileSearchMode] = useState<'files' | 'content'>('files')
+  const [fileSearchResults, setFileSearchResults] = useState<{ files?: { path: string; name: string }[]; matches?: { file: string; line: number; content: string }[] } | null>(null)
+  const [fileSearchLoading, setFileSearchLoading] = useState(false)
+  const fileSearchAbortRef = useRef<AbortController | null>(null)
+
   const restoredTabsRootRef = useRef<string | null>(null)
   const lastPersistedTabsRef = useRef<string>('')
   const handledPreviewRequestKeyRef = useRef<number | null>(null)
@@ -1419,6 +1467,252 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } catch { /* ignore */ }
   }, [onReferenceFile, surfaceId])
 
+  /* ---- File tree context menu ---- */
+  const handleTreeContextMenu = useCallback((node: LazyNode, x: number, y: number) => {
+    setFileContextMenu({ node, x, y })
+  }, [])
+
+  // Close file context menu on outside click
+  useEffect(() => {
+    if (!fileContextMenu) return
+    const onPointerDown = () => setFileContextMenu(null)
+    window.addEventListener('pointerdown', onPointerDown)
+    return () => window.removeEventListener('pointerdown', onPointerDown)
+  }, [fileContextMenu])
+
+  // Listen for drag-move events from the tree
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const { srcPath, destDir } = (e as CustomEvent).detail
+      if (!remoteRoot || !srcPath || !destDir) return
+      void (async () => {
+        try {
+          await fetch(`${API_URL}/api/workspace/move`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ srcPath, destDir, surfaceId }),
+          })
+          bumpTree()
+          // Invalidate children of the target dir so it gets re-fetched
+          const findDir = (nodes: LazyNode[]): LazyDir | null => {
+            for (const n of nodes) {
+              if (n.kind === 'dir' && n.path === destDir) return n
+              if (n.kind === 'dir' && n.children) {
+                const found = findDir(n.children)
+                if (found) return found
+              }
+            }
+            return null
+          }
+          const targetDir = findDir(lazyTree)
+          if (targetDir) {
+            targetDir.children = null
+            if (expandedDirs.has(targetDir.path)) {
+              targetDir.children = await remoteScanDir(targetDir.path, surfaceId)
+            }
+          }
+          // Also invalidate the source parent
+          const srcDirPath = srcPath.includes('/') ? srcPath.slice(0, srcPath.lastIndexOf('/')) : remoteRoot
+          const srcDir = findDir(lazyTree) ?? (srcDirPath === remoteRoot ? null : (() => {
+            const find2 = (nodes: LazyNode[]): LazyDir | null => {
+              for (const n of nodes) {
+                if (n.kind === 'dir' && n.path === srcDirPath) return n
+                if (n.kind === 'dir' && n.children) { const f = find2(n.children); if (f) return f }
+              }
+              return null
+            }
+            return find2(lazyTree)
+          })())
+          if (srcDir && srcDir.kind === 'dir') {
+            srcDir.children = null
+            if (expandedDirs.has(srcDir.path)) {
+              srcDir.children = await remoteScanDir(srcDir.path, surfaceId)
+            }
+          }
+          // If source was at root level, re-scan root
+          if (!srcPath.includes('/') || srcDirPath === remoteRoot) {
+            const newRoot = await remoteScanDir(remoteRoot, surfaceId)
+            setLazyTree(newRoot)
+          }
+          bumpTree()
+          void fetchGitStatus()
+        } catch { /* best effort */ }
+      })()
+    }
+    window.addEventListener('jait-move-file', handler)
+    return () => window.removeEventListener('jait-move-file', handler)
+  }, [remoteRoot, surfaceId, bumpTree, lazyTree, expandedDirs, fetchGitStatus])
+
+  /* ---- File management actions ---- */
+  const handleDeleteNode = useCallback(async (node: LazyNode) => {
+    if (!remoteRoot) return
+    const confirmed = window.confirm(`Delete "${node.name}"${node.kind === 'dir' ? ' and all its contents' : ''}?`)
+    if (!confirmed) return
+    try {
+      await fetch(`${API_URL}/api/workspace/delete`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: node.path, isDirectory: node.kind === 'dir', surfaceId }),
+      })
+      // Close tab if the deleted file was open
+      if (node.kind === 'file') {
+        const tabId = `file:${node.path}`
+        setOpenTabs(prev => prev.filter(t => t.id !== tabId))
+      }
+      bumpTree()
+      // Invalidate parent directory
+      const parentPath = node.path.includes('/') ? node.path.slice(0, node.path.lastIndexOf('/')) : remoteRoot
+      const invalidateParent = (nodes: LazyNode[]) => {
+        for (const n of nodes) {
+          if (n.kind === 'dir' && n.path === parentPath) { n.children = null; return true }
+          if (n.kind === 'dir' && n.children && invalidateParent(n.children)) return true
+        }
+        return false
+      }
+      if (!invalidateParent(lazyTree)) {
+        // Parent is root
+        setLazyTree(await remoteScanDir(remoteRoot, surfaceId))
+      }
+      bumpTree()
+      void fetchGitStatus()
+    } catch { /* ignore */ }
+  }, [remoteRoot, surfaceId, bumpTree, lazyTree, fetchGitStatus])
+
+  const handleRenameConfirm = useCallback(async () => {
+    if (!remoteRoot || !renameTarget || !renameValue.trim()) { setRenameTarget(null); return }
+    const newName = renameValue.trim()
+    if (newName === renameTarget.name) { setRenameTarget(null); return }
+    try {
+      const res = await fetch(`${API_URL}/api/workspace/rename`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: renameTarget.path, newName, surfaceId }),
+      })
+      if (!res.ok) throw new Error('Rename failed')
+      // Close old tab, open with new path
+      const oldTabId = `file:${renameTarget.path}`
+      setOpenTabs(prev => prev.filter(t => t.id !== oldTabId))
+      // Invalidate parent directory
+      const parentPath = renameTarget.path.includes('/') ? renameTarget.path.slice(0, renameTarget.path.lastIndexOf('/')) : remoteRoot
+      const invalidateParent = (nodes: LazyNode[]) => {
+        for (const n of nodes) {
+          if (n.kind === 'dir' && n.path === parentPath) { n.children = null; return true }
+          if (n.kind === 'dir' && n.children && invalidateParent(n.children)) return true
+        }
+        return false
+      }
+      if (!invalidateParent(lazyTree)) {
+        setLazyTree(await remoteScanDir(remoteRoot, surfaceId))
+      }
+      bumpTree()
+      void fetchGitStatus()
+    } catch { /* ignore */ }
+    setRenameTarget(null)
+  }, [remoteRoot, renameTarget, renameValue, surfaceId, bumpTree, lazyTree, fetchGitStatus])
+
+  const handleNewItemConfirm = useCallback(async () => {
+    if (!remoteRoot || !newItemTarget || !newItemValue.trim()) { setNewItemTarget(null); return }
+    const name = newItemValue.trim()
+    const fullPath = `${newItemTarget.parentDir}/${name}`
+    try {
+      const endpoint = newItemTarget.kind === 'dir' ? 'create-directory' : 'create-file'
+      const res = await fetch(`${API_URL}/api/workspace/${endpoint}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: fullPath, surfaceId }),
+      })
+      if (!res.ok) throw new Error('Create failed')
+      // Invalidate parent directory
+      const parentPath = newItemTarget.parentDir
+      const invalidateParent = (nodes: LazyNode[]) => {
+        for (const n of nodes) {
+          if (n.kind === 'dir' && n.path === parentPath) { n.children = null; return true }
+          if (n.kind === 'dir' && n.children && invalidateParent(n.children)) return true
+        }
+        return false
+      }
+      if (!invalidateParent(lazyTree)) {
+        setLazyTree(await remoteScanDir(remoteRoot, surfaceId))
+      }
+      bumpTree()
+      // Auto-expand the parent dir
+      setExpandedDirs(prev => { const n = new Set(prev); n.add(parentPath); return n })
+      void fetchGitStatus()
+    } catch { /* ignore */ }
+    setNewItemTarget(null)
+  }, [remoteRoot, newItemTarget, newItemValue, surfaceId, bumpTree, lazyTree, fetchGitStatus])
+
+  /* ---- File search across workspace ---- */
+  const handleFileSearch = useCallback(async (query: string, mode: 'files' | 'content') => {
+    // Cancel any in-flight search
+    fileSearchAbortRef.current?.abort()
+    if (!query.trim()) {
+      setFileSearchResults(null)
+      setFileSearchLoading(false)
+      return
+    }
+
+    if (remoteRoot) {
+      // Server-backed search via REST endpoint
+      const controller = new AbortController()
+      fileSearchAbortRef.current = controller
+      setFileSearchLoading(true)
+      try {
+        let url = `${API_URL}/api/workspace/search?query=${encodeURIComponent(query)}&mode=${mode}&limit=50`
+        if (surfaceId) url += `&surfaceId=${encodeURIComponent(surfaceId)}`
+        const res = await fetch(url, { signal: controller.signal })
+        if (!res.ok) throw new Error('Search failed')
+        const data = await res.json()
+        if (!controller.signal.aborted) {
+          setFileSearchResults(data)
+        }
+      } catch (err: unknown) {
+        if ((err as Error)?.name !== 'AbortError') {
+          setFileSearchResults(mode === 'content' ? { matches: [] } : { files: [] })
+        }
+      } finally {
+        if (!controller.signal.aborted) setFileSearchLoading(false)
+      }
+    } else {
+      // Local-only: use the existing handleSearchFiles for filename matching
+      if (mode === 'files') {
+        setFileSearchLoading(true)
+        const controller = new AbortController()
+        fileSearchAbortRef.current = controller
+        try {
+          const results = await handleSearchFiles(query, 50, controller.signal)
+          if (!controller.signal.aborted) {
+            setFileSearchResults({ files: results })
+          }
+        } catch { /* ignore */ }
+        if (!controller.signal.aborted) setFileSearchLoading(false)
+      } else {
+        // Content search not available locally
+        setFileSearchResults({ matches: [] })
+      }
+    }
+  }, [remoteRoot, surfaceId, handleSearchFiles])
+
+  // Debounced search effect
+  const fileSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    if (fileSearchTimerRef.current) clearTimeout(fileSearchTimerRef.current)
+    fileSearchTimerRef.current = setTimeout(() => {
+      void handleFileSearch(fileSearchQuery, fileSearchMode)
+    }, 250)
+    return () => { if (fileSearchTimerRef.current) clearTimeout(fileSearchTimerRef.current) }
+  }, [fileSearchQuery, fileSearchMode, handleFileSearch])
+
+  const handleCopyPath = useCallback((node: LazyNode) => {
+    void navigator.clipboard.writeText(node.path)
+  }, [])
+
+  const handleCopyRelativePath = useCallback((node: LazyNode) => {
+    if (!remoteRoot) return void navigator.clipboard.writeText(node.path)
+    const rel = node.path.replace(/\\/g, '/').replace(remoteRoot.replace(/\\/g, '/'), '').replace(/^\/+/, '')
+    void navigator.clipboard.writeText(rel)
+  }, [remoteRoot])
+
   /* ---- Open diff from source control ---- */
   const handleScOpenDiff = useCallback(async (filePath: string) => {
     if (!remoteRoot) return
@@ -1673,6 +1967,72 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setCommitMsgGenerating(false)
   }, [remoteRoot, gitStatus, commitMsgGenerating, gitActionBusy, provider, cliModel])
 
+  /* ---- Git pull ---- */
+  const handleGitPull = useCallback(async () => {
+    if (!remoteRoot || gitActionBusy) return
+    setGitActionBusy(true)
+    setGitActionError(null)
+    try {
+      await gitApi.pull(remoteRoot)
+      await fetchGitStatus()
+      bumpTree()
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Pull failed')
+    }
+    setGitActionBusy(false)
+  }, [remoteRoot, gitActionBusy, fetchGitStatus, bumpTree])
+
+  /* ---- Discard all changes ---- */
+  const handleDiscardAll = useCallback(async () => {
+    const count = gitStatus?.workingTree.files.length ?? 0
+    if (!remoteRoot || gitActionBusy || count === 0) return
+    const confirmed = window.confirm(`Discard all ${count} change${count > 1 ? 's' : ''}? This cannot be undone.`)
+    if (!confirmed) return
+    setGitActionBusy(true)
+    setGitActionError(null)
+    try {
+      await gitApi.discard(remoteRoot)
+      setScDiffFile(null)
+      setOpenTabs(prev => prev.filter(t => t.type !== 'diff'))
+      await fetchGitStatus()
+      bumpTree()
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Discard failed')
+    }
+    setGitActionBusy(false)
+  }, [remoteRoot, gitActionBusy, gitStatus, fetchGitStatus, bumpTree])
+
+  /* ---- Discard single file ---- */
+  const handleDiscardFile = useCallback(async (filePath: string) => {
+    if (!remoteRoot || gitActionBusy) return
+    const fileName = filePath.split('/').pop() ?? filePath
+    const confirmed = window.confirm(`Discard changes in "${fileName}"? This cannot be undone.`)
+    if (!confirmed) return
+    setGitActionBusy(true)
+    setGitActionError(null)
+    try {
+      await gitApi.discard(remoteRoot, [filePath])
+      // Close diff tab for this file if open
+      const tabId = `git-diff:${filePath}`
+      setOpenTabs(prev => prev.filter(t => t.id !== tabId))
+      if (scDiffFile?.path === filePath) setScDiffFile(null)
+      await fetchGitStatus()
+      bumpTree()
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Discard failed')
+    }
+    setGitActionBusy(false)
+  }, [remoteRoot, gitActionBusy, scDiffFile, fetchGitStatus, bumpTree])
+
+  /* ---- Stage file ---- */
+  const handleStageFile = useCallback(async (filePath: string) => {
+    if (!remoteRoot || gitActionBusy) return
+    try {
+      await gitApi.stage(remoteRoot, [filePath])
+      await fetchGitStatus()
+    } catch { /* ignore */ }
+  }, [remoteRoot, gitActionBusy, fetchGitStatus])
+
   /* ---- Select external file ---- */
   const handleSelectExtFile = useCallback((id: string) => {
     const extFile = files.find(f => f.id === id)
@@ -1895,6 +2255,87 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </button>
             )}
           </div>
+          {/* Mobile search bar */}
+          <div className="flex items-center gap-1 px-1.5 py-1 border-b shrink-0">
+            <Search className="h-3 w-3 text-muted-foreground shrink-0" />
+            <input
+              type="text"
+              placeholder={fileSearchMode === 'content' ? 'Search in files…' : 'Search file names…'}
+              value={fileSearchQuery}
+              onChange={(e) => setFileSearchQuery(e.target.value)}
+              className="flex-1 h-7 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+            />
+            {fileSearchQuery && (
+              <button onClick={() => { setFileSearchQuery(''); setFileSearchResults(null) }} className="p-0.5 rounded hover:bg-muted text-muted-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            )}
+            <button
+              onClick={() => setFileSearchMode(m => m === 'files' ? 'content' : 'files')}
+              className={`px-1.5 h-6 rounded text-[10px] font-medium shrink-0 ${fileSearchMode === 'content' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+              title={fileSearchMode === 'files' ? 'Switch to content search' : 'Switch to filename search'}
+            >
+              {fileSearchMode === 'files' ? 'Name' : 'Content'}
+            </button>
+          </div>
+
+          {/* Mobile search results or file tree */}
+          {fileSearchQuery.trim() ? (
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="p-1">
+              {fileSearchLoading && (
+                <div className="flex items-center gap-1.5 px-2 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" /> Searching…
+                </div>
+              )}
+              {!fileSearchLoading && fileSearchResults?.files && fileSearchResults.files.length > 0 && (
+                fileSearchResults.files.map((f) => (
+                  <div
+                    key={f.path}
+                    className="flex items-center gap-1.5 rounded px-1 py-2 cursor-pointer text-sm hover:bg-muted active:bg-muted"
+                    style={{ paddingLeft: 8 }}
+                    onClick={() => {
+                      const fullPath = remoteRoot ? `${remoteRoot.replace(/\\/g, '/')}/${f.path}` : f.path
+                      void handleOpenFileByPath(fullPath)
+                      if (isMobile) setMobileTab('editor')
+                      setFileSearchQuery('')
+                      setFileSearchResults(null)
+                    }}
+                  >
+                    <FileIcon filename={f.name} className="h-4 w-4 shrink-0" />
+                    <span className="truncate flex-1" title={f.path}>{f.path}</span>
+                  </div>
+                ))
+              )}
+              {!fileSearchLoading && fileSearchResults?.matches && fileSearchResults.matches.length > 0 && (
+                fileSearchResults.matches.map((m, i) => (
+                  <div
+                    key={`${m.file}:${m.line}:${i}`}
+                    className="flex flex-col gap-0 rounded px-1 py-2 cursor-pointer text-sm hover:bg-muted active:bg-muted"
+                    style={{ paddingLeft: 8 }}
+                    onClick={() => {
+                      const fullPath = remoteRoot ? `${remoteRoot.replace(/\\/g, '/')}/${m.file}` : m.file
+                      void handleOpenFileByPath(fullPath)
+                      if (isMobile) setMobileTab('editor')
+                      setFileSearchQuery('')
+                      setFileSearchResults(null)
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      <FileIcon filename={m.file.split('/').pop() || m.file} className="h-4 w-4 shrink-0" />
+                      <span className="truncate text-foreground" title={m.file}>{m.file}</span>
+                      <span className="text-muted-foreground shrink-0">:{m.line}</span>
+                    </div>
+                    <span className="truncate text-muted-foreground pl-6">{m.content}</span>
+                  </div>
+                ))
+              )}
+              {!fileSearchLoading && fileSearchResults && !fileSearchResults.files?.length && !fileSearchResults.matches?.length && (
+                <div className="text-sm text-muted-foreground px-2 py-2">No results found.</div>
+              )}
+            </div>
+          </ScrollArea>
+          ) : (
           <ScrollArea className="flex-1 min-h-0">
             <div className="p-1">
               {hasNativeTree && lazyTree.map((node) => (
@@ -1907,6 +2348,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   onToggleDir={handleToggleDir}
                   onSelectFile={handleSelectNativeFileMobile}
                   onContextFile={handleContextNativeFile}
+                  onTreeContextMenu={handleTreeContextMenu}
                   isMobile
                   gitStatusMap={gitStatusMap}
                   dirChangesSet={dirChangesSet}
@@ -1943,6 +2385,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )}
             </div>
           </ScrollArea>
+          )}
           </>
         )}
 
@@ -2025,6 +2468,28 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   >
                     <CloudUpload className="h-3.5 w-3.5" />
                     Push ({gitStatus.aheadCount})
+                  </button>
+                )}
+                {(gitStatus.behindCount > 0 || gitStatus.hasUpstream) && (
+                  <button
+                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleGitPull}
+                    disabled={gitActionBusy}
+                    title={gitStatus.behindCount > 0 ? `Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}` : 'Pull latest changes'}
+                  >
+                    <Download className="h-3.5 w-3.5" />
+                    Pull{gitStatus.behindCount > 0 ? ` (${gitStatus.behindCount})` : ''}
+                  </button>
+                )}
+                {changedFileCount > 0 && (
+                  <button
+                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-muted hover:bg-muted/80 text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    onClick={handleDiscardAll}
+                    disabled={gitActionBusy}
+                    title="Discard all changes"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                    Discard All
                   </button>
                 )}
               </div>
@@ -2282,6 +2747,92 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
         {/* Files tab */}
         {treeTab === 'files' && (
+        <>
+        {/* Search bar */}
+        <div className="flex items-center gap-1 px-1.5 py-1 border-b shrink-0">
+          <Search className="h-3 w-3 text-muted-foreground shrink-0" />
+          <input
+            type="text"
+            placeholder={fileSearchMode === 'content' ? 'Search in files…' : 'Search file names…'}
+            value={fileSearchQuery}
+            onChange={(e) => setFileSearchQuery(e.target.value)}
+            className="flex-1 h-6 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+          />
+          {fileSearchQuery && (
+            <button onClick={() => { setFileSearchQuery(''); setFileSearchResults(null) }} className="p-0.5 rounded hover:bg-muted text-muted-foreground">
+              <X className="h-3 w-3" />
+            </button>
+          )}
+          <button
+            onClick={() => setFileSearchMode(m => m === 'files' ? 'content' : 'files')}
+            className={`px-1.5 h-5 rounded text-[9px] font-medium shrink-0 ${fileSearchMode === 'content' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+            title={fileSearchMode === 'files' ? 'Switch to content search' : 'Switch to filename search'}
+          >
+            {fileSearchMode === 'files' ? 'Name' : 'Content'}
+          </button>
+        </div>
+
+        {/* Search results or file tree */}
+        {fileSearchQuery.trim() ? (
+          <ScrollArea className="flex-1 min-h-0">
+            <div className="p-1">
+              {fileSearchLoading && (
+                <div className="flex items-center gap-1.5 px-2 py-2 text-xs text-muted-foreground">
+                  <Loader2 className="h-3 w-3 animate-spin" /> Searching…
+                </div>
+              )}
+
+              {/* Filename search results */}
+              {!fileSearchLoading && fileSearchResults?.files && fileSearchResults.files.length > 0 && (
+                fileSearchResults.files.map((f) => (
+                  <div
+                    key={f.path}
+                    className="flex items-center gap-1 rounded px-1 py-1 cursor-pointer text-xs hover:bg-muted"
+                    style={{ paddingLeft: 8 }}
+                    onClick={() => {
+                      const fullPath = remoteRoot ? `${remoteRoot.replace(/\\/g, '/')}/${f.path}` : f.path
+                      void handleOpenFileByPath(fullPath)
+                      setFileSearchQuery('')
+                      setFileSearchResults(null)
+                    }}
+                  >
+                    <FileIcon filename={f.name} className="h-3.5 w-3.5 shrink-0" />
+                    <span className="truncate flex-1" title={f.path}>{f.path}</span>
+                  </div>
+                ))
+              )}
+
+              {/* Content search results */}
+              {!fileSearchLoading && fileSearchResults?.matches && fileSearchResults.matches.length > 0 && (
+                fileSearchResults.matches.map((m, i) => (
+                  <div
+                    key={`${m.file}:${m.line}:${i}`}
+                    className="flex flex-col gap-0 rounded px-1 py-1 cursor-pointer text-xs hover:bg-muted"
+                    style={{ paddingLeft: 8 }}
+                    onClick={() => {
+                      const fullPath = remoteRoot ? `${remoteRoot.replace(/\\/g, '/')}/${m.file}` : m.file
+                      void handleOpenFileByPath(fullPath)
+                      setFileSearchQuery('')
+                      setFileSearchResults(null)
+                    }}
+                  >
+                    <div className="flex items-center gap-1">
+                      <FileIcon filename={m.file.split('/').pop() || m.file} className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate text-foreground" title={m.file}>{m.file}</span>
+                      <span className="text-muted-foreground shrink-0">:{m.line}</span>
+                    </div>
+                    <span className="truncate text-muted-foreground pl-5">{m.content}</span>
+                  </div>
+                ))
+              )}
+
+              {/* Empty state */}
+              {!fileSearchLoading && fileSearchResults && !fileSearchResults.files?.length && !fileSearchResults.matches?.length && (
+                <div className="text-xs text-muted-foreground px-2 py-2">No results found.</div>
+              )}
+            </div>
+          </ScrollArea>
+        ) : (
         <ScrollArea className="flex-1 min-h-0">
           <div className="p-1">
             {hasNativeTree && lazyTree.map((node) => (
@@ -2294,6 +2845,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 onToggleDir={handleToggleDir}
                 onSelectFile={handleSelectNativeFile}
                 onContextFile={handleContextNativeFile}
+                onTreeContextMenu={handleTreeContextMenu}
                 gitStatusMap={gitStatusMap}
                 dirChangesSet={dirChangesSet}
               />
@@ -2336,6 +2888,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
           </div>
         </ScrollArea>
+        )}
+        </>
         )}
 
         {/* Source Control tab */}
@@ -2431,6 +2985,28 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   Push ({gitStatus.aheadCount})
                 </button>
               )}
+              {(gitStatus.behindCount > 0 || gitStatus.hasUpstream) && (
+                <button
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={handleGitPull}
+                  disabled={gitActionBusy}
+                  title={gitStatus.behindCount > 0 ? `Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}` : 'Pull latest changes'}
+                >
+                  <Download className="h-3 w-3" />
+                  Pull{gitStatus.behindCount > 0 ? ` (${gitStatus.behindCount})` : ''}
+                </button>
+              )}
+              {changedFileCount > 0 && (
+                <button
+                  className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={handleDiscardAll}
+                  disabled={gitActionBusy}
+                  title="Discard all changes"
+                >
+                  <Undo2 className="h-3 w-3" />
+                  Discard All
+                </button>
+              )}
             </div>
             {gitActionError && (
               <div className="text-[10px] text-red-500 px-0.5">{gitActionError}</div>
@@ -2468,10 +3044,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
                   const isActiveDiff = scDiffFile?.path === f.path
                   return (
-                    <button
-                      type="button"
+                    <div
                       key={f.path}
-                      className={`group flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-xs ${
+                      className={`group flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-xs cursor-pointer ${
                         isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
                       }`}
                       style={{ paddingLeft: 8 }}
@@ -2492,7 +3067,26 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                         {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
                         {f.deletions > 0 && <span className="text-red-500 ml-0.5">-{f.deletions}</span>}
                       </span>
-                    </button>
+                      {/* Per-file actions */}
+                      <span className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <button
+                          type="button"
+                          className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
+                          onClick={(e) => { e.stopPropagation(); void handleStageFile(f.path) }}
+                          title="Stage file (git add)"
+                        >
+                          <Plus className="h-3 w-3" />
+                        </button>
+                        <button
+                          type="button"
+                          className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-red-500"
+                          onClick={(e) => { e.stopPropagation(); void handleDiscardFile(f.path) }}
+                          title="Discard changes"
+                        >
+                          <Undo2 className="h-3 w-3" />
+                        </button>
+                      </span>
+                    </div>
                   )
                 })}
                 </div>
@@ -2764,6 +3358,164 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         >
           Close All
         </button>
+      </div>
+      )}
+
+      {/* File tree context menu */}
+      {fileContextMenu && (
+      <div
+        className="fixed z-50 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+        style={{ left: fileContextMenu.x, top: fileContextMenu.y }}
+        onPointerDown={(e) => e.stopPropagation()}
+      >
+        {fileContextMenu.node.kind === 'file' && (
+          <button
+            className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+            onClick={() => {
+              const node = fileContextMenu.node as LazyFile
+              handleSelectNativeFile(node)
+              setFileContextMenu(null)
+            }}
+          >
+            Open
+          </button>
+        )}
+        {fileContextMenu.node.kind === 'file' && (
+          <button
+            className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+            onClick={() => {
+              const node = fileContextMenu.node as LazyFile
+              void handleContextNativeFile(node)
+              setFileContextMenu(null)
+            }}
+          >
+            <Send className="h-3 w-3" />
+            Add to Chat
+          </button>
+        )}
+        <div className="my-1 h-px bg-border" />
+        {/* New File / New Folder */}
+        <button
+          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          onClick={() => {
+            const parentDir = fileContextMenu.node.kind === 'dir'
+              ? fileContextMenu.node.path
+              : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
+            setNewItemTarget({ parentDir, kind: 'file' })
+            setNewItemValue('')
+            setFileContextMenu(null)
+          }}
+        >
+          <FilePlus className="h-3 w-3" />
+          New File
+        </button>
+        <button
+          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          onClick={() => {
+            const parentDir = fileContextMenu.node.kind === 'dir'
+              ? fileContextMenu.node.path
+              : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
+            setNewItemTarget({ parentDir, kind: 'dir' })
+            setNewItemValue('')
+            setFileContextMenu(null)
+          }}
+        >
+          <FolderPlus className="h-3 w-3" />
+          New Folder
+        </button>
+        <div className="my-1 h-px bg-border" />
+        {/* Rename */}
+        <button
+          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          onClick={() => {
+            setRenameTarget({ path: fileContextMenu.node.path, name: fileContextMenu.node.name, kind: fileContextMenu.node.kind === 'dir' ? 'dir' : 'file' })
+            setRenameValue(fileContextMenu.node.name)
+            setFileContextMenu(null)
+          }}
+        >
+          <Edit3 className="h-3 w-3" />
+          Rename
+        </button>
+        {/* Delete */}
+        <button
+          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted text-red-500"
+          onClick={() => {
+            void handleDeleteNode(fileContextMenu.node)
+            setFileContextMenu(null)
+          }}
+        >
+          <Trash2 className="h-3 w-3" />
+          Delete
+        </button>
+        <div className="my-1 h-px bg-border" />
+        {/* Copy Path */}
+        <button
+          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          onClick={() => {
+            handleCopyPath(fileContextMenu.node)
+            setFileContextMenu(null)
+          }}
+        >
+          <Copy className="h-3 w-3" />
+          Copy Path
+        </button>
+        <button
+          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          onClick={() => {
+            handleCopyRelativePath(fileContextMenu.node)
+            setFileContextMenu(null)
+          }}
+        >
+          <Copy className="h-3 w-3" />
+          Copy Relative Path
+        </button>
+      </div>
+      )}
+
+      {/* Inline rename input */}
+      {renameTarget && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onPointerDown={() => setRenameTarget(null)}>
+        <div className="bg-popover border rounded-lg shadow-lg p-3 min-w-[280px]" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="text-xs font-medium mb-2">Rename "{renameTarget.name}"</div>
+          <input
+            className="w-full text-xs bg-background border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            autoFocus
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void handleRenameConfirm()
+              if (e.key === 'Escape') setRenameTarget(null)
+            }}
+          />
+          <div className="flex justify-end gap-1.5 mt-2">
+            <button className="px-2 py-1 text-xs rounded bg-muted hover:bg-muted/80" onClick={() => setRenameTarget(null)}>Cancel</button>
+            <button className="px-2 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => void handleRenameConfirm()}>Rename</button>
+          </div>
+        </div>
+      </div>
+      )}
+
+      {/* New file/folder input */}
+      {newItemTarget && (
+      <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onPointerDown={() => setNewItemTarget(null)}>
+        <div className="bg-popover border rounded-lg shadow-lg p-3 min-w-[280px]" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="text-xs font-medium mb-2">New {newItemTarget.kind === 'dir' ? 'Folder' : 'File'}</div>
+          <input
+            className="w-full text-xs bg-background border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
+            autoFocus
+            placeholder={newItemTarget.kind === 'dir' ? 'folder-name' : 'filename.ext'}
+            value={newItemValue}
+            onChange={(e) => setNewItemValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') void handleNewItemConfirm()
+              if (e.key === 'Escape') setNewItemTarget(null)
+            }}
+          />
+          <div className="flex justify-end gap-1.5 mt-2">
+            <button className="px-2 py-1 text-xs rounded bg-muted hover:bg-muted/80" onClick={() => setNewItemTarget(null)}>Cancel</button>
+            <button className="px-2 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => void handleNewItemConfirm()}>Create</button>
+          </div>
+        </div>
       </div>
       )}
 

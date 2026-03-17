@@ -22,6 +22,7 @@ export type {
   FileHighlightData,
   DevPreviewOpenData,
   ScreenShareOpenData,
+  ArchitectureUpdateData,
   FsChangeType,
   FsChangeEvent,
   FsChangesPayload,

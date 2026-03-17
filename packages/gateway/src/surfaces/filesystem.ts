@@ -5,8 +5,8 @@
  * via PathGuard. Tracks operations for audit.
  */
 
-import { readFile, writeFile, mkdir, stat, readdir } from "node:fs/promises";
-import { dirname, relative } from "node:path";
+import { readFile, writeFile, mkdir, stat, readdir, unlink, rename, rm, cp } from "node:fs/promises";
+import { dirname, relative, join, basename } from "node:path";
 import { PathGuard, type PathGuardOptions } from "../security/path-guard.js";
 import type {
   Surface,
@@ -240,6 +240,85 @@ export class FileSystemSurface implements Surface {
       // File doesn't exist yet — backup is null (undo = delete the new file)
       this._backups.set(abs, null);
     }
+  }
+
+  // ── File Management Operations ───────────────────────────────
+
+  async deleteFile(filePath: string): Promise<void> {
+    this.ensureRunning();
+    const abs = await this.guard!.validateWithSymlinkCheck(filePath);
+    this._opCount++;
+    await unlink(abs);
+    this.onOutput?.(`deleted ${relative(this.guard!.workspaceRoot, abs)}`);
+  }
+
+  async deleteDirectory(dirPath: string): Promise<void> {
+    this.ensureRunning();
+    const abs = await this.guard!.validateWithSymlinkCheck(dirPath);
+    this._opCount++;
+    await rm(abs, { recursive: true });
+    this.onOutput?.(`deleted directory ${relative(this.guard!.workspaceRoot, abs)}`);
+  }
+
+  async renameFile(oldPath: string, newName: string): Promise<string> {
+    this.ensureRunning();
+    const absOld = await this.guard!.validateWithSymlinkCheck(oldPath);
+    const absNew = join(dirname(absOld), newName);
+    // Validate the new path is also within workspace
+    this.guard!.validate(absNew);
+    this._opCount++;
+    await rename(absOld, absNew);
+    const relNew = relative(this.guard!.workspaceRoot, absNew);
+    this.onOutput?.(`renamed ${relative(this.guard!.workspaceRoot, absOld)} → ${relNew}`);
+    return absNew;
+  }
+
+  async moveFile(srcPath: string, destDir: string): Promise<string> {
+    this.ensureRunning();
+    const absSrc = await this.guard!.validateWithSymlinkCheck(srcPath);
+    const absDestDir = await this.guard!.validateWithSymlinkCheck(destDir);
+    const fileName = basename(absSrc);
+    const absDest = join(absDestDir, fileName);
+    // Validate destination is also within workspace
+    this.guard!.validate(absDest);
+    this._opCount++;
+    await mkdir(absDestDir, { recursive: true });
+    await rename(absSrc, absDest);
+    const relDest = relative(this.guard!.workspaceRoot, absDest);
+    this.onOutput?.(`moved ${relative(this.guard!.workspaceRoot, absSrc)} → ${relDest}`);
+    return absDest;
+  }
+
+  async createDirectory(dirPath: string): Promise<void> {
+    this.ensureRunning();
+    const abs = this.guard!.validate(dirPath);
+    this._opCount++;
+    await mkdir(abs, { recursive: true });
+    this.onOutput?.(`created directory ${relative(this.guard!.workspaceRoot, abs)}`);
+  }
+
+  async createFile(filePath: string, content = ""): Promise<void> {
+    this.ensureRunning();
+    const abs = await this.guard!.validateWithSymlinkCheck(filePath);
+    this._opCount++;
+    await mkdir(dirname(abs), { recursive: true });
+    await writeFile(abs, content, "utf-8");
+    this.onOutput?.(`created ${relative(this.guard!.workspaceRoot, abs)}`);
+  }
+
+  async copyFile(srcPath: string, destPath: string): Promise<void> {
+    this.ensureRunning();
+    const absSrc = await this.guard!.validateWithSymlinkCheck(srcPath);
+    const absDest = this.guard!.validate(destPath);
+    this._opCount++;
+    await mkdir(dirname(absDest), { recursive: true });
+    const srcStat = await stat(absSrc);
+    if (srcStat.isDirectory()) {
+      await cp(absSrc, absDest, { recursive: true });
+    } else {
+      await cp(absSrc, absDest);
+    }
+    this.onOutput?.(`copied ${relative(this.guard!.workspaceRoot, absSrc)} → ${relative(this.guard!.workspaceRoot, absDest)}`);
   }
 
   private ensureRunning() {

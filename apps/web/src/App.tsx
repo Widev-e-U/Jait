@@ -38,6 +38,7 @@ import {
   Server,
   ScrollText,
   ListChecks,
+  Boxes,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -73,6 +74,7 @@ import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
 import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
+import { ArchitecturePanel } from '@/components/workspace/architecture-panel'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
@@ -84,7 +86,7 @@ import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useAutomation } from '@/hooks/useAutomation'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
-import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload } from '@jait/shared'
+import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
@@ -153,6 +155,13 @@ const suggestions = [
   'Explain quantum computing',
   'Write a Python script',
   'What time is it?',
+]
+
+const workspaceSuggestions = [
+  'Generate architecture diagram',
+  'Explain this codebase',
+  'Find potential issues',
+  'What can you help me with?',
 ]
 
 function loadLegacyCliModelsByProvider(currentProvider: ProviderId): Partial<Record<CliProviderId, string | null>> {
@@ -789,6 +798,9 @@ function App() {
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
   const closeConfirmRef = useRef<HTMLDivElement>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
+  const [showArchitecture, setShowArchitecture] = useState(false)
+  const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null)
+  const [architectureGenerating, setArchitectureGenerating] = useState(false)
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
@@ -1646,6 +1658,13 @@ function App() {
         setShowScreenShare(false)
         setSavedScreenShare(null)
       }, [setSavedScreenShare]),
+      'architecture.update': useCallback((data: ArchitectureUpdateData) => {
+        if (data.diagram) {
+          setArchitectureDiagram(data.diagram)
+          setArchitectureGenerating(false)
+          setShowArchitecture(true)
+        }
+      }, []),
     },
   })
 
@@ -1799,11 +1818,18 @@ function App() {
     sendUIState('screen-share.panel', null, activeSessionId)
   }, [setSavedScreenShare, sendUIState, activeSessionId])
 
-  const closeDevPreviewPanel = useCallback(() => {
+  const closeDevPreviewPanel = useCallback(async () => {
+    if (token && activeSessionId) {
+      await fetch(`${getApiUrl()}/api/preview/stop`, {
+        method: 'POST',
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ sessionId: activeSessionId }),
+      }).catch(() => {})
+    }
     setShowDevPreview(false)
     setSavedDevPreview(null)
     sendUIState('dev-preview.panel', null, activeSessionId)
-  }, [setSavedDevPreview, sendUIState, activeSessionId])
+  }, [token, activeSessionId, setSavedDevPreview, sendUIState])
 
   const previewOpen = showDevPreview || savedDevPreview?.open === true || workspacePreviewState.open
 
@@ -2623,6 +2649,16 @@ function App() {
       sid = session?.id ?? null
     }
     if (!sid) return
+    // Handle architecture generation suggestion
+    if (suggestion === 'Generate architecture diagram') {
+      setArchitectureGenerating(true)
+      setShowArchitecture(true)
+      sendMessage(
+        'Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
+        { token, sessionId: sid, mode: chatMode, provider: chatProvider, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) },
+      )
+      return
+    }
     sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
@@ -3189,6 +3225,22 @@ function App() {
               <Wifi className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Network</span>
             </Button>
+            {viewMode === 'developer' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showScreenShare ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-8 text-xs shrink-0 px-2 sm:px-3"
+                    onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
+                  >
+                    <Cast className="h-3.5 w-3.5 sm:mr-1.5" />
+                    <span className="hidden sm:inline">Share</span>
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Screen sharing</TooltipContent>
+              </Tooltip>
+            )}
           </nav>
 
           {/* Spacer */}
@@ -3397,7 +3449,7 @@ function App() {
                   </Tooltip>
                 )}
 
-                {viewMode === 'developer' && (
+                {viewMode === 'developer' && showWorkspace && activeWorkspace && (
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
@@ -3416,9 +3468,9 @@ function App() {
                           }
                         }}
                       >
-                        <Globe className="h-3 w-3 mr-1 text-red-500" />
+                        <Globe className="h-3 w-3 mr-1" />
                         Preview
-                        {previewOpen && <X className="h-3 w-3 ml-1" />}
+                        {previewOpen && <X className="h-3 wer-3 ml-1" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">{previewOpen ? 'Close preview' : 'Open dev preview'}</TooltipContent>
@@ -3470,7 +3522,7 @@ function App() {
               </>
             )}
 
-            {viewMode === 'developer' && (
+            {viewMode === 'developer' && showWorkspace && activeWorkspace && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -3487,21 +3539,20 @@ function App() {
               </Tooltip>
             )}
 
-            {/* Developer-only: Share */}
-            {viewMode === 'developer' && (
+            {viewMode === 'developer' && showWorkspace && activeWorkspace && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={showScreenShare ? 'secondary' : 'ghost'}
+                    variant={showArchitecture ? 'secondary' : 'ghost'}
                     size="sm"
                     className="h-6 text-[11px] px-2 shrink-0"
-                    onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
+                    onClick={() => setShowArchitecture(a => !a)}
                   >
-                    <Cast className="h-3 w-3 mr-1" />
-                    Share
+                    <Boxes className="h-3 w-3 mr-1" />
+                    Architecture
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Screen sharing</TooltipContent>
+                <TooltipContent side="bottom">Software architecture diagram</TooltipContent>
               </Tooltip>
             )}
 
@@ -4045,6 +4096,9 @@ function App() {
                     onClose={closeDevPreviewPanel}
                     initialTarget={devPreviewTarget}
                     autoOpenKey={devPreviewAutoOpenKey}
+                    sessionId={activeSessionId}
+                    token={token}
+                    workspaceRoot={activeWorkspace?.workspaceRoot ?? null}
                   />
                 )}
                 <div className="w-full max-w-3xl space-y-8">
@@ -4052,7 +4106,7 @@ function App() {
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
                     <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
                   </div>
-                  <Suggestions suggestions={suggestions} onSelect={handleSuggestion} />
+                  <Suggestions suggestions={showWorkspace && activeWorkspace ? workspaceSuggestions : suggestions} onSelect={handleSuggestion} />
                   <PromptInput
                     ref={promptInputRef}
                     value={inputValue}
@@ -4089,6 +4143,9 @@ function App() {
                     onClose={closeDevPreviewPanel}
                     initialTarget={devPreviewTarget}
                     autoOpenKey={devPreviewAutoOpenKey}
+                    sessionId={activeSessionId}
+                    token={token}
+                    workspaceRoot={activeWorkspace?.workspaceRoot ?? null}
                   />
                 )}
                 {/* Sticky show-panel buttons when workspace panels are hidden */}
@@ -4323,6 +4380,34 @@ function App() {
         {viewMode === 'developer' && showDebugPanel && (
           <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
             <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
+          </div>
+        )}
+
+        {viewMode === 'developer' && showArchitecture && (
+          <div className="fixed top-14 right-0 bottom-0 w-[560px] border-l z-50 shadow-xl bg-background">
+            <div className="flex items-center justify-between h-8 px-3 border-b bg-muted/30 shrink-0">
+              <span className="text-xs font-medium flex items-center gap-1.5">
+                <Boxes className="h-3 w-3" /> Architecture
+              </span>
+              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setShowArchitecture(false)}>
+                <X className="h-3 w-3" />
+              </Button>
+            </div>
+            <div className="h-[calc(100%-2rem)]">
+              <ArchitecturePanel
+                diagram={architectureDiagram}
+                isGenerating={architectureGenerating}
+                onRegenerate={() => {
+                  setArchitectureGenerating(true)
+                  handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                }}
+                onGenerate={() => {
+                  setArchitectureGenerating(true)
+                  handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                }}
+                theme={themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'}
+              />
+            </div>
           </div>
         )}
 

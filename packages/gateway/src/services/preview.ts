@@ -1,12 +1,21 @@
-import { spawn, type ChildProcessWithoutNullStreams } from "node:child_process";
-import { existsSync, readFileSync } from "node:fs";
-import { join } from "node:path";
-import { createServer } from "node:net";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { BrowserSurface, type BrowserRuntimeEvent } from "../surfaces/browser.js";
+import {
+  createPreviewRunner,
+  type PreviewRunner,
+  type PreviewRunnerResult,
+} from "./preview-runner.js";
 
-export type PreviewStatus = "idle" | "starting" | "ready" | "error" | "stopped";
-export type PreviewMode = "local" | "url";
+export type PreviewStatus = "starting" | "ready" | "error" | "stopped";
+export type PreviewMode = "local" | "docker" | "url";
+
+export interface PreviewLogEntry {
+  id: number;
+  stream: "stdout" | "stderr" | "system";
+  text: string;
+  timestamp: string;
+}
 
 export interface PreviewSession {
   id: string;
@@ -19,10 +28,12 @@ export interface PreviewSession {
   port: number | null;
   url: string | null;
   browserId: string | null;
-  logs: Array<{ id: number; stream: "stdout" | "stderr" | "system"; text: string; timestamp: string }>;
+  processId: number | null;
+  containerId: string | null;
+  logs: PreviewLogEntry[];
   browserEvents: BrowserRuntimeEvent[];
   lastError: string | null;
-  startedAt: string;
+  createdAt: string;
   updatedAt: string;
 }
 
@@ -32,10 +43,12 @@ export interface StartPreviewInput {
   target?: string | null;
   command?: string | null;
   port?: number | null;
+  frameworkHint?: string | null;
 }
 
 interface InternalPreviewSession extends PreviewSession {
   process: ChildProcessWithoutNullStreams | null;
+  runnerResult: PreviewRunnerResult | null;
 }
 
 const MAX_PREVIEW_LOGS = 400;
@@ -66,126 +79,80 @@ function normalizeTargetUrl(target: string): string | null {
   }
 }
 
-function detectPackageManager(workspaceRoot: string): "bun" | "pnpm" | "npm" {
-  if (existsSync(join(workspaceRoot, "bun.lockb"))) return "bun";
-  if (existsSync(join(workspaceRoot, "pnpm-lock.yaml"))) return "pnpm";
-  return "npm";
-}
-
-function loadPackageJson(workspaceRoot: string): Record<string, any> | null {
-  const file = join(workspaceRoot, "package.json");
-  if (!existsSync(file)) return null;
-  try {
-    return JSON.parse(readFileSync(file, "utf8")) as Record<string, any>;
-  } catch {
-    return null;
-  }
-}
-
-function detectPreviewCommand(workspaceRoot: string, requestedCommand: string | null, port: number): string {
-  if (requestedCommand?.trim()) return requestedCommand.trim();
-
-  const packageJson = loadPackageJson(workspaceRoot);
-  if (!packageJson) {
-    throw new Error("No package.json found and no preview command was provided.");
-  }
-
-  const deps = {
-    ...(packageJson.dependencies ?? {}),
-    ...(packageJson.devDependencies ?? {}),
-  } as Record<string, string>;
-  const scripts = (packageJson.scripts ?? {}) as Record<string, string>;
-  const packageManager = detectPackageManager(workspaceRoot);
-
-  if ("vite" in deps) {
-    return `${packageManager} exec vite --host 127.0.0.1 --port ${port}`;
-  }
-  if ("next" in deps) {
-    return `${packageManager} exec next dev --hostname 127.0.0.1 --port ${port}`;
-  }
-  if (scripts.preview) {
-    return `${packageManager} run preview -- --host 127.0.0.1 --port ${port}`;
-  }
-  if (scripts.dev) {
-    return `${packageManager} run dev`;
-  }
-
-  throw new Error("Unable to detect a preview command. Provide one explicitly.");
-}
-
-async function allocatePort(preferred?: number | null): Promise<number> {
-  if (preferred && preferred > 0) return preferred;
-  return new Promise<number>((resolve, reject) => {
-    const server = createServer();
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close(() => reject(new Error("Failed to allocate preview port")));
-        return;
-      }
-      const port = address.port;
-      server.close((err) => (err ? reject(err) : resolve(port)));
-    });
-    server.on("error", reject);
-  });
-}
-
-async function waitForHttp(url: string, timeoutMs = 45_000): Promise<void> {
-  const started = Date.now();
-  while (Date.now() - started < timeoutMs) {
-    try {
-      const response = await fetch(url, { signal: AbortSignal.timeout(3000) });
-      if (response.ok || response.status < 500) return;
-    } catch {
-      // retry
-    }
-    await new Promise((resolve) => setTimeout(resolve, 1000));
-  }
-  throw new Error(`Preview server did not become ready at ${url} within ${timeoutMs}ms`);
-}
-
 export class PreviewService {
   private readonly sessions = new Map<string, InternalPreviewSession>();
   private nextLogId = 1;
+  private readonly runner: PreviewRunner;
 
-  constructor(private readonly surfaceRegistry: SurfaceRegistry) {}
+  constructor(private readonly surfaceRegistry: SurfaceRegistry) {
+    this.runner = createPreviewRunner(false);
+  }
 
   async start(input: StartPreviewInput): Promise<PreviewSession> {
     if (!input.sessionId) throw new Error("sessionId is required");
     await this.stop(input.sessionId);
 
-    const startedAt = nowIso();
+    const createdAt = nowIso();
+    const isLocal = Boolean(input.command?.trim() || input.workspaceRoot?.trim());
     const session: InternalPreviewSession = {
       id: `preview-${input.sessionId}`,
       sessionId: input.sessionId,
       workspaceRoot: input.workspaceRoot?.trim() || null,
-      mode: input.command?.trim() || input.workspaceRoot?.trim() ? "local" : "url",
+      mode: isLocal ? this.runner.mode : "url",
       status: "starting",
       target: input.target?.trim() || null,
       command: null,
       port: null,
       url: null,
       browserId: `preview-browser-${input.sessionId}`,
+      processId: null,
+      containerId: null,
       logs: [],
       browserEvents: [],
       lastError: null,
-      startedAt,
-      updatedAt: startedAt,
+      createdAt,
+      updatedAt: createdAt,
       process: null,
+      runnerResult: null,
     };
     this.sessions.set(input.sessionId, session);
     this.appendLog(session, "system", "Starting preview session");
 
     try {
-      if (session.mode === "local") {
+      if (session.mode !== "url") {
         if (!session.workspaceRoot) {
           throw new Error("workspaceRoot is required for managed project previews");
         }
-        session.port = await allocatePort(input.port);
-        session.command = detectPreviewCommand(session.workspaceRoot, input.command?.trim() || null, session.port);
-        session.url = normalizeTargetUrl(input.target ?? "") ?? `http://127.0.0.1:${session.port}/`;
-        session.process = this.spawnLocalProcess(session);
-        await waitForHttp(session.url);
+        const result = await this.runner.start(
+          {
+            workspaceRoot: session.workspaceRoot,
+            command: input.command?.trim() || null,
+            port: input.port,
+            target: input.target?.trim() || null,
+            frameworkHint: input.frameworkHint?.trim() || null,
+          },
+          (stream, text) => this.appendLog(session, stream, text),
+        );
+
+        session.runnerResult = result;
+        session.process = result.process;
+        session.port = result.port;
+        session.command = result.command;
+        session.url = result.url;
+        session.processId = result.processId ?? null;
+        session.containerId = result.containerId ?? null;
+
+        // Listen for process exit
+        if (result.process) {
+          result.process.on("exit", (code, signal) => {
+            if (session.status === "stopped") return;
+            session.updatedAt = nowIso();
+            session.status = "error";
+            const message = `Preview process exited (code=${code ?? "null"}, signal=${signal ?? "null"})`;
+            session.lastError = message;
+            this.appendLog(session, "stderr", message);
+          });
+        }
       } else {
         session.url = normalizeTargetUrl(input.target ?? "");
         if (!session.url) {
@@ -223,7 +190,9 @@ export class PreviewService {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
 
-    if (session.process && !session.process.killed) {
+    if (session.runnerResult) {
+      await this.runner.stop(session.runnerResult).catch(() => {});
+    } else if (session.process && !session.process.killed) {
       session.process.kill("SIGTERM");
     }
     if (session.browserId) {
@@ -244,8 +213,53 @@ export class PreviewService {
     return this.toPublicSession(session);
   }
 
+  getLogs(sessionId: string, sinceId = 0): PreviewLogEntry[] {
+    const session = this.sessions.get(sessionId);
+    if (!session) return [];
+    return session.logs.filter((entry) => entry.id > sinceId);
+  }
+
   list(): PreviewSession[] {
-    return [...this.sessions.values()].map((session) => this.get(session.sessionId)!).filter(Boolean);
+    return [...this.sessions.values()].map((s) => this.get(s.sessionId)!).filter(Boolean);
+  }
+
+  async screenshot(sessionId: string): Promise<string | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session?.browserId) return null;
+    const surface = this.surfaceRegistry.getSurface(session.browserId);
+    if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
+    return (surface as BrowserSurface).screenshot();
+  }
+
+  async snapshot(sessionId: string): Promise<string | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session?.browserId) return null;
+    const surface = this.surfaceRegistry.getSurface(session.browserId);
+    if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
+    const browser = surface as BrowserSurface;
+    return browser.describe();
+  }
+
+  async inspect(sessionId: string): Promise<{
+    status: PreviewStatus;
+    url: string | null;
+    browserEvents: BrowserRuntimeEvent[];
+    logs: PreviewLogEntry[];
+    screenshot: string | null;
+  } | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+
+    const events = this.readBrowserEvents(session);
+    const screenshotBase64 = await this.screenshot(sessionId).catch(() => null);
+
+    return {
+      status: session.status,
+      url: session.url,
+      browserEvents: events,
+      logs: [...session.logs],
+      screenshot: screenshotBase64,
+    };
   }
 
   async stopAll(): Promise<void> {
@@ -253,44 +267,6 @@ export class PreviewService {
     for (const sessionId of sessionIds) {
       await this.stop(sessionId);
     }
-  }
-
-  private spawnLocalProcess(session: InternalPreviewSession): ChildProcessWithoutNullStreams {
-    const child = spawn(session.command!, {
-      cwd: session.workspaceRoot!,
-      env: {
-        ...process.env,
-        PORT: String(session.port!),
-        HOST: "127.0.0.1",
-        HOSTNAME: "127.0.0.1",
-        BROWSER: "none",
-      },
-      shell: true,
-      stdio: "pipe",
-    });
-
-    child.stdout.setEncoding("utf8");
-    child.stderr.setEncoding("utf8");
-    child.stdout.on("data", (chunk: string) => this.appendLog(session, "stdout", chunk));
-    child.stderr.on("data", (chunk: string) => this.appendLog(session, "stderr", chunk));
-    child.on("exit", (code, signal) => {
-      if (session.status === "stopped") return;
-      session.updatedAt = nowIso();
-      if (session.status !== "ready") {
-        session.status = "error";
-      }
-      const message = `Preview process exited (code=${code ?? "null"}, signal=${signal ?? "null"})`;
-      session.lastError = message;
-      this.appendLog(session, "stderr", message);
-    });
-    child.on("error", (error) => {
-      session.status = "error";
-      session.lastError = error.message;
-      session.updatedAt = nowIso();
-      this.appendLog(session, "stderr", error.message);
-    });
-
-    return child;
   }
 
   private async ensureBrowser(session: InternalPreviewSession): Promise<void> {
@@ -345,10 +321,12 @@ export class PreviewService {
       port: session.port,
       url: session.url,
       browserId: session.browserId,
+      processId: session.processId,
+      containerId: session.containerId,
       logs: [...session.logs],
       browserEvents: [...session.browserEvents],
       lastError: session.lastError,
-      startedAt: session.startedAt,
+      createdAt: session.createdAt,
       updatedAt: session.updatedAt,
     };
   }

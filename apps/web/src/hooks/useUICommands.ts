@@ -8,6 +8,7 @@ import type {
   TerminalFocusData,
   FileHighlightData,
   DevPreviewOpenData,
+  ArchitectureUpdateData,
   FsChangesPayload,
 } from '@jait/shared'
 
@@ -66,6 +67,7 @@ type CommandDataMap = {
   'terminal.focus': TerminalFocusData
   'file.highlight': FileHighlightData
   'dev-preview.open': DevPreviewOpenData
+  'architecture.update': ArchitectureUpdateData
 }
 
 type UICommandListener<T extends UICommandType = UICommandType> =
@@ -77,6 +79,7 @@ interface Listeners {
   'terminal.focus'?: UICommandListener<'terminal.focus'>
   'file.highlight'?: UICommandListener<'file.highlight'>
   'dev-preview.open'?: UICommandListener<'dev-preview.open'>
+  'architecture.update'?: UICommandListener<'architecture.update'>
   'screen-share.open'?: (data: Record<string, unknown>) => void
   'screen-share.close'?: (data: Record<string, unknown>) => void
 }

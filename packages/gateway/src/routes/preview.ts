@@ -15,6 +15,24 @@ export function registerPreviewRoutes(
     return { session: deps.previewService.get(sessionId) };
   });
 
+  app.get("/api/preview/screenshot/:sessionId", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    const screenshot = await deps.previewService.screenshot(sessionId);
+    return { screenshot };
+  });
+
+  app.get("/api/preview/logs/:sessionId", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    const query = request.query as { sinceId?: string };
+    const sinceId = query.sinceId ? Number.parseInt(query.sinceId, 10) : 0;
+    const logs = deps.previewService.getLogs(sessionId, sinceId);
+    return { logs };
+  });
+
   app.post("/api/preview/start", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
@@ -24,6 +42,7 @@ export function registerPreviewRoutes(
       target?: string | null;
       command?: string | null;
       port?: number | null;
+      frameworkHint?: string | null;
     };
     if (!body.sessionId) {
       return reply.status(400).send({ error: "sessionId is required" });
@@ -34,6 +53,7 @@ export function registerPreviewRoutes(
       target: body.target ?? null,
       command: body.command ?? null,
       port: typeof body.port === "number" ? body.port : null,
+      frameworkHint: body.frameworkHint ?? null,
     });
     return { session };
   });
