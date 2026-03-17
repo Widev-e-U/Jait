@@ -231,6 +231,7 @@ async function main() {
     threadMcpConfig: { host: config.host, port: config.port },
     threadService,
     providerRegistry,
+    userService,
     maintenanceService,
     notifications,
   });
@@ -329,6 +330,7 @@ async function main() {
     threadMcpConfig: { host: config.host, port: config.port },
     threadService,
     providerRegistry,
+    userService,
     maintenanceService,
     notifications,
     config,

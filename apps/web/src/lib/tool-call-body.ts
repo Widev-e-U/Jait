@@ -44,19 +44,71 @@ function parseJsonObject(value: unknown): Record<string, unknown> | undefined {
   return undefined
 }
 
-export function normalizeToolName(name: string): string {
-  const idx = name.indexOf('_')
-  return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
+function truncate(value: string, max = 80): string {
+  const trimmed = value.trim()
+  if (trimmed.length <= max) return trimmed
+  return `${trimmed.slice(0, max - 1)}…`
 }
 
-export function normalizeToolArgs(
-  tool: string,
+function summarizeArgumentValue(value: unknown): string | undefined {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    return trimmed ? truncate(trimmed, 48) : undefined
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value)
+  }
+  if (Array.isArray(value)) {
+    return `${value.length} item${value.length === 1 ? '' : 's'}`
+  }
+  if (value && typeof value === 'object') {
+    return 'object'
+  }
+  return undefined
+}
+
+function humanizeArgumentKey(key: string): string {
+  return key
+    .replace(/_/g, ' ')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .trim()
+    .toLowerCase()
+}
+
+function extractPathLikeString(value: string): string | null {
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  const directPathMatch = trimmed.match(/(?:^|[\s:(['"`])((?:\/|\.\/|\.\.\/)?(?:[\w.@-]+\/)+[\w.@-]+(?:\.[\w-]+)?)/)
+  if (directPathMatch?.[1]) return directPathMatch[1]
+
+  const fileOnlyMatch = trimmed.match(/(?:^|[\s:(['"`])((?:\/|\.\/|\.\.\/)?[\w.@-]+(?:\/[\w.@-]+)*\.[\w-]+)/)
+  if (fileOnlyMatch?.[1]) return fileOnlyMatch[1]
+
+  return null
+}
+
+function firstPathFromChanges(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined
+  for (const entry of value) {
+    if (!entry || typeof entry !== 'object') continue
+    const path = firstNonEmptyString(
+      (entry as Record<string, unknown>).path,
+      (entry as Record<string, unknown>).file_path,
+      (entry as Record<string, unknown>).filePath,
+      (entry as Record<string, unknown>).file,
+      (entry as Record<string, unknown>).filename,
+    )
+    if (path) return path
+  }
+  return undefined
+}
+
+function getInvocationObject(
   args: Record<string, unknown>,
   resultData?: Record<string, unknown>,
-): Record<string, unknown> {
-  const normalizedTool = normalizeToolName(tool)
-  const merged = { ...args }
-  const nested = firstObject(
+): Record<string, unknown> | undefined {
+  return firstObject(
     args.action,
     args.input,
     args.arguments,
@@ -74,6 +126,111 @@ export function normalizeToolArgs(
     parseJsonObject(firstObject(resultData?.result)?.input),
     parseJsonObject(firstObject(resultData?.result)?.arguments),
   )
+}
+
+export function summarizeToolArguments(
+  args: Record<string, unknown>,
+  options?: { excludeKeys?: string[]; maxEntries?: number },
+): string | null {
+  const exclude = new Set(options?.excludeKeys ?? [])
+  const maxEntries = options?.maxEntries ?? 3
+  const parts = Object.entries(args)
+    .filter(([key, value]) => !exclude.has(key) && value !== undefined && value !== null && value !== '')
+    .slice(0, maxEntries)
+    .flatMap(([key, value]) => {
+      const summary = summarizeArgumentValue(value)
+      return summary ? [`${humanizeArgumentKey(key)}: ${summary}`] : []
+    })
+
+  return parts.length > 0 ? parts.join(' • ') : null
+}
+
+export function getMcpToolLabel(
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+): { title: string | null; details: string | null } {
+  const nested = getInvocationObject(args, resultData)
+  const title = firstNonEmptyString(
+    args.recipient_name,
+    args.recipientName,
+    args.tool,
+    args.toolName,
+    args.name,
+    nested?.recipient_name,
+    nested?.recipientName,
+    nested?.tool,
+    nested?.toolName,
+    nested?.name,
+  ) ?? null
+
+  const detailsSource = nested ?? args
+  const details = summarizeToolArguments(detailsSource, {
+    excludeKeys: ['recipient_name', 'recipientName', 'tool', 'toolName', 'name'],
+    maxEntries: 4,
+  })
+
+  return { title, details }
+}
+
+export function getToolFilePath(
+  tool: string,
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+  resultMessage?: string | null,
+): string | null {
+  const normalizedTool = normalizeToolName(tool)
+  if (normalizedTool !== 'edit' && normalizedTool !== 'file.write' && normalizedTool !== 'file.patch' && normalizedTool !== 'read' && normalizedTool !== 'file.read') {
+    return null
+  }
+
+  const normalizedArgs = normalizeToolArgs(normalizedTool, args, resultData)
+  const directPath = firstNonEmptyString(
+    normalizedArgs.path,
+    normalizedArgs.file_path,
+    normalizedArgs.filePath,
+    normalizedArgs.file,
+    normalizedArgs.filename,
+    normalizedArgs.target_file,
+    normalizedArgs.targetFile,
+    normalizedArgs.relative_path,
+    normalizedArgs.name,
+    normalizedArgs.title,
+    firstPathFromChanges(normalizedArgs.changes),
+  )
+  if (directPath) return directPath
+
+  const nested = getInvocationObject(args, resultData)
+  const nestedPath = firstNonEmptyString(
+    nested?.path,
+    nested?.file_path,
+    nested?.filePath,
+    nested?.file,
+    nested?.filename,
+    nested?.target_file,
+    nested?.targetFile,
+    nested?.relative_path,
+    nested?.name,
+    nested?.title,
+    firstPathFromChanges(nested?.changes),
+  )
+  if (nestedPath) return nestedPath
+
+  return resultMessage ? extractPathLikeString(resultMessage) : null
+}
+
+export function normalizeToolName(name: string): string {
+  const idx = name.indexOf('_')
+  return idx === -1 ? name : name.slice(0, idx) + '.' + name.slice(idx + 1)
+}
+
+export function normalizeToolArgs(
+  tool: string,
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+): Record<string, unknown> {
+  const normalizedTool = normalizeToolName(tool)
+  const merged = { ...args }
+  const nested = getInvocationObject(args, resultData)
 
   if (normalizedTool === 'edit' || normalizedTool === 'file.write' || normalizedTool === 'file.patch' || normalizedTool === 'read' || normalizedTool === 'file.read') {
     merged.path = firstNonEmptyString(

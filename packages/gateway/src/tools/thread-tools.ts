@@ -3,6 +3,7 @@ import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { ThreadRow, ThreadService } from "../services/threads.js";
+import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import { ToolName } from "./tool-names.js";
@@ -75,6 +76,7 @@ interface ThreadControlGit {
 export interface ThreadControlToolDeps {
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
+  userService?: UserService;
   ws?: WsControlPlane;
   mcpConfig?: { host: string; port: number };
   gitService?: ThreadControlGit;
@@ -102,6 +104,17 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
   const ensureUserId = (context: ToolContext): string => {
     const userId = context.userId?.trim();
     return userId || "system";
+  };
+
+  const resolveProviderId = (requestedProviderId: ProviderId | undefined, userId: string): ProviderId => {
+    if (requestedProviderId) return requestedProviderId;
+    if (userId !== "system" && deps.userService) {
+      const selectedProvider = deps.userService.getSettings(userId).chatProvider;
+      if (deps.providerRegistry.get(selectedProvider)) {
+        return selectedProvider;
+      }
+    }
+    return "jait";
   };
 
   const getAccessibleThread = (threadId: string, userId: string): ThreadRow | undefined => {
@@ -297,11 +310,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           }
 
           case "create": {
+            const providerId = resolveProviderId(input.providerId, userId);
             const thread = deps.threadService.create({
               userId,
               sessionId: input.sessionId,
               title: input.title?.trim() || "New Thread",
-              providerId: input.providerId ?? "jait",
+              providerId,
               model: input.model,
               runtimeMode: input.runtimeMode ?? "full-access",
               workingDirectory: input.workingDirectory,
@@ -333,12 +347,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: false, message: "create_many requires non-empty `threads`." };
             }
 
+            const defaultProviderId = resolveProviderId(input.providerId, userId);
+
             const created = input.threads.map((spec) => {
               const thread = deps.threadService.create({
                 userId,
                 sessionId: spec.sessionId ?? input.sessionId,
                 title: spec.title?.trim() || "New Thread",
-                providerId: spec.providerId ?? input.providerId ?? "jait",
+                providerId: spec.providerId ?? defaultProviderId,
                 model: spec.model ?? input.model,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? "full-access",
                 workingDirectory: spec.workingDirectory ?? input.workingDirectory,

@@ -11,19 +11,23 @@ import type {
 import type { GitStepResult } from "../services/git.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { ThreadService } from "../services/threads.js";
+import { UserService } from "../services/users.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { createToolRegistry } from "./index.js";
 import { createThreadControlTool } from "./thread-tools.js";
 
 class MockThreadProvider implements CliProviderAdapter {
-  readonly id = "jait" as const;
-  readonly info: ProviderInfo = {
-    id: "jait",
-    name: "Mock Jait",
-    description: "Test provider",
-    available: true,
-    modes: ["full-access", "supervised"],
-  };
+  readonly info: ProviderInfo;
+
+  constructor(readonly id: "jait" | "codex" | "claude-code" = "jait") {
+    this.info = {
+      id,
+      name: `Mock ${id}`,
+      description: "Test provider",
+      available: true,
+      modes: ["full-access", "supervised"],
+    };
+  }
 
   private emitter = new EventEmitter();
 
@@ -105,6 +109,42 @@ describe("thread.control tool", () => {
       const data = result.data as { thread: { providerSessionId: string | null; status: string } };
       expect(data.thread.providerSessionId).toBe("mock-session-1");
       expect(data.thread.status).toBe("running");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("defaults new threads to the user's selected provider", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const users = new UserService(db);
+      const user = users.createUser("thread-user", "secret");
+      users.updateSettings(user.id, { chatProvider: "codex" });
+
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService: users,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Use selected provider",
+          start: true,
+          message: "inspect ui",
+        },
+        makeContext(user.id),
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
+      expect(data.thread.providerId).toBe("codex");
+      expect(data.thread.providerSessionId).toBe("mock-session-1");
     } finally {
       sqlite.close();
     }

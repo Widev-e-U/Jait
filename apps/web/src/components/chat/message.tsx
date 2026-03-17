@@ -116,10 +116,34 @@ function WorkspacePathLink({
 function buildMarkdownComponents(
   onOpenPath?: MessageProps['onOpenPath'],
 ): Components | undefined {
-  if (!onOpenPath) return undefined
-
   return {
+    code: ({ node, className, children, ref: _ref, ...props }: any) => {
+      const inline = node?.position?.start.line === node?.position?.end.line && !className
+      if (!inline) {
+        return (
+          <code className={className} {...props}>
+            {children}
+          </code>
+        )
+      }
+
+      return (
+        <code
+          className={cn(
+            'not-prose inline-flex max-w-full items-center rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-[12px] font-medium leading-none text-foreground',
+            'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
+          )}
+          {...props}
+        >
+          <span className="max-w-[32rem] truncate sm:max-w-[40rem]">{children}</span>
+        </code>
+      )
+    },
     a: ({ href, ref: _ref, ...props }) => {
+      if (!onOpenPath) {
+        return <a href={href} {...props}>{props.children}</a>
+      }
+
       const target = parseWorkspaceLinkTarget(href)
       if (!target) {
         return <a href={href} {...props}>{props.children}</a>

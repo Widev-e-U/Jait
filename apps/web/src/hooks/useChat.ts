@@ -5,6 +5,7 @@ import type { ChangedFile, FileChangeState } from '@/components/chat/files-chang
 import type { QueuedMessage } from '@/components/chat/message-queue'
 import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 import { getApiUrl } from '@/lib/gateway-url'
+import { getToolFilePath } from '@/lib/tool-call-body'
 
 const API_URL = getApiUrl()
 const STREAM_SNAPSHOT_LIMIT = 120
@@ -460,7 +461,10 @@ export function useChat(
                   if (tc) {
                     const toolName = tc.tool.replace('_', '.')
                     if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
-                      const filePath = String(tc.args?.path ?? '')
+                      const resultData = data.data && typeof data.data === 'object'
+                        ? data.data as Record<string, unknown>
+                        : undefined
+                      const filePath = getToolFilePath(toolName, tc.args ?? {}, resultData, data.message as string | undefined) ?? ''
                       if (filePath) {
                         const fileName = filePath.split('/').pop() ?? filePath
                         setChangedFiles(prev => {
@@ -781,7 +785,10 @@ export function useChat(
                   const tc = toolCalls[idx]
                   const toolName = tc.tool.replace('_', '.')
                   if (toolName === 'file.write' || toolName === 'file.patch' || toolName === 'edit') {
-                    const filePath = String(tc.args?.path ?? '')
+                    const resultData = data.data && typeof data.data === 'object'
+                      ? data.data as Record<string, unknown>
+                      : undefined
+                    const filePath = getToolFilePath(toolName, tc.args ?? {}, resultData, data.message as string | undefined) ?? ''
                     if (filePath) {
                       const fileName = filePath.split('/').pop() ?? filePath
                       setChangedFiles(prev => {
@@ -998,17 +1005,26 @@ export function useChat(
   }, [state.isLoading, state.isLoadingHistory, messageQueue, processQueue, authToken, onLoginRequired])
 
   useEffect(() => {
+    const resumeQueueIfNeeded = () => {
+      if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
+        const sid = prevSessionIdRef.current
+        void processQueue({
+          token: authToken,
+          sessionId: sid,
+          onLoginRequired,
+        })
+      }
+    }
+
+    const resumeActiveStreamIfNeeded = () => {
+      if (!sessionId || state.isLoadingHistory || !state.isLoading) return
+      resumeSessionStream()
+    }
+
     const handleVisibilityChange = () => {
       if (!document.hidden) {
-        resumeSessionStream()
-        if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
-          const sid = prevSessionIdRef.current
-          void processQueue({
-            token: authToken,
-            sessionId: sid,
-            onLoginRequired,
-          })
-        }
+        resumeActiveStreamIfNeeded()
+        resumeQueueIfNeeded()
       }
     }
 
@@ -1019,9 +1035,7 @@ export function useChat(
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    const handleResume = () => {
-      if (typeof document !== 'undefined' && document.hidden) return
-      resumeSessionStream()
+    const resumeQueueIfNeeded = () => {
       if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
         const sid = prevSessionIdRef.current
         void processQueue({
@@ -1030,6 +1044,17 @@ export function useChat(
           onLoginRequired,
         })
       }
+    }
+
+    const resumeActiveStreamIfNeeded = () => {
+      if (!sessionId || state.isLoadingHistory || !state.isLoading) return
+      resumeSessionStream()
+    }
+
+    const handleResume = () => {
+      if (typeof document !== 'undefined' && document.hidden) return
+      resumeActiveStreamIfNeeded()
+      resumeQueueIfNeeded()
     }
 
     window.addEventListener('focus', handleResume)

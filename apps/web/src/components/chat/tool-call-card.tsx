@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
-import { getToolCallBodyKind, normalizeToolArgs, normalizeToolName } from '@/lib/tool-call-body'
+import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { cn } from '@/lib/utils'
 
 /** Auto-scroll a container to the bottom when content changes */
@@ -178,6 +178,12 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
     if (action.startsWith('cron.')) return `${action}: ${truncate(String(args.name ?? args.id ?? ''), 40)}`
     return action || 'jait'
   }
+  if (normalized === 'mcp-tool') {
+    const mcp = getMcpToolLabel(normalizedArgs)
+    if (mcp.title && mcp.details) return `${mcp.title} • ${mcp.details}`
+    if (mcp.title) return mcp.title
+    if (mcp.details) return mcp.details
+  }
   // ── Legacy tools ─────────────────────────────────────────
   if (normalized.startsWith('terminal.')) return String(normalizedArgs.command ?? args.command ?? '')
   if (normalized === 'file.write' || normalized === 'file.patch') {
@@ -223,6 +229,8 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (normalized === 'surfaces.start') return `Start ${args.type ?? 'surface'}`
   if (normalized === 'surfaces.stop') return `Stop ${args.surfaceId ?? 'surface'}`
   if (normalized === 'surfaces.list') return 'List surfaces'
+  const genericSummary = summarizeToolArguments(normalizedArgs)
+  if (genericSummary) return genericSummary
   return `${Object.keys(args ?? {}).length} argument(s)`
 }
 
@@ -807,6 +815,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
     ? call.result.data as Record<string, unknown>
     : undefined
   const normalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
+  const mcpLabel = normalizedTool === 'mcp-tool' ? getMcpToolLabel(normalizedArgs, resultData) : null
   const meta = getToolMeta(normalizedTool)
   const Icon = meta.icon
   const summary = getCallSummary(normalizedTool, normalizedArgs)
@@ -823,7 +832,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   const terminalId = canOpenTerminal ? getStructuredTerminalId(call) : null
   const runningHint = getRunningHint(normalizedTool, normalizedArgs)
   const isPending = call.status === 'pending'
-  const filePath = typeof normalizedArgs.path === 'string' ? normalizedArgs.path.trim() : ''
+  const filePath = getToolFilePath(normalizedTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
   const showFileSummary = !!filePath && isEditLikeTool(normalizedTool)
   const terminalScrollRef = useAutoScroll(displayOutput)
   const argsScrollRef = useAutoScroll(call.streamingArgs)
@@ -896,6 +905,15 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
               onOpenDiff={onOpenDiff}
               disabled={call.status !== 'success'}
             />
+          </span>
+        ) : mcpLabel && (mcpLabel.title || mcpLabel.details) ? (
+          <span className="inline-flex min-w-0 max-w-full items-center gap-2">
+            <span>{meta.label}:</span>
+            <span className="min-w-0 truncate">
+              {mcpLabel.title ? <code className="text-xs font-mono">{mcpLabel.title}</code> : null}
+              {mcpLabel.title && mcpLabel.details ? <span className="text-muted-foreground"> • </span> : null}
+              {mcpLabel.details ? <span className="text-xs text-muted-foreground">{mcpLabel.details}</span> : null}
+            </span>
           </span>
         ) : (
           <span>{meta.label}: <code className="text-xs font-mono">{summary}</code></span>

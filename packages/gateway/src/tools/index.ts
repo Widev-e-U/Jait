@@ -146,6 +146,7 @@ import { createToolsListTool, createToolsSearchTool } from "./meta-tools.js";
 import type { VoiceService } from "../voice/service.js";
 import { type AppConfig, inferContextWindow } from "../config.js";
 import type { ThreadService } from "../services/threads.js";
+import type { UserService } from "../services/users.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
@@ -173,6 +174,7 @@ export interface ToolRegistryDeps {
   threadMcpConfig?: { host: string; port: number };
   threadService?: ThreadService;
   providerRegistry?: ProviderRegistry;
+  userService?: UserService;
   maintenanceService?: import("../services/maintenance.js").MaintenanceService;
   notifications?: import("../services/notifications.js").NotificationService;
   /** Graceful shutdown callback — needed by the redeploy tool */
@@ -279,6 +281,7 @@ export function createToolRegistry(
       createThreadControlTool({
         threadService: deps.threadService,
         providerRegistry: deps.providerRegistry,
+        userService: deps.userService,
         ws: deps.ws,
         mcpConfig: deps.threadMcpConfig,
       }),

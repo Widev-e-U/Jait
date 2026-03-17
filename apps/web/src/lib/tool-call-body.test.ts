@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRenderEditDiff, getToolCallBodyKind, normalizeToolArgs } from './tool-call-body'
+import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, normalizeToolArgs, summarizeToolArguments } from './tool-call-body'
 
 describe('tool call body helpers', () => {
   it('does not force a diff view for codex edit calls that only provide a path', () => {
@@ -111,5 +111,50 @@ describe('tool call body helpers', () => {
     ).toMatchObject({
       query: 'openai codex',
     })
+  })
+
+  it('builds readable summaries for generic tool arguments', () => {
+    expect(
+      summarizeToolArguments({
+        action: 'create',
+        workingDirectory: '/home/jakob/jait',
+        start: true,
+      }),
+    ).toBe('action: create • working directory: /home/jakob/jait • start: true')
+  })
+
+  it('extracts MCP tool identity and argument details from nested payloads', () => {
+    expect(
+      getMcpToolLabel({
+        recipient_name: 'functions.mcp__jait__thread_control',
+        arguments: JSON.stringify({
+          action: 'create',
+          title: 'Reduce tool cards',
+          start: true,
+        }),
+      }),
+    ).toEqual({
+      title: 'functions.mcp__jait__thread_control',
+      details: 'action: create • title: Reduce tool cards • start: true',
+    })
+  })
+
+  it('extracts edited file paths from result messages when args omit the path', () => {
+    expect(
+      getToolFilePath('edit', {}, undefined, 'Edited apps/web/src/components/chat/tool-call-card.tsx successfully'),
+    ).toBe('apps/web/src/components/chat/tool-call-card.tsx')
+  })
+
+  it('extracts edited file paths from codex change payloads', () => {
+    expect(
+      getToolFilePath('edit', {
+        path: '',
+        changes: [
+          {
+            path: '/tmp/jait-codex-test/sample.txt',
+          },
+        ],
+      }),
+    ).toBe('/tmp/jait-codex-test/sample.txt')
   })
 })
