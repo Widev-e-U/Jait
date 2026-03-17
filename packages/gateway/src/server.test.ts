@@ -3,6 +3,7 @@ import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { signAuthToken } from "./security/http-auth.js";
 import { resolve } from "node:path";
+import { createServer as createHttpServer } from "node:http";
 
 const testConfig = {
   ...loadConfig(),
@@ -126,5 +127,97 @@ describe("@jait/gateway health", () => {
     expect(assetResponse.statusCode).toBe(200);
     expect(String(assetResponse.headers["content-type"])).toContain("image/svg+xml");
     await app.close();
+  });
+
+  it("GET /api/dev-file accepts relative workspace html paths", async () => {
+    const app = await createServer(testConfig);
+    const encodedPath = Buffer.from("docs/site/index.html", "utf8")
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/dev-file/${encodedPath}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(String(response.headers["content-type"])).toContain("text/html");
+    await app.close();
+  });
+
+  it("GET /api/dev-proxy rewrites vite absolute module paths", async () => {
+    const upstream = createHttpServer((request, response) => {
+      if (request.url === "/") {
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        response.end('<!DOCTYPE html><html><head></head><body><script type="module" src="/src/main.tsx"></script></body></html>');
+        return;
+      }
+
+      if (request.url === "/src/main.tsx") {
+        response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+        response.end('import "/@fs/home/jakob/jait/node_modules/vite/dist/client/env.mjs"; import "/node_modules/.vite/deps/react.js?v=1";');
+        return;
+      }
+
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("not found");
+    });
+
+    await new Promise<void>((resolveListen) => upstream.listen(0, "127.0.0.1", () => resolveListen()));
+    const address = upstream.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP address for upstream test server");
+    }
+
+    const app = await createServer(testConfig);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/dev-proxy/${address.port}/src/main.tsx`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(String(response.headers["content-type"])).toContain("text/javascript");
+    expect(response.body).toContain(`"/api/dev-proxy/${address.port}/@fs/home/jakob/jait/node_modules/vite/dist/client/env.mjs"`);
+    expect(response.body).toContain(`"/api/dev-proxy/${address.port}/node_modules/.vite/deps/react.js?v=1"`);
+
+    await app.close();
+    await new Promise<void>((resolveClose, rejectClose) => upstream.close((error) => error ? rejectClose(error) : resolveClose()));
+  });
+
+  it("GET /api/dev-proxy rejects html fallback for module requests", async () => {
+    const upstream = createHttpServer((request, response) => {
+      if (request.url?.startsWith("/src/main.tsx")) {
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        response.end("<!DOCTYPE html><html><body>spa fallback</body></html>");
+        return;
+      }
+
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("not found");
+    });
+
+    await new Promise<void>((resolveListen) => upstream.listen(0, "127.0.0.1", () => resolveListen()));
+    const address = upstream.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP address for upstream test server");
+    }
+
+    const app = await createServer(testConfig);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/dev-proxy/${address.port}/src/main.tsx`,
+    });
+
+    expect(response.statusCode).toBe(502);
+    expect(String(response.headers["content-type"])).toContain("application/json");
+    expect(response.json()).toEqual({
+      error: "DEV_PROXY_MODULE_FALLBACK",
+      message: "Dev server returned HTML for module request /src/main.tsx. Open the server root or fix absolute asset routing.",
+    });
+
+    await app.close();
+    await new Promise<void>((resolveClose, rejectClose) => upstream.close((error) => error ? rejectClose(error) : resolveClose()));
   });
 });

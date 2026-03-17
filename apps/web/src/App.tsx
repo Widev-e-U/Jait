@@ -780,10 +780,12 @@ function App() {
   const [showDevPreview, setShowDevPreview] = useState(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [devPreviewAutoOpenKey, setDevPreviewAutoOpenKey] = useState(0)
+  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target: string; key: number } | null>(null)
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
   const [showCloseWorkspaceConfirm, setShowCloseWorkspaceConfirm] = useState(false)
+  const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
   const closeConfirmRef = useRef<HTMLDivElement>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [terminalHeight, setTerminalHeight] = useState(280)
@@ -843,6 +845,17 @@ function App() {
   const [fsWatcherVersion, setFsWatcherVersion] = useState(0)
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
+  const showWorkspaceEditorPanel = useCallback(() => {
+    setShowWorkspaceEditor(true)
+  }, [])
+  const routePreviewToWorkspace = useCallback((target?: string | null) => {
+    const trimmed = target?.trim()
+    if (!trimmed || !activeWorkspace) return false
+    if (!showWorkspace) setShowWorkspace(true)
+    showWorkspaceEditorPanel()
+    setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
+    return true
+  }, [activeWorkspace, showWorkspace, showWorkspaceEditorPanel])
 
   const getFloatingViewport = useCallback(() => ({
     width: window.innerWidth,
@@ -1203,9 +1216,6 @@ function App() {
     : 'Describe what you want to do...'
 
 
-  // ── UI command channel (server ↔ frontend via WebSocket) ──────────
-  const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
-
   // Detect Electron platform and listen for maximize/unmaximize (custom titlebar)
   useEffect(() => {
     const desktop = (window as any).jaitDesktop
@@ -1263,6 +1273,10 @@ function App() {
     setWorkspaceTabsState(null)
   }, [activeSessionId])
 
+  useEffect(() => {
+    setWorkspacePreviewRequest(null)
+  }, [activeSessionId])
+
   // ── Persistent session state for todos & changed files ────────────
   type SavedTodo = { id: number; title: string; status: 'not-started' | 'in-progress' | 'completed' }
   const [savedTodos] = useSessionState<SavedTodo[]>(activeSessionId, 'todo_list', token)
@@ -1290,9 +1304,20 @@ function App() {
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
-    if (savedDevPreview?.target) setDevPreviewTarget(savedDevPreview.target)
+    const nextTarget = savedDevPreview?.target?.trim() || null
+    if (nextTarget) setDevPreviewTarget(nextTarget)
+    if (savedDevPreview?.open && routePreviewToWorkspace(nextTarget)) {
+      setShowDevPreview(false)
+      return
+    }
     setShowDevPreview(savedDevPreview?.open === true)
-  }, [savedDevPreview])
+  }, [savedDevPreview, routePreviewToWorkspace])
+
+  useEffect(() => {
+    if (!showDevPreview) return
+    if (!routePreviewToWorkspace(devPreviewTarget)) return
+    setShowDevPreview(false)
+  }, [showDevPreview, devPreviewTarget, routePreviewToWorkspace])
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
@@ -1391,8 +1416,13 @@ function App() {
           setShowDevPreview(false)
         } else {
           const v = value as { open?: boolean; target?: string | null }
-          if (typeof v.target === 'string') setDevPreviewTarget(v.target)
-          setShowDevPreview(v.open !== false)
+          const nextTarget = typeof v.target === 'string' ? v.target : null
+          if (nextTarget) setDevPreviewTarget(nextTarget)
+          if (v.open !== false && routePreviewToWorkspace(nextTarget)) {
+            setShowDevPreview(false)
+          } else {
+            setShowDevPreview(v.open !== false)
+          }
         }
         break
       case 'terminal.panel':
@@ -1461,7 +1491,7 @@ function App() {
         break
       }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState])
+  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   const handleFullState = useCallback((state: Record<string, unknown>) => {
@@ -1487,8 +1517,13 @@ function App() {
 
     const dp = state['dev-preview.panel'] as { open?: boolean; target?: string | null } | null | undefined
     if (dp && dp.open !== false) {
-      setShowDevPreview(true)
-      if (typeof dp.target === 'string') setDevPreviewTarget(dp.target)
+      const nextTarget = typeof dp.target === 'string' ? dp.target : null
+      if (nextTarget) setDevPreviewTarget(nextTarget)
+      if (routePreviewToWorkspace(nextTarget)) {
+        setShowDevPreview(false)
+      } else {
+        setShowDevPreview(true)
+      }
     } else {
       setShowDevPreview(false)
     }
@@ -1554,7 +1589,7 @@ function App() {
     } else {
       setMessageQueueState([])
     }
-  }, [setTodoList, setChangedFiles, setMessageQueueState])
+  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider])
 
   const { sendUIState } = useUICommands({
     sessionId: activeSessionId,
@@ -1763,17 +1798,6 @@ function App() {
     sendUIState('screen-share.panel', null, activeSessionId)
   }, [setSavedScreenShare, sendUIState, activeSessionId])
 
-  const openDevPreviewPanel = useCallback((target?: string | null) => {
-    setCurrentView('chat')
-    if (typeof target === 'string' && target.trim()) {
-      setDevPreviewTarget(target.trim())
-    }
-    setShowDevPreview(true)
-    const state = { open: true, target: target?.trim() || devPreviewTarget }
-    setSavedDevPreview(state)
-    sendUIState('dev-preview.panel', state, activeSessionId)
-  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget])
-
   const closeDevPreviewPanel = useCallback(() => {
     setShowDevPreview(false)
     setSavedDevPreview(null)
@@ -1815,9 +1839,21 @@ function App() {
     setShowWorkspaceTree(true)
   }, [])
 
-  const showWorkspaceEditorPanel = useCallback(() => {
-    setShowWorkspaceEditor(true)
-  }, [])
+  const openDevPreviewPanel = useCallback((target?: string | null) => {
+    setCurrentView('chat')
+    const nextTarget = target?.trim() || devPreviewTarget?.trim() || null
+    if (nextTarget) {
+      setDevPreviewTarget(nextTarget)
+    }
+    const state = { open: true, target: nextTarget }
+    setSavedDevPreview(state)
+    sendUIState('dev-preview.panel', state, activeSessionId)
+    if (routePreviewToWorkspace(nextTarget)) {
+      setShowDevPreview(false)
+      return
+    }
+    setShowDevPreview(true)
+  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget, routePreviewToWorkspace])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
@@ -3664,6 +3700,7 @@ function App() {
                 changedPaths={changedPaths}
                 fsWatcherVersion={fsWatcherVersion}
                 savedTabsState={workspaceTabsState}
+                previewRequest={workspacePreviewRequest}
                 onTabsStateChange={handleWorkspaceTabsStateChange}
                 onApplyDiff={handleApplyWorkspaceDiff}
                 provider={chatProvider}
@@ -3692,6 +3729,7 @@ function App() {
                   changedPaths={changedPaths}
                   isMobile
                   savedTabsState={workspaceTabsState}
+                  previewRequest={workspacePreviewRequest}
                   onTabsStateChange={handleWorkspaceTabsStateChange}
                   onApplyDiff={handleApplyWorkspaceDiff}
                   provider={chatProvider}

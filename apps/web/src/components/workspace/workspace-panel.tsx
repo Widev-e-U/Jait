@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Loader2, RefreshCw, Save, Send, Sparkles, X } from 'lucide-react'
+import { ArrowLeft, Check, ChevronRight, CloudUpload, EyeOff, FolderOpen, GitBranch, Globe, Loader2, RefreshCw, Save, Send, Sparkles, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
+import { resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
 import { DiffView } from './diff-view'
 
 /* ------------------------------------------------------------------ */
@@ -57,6 +58,8 @@ interface WorkspacePanelProps {
   provider?: ProviderId
   /** Active provider model override from the chat composer. */
   cliModel?: string | null
+  /** Request to open a preview target in the editor. */
+  previewRequest?: { target: string; key: number } | null
 }
 
 export interface WorkspacePanelHandle {
@@ -70,6 +73,8 @@ export interface WorkspacePanelHandle {
   readFileByPath: (path: string) => Promise<WorkspaceFile | null>
   /** Open a review diff tab with original/modified content. */
   openReviewDiff: (input: { path: string; originalContent: string; modifiedContent: string; language?: string }) => Promise<boolean>
+  /** Open a preview target inside the workspace editor. */
+  openPreviewTarget: (target: string) => boolean
   /** Lazily search the entire directory for files matching a query. Cancellable via AbortSignal. */
   searchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<{ path: string; name: string }[]>
 }
@@ -281,6 +286,7 @@ function isEditableWorkspaceTab(tab: EditorTab | null): boolean {
 }
 
 function getEditorTabTitle(tab: EditorTab): string {
+  if (tab.type === 'preview') return tab.label || 'Preview'
   if (tab.type !== 'diff') return tab.label
   const baseLabel = tab.label || (tab.path.split(/[\\/]/).pop() ?? tab.path)
   return `${baseLabel} <-> ${baseLabel}`
@@ -292,7 +298,7 @@ function getEditorTabTitle(tab: EditorTab): string {
 
 interface EditorTab {
   id: string
-  type: 'file' | 'diff'
+  type: 'file' | 'diff' | 'preview'
   path: string
   label: string
   version?: number
@@ -308,6 +314,8 @@ interface EditorTab {
   isDirty?: boolean
   isSaving?: boolean
   saveError?: string | null
+  previewTarget?: string
+  previewSrc?: string | null
 }
 
 export interface WorkspaceTabsState {
@@ -522,6 +530,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onApplyDiff,
   provider,
   cliModel,
+  previewRequest,
 }, ref) {
   const resolvedTheme = useResolvedTheme()
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
@@ -585,6 +594,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [tabContextMenu, setTabContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const restoredTabsRootRef = useRef<string | null>(null)
   const lastPersistedTabsRef = useRef<string>('')
+  const handledPreviewRequestKeyRef = useRef<number | null>(null)
 
   // Auto-scroll active tab into view (VS Code behaviour)
   useEffect(() => {
@@ -1386,14 +1396,61 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     return true
   }, [])
 
+  const handleOpenPreviewTarget = useCallback((target: string): boolean => {
+    const trimmed = target.trim()
+    if (!trimmed) return false
+    const resolved = resolvePreviewTarget(trimmed)
+    if (!resolved) return false
+
+    const tabId = `preview:${trimmed}`
+    const nextTab: EditorTab = {
+      id: tabId,
+      type: 'preview',
+      path: trimmed,
+      label: resolved.label,
+      previewTarget: trimmed,
+      previewSrc: resolved.iframeSrc,
+    }
+
+    setOpenTabs((prev) => {
+      const existing = prev.find((tab) => tab.id === tabId)
+      if (existing) {
+        return prev.map((tab) => (tab.id === tabId ? { ...tab, ...nextTab } : tab))
+      }
+      const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
+      if (previewIndex >= 0) {
+        const next = [...prev]
+        next[previewIndex] = nextTab
+        return next
+      }
+      return [...prev, nextTab]
+    })
+    setActiveTabId(tabId)
+    setScDiffFile(null)
+    setActiveNativePath(null)
+    setPreviewContent(null)
+    setPreviewPath(trimmed)
+    setPreviewLanguage('plaintext')
+    onActiveFileChange('')
+    return true
+  }, [onActiveFileChange])
+
   useImperativeHandle(ref, () => ({
     openDirectory: handleOpenDirectory,
     openRemoteWorkspace: handleOpenRemoteWorkspace,
     openFileByPath: handleOpenFileByPath,
     readFileByPath: handleReadFileByPath,
     openReviewDiff: handleOpenReviewDiff,
+    openPreviewTarget: handleOpenPreviewTarget,
     searchFiles: handleSearchFiles,
-  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleSearchFiles])
+  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleOpenPreviewTarget, handleSearchFiles])
+
+  useEffect(() => {
+    if (!previewRequest) return
+    if (handledPreviewRequestKeyRef.current === previewRequest.key) return
+    handledPreviewRequestKeyRef.current = previewRequest.key
+    handleOpenPreviewTarget(previewRequest.target)
+  }, [previewRequest, handleOpenPreviewTarget])
 
   /* ---- Git commit / push actions ---- */
   const handleGitAction = useCallback(async (action: GitStackedAction) => {
@@ -1485,6 +1542,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             setPreviewLanguage(neighbor.language ?? 'plaintext')
             setPreviewPath(neighbor.path)
             setScDiffFile(null)
+          } else if (neighbor?.type === 'preview') {
+            setActiveNativePath(null)
+            setPreviewContent(null)
+            setPreviewLanguage('plaintext')
+            setPreviewPath(neighbor.previewTarget ?? neighbor.path)
+            setScDiffFile(null)
           } else if (neighbor?.type === 'diff') {
             setScDiffFile(neighbor.diffMode === 'git' ? (neighbor.diffEntry ?? null) : null)
           }
@@ -1505,6 +1568,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       setPreviewPath(tab.path)
       setScDiffFile(null)
       onActiveFileChange(tab.id.startsWith('ext:') ? tab.id.slice(4) : '')
+    } else if (tab.type === 'preview') {
+      setActiveNativePath(null)
+      setPreviewContent(null)
+      setPreviewLanguage('plaintext')
+      setPreviewPath(tab.previewTarget ?? tab.path)
+      setScDiffFile(null)
+      onActiveFileChange('')
     } else if (tab.type === 'diff') {
       setScDiffFile(tab.diffMode === 'git' ? (tab.diffEntry ?? null) : null)
     }
@@ -1853,6 +1923,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
                     {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
                       <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
+                    ) : tab.type === 'preview' ? (
+                      <Globe className="h-3.5 w-3.5 shrink-0" />
                     ) : (
                       <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
                     )}
@@ -1931,6 +2003,20 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     scrollBeyondLastLine: false,
                   }}
                 />
+              ) : activeTab?.type === 'preview' ? (
+                activeTab.previewSrc ? (
+                  <iframe
+                    key={activeTab.id}
+                    src={activeTab.previewSrc}
+                    title={activeTab.label || 'Workspace preview'}
+                    className="h-full w-full bg-white"
+                    sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
+                  />
+                ) : (
+                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground px-4 text-center">
+                    Preview target is not available.
+                  </div>
+                )
               ) : loadingFile ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -2296,6 +2382,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   )}
                   {gitStatus4tab ? (
                     <GitStatusBadge status={gitStatus4tab} className="text-[9px]" />
+                  ) : tab.type === 'preview' ? (
+                    <Globe className="h-3.5 w-3.5 shrink-0" />
                   ) : (
                     <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
                   )}
@@ -2377,6 +2465,20 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               renderSideBySide: !isMobile,
             }}
           />
+        ) : activeTab?.type === 'preview' ? (
+          activeTab.previewSrc ? (
+            <iframe
+              key={activeTab.id}
+              src={activeTab.previewSrc}
+              title={activeTab.label || 'Workspace preview'}
+              className="h-full w-full bg-white"
+              sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
+            />
+          ) : (
+            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+              Preview target is not available.
+            </div>
+          )
         ) : loadingFile && activeTab?.id === activeTabId ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />

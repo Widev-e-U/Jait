@@ -416,9 +416,19 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
       }
       reply.header("Cache-Control", "no-store");
 
-      if (contentType.includes("text/html")) {
-        const html = await upstream.text();
-        return reply.type("text/html; charset=utf-8").send(rewritePreviewHtml(html, `/api/dev-proxy/${port}`));
+      if (contentType.includes("text/html") && isModuleLikeProxyPath(proxiedPath)) {
+        return reply
+          .code(502)
+          .type("application/json; charset=utf-8")
+          .send({
+          error: "DEV_PROXY_MODULE_FALLBACK",
+          message: `Dev server returned HTML for module request ${proxiedPath}. Open the server root or fix absolute asset routing.`,
+        });
+      }
+
+      if (contentType.includes("text/html") || contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
+        const text = await upstream.text();
+        return reply.type(contentType).send(rewriteDevProxyText(text, contentType, `/api/dev-proxy/${port}`));
       }
 
       const body = Buffer.from(await upstream.arrayBuffer());
@@ -476,6 +486,25 @@ function rewritePreviewHtml(html: string, prefix: string): string {
   return rewritten;
 }
 
+function rewriteDevProxyText(body: string, contentType: string, prefix: string): string {
+  if (contentType.includes("text/html")) {
+    return rewritePreviewHtml(body, prefix);
+  }
+
+  if (contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
+    return body.replace(/(["'`(])\/(@fs\/|@vite\/|node_modules\/|src\/)/g, (_match, boundary: string, pathPrefix: string) => {
+      return `${boundary}${prefix}/${pathPrefix}`;
+    });
+  }
+
+  return body;
+}
+
+function isModuleLikeProxyPath(path: string): boolean {
+  return /^\/(?:@fs\/|@vite\/|node_modules\/|src\/)/.test(path)
+    || /\.(?:m?js|cjs|ts|tsx|jsx|css)(?:$|[?#])/.test(path);
+}
+
 function isPathWithin(root: string, target: string): boolean {
   const rel = relative(root, target);
   return rel === "" || (!rel.startsWith("..") && !rel.startsWith(`..${sep}`));
@@ -486,7 +515,8 @@ function decodePreviewFilePath(encodedPath?: string): string | null {
   try {
     const normalized = encodedPath.replace(/-/g, "+").replace(/_/g, "/");
     const padded = normalized.padEnd(normalized.length + ((4 - normalized.length % 4) % 4), "=");
-    return Buffer.from(padded, "base64").toString("utf8");
+    const decoded = Buffer.from(padded, "base64").toString("utf8");
+    return decoded.startsWith("/") ? decoded : resolve(process.cwd(), decoded);
   } catch {
     return null;
   }
