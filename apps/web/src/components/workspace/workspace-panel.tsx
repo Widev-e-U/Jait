@@ -343,11 +343,23 @@ function useDragResize(
     return Math.min(max, Math.max(min, parsed))
   })
   const dragging = useRef(false)
+  const [isDragging, setIsDragging] = useState(false)
+  const frameRef = useRef<number | null>(null)
+  const pendingSizeRef = useRef<number | null>(null)
+
+  useEffect(() => {
+    return () => {
+      if (frameRef.current !== null) {
+        window.cancelAnimationFrame(frameRef.current)
+      }
+    }
+  }, [])
 
   const onMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault()
       dragging.current = true
+      setIsDragging(true)
       const startPos = direction === 'horizontal' ? e.clientX : e.clientY
       const startSize = size
 
@@ -355,10 +367,27 @@ function useDragResize(
         if (!dragging.current) return
         const pos = direction === 'horizontal' ? ev.clientX : ev.clientY
         const delta = pos - startPos
-        setSize(Math.min(max, Math.max(min, startSize + delta)))
+        pendingSizeRef.current = Math.min(max, Math.max(min, startSize + delta))
+        if (frameRef.current !== null) return
+        frameRef.current = window.requestAnimationFrame(() => {
+          frameRef.current = null
+          const nextSize = pendingSizeRef.current
+          if (nextSize !== null) {
+            setSize(nextSize)
+          }
+        })
       }
       const onUp = () => {
         dragging.current = false
+        setIsDragging(false)
+        if (frameRef.current !== null) {
+          window.cancelAnimationFrame(frameRef.current)
+          frameRef.current = null
+        }
+        if (pendingSizeRef.current !== null) {
+          setSize(pendingSizeRef.current)
+          pendingSizeRef.current = null
+        }
         document.removeEventListener('mousemove', onMove)
         document.removeEventListener('mouseup', onUp)
         document.body.style.cursor = ''
@@ -377,7 +406,7 @@ function useDragResize(
     window.localStorage.setItem(storageKey, String(size))
   }, [size, storageKey])
 
-  return { size, onMouseDown } as const
+  return { size, onMouseDown, isDragging } as const
 }
 
 /* ------------------------------------------------------------------ */
@@ -544,6 +573,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const tree = useDragResize(260, 180, 500, 'horizontal', 'workspaceTreePaneWidth')
   const initialPanel = Math.round((window.innerWidth - 224) * (4 / 6))
   const panel = useDragResize(initialPanel, 400, 1800, 'horizontal', 'workspacePanelWidth')
+  const disablePreviewPointerEvents = tree.isDragging || panel.isDragging
 
   // Lazy tree state
   const [lazyTree, setLazyTree] = useState<LazyNode[]>([])
@@ -2010,6 +2040,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     src={activeTab.previewSrc}
                     title={activeTab.label || 'Workspace preview'}
                     className="h-full w-full bg-white"
+                    style={disablePreviewPointerEvents ? { pointerEvents: 'none' } : undefined}
                     sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
                   />
                 ) : (
@@ -2472,6 +2503,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               src={activeTab.previewSrc}
               title={activeTab.label || 'Workspace preview'}
               className="h-full w-full bg-white"
+              style={disablePreviewPointerEvents ? { pointerEvents: 'none' } : undefined}
               sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
             />
           ) : (
