@@ -2091,6 +2091,35 @@ function App() {
       const surfaceQuery = activeWorkspace?.surfaceId
         ? `&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`
         : ''
+      const workspaceRoot = activeWorkspace?.workspaceRoot
+      const name = filePath.split(/[\/\\]/).pop() ?? filePath
+      const language = workspaceLanguageForPath(name)
+
+      const openReviewDiff = async (path: string, originalContent: string | null | undefined, modifiedContent: string) => {
+        await workspaceRef.current?.openReviewDiff({
+          path,
+          originalContent: originalContent ?? '',
+          modifiedContent,
+          language,
+        })
+        if (!showWorkspace) setShowWorkspace(true)
+        showWorkspaceEditorPanel()
+      }
+
+      const openGitDiffFallback = async (path: string, currentContent: string): Promise<boolean> => {
+        if (!workspaceRoot) return false
+        try {
+          const diffs = await gitApi.fileDiffs(workspaceRoot)
+          const normalizedPath = path.replace(/\\/g, '/')
+          const entry = diffs.find((diff) => diff.path === normalizedPath)
+            ?? diffs.find((diff) => normalizedPath.endsWith(`/${diff.path}`))
+          if (!entry) return false
+          await openReviewDiff(path, entry.original, currentContent || entry.modified)
+          return true
+        } catch {
+          return false
+        }
+      }
 
       // Try to fetch the backup (original) content from the gateway
       const backupRes = await fetch(
@@ -2104,28 +2133,14 @@ function App() {
           originalContent: string | null
           currentContent: string
         }
-        const name = filePath.split(/[\/\\]/).pop() ?? filePath
-        await workspaceRef.current?.openReviewDiff({
-          path: data.path,
-          originalContent: data.originalContent ?? '',
-          modifiedContent: data.currentContent,
-          language: workspaceLanguageForPath(name),
-        })
-        if (!showWorkspace) setShowWorkspace(true)
-        showWorkspaceEditorPanel()
+        await openReviewDiff(data.path, data.originalContent, data.currentContent)
         return
       }
 
       const file = await workspaceRef.current?.readFileByPath(filePath)
       if (file) {
-        await workspaceRef.current?.openReviewDiff({
-          path: file.path,
-          originalContent: '',
-          modifiedContent: file.content,
-          language: file.language,
-        })
-        if (!showWorkspace) setShowWorkspace(true)
-        showWorkspaceEditorPanel()
+        if (await openGitDiffFallback(file.path, file.content)) return
+        await openReviewDiff(file.path, file.content, file.content)
         return
       }
       // Fallback: fetch from the workspace REST API and still open a review diff
@@ -2135,21 +2150,13 @@ function App() {
       )
       if (!readRes.ok) return
       const readData = await readRes.json() as { path: string; content: string }
-      const name = filePath.split('/').pop() ?? filePath
-      const language = workspaceLanguageForPath(name)
-      await workspaceRef.current?.openReviewDiff({
-        path: readData.path,
-        originalContent: '',
-        modifiedContent: readData.content,
-        language,
-      })
-      if (!showWorkspace) setShowWorkspace(true)
-      showWorkspaceEditorPanel()
+      if (await openGitDiffFallback(readData.path, readData.content)) return
+      await openReviewDiff(readData.path, readData.content, readData.content)
       return
     } catch {
       // silently ignore
     }
-  }, [token, activeWorkspace?.surfaceId, showWorkspace, showWorkspaceEditorPanel])
+  }, [token, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, showWorkspace, showWorkspaceEditorPanel])
 
   const handleOpenMessagePath = useCallback(async (filePath: string) => {
     try {

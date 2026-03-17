@@ -280,6 +280,12 @@ function isEditableWorkspaceTab(tab: EditorTab | null): boolean {
   return Boolean(tab && tab.type === 'file' && tab.id.startsWith('file:'))
 }
 
+function getEditorTabTitle(tab: EditorTab): string {
+  if (tab.type !== 'diff') return tab.label
+  const baseLabel = tab.label || (tab.path.split(/[\\/]/).pop() ?? tab.path)
+  return `${baseLabel} <-> ${baseLabel}`
+}
+
 /* ------------------------------------------------------------------ */
 /*  Editor tab model                                                   */
 /* ------------------------------------------------------------------ */
@@ -545,6 +551,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // ── Git status state ──
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
   const [gitStatusLoading, setGitStatusLoading] = useState(false)
+  const gitStatusRequestSeqRef = useRef(0)
   /** Map of relative file path → status code (A/M/D/R/?) */
   const gitStatusMap = useMemo(() => {
     if (!gitStatus?.workingTree.files.length) return new Map<string, string>()
@@ -689,14 +696,22 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const fetchGitStatus = useCallback(async () => {
     if (!remoteRoot) return
+    const requestSeq = ++gitStatusRequestSeqRef.current
     setGitStatusLoading(true)
     try {
       const status = await gitApi.status(remoteRoot)
-      setGitStatus(status)
+      if (requestSeq === gitStatusRequestSeqRef.current) {
+        setGitStatus(status)
+      }
     } catch {
-      setGitStatus(null)
+      if (requestSeq === gitStatusRequestSeqRef.current) {
+        setGitStatus(null)
+      }
+    } finally {
+      if (requestSeq === gitStatusRequestSeqRef.current) {
+        setGitStatusLoading(false)
+      }
     }
-    setGitStatusLoading(false)
   }, [remoteRoot])
 
   // Fetch git status when workspace opens and on fs changes
@@ -716,6 +731,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     prevChangedPathsRef.current = new Set(changedPaths)
     if (newPaths.length === 0) return
     bumpTree()
+    if (remoteRoot) void fetchGitStatus()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [changedPaths])
 
@@ -1265,9 +1281,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setScDiffLoading(true)
     try {
       const diffs = await gitApi.fileDiffs(remoteRoot)
-      // Match by exact path or by suffix (git paths are relative, tree paths may be absolute)
-      const entry = diffs.find((d) => d.path === filePath) ??
-        diffs.find((d) => filePath.replace(/\\/g, '/').endsWith('/' + d.path))
+      const normalizedFilePath = normalizePath(filePath)
+      const normalizedRoot = normalizePath(remoteRoot)
+      const relativeFilePath = normalizedFilePath === normalizedRoot
+        ? ''
+        : normalizedFilePath.startsWith(`${normalizedRoot}/`)
+          ? normalizedFilePath.slice(normalizedRoot.length + 1)
+          : normalizedFilePath
+
+      const entry = diffs.find((diff) => {
+        const normalizedDiffPath = normalizePath(diff.path)
+        return normalizedDiffPath === normalizedFilePath
+          || normalizedDiffPath === relativeFilePath
+          || normalizedFilePath.endsWith(`/${normalizedDiffPath}`)
+          || normalizedDiffPath.endsWith(`/${relativeFilePath}`)
+      })
       if (entry) {
         setScDiffFile(entry)
         const fileName = filePath.split('/').pop() ?? filePath
@@ -1284,10 +1312,37 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         }
         setOpenTabs(prev => [...prev, newTab])
         setActiveTabId(tabId)
+      } else {
+        // Fallback so source-control clicks still open a comparable view even
+        // if the diff API returns the path in an unexpected form.
+        const absolutePath = relativeFilePath ? `${normalizedRoot}/${relativeFilePath}` : normalizedFilePath
+        let content = ''
+        try {
+          content = await remoteReadFile(absolutePath, surfaceId)
+        } catch {
+          try {
+            content = await remoteReadFile(normalizedFilePath, surfaceId)
+          } catch {
+            content = ''
+          }
+        }
+        const fileName = filePath.split('/').pop() ?? filePath
+        const newTab: EditorTab = {
+          id: tabId,
+          type: 'diff',
+          path: absolutePath,
+          label: fileName,
+          diffMode: 'review',
+          language: inferLanguage(filePath),
+          originalContent: content,
+          modifiedContent: content,
+        }
+        setOpenTabs(prev => [...prev, newTab])
+        setActiveTabId(tabId)
       }
     } catch { /* ignore */ }
     setScDiffLoading(false)
-  }, [remoteRoot, openTabs])
+  }, [remoteRoot, openTabs, surfaceId])
 
   const handleOpenReviewDiff = useCallback(async ({
     path,
@@ -1801,7 +1856,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     ) : (
                       <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
                     )}
-                    <span className="truncate max-w-[100px]">{tab.label}</span>
+                    <span className="truncate max-w-[140px]">{getEditorTabTitle(tab)}</span>
                     <button
                       className="p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 opacity-60"
                       onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id) }}
@@ -2245,8 +2300,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
                   )}
                   {tab.isDirty && <span className="shrink-0 text-[10px] leading-none text-primary">*</span>}
-                  <span className="truncate max-w-[140px]">
-                    {tab.label}
+                  <span className="truncate max-w-[220px]">
+                    {getEditorTabTitle(tab)}
                   </span>
                   <button
                     className={`p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 transition-opacity ${

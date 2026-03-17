@@ -43,7 +43,7 @@ export function SessionSelector({
 }: SessionSelectorProps) {
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between px-3 py-2 border-b">
+      <div className="flex h-[35px] shrink-0 items-center justify-between px-3 border-b">
         <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
           Sessions
         </span>
