@@ -344,9 +344,9 @@ export const migrations: Migration[] = [
     },
   },
 
-  // ─── 013: Add strategy to automation repositories ────────────────
+  // ─── 019: Add strategy to automation repositories ────────────────
   {
-    id: 13,
+    id: 19,
     name: "automation_repositories_strategy",
     run(db) {
       try {
