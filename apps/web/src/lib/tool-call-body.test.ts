@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, normalizeToolArgs, summarizeToolArguments } from './tool-call-body'
+import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolImagePath, normalizeToolArgs, summarizeToolArguments } from './tool-call-body'
 
 describe('tool call body helpers', () => {
   it('does not force a diff view for codex edit calls that only provide a path', () => {
@@ -156,5 +156,30 @@ describe('tool call body helpers', () => {
         ],
       }),
     ).toBe('/tmp/jait-codex-test/sample.txt')
+  })
+
+  it('extracts screenshot paths from structured result payloads', () => {
+    expect(
+      getToolImagePath(
+        'mcp-tool',
+        {},
+        {
+          result: {
+            path: '/home/jakob/jait/.tmp/jait-preview-live.png',
+          },
+        },
+      ),
+    ).toBe('/home/jakob/jait/.tmp/jait-preview-live.png')
+  })
+
+  it('extracts screenshot paths from result messages', () => {
+    expect(
+      getToolImagePath(
+        'browser.screenshot',
+        {},
+        undefined,
+        'Saved screenshot to /home/jakob/jait/.tmp/jait-preview-live.png',
+      ),
+    ).toBe('/home/jakob/jait/.tmp/jait-preview-live.png')
   })
 })

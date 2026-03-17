@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { signAuthToken } from "./security/http-auth.js";
+import { resolve } from "node:path";
 
 const testConfig = {
   ...loadConfig(),
@@ -96,6 +97,34 @@ describe("@jait/gateway health", () => {
     const body = JSON.parse(response.body);
     expect(body.sessionId).toBe("unknown-session");
     expect(body.messages).toEqual([]);
+    await app.close();
+  });
+
+  it("GET /api/dev-file serves workspace html previews with rewritten asset paths", async () => {
+    const app = await createServer(testConfig);
+    const encodedPath = Buffer.from(resolve("docs/site/index.html"), "utf8")
+      .toString("base64")
+      .replace(/\+/g, "-")
+      .replace(/\//g, "_")
+      .replace(/=+$/g, "");
+
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/dev-file/${encodedPath}`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(String(response.headers["content-type"])).toContain("text/html");
+    expect(response.body).toContain(`<base href="/api/dev-file/${encodedPath}/">`);
+    expect(response.body).toContain(`/api/dev-file/${encodedPath}/icon.svg`);
+
+    const assetResponse = await app.inject({
+      method: "GET",
+      url: `/api/dev-file/${encodedPath}/icon.svg`,
+    });
+
+    expect(assetResponse.statusCode).toBe(200);
+    expect(String(assetResponse.headers["content-type"])).toContain("image/svg+xml");
     await app.close();
   });
 });

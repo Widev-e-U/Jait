@@ -6,7 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { EditDiffView } from '@/components/chat/edit-diff-view'
 import { FileIcon } from '@/components/icons/file-icons'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
-import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
+import { getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolImagePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from '@/lib/tool-call-body'
 import { getApiUrl } from '@/lib/gateway-url'
 import { cn } from '@/lib/utils'
 
@@ -827,17 +827,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   const finalOutput = formatOutput(call.result, normalizedTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
   const snapshotText = typeof resultData?.snapshot === 'string' ? resultData.snapshot : null
-  const screenshotPath = normalizedTool === 'browser.screenshot'
-    ? (
-        typeof resultData?.path === 'string' && resultData.path.trim()
-          ? resultData.path.trim()
-          : resultData?.result && typeof resultData.result === 'object' && typeof (resultData.result as Record<string, unknown>).path === 'string'
-            ? String((resultData.result as Record<string, unknown>).path).trim()
-            : typeof normalizedArgs.path === 'string' && normalizedArgs.path.trim()
-              ? normalizedArgs.path.trim()
-              : null
-      )
-    : null
+  const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
   const isTerminal = normalizedTool.startsWith('terminal.') || normalizedTool === 'execute'
   const terminalOutcomeBadge = getTerminalOutcomeBadge(call)
   const canOpenTerminal = isTerminalCreationCall(call)

@@ -3942,6 +3942,13 @@ function App() {
               <div className={`flex-1 min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
                 onAnimationEnd={() => setDeveloperAnimPhase('idle')}
               >
+                {showDevPreview && (
+                  <DevPreviewPanel
+                    onClose={() => setShowDevPreview(false)}
+                    initialTarget={devPreviewTarget}
+                    autoOpenKey={devPreviewAutoOpenKey}
+                  />
+                )}
                 <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>

@@ -15,6 +15,17 @@ interface ResolvedPreviewTarget {
   label: string
 }
 
+function encodePreviewFilePath(path: string): string {
+  return btoa(unescape(encodeURIComponent(path)))
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/g, '')
+}
+
+function isHtmlFilePath(input: string): boolean {
+  return /\.(?:html?)$/i.test(input.trim())
+}
+
 function isLoopbackHost(hostname: string): boolean {
   const normalized = hostname.trim().toLowerCase()
   return normalized === 'localhost'
@@ -27,6 +38,13 @@ function isLoopbackHost(hostname: string): boolean {
 export function resolvePreviewTarget(input: string): ResolvedPreviewTarget | null {
   const trimmed = input.trim()
   if (!trimmed) return null
+
+  if (!/^[a-z]+:\/\//i.test(trimmed) && isHtmlFilePath(trimmed)) {
+    return {
+      iframeSrc: `${getApiUrl()}/api/dev-file/${encodePreviewFilePath(trimmed)}`,
+      label: trimmed,
+    }
+  }
 
   if (/^\d+$/.test(trimmed)) {
     const port = Number.parseInt(trimmed, 10)
@@ -131,7 +149,7 @@ export function DevPreviewPanel({ onClose, initialTarget = null, autoOpenKey = 0
           <Input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder="3000 or http://localhost:3000"
+            placeholder="3000, http://localhost:3000, or docs/site/index.html"
             className="h-8"
             onKeyDown={(event) => {
               if (event.key === 'Enter' && resolved) {
@@ -145,7 +163,7 @@ export function DevPreviewPanel({ onClose, initialTarget = null, autoOpenKey = 0
           </Button>
         </div>
         <p className="text-[11px] text-muted-foreground">
-          Supports `localhost`, `127.0.0.1`, `0.0.0.0`, and `::1` ports through the gateway proxy. Reload manually if your dev server changes.
+          Supports loopback dev servers and static `.html` files from the gateway workspace. Source Vite entry files still need Vite if they import `/src/*.ts` or `/src/*.tsx`.
         </p>
       </div>
 
