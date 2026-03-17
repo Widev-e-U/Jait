@@ -185,42 +185,45 @@
       box-shadow: 0 4px 20px -8px rgba(0,0,0,0.12);
     }
 
-    /* ── CLI providers grid ───────────────────── */
-    .providers-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-      gap: 14px;
-      margin-top: 20px;
+    /* ── CLI provider pills ───────────────────── */
+    .providers-strip {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: 8px;
+      margin: 20px 0 6px;
     }
-    .provider-card {
-      display: flex; align-items: center; gap: 14px;
-      padding: 18px 20px;
-      border-radius: var(--radius);
+    .providers-strip .prov-label {
+      font-size: 0.78rem;
+      color: var(--muted);
+      font-weight: 500;
+      margin-right: 2px;
+      animation: pill-in 0.5s cubic-bezier(0.16,1,0.3,1) both;
+      animation-delay: 0.3s;
+    }
+    .prov-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      padding: 5px 12px 5px 8px;
+      border-radius: 999px;
       border: 1px solid var(--border);
-      background: rgba(9,9,11,0.5);
-      backdrop-filter: blur(12px);
-      transition: border-color 0.25s, transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s;
+      background: rgba(9,9,11,0.4);
+      font-size: 0.78rem;
+      font-weight: 500;
+      color: var(--text);
+      backdrop-filter: blur(8px);
+      transition: border-color 0.25s, background 0.25s;
     }
-    .provider-card:hover {
-      border-color: rgba(56,189,248,0.3);
-      transform: translateY(-2px);
-      box-shadow: 0 12px 40px -20px rgba(2,6,23,0.5);
+    .prov-pill:hover { border-color: rgba(56,189,248,0.25); }
+    .prov-pill svg { width: 16px; height: 16px; flex-shrink: 0; }
+    @keyframes pill-in {
+      from { opacity: 0; transform: translateY(10px); }
+      to   { opacity: 1; transform: translateY(0); }
     }
-    .provider-icon {
-      width: 40px; height: 40px; min-width: 40px;
-      display: flex; align-items: center; justify-content: center;
-      border-radius: 0.75rem;
-      border: 1px solid var(--border);
-      background: rgba(9,9,11,0.7);
-    }
-    .provider-icon svg { width: 22px; height: 22px; }
-    .provider-info { min-width: 0; }
-    .provider-info .prov-name {
-      font-size: 0.9rem; font-weight: 600; color: var(--text);
-      display: flex; align-items: center; gap: 8px;
-    }
-    .provider-info .prov-desc {
-      font-size: 0.78rem; color: var(--muted); margin: 0; line-height: 1.4;
+    .prov-pill {
+      animation: pill-in 0.5s cubic-bezier(0.16,1,0.3,1) both;
+      animation-delay: calc(var(--i, 0) * 80ms + 0.4s);
     }
     .prov-badge {
       display: inline-block;
@@ -238,13 +241,9 @@
       background: rgba(251,191,36,0.1); color: var(--amber);
       border: 1px solid rgba(251,191,36,0.2);
     }
-    html.light .provider-card {
-      background: rgba(255,255,255,0.7);
-      box-shadow: 0 4px 20px -10px rgba(0,0,0,0.06);
-    }
-    html.light .provider-card:hover { box-shadow: 0 10px 36px -14px rgba(0,0,0,0.1); }
-    html.light .provider-icon {
-      background: rgba(245,247,250,0.9);
+    html.light .prov-pill {
+      background: rgba(255,255,255,0.6);
+      box-shadow: 0 2px 8px -4px rgba(0,0,0,0.06);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     html { scroll-behavior: smooth; }
@@ -738,29 +737,25 @@
     .method-card h3 { font-size: 1rem; margin: 0 0 8px; }
     .method-card p { font-size: 0.85rem; margin: 0 0 12px; }
 
-    .downloads-grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-      gap: 16px; margin-top: 16px;
+    .platform-link {
+      display: flex; flex-direction: column; align-items: center; gap: 8px;
+      padding: 16px 24px; border-radius: var(--radius);
+      border: 1px solid var(--border); background: rgba(9,9,11,0.4);
+      backdrop-filter: blur(8px); text-decoration: none; color: var(--text);
+      transition: border-color 0.25s, transform 0.25s cubic-bezier(0.16,1,0.3,1), background 0.25s;
     }
-    .download-card {
-      background: rgba(9,9,11,0.6);
-      border: 1px solid var(--border);
-      border-radius: var(--radius);
-      backdrop-filter: blur(12px);
-      padding: 24px;
-      display: flex; flex-direction: column; gap: 8px;
-      transition: border-color 0.25s, transform 0.25s cubic-bezier(0.16,1,0.3,1), box-shadow 0.25s;
+    .platform-link:hover {
+      border-color: rgba(52,211,153,0.3); transform: translateY(-2px);
+      background: rgba(52,211,153,0.05);
     }
-    .download-card:hover {
-      border-color: rgba(52,211,153,0.3);
-      transform: translateY(-2px);
-      box-shadow: 0 18px 60px -30px rgba(2,6,23,0.6);
+    .platform-link svg { width: 28px; height: 28px; opacity: 0.8; }
+    .platform-link:hover svg { opacity: 1; }
+    .platform-link span { font-size: 0.75rem; font-weight: 500; color: var(--muted); }
+    html.light .platform-link {
+      background: rgba(255,255,255,0.6);
+      box-shadow: 0 2px 10px -4px rgba(0,0,0,0.06);
     }
-    .download-card .platform { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); }
-    .download-card h3 { font-size: 1rem; margin: 0; }
-    .download-card p { font-size: 0.9rem; margin: 0; }
-    .download-card .btn { margin-top: auto; text-align: center; justify-content: center; }
+    html.light .platform-link:hover { background: rgba(52,211,153,0.06); }
 
     .badge {
       display: inline-block;
@@ -1006,6 +1001,12 @@
       display: flex; align-items: center; justify-content: center;
     }
     .jait-prompt-send svg { width: 12px; height: 12px; color: #fff; }
+    .jait-prompt-btn {
+      width: 26px; height: 26px; min-width: 26px;
+      border-radius: 50%;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .jait-prompt-btn svg { width: 14px; height: 14px; }
     .jait-prompt-controls {
       display: flex; align-items: center; gap: 6px;
       margin-top: 6px;
@@ -1169,6 +1170,30 @@
           <h1 class="hero-tagline">An agent workspace that looks and behaves like an actual toolchain.</h1>
           <p class="hero-desc">Jait combines chat, terminals, file editing, browser control, screen sharing, and automation threads in one local-first surface.</p>
 
+          <div class="providers-strip">
+            <span class="prov-label">Supports</span>
+            <span class="prov-pill" style="--i:0">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="color:#10a37f"><path d="M22.28 9.82a5.98 5.98 0 0 0-.52-4.91 6.05 6.05 0 0 0-6.51-2.9A6.07 6.07 0 0 0 4.98 4.18 5.98 5.98 0 0 0 .98 7.08a6.05 6.05 0 0 0 .74 7.1 5.98 5.98 0 0 0 .51 4.91 6.05 6.05 0 0 0 6.52 2.9 5.98 5.98 0 0 0 4.51 2.01 6.06 6.06 0 0 0 5.77-4.21 5.99 5.99 0 0 0 4-2.9 6.06 6.06 0 0 0-.75-7.07zM13.26 22.43a4.48 4.48 0 0 1-2.88-1.04l.14-.08 4.78-2.76a.8.8 0 0 0 .39-.68v-6.74l2.02 1.17a.07.07 0 0 1 .04.05v5.58a4.5 4.5 0 0 1-4.49 4.5zM3.6 18.3a4.47 4.47 0 0 1-.54-3.01l.14.08 4.78 2.76a.77.77 0 0 0 .78 0l5.84-3.37v2.33a.08.08 0 0 1-.03.06L9.74 19.95a4.5 4.5 0 0 1-6.14-1.65zM2.34 7.9a4.49 4.49 0 0 1 2.37-1.97V11.6a.77.77 0 0 0 .39.68l5.81 3.35-2.02 1.17a.08.08 0 0 1-.07 0l-4.83-2.79A4.5 4.5 0 0 1 2.34 7.87zm16.6 3.86l-5.83-3.39 2.01-1.16a.08.08 0 0 1 .07 0l4.83 2.79a4.49 4.49 0 0 1-.68 8.1v-5.68a.79.79 0 0 0-.4-.66zm2.01-3.02l-.14-.09-4.77-2.78a.78.78 0 0 0-.79 0L9.41 9.23V6.9a.07.07 0 0 1 .03-.06l4.83-2.79a4.5 4.5 0 0 1 6.68 4.66zM8.31 12.86l-2.02-1.16a.08.08 0 0 1-.04-.06V6.08a4.5 4.5 0 0 1 7.38-3.46l-.14.08-4.78 2.76a.8.8 0 0 0-.39.68zm1.1-2.37l2.6-1.5 2.61 1.5v3l-2.6 1.5-2.61-1.5z"/></svg>
+              OpenAI Codex <span class="prov-badge live">Live</span>
+            </span>
+            <span class="prov-pill" style="--i:1">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="color:#d97757"><path d="M12 2.4l2.2 6.65a1.6 1.6 0 0 0 1.05 1.05L21.9 12.3l-6.65 2.2a1.6 1.6 0 0 0-1.05 1.05L12 22.2l-2.2-6.65a1.6 1.6 0 0 0-1.05-1.05L2.1 12.3l6.65-2.2a1.6 1.6 0 0 0 1.05-1.05Z"/></svg>
+              Claude Code <span class="prov-badge soon">Soon</span>
+            </span>
+            <span class="prov-pill" style="--i:2">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="color:#4285f4"><path d="M12 0c0 6.627-5.373 12-12 12 6.627 0 12 5.373 12 12 0-6.627 5.373-12 12-12-6.627 0-12-5.373-12-12z"/></svg>
+              Gemini CLI <span class="prov-badge soon">Soon</span>
+            </span>
+            <span class="prov-pill" style="--i:3">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+              OpenCode <span class="prov-badge soon">Soon</span>
+            </span>
+            <span class="prov-pill" style="--i:4">
+              <svg viewBox="0 0 24 24" fill="currentColor" style="color:#9a77db"><path d="M9.11 8.18a.75.75 0 0 1 1.06-.02l.82.78.82-.78a.75.75 0 1 1 1.03 1.09l-1.1 1.04 1.1 1.04a.75.75 0 0 1-1.03 1.09l-.82-.78-.82.78a.75.75 0 0 1-1.03-1.09l1.1-1.04-1.1-1.04a.75.75 0 0 1-.03-1.07Z"/><path d="M12 1C6.2 1 2.48 4.36 1.28 8.42a3.7 3.7 0 0 0-.3 1.75 3.55 3.55 0 0 0-.45 1.87c.06.86.49 1.6 1.1 2.13A3.49 3.49 0 0 0 2.4 16c.58 1.57 1.83 3 3.6 3h1v-1.5H5.98c-1.2 0-2.12-1-2.58-2.22a2 2 0 0 1-.53-1.21 1.99 1.99 0 0 1 .33-1.34.75.75 0 0 0 .15-.55c-.05-.49.06-.98.2-1.42C4.22 8.06 6.96 5.5 9.86 4.59a10 10 0 0 1 4.28 0c2.9.91 5.64 3.47 6.31 6.27.14.44.25.93.2 1.42a.75.75 0 0 0 .15.55c.22.37.35.83.33 1.34a2 2 0 0 1-.53 1.21c-.46 1.22-1.38 2.22-2.58 2.22H17V19h1c1.77 0 3.02-1.43 3.6-3a3.49 3.49 0 0 0 .77-1.83c.61-.53 1.04-1.27 1.1-2.13.06-.68-.12-1.32-.44-1.87a3.7 3.7 0 0 0-.31-1.75C21.52 4.36 17.8 1 12 1ZM8.5 15.5a1 1 0 1 0 0-2 1 1 0 0 0 0 2Zm8-1a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"/></svg>
+              Copilot CLI <span class="prov-badge soon">Soon</span>
+            </span>
+          </div>
+
           <div class="caps">
             <span class="cap">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="20" rx="2"/><line x1="7" y1="12" x2="17" y2="12"/></svg>
@@ -1224,79 +1249,76 @@
           </div>
         </div>
 
-        <!-- Right column — Control surface -->
+        <!-- Right column — Jait app preview -->
         <div class="control-surface">
-          <div class="cs-panel">
-            <div class="cs-titlebar">
-              <div class="cs-dots">
-                <span class="red"></span>
-                <span class="amber"></span>
-                <span class="green"></span>
+          <div class="jait-app" style="min-height:0">
+            <div class="jait-header">
+              <div class="jait-logo">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+                  <path d="M318 372 L430 486 L318 600" fill="none" stroke="currentColor" stroke-width="88" stroke-linecap="round" stroke-linejoin="round"/>
+                  <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715" fill="none" stroke="currentColor" stroke-width="88" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
               </div>
-              <div class="cs-label">Control surface</div>
+              <div class="jait-nav">
+                <span class="jait-nav-btn active">Chat</span>
+                <span class="jait-nav-btn">Jobs</span>
+              </div>
+              <div class="jait-model-pill"><span class="dot"></span> codex</div>
             </div>
-            <div class="cs-body">
-              <div class="cs-card">
-                <div class="cs-card-header">
-                  <div>
-                    <p class="cs-card-title">Live repo session</p>
-                    <p class="cs-card-sub">/workspace/jait attached to chat and tools</p>
+            <div class="jait-toolbar">
+              <span class="jait-tool-btn active">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/></svg>
+                Sessions
+              </span>
+              <span class="jait-tool-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                Terminal
+              </span>
+              <span class="jait-tool-btn">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+                Workspace
+              </span>
+            </div>
+            <div class="jait-chat" style="min-height:0;padding:14px 16px;gap:10px">
+              <div class="jait-msg">
+                <div class="jait-msg-avatar user">U</div>
+                <div class="jait-msg-body"><p>Refactor the auth middleware to support JWT refresh tokens</p></div>
+              </div>
+              <div class="jait-msg">
+                <div class="jait-msg-avatar agent">J</div>
+                <div class="jait-msg-body">
+                  <p>I'll update the middleware and add a refresh endpoint.</p>
+                  <div class="jait-tool-call">
+                    <div class="tc-icon file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                    <span class="tc-text">src/middleware/auth.ts <span style="color:#22c55e">(+24 −8)</span></span>
+                    <span class="tc-status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span>
                   </div>
-                  <span class="cs-status-pill online">gateway online</span>
-                </div>
-                <div class="cs-terminal">
-                  <div class="cmd">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
-                    <span>bun run typecheck</span>
+                  <div class="jait-tool-call">
+                    <div class="tc-icon file"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg></div>
+                    <span class="tc-text">src/routes/auth.ts <span style="color:#22c55e">(+36)</span></span>
+                    <span class="tc-status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span>
                   </div>
-                  <div>$ workspace diff opened in review mode</div>
-                  <div>$ browser preview attached for verification</div>
+                  <div class="jait-tool-call">
+                    <div class="tc-icon terminal"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg></div>
+                    <span class="tc-text">bun run typecheck</span>
+                    <span class="tc-status"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></span>
+                  </div>
+                  <p style="margin-top:6px">Auth middleware now validates and rotates refresh tokens. All types check out.</p>
                 </div>
               </div>
-
-              <div class="cs-mini-grid">
-                <div class="cs-card">
-                  <div class="label">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--sky)"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
-                    Workspace
-                  </div>
-                  <ul class="cs-file-list">
-                    <li class="active">apps/web/src/App.tsx</li>
-                    <li class="muted">packages/gateway/src/server.ts</li>
-                    <li class="diff">review diff ready</li>
-                  </ul>
-                </div>
-                <div class="cs-card">
-                  <div class="label">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--cyan)"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg>
-                    Thread flow
-                  </div>
-                  <div class="cs-flow-item done">
-                    <span>Inspect implementation</span>
-                    <span class="status-done">done</span>
-                  </div>
-                  <div class="cs-flow-item running">
-                    <span>Patch landing page</span>
-                    <span class="status-running">running</span>
-                  </div>
-                  <div class="cs-flow-item queued">
-                    <span>Typecheck and tests</span>
-                    <span class="status-queued">queued</span>
-                  </div>
-                </div>
+            </div>
+            <div class="jait-prompt">
+              <div class="jait-prompt-inner">
+                <div class="jait-prompt-text">Type a message...<span class="jait-prompt-caret"></span></div>
+                <div class="jait-prompt-btn" style="color:#555"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="22"/></svg></div>
+                <div class="jait-prompt-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg></div>
               </div>
-
-              <div class="cs-card">
-                <div class="cs-card-header">
-                  <div class="label" style="margin-bottom:0">
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--emerald)"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" y1="20" x2="2.01" y2="20"/></svg>
-                    Reach beyond chat
-                  </div>
-                  <span style="font-size:0.68rem;color:#64748b">screen &middot; browser &middot; network</span>
-                </div>
-                <p style="font-size:0.85rem;line-height:1.6;color:#cbd5e1;margin:0">
-                  Built for real operations, not just prompt exchange. Connect devices, inspect a live UI, and validate changes from the same session.
-                </p>
+              <div class="jait-prompt-controls">
+                <span class="jait-prompt-pill active">
+                  <svg viewBox="0 0 24 24" fill="currentColor" style="width:10px;height:10px;color:#10a37f"><circle cx="12" cy="12" r="10"/></svg>
+                  Codex
+                </span>
+                <span class="jait-prompt-pill">plan</span>
               </div>
             </div>
           </div>
@@ -1513,91 +1535,34 @@
       </div>
     </div>
 
-    <!-- ══════ Works with ══════ -->
-    <div class="section-card glow-emerald reveal">
-      <h2>Wraps the AI CLIs you already use</h2>
-      <p class="section-sub">Jait isn't just its own agent — it's a unified workspace layer on top of the leading AI coding CLIs. Use any supported backend, switch freely, and keep the same tools, terminals, and file context.</p>
-      <div class="providers-grid reveal-stagger">
-        <div class="provider-card reveal" style="--i:0">
-          <div class="provider-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-          </div>
-          <div class="provider-info">
-            <div class="prov-name">OpenAI Codex <span class="prov-badge live">Live</span></div>
-            <p class="prov-desc">Full integration with codex CLI agent</p>
-          </div>
-        </div>
-        <div class="provider-card reveal" style="--i:1">
-          <div class="provider-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><path d="M8 12a4 4 0 0 1 8 0"/><path d="M8 12a4 4 0 0 0 8 0"/></svg>
-          </div>
-          <div class="provider-info">
-            <div class="prov-name">Claude Code <span class="prov-badge soon">Soon</span></div>
-            <p class="prov-desc">Anthropic's Claude CLI as a backend</p>
-          </div>
-        </div>
-        <div class="provider-card reveal" style="--i:2">
-          <div class="provider-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-          </div>
-          <div class="provider-info">
-            <div class="prov-name">Gemini CLI <span class="prov-badge soon">Soon</span></div>
-            <p class="prov-desc">Google's Gemini coding agent</p>
-          </div>
-        </div>
-        <div class="provider-card reveal" style="--i:3">
-          <div class="provider-icon">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
-          </div>
-          <div class="provider-info">
-            <div class="prov-name">OpenCode <span class="prov-badge soon">Soon</span></div>
-            <p class="prov-desc">Open-source AI coding CLI</p>
-          </div>
-        </div>
-      </div>
-    </div>
-
 
 
     <!-- ══════ Downloads ══════ -->
     <div class="section-card glow-emerald reveal" id="downloads">
-      <h2>Downloads</h2>
-      <p class="section-sub">Pre-built apps and APKs for every platform.</p>
-      <div class="downloads-grid reveal-stagger">
-        <div class="download-card reveal" style="--i:0">
-          <span class="platform">Windows</span>
-          <h3>Desktop App</h3>
-          <p>Installer for Windows 10/11 (x64)</p>
-          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-Setup-x64.exe" class="btn btn-outline">Download .exe</a>
-        </div>
-        <div class="download-card reveal" style="--i:1">
-          <span class="platform">macOS</span>
-          <h3>Desktop App</h3>
-          <p>Universal binary (Intel + Apple Silicon)</p>
-          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-universal.dmg" class="btn btn-outline">Download .dmg</a>
-        </div>
-        <div class="download-card reveal" style="--i:2">
-          <span class="platform">Linux</span>
-          <h3>Desktop App</h3>
-          <p>AppImage for any Linux distribution</p>
-          <a href="https://github.com/JakobWl/Jait/releases/latest/download/Jait-x86_64.AppImage" class="btn btn-outline">Download .AppImage</a>
-        </div>
-        <div class="download-card reveal" style="--i:3">
-          <span class="platform">Android</span>
-          <h3>Mobile App</h3>
-          <p>APK for Android 10+ (arm64)</p>
-          <a href="https://github.com/JakobWl/Jait/releases/latest/download/jait-arm64-v8a.apk" class="btn btn-outline">Download .apk</a>
-        </div>
-        <div class="download-card reveal" style="--i:4">
-          <span class="platform">Gateway</span>
-          <h3>npm package</h3>
-          <p>Install the gateway via npm</p>
-          <a href="https://www.npmjs.com/package/@jait/gateway" class="btn btn-outline">View on npm</a>
-        </div>
+      <h2>Available everywhere</h2>
+      <p class="section-sub">Desktop, mobile, and CLI — grab the latest from GitHub Releases.</p>
+      <div class="platform-icons reveal-stagger" style="display:flex;flex-wrap:wrap;gap:12px;margin-top:20px;justify-content:center">
+        <a href="https://github.com/JakobWl/Jait/releases" class="platform-link reveal" style="--i:0" title="Windows">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+          <span>Windows</span>
+        </a>
+        <a href="https://github.com/JakobWl/Jait/releases" class="platform-link reveal" style="--i:1" title="macOS">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.8-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M13 3.5c.73-.83 1.94-1.46 2.94-1.5.13 1.17-.34 2.35-1.04 3.19-.69.85-1.83 1.51-2.95 1.42-.15-1.15.41-2.35 1.05-3.11z"/></svg>
+          <span>macOS</span>
+        </a>
+        <a href="https://github.com/JakobWl/Jait/releases" class="platform-link reveal" style="--i:2" title="Linux">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12.504 0c-.155 0-.315.008-.48.021-4.226.333-3.105 4.807-3.17 6.298-.076 1.092-.323 1.396-1.743 2.882-1.518 1.695-1.678 2.626-1.678 3.283 0 .956-.399 1.174-.94 2.07-.686 1.14-.118 3.729.565 4.567.748.914 2.395 1.506 2.823 1.506.299 0 .96-.059 1.58-.217.643-.164 1.35-.245 1.539-.245s.896.081 1.539.245c.62.158 1.281.217 1.58.217.428 0 2.075-.592 2.823-1.506.683-.838 1.251-3.427.565-4.567-.541-.896-.94-1.114-.94-2.07 0-.657-.16-1.588-1.678-3.283-1.42-1.486-1.667-1.79-1.743-2.882-.065-1.491 1.056-5.965-3.17-6.298-.165-.013-.325-.021-.48-.021zm-1.767 6.988c.573 0 1.103.285 1.328.736a.635.635 0 0 1-.057.672c-.142.193-.416.292-.672.292-.576 0-.965-.36-.965-.908 0-.284.143-.562.366-.792zm3.527 0c.223.23.366.508.366.792 0 .548-.389.908-.965.908-.256 0-.53-.099-.672-.292a.635.635 0 0 1-.057-.672c.225-.451.755-.736 1.328-.736zM8.394 12c.27 0 .513.058.76.169.68.308.868 1.04 1.073 1.808.193.723.41 1.544 1.274 2.08.244.15.37.39.37.695 0 .636-.537.802-.838.802-.37 0-.783-.27-1.13-.584-.756-.685-1.275-1.738-1.275-2.57 0-.9-.29-1.478-.29-1.978 0-.217.086-.422.056-.422zm7.212 0c-.03 0 .056.205.056.422 0 .5-.29 1.078-.29 1.978 0 .832-.519 1.885-1.275 2.57-.347.314-.76.584-1.13.584-.301 0-.838-.166-.838-.802 0-.305.126-.544.37-.695.864-.536 1.081-1.357 1.274-2.08.205-.768.393-1.5 1.073-1.808.247-.111.49-.169.76-.169z"/></svg>
+          <span>Linux</span>
+        </a>
+        <a href="https://github.com/JakobWl/Jait/releases" class="platform-link reveal" style="--i:3" title="Android">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.341a.96.96 0 0 0-.953.958c0 .529.427.96.953.96a.96.96 0 0 0 .957-.96.96.96 0 0 0-.957-.958m-11.046 0a.96.96 0 0 0-.955.958c0 .529.427.96.955.96a.96.96 0 0 0 .955-.96.96.96 0 0 0-.955-.958m11.4-6.015l1.96-3.394a.408.408 0 0 0-.148-.557.404.404 0 0 0-.554.148l-1.985 3.437a12.098 12.098 0 0 0-5.15-1.12c-1.832 0-3.55.4-5.15 1.12L4.865 5.523a.406.406 0 0 0-.554-.148.408.408 0 0 0-.149.557l1.96 3.394C2.68 11.267.336 14.954 0 19.2h24c-.336-4.246-2.68-7.933-6.123-9.874"/></svg>
+          <span>Android</span>
+        </a>
+        <a href="https://www.npmjs.com/package/@jait/gateway" class="platform-link reveal" style="--i:4" title="npm">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 7.334v8h6.666v1.332H12v-1.332h12v-8H0zm6.666 6.664H5.334v-4H3.999v4H1.335V8.667h5.331v5.331zm4 0v1.336H8.001V8.667h5.334v5.332h-2.669v-.001zm12.001 0h-1.33v-4h-1.336v4h-1.335v-4h-1.33v4h-2.671V8.667h8.002v5.331zM10.665 10H12v2.667h-1.335V10z"/></svg>
+          <span>npm</span>
+        </a>
       </div>
-      <p style="margin-top: 20px; font-size: 0.85rem;">
-        All releases: <a href="https://github.com/JakobWl/Jait/releases">github.com/JakobWl/Jait/releases</a>
-      </p>
     </div>
 
 
