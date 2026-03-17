@@ -71,6 +71,10 @@ export function setStoredGatewayUrl(url: string | null): void {
  * HTTP(S) gateway URL used by `fetch()` calls.
  */
 export function getApiUrl(): string {
+  // Build-time env (Vite)
+  const env = import.meta.env.VITE_API_URL as string | undefined
+  if (import.meta.env.DEV && env) return stripTrailingSlash(env)
+
   const stored = getStoredGatewayUrl()
   if (stored) return stripTrailingSlash(stored)
 
@@ -78,8 +82,6 @@ export function getApiUrl(): string {
   const desktop = (window as any).jaitDesktop?.gatewayUrl as string | undefined
   if (desktop) return stripTrailingSlash(desktop)
 
-  // Build-time env (Vite)
-  const env = import.meta.env.VITE_API_URL as string | undefined
   if (env) return stripTrailingSlash(env)
 
   return getDefaultHttp()
@@ -89,11 +91,11 @@ export function getApiUrl(): string {
  * WebSocket gateway URL.
  */
 export function getWsUrl(): string {
+  const env = import.meta.env.VITE_WS_URL as string | undefined
+  if (import.meta.env.DEV && env) return stripTrailingSlash(env)
+
   const stored = getStoredGatewayUrl()
   if (stored) return stripTrailingSlash(httpToWs(stored))
-
-  const env = import.meta.env.VITE_WS_URL as string | undefined
-  if (env) return stripTrailingSlash(env)
 
   const apiUrl = getApiUrl()
   return stripTrailingSlash(httpToWs(apiUrl))

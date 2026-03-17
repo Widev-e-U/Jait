@@ -95,6 +95,12 @@ export interface GitPullResult {
   upstreamBranch: string | null
 }
 
+export interface GitFetchResult {
+  status: 'fetched' | 'skipped_no_remote'
+  remote: string | null
+  allRemotes: boolean
+}
+
 export interface GitWorktreeResult {
   path: string
   branch: string
@@ -168,6 +174,10 @@ export const gitApi = {
 
   pull(cwd: string): Promise<GitPullResult> {
     return gitPost<GitPullResult>('pull', { cwd })
+  },
+
+  fetch(cwd: string, all = false): Promise<GitFetchResult> {
+    return gitPost<GitFetchResult>('fetch', { cwd, all })
   },
 
   runStackedAction(

@@ -39,6 +39,7 @@ import type { FileChangeEvent } from "./services/workspace-watcher.js";
 import { GitService } from "./services/git.js";
 import { MaintenanceService } from "./services/maintenance.js";
 import { NotificationService } from "./services/notifications.js";
+import { PreviewService } from "./services/preview.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
 
 async function main() {
@@ -122,6 +123,7 @@ async function main() {
   // Register remote-filesystem factory (needs ws reference for proxying ops to nodes)
   surfaceRegistry.register(new RemoteFileSystemSurfaceFactory(ws));
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
+  const previewService = new PreviewService(surfaceRegistry);
 
   // Auto-wire terminal output → WebSocket for ALL terminals (REST, tool, etc.)
   // Also broadcast workspace activation for filesystem surfaces.
@@ -241,6 +243,7 @@ async function main() {
     sessionState,
     maintenanceService,
     notifications,
+    previewService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -342,6 +345,7 @@ async function main() {
     notifications,
     config,
     shutdown: shutdownRef,
+    previewService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -436,6 +440,7 @@ async function main() {
     maintenanceService,
     notifications,
     providerRegistry,
+    previewService,
     shutdown: shutdownRef,
   });
 
@@ -576,6 +581,7 @@ async function main() {
   const shutdown = async () => {
     console.log("Shutting down...");
     consentManager.cancelAll("shutdown");
+    await previewService.stopAll();
     await surfaceRegistry.stopAll("shutdown");
     scheduler.stop();
     ws.stop();

@@ -99,6 +99,12 @@ export interface GitPullResult {
   upstreamBranch: string | null;
 }
 
+export interface GitFetchResult {
+  status: "fetched" | "skipped_no_remote";
+  remote: string | null;
+  allRemotes: boolean;
+}
+
 export interface GitWorktreeResult {
   path: string;
   branch: string;
@@ -580,6 +586,35 @@ export class GitService {
       status: before === after ? "skipped_up_to_date" : "pulled",
       branch,
       upstreamBranch: upstream,
+    };
+  }
+
+  async fetch(cwd: string, allRemotes = false): Promise<GitFetchResult> {
+    let remote: string | null = null;
+    try {
+      remote = await this.getPreferredRemote(cwd);
+    } catch {
+      remote = null;
+    }
+
+    if (!allRemotes && !remote) {
+      return {
+        status: "skipped_no_remote",
+        remote: null,
+        allRemotes: false,
+      };
+    }
+
+    if (allRemotes) {
+      await gitExec(cwd, "fetch --all");
+    } else {
+      await gitExec(cwd, `fetch "${remote}"`);
+    }
+
+    return {
+      status: "fetched",
+      remote,
+      allRemotes,
     };
   }
 

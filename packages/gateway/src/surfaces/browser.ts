@@ -31,6 +31,17 @@ export interface BrowserPageSnapshot {
   elements: BrowserInteractiveElement[];
 }
 
+export interface BrowserRuntimeEvent {
+  id: number;
+  timestamp: string;
+  type: "console" | "pageerror" | "requestfailed" | "response";
+  level?: string;
+  text?: string;
+  url?: string;
+  method?: string;
+  status?: number;
+}
+
 export interface BrowserDriver {
   navigate(url: string, signal?: AbortSignal): Promise<void>;
   click(selector: string, signal?: AbortSignal): Promise<void>;
@@ -40,6 +51,7 @@ export interface BrowserDriver {
   waitFor(selector: string, timeoutMs: number, signal?: AbortSignal): Promise<void>;
   screenshot(path?: string, signal?: AbortSignal): Promise<string>;
   snapshot(signal?: AbortSignal): Promise<BrowserPageSnapshot>;
+  getEvents(): BrowserRuntimeEvent[];
   close(): Promise<void>;
 }
 
@@ -56,6 +68,7 @@ type PlaywrightBrowser = {
       evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
       waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
       screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
+      on?: (event: string, handler: (...args: any[]) => void) => void;
     }>;
     close: () => Promise<void>;
   }>;
@@ -87,6 +100,22 @@ interface NodeBridgeEvent {
 const DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS = 45_000;
 const DEFAULT_NODE_BRIDGE_READY_TIMEOUT_MS = 60_000;
 const DEFAULT_NODE_BRIDGE_COMMAND_TIMEOUT_MS = 60_000;
+const MAX_BROWSER_RUNTIME_EVENTS = 200;
+
+function pushBrowserRuntimeEvent(
+  events: BrowserRuntimeEvent[],
+  next: Omit<BrowserRuntimeEvent, "id" | "timestamp">,
+): void {
+  const previousId = events[events.length - 1]?.id ?? 0;
+  events.push({
+    id: previousId + 1,
+    timestamp: new Date().toISOString(),
+    ...next,
+  });
+  if (events.length > MAX_BROWSER_RUNTIME_EVENTS) {
+    events.splice(0, events.length - MAX_BROWSER_RUNTIME_EVENTS);
+  }
+}
 
 export class BrowserSurface implements Surface {
   readonly type = "browser" as const;
@@ -212,6 +241,10 @@ export class BrowserSurface implements Surface {
     return this.requireDriver().screenshot(path, signal);
   }
 
+  getEvents(): BrowserRuntimeEvent[] {
+    return this.requireDriver().getEvents();
+  }
+
   private captureSnapshotMeta(snap: BrowserPageSnapshot): void {
     this._lastUrl = snap.url;
     this._lastTitle = snap.title;
@@ -321,6 +354,42 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
   }
   const activeContext = context;
   const activePage = page;
+  const events: BrowserRuntimeEvent[] = [];
+
+  activePage.on?.("console", (msg: any) => {
+    const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
+    const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
+    pushBrowserRuntimeEvent(events, { type: "console", level, text });
+  });
+  activePage.on?.("pageerror", (err: Error) => {
+    pushBrowserRuntimeEvent(events, {
+      type: "pageerror",
+      level: "error",
+      text: err?.message ?? String(err),
+    });
+  });
+  activePage.on?.("requestfailed", (request: any) => {
+    pushBrowserRuntimeEvent(events, {
+      type: "requestfailed",
+      level: "error",
+      text: request?.failure?.()?.errorText ?? "Request failed",
+      url: request?.url?.(),
+      method: request?.method?.(),
+    });
+  });
+  activePage.on?.("response", (response: any) => {
+    const status = typeof response?.status === "function" ? response.status() : undefined;
+    if (typeof status !== "number" || status < 400) return;
+    const request = response.request?.();
+    pushBrowserRuntimeEvent(events, {
+      type: "response",
+      level: status >= 500 ? "error" : "warn",
+      text: `HTTP ${status}`,
+      url: response.url?.(),
+      method: request?.method?.(),
+      status,
+    });
+  });
 
   /**
    * Race a Playwright page operation against an AbortSignal.
@@ -434,6 +503,9 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
           elements,
         };
       }) as Promise<BrowserPageSnapshot>, signal);
+    },
+    getEvents() {
+      return [...events];
     },
     async close() {
       await activeContext.close();
@@ -668,6 +740,9 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
         throw new Error("Node bridge returned an invalid browser snapshot.");
       }
       return result as BrowserPageSnapshot;
+    },
+    getEvents() {
+      return [];
     },
     async close() {
       await closeBridge();

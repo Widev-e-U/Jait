@@ -60,6 +60,8 @@ interface WorkspacePanelProps {
   cliModel?: string | null
   /** Request to open a preview target in the editor. */
   previewRequest?: { target: string; key: number } | null
+  /** Notifies the app shell when a workspace preview tab is opened or closed. */
+  onPreviewOpenChange?: (state: { open: boolean; target: string | null }) => void
 }
 
 export interface WorkspacePanelHandle {
@@ -75,6 +77,8 @@ export interface WorkspacePanelHandle {
   openReviewDiff: (input: { path: string; originalContent: string; modifiedContent: string; language?: string }) => Promise<boolean>
   /** Open a preview target inside the workspace editor. */
   openPreviewTarget: (target: string) => boolean
+  /** Close the current workspace preview tab, if any. */
+  closePreviewTarget: () => void
   /** Lazily search the entire directory for files matching a query. Cancellable via AbortSignal. */
   searchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<{ path: string; name: string }[]>
 }
@@ -106,6 +110,34 @@ function inferLanguage(path: string) {
 
 export function workspaceLanguageForPath(path: string) {
   return inferLanguage(path)
+}
+
+type GitAutoFetchMode = false | true | 'all'
+
+const GIT_AUTO_FETCH_KEY = 'jait.git.autofetch'
+const GIT_AUTO_FETCH_PERIOD_KEY = 'jait.git.autofetchPeriod'
+const DEFAULT_GIT_AUTO_FETCH_PERIOD_SECONDS = 180
+
+function readGitAutoFetchMode(): GitAutoFetchMode {
+  if (typeof window === 'undefined') return false
+  const raw = window.localStorage.getItem(GIT_AUTO_FETCH_KEY)
+  if (raw === 'true') return true
+  if (raw === 'all') return 'all'
+  return false
+}
+
+function readGitAutoFetchPeriodSeconds(): number {
+  if (typeof window === 'undefined') return DEFAULT_GIT_AUTO_FETCH_PERIOD_SECONDS
+  const raw = window.localStorage.getItem(GIT_AUTO_FETCH_PERIOD_KEY)
+  const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+  if (!Number.isFinite(parsed) || parsed < 10) return DEFAULT_GIT_AUTO_FETCH_PERIOD_SECONDS
+  return parsed
+}
+
+function describeGitAutoFetchMode(mode: GitAutoFetchMode): string {
+  if (mode === 'all') return 'Auto-fetch: all remotes'
+  if (mode === true) return 'Auto-fetch: default remote'
+  return 'Auto-fetch: off'
 }
 
 /* ------------------------------------------------------------------ */
@@ -355,15 +387,17 @@ function useDragResize(
     }
   }, [])
 
-  const onMouseDown = useCallback(
-    (e: React.MouseEvent) => {
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
       e.preventDefault()
       dragging.current = true
       setIsDragging(true)
+      const pointerId = e.pointerId
+      e.currentTarget.setPointerCapture?.(pointerId)
       const startPos = direction === 'horizontal' ? e.clientX : e.clientY
       const startSize = size
 
-      const onMove = (ev: MouseEvent) => {
+      const onMove = (ev: PointerEvent) => {
         if (!dragging.current) return
         const pos = direction === 'horizontal' ? ev.clientX : ev.clientY
         const delta = pos - startPos
@@ -380,6 +414,7 @@ function useDragResize(
       const onUp = () => {
         dragging.current = false
         setIsDragging(false)
+        e.currentTarget.releasePointerCapture?.(pointerId)
         if (frameRef.current !== null) {
           window.cancelAnimationFrame(frameRef.current)
           frameRef.current = null
@@ -388,15 +423,17 @@ function useDragResize(
           setSize(pendingSizeRef.current)
           pendingSizeRef.current = null
         }
-        document.removeEventListener('mousemove', onMove)
-        document.removeEventListener('mouseup', onUp)
+        document.removeEventListener('pointermove', onMove)
+        document.removeEventListener('pointerup', onUp)
+        document.removeEventListener('pointercancel', onUp)
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
       }
       document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize'
       document.body.style.userSelect = 'none'
-      document.addEventListener('mousemove', onMove)
-      document.addEventListener('mouseup', onUp)
+      document.addEventListener('pointermove', onMove)
+      document.addEventListener('pointerup', onUp)
+      document.addEventListener('pointercancel', onUp)
     },
     [size, min, max, direction],
   )
@@ -406,7 +443,7 @@ function useDragResize(
     window.localStorage.setItem(storageKey, String(size))
   }, [size, storageKey])
 
-  return { size, onMouseDown, isDragging } as const
+  return { size, onPointerDown, isDragging } as const
 }
 
 /* ------------------------------------------------------------------ */
@@ -560,6 +597,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   provider,
   cliModel,
   previewRequest,
+  onPreviewOpenChange,
 }, ref) {
   const resolvedTheme = useResolvedTheme()
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
@@ -614,6 +652,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /** Whether a git action (commit/push) is in progress */
   const [gitActionBusy, setGitActionBusy] = useState(false)
   const [gitActionError, setGitActionError] = useState<string | null>(null)
+  const [gitAutoFetchMode, setGitAutoFetchMode] = useState<GitAutoFetchMode>(() => readGitAutoFetchMode())
+  const [gitAutoFetchPeriodSeconds] = useState<number>(() => readGitAutoFetchPeriodSeconds())
+  const gitActionBusyRef = useRef(gitActionBusy)
+  const gitStatusLoadingRef = useRef(gitStatusLoading)
 
   // ── Editor tabs state ──
   const [openTabs, setOpenTabs] = useState<EditorTab[]>([])
@@ -726,6 +768,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     onTabsStateChange(nextState)
   }, [openTabs, activeTab, remoteRoot, onTabsStateChange])
 
+  useEffect(() => {
+    if (!onPreviewOpenChange) return
+    const previewTab = openTabs.find((tab) => tab.type === 'preview') ?? null
+    onPreviewOpenChange({
+      open: previewTab !== null,
+      target: previewTab?.previewTarget ?? previewTab?.path ?? null,
+    })
+  }, [openTabs, onPreviewOpenChange])
+
   // Close tab context menu on outside click.
   useEffect(() => {
     if (!tabContextMenu) return
@@ -754,10 +805,71 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
   }, [remoteRoot])
 
+  const persistGitAutoFetchMode = useCallback((mode: GitAutoFetchMode) => {
+    setGitAutoFetchMode(mode)
+    if (typeof window === 'undefined') return
+    window.localStorage.setItem(GIT_AUTO_FETCH_KEY, mode === false ? 'false' : mode === 'all' ? 'all' : 'true')
+  }, [])
+
+  const handleGitAutoFetchModeChange = useCallback((value: string) => {
+    const nextMode: GitAutoFetchMode = value === 'all' ? 'all' : value === 'true' ? true : false
+    persistGitAutoFetchMode(nextMode)
+  }, [persistGitAutoFetchMode])
+
+  useEffect(() => {
+    gitActionBusyRef.current = gitActionBusy
+  }, [gitActionBusy])
+
+  useEffect(() => {
+    gitStatusLoadingRef.current = gitStatusLoading
+  }, [gitStatusLoading])
+
   // Fetch git status when workspace opens and on fs changes
   useEffect(() => {
     if (remoteRoot) fetchGitStatus()
   }, [remoteRoot, fsWatcherVersion, fetchGitStatus])
+
+  useEffect(() => {
+    if (!remoteRoot || gitAutoFetchMode === false) return
+
+    let cancelled = false
+    let timer: number | null = null
+
+    const waitForIdleAndFocus = async () => {
+      while (!cancelled) {
+        const pageFocused = typeof document !== 'undefined' && document.visibilityState === 'visible' && document.hasFocus()
+        if (!gitActionBusyRef.current && !gitStatusLoadingRef.current && pageFocused) return true
+        await new Promise((resolve) => { timer = window.setTimeout(resolve, 1000) })
+      }
+      return false
+    }
+
+    const run = async () => {
+      while (!cancelled) {
+        const ready = await waitForIdleAndFocus()
+        if (!ready || cancelled) return
+
+        try {
+          await gitApi.fetch(remoteRoot, gitAutoFetchMode === 'all')
+          await fetchGitStatus()
+        } catch {
+          // Keep the loop alive; auth or remote issues should not break the panel.
+        }
+
+        if (cancelled) return
+        await new Promise((resolve) => { timer = window.setTimeout(resolve, gitAutoFetchPeriodSeconds * 1000) })
+      }
+    }
+
+    void run()
+
+    return () => {
+      cancelled = true
+      if (timer !== null) {
+        window.clearTimeout(timer)
+      }
+    }
+  }, [remoteRoot, gitAutoFetchMode, gitAutoFetchPeriodSeconds, fetchGitStatus])
 
   // Bump the file tree when new agent-modified paths appear
   const prevChangedPathsRef = useRef<Set<string>>(new Set())
@@ -1465,6 +1577,42 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     return true
   }, [onActiveFileChange])
 
+  const handleClosePreviewTarget = useCallback(() => {
+    setOpenTabs((prev) => {
+      const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
+      if (previewIndex < 0) return prev
+      const previewTab = prev[previewIndex]
+      const next = prev.filter((tab) => tab.id !== previewTab?.id)
+      if (previewTab?.id === activeTabId) {
+        const neighbor = next[Math.min(previewIndex, next.length - 1)]
+        const newActiveId = neighbor?.id ?? null
+        setTimeout(() => {
+          setActiveTabId(newActiveId)
+          if (!newActiveId) {
+            setActiveNativePath(null)
+            setPreviewContent(null)
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'file') {
+            setActiveNativePath(neighbor.path)
+            setPreviewContent(neighbor.content ?? null)
+            setPreviewLanguage(neighbor.language ?? 'plaintext')
+            setPreviewPath(neighbor.path)
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'preview') {
+            setActiveNativePath(null)
+            setPreviewContent(null)
+            setPreviewLanguage('plaintext')
+            setPreviewPath(neighbor.previewTarget ?? neighbor.path)
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'diff') {
+            setScDiffFile(neighbor.diffMode === 'git' ? (neighbor.diffEntry ?? null) : null)
+          }
+        }, 0)
+      }
+      return next
+    })
+  }, [activeTabId])
+
   useImperativeHandle(ref, () => ({
     openDirectory: handleOpenDirectory,
     openRemoteWorkspace: handleOpenRemoteWorkspace,
@@ -1472,8 +1620,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     readFileByPath: handleReadFileByPath,
     openReviewDiff: handleOpenReviewDiff,
     openPreviewTarget: handleOpenPreviewTarget,
+    closePreviewTarget: handleClosePreviewTarget,
     searchFiles: handleSearchFiles,
-  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleOpenPreviewTarget, handleSearchFiles])
+  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleSearchFiles])
 
   useEffect(() => {
     if (!previewRequest) return
@@ -1806,6 +1955,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   <GitBranch className="h-3 w-3 inline mr-0.5 -mt-px" />
                   {gitStatus.branch}
                 </span>
+              )}
+              {remoteRoot && (
+                <select
+                  className="h-6 rounded border bg-background px-1.5 text-[10px] text-muted-foreground"
+                  value={String(gitAutoFetchMode)}
+                  onChange={(e) => handleGitAutoFetchModeChange(e.target.value)}
+                  title={`${describeGitAutoFetchMode(gitAutoFetchMode)}. Interval: ${gitAutoFetchPeriodSeconds}s`}
+                >
+                  <option value="false">Auto-fetch off</option>
+                  <option value="true">Auto-fetch origin</option>
+                  <option value="all">Auto-fetch all</option>
+                </select>
               )}
               <button
                 className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
@@ -2189,6 +2350,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </span>
             )}
             {!gitStatus?.branch && <span className="text-[10px] text-muted-foreground flex-1">No repo</span>}
+            {remoteRoot && (
+              <select
+                className="h-6 rounded border bg-background px-1.5 text-[10px] text-muted-foreground"
+                value={String(gitAutoFetchMode)}
+                onChange={(e) => handleGitAutoFetchModeChange(e.target.value)}
+                title={`${describeGitAutoFetchMode(gitAutoFetchMode)}. Interval: ${gitAutoFetchPeriodSeconds}s`}
+              >
+                <option value="false">Auto-fetch off</option>
+                <option value="true">Auto-fetch origin</option>
+                <option value="all">Auto-fetch all</option>
+              </select>
+            )}
             <button
               className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
               onClick={fetchGitStatus}
@@ -2340,9 +2513,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {/* Resize handle: tree ↔ editor */}
       {showTreeProp && showEditorProp && (
       <div
-        className="w-1 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
-        onMouseDown={tree.onMouseDown}
-      />
+        className="relative w-2 -mx-0.5 shrink-0 cursor-col-resize group touch-none"
+        onPointerDown={tree.onPointerDown}
+      >
+        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/60 transition-colors group-hover:bg-primary/40 group-active:bg-primary/50" />
+      </div>
       )}
 
       {/* Editor pane */}
@@ -2594,9 +2769,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
       {/* Resize handle: panel ↔ chat (right edge) */}
       <div
-        className="w-1 shrink-0 cursor-col-resize hover:bg-primary/20 active:bg-primary/30 transition-colors"
-        onMouseDown={panel.onMouseDown}
-      />
+        className="relative w-2 -mx-0.5 shrink-0 cursor-col-resize group touch-none"
+        onPointerDown={panel.onPointerDown}
+      >
+        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/60 transition-colors group-hover:bg-primary/40 group-active:bg-primary/50" />
+      </div>
     </aside>
   )
 })

@@ -36,6 +36,7 @@ import { registerMaintenanceRoutes } from "./routes/maintenance.js";
 import { registerMcpRoutes } from "./routes/mcp-server.js";
 import { registerGitRoutes } from "./routes/git.js";
 import { registerUpdateRoutes } from "./routes/update.js";
+import { registerPreviewRoutes } from "./routes/preview.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -95,6 +96,7 @@ export interface ServerDeps {
   providerRegistry?: ProviderRegistry;
   shutdown?: () => Promise<void>;
   gitService?: import("./routes/threads.js").ThreadRouteDeps["gitService"];
+  previewService?: import("./services/preview.js").PreviewService;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -177,6 +179,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerBrowserAssetRoutes(app);
   registerWorkspacePreviewRoutes(app);
   registerDevProxyRoutes(app);
+  if (deps.previewService) {
+    registerPreviewRoutes(app, config, { previewService: deps.previewService });
+  }
 
   if (deps.surfaceRegistry) {
     registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws);

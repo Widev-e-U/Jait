@@ -151,6 +151,7 @@ import type { ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ProviderRegistry } from "../providers/registry.js";
+import type { PreviewService } from "../services/preview.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -183,6 +184,7 @@ export interface ToolRegistryDeps {
   notifications?: import("../services/notifications.js").NotificationService;
   /** Graceful shutdown callback — needed by the redeploy tool */
   shutdown?: () => Promise<void>;
+  previewService?: PreviewService;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -310,7 +312,7 @@ export function createToolRegistry(
   for (const tool of createBrowserInteractionTools(surfaceRegistry)) {
     tools.register(tool);
   }
-  tools.register(createPreviewOpenTool(deps.ws, deps.sessionState));
+  tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());

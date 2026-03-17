@@ -6,6 +6,7 @@
  *
  *   POST   /api/git/status                — get status for a repo path
  *   POST   /api/git/branches              — list branches
+ *   POST   /api/git/fetch                 — fetch remote refs
  *   POST   /api/git/pull                  — pull (rebase)
  *   POST   /api/git/run-stacked-action    — commit / push / create PR
  *   POST   /api/git/checkout              — checkout a branch
@@ -255,6 +256,37 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       return result;
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Failed to list branches" });
+    }
+  });
+
+  /** Fetch remote refs */
+  app.post("/api/git/fetch", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { cwd, all } = request.body as { cwd: string; all?: boolean };
+    if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      if (remoteNodeId && ws) {
+        const remotes = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args: "remote" }, 15_000)
+          .then((r) => r.stdout.split("\n").map((line) => line.trim()).filter(Boolean))
+          .catch(() => []);
+        if (!all && remotes.length === 0) {
+          return { status: "skipped_no_remote", remote: null, allRemotes: false };
+        }
+        const preferredRemote = remotes[0] ?? null;
+        const args = all ? "fetch --all" : `fetch "${preferredRemote}"`;
+        await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 60_000);
+        return {
+          status: "fetched",
+          remote: preferredRemote,
+          allRemotes: all === true,
+        };
+      }
+      const result = await git.fetch(cwd, all === true);
+      return result;
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Fetch failed" });
     }
   });
 

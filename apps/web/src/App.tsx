@@ -781,6 +781,7 @@ function App() {
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [devPreviewAutoOpenKey, setDevPreviewAutoOpenKey] = useState(0)
   const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target: string; key: number } | null>(null)
+  const [workspacePreviewState, setWorkspacePreviewState] = useState<{ open: boolean; target: string | null }>({ open: false, target: null })
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
@@ -1803,6 +1804,8 @@ function App() {
     setSavedDevPreview(null)
     sendUIState('dev-preview.panel', null, activeSessionId)
   }, [setSavedDevPreview, sendUIState, activeSessionId])
+
+  const previewOpen = showDevPreview || savedDevPreview?.open === true || workspacePreviewState.open
 
   const openTerminalPanel = useCallback(() => {
     setShowTerminal(true)
@@ -3395,25 +3398,30 @@ function App() {
                 )}
 
                 {viewMode === 'developer' && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={showDevPreview ? 'secondary' : 'ghost'}
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                        variant={previewOpen ? 'secondary' : 'ghost'}
                         size="sm"
                         className="h-6 text-[11px] px-2 shrink-0"
                         onClick={() => {
-                          if (showDevPreview) {
-                            closeDevPreviewPanel()
+                          if (previewOpen) {
+                            if (workspacePreviewState.open) {
+                              workspaceRef.current?.closePreviewTarget()
+                            } else {
+                              closeDevPreviewPanel()
+                            }
                           } else {
                             openDevPreviewPanel()
                           }
                         }}
                       >
-                        <Globe className="h-3 w-3 mr-1" />
+                        <Globe className="h-3 w-3 mr-1 text-red-500" />
                         Preview
+                        {previewOpen && <X className="h-3 w-3 ml-1" />}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom">{showDevPreview ? 'Close dev preview' : 'Open dev preview'}</TooltipContent>
+                    <TooltipContent side="bottom">{previewOpen ? 'Close preview' : 'Open dev preview'}</TooltipContent>
                   </Tooltip>
                 )}
 
@@ -3702,6 +3710,7 @@ function App() {
                 savedTabsState={workspaceTabsState}
                 previewRequest={workspacePreviewRequest}
                 onTabsStateChange={handleWorkspaceTabsStateChange}
+                onPreviewOpenChange={setWorkspacePreviewState}
                 onApplyDiff={handleApplyWorkspaceDiff}
                 provider={chatProvider}
                 cliModel={cliModel}
@@ -3731,6 +3740,7 @@ function App() {
                   savedTabsState={workspaceTabsState}
                   previewRequest={workspacePreviewRequest}
                   onTabsStateChange={handleWorkspaceTabsStateChange}
+                  onPreviewOpenChange={setWorkspacePreviewState}
                   onApplyDiff={handleApplyWorkspaceDiff}
                   provider={chatProvider}
                   cliModel={cliModel}
