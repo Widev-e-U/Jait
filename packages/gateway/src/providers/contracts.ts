@@ -1,10 +1,13 @@
 /**
  * Provider Contracts — CLI agent provider abstraction.
  *
- * Supports three provider types:
+ * Supports six provider types:
  *  1. "jait"        — Jait's own runAgentLoop (OpenAI-compatible API)
  *  2. "codex"       — OpenAI Codex CLI via stdio JSON-RPC
  *  3. "claude-code" — Anthropic Claude Code CLI via stdio
+ *  4. "gemini"      — Google Gemini CLI via stdio
+ *  5. "opencode"    — OpenCode CLI via stdio
+ *  6. "copilot"     — GitHub Copilot CLI via stdio
  *
  * Each CLI provider can optionally connect to Jait's MCP server
  * to access custom tools (memory, cron, web, todo, etc.).
@@ -12,7 +15,7 @@
 
 // ── Provider identity ────────────────────────────────────────────────
 
-export type ProviderId = "jait" | "codex" | "claude-code";
+export type ProviderId = "jait" | "codex" | "claude-code" | "gemini" | "opencode" | "copilot";
 
 export interface ProviderInfo {
   id: ProviderId;

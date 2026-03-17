@@ -80,3 +80,6 @@ export class ProviderRegistry {
 export { JaitProvider } from "./jait-provider.js";
 export { CodexProvider } from "./codex-provider.js";
 export { ClaudeCodeProvider } from "./claude-code-provider.js";
+export { GeminiProvider } from "./gemini-provider.js";
+export { OpenCodeProvider } from "./opencode-provider.js";
+export { CopilotProvider } from "./copilot-provider.js";

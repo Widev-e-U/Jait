@@ -31,6 +31,9 @@ import { ProviderRegistry } from "./providers/registry.js";
 import { CodexProvider } from "./providers/codex-provider.js";
 import { ClaudeCodeProvider } from "./providers/claude-code-provider.js";
 import { JaitProvider } from "./providers/jait-provider.js";
+import { GeminiProvider } from "./providers/gemini-provider.js";
+import { OpenCodeProvider } from "./providers/opencode-provider.js";
+import { CopilotProvider } from "./providers/copilot-provider.js";
 import { WorkspaceWatcher } from "./services/workspace-watcher.js";
 import type { FileChangeEvent } from "./services/workspace-watcher.js";
 import { GitService } from "./services/git.js";
@@ -78,6 +81,9 @@ async function main() {
   providerRegistry.register(new JaitProvider());
   providerRegistry.register(new CodexProvider());
   providerRegistry.register(new ClaudeCodeProvider());
+  providerRegistry.register(new GeminiProvider());
+  providerRegistry.register(new OpenCodeProvider());
+  providerRegistry.register(new CopilotProvider());
   console.log(`Providers registered: ${providerRegistry.list().map(p => p.id).join(", ")}`);
 
   // Surface registry — register all surface factories

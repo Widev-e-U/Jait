@@ -100,16 +100,21 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
   }
 
   /**
-   * Claude Code doesn't expose a model listing API.
-   * Prefer stable aliases over dated full model names so the picker doesn't go stale.
+   * Dynamically discover model aliases from the Claude CLI --help output.
+   * Falls back to well-known aliases if parsing fails.
    */
   async listModels(): Promise<ProviderModelInfo[]> {
+    try {
+      const models = await this.parseModelsFromHelp();
+      if (models.length > 0) return models;
+    } catch { /* fall through */ }
+
+    // Fallback: stable aliases that Claude Code accepts
     return [
       { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
-      { id: "sonnet", name: "Sonnet", description: "Claude Sonnet alias for day-to-day coding" },
-      { id: "opus", name: "Opus", description: "Claude Opus alias for the most capable model" },
-      { id: "haiku", name: "Haiku", description: "Claude Haiku alias for faster lightweight tasks" },
-      { id: "opusplan", name: "Opus Plan", description: "Planning-focused Claude alias" },
+      { id: "sonnet", name: "Sonnet", description: "Claude Sonnet — fast, capable coding model" },
+      { id: "opus", name: "Opus", description: "Claude Opus — most capable model" },
+      { id: "haiku", name: "Haiku", description: "Claude Haiku — fast lightweight model" },
     ];
   }
 
@@ -446,6 +451,49 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     const claudeDir = join(homedir(), ".claude");
     const claudeState = join(homedir(), ".claude.json");
     return existsSync(claudeDir) || existsSync(claudeState);
+  }
+
+  /**
+   * Parse the `claude --help` output to discover available model names/aliases.
+   * The --model description typically mentions aliases like 'sonnet', 'opus',
+   * and full model names like 'claude-sonnet-4-6'.
+   */
+  private parseModelsFromHelp(): Promise<ProviderModelInfo[]> {
+    return new Promise((resolve) => {
+      const cmd = this.claudePath ?? "claude";
+      const child = spawn(cmd, ["--help"], { stdio: "pipe", shell: true });
+      let output = "";
+      const timer = setTimeout(() => { child.kill(); resolve([]); }, 5000);
+
+      child.stdout?.on("data", (d: Buffer) => { output += d.toString(); });
+      child.stderr?.on("data", (d: Buffer) => { output += d.toString(); });
+      child.on("exit", () => {
+        clearTimeout(timer);
+        const models: ProviderModelInfo[] = [];
+        // Always include "default" first
+        models.push({ id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true });
+
+        // Extract alias examples from --model help text
+        // Pattern: e.g. 'sonnet' or 'opus' or full name like 'claude-sonnet-4-6'
+        const modelSection = output.match(/--model\s+<model>\s+(.*?)(?:\n\s*-|\n\n)/s);
+        if (modelSection?.[1]) {
+          const text = modelSection[1];
+          // Find quoted aliases: 'sonnet', 'opus', 'claude-sonnet-4-6', etc.
+          const aliases = [...text.matchAll(/'([a-z][a-z0-9-]*)'/g)].map(m => m[1]).filter((a): a is string => !!a);
+          for (const alias of aliases) {
+            if (!models.some(m => m.id === alias)) {
+              models.push({
+                id: alias,
+                name: alias.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+              });
+            }
+          }
+        }
+
+        resolve(models.length > 1 ? models : []);
+      });
+      child.on("error", () => { clearTimeout(timer); resolve([]); });
+    });
   }
 
   private testCommand(cmd: string): Promise<boolean> {
