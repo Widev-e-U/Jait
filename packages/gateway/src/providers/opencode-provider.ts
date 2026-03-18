@@ -13,6 +13,8 @@
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
+import { existsSync, writeFileSync, readFileSync, unlinkSync } from "node:fs";
+import { join } from "node:path";
 import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
@@ -33,6 +35,9 @@ interface OpenCodeSessionState {
   env: Record<string, string>;
   model?: string;
   exitMode: "normal" | "interrupt" | "stop";
+  openCodeSessionId?: string;
+  turnCount: number;
+  mcpConfigInjected: boolean;
 }
 
 // ── Provider implementation ──────────────────────────────────────────
@@ -106,9 +111,15 @@ export class OpenCodeProvider implements CliProviderAdapter {
       env,
       model: options.model,
       exitMode: "normal",
+      turnCount: 0,
+      mcpConfigInjected: false,
     };
 
     this.sessions.set(sessionId, state);
+
+    // Inject MCP servers into project-level opencode.json
+    this.injectMcpConfig(state, options.mcpServers);
+
     state.session.status = "running";
     this.emit({ type: "session.started", sessionId });
 
@@ -126,6 +137,13 @@ export class OpenCodeProvider implements CliProviderAdapter {
     if (state.model) {
       args.push("-m", state.model);
     }
+
+    // Resume previous session on 2nd+ turn
+    if (state.turnCount > 0 && state.openCodeSessionId) {
+      args.push("--session", state.openCodeSessionId);
+    }
+
+    state.turnCount++;
 
     const cmd = this.opencodePath ?? "opencode";
     const child = spawn(cmd, args, {
@@ -216,6 +234,9 @@ export class OpenCodeProvider implements CliProviderAdapter {
     const state = this.sessions.get(sessionId);
     if (!state) return;
 
+    // Clean up injected MCP config
+    this.cleanupMcpConfig(state);
+
     if (state.process) {
       state.exitMode = "stop";
       killChildTree(state.process, "SIGTERM");
@@ -280,6 +301,11 @@ export class OpenCodeProvider implements CliProviderAdapter {
         if (text) {
           this.emit({ type: "token", sessionId, content: text });
         }
+        // Capture session ID from events for resume
+        const textSessionId = event["sessionID"] as string | undefined;
+        if (textSessionId && !state.openCodeSessionId) {
+          state.openCodeSessionId = textSessionId;
+        }
         break;
       }
 
@@ -314,6 +340,11 @@ export class OpenCodeProvider implements CliProviderAdapter {
       }
 
       case "step_start": {
+        // Capture session ID from events for resume
+        const startSessionId = event["sessionID"] as string | undefined;
+        if (startSessionId && !state.openCodeSessionId) {
+          state.openCodeSessionId = startSessionId;
+        }
         this.emit({
           type: "activity",
           sessionId,
@@ -388,6 +419,78 @@ export class OpenCodeProvider implements CliProviderAdapter {
       child.on("exit", (code) => { clearTimeout(timer); resolve(code === 0); });
       child.on("error", () => { clearTimeout(timer); resolve(false); });
     });
+  }
+
+  /** Inject MCP servers into project-level opencode.json */
+  private injectMcpConfig(
+    state: OpenCodeSessionState,
+    servers: StartSessionOptions["mcpServers"],
+  ): void {
+    if (!servers || servers.length === 0) return;
+
+    const configPath = join(state.workingDirectory, "opencode.json");
+
+    // Read existing config if present
+    let config: Record<string, unknown> = {};
+    try {
+      if (existsSync(configPath)) {
+        config = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+      }
+    } catch { /* start fresh */ }
+
+    const mcp = (config["mcp"] ?? {}) as Record<string, unknown>;
+
+    for (const server of servers) {
+      if (server.transport === "stdio" && server.command) {
+        const cmd = [server.command, ...(server.args ?? [])];
+        mcp[server.name] = {
+          type: "local",
+          command: cmd,
+          enabled: true,
+          ...(server.env && Object.keys(server.env).length > 0 ? { environment: server.env } : {}),
+        };
+      } else if (server.transport === "sse" && server.url) {
+        mcp[server.name] = {
+          type: "remote",
+          url: server.url,
+          enabled: true,
+        };
+      }
+    }
+
+    config["mcp"] = mcp;
+    writeFileSync(configPath, JSON.stringify(config, null, 2));
+    state.mcpConfigInjected = true;
+  }
+
+  /** Remove injected MCP servers from opencode.json */
+  private cleanupMcpConfig(state: OpenCodeSessionState): void {
+    if (!state.mcpConfigInjected) return;
+
+    const configPath = join(state.workingDirectory, "opencode.json");
+    try {
+      if (!existsSync(configPath)) return;
+      const config = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+      const mcp = config["mcp"] as Record<string, unknown> | undefined;
+      if (mcp) {
+        // Remove servers that were injected (enabled: true local/remote entries)
+        for (const [name, entry] of Object.entries(mcp)) {
+          const e = entry as Record<string, unknown> | undefined;
+          if (e?.["enabled"] === true) {
+            delete mcp[name];
+          }
+        }
+        if (Object.keys(mcp).length === 0) {
+          delete config["mcp"];
+        }
+      }
+      if (Object.keys(config).length === 0) {
+        // If config is empty, don't leave an empty file behind
+        unlinkSync(configPath);
+      } else {
+        writeFileSync(configPath, JSON.stringify(config, null, 2));
+      }
+    } catch { /* best effort */ }
   }
 }
 

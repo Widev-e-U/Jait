@@ -283,7 +283,7 @@ import { createInterface } from "node:readline";
 function detectCliProviders(): string[] {
   const providers: string[] = [];
   const cmd = process.platform === "win32" ? "where" : "which";
-  for (const bin of ["codex", "claude"]) {
+  for (const bin of ["codex", "claude", "opencode", "gemini", "copilot"]) {
     try {
       execSync(`${cmd} ${bin}`, { stdio: "pipe", timeout: 5000 });
       providers.push(bin === "claude" ? "claude-code" : bin);

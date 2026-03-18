@@ -38,6 +38,10 @@ interface CopilotSessionState {
   model?: string;
   mcpConfigPath?: string;
   exitMode: "normal" | "interrupt" | "stop";
+  /** Copilot session ID from the result event — used for --resume */
+  copilotSessionId?: string;
+  /** Number of turns sent in this session (first turn starts fresh, subsequent resume) */
+  turnCount: number;
 }
 
 // ── Provider implementation ──────────────────────────────────────────
@@ -85,26 +89,17 @@ export class CopilotProvider implements CliProviderAdapter {
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
-    // Copilot CLI models are known from --help; try dynamic parsing first
+    // Copilot CLI models are discovered dynamically from --help output
     try {
       const models = await this.parseModelsFromHelp();
       if (models.length > 0) return models;
     } catch { /* fall through */ }
 
-    // Fallback to known models
+    // Fallback to a small set of known models
     return [
       { id: "claude-sonnet-4.6", name: "Claude Sonnet 4.6", isDefault: true },
-      { id: "claude-sonnet-4.5", name: "Claude Sonnet 4.5" },
-      { id: "claude-opus-4.6", name: "Claude Opus 4.6" },
-      { id: "claude-haiku-4.5", name: "Claude Haiku 4.5" },
       { id: "gpt-5.3-codex", name: "GPT-5.3 Codex" },
-      { id: "gpt-5.2-codex", name: "GPT-5.2 Codex" },
-      { id: "gpt-5.2", name: "GPT-5.2" },
-      { id: "gpt-5.1-codex", name: "GPT-5.1 Codex" },
-      { id: "gpt-5.1", name: "GPT-5.1" },
-      { id: "gpt-5-mini", name: "GPT-5 Mini" },
       { id: "gpt-4.1", name: "GPT-4.1" },
-      { id: "gemini-3-pro-preview", name: "Gemini 3 Pro Preview" },
     ];
   }
 
@@ -134,6 +129,7 @@ export class CopilotProvider implements CliProviderAdapter {
       model: options.model,
       mcpConfigPath: this.buildMcpConfig(options.mcpServers, sessionId),
       exitMode: "normal",
+      turnCount: 0,
     };
 
     this.sessions.set(sessionId, state);
@@ -152,6 +148,7 @@ export class CopilotProvider implements CliProviderAdapter {
     const args: string[] = [
       "-p", message,
       "--stream", "on",
+      "--output-format", "json",
       "-s", // silent — clean output
     ];
 
@@ -166,6 +163,12 @@ export class CopilotProvider implements CliProviderAdapter {
     if (state.mcpConfigPath) {
       args.push("--additional-mcp-config", `@${state.mcpConfigPath}`);
     }
+
+    // Resume previous session for multi-turn conversation
+    if (state.turnCount > 0 && state.copilotSessionId) {
+      args.push("--resume", state.copilotSessionId);
+    }
+    state.turnCount++;
 
     const cmd = this.copilotPath ?? "copilot";
     const child = spawn(cmd, args, {
@@ -443,6 +446,15 @@ export class CopilotProvider implements CliProviderAdapter {
       case "session.error": {
         const message = String(data?.["message"] ?? event["message"] ?? "Unknown error");
         this.emit({ type: "session.error", sessionId, error: message });
+        break;
+      }
+
+      case "result": {
+        // Capture sessionId from the result event for --resume
+        const resultSessionId = String(event["sessionId"] ?? "");
+        if (resultSessionId) {
+          state.copilotSessionId = resultSessionId;
+        }
         break;
       }
 

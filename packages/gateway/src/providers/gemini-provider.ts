@@ -5,16 +5,13 @@
  *
  * Gemini CLI stream-json events:
  *   { type: "init", session_id, model }
- *   { type: "message", role, content, delta? }
- *   { type: "tool_use", tool_name, tool_id, parameters }
- *   { type: "tool_result", tool_id, status, output?, error? }
- *   { type: "error", severity, message }
- *   { type: "result", status, stats? }
+ *   { type: "message", role: "user"|"assistant", content, delta? }
+ *   { type: "result", status: "success"|"error", stats? }
  */
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync, readFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -37,6 +34,12 @@ interface GeminiSessionState {
   env: Record<string, string>;
   model?: string;
   exitMode: "normal" | "interrupt" | "stop";
+  /** Gemini CLI session_id from the init event — used for --resume */
+  geminiSessionId?: string;
+  /** Number of turns sent in this session (first turn starts fresh, subsequent resume) */
+  turnCount: number;
+  /** Whether MCP config was injected into the project .gemini/settings.json */
+  mcpConfigInjected: boolean;
 }
 
 // ── Provider implementation ──────────────────────────────────────────
@@ -84,17 +87,17 @@ export class GeminiProvider implements CliProviderAdapter {
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
-    // Gemini CLI doesn't have a model-list command.
-    // Use well-known model aliases and attempt to discover via --help.
-    try {
-      const models = await this.parseModelsFromHelp();
-      if (models.length > 0) return models;
-    } catch { /* fall through */ }
-
+    // Models sourced from Gemini CLI's own config/models.js VALID_GEMINI_MODELS set
+    // plus user-friendly auto aliases
     return [
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Most capable Gemini model", isDefault: true },
+      { id: "auto", name: "Auto (latest)", description: "Automatically selects the best model", isDefault: true },
+      { id: "gemini-3-pro-preview", name: "Gemini 3 Pro Preview", description: "Latest Gemini 3 model" },
+      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", description: "Latest Gemini 3.1 model" },
+      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", description: "Fast Gemini 3 flash" },
+      { id: "gemini-3.1-flash-lite-preview", name: "Gemini 3.1 Flash Lite Preview", description: "Lightweight Gemini 3.1" },
+      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Stable pro model" },
       { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", description: "Fast and efficient" },
-      { id: "gemini-2.0-flash", name: "Gemini 2.0 Flash", description: "Previous generation flash" },
+      { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", description: "Lightweight flash model" },
     ];
   }
 
@@ -123,7 +126,12 @@ export class GeminiProvider implements CliProviderAdapter {
       env,
       model: options.model,
       exitMode: "normal",
+      turnCount: 0,
+      mcpConfigInjected: false,
     };
+
+    // Inject MCP servers into the project-level .gemini/settings.json
+    this.injectMcpConfig(state, options.mcpServers);
 
     this.sessions.set(sessionId, state);
     state.session.status = "running";
@@ -151,6 +159,12 @@ export class GeminiProvider implements CliProviderAdapter {
       args.push("-m", state.model);
     }
 
+    // Resume previous session for multi-turn conversation
+    if (state.turnCount > 0 && state.geminiSessionId) {
+      args.push("--resume", "latest");
+    }
+    state.turnCount++;
+
     const cmd = this.geminiPath ?? "gemini";
     const child = spawn(cmd, args, {
       cwd: state.workingDirectory,
@@ -172,7 +186,7 @@ export class GeminiProvider implements CliProviderAdapter {
 
     child.stderr?.on("data", (data: Buffer) => {
       const text = data.toString().trim();
-      if (text) {
+      if (text && !text.startsWith("Loaded cached")) {
         console.error(`[gemini:${sessionId}] stderr: ${text}`);
       }
     });
@@ -256,6 +270,9 @@ export class GeminiProvider implements CliProviderAdapter {
       this.emit({ type: "session.completed", sessionId });
     }
 
+    // Clean up injected MCP config
+    this.cleanupMcpConfig(state);
+
     this.sessions.delete(sessionId);
   }
 
@@ -265,16 +282,6 @@ export class GeminiProvider implements CliProviderAdapter {
   }
 
   // ── Private helpers ────────────────────────────────────────────────
-
-  private emit(event: ProviderEvent): void {
-    this.emitter.emit("event", event);
-  }
-
-  private getState(sessionId: string): GeminiSessionState {
-    const state = this.sessions.get(sessionId);
-    if (!state) throw new Error(`No Gemini session found: ${sessionId}`);
-    return state;
-  }
 
   private processBuffer(_sessionId: string, state: GeminiSessionState): void {
     const lines = state.buffer.split("\n");
@@ -288,7 +295,10 @@ export class GeminiProvider implements CliProviderAdapter {
         const event = JSON.parse(trimmed) as Record<string, unknown>;
         this.handleEvent(state, event);
       } catch {
-        // Not JSON — ignore
+        // Not valid JSON — emit as plain text token
+        if (trimmed.length > 0) {
+          this.emit({ type: "token", sessionId: state.session.id, content: trimmed });
+        }
       }
     }
   }
@@ -299,91 +309,82 @@ export class GeminiProvider implements CliProviderAdapter {
 
     switch (type) {
       case "init": {
-        this.emit({
-          type: "activity",
-          sessionId,
-          kind: "init",
-          summary: `Gemini session initialized (model: ${event["model"] ?? "default"})`,
-          payload: event,
-        });
+        // Session initialization — capture session_id for resume and model info
+        const geminiSid = String(event["session_id"] ?? "");
+        if (geminiSid) {
+          state.geminiSessionId = geminiSid;
+        }
+        const model = String(event["model"] ?? "");
+        if (model) {
+          this.emit({
+            type: "activity",
+            sessionId,
+            kind: "init",
+            summary: `Gemini session started with model ${model}`,
+          });
+        }
         break;
       }
 
       case "message": {
+        const role = String(event["role"] ?? "");
         const content = String(event["content"] ?? "");
-        const role = event["role"] as string;
-        if (event["delta"]) {
-          // Streaming chunk
+        if (role === "assistant" && content) {
           this.emit({ type: "token", sessionId, content });
-        } else if (role === "assistant") {
-          this.emit({ type: "message", sessionId, role: "assistant", content });
         }
         break;
       }
 
       case "tool_use": {
         const toolName = String(event["tool_name"] ?? "");
-        const toolId = String(event["tool_id"] ?? uuidv7());
-        const params = (event["parameters"] as Record<string, unknown>) ?? {};
-        this.emit({
-          type: "tool.start",
-          sessionId,
-          tool: toolName,
-          args: params,
-          callId: toolId,
-        });
+        const callId = String(event["tool_id"] ?? uuidv7());
+        const args = (event["parameters"] ?? {}) as Record<string, unknown>;
+        this.emit({ type: "tool.start", sessionId, tool: toolName, args, callId });
         break;
       }
 
       case "tool_result": {
-        const toolId = String(event["tool_id"] ?? "");
-        const status = event["status"] as string;
-        const output = String(event["output"] ?? "");
-        const error = event["error"] as Record<string, unknown> | undefined;
+        const callId = String(event["tool_id"] ?? "");
+        const status = String(event["status"] ?? "");
+        const output = String(event["output"] ?? event["error"] ?? "");
         this.emit({
           type: "tool.result",
           sessionId,
-          tool: toolId,
+          tool: callId,
           ok: status === "success",
-          message: error ? String(error["message"] ?? output) : output,
-          callId: toolId,
+          message: output,
+          callId,
         });
         break;
       }
 
       case "error": {
         const message = String(event["message"] ?? "Unknown error");
-        this.emit({
-          type: "activity",
-          sessionId,
-          kind: "error",
-          summary: `Gemini error: ${message}`,
-          payload: event,
-        });
+        this.emit({ type: "session.error", sessionId, error: message });
         break;
       }
 
       case "result": {
-        // Final result event — session stats
-        this.emit({
-          type: "activity",
-          sessionId,
-          kind: "result",
-          summary: `Gemini turn completed (status: ${event["status"] ?? "unknown"})`,
-          payload: event,
-        });
+        // Turn complete — contains stats
+        const status = String(event["status"] ?? "");
+        if (status === "error") {
+          const err = event["error"] as Record<string, unknown> | undefined;
+          const message = String(err?.["message"] ?? "Gemini turn failed");
+          this.emit({ type: "session.error", sessionId, error: message });
+        }
         break;
       }
-
-      default:
-        this.emit({
-          type: "activity",
-          sessionId,
-          kind: type ?? "unknown",
-          summary: `Gemini: ${type}`,
-          payload: event,
-        });
     }
+  }
+
+  private emit(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
+  }
+
+  private getState(sessionId: string): GeminiSessionState {
+    const state = this.sessions.get(sessionId);
+    if (!state) throw new Error(`No Gemini session found: ${sessionId}`);
+    return state;
   }
 
   private hasGeminiConfig(): boolean {
@@ -392,32 +393,75 @@ export class GeminiProvider implements CliProviderAdapter {
     return existsSync(settingsFile);
   }
 
-  private parseModelsFromHelp(): Promise<ProviderModelInfo[]> {
-    return new Promise((resolve) => {
-      const child = spawn("gemini", ["--help"], { stdio: "pipe", shell: true });
-      let output = "";
-      const timer = setTimeout(() => { child.kill(); resolve([]); }, 5000);
+  /**
+   * Inject Jait MCP servers into the project-level .gemini/settings.json.
+   * Gemini CLI reads mcpServers from <cwd>/.gemini/settings.json.
+   */
+  private injectMcpConfig(
+    state: GeminiSessionState,
+    servers: StartSessionOptions["mcpServers"],
+  ): void {
+    if (!servers || servers.length === 0) return;
 
-      child.stdout?.on("data", (d: Buffer) => { output += d.toString(); });
-      child.on("exit", () => {
-        clearTimeout(timer);
-        // Try to extract model names from --model description
-        const modelMatch = output.match(/--model.*?<([^>]+)>/);
-        if (modelMatch?.[1]) {
-          const choices = modelMatch[1].split("|").map(s => s.trim()).filter(Boolean);
-          if (choices.length > 0) {
-            resolve(choices.map((id, i) => ({
-              id,
-              name: id.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-              isDefault: i === 0,
-            })));
-            return;
+    const configDir = join(state.workingDirectory, ".gemini");
+    const configPath = join(configDir, "settings.json");
+
+    // Read existing project settings if present
+    let settings: Record<string, unknown> = {};
+    try {
+      if (existsSync(configPath)) {
+        settings = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+      }
+    } catch { /* start fresh */ }
+
+    const mcpServers = (settings["mcpServers"] ?? {}) as Record<string, unknown>;
+
+    for (const server of servers) {
+      if (server.transport === "stdio" && server.command) {
+        mcpServers[server.name] = {
+          command: server.command,
+          args: server.args ?? [],
+          trust: true,
+          ...(server.env && Object.keys(server.env).length > 0 ? { env: server.env } : {}),
+        };
+      } else if ((server.transport === "sse" || server.transport as string === "http") && server.url) {
+        mcpServers[server.name] = {
+          url: server.url,
+          trust: true,
+        };
+      }
+    }
+
+    settings["mcpServers"] = mcpServers;
+    mkdirSync(configDir, { recursive: true });
+    writeFileSync(configPath, JSON.stringify(settings, null, 2));
+    state.mcpConfigInjected = true;
+  }
+
+  /**
+   * Remove Jait-injected MCP servers from the project .gemini/settings.json on session end.
+   */
+  private cleanupMcpConfig(state: GeminiSessionState): void {
+    if (!state.mcpConfigInjected) return;
+
+    const configPath = join(state.workingDirectory, ".gemini", "settings.json");
+    try {
+      if (!existsSync(configPath)) return;
+      const settings = JSON.parse(readFileSync(configPath, "utf-8")) as Record<string, unknown>;
+      const mcpServers = settings["mcpServers"] as Record<string, unknown> | undefined;
+      if (mcpServers) {
+        // Remove servers that have trust: true (our injected ones)
+        for (const [name, config] of Object.entries(mcpServers)) {
+          if ((config as Record<string, unknown>)?.["trust"] === true) {
+            delete mcpServers[name];
           }
         }
-        resolve([]);
-      });
-      child.on("error", () => { clearTimeout(timer); resolve([]); });
-    });
+        if (Object.keys(mcpServers).length === 0) {
+          delete settings["mcpServers"];
+        }
+      }
+      writeFileSync(configPath, JSON.stringify(settings, null, 2));
+    } catch { /* best effort */ }
   }
 
   private testCommand(cmd: string): Promise<boolean> {
