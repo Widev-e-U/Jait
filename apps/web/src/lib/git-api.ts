@@ -117,6 +117,21 @@ export interface GhAuthResult {
   username: string | null
 }
 
+export interface ForgeStatusResult {
+  provider: GitRemoteProvider
+  forgeName: string
+  installed: boolean
+  authenticated: boolean
+  username: string | null
+  error?: string
+}
+
+export interface ForgeAuthResult {
+  ok: boolean
+  username: string | null
+  error?: string
+}
+
 export interface GitIdentity {
   name: string | null
   email: string | null
@@ -252,6 +267,18 @@ export const gitApi = {
 
   ghAuth(token: string, cwd?: string): Promise<GhAuthResult> {
     return gitPost<GhAuthResult>('gh-auth', { token, ...(cwd ? { cwd } : {}) })
+  },
+
+  forgeStatus(cwd?: string, remoteUrl?: string): Promise<ForgeStatusResult> {
+    return gitPost<ForgeStatusResult>('forge-status', { ...(cwd ? { cwd } : {}), ...(remoteUrl ? { remoteUrl } : {}) })
+  },
+
+  forgeAuth(token: string, cwd?: string, remoteUrl?: string): Promise<ForgeAuthResult> {
+    return gitPost<ForgeAuthResult>('forge-auth', { token, ...(cwd ? { cwd } : {}), ...(remoteUrl ? { remoteUrl } : {}) })
+  },
+
+  forgePrChecks(cwd: string, branch: string, remoteUrl?: string): Promise<PrCheck[]> {
+    return gitPost<PrCheck[]>('forge-pr-checks', { cwd, branch, ...(remoteUrl ? { remoteUrl } : {}) })
   },
 
   identity(cwd: string): Promise<GitIdentity> {

@@ -32,10 +32,12 @@ export function mapCodexNotification(
       return [];
     }
 
-    // ── Reasoning / chain-of-thought tokens — too granular ──
     case "item/reasoning/textDelta":
-    case "item/reasoning/summaryTextDelta":
+    case "item/reasoning/summaryTextDelta": {
+      const delta = typeof params.delta === "string" ? params.delta : "";
+      if (delta) return [{ type: "activity", sessionId, kind: "thinking", summary: delta, payload: params }];
       return [];
+    }
 
     // ── Tool/command output deltas ──
     case "item/commandExecution/outputDelta":

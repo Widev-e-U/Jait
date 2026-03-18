@@ -134,6 +134,8 @@ export interface AutomationRepo {
   defaultBranch: string
   localPath: string
   githubUrl: string | null
+  /** @deprecated Use forgeUrl */
+  forgeUrl: string | null
   strategy: string | null
   createdAt: string
   updatedAt: string
@@ -144,6 +146,9 @@ export interface CreateRepoRequest {
   defaultBranch?: string
   localPath: string
   deviceId?: string
+  /** Remote URL for any git forge (GitHub, GitLab, Gitea, Azure DevOps, Bitbucket) */
+  forgeUrl?: string
+  /** @deprecated Use forgeUrl */
   githubUrl?: string
 }
 
@@ -152,6 +157,8 @@ export interface UpdateRepoRequest {
   defaultBranch?: string
   localPath?: string
   deviceId?: string
+  forgeUrl?: string
+  /** @deprecated Use forgeUrl */
   githubUrl?: string
   strategy?: string | null
 }

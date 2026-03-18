@@ -447,6 +447,31 @@ function useDragResize(
 }
 
 /* ------------------------------------------------------------------ */
+/*  Search result highlight helper                                     */
+/* ------------------------------------------------------------------ */
+
+function HighlightMatch({ text, query }: { text: string; query: string }) {
+  if (!query) return <>{text}</>
+  const lower = text.toLowerCase()
+  const q = query.toLowerCase()
+  const parts: React.ReactNode[] = []
+  let cursor = 0
+  let idx = lower.indexOf(q, cursor)
+  while (idx !== -1) {
+    if (idx > cursor) parts.push(text.slice(cursor, idx))
+    parts.push(
+      <span key={idx} className="bg-yellow-300/40 dark:bg-yellow-500/30 text-foreground rounded-sm px-px">
+        {text.slice(idx, idx + query.length)}
+      </span>,
+    )
+    cursor = idx + query.length
+    idx = lower.indexOf(q, cursor)
+  }
+  if (cursor < text.length) parts.push(text.slice(cursor))
+  return <>{parts}</>
+}
+
+/* ------------------------------------------------------------------ */
 /*  Tree node component                                                */
 /* ------------------------------------------------------------------ */
 
@@ -2303,7 +2328,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     }}
                   >
                     <FileIcon filename={f.name} className="h-4 w-4 shrink-0" />
-                    <span className="truncate flex-1" title={f.path}>{f.path}</span>
+                    <span className="truncate flex-1" title={f.path}><HighlightMatch text={f.path} query={fileSearchQuery} /></span>
                   </div>
                 ))
               )}
@@ -2323,10 +2348,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   >
                     <div className="flex items-center gap-1">
                       <FileIcon filename={m.file.split('/').pop() || m.file} className="h-4 w-4 shrink-0" />
-                      <span className="truncate text-foreground" title={m.file}>{m.file}</span>
+                      <span className="truncate text-foreground" title={m.file}><HighlightMatch text={m.file} query={fileSearchQuery} /></span>
                       <span className="text-muted-foreground shrink-0">:{m.line}</span>
                     </div>
-                    <span className="truncate text-muted-foreground pl-6">{m.content}</span>
+                    <span className="truncate text-muted-foreground pl-6"><HighlightMatch text={m.content} query={fileSearchQuery} /></span>
                   </div>
                 ))
               )}
@@ -2797,7 +2822,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     }}
                   >
                     <FileIcon filename={f.name} className="h-3.5 w-3.5 shrink-0" />
-                    <span className="truncate flex-1" title={f.path}>{f.path}</span>
+                    <span className="truncate flex-1" title={f.path}><HighlightMatch text={f.path} query={fileSearchQuery} /></span>
                   </div>
                 ))
               )}
@@ -2818,10 +2843,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   >
                     <div className="flex items-center gap-1">
                       <FileIcon filename={m.file.split('/').pop() || m.file} className="h-3.5 w-3.5 shrink-0" />
-                      <span className="truncate text-foreground" title={m.file}>{m.file}</span>
+                      <span className="truncate text-foreground" title={m.file}><HighlightMatch text={m.file} query={fileSearchQuery} /></span>
                       <span className="text-muted-foreground shrink-0">:{m.line}</span>
                     </div>
-                    <span className="truncate text-muted-foreground pl-5">{m.content}</span>
+                    <span className="truncate text-muted-foreground pl-5"><HighlightMatch text={m.content} query={fileSearchQuery} /></span>
                   </div>
                 ))
               )}

@@ -133,7 +133,7 @@ export type GitRemoteProvider =
   | "unknown"
   | "none";
 
-interface ParsedRemote {
+export interface ParsedRemote {
   provider: Exclude<GitRemoteProvider, "none" | "unknown">;
   host: string;
   normalizedUrl: string;

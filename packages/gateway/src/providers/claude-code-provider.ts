@@ -13,7 +13,7 @@
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, writeFileSync, mkdirSync } from "node:fs";
+import { existsSync, writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -296,6 +296,11 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       this.emit({ type: "session.completed", sessionId });
     }
 
+    // Clean up MCP config temp file
+    if (state.mcpConfigPath) {
+      try { rmSync(join(state.mcpConfigPath, ".."), { recursive: true, force: true }); } catch { /* best effort */ }
+    }
+
     this.sessions.delete(sessionId);
   }
 
@@ -345,8 +350,14 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
           this.emit({ type: "token", sessionId, content });
         } else if (Array.isArray(content)) {
           for (const block of content) {
-            if ((block as Record<string, unknown>)?.["type"] === "text") {
+            const blockType = (block as Record<string, unknown>)?.["type"];
+            if (blockType === "text") {
               this.emit({ type: "token", sessionId, content: String((block as Record<string, unknown>)["text"] ?? "") });
+            } else if (blockType === "thinking") {
+              const thinking = String((block as Record<string, unknown>)["thinking"] ?? "");
+              if (thinking) {
+                this.emit({ type: "activity", sessionId, kind: "thinking", summary: thinking, payload: block });
+              }
             }
           }
         }
@@ -357,6 +368,11 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
         const delta = event["delta"] as Record<string, unknown> | undefined;
         if (delta?.["type"] === "text_delta") {
           this.emit({ type: "token", sessionId, content: String(delta["text"] ?? "") });
+        } else if (delta?.["type"] === "thinking_delta") {
+          const thinking = String(delta["thinking"] ?? "");
+          if (thinking) {
+            this.emit({ type: "activity", sessionId, kind: "thinking", summary: thinking, payload: delta });
+          }
         }
         break;
       }

@@ -11,6 +11,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
@@ -32,6 +33,10 @@ export class JaitProvider implements CliProviderAdapter {
   async checkAvailability(): Promise<boolean> {
     this.info.available = true;
     return true;
+  }
+
+  async listModels(): Promise<ProviderModelInfo[]> {
+    return JAIT_MODELS;
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
@@ -81,3 +86,17 @@ export class JaitProvider implements CliProviderAdapter {
     this.emitter.emit("event", event);
   }
 }
+
+const JAIT_MODELS: ProviderModelInfo[] = [
+  { id: "gpt-4o", name: "GPT-4o", description: "OpenAI's flagship multimodal model", isDefault: true },
+  { id: "gpt-4o-mini", name: "GPT-4o Mini", description: "Fast and affordable" },
+  { id: "gpt-4.1", name: "GPT-4.1", description: "Latest GPT-4 series" },
+  { id: "gpt-4.1-mini", name: "GPT-4.1 Mini", description: "Fast GPT-4.1" },
+  { id: "gpt-4.1-nano", name: "GPT-4.1 Nano", description: "Ultra-fast, lightweight" },
+  { id: "o4-mini", name: "o4 Mini", description: "Reasoning model" },
+  { id: "o3", name: "o3", description: "Advanced reasoning" },
+  { id: "o3-mini", name: "o3 Mini", description: "Fast reasoning" },
+  { id: "claude-sonnet-4-6-20250318", name: "Claude Sonnet 4.6", description: "Via OpenRouter/compatible API" },
+  { id: "deepseek-chat", name: "DeepSeek V3", description: "DeepSeek's latest" },
+  { id: "deepseek-reasoner", name: "DeepSeek R1", description: "DeepSeek reasoning model" },
+];

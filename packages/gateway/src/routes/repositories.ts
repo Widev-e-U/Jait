@@ -52,7 +52,7 @@ export function registerRepoRoutes(
   app.get("/api/repos", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
-    const repos = repoService.list(user.id);
+    const repos = repoService.list(user.id).map((r) => ({ ...r, forgeUrl: r.githubUrl }));
     return { repos };
   });
 
@@ -67,12 +67,15 @@ export function registerRepoRoutes(
       defaultBranch?: string;
       localPath: string;
       deviceId?: string;
+      forgeUrl?: string;
       githubUrl?: string;
     };
 
     if (!body.name || !body.localPath) {
       return reply.status(400).send({ error: "name and localPath are required" });
     }
+
+    const effectiveForgeUrl = body.forgeUrl ?? body.githubUrl;
 
     // Prevent duplicate path for same user
     const existing = repoService.findByPath(body.localPath, user.id);
@@ -94,7 +97,7 @@ export function registerRepoRoutes(
       name: body.name,
       defaultBranch: body.defaultBranch,
       localPath: body.localPath,
-      githubUrl: body.githubUrl,
+      githubUrl: effectiveForgeUrl,
     });
 
     broadcastRepoEvent("created", { repo });
@@ -111,6 +114,7 @@ export function registerRepoRoutes(
       name?: string;
       defaultBranch?: string;
       localPath?: string;
+      forgeUrl?: string;
       githubUrl?: string;
       deviceId?: string;
       strategy?: string | null;
@@ -119,7 +123,13 @@ export function registerRepoRoutes(
     const existing = getOwnedRepo(request.params.id, user.id);
     if (!assertOwnership(reply, existing, user.id, "Repository not found")) return;
 
-    const repo = repoService.update(request.params.id, body);
+    const updatePayload = { ...body };
+    if (body.forgeUrl !== undefined) {
+      updatePayload.githubUrl = body.forgeUrl;
+    }
+    delete (updatePayload as Record<string, unknown>).forgeUrl;
+
+    const repo = repoService.update(request.params.id, updatePayload);
     if (!repo) return reply.status(404).send({ error: "Repository not found" });
 
     broadcastRepoEvent("updated", { repo });

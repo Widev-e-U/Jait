@@ -87,18 +87,10 @@ export class GeminiProvider implements CliProviderAdapter {
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
-    // Models sourced from Gemini CLI's own config/models.js VALID_GEMINI_MODELS set
-    // plus user-friendly auto aliases
-    return [
-      { id: "auto", name: "Auto (latest)", description: "Automatically selects the best model", isDefault: true },
-      { id: "gemini-3-pro-preview", name: "Gemini 3 Pro Preview", description: "Latest Gemini 3 model" },
-      { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", description: "Latest Gemini 3.1 model" },
-      { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", description: "Fast Gemini 3 flash" },
-      { id: "gemini-3.1-flash-lite-preview", name: "Gemini 3.1 Flash Lite Preview", description: "Lightweight Gemini 3.1" },
-      { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Stable pro model" },
-      { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", description: "Fast and efficient" },
-      { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", description: "Lightweight flash model" },
-    ];
+    const dynamic = await this.fetchModelsFromCli();
+    if (dynamic.length > 0) return dynamic;
+
+    return FALLBACK_MODELS;
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
@@ -283,6 +275,94 @@ export class GeminiProvider implements CliProviderAdapter {
 
   // ── Private helpers ────────────────────────────────────────────────
 
+  /**
+   * Dynamically discover models from the installed gemini-cli-core package.
+   * Reads dist/src/config/models.js and extracts VALID_GEMINI_MODELS + auto aliases.
+   */
+  private async fetchModelsFromCli(): Promise<ProviderModelInfo[]> {
+    try {
+      const modelsJs = await this.findGeminiModelsJs();
+      if (!modelsJs) return [];
+
+      const source = readFileSync(modelsJs, "utf-8");
+
+      // Extract concrete models from VALID_GEMINI_MODELS Set
+      const validSet = new Set<string>();
+      const setMatch = source.match(/VALID_GEMINI_MODELS\s*=\s*new\s+Set\(\[([^\]]+)\]/s);
+      if (setMatch?.[1]) {
+        const refs = setMatch[1].matchAll(/(\w+)/g);
+        for (const [, ref] of refs) {
+          if (!ref) continue;
+          const constMatch = source.match(new RegExp(`const\\s+${ref}\\s*=\\s*['"]([^'"]+)['"]`));
+          if (constMatch?.[1]) validSet.add(constMatch[1]);
+        }
+      }
+
+      // Extract auto aliases
+      const autoModels = new Set<string>();
+      for (const m of source.matchAll(/(?:MODEL_AUTO|MODEL_ALIAS_AUTO)\s*=\s*['"]([^'"]+)['"]/g)) {
+        if (m[1]) autoModels.add(m[1]);
+      }
+
+      const models: ProviderModelInfo[] = [];
+
+      // Add auto aliases first
+      for (const id of autoModels) {
+        const label = id.includes("3") ? "Auto (Gemini 3)" : id.includes("2.5") ? "Auto (Gemini 2.5)" : `Auto (${id})`;
+        models.push({ id, name: label, description: "Intelligent model routing", isDefault: id.includes("3") });
+      }
+      // Also add the bare "auto" alias
+      if (!autoModels.has("auto")) {
+        models.push({ id: "auto", name: "Auto (latest)", description: "Automatically selects the best model", isDefault: true });
+      }
+
+      // Add concrete models
+      for (const id of validSet) {
+        if (id.includes("customtools")) continue; // internal-only variant
+        const tier = id.includes("flash-lite") ? "Flash Lite" : id.includes("flash") ? "Flash" : "Pro";
+        const family = id.match(/gemini-(\d[\d.]*)/)?.[1] ?? "";
+        const preview = id.includes("preview") ? " Preview" : "";
+        models.push({
+          id,
+          name: `Gemini ${family} ${tier}${preview}`,
+          description: `${tier} model${preview ? " (preview)" : ""}`,
+        });
+      }
+
+      return models.length > 0 ? models : [];
+    } catch {
+      return [];
+    }
+  }
+
+  private async findGeminiModelsJs(): Promise<string | null> {
+    // Strategy 1: resolve from global npm prefix
+    const paths = [
+      // npm global
+      join(homedir(), ".npm-global", "lib", "node_modules", "@google", "gemini-cli", "node_modules", "@google", "gemini-cli-core", "dist", "src", "config", "models.js"),
+      // Linux/macOS default global
+      "/usr/local/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/config/models.js",
+      "/usr/lib/node_modules/@google/gemini-cli/node_modules/@google/gemini-cli-core/dist/src/config/models.js",
+      // bun global
+      join(homedir(), ".bun", "install", "global", "node_modules", "@google", "gemini-cli-core", "dist", "src", "config", "models.js"),
+    ];
+
+    for (const p of paths) {
+      if (existsSync(p)) return p;
+    }
+
+    // Strategy 2: use `npm root -g` to find global prefix dynamically
+    try {
+      const result = spawnSync("npm", ["root", "-g"], { encoding: "utf-8", timeout: 5000, shell: true });
+      if (result.status === 0 && result.stdout?.trim()) {
+        const p = join(result.stdout.trim(), "@google", "gemini-cli", "node_modules", "@google", "gemini-cli-core", "dist", "src", "config", "models.js");
+        if (existsSync(p)) return p;
+      }
+    } catch { /* ignore */ }
+
+    return null;
+  }
+
   private processBuffer(_sessionId: string, state: GeminiSessionState): void {
     const lines = state.buffer.split("\n");
     state.buffer = lines.pop() ?? "";
@@ -358,6 +438,14 @@ export class GeminiProvider implements CliProviderAdapter {
         break;
       }
 
+      case "thought": {
+        const content = String(event["content"] ?? "");
+        if (content) {
+          this.emit({ type: "activity", sessionId, kind: "thinking", summary: content, payload: event });
+        }
+        break;
+      }
+
       case "error": {
         const message = String(event["message"] ?? "Unknown error");
         this.emit({ type: "session.error", sessionId, error: message });
@@ -365,12 +453,21 @@ export class GeminiProvider implements CliProviderAdapter {
       }
 
       case "result": {
-        // Turn complete — contains stats
         const status = String(event["status"] ?? "");
         if (status === "error") {
           const err = event["error"] as Record<string, unknown> | undefined;
           const message = String(err?.["message"] ?? "Gemini turn failed");
           this.emit({ type: "session.error", sessionId, error: message });
+        }
+        const stats = event["stats"] as Record<string, unknown> | undefined;
+        if (stats) {
+          this.emit({
+            type: "activity",
+            sessionId,
+            kind: "usage",
+            summary: "Gemini usage stats",
+            payload: stats,
+          });
         }
         break;
       }
@@ -473,6 +570,17 @@ export class GeminiProvider implements CliProviderAdapter {
     });
   }
 }
+
+const FALLBACK_MODELS: ProviderModelInfo[] = [
+  { id: "auto", name: "Auto (latest)", description: "Automatically selects the best model", isDefault: true },
+  { id: "gemini-3-pro-preview", name: "Gemini 3 Pro Preview", description: "Pro model (preview)" },
+  { id: "gemini-3.1-pro-preview", name: "Gemini 3.1 Pro Preview", description: "Pro model (preview)" },
+  { id: "gemini-3-flash-preview", name: "Gemini 3 Flash Preview", description: "Flash model (preview)" },
+  { id: "gemini-3.1-flash-lite-preview", name: "Gemini 3.1 Flash Lite Preview", description: "Flash Lite model (preview)" },
+  { id: "gemini-2.5-pro", name: "Gemini 2.5 Pro", description: "Pro model" },
+  { id: "gemini-2.5-flash", name: "Gemini 2.5 Flash", description: "Flash model" },
+  { id: "gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite", description: "Flash Lite model" },
+];
 
 function killChildTree(child: ChildProcess, signal: "SIGINT" | "SIGTERM" | "SIGKILL" = "SIGTERM"): void {
   if (process.platform === "win32" && child.pid !== undefined) {

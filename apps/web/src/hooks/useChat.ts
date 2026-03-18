@@ -91,6 +91,13 @@ export interface PlanData {
   actions: PlanAction[]
 }
 
+export interface ChatAttachment {
+  name: string
+  mimeType: string
+  data: string
+  preview?: string
+}
+
 interface SendMessageOptions {
   token?: string | null
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
@@ -104,6 +111,8 @@ interface SendMessageOptions {
   displayContent?: string
   /** File references to attach as metadata on the user message */
   referencedFiles?: { path: string; name: string }[]
+  /** File attachments (images, documents) as base64 data */
+  attachments?: ChatAttachment[]
   /** True when the message originates from the local queue and should roll back on send failure. */
   queued?: boolean
 }
@@ -113,6 +122,7 @@ interface QueuedChatMessage extends QueuedMessage {
   model?: string | null
   mode?: ChatMode
   referencedFiles?: { path: string; name: string }[]
+  attachments?: ChatAttachment[]
 }
 
 function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
@@ -597,7 +607,7 @@ export function useChat(
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
 
-      const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}), ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}), ...(options.model ? { model: options.model } : {}) }
+      const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}), ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}), ...(options.model ? { model: options.model } : {}), ...(options.attachments?.length ? { attachments: options.attachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}) }
       pushSSEDebugEvent('request', JSON.stringify(requestBody))
 
       const response = await fetch(`${API_URL}/api/chat`, {
@@ -982,6 +992,7 @@ export function useChat(
         ...(next.model !== undefined ? { model: next.model } : {}),
         ...(next.displayContent ? { displayContent: next.displayContent } : {}),
         ...(next.referencedFiles?.length ? { referencedFiles: next.referencedFiles } : {}),
+        ...(next.attachments?.length ? { attachments: next.attachments } : {}),
       })
       if (!ok) {
         setMessageQueue(prev => (prev.some(item => item.id === next.id) ? prev : [next, ...prev]))

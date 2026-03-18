@@ -23,30 +23,25 @@ import Moonshot from '@lobehub/icons/es/Moonshot'
 import Kimi from '@lobehub/icons/es/Kimi'
 import Grok from '@lobehub/icons/es/Grok'
 
-const API_KEY_FIELDS = [
-  'OPENAI_API_KEY',
-  'OPENAI_BASE_URL',
-  'OPENAI_MODEL',
-  'OPENAI_WEB_SEARCH_MODEL',
-  'BRAVE_API_KEY',
-  'PERPLEXITY_API_KEY',
-  'OPENROUTER_API_KEY',
-  'XAI_API_KEY',
-  'GEMINI_API_KEY',
-  'MOONSHOT_API_KEY',
-  'KIMI_BASE_URL',
-  'KIMI_MODEL',
-  'PERPLEXITY_MODEL',
-  'PERPLEXITY_OPENROUTER_MODEL',
-  'GROK_MODEL',
-  'GEMINI_MODEL',
-  'WHISPER_URL',
-  'HA_URL',
-  'HA_TOKEN',
-  'HA_STT_ENTITY',
-] as const
+interface ApiFieldGroup {
+  label: string
+  fields: readonly string[]
+}
 
-type FieldName = typeof API_KEY_FIELDS[number]
+const API_FIELD_GROUPS: ApiFieldGroup[] = [
+  { label: 'OpenAI / Jait', fields: ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
+  { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY', 'PERPLEXITY_MODEL', 'PERPLEXITY_OPENROUTER_MODEL'] },
+  { label: 'OpenRouter', fields: ['OPENROUTER_API_KEY'] },
+  { label: 'xAI / Grok', fields: ['XAI_API_KEY', 'GROK_MODEL'] },
+  { label: 'Google Gemini', fields: ['GEMINI_API_KEY', 'GEMINI_MODEL'] },
+  { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY', 'KIMI_BASE_URL', 'KIMI_MODEL'] },
+  { label: 'Brave Search', fields: ['BRAVE_API_KEY'] },
+  { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY'] },
+]
+
+const API_KEY_FIELDS = API_FIELD_GROUPS.flatMap((g) => g.fields) as unknown as readonly string[]
+
+type FieldName = string
 
 /** Map field prefix → lobe icon component */
 const FIELD_ICON: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
@@ -523,59 +518,60 @@ export function SettingsPage({
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6">
-      {filteredApiFields.length > 0 ? (
-      <Card className="p-5 space-y-4">
-        <div>
-          <h2 className="text-base font-medium">API keys and provider settings</h2>
-          <p className="text-sm text-muted-foreground">
-            Values stored here are user-specific and override environment defaults for your account.
-          </p>
-        </div>
-        <div className="grid gap-4 md:grid-cols-2">
-          {filteredApiFields.map((field) => {
-            const IconComponent = getFieldIcon(field)
-            const secret = isSecretField(field)
-            const shown = !!visible[field]
-
-            return (
-              <div key={field} className="space-y-1.5">
-                <div className="flex items-center gap-1.5">
-                  {IconComponent ? (
-                    <IconComponent size={14} className="shrink-0 text-muted-foreground" />
-                  ) : (
-                    <Key className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  )}
-                  <Label htmlFor={`api-${field}`} className="font-mono text-xs">{field}</Label>
-                  {renderSourceBadge(field)}
-                </div>
-                <div className="relative">
-                  <Input
-                    id={`api-${field}`}
-                    type={secret && !shown ? 'password' : 'text'}
-                    value={draft[field] ?? ''}
-                    onChange={(event) => {
-                      const next = event.target.value
-                      setDraft((prev) => ({ ...prev, [field]: next }))
-                    }}
-                    placeholder={envSet[field] ? '(set via .env)' : '(empty)'}
-                    className={secret ? 'pr-9' : ''}
-                  />
-                  {secret && (
-                    <button
-                      type="button"
-                      className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                      onClick={() => toggleVisibility(field)}
-                      tabIndex={-1}
-                      aria-label={shown ? 'Hide value' : 'Show value'}
-                    >
-                      {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                    </button>
-                  )}
-                </div>
+      {filteredApiFields.length > 0 ? (<>
+        <p className="text-sm text-muted-foreground">
+          Values stored here are user-specific and override environment defaults for your account.
+        </p>
+        {API_FIELD_GROUPS.map((group) => {
+          const groupFields = group.fields.filter((f) => filteredApiFields.includes(f))
+          if (groupFields.length === 0) return null
+          const GroupIcon = getFieldIcon(groupFields[0] as FieldName)
+          return (
+            <Card key={group.label} className="p-5 space-y-3">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                {GroupIcon ? <GroupIcon size={16} className="text-muted-foreground" /> : <Key className="h-4 w-4 text-muted-foreground" />}
+                {group.label}
+              </h3>
+              <div className="grid gap-4 md:grid-cols-2">
+                {groupFields.map((field) => {
+                  const secret = isSecretField(field)
+                  const shown = !!visible[field]
+                  return (
+                    <div key={field} className="space-y-1.5">
+                      <div className="flex items-center gap-1.5">
+                        <Label htmlFor={`api-${field}`} className="font-mono text-xs">{field}</Label>
+                        {renderSourceBadge(field as FieldName)}
+                      </div>
+                      <div className="relative">
+                        <Input
+                          id={`api-${field}`}
+                          type={secret && !shown ? 'password' : 'text'}
+                          value={draft[field] ?? ''}
+                          onChange={(event) => {
+                            setDraft((prev) => ({ ...prev, [field]: event.target.value }))
+                          }}
+                          placeholder={envSet[field] ? '(set via .env)' : '(empty)'}
+                          className={secret ? 'pr-9' : ''}
+                        />
+                        {secret && (
+                          <button
+                            type="button"
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                            onClick={() => toggleVisibility(field)}
+                            tabIndex={-1}
+                            aria-label={shown ? 'Hide value' : 'Show value'}
+                          >
+                            {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
-            )
-          })}
-        </div>
+            </Card>
+          )
+        })}
         <div className="flex items-center gap-3">
           <Button onClick={() => { void handleSave() }} disabled={saving}>
             {saving ? 'Saving...' : 'Save API settings'}
@@ -583,8 +579,7 @@ export function SettingsPage({
           {status && <span className="text-sm text-muted-foreground">{status}</span>}
         </div>
         {error && <p className="text-sm text-destructive">{error}</p>}
-      </Card>
-      ) : emptyState}
+      </>) : emptyState}
         </TabsContent>
 
         <TabsContent value="tools" className="space-y-6">

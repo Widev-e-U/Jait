@@ -18,7 +18,8 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
-import { GitService, detectGitRemoteProvider } from "../services/git.js";
+import { GitService, detectGitRemoteProvider, parseGitRemote } from "../services/git.js";
+import { getForge } from "../services/git-forge.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
 import type { UserService } from "../services/users.js";
@@ -782,6 +783,97 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       return { ok: true, username };
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "gh auth failed" });
+    }
+  });
+
+  // ── Generic forge endpoints (provider-agnostic) ───────────────────
+
+  /** Check forge auth status — auto-detects provider from remote URL */
+  app.post("/api/git/forge-status", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; remoteUrl?: string };
+    const cwd = body.cwd ?? "";
+
+    try {
+      const remoteUrl = body.remoteUrl ?? (cwd ? await git.getRemoteUrl(cwd, "origin").catch(() => null) : null);
+      const parsed = parseGitRemote(remoteUrl ?? null);
+      const provider = parsed?.provider ?? "unknown";
+      const forge = getForge(provider);
+
+      if (!forge) {
+        return {
+          provider,
+          forgeName: provider === "unknown" ? "Unknown" : provider,
+          installed: false,
+          authenticated: false,
+          username: null,
+        };
+      }
+
+      const installed = await forge.checkCliAvailable(cwd || process.cwd());
+      const authResult = await forge.checkAuth(cwd || process.cwd());
+
+      return {
+        provider,
+        forgeName: forge.displayName,
+        installed,
+        authenticated: authResult.authenticated,
+        username: authResult.username ?? null,
+        error: authResult.error,
+      };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "forge status check failed" });
+    }
+  });
+
+  /** Authenticate with a forge — auto-detects provider */
+  app.post("/api/git/forge-auth", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; token?: string; remoteUrl?: string };
+    const cwd = body.cwd ?? "";
+    const token = body.token;
+    if (!token || typeof token !== "string") {
+      return reply.status(400).send({ error: "Missing token" });
+    }
+
+    try {
+      const remoteUrl = body.remoteUrl ?? (cwd ? await git.getRemoteUrl(cwd, "origin").catch(() => null) : null);
+      const parsed = parseGitRemote(remoteUrl ?? null);
+      const forge = parsed ? getForge(parsed.provider) : null;
+
+      if (!forge) {
+        return reply.status(400).send({ error: "Cannot determine forge provider from remote URL" });
+      }
+
+      const result = await forge.loginWithToken(token, cwd || process.cwd());
+      return { ok: result.authenticated, username: result.username ?? null, error: result.error };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "forge auth failed" });
+    }
+  });
+
+  /** Fetch PR checks — auto-detects provider */
+  app.post("/api/git/forge-pr-checks", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; branch?: string; remoteUrl?: string };
+    const cwd = body.cwd ?? "";
+    const branch = body.branch;
+    if (!branch) {
+      return reply.status(400).send({ error: "Missing branch parameter" });
+    }
+
+    try {
+      const remoteUrl = body.remoteUrl ?? (cwd ? await git.getRemoteUrl(cwd, "origin").catch(() => null) : null);
+      const parsed = parseGitRemote(remoteUrl ?? null);
+      const forge = parsed ? getForge(parsed.provider) : null;
+      if (!forge) return [];
+
+      return await forge.getPrChecks(cwd || process.cwd(), branch);
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "forge pr checks failed" });
     }
   });
 

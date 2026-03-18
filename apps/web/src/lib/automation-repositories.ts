@@ -8,6 +8,9 @@ export interface AutomationRepository {
   defaultBranch: string
   localPath: string
   deviceId?: string | null
+  /** Remote forge URL (GitHub, GitLab, Gitea, Azure DevOps, Bitbucket) */
+  forgeUrl?: string | null
+  /** @deprecated Use forgeUrl */
   githubUrl?: string | null
   source: AutomationRepositorySource
 }

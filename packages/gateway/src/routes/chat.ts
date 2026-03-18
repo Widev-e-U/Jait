@@ -641,7 +641,17 @@ export function registerChatRoutes(
       ? (body["provider"] as ProviderId)
       : undefined;
 
-    if (!content.trim()) {
+    // Parse file attachments (images / files sent as base64 from the client)
+    const rawAttachments = Array.isArray(body["attachments"]) ? body["attachments"] as Array<Record<string, unknown>> : [];
+    const attachments = rawAttachments
+      .filter((a) => typeof a["name"] === "string" && typeof a["data"] === "string")
+      .map((a) => ({
+        name: String(a["name"]),
+        mimeType: String(a["mimeType"] ?? a["type"] ?? "application/octet-stream"),
+        data: String(a["data"]),
+      }));
+
+    if (!content.trim() && attachments.length === 0) {
       return reply
         .status(400)
         .send({ error: "VALIDATION_ERROR", details: "content is required" });
@@ -702,8 +712,31 @@ export function registerChatRoutes(
       }
     }
     const history = sessionHistory.get(sessionId)!;
-    history.push({ role: "user", content });
-    persistMessage(sessionId, "user", content);
+
+    // Build user message — multimodal if attachments are present
+    if (attachments.length > 0) {
+      const contentParts: unknown[] = [];
+      if (content.trim()) {
+        contentParts.push({ type: "text", text: content });
+      }
+      for (const att of attachments) {
+        if (att.mimeType.startsWith("image/")) {
+          const dataUrl = att.data.startsWith("data:") ? att.data : `data:${att.mimeType};base64,${att.data}`;
+          contentParts.push({ type: "image_url", image_url: { url: dataUrl, detail: "auto" } });
+        } else {
+          // Text/code file — decode and include as text
+          const decoded = att.data.startsWith("data:")
+            ? Buffer.from(att.data.split(",")[1] ?? "", "base64").toString("utf-8")
+            : Buffer.from(att.data, "base64").toString("utf-8");
+          contentParts.push({ type: "text", text: `[File: ${att.name}]\n${decoded}` });
+        }
+      }
+      history.push({ role: "user", content: contentParts as unknown as string });
+      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""));
+    } else {
+      history.push({ role: "user", content });
+      persistMessage(sessionId, "user", content);
+    }
     try { sessionService?.touch(sessionId); } catch { /* session may not exist */ }
 
     const streamAbort = new AbortController();

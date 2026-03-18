@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef, type ReactNode } from 'react'
-import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2 } from 'lucide-react'
+import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X } from 'lucide-react'
 import { getIconForFile, DEFAULT_FILE } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { ModeSelector } from '@/components/chat/mode-selector'
@@ -10,7 +10,7 @@ import { ProviderSelector } from '@/components/chat/provider-selector'
 import { CliModelSelector } from '@/components/chat/cli-model-selector'
 import type { ProviderId } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import type { SessionInfo } from '@/hooks/useChat'
+import type { SessionInfo, ChatAttachment } from '@/hooks/useChat'
 import { FileIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
@@ -28,10 +28,10 @@ export interface ReferencedFile {
 interface PromptInputProps {
   value: string
   onChange: (value: string) => void
-  onSubmit: (chipFiles?: ReferencedFile[]) => void
+  onSubmit: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[]) => void
   onStop?: () => void
   /** Queue a message while the agent is busy. */
-  onQueue?: (chipFiles?: ReferencedFile[]) => void
+  onQueue?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[]) => void
   isLoading?: boolean
   disabled?: boolean
   controlsDisabled?: boolean
@@ -254,6 +254,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const [dragging, setDragging] = useState(false)
   const dragCounter = useRef(0)
   const [isEmpty, setIsEmpty] = useState(!value)
+  const [attachments, setAttachments] = useState<ChatAttachment[]>([])
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // @ mention state
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -589,21 +591,76 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const el = editableRef.current
       const text = el ? getTextFromEditable(el).trim() : value.trim()
       const chips = el ? getChipFiles(el) : []
-      if (!(text || chips.length > 0)) return
+      if (!(text || chips.length > 0 || attachments.length > 0)) return
       if (isLoading && onQueue) {
-        onQueue(chips)
+        onQueue(chips, attachments)
+        setAttachments([])
         return
       }
-      if (!isLoading) onSubmit(chips)
+      if (!isLoading) {
+        onSubmit(chips, attachments)
+        setAttachments([])
+      }
     }
   }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit])
 
-  // Prevent pasting HTML — paste as plain text only
+  const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const result = reader.result as string
+        const base64 = result.split(',')[1] ?? ''
+        const isImage = file.type.startsWith('image/')
+        resolve({
+          name: file.name,
+          mimeType: file.type || 'application/octet-stream',
+          data: base64,
+          preview: isImage ? result : undefined,
+        })
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+  }, [])
+
+  const addFilesAsAttachments = useCallback(async (files: FileList | File[]) => {
+    const results = await Promise.all(Array.from(files).map(readFileAsAttachment))
+    setAttachments((prev) => {
+      const names = new Set(prev.map((a) => a.name))
+      return [...prev, ...results.filter((r) => !names.has(r.name))]
+    })
+    setIsEmpty(false)
+  }, [readFileAsAttachment])
+
+  const removeAttachment = useCallback((name: string) => {
+    setAttachments((prev) => {
+      const next = prev.filter((a) => a.name !== name)
+      const el = editableRef.current
+      if (next.length === 0 && el && !getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]')) {
+        setIsEmpty(true)
+      }
+      return next
+    })
+  }, [])
+
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const items = e.clipboardData.items
+    const imageFiles: File[] = []
+    for (let i = 0; i < items.length; i++) {
+      if (items[i]?.type.startsWith('image/')) {
+        const file = items[i]?.getAsFile()
+        if (file) imageFiles.push(file)
+      }
+    }
+    if (imageFiles.length > 0) {
+      e.preventDefault()
+      void addFilesAsAttachments(imageFiles)
+      return
+    }
     e.preventDefault()
     const text = e.clipboardData.getData('text/plain')
     document.execCommand('insertText', false, text)
-  }, [])
+  }, [addFilesAsAttachments])
 
   // Drag-and-drop handlers
   const onDragEnter = useCallback((e: React.DragEvent) => {
@@ -656,23 +713,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       return
     }
 
-    // Handle external OS file drop — create chips (content lazy-loaded at submit)
     if (e.dataTransfer.files?.length) {
-      for (const file of Array.from(e.dataTransfer.files)) {
-        const name = file.name
-        const path = file.webkitRelativePath || file.name
-        if (!el.querySelector(`[data-file-path="${CSS.escape(path)}"]`)) {
-          const chip = createChipNode({ path, name }, handleRemoveChip)
-          chip.setAttribute('data-external', 'true')
-          el.appendChild(chip)
-          el.appendChild(document.createTextNode(' '))
-        }
-      }
-      moveCursorToEnd(el)
-      isSyncing.current = true
-      onChange(getTextFromEditable(el))
-      isSyncing.current = false
-      setIsEmpty(false)
+      void addFilesAsAttachments(e.dataTransfer.files)
     }
   }, [onChange])
 
@@ -688,6 +730,42 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
+      {/* Attachment previews */}
+      {attachments.length > 0 && (
+        <div className="flex flex-wrap gap-2 px-3 pt-3">
+          {attachments.map((att) => (
+            <div key={att.name} className="group relative flex items-center gap-1.5 rounded-lg border bg-muted/50 px-2 py-1.5 text-xs">
+              {att.preview ? (
+                <img src={att.preview} alt={att.name} className="h-8 w-8 rounded object-cover" />
+              ) : (
+                <FileIcon filename={att.name} className="h-4 w-4 shrink-0" />
+              )}
+              <span className="max-w-[120px] truncate">{att.name}</span>
+              <button
+                type="button"
+                className="ml-0.5 rounded-full p-0.5 text-muted-foreground hover:bg-destructive/10 hover:text-destructive transition-colors"
+                onClick={() => removeAttachment(att.name)}
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {/* Hidden file input */}
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        accept="image/*,.txt,.md,.ts,.tsx,.js,.jsx,.py,.json,.yaml,.yml,.toml,.css,.html,.xml,.csv,.log,.sh,.bat,.rs,.go,.java,.c,.cpp,.h,.hpp"
+        className="hidden"
+        onChange={(e) => {
+          if (e.target.files?.length) {
+            void addFilesAsAttachments(e.target.files)
+            e.target.value = ''
+          }
+        }}
+      />
       {/* Editable area with inline file chips */}
       <div className="relative px-3 pt-3 pb-1.5">
         {isEmpty && (
@@ -778,6 +856,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           </div>
         )}
         <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterControls ? 'pl-1' : 'ml-auto')}>
+          <Button
+            type="button"
+            size="icon"
+            variant="ghost"
+            className="h-8 w-8 shrink-0 rounded-lg"
+            onClick={() => fileInputRef.current?.click()}
+            title="Attach files"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
           {onVoiceInput && !voiceRecording && !voiceTranscribing && (
             <Button
               type="button"
@@ -833,12 +921,13 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               size="icon"
               variant="secondary"
               className="h-8 w-8 shrink-0 rounded-lg"
-              disabled={isEmpty || composerDisabled}
+              disabled={(isEmpty && attachments.length === 0) || composerDisabled}
               title="Add to queue"
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []
-                onQueue(chips)
+                onQueue(chips, attachments)
+                setAttachments([])
               }}
             >
               <ListPlus className="h-4 w-4" />
@@ -848,11 +937,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               type="button"
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg"
-              disabled={isEmpty || composerDisabled}
+              disabled={(isEmpty && attachments.length === 0) || composerDisabled}
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []
-                onSubmit(chips)
+                onSubmit(chips, attachments)
+                setAttachments([])
               }}
             >
               <ArrowUp className="h-4 w-4" />

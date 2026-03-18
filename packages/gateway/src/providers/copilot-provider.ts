@@ -14,7 +14,7 @@
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { writeFileSync, mkdirSync } from "node:fs";
+import { writeFileSync, mkdirSync, rmSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -275,6 +275,11 @@ export class CopilotProvider implements CliProviderAdapter {
       this.emit({ type: "session.completed", sessionId });
     }
 
+    // Clean up MCP config temp file
+    if (state.mcpConfigPath) {
+      try { rmSync(join(state.mcpConfigPath, ".."), { recursive: true, force: true }); } catch { /* best effort */ }
+    }
+
     this.sessions.delete(sessionId);
   }
 
@@ -503,14 +508,25 @@ export class CopilotProvider implements CliProviderAdapter {
 
   private checkAuth(): Promise<boolean> {
     return new Promise((resolve) => {
-      const child = spawn("copilot", ["--version"], { stdio: "pipe", shell: true });
+      const child = spawn("gh", ["auth", "status"], { stdio: "pipe", shell: true });
+      let stdout = "";
+      child.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
+      child.stderr?.on("data", (d: Buffer) => { stdout += d.toString(); });
       const timer = setTimeout(() => { child.kill(); resolve(true); }, 5000);
       child.on("exit", (code) => {
         clearTimeout(timer);
-        // --version succeeding means the binary works; auth is checked at runtime
-        resolve(code === 0);
+        if (code === 0) {
+          resolve(true);
+        } else {
+          this.info.unavailableReason = `GitHub auth check failed. Run \`gh auth login\` first. Output: ${stdout.slice(0, 200)}`;
+          resolve(false);
+        }
       });
-      child.on("error", () => { clearTimeout(timer); resolve(false); });
+      child.on("error", () => {
+        clearTimeout(timer);
+        // gh not installed — fall back to assuming copilot binary itself will auth
+        resolve(true);
+      });
     });
   }
 

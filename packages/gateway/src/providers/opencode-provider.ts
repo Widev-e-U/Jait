@@ -65,6 +65,21 @@ export class OpenCodeProvider implements CliProviderAdapter {
         return false;
       }
       this.opencodePath = "opencode";
+
+      const hasApiKey = !!(
+        process.env["ANTHROPIC_API_KEY"] ||
+        process.env["OPENAI_API_KEY"] ||
+        process.env["GOOGLE_API_KEY"] ||
+        process.env["OPENROUTER_API_KEY"] ||
+        process.env["AWS_ACCESS_KEY_ID"]
+      );
+      if (!hasApiKey) {
+        this.info.available = false;
+        this.info.unavailableReason =
+          "No LLM API key found for OpenCode. Set ANTHROPIC_API_KEY, OPENAI_API_KEY, or another provider key.";
+        return false;
+      }
+
       this.info.available = true;
       this.info.unavailableReason = undefined;
       return true;
@@ -298,10 +313,14 @@ export class OpenCodeProvider implements CliProviderAdapter {
     switch (type) {
       case "text": {
         const text = String(part?.["text"] ?? "");
+        const partType = String(part?.["type"] ?? "text");
         if (text) {
-          this.emit({ type: "token", sessionId, content: text });
+          if (partType === "thinking" || partType === "reasoning") {
+            this.emit({ type: "activity", sessionId, kind: "thinking", summary: text, payload: part });
+          } else {
+            this.emit({ type: "token", sessionId, content: text });
+          }
         }
-        // Capture session ID from events for resume
         const textSessionId = event["sessionID"] as string | undefined;
         if (textSessionId && !state.openCodeSessionId) {
           state.openCodeSessionId = textSessionId;

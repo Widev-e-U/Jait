@@ -57,6 +57,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
+import type { ChatAttachment } from '@/hooks/useChat'
 import { DevPreviewPanel } from '@/components/chat/dev-preview-panel'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
 import { PlanReview } from '@/components/chat/plan-review'
@@ -2420,8 +2421,7 @@ function App() {
     }
   }, [workspaceFiles])
 
-  /** Explicitly queue a message while the agent is busy. */
-  const handleQueue = useCallback(async (chipFiles?: ReferencedFile[]) => {
+  const handleQueue = useCallback(async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[]) => {
     const prepared = await preparePromptSubmission(inputValue, chipFiles)
     if (!prepared) return
     enqueueMessage({
@@ -2431,17 +2431,18 @@ function App() {
       provider: chatProvider,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       referencedFiles: prepared.referencedFiles,
+      attachments: fileAttachments,
     })
     setInputValue('')
   }, [chatMode, chatProvider, cliModel, enqueueMessage, inputValue, preparePromptSubmission])
 
 
-  const handleSubmit = async (chipFiles?: ReferencedFile[]) => {
+  const handleSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[]) => {
     if (viewMode === 'manager') {
       return handleManagerSubmit(chipFiles)
     }
     const prepared = await preparePromptSubmission(inputValue, chipFiles)
-    if (!prepared) return
+    if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
     if (!token) {
       setShowLoginDialog(true)
       return
@@ -2454,28 +2455,32 @@ function App() {
     }
     if (!sid) return
 
+    const promptText = prepared?.promptWithReferences ?? inputValue.trim()
+
     if (isLoading || messageQueue.length > 0) {
       enqueueMessage({
-        content: prepared.promptWithReferences,
-        displayContent: prepared.displayContent || prepared.promptWithReferences,
+        content: promptText,
+        displayContent: prepared?.displayContent || promptText,
         mode: chatMode,
         provider: chatProvider,
         model: chatProvider !== 'jait' ? cliModel : undefined,
-        referencedFiles: prepared.referencedFiles,
+        referencedFiles: prepared?.referencedFiles,
+        attachments: fileAttachments,
       })
       setInputValue('')
       return
     }
 
-    sendMessage(prepared.promptWithReferences, {
+    sendMessage(promptText, {
       token,
       sessionId: sid,
       mode: chatMode,
       provider: chatProvider,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
-      ...(prepared.referencedFiles ? {
-        displayContent: prepared.displayContent || prepared.promptWithReferences,
+      attachments: fileAttachments,
+      ...(prepared?.referencedFiles ? {
+        displayContent: prepared.displayContent || promptText,
         referencedFiles: prepared.referencedFiles,
       } : {}),
     })

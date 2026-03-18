@@ -1,8 +1,10 @@
 /**
- * GhSetupDialog — guides the user through GitHub CLI installation and authentication.
+ * ForgeSetupDialog — guides the user through git forge authentication.
  *
- * Shown when a PR creation is attempted but `gh` is either not installed or not authenticated.
- * Allows inline token-based auth without leaving the app.
+ * Auto-detects the hosting provider (GitHub, GitLab, Gitea, Azure DevOps, Bitbucket)
+ * from the remote URL and shows the appropriate setup instructions.
+ *
+ * Exported as both `ForgeSetupDialog` (new) and `GhSetupDialog` (backward compat).
  */
 
 import { useState, useCallback, useEffect } from 'react'
@@ -18,32 +20,76 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Loader2, CheckCircle2, XCircle } from 'lucide-react'
-import { gitApi, type GhStatusResult } from '@/lib/git-api'
+import { gitApi, type ForgeStatusResult } from '@/lib/git-api'
 
 type Step = 'checking' | 'not-installed' | 'not-authenticated' | 'authenticating' | 'success' | 'error'
 
-interface GhSetupDialogProps {
+const FORGE_TOKEN_HELP: Record<string, { placeholder: string; createUrl: string; createLabel: string; scopes: string; cliName?: string; cliUrl?: string }> = {
+  github: {
+    placeholder: 'ghp_... or github_pat_...',
+    createUrl: 'https://github.com/settings/tokens/new?scopes=repo,read:org,workflow&description=Jait+CLI',
+    createLabel: 'Create a GitHub token',
+    scopes: 'repo, read:org, and workflow',
+    cliName: 'gh',
+    cliUrl: 'https://cli.github.com',
+  },
+  gitlab: {
+    placeholder: 'glpat-...',
+    createUrl: 'https://gitlab.com/-/user_settings/personal_access_tokens',
+    createLabel: 'Create a GitLab token',
+    scopes: 'api and write_repository',
+    cliName: 'glab',
+    cliUrl: 'https://gitlab.com/gitlab-org/cli',
+  },
+  gitea: {
+    placeholder: 'your-gitea-token',
+    createUrl: '',
+    createLabel: 'Create a token in your Gitea settings',
+    scopes: 'repo access',
+    cliName: 'tea',
+    cliUrl: 'https://gitea.com/gitea/tea',
+  },
+  'azure-devops': {
+    placeholder: 'your-azure-devops-pat',
+    createUrl: 'https://dev.azure.com/_usersSettings/tokens',
+    createLabel: 'Create an Azure DevOps PAT',
+    scopes: 'Code (Read & Write)',
+    cliName: 'az',
+    cliUrl: 'https://learn.microsoft.com/en-us/cli/azure/install-azure-cli',
+  },
+  bitbucket: {
+    placeholder: 'your-bitbucket-app-password',
+    createUrl: 'https://bitbucket.org/account/settings/app-passwords/',
+    createLabel: 'Create a Bitbucket app password',
+    scopes: 'Repositories (Read/Write) and Pull Requests (Read/Write)',
+  },
+}
+
+interface ForgeSetupDialogProps {
   open: boolean
   onOpenChange: (open: boolean) => void
-  /** Working directory — used to target the correct machine (local or remote). */
   cwd?: string
-  /** Called when setup completes successfully so the caller can proceed with PR creation. */
+  remoteUrl?: string
   onReady?: () => void
 }
 
-export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialogProps) {
+export function ForgeSetupDialog({ open, onOpenChange, cwd, remoteUrl, onReady }: ForgeSetupDialogProps) {
   const [step, setStep] = useState<Step>('checking')
-  const [status, setStatus] = useState<GhStatusResult | null>(null)
+  const [forgeStatus, setForgeStatus] = useState<ForgeStatusResult | null>(null)
   const [token, setToken] = useState('')
   const [error, setError] = useState<string | null>(null)
+
+  const provider = forgeStatus?.provider ?? 'github'
+  const forgeName = forgeStatus?.forgeName ?? 'Git Forge'
+  const help = FORGE_TOKEN_HELP[provider] ?? FORGE_TOKEN_HELP.github!
 
   const checkStatus = useCallback(async () => {
     setStep('checking')
     setError(null)
     try {
-      const result = await gitApi.ghStatus(cwd)
-      setStatus(result)
-      if (!result.installed) {
+      const result = await gitApi.forgeStatus(cwd, remoteUrl)
+      setForgeStatus(result)
+      if (!result.installed && !result.authenticated) {
         setStep('not-installed')
       } else if (!result.authenticated) {
         setStep('not-authenticated')
@@ -51,14 +97,14 @@ export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialo
         setStep('success')
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to check GitHub CLI status')
+      setError(err instanceof Error ? err.message : 'Failed to check forge status')
       setStep('error')
     }
-  }, [cwd])
+  }, [cwd, remoteUrl])
 
   useEffect(() => {
     if (open) {
-      checkStatus()
+      void checkStatus()
       setToken('')
     }
   }, [open, checkStatus])
@@ -68,20 +114,20 @@ export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialo
     setStep('authenticating')
     setError(null)
     try {
-      const result = await gitApi.ghAuth(token.trim(), cwd)
+      const result = await gitApi.forgeAuth(token.trim(), cwd, remoteUrl)
       if (result.ok) {
-        setStatus({ installed: true, authenticated: true, username: result.username })
+        setForgeStatus((prev) => prev ? { ...prev, authenticated: true, username: result.username } : prev)
         setStep('success')
         setToken('')
       } else {
-        setError('Authentication failed — check that your token has the "repo" scope.')
+        setError(result.error ?? 'Authentication failed — check your token permissions.')
         setStep('not-authenticated')
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Authentication failed')
       setStep('not-authenticated')
     }
-  }, [token, cwd])
+  }, [token, cwd, remoteUrl])
 
   const handleProceed = useCallback(() => {
     onOpenChange(false)
@@ -92,103 +138,89 @@ export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialo
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-md">
         <DialogHeader>
-          <DialogTitle>GitHub CLI Setup</DialogTitle>
+          <DialogTitle>{forgeName} Setup</DialogTitle>
           <DialogDescription>
-            Pull request creation requires the GitHub CLI ({'\u200B'}<code className="text-xs">gh</code>).
+            Pull request creation requires authentication with {forgeName}.
           </DialogDescription>
         </DialogHeader>
 
-        {/* Checking */}
         {step === 'checking' && (
           <div className="flex items-center gap-3 py-4">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Checking GitHub CLI status…</span>
+            <span className="text-sm text-muted-foreground">Checking {forgeName} status…</span>
           </div>
         )}
 
-        {/* Not installed or not authenticated — show token input for both */}
         {(step === 'not-installed' || step === 'not-authenticated') && (
           <div className="space-y-4 py-2">
             <div className="flex items-start gap-3">
               <XCircle className={`h-5 w-5 mt-0.5 shrink-0 ${step === 'not-installed' ? 'text-red-500' : 'text-amber-500'}`} />
               <div className="space-y-1">
                 <p className="text-sm font-medium">
-                  {step === 'not-installed' ? 'GitHub CLI not detected' : 'GitHub CLI is not authenticated'}
+                  {step === 'not-installed' ? `${forgeName} CLI not detected` : `${forgeName} is not authenticated`}
                 </p>
                 <p className="text-xs text-muted-foreground">
-                  Paste a Personal Access Token with <code className="text-xs">repo</code> scope to sign in.
+                  Paste a Personal Access Token with {help.scopes} scope to sign in.
                 </p>
               </div>
             </div>
             <div className="space-y-2">
-              <Label htmlFor="gh-token" className="text-xs">
+              <Label htmlFor="forge-token" className="text-xs">
                 Personal Access Token
               </Label>
               <Input
-                id="gh-token"
+                id="forge-token"
                 type="password"
-                placeholder="ghp_... or github_pat_..."
+                placeholder={help.placeholder}
                 value={token}
                 onChange={(e) => setToken(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleAuth() }}
+                onKeyDown={(e) => { if (e.key === 'Enter') void handleAuth() }}
                 autoFocus
               />
               <p className="text-[10px] text-muted-foreground">
-                <a
-                  href="https://github.com/settings/tokens/new?scopes=repo,read:org,workflow&description=Jait+CLI"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
-                >
-                  Create a token
-                </a>
-                {' '}with <code className="text-[10px]">repo</code>, <code className="text-[10px]">read:org</code>, and <code className="text-[10px]">workflow</code> scopes.
-                For fine-grained tokens, grant Contents + Pull Requests read/write access.
+                {help.createUrl ? (
+                  <a href={help.createUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                    {help.createLabel}
+                  </a>
+                ) : (
+                  <span>{help.createLabel}</span>
+                )}
+                {' '}with <code className="text-[10px]">{help.scopes}</code> permissions.
               </p>
             </div>
-            {step === 'not-installed' && (
+            {step === 'not-installed' && help.cliName && help.cliUrl && (
               <p className="text-[10px] text-muted-foreground">
-                If <code className="text-[10px]">gh</code> is not installed,{' '}
-                <a
-                  href="https://cli.github.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="underline hover:text-foreground"
-                >
-                  download it here
-                </a>.
+                Optionally install the <code className="text-[10px]">{help.cliName}</code> CLI:{' '}
+                <a href={help.cliUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
+                  {help.cliUrl}
+                </a>
               </p>
             )}
-            {error && (
-              <p className="text-xs text-red-500">{error}</p>
-            )}
+            {error && <p className="text-xs text-red-500">{error}</p>}
           </div>
         )}
 
-        {/* Authenticating */}
         {step === 'authenticating' && (
           <div className="flex items-center gap-3 py-4">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Authenticating…</span>
+            <span className="text-sm text-muted-foreground">Authenticating with {forgeName}…</span>
           </div>
         )}
 
-        {/* Success */}
         {step === 'success' && (
           <div className="flex items-start gap-3 py-4">
             <CheckCircle2 className="h-5 w-5 text-green-500 mt-0.5 shrink-0" />
             <div className="space-y-1">
               <p className="text-sm font-medium">
-                Authenticated{status?.username ? ` as ${status.username}` : ''}
+                Authenticated{forgeStatus?.username ? ` as ${forgeStatus.username}` : ''} on {forgeName}
               </p>
               <p className="text-xs text-muted-foreground">
-                GitHub CLI is ready. You can now create pull requests.
+                You can now create pull requests.
               </p>
             </div>
           </div>
         )}
 
-        {/* Error */}
         {step === 'error' && (
           <div className="flex items-start gap-3 py-4">
             <XCircle className="h-5 w-5 text-red-500 mt-0.5 shrink-0" />
@@ -203,15 +235,11 @@ export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialo
           {(step === 'not-installed' || step === 'not-authenticated' || step === 'error') && (
             <>
               {step === 'error' && (
-                <Button variant="outline" size="sm" onClick={checkStatus}>
+                <Button variant="outline" size="sm" onClick={() => void checkStatus()}>
                   Re-check
                 </Button>
               )}
-              <Button
-                size="sm"
-                disabled={!token.trim()}
-                onClick={handleAuth}
-              >
+              <Button size="sm" disabled={!token.trim()} onClick={() => void handleAuth()}>
                 Sign in
               </Button>
             </>
@@ -226,3 +254,6 @@ export function GhSetupDialog({ open, onOpenChange, cwd, onReady }: GhSetupDialo
     </Dialog>
   )
 }
+
+/** @deprecated Use `ForgeSetupDialog` instead — this is a backward-compat alias. */
+export const GhSetupDialog = ForgeSetupDialog
