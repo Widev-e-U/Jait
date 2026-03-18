@@ -375,10 +375,18 @@ export class GeminiProvider implements CliProviderAdapter {
         const event = JSON.parse(trimmed) as Record<string, unknown>;
         this.handleEvent(state, event);
       } catch {
-        // Not valid JSON — emit as plain text token
-        if (trimmed.length > 0) {
-          this.emit({ type: "token", sessionId: state.session.id, content: trimmed });
+        // Line wasn't valid JSON — try to salvage if JSON is embedded after CLI noise
+        // (e.g. "MCP issues detected. Run /mcp list for status.{\"type\":\"init\",...}")
+        const braceIdx = trimmed.indexOf("{");
+        if (braceIdx > 0) {
+          try {
+            const event = JSON.parse(trimmed.slice(braceIdx)) as Record<string, unknown>;
+            this.handleEvent(state, event);
+            continue;
+          } catch { /* not salvageable */ }
         }
+        // Ignore non-JSON lines — in stream-json mode all real content arrives as
+        // structured events. Plain text here is CLI warnings/noise, not assistant output.
       }
     }
   }
