@@ -10,7 +10,7 @@ const API_URL = getApiUrl()
 
 // ── Types ────────────────────────────────────────────────────────────
 
-export type ProviderId = 'jait' | 'codex' | 'claude-code'
+export type ProviderId = 'jait' | 'codex' | 'claude-code' | 'gemini' | 'opencode' | 'copilot'
 export type ThreadStatus = 'running' | 'completed' | 'error' | 'interrupted'
 export type RuntimeMode = 'full-access' | 'supervised'
 export type ThreadKind = 'delivery' | 'delegation'

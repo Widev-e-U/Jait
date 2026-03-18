@@ -7,6 +7,8 @@ import { useState, useEffect } from 'react'
 import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
+import Gemini from '@lobehub/icons/es/Gemini'
+import Copilot from '@lobehub/icons/es/Copilot'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,6 +39,8 @@ interface ProviderSelectorProps {
 /** Wrap @lobehub/icons so they conform to the same {className} interface as lucide icons. */
 const OpenAIIcon = ({ className }: { className?: string }) => <OpenAI size={16} className={className} />
 const ClaudeIcon = ({ className }: { className?: string }) => <Claude size={16} className={className} />
+const GeminiIcon = ({ className }: { className?: string }) => <Gemini size={16} className={className} />
+const CopilotIcon = ({ className }: { className?: string }) => <Copilot size={16} className={className} />
 
 const PROVIDER_DEFS: Array<{
   value: ProviderId
@@ -61,6 +65,24 @@ const PROVIDER_DEFS: Array<{
     label: 'Claude Code',
     icon: ClaudeIcon,
     description: 'Anthropic Claude Code CLI — coding agent with MCP tools',
+  },
+  {
+    value: 'gemini',
+    label: 'Gemini CLI',
+    icon: GeminiIcon,
+    description: 'Google Gemini CLI — coding agent',
+  },
+  {
+    value: 'opencode',
+    label: 'OpenCode',
+    icon: Bot,
+    description: 'OpenCode CLI — open-source coding agent',
+  },
+  {
+    value: 'copilot',
+    label: 'Copilot',
+    icon: CopilotIcon,
+    description: 'GitHub Copilot CLI — coding agent',
   },
 ]
 
