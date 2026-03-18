@@ -75,7 +75,6 @@ import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
 import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
-import { ArchitecturePanel } from '@/components/workspace/architecture-panel'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
@@ -802,6 +801,7 @@ function App() {
   const [showArchitecture, setShowArchitecture] = useState(false)
   const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null)
   const [architectureGenerating, setArchitectureGenerating] = useState(false)
+  const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
@@ -862,6 +862,12 @@ function App() {
   const showWorkspaceEditorPanel = useCallback(() => {
     setShowWorkspaceEditor(true)
   }, [])
+  const openArchitectureInWorkspace = useCallback(() => {
+    if (!activeWorkspace) return
+    if (!showWorkspace) setShowWorkspace(true)
+    showWorkspaceEditorPanel()
+    setArchitectureRequest({ key: Date.now() })
+  }, [activeWorkspace, showWorkspace, showWorkspaceEditorPanel])
   const routePreviewToWorkspace = useCallback((target?: string | null) => {
     const trimmed = target?.trim()
     if (!trimmed || !activeWorkspace) return false
@@ -886,6 +892,7 @@ function App() {
   const onFloatingDragStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'touch' && e.button !== 0) return
     e.preventDefault()
+    const target = e.currentTarget
 
     const viewport = getFloatingViewport()
     const nextSize = clampFloatingScreenShareSize({ size: floatingSSSize, viewport })
@@ -920,6 +927,9 @@ function App() {
       }))
     }
     const cleanup = () => {
+      if (target.hasPointerCapture?.(e.pointerId)) {
+        target.releasePointerCapture?.(e.pointerId)
+      }
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
@@ -939,6 +949,7 @@ function App() {
     document.body.style.userSelect = 'none'
     floatingDragCleanupRef.current?.()
     floatingDragCleanupRef.current = cleanup
+    target.setPointerCapture?.(e.pointerId)
     document.addEventListener('pointermove', onMove)
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
@@ -948,6 +959,7 @@ function App() {
     if (e.pointerType !== 'touch' && e.button !== 0) return
     e.preventDefault()
     e.stopPropagation()
+    const target = e.currentTarget
 
     const viewport = getFloatingViewport()
     const nextSize = clampFloatingScreenShareSize({ size: floatingSSSize, viewport })
@@ -984,6 +996,9 @@ function App() {
       ))
     }
     const cleanup = () => {
+      if (target.hasPointerCapture?.(e.pointerId)) {
+        target.releasePointerCapture?.(e.pointerId)
+      }
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
       document.removeEventListener('pointercancel', onUp)
@@ -1003,6 +1018,7 @@ function App() {
     document.body.style.userSelect = 'none'
     floatingResizeCleanupRef.current?.()
     floatingResizeCleanupRef.current = cleanup
+    target.setPointerCapture?.(e.pointerId)
     document.addEventListener('pointermove', onMove)
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
@@ -1626,6 +1642,7 @@ function App() {
       'workspace.close': useCallback(() => {
         setShowWorkspace(false)
         setActiveWorkspace(null)
+        setShowArchitecture(false)
         setSavedWorkspace(null)
       }, [setSavedWorkspace]),
       'terminal.focus': useCallback((data: TerminalFocusData) => {
@@ -1664,8 +1681,9 @@ function App() {
           setArchitectureDiagram(data.diagram)
           setArchitectureGenerating(false)
           setShowArchitecture(true)
+          openArchitectureInWorkspace()
         }
-      }, []),
+      }, [openArchitectureInWorkspace]),
     },
   })
 
@@ -1850,6 +1868,7 @@ function App() {
     setShowWorkspace(false)
     setActiveWorkspace(null)
     setSavedWorkspace(null)
+    setShowArchitecture(false)
     sendUIState('workspace.panel', null, activeSessionId)
   }, [setSavedWorkspace, sendUIState, activeSessionId])
 
@@ -2122,22 +2141,30 @@ function App() {
     const startY = e.clientY
     const startH = terminalHeight
     const maxH = window.innerHeight * 0.5
+    const cleanup = () => {
+      isDragging.current = false
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', onUp)
+      window.removeEventListener('blur', onWindowBlur)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
     const onMove = (ev: MouseEvent) => {
       if (!isDragging.current) return
       const delta = startY - ev.clientY
       setTerminalHeight(Math.min(maxH, Math.max(280, startH + delta)))
     }
     const onUp = () => {
-      isDragging.current = false
-      document.removeEventListener('mousemove', onMove)
-      document.removeEventListener('mouseup', onUp)
-      document.body.style.cursor = ''
-      document.body.style.userSelect = ''
+      cleanup()
+    }
+    const onWindowBlur = () => {
+      cleanup()
     }
     document.body.style.cursor = 'row-resize'
     document.body.style.userSelect = 'none'
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
+    window.addEventListener('blur', onWindowBlur)
   }, [terminalHeight])
 
   const ensureActiveTerminal = useCallback(async (preferredTerminalId: string | null = null) => {
@@ -3454,34 +3481,6 @@ function App() {
                   </Tooltip>
                 )}
 
-                {viewMode === 'developer' && showWorkspace && activeWorkspace && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                        variant={previewOpen ? 'secondary' : 'ghost'}
-                        size="sm"
-                        className="h-6 text-[11px] px-2 shrink-0"
-                        onClick={() => {
-                          if (previewOpen) {
-                            if (workspacePreviewState.open) {
-                              workspaceRef.current?.closePreviewTarget()
-                            } else {
-                              closeDevPreviewPanel()
-                            }
-                          } else {
-                            openDevPreviewPanel()
-                          }
-                        }}
-                      >
-                        <Globe className="h-3 w-3 mr-1" />
-                        Preview
-                        {previewOpen && <X className="h-3 wer-3 ml-1" />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">{previewOpen ? 'Close preview' : 'Open dev preview'}</TooltipContent>
-                  </Tooltip>
-                )}
-
                 {/* Workspace button with close-confirmation popover */}
                 <div className="relative flex items-center shrink-0">
                   <Tooltip>
@@ -3524,6 +3523,34 @@ function App() {
                     </>
                   )}
                 </div>
+
+                {viewMode === 'developer' && showWorkspace && activeWorkspace && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={previewOpen ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-6 text-[11px] px-2 shrink-0"
+                        onClick={() => {
+                          if (previewOpen) {
+                            if (workspacePreviewState.open) {
+                              workspaceRef.current?.closePreviewTarget()
+                            } else {
+                              closeDevPreviewPanel()
+                            }
+                          } else {
+                            openDevPreviewPanel()
+                          }
+                        }}
+                      >
+                        <Globe className="h-3 w-3 mr-1" />
+                        Preview
+                        {previewOpen && <X className="h-3 wer-3 ml-1" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">{previewOpen ? 'Close preview' : 'Open dev preview'}</TooltipContent>
+                  </Tooltip>
+                )}
               </>
             )}
 
@@ -3551,10 +3578,19 @@ function App() {
                     variant={showArchitecture ? 'secondary' : 'ghost'}
                     size="sm"
                     className="h-6 text-[11px] px-2 shrink-0"
-                    onClick={() => setShowArchitecture(a => !a)}
+                    onClick={() => {
+                      if (showArchitecture) {
+                        workspaceRef.current?.closeArchitectureTab()
+                        setShowArchitecture(false)
+                      } else {
+                        setShowArchitecture(true)
+                        openArchitectureInWorkspace()
+                      }
+                    }}
                   >
                     <Boxes className="h-3 w-3 mr-1" />
                     Architecture
+                    {showArchitecture && <X className="h-3 w-3 ml-1" />}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Software architecture diagram</TooltipContent>
@@ -3767,6 +3803,14 @@ function App() {
                 previewRequest={workspacePreviewRequest}
                 onTabsStateChange={handleWorkspaceTabsStateChange}
                 onPreviewOpenChange={setWorkspacePreviewState}
+                architectureDiagram={architectureDiagram}
+                architectureGenerating={architectureGenerating}
+                architectureRequest={architectureRequest}
+                onArchitectureOpenChange={setShowArchitecture}
+                onGenerateArchitecture={() => {
+                  setArchitectureGenerating(true)
+                  handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                }}
                 onApplyDiff={handleApplyWorkspaceDiff}
                 provider={chatProvider}
                 cliModel={cliModel}
@@ -3797,6 +3841,14 @@ function App() {
                   previewRequest={workspacePreviewRequest}
                   onTabsStateChange={handleWorkspaceTabsStateChange}
                   onPreviewOpenChange={setWorkspacePreviewState}
+                  architectureDiagram={architectureDiagram}
+                  architectureGenerating={architectureGenerating}
+                  architectureRequest={architectureRequest}
+                  onArchitectureOpenChange={setShowArchitecture}
+                  onGenerateArchitecture={() => {
+                    setArchitectureGenerating(true)
+                    handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                  }}
                   onApplyDiff={handleApplyWorkspaceDiff}
                   provider={chatProvider}
                   cliModel={cliModel}
@@ -4385,34 +4437,6 @@ function App() {
         {viewMode === 'developer' && showDebugPanel && (
           <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
             <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
-          </div>
-        )}
-
-        {viewMode === 'developer' && showArchitecture && (
-          <div className="fixed top-14 right-0 bottom-0 w-[560px] border-l z-50 shadow-xl bg-background">
-            <div className="flex items-center justify-between h-8 px-3 border-b bg-muted/30 shrink-0">
-              <span className="text-xs font-medium flex items-center gap-1.5">
-                <Boxes className="h-3 w-3" /> Architecture
-              </span>
-              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={() => setShowArchitecture(false)}>
-                <X className="h-3 w-3" />
-              </Button>
-            </div>
-            <div className="h-[calc(100%-2rem)]">
-              <ArchitecturePanel
-                diagram={architectureDiagram}
-                isGenerating={architectureGenerating}
-                onRegenerate={() => {
-                  setArchitectureGenerating(true)
-                  handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
-                }}
-                onGenerate={() => {
-                  setArchitectureGenerating(true)
-                  handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
-                }}
-                theme={themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches) ? 'dark' : 'light'}
-              />
-            </div>
           </div>
         )}
 

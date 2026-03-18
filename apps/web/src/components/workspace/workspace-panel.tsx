@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { ArrowLeft, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
+import { ArchitecturePanel } from './architecture-panel'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
@@ -62,6 +63,16 @@ interface WorkspacePanelProps {
   previewRequest?: { target: string; key: number } | null
   /** Notifies the app shell when a workspace preview tab is opened or closed. */
   onPreviewOpenChange?: (state: { open: boolean; target: string | null }) => void
+  /** Mermaid source for the architecture tab. */
+  architectureDiagram?: string | null
+  /** Whether architecture generation is currently running. */
+  architectureGenerating?: boolean
+  /** Request to open the architecture tab in the editor. */
+  architectureRequest?: { key: number } | null
+  /** Notifies the app shell when the architecture tab is opened or closed. */
+  onArchitectureOpenChange?: (open: boolean) => void
+  /** Trigger architecture generation. */
+  onGenerateArchitecture?: () => void
 }
 
 export interface WorkspacePanelHandle {
@@ -79,6 +90,10 @@ export interface WorkspacePanelHandle {
   openPreviewTarget: (target: string) => boolean
   /** Close the current workspace preview tab, if any. */
   closePreviewTarget: () => void
+  /** Open the architecture tab. */
+  openArchitectureTab: () => void
+  /** Close the architecture tab, if any. */
+  closeArchitectureTab: () => void
   /** Lazily search the entire directory for files matching a query. Cancellable via AbortSignal. */
   searchFiles: (query: string, limit: number, signal?: AbortSignal) => Promise<{ path: string; name: string }[]>
 }
@@ -318,6 +333,7 @@ function isEditableWorkspaceTab(tab: EditorTab | null): boolean {
 }
 
 function getEditorTabTitle(tab: EditorTab): string {
+  if (tab.type === 'architecture') return tab.label || 'Architecture'
   if (tab.type === 'preview') return tab.label || 'Preview'
   if (tab.type !== 'diff') return tab.label
   const baseLabel = tab.label || (tab.path.split(/[\\/]/).pop() ?? tab.path)
@@ -330,7 +346,7 @@ function getEditorTabTitle(tab: EditorTab): string {
 
 interface EditorTab {
   id: string
-  type: 'file' | 'diff' | 'preview'
+  type: 'file' | 'diff' | 'preview' | 'architecture'
   path: string
   label: string
   version?: number
@@ -378,9 +394,11 @@ function useDragResize(
   const [isDragging, setIsDragging] = useState(false)
   const frameRef = useRef<number | null>(null)
   const pendingSizeRef = useRef<number | null>(null)
+  const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
     return () => {
+      cleanupRef.current?.()
       if (frameRef.current !== null) {
         window.cancelAnimationFrame(frameRef.current)
       }
@@ -393,7 +411,9 @@ function useDragResize(
       dragging.current = true
       setIsDragging(true)
       const pointerId = e.pointerId
-      e.currentTarget.setPointerCapture?.(pointerId)
+      const target = e.currentTarget
+      cleanupRef.current?.()
+      target.setPointerCapture?.(pointerId)
       const startPos = direction === 'horizontal' ? e.clientX : e.clientY
       const startSize = size
 
@@ -411,10 +431,12 @@ function useDragResize(
           }
         })
       }
-      const onUp = () => {
+      const cleanup = () => {
         dragging.current = false
         setIsDragging(false)
-        e.currentTarget.releasePointerCapture?.(pointerId)
+        if (target.hasPointerCapture?.(pointerId)) {
+          target.releasePointerCapture?.(pointerId)
+        }
         if (frameRef.current !== null) {
           window.cancelAnimationFrame(frameRef.current)
           frameRef.current = null
@@ -426,14 +448,29 @@ function useDragResize(
         document.removeEventListener('pointermove', onMove)
         document.removeEventListener('pointerup', onUp)
         document.removeEventListener('pointercancel', onUp)
+        target.removeEventListener('lostpointercapture', onLostPointerCapture)
+        window.removeEventListener('blur', onWindowBlur)
         document.body.style.cursor = ''
         document.body.style.userSelect = ''
+        cleanupRef.current = null
+      }
+      const onUp = () => {
+        cleanup()
+      }
+      const onLostPointerCapture = () => {
+        cleanup()
+      }
+      const onWindowBlur = () => {
+        cleanup()
       }
       document.body.style.cursor = direction === 'horizontal' ? 'col-resize' : 'row-resize'
       document.body.style.userSelect = 'none'
+      cleanupRef.current = cleanup
       document.addEventListener('pointermove', onMove)
       document.addEventListener('pointerup', onUp)
       document.addEventListener('pointercancel', onUp)
+      target.addEventListener('lostpointercapture', onLostPointerCapture)
+      window.addEventListener('blur', onWindowBlur)
     },
     [size, min, max, direction],
   )
@@ -658,6 +695,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   cliModel,
   previewRequest,
   onPreviewOpenChange,
+  architectureDiagram,
+  architectureGenerating,
+  architectureRequest,
+  onArchitectureOpenChange,
+  onGenerateArchitecture,
 }, ref) {
   const resolvedTheme = useResolvedTheme()
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
@@ -740,6 +782,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const restoredTabsRootRef = useRef<string | null>(null)
   const lastPersistedTabsRef = useRef<string>('')
   const handledPreviewRequestKeyRef = useRef<number | null>(null)
+  const handledArchitectureRequestKeyRef = useRef<number | null>(null)
 
   // Auto-scroll active tab into view (VS Code behaviour)
   useEffect(() => {
@@ -849,6 +892,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       target: previewTab?.previewTarget ?? previewTab?.path ?? null,
     })
   }, [openTabs, onPreviewOpenChange])
+
+  useEffect(() => {
+    if (!onArchitectureOpenChange) return
+    onArchitectureOpenChange(openTabs.some((tab) => tab.type === 'architecture'))
+  }, [openTabs, onArchitectureOpenChange])
 
   // Close tab context menu on outside click.
   useEffect(() => {
@@ -1896,6 +1944,73 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     return true
   }, [onActiveFileChange])
 
+  const handleOpenArchitectureTab = useCallback(() => {
+    const tabId = 'architecture'
+    const nextTab: EditorTab = {
+      id: tabId,
+      type: 'architecture',
+      path: '__architecture__',
+      label: 'Architecture',
+    }
+
+    setOpenTabs((prev) => {
+      const existing = prev.find((tab) => tab.id === tabId)
+      if (existing) {
+        return prev.map((tab) => (tab.id === tabId ? { ...tab, ...nextTab } : tab))
+      }
+      return [...prev, nextTab]
+    })
+    setActiveTabId(tabId)
+    setScDiffFile(null)
+    setActiveNativePath(null)
+    setPreviewContent(null)
+    setPreviewPath('__architecture__')
+    setPreviewLanguage('plaintext')
+    onActiveFileChange('')
+  }, [onActiveFileChange])
+
+  const handleCloseArchitectureTab = useCallback(() => {
+    setOpenTabs((prev) => {
+      const architectureIndex = prev.findIndex((tab) => tab.type === 'architecture')
+      if (architectureIndex < 0) return prev
+      const architectureTab = prev[architectureIndex]
+      const next = prev.filter((tab) => tab.id !== architectureTab?.id)
+      if (architectureTab?.id === activeTabId) {
+        const neighbor = next[Math.min(architectureIndex, next.length - 1)]
+        const newActiveId = neighbor?.id ?? null
+        setTimeout(() => {
+          setActiveTabId(newActiveId)
+          if (!newActiveId) {
+            setActiveNativePath(null)
+            setPreviewContent(null)
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'file') {
+            setActiveNativePath(neighbor.path)
+            setPreviewContent(neighbor.content ?? null)
+            setPreviewLanguage(neighbor.language ?? 'plaintext')
+            setPreviewPath(neighbor.path)
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'preview') {
+            setActiveNativePath(null)
+            setPreviewContent(null)
+            setPreviewLanguage('plaintext')
+            setPreviewPath(neighbor.previewTarget ?? neighbor.path)
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'architecture') {
+            setActiveNativePath(null)
+            setPreviewContent(null)
+            setPreviewLanguage('plaintext')
+            setPreviewPath('__architecture__')
+            setScDiffFile(null)
+          } else if (neighbor?.type === 'diff') {
+            setScDiffFile(neighbor.diffMode === 'git' ? (neighbor.diffEntry ?? null) : null)
+          }
+        }, 0)
+      }
+      return next
+    })
+  }, [activeTabId])
+
   const handleClosePreviewTarget = useCallback(() => {
     setOpenTabs((prev) => {
       const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
@@ -1923,6 +2038,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             setPreviewLanguage('plaintext')
             setPreviewPath(neighbor.previewTarget ?? neighbor.path)
             setScDiffFile(null)
+          } else if (neighbor?.type === 'architecture') {
+            setActiveNativePath(null)
+            setPreviewContent(null)
+            setPreviewLanguage('plaintext')
+            setPreviewPath('__architecture__')
+            setScDiffFile(null)
           } else if (neighbor?.type === 'diff') {
             setScDiffFile(neighbor.diffMode === 'git' ? (neighbor.diffEntry ?? null) : null)
           }
@@ -1940,8 +2061,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     openReviewDiff: handleOpenReviewDiff,
     openPreviewTarget: handleOpenPreviewTarget,
     closePreviewTarget: handleClosePreviewTarget,
+    openArchitectureTab: handleOpenArchitectureTab,
+    closeArchitectureTab: handleCloseArchitectureTab,
     searchFiles: handleSearchFiles,
-  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleSearchFiles])
+  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleOpenArchitectureTab, handleCloseArchitectureTab, handleSearchFiles])
 
   useEffect(() => {
     if (!previewRequest) return
@@ -1949,6 +2072,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     handledPreviewRequestKeyRef.current = previewRequest.key
     handleOpenPreviewTarget(previewRequest.target)
   }, [previewRequest, handleOpenPreviewTarget])
+
+  useEffect(() => {
+    if (!architectureRequest) return
+    if (handledArchitectureRequestKeyRef.current === architectureRequest.key) return
+    handledArchitectureRequestKeyRef.current = architectureRequest.key
+    handleOpenArchitectureTab()
+  }, [architectureRequest, handleOpenArchitectureTab])
 
   /* ---- Git commit / push actions ---- */
   const handleGitAction = useCallback(async (action: GitStackedAction) => {
@@ -2137,6 +2267,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       setPreviewContent(null)
       setPreviewLanguage('plaintext')
       setPreviewPath(tab.previewTarget ?? tab.path)
+      setScDiffFile(null)
+      onActiveFileChange('')
+    } else if (tab.type === 'architecture') {
+      setActiveNativePath(null)
+      setPreviewContent(null)
+      setPreviewLanguage('plaintext')
+      setPreviewPath('__architecture__')
       setScDiffFile(null)
       onActiveFileChange('')
     } else if (tab.type === 'diff') {
@@ -2604,6 +2741,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
                     {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
                       <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
+                    ) : tab.type === 'architecture' ? (
+                      <Boxes className="h-3.5 w-3.5 shrink-0" />
                     ) : tab.type === 'preview' ? (
                       <Globe className="h-3.5 w-3.5 shrink-0" />
                     ) : (
@@ -2699,6 +2838,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     Preview target is not available.
                   </div>
                 )
+              ) : activeTab?.type === 'architecture' ? (
+                <ArchitecturePanel
+                  diagram={architectureDiagram ?? null}
+                  isGenerating={architectureGenerating}
+                  onGenerate={onGenerateArchitecture}
+                  onRegenerate={onGenerateArchitecture}
+                  theme={resolvedTheme}
+                />
               ) : loadingFile ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
                   <Loader2 className="h-4 w-4 animate-spin" />
@@ -3207,6 +3354,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   )}
                   {gitStatus4tab ? (
                     <GitStatusBadge status={gitStatus4tab} className="text-[9px]" />
+                  ) : tab.type === 'architecture' ? (
+                    <Boxes className="h-3.5 w-3.5 shrink-0" />
                   ) : tab.type === 'preview' ? (
                     <Globe className="h-3.5 w-3.5 shrink-0" />
                   ) : (
@@ -3305,6 +3454,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               Preview target is not available.
             </div>
           )
+        ) : activeTab?.type === 'architecture' ? (
+          <ArchitecturePanel
+            diagram={architectureDiagram ?? null}
+            isGenerating={architectureGenerating}
+            onGenerate={onGenerateArchitecture}
+            onRegenerate={onGenerateArchitecture}
+            theme={resolvedTheme}
+          />
         ) : loadingFile && activeTab?.id === activeTabId ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
             <Loader2 className="h-4 w-4 animate-spin" />
