@@ -1,14 +1,16 @@
 /**
  * Claude Code CLI Provider — wraps Anthropic's Claude Code CLI as a Jait provider.
  *
- * Spawns `claude` CLI with `--output-format stream-json` for structured output.
- * Claude Code supports MCP natively via its config, so Jait tools can be exposed.
+ * Spawns `claude --print --output-format stream-json --include-partial-messages --verbose`
+ * and parses newline-delimited JSON events from stdout.
  *
- * Claude Code outputs newline-delimited JSON events to stdout:
- *   { type: "assistant", message: { ... } }
- *   { type: "tool_use", tool: "...", input: {...} }
- *   { type: "tool_result", ... }
- *   { type: "result", ... }
+ * Event types from Claude Code stream-json:
+ *   { type: "system",       subtype: "init", model, tools, ... }
+ *   { type: "stream_event", event: { type: "content_block_delta", delta: { type: "text_delta", text } } }
+ *   { type: "stream_event", event: { type: "content_block_start", content_block: { type: "tool_use", ... } } }
+ *   { type: "assistant",    message: { content: [...blocks...] } }   — partial/full message snapshots
+ *   { type: "user",         message: { content: [{ type: "tool_result", ... }] } }
+ *   { type: "result",       result: "...", usage: {...} }
  */
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
@@ -38,6 +40,8 @@ interface ClaudeSessionState {
   mcpConfigPath?: string;
   exitMode: "normal" | "interrupt" | "stop";
   pendingToolCalls: ClaudePendingToolCall[];
+  /** Whether any stream_event text_delta tokens were emitted this turn */
+  hasStreamedTokens: boolean;
 }
 
 interface ClaudePendingToolCall {
@@ -104,17 +108,20 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
    * Falls back to well-known aliases if parsing fails.
    */
   async listModels(): Promise<ProviderModelInfo[]> {
+    // Try dynamic discovery first: parse --help for aliases and full model names
     try {
       const models = await this.parseModelsFromHelp();
       if (models.length > 0) return models;
     } catch { /* fall through */ }
 
-    // Fallback: stable aliases that Claude Code accepts
+    // Fallback: stable aliases and full model IDs that Claude Code accepts
     return [
-      { id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true },
-      { id: "sonnet", name: "Sonnet", description: "Claude Sonnet — fast, capable coding model" },
+      { id: "sonnet", name: "Sonnet", description: "Claude Sonnet — fast, capable coding model", isDefault: true },
       { id: "opus", name: "Opus", description: "Claude Opus — most capable model" },
       { id: "haiku", name: "Haiku", description: "Claude Haiku — fast lightweight model" },
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", description: "Claude Sonnet 4.6 (full name)" },
+      { id: "claude-opus-4-6", name: "Claude Opus 4.6", description: "Claude Opus 4.6 (full name)" },
+      { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", description: "Claude Haiku 4.5 (full name)" },
     ];
   }
 
@@ -145,6 +152,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       mcpConfigPath: this.buildClaudeMcpConfig(options.mcpServers, sessionId),
       exitMode: "normal",
       pendingToolCalls: [],
+      hasStreamedTokens: false,
     };
 
     this.sessions.set(sessionId, state);
@@ -195,6 +203,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     state.process = child;
     state.buffer = "";
     state.exitMode = "normal";
+    state.hasStreamedTokens = false;
     state.session.status = "running";
     this.emit({ type: "turn.started", sessionId });
 
@@ -343,83 +352,96 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     const type = event["type"] as string;
 
     switch (type) {
+      // ── stream_event: wrapper around raw Anthropic API streaming events ──
+      case "stream_event": {
+        const inner = event["event"] as Record<string, unknown> | undefined;
+        if (!inner) break;
+        this.handleStreamEvent(state, inner);
+        break;
+      }
+
+      // ── assistant: complete/partial message snapshot (emitted alongside stream_event) ──
       case "assistant": {
+        // When streaming with --include-partial-messages, these are snapshots
+        // of the full message so far. We only use them for tool_use blocks
+        // (the text tokens are already streamed via stream_event deltas).
         const message = event["message"] as Record<string, unknown> | undefined;
         const content = message?.["content"];
-        if (typeof content === "string") {
-          this.emit({ type: "token", sessionId, content });
-        } else if (Array.isArray(content)) {
+        if (Array.isArray(content)) {
           for (const block of content) {
-            const blockType = (block as Record<string, unknown>)?.["type"];
-            if (blockType === "text") {
-              this.emit({ type: "token", sessionId, content: String((block as Record<string, unknown>)["text"] ?? "") });
-            } else if (blockType === "thinking") {
-              const thinking = String((block as Record<string, unknown>)["thinking"] ?? "");
-              if (thinking) {
-                this.emit({ type: "activity", sessionId, kind: "thinking", summary: thinking, payload: block });
+            const b = block as Record<string, unknown>;
+            if (b["type"] === "tool_use" && b["name"]) {
+              this.handleToolUseBlock(state, b);
+            }
+          }
+        } else if (typeof content === "string" && content) {
+          // Non-streaming fallback: if no stream_event deltas were seen, emit the full text
+          if (!state.hasStreamedTokens) {
+            this.emit({ type: "token", sessionId, content });
+          }
+        }
+        break;
+      }
+
+      // ── user: tool result feedback from Claude's own tool execution ──
+      case "user": {
+        const message = event["message"] as Record<string, unknown> | undefined;
+        const userContent = message?.["content"];
+        if (Array.isArray(userContent)) {
+          for (const block of userContent) {
+            const b = block as Record<string, unknown>;
+            if (b["type"] === "tool_result") {
+              const toolUseId = String(b["tool_use_id"] ?? "");
+              const isError = b["is_error"] === true;
+              const resultText = String(event["tool_use_result"] ?? b["content"] ?? "");
+              const match = toolUseId
+                ? state.pendingToolCalls.find(p => p.providerCallId === toolUseId)
+                : state.pendingToolCalls[0];
+              if (match) {
+                const idx = state.pendingToolCalls.indexOf(match);
+                if (idx !== -1) state.pendingToolCalls.splice(idx, 1);
               }
+              this.emit({
+                type: "tool.result",
+                sessionId,
+                tool: match ? match.normalizedTool : "unknown",
+                ok: !isError,
+                message: resultText,
+                ...(match ? { callId: match.callId, data: match.args } : {}),
+              });
             }
           }
         }
         break;
       }
 
-      case "content_block_delta": {
-        const delta = event["delta"] as Record<string, unknown> | undefined;
-        if (delta?.["type"] === "text_delta") {
-          this.emit({ type: "token", sessionId, content: String(delta["text"] ?? "") });
-        } else if (delta?.["type"] === "thinking_delta") {
-          const thinking = String(delta["thinking"] ?? "");
-          if (thinking) {
-            this.emit({ type: "activity", sessionId, kind: "thinking", summary: thinking, payload: delta });
-          }
-        }
-        break;
-      }
-
-      case "tool_use": {
-        const rawTool = String(event["name"] ?? event["tool"] ?? "")
-        const normalizedTool = normalizeClaudeToolName(rawTool)
-        const args = normalizeClaudeToolArgs(rawTool, (event["input"] as Record<string, unknown> | undefined) ?? {})
-        const callId = extractClaudeToolCallId(event) ?? uuidv7()
-        state.pendingToolCalls.push({
-          callId,
-          rawTool,
-          normalizedTool,
-          args,
-          ...(extractClaudeProviderToolId(event) ? { providerCallId: extractClaudeProviderToolId(event) } : {}),
-        })
-        this.emit({
-          type: "tool.start",
-          sessionId,
-          tool: normalizedTool,
-          args,
-          callId,
-        });
-        break;
-      }
-
-      case "tool_result": {
-        const match = resolveClaudePendingToolCall(state.pendingToolCalls, event)
-        const rawTool = String(event["tool"] ?? match?.rawTool ?? "")
-        this.emit({
-          type: "tool.result",
-          sessionId,
-          tool: normalizeClaudeToolName(rawTool),
-          ok: event["is_error"] !== true,
-          message: String(event["content"] ?? event["output"] ?? ""),
-          ...(match ? { callId: match.callId, data: match.args } : {}),
-        });
-        break;
-      }
-
+      // ── result: final summary when the CLI process finishes a turn ──
       case "result": {
         const resultContent = event["result"] as string | undefined;
         if (resultContent) {
           this.emit({ type: "message", sessionId, role: "assistant", content: resultContent });
         }
+        // Extract usage info if available
+        const usage = event["usage"] as Record<string, unknown> | undefined;
+        if (usage) {
+          this.emit({
+            type: "activity",
+            sessionId,
+            kind: "usage",
+            summary: `Cost: $${event["total_cost_usd"] ?? "?"}`,
+            payload: { usage, cost: event["total_cost_usd"], duration: event["duration_ms"] },
+          });
+        }
         break;
       }
+
+      // ── system: init event with model info, tools, etc. ──
+      case "system":
+        break;
+
+      // ── rate_limit_event: informational, ignore ──
+      case "rate_limit_event":
+        break;
 
       default:
         this.emit({
@@ -430,6 +452,88 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
           payload: event,
         });
     }
+  }
+
+  /**
+   * Handle unwrapped Anthropic API streaming events from inside stream_event wrappers.
+   * These follow the Anthropic Messages API streaming format.
+   */
+  private handleStreamEvent(state: ClaudeSessionState, event: Record<string, unknown>): void {
+    const sessionId = state.session.id;
+    const eventType = event["type"] as string;
+
+    switch (eventType) {
+      case "content_block_start": {
+        const block = event["content_block"] as Record<string, unknown> | undefined;
+        if (!block) break;
+        if (block["type"] === "tool_use") {
+          this.handleToolUseBlock(state, block);
+        }
+        break;
+      }
+
+      case "content_block_delta": {
+        const delta = event["delta"] as Record<string, unknown> | undefined;
+        if (!delta) break;
+        const deltaType = delta["type"] as string;
+        if (deltaType === "text_delta") {
+          const text = String(delta["text"] ?? "");
+          if (text) {
+            state.hasStreamedTokens = true;
+            this.emit({ type: "token", sessionId, content: text });
+          }
+        } else if (deltaType === "thinking_delta") {
+          const thinking = String(delta["thinking"] ?? "");
+          if (thinking) {
+            this.emit({ type: "activity", sessionId, kind: "thinking", summary: thinking, payload: delta });
+          }
+        }
+        // input_json_delta, signature_delta: ignored (tool input streamed incrementally, not needed)
+        break;
+      }
+
+      case "content_block_stop":
+      case "message_start":
+      case "message_delta":
+      case "message_stop":
+        // Lifecycle markers — no action needed
+        break;
+    }
+  }
+
+  /**
+   * Register a tool_use content block as a pending tool call and emit tool.start.
+   */
+  private handleToolUseBlock(state: ClaudeSessionState, block: Record<string, unknown>): void {
+    const sessionId = state.session.id;
+    const rawTool = String(block["name"] ?? "");
+    const providerCallId = String(block["id"] ?? "");
+
+    // Avoid emitting duplicate tool.start for the same provider call id
+    if (providerCallId && state.pendingToolCalls.some(p => p.providerCallId === providerCallId)) {
+      return;
+    }
+
+    const normalizedTool = normalizeClaudeToolName(rawTool);
+    const input = (block["input"] as Record<string, unknown>) ?? {};
+    const args = normalizeClaudeToolArgs(rawTool, input);
+    const callId = uuidv7();
+
+    state.pendingToolCalls.push({
+      callId,
+      rawTool,
+      normalizedTool,
+      args,
+      providerCallId: providerCallId || undefined,
+    });
+
+    this.emit({
+      type: "tool.start",
+      sessionId,
+      tool: normalizedTool,
+      args,
+      callId,
+    });
   }
 
   private buildClaudeMcpConfig(
@@ -562,51 +666,6 @@ function normalizeClaudeToolArgs(
   return input;
 }
 
-function extractClaudeToolCallId(event: Record<string, unknown>): string | undefined {
-  const direct =
-    asNonEmptyString(event["callId"]) ??
-    asNonEmptyString(event["call_id"]) ??
-    asNonEmptyString(event["toolCallId"]) ??
-    asNonEmptyString(event["tool_call_id"]);
-  if (direct) return direct;
-  return extractClaudeProviderToolId(event);
-}
-
-function extractClaudeProviderToolId(event: Record<string, unknown>): string | undefined {
-  return (
-    asNonEmptyString(event["id"]) ??
-    asNonEmptyString(event["toolUseId"]) ??
-    asNonEmptyString(event["tool_use_id"]) ??
-    asNonEmptyString(event["toolId"]) ??
-    asNonEmptyString(event["tool_id"])
-  );
-}
-
-function resolveClaudePendingToolCall(
-  pending: ClaudePendingToolCall[],
-  event: Record<string, unknown>,
-): ClaudePendingToolCall | undefined {
-  if (pending.length === 0) return undefined;
-
-  const directId = extractClaudeToolCallId(event);
-  if (directId) {
-    const directIdx = pending.findIndex((entry) => entry.callId === directId || entry.providerCallId === directId);
-    if (directIdx !== -1) return pending.splice(directIdx, 1)[0];
-  }
-
-  const rawTool = asNonEmptyString(event["tool"]);
-  if (rawTool) {
-    const normalizedTool = normalizeClaudeToolName(rawTool);
-    const toolIdx = pending.findIndex((entry) => entry.rawTool === rawTool || entry.normalizedTool === normalizedTool);
-    if (toolIdx !== -1) return pending.splice(toolIdx, 1)[0];
-  }
-
-  return pending.shift();
-}
-
-function asNonEmptyString(value: unknown): string | undefined {
-  return typeof value === "string" && value.trim() ? value : undefined;
-}
 
 function killChildTree(child: ChildProcess, signal: "SIGINT" | "SIGTERM" | "SIGKILL" = "SIGTERM"): void {
   if (process.platform === "win32" && child.pid !== undefined) {
