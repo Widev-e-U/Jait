@@ -5,7 +5,9 @@ import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type 
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
+import { Textarea } from '@/components/ui/textarea'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
@@ -3222,15 +3224,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           {/* Branch + refresh header */}
           <div className="flex h-[35px] items-center gap-1.5 px-2 border-b bg-muted/10 shrink-0">
             {gitStatus?.branch && (
-              <span className="text-[10px] text-muted-foreground truncate flex-1" title={gitStatus.branch}>
+              <span className="ui-caption truncate flex-1" title={gitStatus.branch}>
                 <GitBranch className="h-3 w-3 inline mr-0.5 -mt-px" />
                 {gitStatus.branch}
               </span>
             )}
-            {!gitStatus?.branch && <span className="text-[10px] text-muted-foreground flex-1">No repo</span>}
+            {!gitStatus?.branch && <span className="ui-caption flex-1">No repo</span>}
             {remoteRoot && (
               <select
-                className="h-6 rounded border bg-background px-1.5 text-[10px] text-muted-foreground"
+                className="h-7 rounded-md border border-input bg-background/90 px-2 text-xs text-muted-foreground shadow-sm"
                 value={String(gitAutoFetchMode)}
                 onChange={(e) => handleGitAutoFetchModeChange(e.target.value)}
                 title={`${describeGitAutoFetchMode(gitAutoFetchMode)}. Interval: ${gitAutoFetchPeriodSeconds}s`}
@@ -3241,7 +3243,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </select>
             )}
             <button
-              className="p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              className="ui-inline-action p-1"
               onClick={fetchGitStatus}
               disabled={gitStatusLoading}
               title="Refresh git status"
@@ -3254,8 +3256,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           {remoteRoot && gitStatus && (
           <div className="px-2 py-1.5 border-b bg-muted/5 shrink-0 space-y-1.5">
             <div className="relative">
-              <textarea
-                className="w-full text-xs bg-background border rounded px-2 py-1.5 pr-7 resize-none placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary/50"
+              <Textarea
+                className="min-h-[68px] resize-none pr-9 text-sm"
                 rows={2}
                 placeholder="Commit message"
                 value={commitMessage}
@@ -3269,7 +3271,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 disabled={gitActionBusy || commitMsgGenerating}
               />
               <button
-                className="absolute top-1 right-1 p-0.5 rounded text-muted-foreground hover:text-primary transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="absolute top-2 right-2 rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-primary disabled:cursor-not-allowed disabled:opacity-40"
                 onClick={handleGenerateCommitMessage}
                 disabled={!canGenerateCommitMessage}
                 title="Generate commit message with AI"
@@ -3280,68 +3282,77 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </button>
             </div>
             <div className="flex items-center gap-1 flex-wrap">
-              <button
-                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              <Button
+                size="sm"
+                className="h-8 rounded-md px-2 text-xs"
                 onClick={() => handleGitAction('commit')}
                 disabled={gitActionBusy || changedFileCount === 0}
                 title="Commit all changes (Ctrl+Enter)"
               >
                 {gitActionBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
                 Commit
-              </button>
-              <button
-                className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                className="h-8 rounded-md px-2 text-xs"
                 onClick={() => handleGitAction('commit_push')}
                 disabled={gitActionBusy || changedFileCount === 0}
                 title="Commit and push"
               >
                 <CloudUpload className="h-3 w-3" />
                 Commit & Push
-              </button>
+              </Button>
               {(gitStatus.aheadCount > 0) && (
-                <button
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 rounded-md px-2 text-xs"
                   onClick={() => handleGitAction('commit_push')}
                   disabled={gitActionBusy}
                   title={`Push ${gitStatus.aheadCount} committed commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
                 >
                   <CloudUpload className="h-3 w-3" />
                   Push ({gitStatus.aheadCount})
-                </button>
+                </Button>
               )}
               {(gitStatus.behindCount > 0 || gitStatus.hasUpstream) && (
-                <button
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-foreground disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  className="h-8 rounded-md px-2 text-xs"
                   onClick={handleGitPull}
                   disabled={gitActionBusy}
                   title={gitStatus.behindCount > 0 ? `Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}` : 'Pull latest changes'}
                 >
                   <Download className="h-3 w-3" />
                   Pull{gitStatus.behindCount > 0 ? ` (${gitStatus.behindCount})` : ''}
-                </button>
+                </Button>
               )}
               {changedFileCount > 0 && (
                 discardConfirm?.kind === 'all' ? (
-                  <div className="flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[11px]">
+                  <div className="flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/5 px-2 py-1 text-xs">
                     <span className="text-red-500">Discard all changes?</span>
-                    <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
-                    <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+                    <Button size="sm" variant="destructive" className="h-7 rounded-md px-2 text-xs" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
+                    <Button size="sm" variant="ghost" className="h-7 rounded-md px-2 text-xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
                   </div>
                 ) : (
-                  <button
-                    className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    className="h-8 rounded-md px-2 text-xs text-red-600 hover:text-red-700 dark:text-red-400"
                     onClick={() => setDiscardConfirm({ kind: 'all' })}
                     disabled={gitActionBusy}
                     title="Discard all changes"
                   >
                     <Undo2 className="h-3 w-3" />
                     Discard All
-                  </button>
+                  </Button>
                 )
               )}
             </div>
             {gitActionError && (
-              <div className="text-[10px] text-red-500 px-0.5">{gitActionError}</div>
+              <div className="ui-caption px-0.5 text-red-500">{gitActionError}</div>
             )}
           </div>
           )}
@@ -3361,7 +3372,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
             {gitStatus && changedFileCount > 0 && (
               <div className="p-1">
-                <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1 font-medium">
+                <div className="ui-eyebrow px-2 py-1">
                   Source Control ({changedFileCount})
                   <span className="normal-case tracking-normal ml-1">
                     <span className="text-green-500">+{gitStatus.index.insertions + gitStatus.workingTree.insertions}</span>
@@ -3617,25 +3628,25 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
       {tabContextMenu && (
       <div
-        className="fixed z-50 min-w-[170px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+        className="ui-panel-surface fixed z-50 min-w-[170px] py-1"
         style={{ left: tabContextMenu.x, top: tabContextMenu.y }}
         onPointerDown={(e) => e.stopPropagation()}
       >
         <button
-          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted"
+          className="ui-menu-item"
           onClick={() => handleCloseTab(tabContextMenu.tabId)}
         >
           Close
         </button>
         <button
-          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40"
+          className="ui-menu-item"
           disabled={openTabs.length <= 1}
           onClick={() => handleCloseOtherTabs(tabContextMenu.tabId)}
         >
           Close Others
         </button>
         <button
-          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40"
+          className="ui-menu-item"
           disabled={contextTabIndex < 0 || contextTabIndex >= openTabs.length - 1}
           onClick={() => handleCloseTabsToRight(tabContextMenu.tabId)}
         >
@@ -3643,7 +3654,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         </button>
         <div className="my-1 h-px bg-border" />
         <button
-          className="w-full text-left px-3 py-1.5 text-xs hover:bg-muted disabled:opacity-40"
+          className="ui-menu-item"
           disabled={openTabs.length === 0}
           onClick={handleCloseAllTabs}
         >
@@ -3655,13 +3666,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {/* File tree context menu */}
       {fileContextMenu && (
       <div
-        className="fixed z-50 min-w-[180px] rounded-md border bg-popover text-popover-foreground shadow-lg py-1"
+        className="ui-panel-surface fixed z-50 min-w-[180px] py-1"
         style={{ left: fileContextMenu.x, top: fileContextMenu.y }}
         onPointerDown={(e) => e.stopPropagation()}
       >
         {fileContextMenu.node.kind === 'file' && (
           <button
-            className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+            className="ui-menu-item"
             onClick={() => {
               const node = fileContextMenu.node as LazyFile
               handleSelectNativeFile(node)
@@ -3673,7 +3684,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         )}
         {fileContextMenu.node.kind === 'file' && (
           <button
-            className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+            className="ui-menu-item"
             onClick={() => {
               const node = fileContextMenu.node as LazyFile
               void handleContextNativeFile(node)
@@ -3687,7 +3698,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         <div className="my-1 h-px bg-border" />
         {/* New File / New Folder */}
         <button
-          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          className="ui-menu-item"
           onClick={() => {
             const parentDir = fileContextMenu.node.kind === 'dir'
               ? fileContextMenu.node.path
@@ -3701,7 +3712,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           New File
         </button>
         <button
-          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          className="ui-menu-item"
           onClick={() => {
             const parentDir = fileContextMenu.node.kind === 'dir'
               ? fileContextMenu.node.path
@@ -3717,7 +3728,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         <div className="my-1 h-px bg-border" />
         {/* Rename */}
         <button
-          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          className="ui-menu-item"
           onClick={() => {
             setRenameTarget({ path: fileContextMenu.node.path, name: fileContextMenu.node.name, kind: fileContextMenu.node.kind === 'dir' ? 'dir' : 'file' })
             setRenameValue(fileContextMenu.node.name)
@@ -3729,7 +3740,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         </button>
         {/* Delete */}
         <button
-          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted text-red-500"
+          className="ui-menu-item text-red-500 hover:text-red-600"
           onClick={() => {
             void handleDeleteNode(fileContextMenu.node)
             setFileContextMenu(null)
@@ -3741,7 +3752,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         <div className="my-1 h-px bg-border" />
         {/* Copy Path */}
         <button
-          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          className="ui-menu-item"
           onClick={() => {
             handleCopyPath(fileContextMenu.node)
             setFileContextMenu(null)
@@ -3751,7 +3762,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           Copy Path
         </button>
         <button
-          className="w-full flex items-center gap-2 text-left px-3 py-1.5 text-xs hover:bg-muted"
+          className="ui-menu-item"
           onClick={() => {
             handleCopyRelativePath(fileContextMenu.node)
             setFileContextMenu(null)
@@ -3766,10 +3777,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {/* Inline rename input */}
       {renameTarget && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onPointerDown={() => setRenameTarget(null)}>
-        <div className="bg-popover border rounded-lg shadow-lg p-3 min-w-[280px]" onPointerDown={(e) => e.stopPropagation()}>
-          <div className="text-xs font-medium mb-2">Rename "{renameTarget.name}"</div>
-          <input
-            className="w-full text-xs bg-background border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
+        <div className="ui-panel-surface min-w-[320px] p-4" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="mb-2 text-sm font-medium">Rename "{renameTarget.name}"</div>
+          <Input
+            className="h-10 text-sm"
             autoFocus
             value={renameValue}
             onChange={(e) => setRenameValue(e.target.value)}
@@ -3778,9 +3789,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               if (e.key === 'Escape') setRenameTarget(null)
             }}
           />
-          <div className="flex justify-end gap-1.5 mt-2">
-            <button className="px-2 py-1 text-xs rounded bg-muted hover:bg-muted/80" onClick={() => setRenameTarget(null)}>Cancel</button>
-            <button className="px-2 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => void handleRenameConfirm()}>Rename</button>
+          <div className="mt-3 flex justify-end gap-1.5">
+            <Button variant="ghost" size="sm" className="h-8 rounded-md px-3 text-xs" onClick={() => setRenameTarget(null)}>Cancel</Button>
+            <Button size="sm" className="h-8 rounded-md px-3 text-xs" onClick={() => void handleRenameConfirm()}>Rename</Button>
           </div>
         </div>
       </div>
@@ -3789,10 +3800,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {/* New file/folder input */}
       {newItemTarget && (
       <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onPointerDown={() => setNewItemTarget(null)}>
-        <div className="bg-popover border rounded-lg shadow-lg p-3 min-w-[280px]" onPointerDown={(e) => e.stopPropagation()}>
-          <div className="text-xs font-medium mb-2">New {newItemTarget.kind === 'dir' ? 'Folder' : 'File'}</div>
-          <input
-            className="w-full text-xs bg-background border rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-primary/50"
+        <div className="ui-panel-surface min-w-[320px] p-4" onPointerDown={(e) => e.stopPropagation()}>
+          <div className="mb-2 text-sm font-medium">New {newItemTarget.kind === 'dir' ? 'Folder' : 'File'}</div>
+          <Input
+            className="h-10 text-sm"
             autoFocus
             placeholder={newItemTarget.kind === 'dir' ? 'folder-name' : 'filename.ext'}
             value={newItemValue}
@@ -3802,9 +3813,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               if (e.key === 'Escape') setNewItemTarget(null)
             }}
           />
-          <div className="flex justify-end gap-1.5 mt-2">
-            <button className="px-2 py-1 text-xs rounded bg-muted hover:bg-muted/80" onClick={() => setNewItemTarget(null)}>Cancel</button>
-            <button className="px-2 py-1 text-xs rounded bg-primary text-primary-foreground hover:bg-primary/90" onClick={() => void handleNewItemConfirm()}>Create</button>
+          <div className="mt-3 flex justify-end gap-1.5">
+            <Button variant="ghost" size="sm" className="h-8 rounded-md px-3 text-xs" onClick={() => setNewItemTarget(null)}>Cancel</Button>
+            <Button size="sm" className="h-8 rounded-md px-3 text-xs" onClick={() => void handleNewItemConfirm()}>Create</Button>
           </div>
         </div>
       </div>

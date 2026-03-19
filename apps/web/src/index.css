@@ -114,7 +114,7 @@
   }
 
   body {
-    @apply bg-background text-foreground;
+    @apply bg-background text-foreground antialiased;
   }
 
   [data-sonner-toaster] {
@@ -235,5 +235,44 @@
   }
   .scrollbar-none::-webkit-scrollbar {
     display: none;
+  }
+}
+
+@layer components {
+  .ui-meta {
+    @apply text-xs leading-4 text-muted-foreground;
+  }
+
+  .ui-caption {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    @apply text-muted-foreground;
+  }
+
+  .ui-eyebrow {
+    font-size: 0.6875rem;
+    line-height: 1rem;
+    letter-spacing: 0.08em;
+    @apply font-medium uppercase text-muted-foreground;
+  }
+
+  .ui-pill {
+    @apply inline-flex items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-2 py-1 text-xs font-medium text-muted-foreground;
+  }
+
+  .ui-panel-surface {
+    @apply rounded-xl border border-border/70 bg-popover text-popover-foreground shadow-lg;
+  }
+
+  .ui-menu-item {
+    @apply flex w-full items-center gap-2 rounded-md px-3 py-2 text-left text-sm transition-colors hover:bg-accent hover:text-accent-foreground disabled:pointer-events-none disabled:opacity-40;
+  }
+
+  .ui-inline-action {
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-accent hover:text-accent-foreground;
+  }
+
+  .ui-inline-action-danger {
+    @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10;
   }
 }
