@@ -528,7 +528,7 @@ function ManagerThreadListItem({
     <div
       role="button"
       tabIndex={0}
-      className={`group relative grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-5 border-b px-3 py-3.5 text-sm transition-colors hover:bg-muted/40 ${
+      className={`group relative grid w-full grid-cols-[minmax(0,1fr)_auto] items-center gap-2.5 border-b px-2.5 py-2.5 text-sm transition-colors hover:bg-muted/40 sm:gap-5 sm:px-3 sm:py-3.5 ${
         thread.kind === 'delegation' ? 'bg-amber-500/[0.04]' : ''
       }`}
       onClick={onOpen}
@@ -543,7 +543,7 @@ function ManagerThreadListItem({
       <div className="flex flex-col gap-0.5">
         <div className="flex w-full min-w-0 items-center gap-1.5">
           <ManagerStatusDot status={thread.status} />
-          <div className="flex-1 truncate font-medium">
+          <div className="flex-1 truncate text-[13px] font-medium sm:text-sm">
             {isTitlePending(thread.title) ? (
               <TitleSkeleton className="h-3.5 w-28" />
             ) : (
@@ -551,7 +551,7 @@ function ManagerThreadListItem({
             )}
           </div>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-1 pl-[calc(0.75rem+6px)] text-xs text-muted-foreground sm:flex-nowrap sm:gap-x-1 sm:gap-y-0">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[calc(0.75rem+6px)] text-[11px] leading-tight text-muted-foreground sm:flex-nowrap sm:gap-x-1 sm:gap-y-0 sm:text-xs">
           <span className="min-w-0 basis-full truncate sm:basis-auto">{repoName}</span>
           <ThreadKindBadge kind={thread.kind} />
           {thread.kind === 'delegation' && (
@@ -586,7 +586,7 @@ function ManagerThreadListItem({
           )}
         </div>
       </div>
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5 sm:gap-1">
         {showThreadActions && repo && (
           <div
             className="shrink-0"
@@ -613,7 +613,7 @@ function ManagerThreadListItem({
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7 rounded-lg"
+            className="h-6 w-6 rounded-lg sm:h-7 sm:w-7"
             onClick={(event) => {
               event.stopPropagation()
               onStop()
@@ -626,7 +626,7 @@ function ManagerThreadListItem({
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7 rounded-lg opacity-100 transition-opacity"
+          className="h-6 w-6 rounded-lg opacity-100 transition-opacity sm:h-7 sm:w-7"
           onClick={(event) => {
             event.stopPropagation()
             onDelete()
@@ -3770,20 +3770,20 @@ function App() {
                 )}
                 <div className="flex-1" />
                 {automation.selectedThread ? (
-                  <div className={isMobile ? 'flex min-w-0 basis-full items-start gap-2' : 'flex min-w-0 items-center gap-2 shrink-0'}>
+                  <div className={isMobile ? 'flex min-w-0 basis-full items-start gap-1.5' : 'flex min-w-0 items-center gap-2 shrink-0'}>
                     <div className="flex min-w-0 flex-1 items-start gap-2">
                       <ManagerStatusDot status={automation.selectedThread.status} />
                       <div className={`min-w-0 ${isMobile ? 'flex-1' : 'flex items-center gap-2'}`}>
                         {isTitlePending(automation.selectedThread.title) ? (
                           <TitleSkeleton className="text-[11px] h-3.5 w-28" />
                         ) : (
-                          <span className={`text-[11px] text-muted-foreground truncate ${isMobile ? 'block' : 'max-w-[200px]'}`}>
+                          <span className={`text-[10px] text-muted-foreground truncate sm:text-[11px] ${isMobile ? 'block leading-tight' : 'max-w-[200px]'}`}>
                             {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
                           </span>
                         )}
                         <ThreadKindBadge kind={automation.selectedThread.kind} />
                         {(automation.selectedRepo || (isMobile && automation.selectedThread.branch)) && (
-                          <span className={`text-[10px] text-muted-foreground truncate ${isMobile ? 'mt-0.5 block' : 'max-w-[160px]'}`}>
+                          <span className={`text-[10px] text-muted-foreground truncate ${isMobile ? 'mt-0.5 block leading-tight' : 'max-w-[160px]'}`}>
                             {automation.selectedRepo
                               ? `${automation.selectedRepo.name} · ${automation.selectedRepo.defaultBranch}`
                               : ''}
@@ -3794,7 +3794,7 @@ function App() {
                         )}
                       </div>
                     </div>
-                    <div className={`flex shrink-0 items-center gap-1 ${isMobile ? '' : ''}`}>
+                    <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
                       {!isMobile && automation.selectedThread.branch && (
                         <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">
                           {automation.selectedThread.branch}
@@ -3804,7 +3804,7 @@ function App() {
                         <Button
                           variant="ghost"
                           size="icon"
-                          className="h-5 w-5"
+                          className="h-[18px] w-[18px] sm:h-5 sm:w-5"
                           onClick={() => void automation.handleStop(automation.selectedThread!.id)}
                           title={automation.selectedThread.kind === 'delegation' ? 'End helper thread' : 'Stop thread'}
                         >
@@ -4130,12 +4130,12 @@ function App() {
                     <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
                       {/* Title + composer */}
                       <div
-                        className={`relative z-10 flex flex-col items-center px-4 pb-2 pt-4${managerAnimPhase !== 'idle' ? ' will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]' : ''}`}
+                        className={`relative z-10 flex flex-col items-center px-3 pb-1.5 pt-3 sm:px-4 sm:pb-2 sm:pt-4${managerAnimPhase !== 'idle' ? ' will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]' : ''}`}
                         style={managerAnimPhase === 'center' ? { transform: 'translateY(calc(50vh - 200px))' } : managerAnimPhase === 'top' ? { transform: 'translateY(0)' } : undefined}
                         onTransitionEnd={() => { if (managerAnimPhase === 'top') setManagerAnimPhase('idle') }}
                       >
                         <div className="w-full max-w-3xl">
-                          <h1 className="mb-4 text-center text-2xl font-semibold tracking-tight">What do you want to build?</h1>
+                          <h1 className="mb-3 text-center text-xl font-semibold tracking-tight sm:mb-4 sm:text-2xl">What do you want to build?</h1>
                           {automation.error && (
                             <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-3">
                               <AlertTriangle className="h-4 w-4 shrink-0" />
@@ -4183,7 +4183,7 @@ function App() {
                       <div className="flex-1 overflow-y-auto">
                         <div className="mx-auto w-full max-w-3xl">
 
-                          <div className="flex items-center justify-between border-b px-3 py-2">
+                          <div className="flex items-center justify-between border-b px-2.5 py-1.5 sm:px-3 sm:py-2">
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-medium">Threads</span>
                               <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[10px]">
@@ -4200,7 +4200,7 @@ function App() {
                             </Button>
                           </div>
                           {managerThreads.length === 0 ? (
-                            <div className="px-4 py-12 text-center text-sm text-muted-foreground">
+                            <div className="px-4 py-8 text-center text-sm text-muted-foreground sm:py-12">
                               No threads yet
                             </div>
                           ) : (
@@ -4224,7 +4224,7 @@ function App() {
                               })}
                               {automation.hasMoreThreads && (
                                 <button
-                                  className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  className="px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground sm:px-4 sm:py-2"
                                   onClick={automation.showMoreThreads}
                                 >
                                   Show more threads
@@ -4232,7 +4232,7 @@ function App() {
                               )}
                               {managerThreads.length > automation.threadListLimit && (
                                 <button
-                                  className="px-4 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                                  className="px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground sm:px-4 sm:py-2"
                                   onClick={automation.showFewerThreads}
                                 >
                                   Show less
