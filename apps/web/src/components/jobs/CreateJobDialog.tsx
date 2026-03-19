@@ -197,16 +197,16 @@ export function CreateJobDialog({
   if (!isOpen) return null
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="create-job-dialog-title"
         data-testid="create-job-dialog"
-        className="bg-background text-foreground border border-border rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto"
+        className="h-[92dvh] w-full overflow-y-auto border border-border bg-background text-foreground shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-2xl sm:rounded-lg"
       >
-        <div className="flex items-center justify-between p-4 border-b">
-          <h2 id="create-job-dialog-title" className="text-xl font-semibold">
+        <div className="flex items-center justify-between border-b px-4 py-3 sm:p-4">
+          <h2 id="create-job-dialog-title" className="text-lg font-semibold sm:text-xl">
             {editJob ? 'Edit Job' : 'Create New Job'}
           </h2>
           <Button variant="ghost" size="sm" onClick={onClose} aria-label="Close dialog">
@@ -214,10 +214,10 @@ export function CreateJobDialog({
           </Button>
         </div>
 
-        <form onSubmit={handleSubmit} className="p-4 space-y-6">
+        <form onSubmit={handleSubmit} className="space-y-5 p-4 sm:space-y-6">
           {/* Job Type Selection */}
           <Tabs value={jobType} onValueChange={(v) => setJobType(v as JobType)}>
-            <TabsList className="grid w-full grid-cols-2">
+            <TabsList className="grid h-auto w-full grid-cols-2">
               <TabsTrigger value="agent_task">Agent Task</TabsTrigger>
               <TabsTrigger value="system_job">System Job</TabsTrigger>
             </TabsList>
@@ -316,7 +316,7 @@ export function CreateJobDialog({
 
             {/* Schedule */}
             <div>
-              <div className="flex items-center justify-between mb-2">
+              <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                 <Label>Schedule</Label>
                 <div className="flex items-center gap-2">
                   <Label htmlFor="custom-schedule" className="text-sm text-muted-foreground">
@@ -366,7 +366,7 @@ export function CreateJobDialog({
             </div>
 
             {/* Enabled */}
-            <div className="flex items-center justify-between">
+            <div className="flex items-center justify-between gap-3">
               <div>
                 <Label htmlFor="enabled">Enabled</Label>
                 <p className="text-sm text-muted-foreground">
@@ -390,11 +390,11 @@ export function CreateJobDialog({
           )}
 
           {/* Actions */}
-          <div className="flex justify-end gap-3 border-t pt-4">
-            <Button type="button" variant="outline" onClick={onClose}>
+          <div className="grid grid-cols-1 gap-3 border-t pt-4 sm:flex sm:justify-end">
+            <Button type="button" variant="outline" onClick={onClose} className="w-full sm:w-auto">
               Cancel
             </Button>
-            <Button type="submit" disabled={isSubmitting}>
+            <Button type="submit" disabled={isSubmitting} className="w-full sm:w-auto">
               {isSubmitting && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {editJob ? 'Save Changes' : 'Create Job'}
             </Button>

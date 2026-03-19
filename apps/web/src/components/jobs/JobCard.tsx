@@ -62,14 +62,14 @@ export function JobCard({
       className={`transition-opacity ${isLoading ? 'opacity-50' : ''} ${!job.enabled ? 'opacity-75' : ''}`}
     >
       <CardHeader className="pb-2">
-        <div className="flex items-start justify-between">
-          <div className="flex items-center gap-3">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex min-w-0 items-start gap-3">
             {job.job_type === 'agent_task' && job.model && job.provider && (
               <ModelIcon provider={job.provider} model={job.model} size={32} />
             )}
-            <div>
-              <CardTitle className="text-lg">{job.name}</CardTitle>
-              <div className="flex items-center gap-2 mt-1">
+            <div className="min-w-0 flex-1">
+              <CardTitle className="truncate text-base sm:text-lg">{job.name}</CardTitle>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
                 <Badge variant={job.job_type === 'agent_task' ? 'default' : 'secondary'}>
                   {jobTypeLabels[job.job_type]}
                 </Badge>
@@ -81,20 +81,25 @@ export function JobCard({
               </div>
             </div>
           </div>
-          <Switch
-            checked={job.enabled}
-            onCheckedChange={handleToggle}
-            disabled={isToggling}
-          />
+          <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 sm:min-w-[92px] sm:justify-end sm:border-0 sm:bg-transparent sm:p-0">
+            <span className="text-xs text-muted-foreground sm:hidden">
+              {job.enabled ? 'Enabled' : 'Paused'}
+            </span>
+            <Switch
+              checked={job.enabled}
+              onCheckedChange={handleToggle}
+              disabled={isToggling}
+            />
+          </div>
         </div>
       </CardHeader>
 
       <CardContent>
         {/* Schedule */}
-        <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+        <div className="mb-2 flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
           <Clock className="h-4 w-4" />
-          <span className="font-mono">{job.cron_expression}</span>
-          <span className="text-xs">({describeCron(job.cron_expression)})</span>
+          <span className="break-all font-mono">{job.cron_expression}</span>
+          <span className="text-xs sm:text-[11px]">({describeCron(job.cron_expression)})</span>
         </div>
 
         {/* Next run */}
@@ -113,25 +118,27 @@ export function JobCard({
 
         {/* Last run status */}
         {recentRun && (
-          <div className="flex items-center gap-2 text-sm mb-3">
-            {recentRun.status === 'completed' && (
-              <>
-                <CheckCircle2 className="h-4 w-4 text-green-500" />
-                <span className="text-green-600 dark:text-green-400">Last run succeeded</span>
-              </>
-            )}
-            {recentRun.status === 'failed' && (
-              <>
-                <AlertCircle className="h-4 w-4 text-red-500" />
-                <span className="text-red-600 dark:text-red-400">Last run failed</span>
-              </>
-            )}
-            {recentRun.status === 'running' && (
-              <>
-                <Loader2 className="h-4 w-4 text-blue-500 animate-spin" />
-                <span className="text-blue-600 dark:text-blue-400">Running now...</span>
-              </>
-            )}
+          <div className="mb-3 flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-2">
+            <div className="flex items-center gap-2">
+              {recentRun.status === 'completed' && (
+                <>
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-green-600 dark:text-green-400">Last run succeeded</span>
+                </>
+              )}
+              {recentRun.status === 'failed' && (
+                <>
+                  <AlertCircle className="h-4 w-4 text-red-500" />
+                  <span className="text-red-600 dark:text-red-400">Last run failed</span>
+                </>
+              )}
+              {recentRun.status === 'running' && (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                  <span className="text-blue-600 dark:text-blue-400">Running now...</span>
+                </>
+              )}
+            </div>
             {recentRun.started_at && (
               <span className="text-xs text-muted-foreground">
                 {new Date(recentRun.started_at).toLocaleString()}
@@ -141,13 +148,14 @@ export function JobCard({
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-2 pt-2 border-t">
+        <div className="grid grid-cols-2 gap-2 border-t pt-2 sm:flex sm:flex-wrap sm:items-center">
           <Button
             variant="outline"
             size="sm"
             onClick={handleTrigger}
             disabled={isTriggering || !job.enabled}
             data-testid={`job-trigger-${job.id}`}
+            className="w-full"
           >
             {isTriggering ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -161,6 +169,7 @@ export function JobCard({
             size="sm"
             onClick={() => onViewHistory(job)}
             data-testid={`job-history-${job.id}`}
+            className="w-full"
           >
             <History className="h-4 w-4 mr-1" />
             History
@@ -171,6 +180,7 @@ export function JobCard({
             onClick={() => onEdit(job)}
             aria-label={`Edit job ${job.name}`}
             data-testid={`job-edit-${job.id}`}
+            className="w-full"
           >
             <Edit className="h-4 w-4" />
           </Button>
@@ -178,7 +188,7 @@ export function JobCard({
             variant="ghost"
             size="sm"
             onClick={() => onDelete(job.id)}
-            className="text-destructive hover:text-destructive hover:bg-destructive/10"
+            className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
             aria-label={`Delete job ${job.name}`}
             data-testid={`job-delete-${job.id}`}
           >

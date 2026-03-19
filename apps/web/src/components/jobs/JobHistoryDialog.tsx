@@ -76,18 +76,18 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
   }
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/50 sm:items-center">
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby="job-history-dialog-title"
         data-testid="job-history-dialog"
-        className="bg-background text-foreground border border-border rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="flex h-[92dvh] w-full flex-col overflow-hidden border border-border bg-background text-foreground shadow-xl sm:h-auto sm:max-h-[90vh] sm:max-w-3xl sm:rounded-lg"
       >
         {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b">
-          <div>
-            <h2 id="job-history-dialog-title" className="text-xl font-semibold">Job History</h2>
+        <div className="flex items-start justify-between gap-3 border-b px-4 py-3 sm:p-4">
+          <div className="min-w-0">
+            <h2 id="job-history-dialog-title" className="text-lg font-semibold sm:text-xl">Job History</h2>
             <p className="text-sm text-muted-foreground">{job.name}</p>
           </div>
           <div className="flex items-center gap-2">
@@ -124,8 +124,8 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
                   key={run.id}
                   className="border border-border rounded-lg p-4 hover:bg-muted/40 transition-colors"
                 >
-                  <div className="flex items-start justify-between mb-2">
-                    <div className="flex items-center gap-2">
+                  <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                    <div className="flex flex-wrap items-center gap-2">
                       {getStatusIcon(run.status)}
                       {getStatusBadge(run.status)}
                       {run.triggered_by && (
@@ -139,7 +139,7 @@ export function JobHistoryDialog({ job, isOpen, onClose }: JobHistoryDialogProps
                     </div>
                   </div>
 
-                  <div className="text-sm text-muted-foreground mb-2">
+                  <div className="mb-2 text-sm text-muted-foreground">
                     <span className="font-medium">Started:</span>{' '}
                     {run.started_at ? new Date(run.started_at).toLocaleString() : 'Not started'}
                     {run.completed_at && (

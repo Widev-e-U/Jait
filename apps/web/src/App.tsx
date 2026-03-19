@@ -102,6 +102,11 @@ import { agentsApi, type AgentThread, type ProviderId, type ThreadStatus } from 
 import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { getWorkspaceRootForPath, isPathWithinWorkspace } from '@/lib/workspace-links'
+import {
+  collapseMobileWorkspace,
+  showMobileWorkspacePane,
+  toggleMobileWorkspacePane,
+} from '@/lib/mobile-workspace-layout'
 
 const API_URL = getApiUrl()
 const VOICE_LEVEL_BAR_COUNT = 28
@@ -861,8 +866,23 @@ function App() {
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
   const showWorkspaceEditorPanel = useCallback(() => {
+    if (isMobile) {
+      const nextLayout = showMobileWorkspacePane('editor')
+      setShowWorkspaceTree(nextLayout.tree)
+      setShowWorkspaceEditor(nextLayout.editor)
+      return
+    }
     setShowWorkspaceEditor(true)
-  }, [])
+  }, [isMobile])
+  const showWorkspaceTreePanel = useCallback(() => {
+    if (isMobile) {
+      const nextLayout = showMobileWorkspacePane('tree')
+      setShowWorkspaceTree(nextLayout.tree)
+      setShowWorkspaceEditor(nextLayout.editor)
+      return
+    }
+    setShowWorkspaceTree(true)
+  }, [isMobile])
   const openArchitectureInWorkspace = useCallback(() => {
     if (!activeWorkspace) return
     if (!showWorkspace) setShowWorkspace(true)
@@ -1461,6 +1481,21 @@ function App() {
     }
   }, [savedWorkspaceLayout])
 
+  const mobileWorkspaceInitKeyRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (!showMobileWorkspace) {
+      mobileWorkspaceInitKeyRef.current = null
+      return
+    }
+    const workspaceKey = `${activeSessionId ?? 'no-session'}:${activeWorkspace?.surfaceId ?? activeWorkspace?.workspaceRoot ?? 'no-workspace'}`
+    if (mobileWorkspaceInitKeyRef.current === workspaceKey) return
+    mobileWorkspaceInitKeyRef.current = workspaceKey
+    if (!showWorkspaceTree || !showWorkspaceEditor) return
+    const nextLayout = collapseMobileWorkspace()
+    setShowWorkspaceTree(nextLayout.tree)
+    setShowWorkspaceEditor(nextLayout.editor)
+  }, [showMobileWorkspace, activeSessionId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor])
+
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
     if (savedChatMode) setChatMode(savedChatMode)
@@ -1976,20 +2011,24 @@ function App() {
   }, [setSavedWorkspace, sendUIState, activeSessionId])
 
   const toggleWorkspaceTree = useCallback(() => {
-    setShowWorkspaceTree(prev => {
-      return !prev
-    })
-  }, [])
+    if (isMobile) {
+      const nextLayout = toggleMobileWorkspacePane({ tree: showWorkspaceTree, editor: showWorkspaceEditor }, 'tree')
+      setShowWorkspaceTree(nextLayout.tree)
+      setShowWorkspaceEditor(nextLayout.editor)
+      return
+    }
+    setShowWorkspaceTree(prev => !prev)
+  }, [isMobile, showWorkspaceTree, showWorkspaceEditor])
 
   const toggleWorkspaceEditor = useCallback(() => {
-    setShowWorkspaceEditor(prev => {
-      return !prev
-    })
-  }, [])
-
-  const showWorkspaceTreePanel = useCallback(() => {
-    setShowWorkspaceTree(true)
-  }, [])
+    if (isMobile) {
+      const nextLayout = toggleMobileWorkspacePane({ tree: showWorkspaceTree, editor: showWorkspaceEditor }, 'editor')
+      setShowWorkspaceTree(nextLayout.tree)
+      setShowWorkspaceEditor(nextLayout.editor)
+      return
+    }
+    setShowWorkspaceEditor(prev => !prev)
+  }, [isMobile, showWorkspaceTree, showWorkspaceEditor])
 
   const openDevPreviewPanel = useCallback((target?: string | null) => {
     setCurrentView('chat')
@@ -3923,6 +3962,34 @@ function App() {
 
 
 
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && (
+              <div className="flex items-center gap-2 px-2 py-2 border-b bg-background/95 shrink-0">
+                <button
+                  onClick={toggleWorkspaceTree}
+                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                    showWorkspaceTree
+                      ? 'border-foreground/15 bg-foreground text-background'
+                      : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <FolderTree className="h-3.5 w-3.5" />
+                  <GitBranch className="h-3.5 w-3.5" />
+                  Files + Changes
+                </button>
+                <button
+                  onClick={toggleWorkspaceEditor}
+                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                    showWorkspaceEditor
+                      ? 'border-foreground/15 bg-foreground text-background'
+                      : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <Code className="h-3.5 w-3.5" />
+                  Editor
+                </button>
+              </div>
+            )}
+
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && (showWorkspaceTree || showWorkspaceEditor) && (
               <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
                 <WorkspacePanel
@@ -3958,33 +4025,6 @@ function App() {
                   cliModel={cliModel}
                 />
               </section>
-            )}
-
-            {/* Mobile: sticky show-panel buttons when workspace panels are hidden */}
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && (
-              <div className="flex items-center gap-1 px-2 py-1.5 border-b bg-muted/20 shrink-0">
-                {!showWorkspaceTree && (
-                  <button
-                    onClick={showWorkspaceTreePanel}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    <FolderTree className="h-3.5 w-3.5" />
-                    <GitBranch className="h-3.5 w-3.5" />
-                    {!isMobile && 'Show Files + Changes'}
-                  </button>
-                )}
-                {!showWorkspaceEditor && (
-                  <button
-                    onClick={showWorkspaceEditorPanel}
-                    className="flex items-center gap-1 rounded px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                  >
-                    <Eye className="h-3.5 w-3.5" />
-                    <Code className="h-3.5 w-3.5" />
-                    {!isMobile && 'Show Editor'}
-                  </button>
-                )}
-              </div>
             )}
 
             {viewMode === 'manager' ? (

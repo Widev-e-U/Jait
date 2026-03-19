@@ -110,24 +110,24 @@ export function JobsPage() {
   const systemJobCount = jobs.filter(j => j.job_type === 'system_job').length
 
   return (
-    <div className="container mx-auto py-6 px-4 max-w-6xl">
+    <div className="container mx-auto max-w-6xl px-3 py-4 sm:px-4 sm:py-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
+      <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+        <div className="min-w-0">
+          <h1 className="flex items-center gap-2 text-xl font-bold sm:text-2xl">
             <Calendar className="h-6 w-6" />
             Scheduled Jobs
           </h1>
-          <p className="text-muted-foreground mt-1">
+          <p className="mt-1 text-sm text-muted-foreground sm:text-base">
             Manage your automated tasks and agent schedules
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => void loadJobs(page, pageSize)} disabled={isLoading}>
+        <div className="grid grid-cols-1 gap-2 sm:flex sm:items-center">
+          <Button variant="outline" onClick={() => void loadJobs(page, pageSize)} disabled={isLoading} className="w-full sm:w-auto">
             <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? 'animate-spin' : ''}`} />
             Refresh
           </Button>
-          <Button onClick={() => setIsCreateOpen(true)}>
+          <Button onClick={() => setIsCreateOpen(true)} className="w-full sm:w-auto">
             <Plus className="h-4 w-4 mr-2" />
             New Job
           </Button>
@@ -135,17 +135,17 @@ export function JobsPage() {
       </div>
 
       {/* Stats */}
-      <div className="flex items-center gap-4 mb-6">
-        <Badge variant="outline" className="text-sm py-1 px-3">
+      <div className="mb-6 grid grid-cols-2 gap-2 sm:flex sm:flex-wrap sm:items-center sm:gap-4">
+        <Badge variant="outline" className="justify-center px-3 py-1 text-xs sm:text-sm">
           {totalJobs} total
         </Badge>
-        <Badge variant="default" className="text-sm py-1 px-3">
+        <Badge variant="default" className="justify-center px-3 py-1 text-xs sm:text-sm">
           {enabledCount} enabled on page
         </Badge>
-        <Badge variant="secondary" className="text-sm py-1 px-3">
+        <Badge variant="secondary" className="justify-center px-3 py-1 text-xs sm:text-sm">
           {agentTaskCount} agent tasks on page
         </Badge>
-        <Badge variant="secondary" className="text-sm py-1 px-3">
+        <Badge variant="secondary" className="justify-center px-3 py-1 text-xs sm:text-sm">
           {systemJobCount} system jobs on page
         </Badge>
       </div>
@@ -173,7 +173,7 @@ export function JobsPage() {
         </div>
       ) : jobs.length === 0 ? (
         /* Empty state */
-        <div className="text-center py-24 border-2 border-dashed rounded-lg">
+        <div className="rounded-lg border-2 border-dashed px-4 py-16 text-center sm:py-24">
           <Calendar className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
           <h3 className="text-lg font-medium mb-2">No scheduled jobs yet</h3>
           <p className="text-muted-foreground mb-4">
@@ -203,17 +203,17 @@ export function JobsPage() {
       )}
 
       {/* Pagination */}
-      <div className="mt-6 flex flex-wrap items-center justify-between gap-3 border-t pt-4">
+      <div className="mt-6 flex flex-col gap-3 border-t pt-4 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
         <div className="text-sm text-muted-foreground">
           Showing {pageStart}–{pageEnd} of {totalJobs}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
           <label className="text-sm text-muted-foreground" htmlFor="jobs-page-size">
             Per page
           </label>
           <select
             id="jobs-page-size"
-            className="h-8 rounded-md border bg-background px-2 text-sm"
+            className="h-9 rounded-md border bg-background px-2 text-sm"
             value={pageSize}
             onChange={(event) => {
               const nextSize = Number.parseInt(event.target.value, 10)
@@ -226,27 +226,31 @@ export function JobsPage() {
               <option key={size} value={size}>{size}</option>
             ))}
           </select>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page <= 1 || isLoading}
-            onClick={() => setPage(prev => Math.max(1, prev - 1))}
-          >
-            <ChevronLeft className="h-4 w-4 mr-1" />
-            Prev
-          </Button>
-          <span className="text-sm text-muted-foreground tabular-nums">
-            Page {page} / {totalPages}
-          </span>
-          <Button
-            variant="outline"
-            size="sm"
-            disabled={page >= totalPages || isLoading}
-            onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
-          >
-            Next
-            <ChevronRight className="h-4 w-4 ml-1" />
-          </Button>
+          <div className="grid grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:items-center">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page <= 1 || isLoading}
+              onClick={() => setPage(prev => Math.max(1, prev - 1))}
+              className="w-full"
+            >
+              <ChevronLeft className="h-4 w-4 mr-1" />
+              Prev
+            </Button>
+            <span className="text-center text-sm text-muted-foreground tabular-nums">
+              Page {page} / {totalPages}
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={page >= totalPages || isLoading}
+              onClick={() => setPage(prev => Math.min(totalPages, prev + 1))}
+              className="w-full"
+            >
+              Next
+              <ChevronRight className="h-4 w-4 ml-1" />
+            </Button>
+          </div>
         </div>
       </div>
 
