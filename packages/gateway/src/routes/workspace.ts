@@ -34,6 +34,23 @@ function findFsSurface(registry: SurfaceRegistry, surfaceId?: string): AnyFsSurf
   return null;
 }
 
+function findFsSurfaceWithBackup(
+  registry: SurfaceRegistry,
+  filePath: string,
+  preferredSurfaceId?: string,
+): AnyFsSurface | null {
+  const preferred = findFsSurface(registry, preferredSurfaceId);
+  if (preferred?.hasBackup(filePath)) return preferred;
+
+  for (const s of registry.listSurfaces()) {
+    if (!((s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running")) continue;
+    if (preferred && s.snapshot().id === preferred.snapshot().id) continue;
+    if (s.hasBackup(filePath)) return s;
+  }
+
+  return preferred ?? null;
+}
+
 export function registerWorkspaceRoutes(
   app: FastifyInstance,
   surfaceRegistry: SurfaceRegistry,
@@ -194,7 +211,7 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "content must be a string" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    const fs = findFsSurfaceWithBackup(surfaceRegistry, filePath, body?.surfaceId);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -248,7 +265,7 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    const fs = findFsSurfaceWithBackup(surfaceRegistry, filePath, body?.surfaceId);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -346,14 +363,14 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "paths array is required" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
-    if (!fs) {
-      return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
-    }
-
     const results: { path: string; restored: boolean }[] = [];
     for (const p of paths) {
       try {
+        const fs = findFsSurfaceWithBackup(surfaceRegistry, p, body?.surfaceId);
+        if (!fs) {
+          results.push({ path: p, restored: false });
+          continue;
+        }
         const restored = await fs.restore(p);
         results.push({ path: p, restored });
       } catch {

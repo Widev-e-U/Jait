@@ -4,6 +4,7 @@ import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edi
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
+import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
@@ -774,6 +775,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [renameValue, setRenameValue] = useState('')
   const [newItemTarget, setNewItemTarget] = useState<{ parentDir: string; kind: 'file' | 'dir' } | null>(null)
   const [newItemValue, setNewItemValue] = useState('')
+  const [discardConfirm, setDiscardConfirm] = useState<{ kind: 'all' } | { kind: 'file'; path: string } | null>(null)
 
   // ── File search state ──
   const [fileSearchQuery, setFileSearchQuery] = useState('')
@@ -2147,12 +2149,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       ...(gitStatus?.workingTree.files.map((file) => file.path) ?? []),
     ]).size
     if (!remoteRoot || gitActionBusy || count === 0) return
-    const confirmed = window.confirm(`Discard all ${count} change${count > 1 ? 's' : ''}? This cannot be undone.`)
-    if (!confirmed) return
     setGitActionBusy(true)
     setGitActionError(null)
     try {
       await gitApi.discard(remoteRoot)
+      setDiscardConfirm(null)
       setScDiffFile(null)
       setOpenTabs(prev => prev.filter(t => t.type !== 'diff'))
       await fetchGitStatus()
@@ -2166,13 +2167,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /* ---- Discard single file ---- */
   const handleDiscardFile = useCallback(async (filePath: string) => {
     if (!remoteRoot || gitActionBusy) return
-    const fileName = filePath.split('/').pop() ?? filePath
-    const confirmed = window.confirm(`Discard changes in "${fileName}"? This cannot be undone.`)
-    if (!confirmed) return
     setGitActionBusy(true)
     setGitActionError(null)
     try {
       await gitApi.discard(remoteRoot, [filePath])
+      setDiscardConfirm(null)
       // Close diff tab for this file if open
       const tabId = `git-diff:${filePath}`
       setOpenTabs(prev => prev.filter(t => t.id !== tabId))
@@ -2376,62 +2375,73 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
             const isActiveDiff = scDiffFile?.path === f.path
             return (
-              <div
-                key={`${actions}:${f.path}`}
-                className={`grid w-full cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs ${
-                  isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
-                }`}
-                draggable
-                onClick={() => handleScOpenDiff(f.path)}
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = 'copy'
-                  e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: f.path, name: fileName }))
-                }}
-                title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
-              >
-                <GitStatusBadge status={fileStatus} />
-                <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
-                <div className="min-w-0">
-                  <div className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
-                    {fileName}
+              <div key={`${actions}:${f.path}`}>
+                <div
+                  className={`grid w-full cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs ${
+                    isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
+                  }`}
+                  draggable
+                  onClick={() => handleScOpenDiff(f.path)}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'copy'
+                    e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: f.path, name: fileName }))
+                  }}
+                  title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
+                >
+                  <GitStatusBadge status={fileStatus} />
+                  <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
+                  <div className="min-w-0">
+                    <div className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
+                      {fileName}
+                    </div>
+                    <div className="truncate text-[10px] text-muted-foreground">
+                      {dirPath || '\u00A0'}
+                    </div>
                   </div>
-                  <div className="truncate text-[10px] text-muted-foreground">
-                    {dirPath || '\u00A0'}
-                  </div>
+                  <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
+                    {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
+                    {f.deletions > 0 && <span className="ml-0.5 text-red-500">-{f.deletions}</span>}
+                  </span>
+                  <span className="flex w-[3.5rem] shrink-0 items-center justify-end gap-0.5">
+                    {actions === 'stage' ? (
+                      <button
+                        type="button"
+                        className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
+                        onClick={(e) => { e.stopPropagation(); void handleStageFile(f.path) }}
+                        title="Stage file (git add)"
+                      >
+                        <Plus className="h-3 w-3" />
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
+                        onClick={(e) => { e.stopPropagation(); void handleUnstageFile(f.path) }}
+                        title="Unstage file"
+                      >
+                        <Minus className="h-3 w-3" />
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-red-500"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setDiscardConfirm((prev) => prev?.kind === 'file' && prev.path === f.path ? null : { kind: 'file', path: f.path })
+                      }}
+                      title="Discard changes"
+                    >
+                      <Undo2 className="h-3 w-3" />
+                    </button>
+                  </span>
                 </div>
-                <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
-                  {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
-                  {f.deletions > 0 && <span className="ml-0.5 text-red-500">-{f.deletions}</span>}
-                </span>
-                <span className="flex w-[3.5rem] shrink-0 items-center justify-end gap-0.5">
-                  {actions === 'stage' ? (
-                    <button
-                      type="button"
-                      className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
-                      onClick={(e) => { e.stopPropagation(); void handleStageFile(f.path) }}
-                      title="Stage file (git add)"
-                    >
-                      <Plus className="h-3 w-3" />
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
-                      onClick={(e) => { e.stopPropagation(); void handleUnstageFile(f.path) }}
-                      title="Unstage file"
-                    >
-                      <Minus className="h-3 w-3" />
-                    </button>
-                  )}
-                  <button
-                    type="button"
-                    className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-red-500"
-                    onClick={(e) => { e.stopPropagation(); void handleDiscardFile(f.path) }}
-                    title="Discard changes"
-                  >
-                    <Undo2 className="h-3 w-3" />
-                  </button>
-                </span>
+                {discardConfirm?.kind === 'file' && discardConfirm.path === f.path && (
+                  <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+                    <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
+                    <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardFile(f.path)} disabled={gitActionBusy}>Discard</Button>
+                    <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+                  </div>
+                )}
               </div>
             )
           })}
@@ -3311,15 +3321,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </button>
               )}
               {changedFileCount > 0 && (
-                <button
-                  className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                  onClick={handleDiscardAll}
-                  disabled={gitActionBusy}
-                  title="Discard all changes"
-                >
-                  <Undo2 className="h-3 w-3" />
-                  Discard All
-                </button>
+                discardConfirm?.kind === 'all' ? (
+                  <div className="flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[11px]">
+                    <span className="text-red-500">Discard all changes?</span>
+                    <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
+                    <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+                  </div>
+                ) : (
+                  <button
+                    className="flex items-center gap-1 px-2 py-1 rounded text-[11px] font-medium bg-muted hover:bg-muted/80 text-red-500 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    onClick={() => setDiscardConfirm({ kind: 'all' })}
+                    disabled={gitActionBusy}
+                    title="Discard all changes"
+                  >
+                    <Undo2 className="h-3 w-3" />
+                    Discard All
+                  </button>
+                )
               )}
             </div>
             {gitActionError && (

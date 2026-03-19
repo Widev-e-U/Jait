@@ -98,8 +98,9 @@ import {
   getDefaultFloatingScreenSharePosition,
 } from '@/lib/floating-screen-share'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import { agentsApi, type AgentThread, type ProviderId } from '@/lib/agents-api'
+import { agentsApi, type AgentThread, type ProviderId, type ThreadStatus } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
+import { triggerSystemNotification } from '@/lib/system-notifications'
 import { getWorkspaceRootForPath, isPathWithinWorkspace } from '@/lib/workspace-links'
 
 const API_URL = getApiUrl()
@@ -1173,6 +1174,7 @@ function App() {
     todoList,
     changedFiles,
     messageQueue,
+    completionCount,
     contextUsage,
     sessionInfo,
     sendMessage,
@@ -1198,6 +1200,7 @@ function App() {
     refreshMessages,
   } = useChat(activeSessionId, token, onLoginRequired, activeWorkspace?.surfaceId ?? null)
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
+  const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
   const managerQueueProcessingRef = useRef(new Set<string>())
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals(token)
   const { provider, model } = useModelInfo()
@@ -1264,6 +1267,102 @@ function App() {
   useEffect(() => {
     wsFullStateReceivedRef.current = false
   }, [activeSessionId])
+
+  const handleMessageComplete = useCallback(() => {
+    refreshMessages()
+    setRemoteMessageCompleteCount((prev) => prev + 1)
+  }, [refreshMessages])
+
+  const chatQueueSeenRef = useRef(false)
+  const lastChatNotificationSignalRef = useRef(0)
+  const chatNotificationSessionRef = useRef<string | null>(activeSessionId)
+  const threadQueueSeenRef = useRef<Record<string, boolean>>({})
+  const pendingThreadCompletionRef = useRef<Record<string, AgentThread>>({})
+  const previousThreadStatusesRef = useRef<Record<string, ThreadStatus>>({})
+
+  useEffect(() => {
+    if (messageQueue.length > 0) {
+      chatQueueSeenRef.current = true
+    }
+  }, [messageQueue.length])
+
+  const chatCompletionSignal = completionCount + remoteMessageCompleteCount
+
+  useEffect(() => {
+    if (chatNotificationSessionRef.current === activeSessionId) return
+    chatNotificationSessionRef.current = activeSessionId
+    setRemoteMessageCompleteCount(0)
+    chatQueueSeenRef.current = false
+    lastChatNotificationSignalRef.current = chatCompletionSignal
+  }, [activeSessionId, chatCompletionSignal])
+
+  useEffect(() => {
+    if (chatCompletionSignal <= lastChatNotificationSignalRef.current) return
+    if (isLoading || isLoadingHistory || messageQueue.length > 0) return
+
+    const queueFinished = chatQueueSeenRef.current
+    lastChatNotificationSignalRef.current = chatCompletionSignal
+    chatQueueSeenRef.current = false
+
+    void triggerSystemNotification({
+      id: `chat-complete:${activeSessionId ?? 'global'}:${chatCompletionSignal}`,
+      title: queueFinished ? 'Queued chat finished' : 'Chat finished',
+      body: queueFinished
+        ? 'All queued chat messages finished generating.'
+        : 'Assistant response finished generating.',
+      level: 'success',
+      includeToast: false,
+    })
+  }, [activeSessionId, chatCompletionSignal, isLoading, isLoadingHistory, messageQueue.length])
+
+  useEffect(() => {
+    const nextStatuses: Record<string, ThreadStatus> = {}
+    const activeThreadIds = new Set<string>()
+
+    for (const thread of automation.threads) {
+      activeThreadIds.add(thread.id)
+      nextStatuses[thread.id] = thread.status
+      const queueLength = managerMessageQueues[thread.id]?.length ?? 0
+      if (queueLength > 0) {
+        threadQueueSeenRef.current[thread.id] = true
+      }
+
+      const previousStatus = previousThreadStatusesRef.current[thread.id]
+      if (previousStatus === 'running' && thread.status !== 'running') {
+        pendingThreadCompletionRef.current[thread.id] = thread
+      } else if (pendingThreadCompletionRef.current[thread.id]) {
+        pendingThreadCompletionRef.current[thread.id] = thread
+      }
+
+      if (pendingThreadCompletionRef.current[thread.id] && queueLength === 0) {
+        const completedThread = pendingThreadCompletionRef.current[thread.id]
+        const queueFinished = threadQueueSeenRef.current[thread.id] === true
+        const title = queueFinished ? 'Queued thread finished' : 'Thread finished'
+        const body = completedThread.status === 'completed'
+          ? `"${completedThread.title}" completed.`
+          : `"${completedThread.title}" ended with status ${completedThread.status}.`
+
+        delete pendingThreadCompletionRef.current[thread.id]
+        delete threadQueueSeenRef.current[thread.id]
+
+        void triggerSystemNotification({
+          id: `thread-complete:${thread.id}:${completedThread.updatedAt}`,
+          title,
+          body,
+          level: completedThread.status === 'completed' ? 'success' : 'warning',
+          includeToast: false,
+        })
+      }
+    }
+
+    for (const threadId of Object.keys(previousThreadStatusesRef.current)) {
+      if (activeThreadIds.has(threadId)) continue
+      delete threadQueueSeenRef.current[threadId]
+      delete pendingThreadCompletionRef.current[threadId]
+    }
+
+    previousThreadStatusesRef.current = nextStatuses
+  }, [automation.threads, managerMessageQueues])
 
   // ── Persistent session state for panels ───────────────────────────
   interface WorkspacePanelState { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string }
@@ -1626,7 +1725,7 @@ function App() {
     token,
     onStateSync: handleStateSync,
     onFullState: handleFullState,
-    onMessageComplete: refreshMessages,
+    onMessageComplete: handleMessageComplete,
     onThreadEvent: automation.handleThreadEvent,
     onConnectionStateChange: handleUiConnectionStateChange,
     onFsChanges: useCallback((_payload: FsChangesPayload) => {

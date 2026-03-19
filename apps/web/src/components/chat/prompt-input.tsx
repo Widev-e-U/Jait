@@ -279,7 +279,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const [searchLoading, setSearchLoading] = useState(false)
   const searchAbort = useRef<AbortController | null>(null)
   const composerDisabled = Boolean(disabled)
-  const selectorsDisabled = Boolean(controlsDisabled ?? disabled ?? false) || Boolean(isLoading)
+  const controlsLocked = Boolean(controlsDisabled ?? disabled ?? false)
+  const selectorsDisabled = controlsLocked || Boolean(isLoading)
+  const viewModeDisabled = controlsLocked
   const showViewModeSelector = Boolean(viewMode && onViewModeChange)
   const showProviderSelector = Boolean(provider && onProviderChange)
   const showCliModelSelector = Boolean(provider && provider !== 'jait' && onCliModelChange)
@@ -831,7 +833,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
               {showViewModeSelector && (
-                <ViewModeSelector mode={viewMode!} onChange={onViewModeChange!} disabled={selectorsDisabled} compact={isMobile} />
+                <ViewModeSelector mode={viewMode!} onChange={onViewModeChange!} disabled={viewModeDisabled} compact={isMobile} />
               )}
               {footerLeadingContent}
               {showProviderSelector && (

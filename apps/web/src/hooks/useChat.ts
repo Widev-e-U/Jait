@@ -161,6 +161,7 @@ export function useChat(
   const [todoList, setTodoList] = useState<TodoItem[]>([])
   const [changedFiles, setChangedFiles] = useState<ChangedFile[]>([])
   const [messageQueue, setMessageQueue] = useState<QueuedChatMessage[]>([])
+  const [completionCount, setCompletionCount] = useState(0)
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
   const processingQueueRef = useRef(false)
@@ -532,6 +533,7 @@ export function useChat(
                       : m
                   ),
                 }))
+                setCompletionCount((prev) => prev + 1)
               } else if (data.type === 'error') {
                 setState(prev => ({
                   ...prev,
@@ -874,8 +876,9 @@ export function useChat(
                             }
                           : m
                       ),
-                }))
+                        }))
               }
+              setCompletionCount((prev) => prev + 1)
               return 'sent'
             } else if (data.type === 'error') {
               throw new Error(data.message)
@@ -1119,10 +1122,11 @@ export function useChat(
 
   const rejectFile = useCallback(async (path: string) => {
     // Call undo endpoint to restore the original file
+    let restored = false
     try {
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (authToken) headers['Authorization'] = `Bearer ${authToken}`
-      await fetch(`${API_URL}/api/workspace/undo`, {
+      const res = await fetch(`${API_URL}/api/workspace/undo`, {
         method: 'POST',
         headers,
         body: JSON.stringify({
@@ -1130,9 +1134,11 @@ export function useChat(
           ...(workspaceSurfaceId ? { surfaceId: workspaceSurfaceId } : {}),
         }),
       })
+      restored = res.ok
     } catch {
-      // Silently ignore — we still mark it rejected visually
+      restored = false
     }
+    if (!restored) return
     updateAndBroadcastFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'rejected' as FileChangeState } : f))
   }, [authToken, updateAndBroadcastFiles, workspaceSurfaceId])
 
@@ -1144,10 +1150,11 @@ export function useChat(
     // Collect all undecided file paths and undo them in batch
     const undecidedPaths = changedFiles.filter(f => f.state === 'undecided').map(f => f.path)
     if (undecidedPaths.length > 0) {
+      let restoredPaths = new Set<string>()
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' }
         if (authToken) headers['Authorization'] = `Bearer ${authToken}`
-        await fetch(`${API_URL}/api/workspace/undo-all`, {
+        const res = await fetch(`${API_URL}/api/workspace/undo-all`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
@@ -1155,11 +1162,21 @@ export function useChat(
             ...(workspaceSurfaceId ? { surfaceId: workspaceSurfaceId } : {}),
           }),
         })
+        if (res.ok) {
+          const data = await res.json() as { results?: { path: string; restored: boolean }[] }
+          restoredPaths = new Set((data.results ?? []).filter((r) => r.restored).map((r) => r.path))
+        }
       } catch {
         // Silently ignore
       }
+      if (restoredPaths.size === 0) return
+      updateAndBroadcastFiles(prev => prev.map(f =>
+        f.state === 'undecided' && restoredPaths.has(f.path)
+          ? { ...f, state: 'rejected' as FileChangeState }
+          : f,
+      ))
+      return
     }
-    updateAndBroadcastFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'rejected' as FileChangeState } : f))
   }, [authToken, changedFiles, updateAndBroadcastFiles, workspaceSurfaceId])
 
   // Auto-hide the files-changed list once every file has been decided
@@ -1415,6 +1432,7 @@ export function useChat(
     todoList,
     changedFiles,
     messageQueue,
+    completionCount,
     contextUsage,
     sessionInfo,
     sendMessage,

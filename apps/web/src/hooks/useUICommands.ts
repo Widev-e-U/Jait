@@ -12,18 +12,11 @@ import type {
   FsChangesPayload,
 } from '@jait/shared'
 
-import { toast } from 'sonner'
 import { getWsUrl } from '@/lib/gateway-url'
 import { detectPlatform, initDeviceId } from '@/lib/device-id'
+import { triggerSystemNotification } from '@/lib/system-notifications'
 
 const WS_URL = getWsUrl()
-
-/** Simple string → 32-bit int hash (for Capacitor local-notification ids). */
-function hashCode(s: string): number {
-  let h = 0
-  for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
-  return h
-}
 
 // ── Device / platform helpers ───────────────────────────────────────
 
@@ -196,52 +189,13 @@ export function useUICommands(opts: UseUICommandsOptions) {
   const handleGatewayNotification = useCallback(async (notif: {
     id: string; title: string; body: string; level: string; link?: string
   }) => {
-    // 1) Electron desktop — native OS toast
-    if (window.jaitDesktop?.notify) {
-      window.jaitDesktop.notify({ title: notif.title, body: notif.body })
-      return
-    }
-
-    // 2) Capacitor (Android/iOS) — local notification
-    if (window.Capacitor) {
-      try {
-        const capNotifMod = '@capacitor/local-notifications'
-        const { LocalNotifications } = await import(capNotifMod)
-        const perm = await LocalNotifications.requestPermissions()
-        if (perm.display === 'granted') {
-          await LocalNotifications.schedule({
-            notifications: [{
-              id: Math.abs(hashCode(notif.id)),
-              title: notif.title,
-              body: notif.body,
-              schedule: { at: new Date() },
-            }],
-          })
-          return
-        }
-      } catch {
-        // Plugin not installed or not supported — fall through to browser
-      }
-    }
-
-    // 3) Browser Notification API
-    if ('Notification' in window) {
-      if (Notification.permission === 'granted') {
-        new Notification(notif.title, { body: notif.body, tag: notif.id })
-      } else if (Notification.permission !== 'denied') {
-        const perm = await Notification.requestPermission()
-        if (perm === 'granted') {
-          new Notification(notif.title, { body: notif.body, tag: notif.id })
-        }
-      }
-    }
-
-    // 4) Always show an in-app Sonner toast as well
-    const toastFn = notif.level === 'error' ? toast.error
-      : notif.level === 'warning' ? toast.warning
-      : notif.level === 'success' ? toast.success
-      : toast.info
-    toastFn(notif.title, { description: notif.body })
+    await triggerSystemNotification({
+      id: notif.id,
+      title: notif.title,
+      body: notif.body,
+      level: notif.level as 'info' | 'success' | 'warning' | 'error',
+      includeToast: true,
+    })
   }, [])
 
   // Handle incoming messages — extracted so it's stable across reconnects
