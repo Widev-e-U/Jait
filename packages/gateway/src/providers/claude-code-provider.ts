@@ -190,6 +190,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       pendingToolCalls: [],
       hasStreamedTokens: false,
       hasSentFirstTurn: false,
+      pendingDrip: null,
     };
 
     this.sessions.set(sessionId, state);
