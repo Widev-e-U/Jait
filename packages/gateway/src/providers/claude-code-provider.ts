@@ -233,7 +233,9 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       args.push("--mcp-config", state.mcpConfigPath);
     }
 
-    args.push(message);
+    // Use -- to separate options from the positional message argument.
+    // Without this, variadic flags like --mcp-config consume the message.
+    args.push("--", message);
     state.hasSentFirstTurn = true;
 
     const cmd = this.claudePath ?? "claude";
@@ -265,50 +267,45 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       }
     });
 
-    return new Promise<void>((resolve, reject) => {
-      child.on("exit", (code, signal) => {
-        state.process = null;
-        const exitMode = state.exitMode;
-        state.exitMode = "normal";
+    // Handle process lifecycle via events (non-blocking, like Codex provider).
+    // The caller listens for turn.completed / session.error via onEvent().
+    child.on("exit", (code, signal) => {
+      state.process = null;
+      const exitMode = state.exitMode;
+      state.exitMode = "normal";
 
-        if (exitMode === "stop") {
-          state.session.status = "completed";
-          state.session.completedAt = new Date().toISOString();
-          this.emit({ type: "session.completed", sessionId });
-          resolve();
-          return;
-        }
+      if (exitMode === "stop") {
+        state.session.status = "completed";
+        state.session.completedAt = new Date().toISOString();
+        this.emit({ type: "session.completed", sessionId });
+        return;
+      }
 
-        if (exitMode === "interrupt") {
-          state.session.status = "interrupted";
-          this.emit({ type: "turn.completed", sessionId });
-          resolve();
-          return;
-        }
+      if (exitMode === "interrupt") {
+        state.session.status = "interrupted";
+        this.emit({ type: "turn.completed", sessionId });
+        return;
+      }
 
-        if (code === 0) {
-          state.session.status = "idle";
-          state.session.error = undefined;
-          this.emit({ type: "turn.completed", sessionId });
-          resolve();
-          return;
-        }
+      if (code === 0) {
+        state.session.status = "idle";
+        state.session.error = undefined;
+        this.emit({ type: "turn.completed", sessionId });
+        return;
+      }
 
-        const error = `Claude Code exited with code ${code}${signal ? ` (signal=${signal})` : ""}`;
-        state.session.status = "error";
-        state.session.error = error;
-        this.emit({ type: "session.error", sessionId, error });
-        reject(new Error(error));
-      });
+      const error = `Claude Code exited with code ${code}${signal ? ` (signal=${signal})` : ""}`;
+      state.session.status = "error";
+      state.session.error = error;
+      this.emit({ type: "session.error", sessionId, error });
+    });
 
-      child.on("error", (err) => {
-        state.process = null;
-        state.exitMode = "normal";
-        state.session.status = "error";
-        state.session.error = err.message;
-        this.emit({ type: "session.error", sessionId, error: err.message });
-        reject(err);
-      });
+    child.on("error", (err) => {
+      state.process = null;
+      state.exitMode = "normal";
+      state.session.status = "error";
+      state.session.error = err.message;
+      this.emit({ type: "session.error", sessionId, error: err.message });
     });
   }
 
@@ -604,8 +601,12 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
           env: server.env ?? {},
         };
       } else if (server.transport === "sse" && server.url) {
+        // Claude Code only supports stdio MCP servers.
+        // Use npx mcp-remote to bridge HTTP/SSE endpoints.
         mcpServers[server.name] = {
-          url: server.url,
+          command: "npx",
+          args: ["mcp-remote", server.url],
+          env: server.env ?? {},
         };
       }
     }
