@@ -206,7 +206,6 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       cwd: state.workingDirectory,
       env: state.env,
       stdio: ["pipe", "pipe", "pipe"],
-      shell: true,
     });
 
     state.process = child;
@@ -215,6 +214,9 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     state.hasStreamedTokens = false;
     state.session.status = "running";
     this.emit({ type: "turn.started", sessionId });
+
+    // Close stdin — the prompt is passed as a CLI argument, not via stdin
+    child.stdin?.end();
 
     child.stdout?.on("data", (data: Buffer) => {
       state.buffer += data.toString();
@@ -595,7 +597,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
   private parseModelsFromHelp(): Promise<ProviderModelInfo[]> {
     return new Promise((resolve) => {
       const cmd = this.claudePath ?? "claude";
-      const child = spawn(cmd, ["--help"], { stdio: "pipe", shell: true });
+      const child = spawn(cmd, ["--help"], { stdio: "pipe" });
       let output = "";
       const timer = setTimeout(() => { child.kill(); resolve([]); }, 5000);
 
@@ -632,7 +634,6 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     return new Promise((resolve) => {
       const child = spawn(cmd, ["--version"], {
         stdio: "pipe",
-        shell: true,
       });
       const timer = setTimeout(() => { child.kill(); resolve(false); }, 5000);
       child.on("exit", (code: number | null) => { clearTimeout(timer); resolve(code === 0); });
