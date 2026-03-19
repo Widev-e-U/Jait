@@ -104,25 +104,34 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
   }
 
   /**
-   * Dynamically discover model aliases from the Claude CLI --help output.
-   * Falls back to well-known aliases if parsing fails.
+   * Dynamically discover available models by spawning a quick `claude --print`
+   * session and reading the model from the system init event, plus parsing
+   * `--help` for known aliases. Merges dynamic results with well-known models.
    */
   async listModels(): Promise<ProviderModelInfo[]> {
-    // Try dynamic discovery first: parse --help for aliases and full model names
-    try {
-      const models = await this.parseModelsFromHelp();
-      if (models.length > 0) return models;
-    } catch { /* fall through */ }
-
-    // Fallback: stable aliases and full model IDs that Claude Code accepts
-    return [
+    // Well-known Claude Code models — always available as a baseline.
+    // Aliases first (most useful), then full model IDs.
+    const wellKnown: ProviderModelInfo[] = [
       { id: "sonnet", name: "Sonnet", description: "Claude Sonnet — fast, capable coding model", isDefault: true },
       { id: "opus", name: "Opus", description: "Claude Opus — most capable model" },
       { id: "haiku", name: "Haiku", description: "Claude Haiku — fast lightweight model" },
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6", description: "Claude Sonnet 4.6 (full name)" },
-      { id: "claude-opus-4-6", name: "Claude Opus 4.6", description: "Claude Opus 4.6 (full name)" },
-      { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5", description: "Claude Haiku 4.5 (full name)" },
+      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
+      { id: "claude-opus-4-6", name: "Claude Opus 4.6" },
+      { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
     ];
+
+    // Try to discover additional model aliases from --help
+    try {
+      const discovered = await this.parseModelsFromHelp();
+      // Merge: add any discovered models that aren't in the well-known list
+      for (const m of discovered) {
+        if (!wellKnown.some(w => w.id === m.id)) {
+          wellKnown.push(m);
+        }
+      }
+    } catch { /* best effort */ }
+
+    return wellKnown;
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
@@ -463,14 +472,10 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     const eventType = event["type"] as string;
 
     switch (eventType) {
-      case "content_block_start": {
-        const block = event["content_block"] as Record<string, unknown> | undefined;
-        if (!block) break;
-        if (block["type"] === "tool_use") {
-          this.handleToolUseBlock(state, block);
-        }
+      case "content_block_start":
+        // tool_use blocks arrive here with input:{} (always empty in streaming).
+        // We wait for the full `assistant` snapshot to emit tool.start with complete args.
         break;
-      }
 
       case "content_block_delta": {
         const delta = event["delta"] as Record<string, unknown> | undefined;
@@ -503,19 +508,28 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
 
   /**
    * Register a tool_use content block as a pending tool call and emit tool.start.
+   * Only called from `assistant` message snapshots where input is complete.
    */
   private handleToolUseBlock(state: ClaudeSessionState, block: Record<string, unknown>): void {
     const sessionId = state.session.id;
     const rawTool = String(block["name"] ?? "");
     const providerCallId = String(block["id"] ?? "");
+    const input = (block["input"] as Record<string, unknown>) ?? {};
+    const hasInput = Object.keys(input).length > 0;
 
-    // Avoid emitting duplicate tool.start for the same provider call id
-    if (providerCallId && state.pendingToolCalls.some(p => p.providerCallId === providerCallId)) {
+    // If we already registered this tool call, update its args if the snapshot
+    // now has complete input (the first snapshot often has input:{}).
+    const existing = providerCallId
+      ? state.pendingToolCalls.find(p => p.providerCallId === providerCallId)
+      : undefined;
+    if (existing) {
+      if (hasInput && Object.keys(existing.args).length === 0) {
+        existing.args = normalizeClaudeToolArgs(rawTool, input);
+      }
       return;
     }
 
     const normalizedTool = normalizeClaudeToolName(rawTool);
-    const input = (block["input"] as Record<string, unknown>) ?? {};
     const args = normalizeClaudeToolArgs(rawTool, input);
     const callId = uuidv7();
 
@@ -590,8 +604,6 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       child.on("exit", () => {
         clearTimeout(timer);
         const models: ProviderModelInfo[] = [];
-        // Always include "default" first
-        models.push({ id: "default", name: "Default", description: "Claude Code default model selection", isDefault: true });
 
         // Extract alias examples from --model help text
         // Pattern: e.g. 'sonnet' or 'opus' or full name like 'claude-sonnet-4-6'
@@ -610,7 +622,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
           }
         }
 
-        resolve(models.length > 1 ? models : []);
+        resolve(models);
       });
       child.on("error", () => { clearTimeout(timer); resolve([]); });
     });
