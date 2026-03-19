@@ -42,6 +42,8 @@ interface ClaudeSessionState {
   pendingToolCalls: ClaudePendingToolCall[];
   /** Whether any stream_event text_delta tokens were emitted this turn */
   hasStreamedTokens: boolean;
+  /** Whether the first turn has been sent (determines --session-id vs --resume) */
+  hasSentFirstTurn: boolean;
 }
 
 interface ClaudePendingToolCall {
@@ -104,34 +106,27 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
   }
 
   /**
-   * Dynamically discover available models by spawning a quick `claude --print`
-   * session and reading the model from the system init event, plus parsing
-   * `--help` for known aliases. Merges dynamic results with well-known models.
+   * List available models. Uses well-known aliases that Claude Code accepts,
+   * supplemented by any additional aliases discovered from `claude --help`.
    */
   async listModels(): Promise<ProviderModelInfo[]> {
-    // Well-known Claude Code models — always available as a baseline.
-    // Aliases first (most useful), then full model IDs.
-    const wellKnown: ProviderModelInfo[] = [
+    const models: ProviderModelInfo[] = [
       { id: "sonnet", name: "Sonnet", description: "Claude Sonnet — fast, capable coding model", isDefault: true },
       { id: "opus", name: "Opus", description: "Claude Opus — most capable model" },
       { id: "haiku", name: "Haiku", description: "Claude Haiku — fast lightweight model" },
-      { id: "claude-sonnet-4-6", name: "Claude Sonnet 4.6" },
-      { id: "claude-opus-4-6", name: "Claude Opus 4.6" },
-      { id: "claude-haiku-4-5-20251001", name: "Claude Haiku 4.5" },
     ];
 
-    // Try to discover additional model aliases from --help
+    // Try to discover additional aliases from --help (e.g. full model names)
     try {
       const discovered = await this.parseModelsFromHelp();
-      // Merge: add any discovered models that aren't in the well-known list
       for (const m of discovered) {
-        if (!wellKnown.some(w => w.id === m.id)) {
-          wellKnown.push(m);
+        if (!models.some(w => w.id === m.id)) {
+          models.push(m);
         }
       }
     } catch { /* best effort */ }
 
-    return wellKnown;
+    return models;
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
@@ -162,6 +157,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       exitMode: "normal",
       pendingToolCalls: [],
       hasStreamedTokens: false,
+      hasSentFirstTurn: false,
     };
 
     this.sessions.set(sessionId, state);
@@ -177,13 +173,21 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       throw new Error("Claude Code turn already running");
     }
 
+    const isFirstTurn = !state.hasSentFirstTurn;
+
     const args: string[] = [
       "--print",
       "--output-format", "stream-json",
       "--include-partial-messages",
       "--verbose",
-      "--session-id", state.session.id,
     ];
+
+    // First turn: create a new session. Subsequent turns: resume it.
+    if (isFirstTurn) {
+      args.push("--session-id", state.session.id);
+    } else {
+      args.push("--resume", state.session.id);
+    }
 
     if (state.session.runtimeMode === "full-access") {
       args.push("--dangerously-skip-permissions");
@@ -200,6 +204,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     }
 
     args.push(message);
+    state.hasSentFirstTurn = true;
 
     const cmd = this.claudePath ?? "claude";
     const child = spawn(cmd, args, {
