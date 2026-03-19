@@ -3314,7 +3314,7 @@ function App() {
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
         <header
-          className={`flex items-center px-2 sm:px-5 border-b shrink-0 gap-1 sm:gap-2 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
+          className={`flex items-center gap-1 border-b bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
           style={isElectron ? {
             WebkitAppRegion: 'drag',
             paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
@@ -3336,7 +3336,7 @@ function App() {
             <Button
               variant={currentView === 'chat' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-8 text-xs shrink-0 px-2 sm:px-3"
+              className="h-8 shrink-0 rounded-lg px-2.5 text-xs sm:px-3"
               onClick={() => setCurrentView('chat')}
             >
               <MessageSquare className="h-3.5 w-3.5 sm:mr-1.5" />
@@ -3345,7 +3345,7 @@ function App() {
             <Button
               variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-8 text-xs shrink-0 px-2 sm:px-3"
+              className="h-8 shrink-0 rounded-lg px-2.5 text-xs sm:px-3"
               onClick={() => setCurrentView('jobs')}
             >
               <Calendar className="h-3.5 w-3.5 sm:mr-1.5" />
@@ -3354,7 +3354,7 @@ function App() {
             <Button
               variant={currentView === 'network' ? 'secondary' : 'ghost'}
               size="sm"
-              className="h-8 text-xs shrink-0 px-2 sm:px-3"
+              className="h-8 shrink-0 rounded-lg px-2.5 text-xs sm:px-3"
               onClick={() => setCurrentView('network')}
             >
               <Wifi className="h-3.5 w-3.5 sm:mr-1.5" />
@@ -3366,7 +3366,7 @@ function App() {
                   <Button
                     variant={showScreenShare ? 'secondary' : 'ghost'}
                     size="sm"
-                    className="h-8 text-xs shrink-0 px-2 sm:px-3"
+                    className="h-8 shrink-0 rounded-lg px-2.5 text-xs sm:px-3"
                     onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                   >
                     <Cast className="h-3.5 w-3.5 sm:mr-1.5" />
@@ -3398,7 +3398,7 @@ function App() {
               />
             )}
             {screenShare.isActive && (
-              <span className="flex items-center gap-1 text-[11px] text-muted-foreground bg-muted/60 rounded px-1.5 py-0.5 shrink-0">
+              <span className="ui-pill shrink-0">
                 <Cast className="h-3 w-3 text-green-500 animate-pulse" />
                 <span className="hidden sm:inline">Sharing</span>
               </span>
@@ -3417,7 +3417,7 @@ function App() {
               return displayModel ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <div className="flex items-center gap-1 sm:gap-1.5 sm:mr-2 px-1.5 sm:px-2 py-1 rounded-md bg-muted/50 cursor-default">
+                    <div className="ui-pill cursor-default sm:mr-2">
                       <ModelIcon provider={displayProvider} model={chatProvider === 'codex' ? 'codex' : chatProvider === 'claude-code' ? 'claude-3' : model ?? undefined} size={16} />
                       <span className="text-xs text-muted-foreground hidden sm:inline">{displayModel}</span>
                     </div>
@@ -3433,7 +3433,7 @@ function App() {
             {updateInfo?.hasUpdate && (
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <button
+                  <Button
                     onClick={() => {
                       if (appPlatform === 'web') {
                         setCurrentView('settings')
@@ -3444,11 +3444,13 @@ function App() {
                         )
                       }
                     }}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-amber-500/15 text-amber-600 dark:text-amber-400 hover:bg-amber-500/25 transition-colors text-xs"
+                    variant="outline"
+                    size="sm"
+                    className="h-8 shrink-0 border-amber-500/30 bg-amber-500/10 px-2 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 dark:text-amber-300"
                   >
                     <ArrowUpCircle className="h-3.5 w-3.5" />
                     <span className="hidden sm:inline">v{updateInfo.latestVersion}</span>
-                  </button>
+                  </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Update available — v{updateInfo.latestVersion}</TooltipContent>
               </Tooltip>
@@ -3501,7 +3503,7 @@ function App() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button variant="ghost" size="sm" className="h-8 text-xs" onClick={() => setShowLoginDialog(true)}>
+              <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setShowLoginDialog(true)}>
                 Sign in
               </Button>
             )}
@@ -3550,7 +3552,7 @@ function App() {
                   <Button
                     variant={showSidebar ? 'secondary' : 'ghost'}
                     size="sm"
-                    className="h-6 text-[11px] px-2 shrink-0"
+                    className="h-7 shrink-0 rounded-md px-2 text-xs"
                     onClick={() => setShowSidebar(s => !s)}
                   >
                     {showSidebar
@@ -3573,7 +3575,7 @@ function App() {
                       <Button
                         variant={showTerminal ? 'secondary' : 'ghost'}
                         size="sm"
-                        className="h-6 text-[11px] px-2 shrink-0"
+                        className="h-7 shrink-0 rounded-md px-2 text-xs"
                         onClick={() => { void handleToggleTerminal() }}
                       >
                         <TerminalIcon className="h-3 w-3 mr-1" />
@@ -3591,7 +3593,7 @@ function App() {
                       <Button
                         variant={showWorkspace ? 'secondary' : 'ghost'}
                         size="sm"
-                        className="h-6 text-[11px] px-2"
+                        className="h-7 rounded-md px-2 text-xs"
                         onClick={() => { void handleOpenWorkspace() }}
                       >
                         <FolderTree className="h-3 w-3 mr-1" />
@@ -3607,20 +3609,20 @@ function App() {
                       <div className="fixed inset-0 z-40" onClick={() => setShowCloseWorkspaceConfirm(false)} />
                       <div
                         ref={closeConfirmRef}
-                        className="absolute top-full left-0 mt-1 z-50 w-64 rounded-lg border bg-background shadow-lg p-3 space-y-2"
+                        className="ui-panel-surface absolute top-full left-0 z-50 mt-1 w-64 space-y-3 p-3"
                       >
                         <div className="flex items-start gap-2">
                           <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                          <div className="text-xs">
+                          <div className="text-sm">
                             <p className="font-medium">Close workspace?</p>
-                            <p className="text-muted-foreground mt-0.5">
+                            <p className="ui-meta mt-1">
                               You have {changedFiles.length} unsaved file {changedFiles.length === 1 ? 'change' : 'changes'} that will be discarded.
                             </p>
                           </div>
                         </div>
                         <div className="flex items-center justify-end gap-1.5">
-                          <Button variant="ghost" size="sm" className="h-6 text-[11px] px-2" onClick={() => setShowCloseWorkspaceConfirm(false)}>Cancel</Button>
-                          <Button variant="destructive" size="sm" className="h-6 text-[11px] px-2" onClick={() => { setShowCloseWorkspaceConfirm(false); closeWorkspacePanel() }}>Discard & Close</Button>
+                          <Button variant="ghost" size="sm" className="h-7 rounded-md px-2 text-xs" onClick={() => setShowCloseWorkspaceConfirm(false)}>Cancel</Button>
+                          <Button variant="destructive" size="sm" className="h-7 rounded-md px-2 text-xs" onClick={() => { setShowCloseWorkspaceConfirm(false); closeWorkspacePanel() }}>Discard & Close</Button>
                         </div>
                       </div>
                     </>
@@ -3633,7 +3635,7 @@ function App() {
                       <Button
                         variant={previewOpen ? 'secondary' : 'ghost'}
                         size="sm"
-                        className="h-6 text-[11px] px-2 shrink-0"
+                        className="h-7 shrink-0 rounded-md px-2 text-xs"
                         onClick={() => {
                           if (previewOpen) {
                             if (workspacePreviewState.open) {
