@@ -106,25 +106,55 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
   }
 
   /**
-   * List available models. Uses well-known aliases that Claude Code accepts,
-   * supplemented by any additional aliases discovered from `claude --help`.
+   * Dynamically discover available models by probing the Claude CLI.
+   *
+   * Spawns a short-lived `claude --print` for each candidate alias in parallel,
+   * reads the `system` init event to get the resolved model name, and deduplicates
+   * so that aliases pointing to the same underlying model only appear once.
    */
   async listModels(): Promise<ProviderModelInfo[]> {
-    const models: ProviderModelInfo[] = [
-      { id: "sonnet", name: "Sonnet", description: "Claude Sonnet — fast, capable coding model", isDefault: true },
-      { id: "opus", name: "Opus", description: "Claude Opus — most capable model" },
-      { id: "haiku", name: "Haiku", description: "Claude Haiku — fast lightweight model" },
-    ];
+    // Candidate aliases to probe — short aliases first (preferred for display)
+    const candidates = ["sonnet", "opus", "haiku"];
 
-    // Try to discover additional aliases from --help (e.g. full model names)
+    // Also parse --help for any additional aliases we might not know about
     try {
-      const discovered = await this.parseModelsFromHelp();
-      for (const m of discovered) {
-        if (!models.some(w => w.id === m.id)) {
-          models.push(m);
-        }
+      const helpAliases = await this.parseAliasesFromHelp();
+      for (const alias of helpAliases) {
+        if (!candidates.includes(alias)) candidates.push(alias);
       }
     } catch { /* best effort */ }
+
+    // Probe all candidates in parallel
+    const results = await Promise.all(candidates.map(alias => this.probeModel(alias)));
+
+    // Deduplicate by resolved model name: keep the first (shortest) alias
+    const seen = new Map<string, { alias: string; resolvedModel: string }>();
+    for (const r of results) {
+      if (r && !seen.has(r.resolvedModel)) {
+        seen.set(r.resolvedModel, r);
+      }
+    }
+
+    const models: ProviderModelInfo[] = [];
+    let isFirst = true;
+    for (const { alias, resolvedModel } of seen.values()) {
+      models.push({
+        id: alias,
+        name: alias.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
+        description: resolvedModel,
+        ...(isFirst ? { isDefault: true } : {}),
+      });
+      isFirst = false;
+    }
+
+    // Fallback if probing failed entirely
+    if (models.length === 0) {
+      return [
+        { id: "sonnet", name: "Sonnet", description: "Claude Sonnet", isDefault: true },
+        { id: "opus", name: "Opus", description: "Claude Opus" },
+        { id: "haiku", name: "Haiku", description: "Claude Haiku" },
+      ];
+    }
 
     return models;
   }
@@ -595,11 +625,59 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
   }
 
   /**
-   * Parse the `claude --help` output to discover available model names/aliases.
-   * The --model description typically mentions aliases like 'sonnet', 'opus',
-   * and full model names like 'claude-sonnet-4-6'.
+   * Probe a single model alias by spawning `claude --print` with a trivial prompt
+   * and reading the system init event. Returns the alias and resolved model name,
+   * or null if the alias is invalid.
    */
-  private parseModelsFromHelp(): Promise<ProviderModelInfo[]> {
+  private probeModel(alias: string): Promise<{ alias: string; resolvedModel: string } | null> {
+    return new Promise((resolve) => {
+      const cmd = this.claudePath ?? "claude";
+      const child = spawn(cmd, [
+        "--print", "--output-format", "stream-json", "--verbose",
+        "--no-session-persistence", "--dangerously-skip-permissions",
+        "--max-budget-usd", "0.001",
+        "--model", alias,
+        ".",
+      ], { stdio: ["pipe", "pipe", "pipe"] });
+      child.stdin?.end();
+
+      let resolved = false;
+      const timer = setTimeout(() => {
+        if (!resolved) { resolved = true; child.kill(); resolve(null); }
+      }, 8000);
+
+      child.stdout?.on("data", (d: Buffer) => {
+        if (resolved) return;
+        try {
+          const firstLine = d.toString().split("\n")[0];
+          const init = JSON.parse(firstLine ?? "") as Record<string, unknown>;
+          if (init["type"] === "system" && typeof init["model"] === "string") {
+            resolved = true;
+            clearTimeout(timer);
+            child.kill();
+            resolve({ alias, resolvedModel: init["model"] as string });
+          }
+        } catch { /* not valid JSON yet */ }
+      });
+
+      child.on("exit", (code) => {
+        if (!resolved) {
+          resolved = true;
+          clearTimeout(timer);
+          resolve(code === 0 ? { alias, resolvedModel: alias } : null);
+        }
+      });
+
+      child.on("error", () => {
+        if (!resolved) { resolved = true; clearTimeout(timer); resolve(null); }
+      });
+    });
+  }
+
+  /**
+   * Parse `claude --help` to discover model alias names mentioned in the --model description.
+   */
+  private parseAliasesFromHelp(): Promise<string[]> {
     return new Promise((resolve) => {
       const cmd = this.claudePath ?? "claude";
       const child = spawn(cmd, ["--help"], { stdio: "pipe" });
@@ -610,26 +688,15 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       child.stderr?.on("data", (d: Buffer) => { output += d.toString(); });
       child.on("exit", () => {
         clearTimeout(timer);
-        const models: ProviderModelInfo[] = [];
-
-        // Extract alias examples from --model help text
-        // Pattern: e.g. 'sonnet' or 'opus' or full name like 'claude-sonnet-4-6'
+        const aliases: string[] = [];
         const modelSection = output.match(/--model\s+<model>\s+(.*?)(?:\n\s*-|\n\n)/s);
         if (modelSection?.[1]) {
-          const text = modelSection[1];
-          // Find quoted aliases: 'sonnet', 'opus', 'claude-sonnet-4-6', etc.
-          const aliases = [...text.matchAll(/'([a-z][a-z0-9-]*)'/g)].map(m => m[1]).filter((a): a is string => !!a);
-          for (const alias of aliases) {
-            if (!models.some(m => m.id === alias)) {
-              models.push({
-                id: alias,
-                name: alias.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-              });
-            }
+          const matches = [...modelSection[1].matchAll(/'([a-z][a-z0-9-]*)'/g)];
+          for (const m of matches) {
+            if (m[1] && !aliases.includes(m[1])) aliases.push(m[1]);
           }
         }
-
-        resolve(models);
+        resolve(aliases);
       });
       child.on("error", () => { clearTimeout(timer); resolve([]); });
     });
