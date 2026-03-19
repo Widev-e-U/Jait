@@ -92,6 +92,24 @@ function getToolMeta(tool: string) {
   return toolMeta[normalized] ?? { icon: Terminal, label: normalized, color: 'text-muted-foreground' }
 }
 
+/** Convert an unknown tool arg to a display string, never returning [object Object] */
+function displayStr(value: unknown, fallback = ''): string {
+  if (value == null) return fallback
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  if (Array.isArray(value)) return `${value.length} item(s)`
+  if (typeof value === 'object') {
+    const obj = value as Record<string, unknown>
+    // Try common string fields that providers might nest
+    for (const key of ['text', 'content', 'message', 'name', 'path', 'value', 'description']) {
+      if (typeof obj[key] === 'string' && obj[key]) return obj[key] as string
+    }
+    const keys = Object.keys(obj)
+    return keys.length > 0 ? `{${keys.slice(0, 3).join(', ')}${keys.length > 3 ? ', …' : ''}}` : fallback
+  }
+  return fallback
+}
+
 function truncate(value: string, max = 64): string {
   const trimmed = value.trim()
   if (trimmed.length <= max) return trimmed
@@ -147,27 +165,27 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   const normalized = normalizeTool(tool)
   const normalizedArgs = normalizeToolArgs(normalized, args)
   // ── Core tools ──────────────────────────────────────────
-  if (normalized === 'read') return String(normalizedArgs.path ?? '')
+  if (normalized === 'read') return displayStr(normalizedArgs.path)
   if (normalized === 'edit') {
-    const path = String(normalizedArgs.path ?? '')
+    const path = displayStr(normalizedArgs.path)
     const fileName = getBaseName(path)
     const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
     if (normalizedArgs.search) return `${fileName}${diffCount ? ` (${diffCount})` : ' (patch)'}`
     if (diffCount) return `${fileName} (${diffCount})`
     return fileName
   }
-  if (normalized === 'execute') return String(normalizedArgs.command ?? args.command ?? '')
+  if (normalized === 'execute') return displayStr(normalizedArgs.command ?? args.command)
   if (normalized === 'search') {
-    const pattern = String(normalizedArgs.pattern ?? args.pattern ?? '')
-    const mode = String(normalizedArgs.mode ?? args.mode ?? 'content')
+    const pattern = displayStr(normalizedArgs.pattern ?? args.pattern)
+    const mode = displayStr(normalizedArgs.mode ?? args.mode, 'content')
     return mode === 'files' ? `Find: ${pattern}` : pattern
   }
   if (normalized === 'web') {
-    if (normalizedArgs.url) return String(normalizedArgs.url)
+    if (normalizedArgs.url) return displayStr(normalizedArgs.url)
     if (Array.isArray(normalizedArgs.urls)) return `${normalizedArgs.urls.length} URLs`
-    return String(normalizedArgs.query ?? '')
+    return displayStr(normalizedArgs.query)
   }
-  if (normalized === 'agent') return truncate(String(args.description ?? args.prompt ?? ''), 80)
+  if (normalized === 'agent') return truncate(displayStr(args.description ?? args.prompt), 80)
   if (normalized === 'todo') {
     const list = args.todoList as Array<{ title: string; status: string }> | undefined
     if (!list) return 'Track tasks'
@@ -176,9 +194,9 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
     return `${list.length} task(s)`
   }
   if (normalized === 'jait') {
-    const action = String(args.action ?? '')
-    if (action.startsWith('memory.')) return `${action}: ${truncate(String(args.query ?? args.content ?? ''), 60)}`
-    if (action.startsWith('cron.')) return `${action}: ${truncate(String(args.name ?? args.id ?? ''), 40)}`
+    const action = displayStr(args.action)
+    if (action.startsWith('memory.')) return `${action}: ${truncate(displayStr(args.query ?? args.content), 60)}`
+    if (action.startsWith('cron.')) return `${action}: ${truncate(displayStr(args.name ?? args.id), 40)}`
     return action || 'jait'
   }
   if (normalized === 'mcp-tool') {
@@ -188,50 +206,50 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
     if (mcp.details) return mcp.details
   }
   // ── Legacy tools ─────────────────────────────────────────
-  if (normalized.startsWith('terminal.')) return String(normalizedArgs.command ?? args.command ?? '')
+  if (normalized.startsWith('terminal.')) return displayStr(normalizedArgs.command ?? args.command)
   if (normalized === 'file.write' || normalized === 'file.patch') {
-    const path = String(normalizedArgs.path ?? '')
+    const path = displayStr(normalizedArgs.path)
     const diffCount = getEditDiffCountLabel(normalized, normalizedArgs)
     return diffCount ? `${path} (${diffCount})` : path
   }
-  if (normalized.startsWith('file.')) return String(normalizedArgs.path ?? '')
+  if (normalized.startsWith('file.')) return displayStr(normalizedArgs.path)
   if (normalized === 'memory.save') {
-    const scope = String(args.scope ?? 'memory')
-    const content = String(args.content ?? '').trim()
+    const scope = displayStr(args.scope, 'memory')
+    const content = displayStr(args.content).trim()
     return content ? `${scope}: ${truncate(content, 80)}` : `scope: ${scope}`
   }
-  if (normalized === 'memory.search') return String(args.query ?? '')
-  if (normalized === 'memory.forget') return String(args.id ?? '')
+  if (normalized === 'memory.search') return displayStr(args.query)
+  if (normalized === 'memory.forget') return displayStr(args.id)
   if (normalized === 'cron.add') {
-    const name = String(args.name ?? 'job')
-    const cron = String(args.cron ?? '')
-    const toolName = String(args.toolName ?? '')
+    const name = displayStr(args.name, 'job')
+    const cron = displayStr(args.cron)
+    const toolName = displayStr(args.toolName)
     if (cron && toolName) return `${name} (${cron}) -> ${toolName}`
     if (cron) return `${name} (${cron})`
     return name
   }
   if (normalized === 'cron.update') {
-    const id = String(args.id ?? 'job')
-    const cron = String(args.cron ?? '')
+    const id = displayStr(args.id, 'job')
+    const cron = displayStr(args.cron)
     return cron ? `${id} (${cron})` : id
   }
-  if (normalized === 'cron.remove') return String(args.id ?? '')
+  if (normalized === 'cron.remove') return displayStr(args.id)
   if (normalized === 'cron.list') return 'List cron jobs'
-  if (tool === 'os.query') return String(args.query ?? '')
-  if (tool === 'os.install') return String(args.package ?? '')
-  if (normalized === 'browser.navigate') return String(normalizedArgs.url ?? '')
+  if (tool === 'os.query') return displayStr(args.query)
+  if (tool === 'os.install') return displayStr(args.package)
+  if (normalized === 'browser.navigate') return displayStr(normalizedArgs.url)
   if (normalized === 'browser.snapshot') return 'Describe page'
-  if (normalized === 'browser.click') return String(args.selector ?? '')
-  if (normalized === 'browser.type') return `${String(args.selector ?? '')} ← ${String(args.text ?? '')}`
-  if (normalized === 'browser.scroll') return `x:${String(args.x ?? 0)} y:${String(args.y ?? 0)}`
-  if (normalized === 'browser.select') return `${String(args.selector ?? '')} = ${String(args.value ?? '')}`
-  if (normalized === 'browser.wait') return `${String(args.selector ?? '')} (${String(args.timeoutMs ?? 10000)}ms)`
-  if (normalized === 'browser.screenshot') return String(args.path ?? 'auto path')
-  if (normalized === 'browser.search') return String(normalizedArgs.query ?? '')
-  if (normalized === 'browser.fetch') return String(normalizedArgs.url ?? '')
-  if (normalized === 'preview.open') return String(normalizedArgs.target ?? args.target ?? '')
-  if (normalized === 'surfaces.start') return `Start ${args.type ?? 'surface'}`
-  if (normalized === 'surfaces.stop') return `Stop ${args.surfaceId ?? 'surface'}`
+  if (normalized === 'browser.click') return displayStr(args.selector)
+  if (normalized === 'browser.type') return `${displayStr(args.selector)} ← ${displayStr(args.text)}`
+  if (normalized === 'browser.scroll') return `x:${displayStr(args.x, '0')} y:${displayStr(args.y, '0')}`
+  if (normalized === 'browser.select') return `${displayStr(args.selector)} = ${displayStr(args.value)}`
+  if (normalized === 'browser.wait') return `${displayStr(args.selector)} (${displayStr(args.timeoutMs, '10000')}ms)`
+  if (normalized === 'browser.screenshot') return displayStr(args.path, 'auto path')
+  if (normalized === 'browser.search') return displayStr(normalizedArgs.query)
+  if (normalized === 'browser.fetch') return displayStr(normalizedArgs.url)
+  if (normalized === 'preview.open') return displayStr(normalizedArgs.target ?? args.target)
+  if (normalized === 'surfaces.start') return `Start ${displayStr(args.type, 'surface')}`
+  if (normalized === 'surfaces.stop') return `Stop ${displayStr(args.surfaceId, 'surface')}`
   if (normalized === 'surfaces.list') return 'List surfaces'
   const genericSummary = summarizeToolArguments(normalizedArgs)
   if (genericSummary) return genericSummary
@@ -364,6 +382,18 @@ function formatCronAddResult(data: Record<string, unknown>): string | null {
   return lines.length > 0 ? lines.join('\n') : null
 }
 
+/** Safely convert any value to a display string, never returning [object Object] */
+export function safeStringify(value: unknown): string {
+  if (value == null) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value, null, 2)
+  } catch {
+    return '(complex value)'
+  }
+}
+
 export function formatStructuredValue(value: unknown): string | null {
   if (value == null) return null
   if (typeof value === 'string') return value
@@ -379,7 +409,7 @@ export function formatStructuredValue(value: unknown): string | null {
   try {
     return JSON.stringify(value, null, 2)
   } catch {
-    return String(value)
+    return '(complex value)'
   }
 }
 
@@ -409,6 +439,12 @@ function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
     const formatted = formatCronAddResult(data)
     if (formatted) return formatted
   }
+  // Agent/subagent: return content for the SubAgentHistoryView to parse from data
+  if (normalizedTool === 'agent' && data) {
+    const content = typeof data.content === 'string' ? data.content : ''
+    if (content) return content
+    // Fall through to result.message
+  }
 
   if (data?.output != null) return formatStructuredValue(data.output) ?? ''
   if (data?.content != null) return formatStructuredValue(data.content) ?? ''
@@ -425,7 +461,7 @@ function formatOutput(result: ToolCallInfo['result'], tool?: string): string {
       .join('\n')
   }
   if (result.message && result.message !== 'Command executed successfully') return result.message
-  if (data) return JSON.stringify(data, null, 2)
+  if (data) return safeStringify(data)
   return result.message
 }
 
@@ -499,6 +535,74 @@ function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className
   }
 
   return null
+}
+
+interface SubAgentToolCall {
+  tool: string
+  ok: boolean
+  message: string
+}
+
+function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>; message?: string }) {
+  const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls as SubAgentToolCall[] : []
+  const content = typeof data.content === 'string' ? data.content.trim() : ''
+  const rounds = typeof data.rounds === 'number' ? data.rounds : null
+  const durationMs = typeof data.durationMs === 'number' ? data.durationMs : null
+
+  return (
+    <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
+      {/* Stats bar */}
+      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
+        {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
+        {toolCalls.length > 0 && <span>{toolCalls.length} tool call{toolCalls.length !== 1 ? 's' : ''}</span>}
+        {durationMs != null && (
+          <span>{durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}</span>
+        )}
+      </div>
+
+      {/* Tool call history */}
+      {toolCalls.length > 0 && (
+        <div className="space-y-1">
+          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Tool calls</div>
+          <div className="rounded bg-background/80 divide-y divide-border/30">
+            {toolCalls.map((tc, i) => (
+              <div key={`${tc.tool}-${i}`} className="flex items-center gap-2 px-2 py-1.5">
+                {tc.ok ? (
+                  <CheckCircle2 className="h-3 w-3 shrink-0 text-green-500" />
+                ) : (
+                  <XCircle className="h-3 w-3 shrink-0 text-red-500" />
+                )}
+                <span className="font-mono text-[11px] text-foreground/80 shrink-0">{tc.tool}</span>
+                {tc.message && (
+                  <span className="text-[11px] text-muted-foreground truncate min-w-0">{truncate(tc.message, 100)}</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Final output */}
+      {content && (
+        <div>
+          <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Result</div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono text-[11px] leading-5">
+            {content}
+          </pre>
+        </div>
+      )}
+
+      {/* Fallback to message if no content */}
+      {!content && message && (
+        <div>
+          <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Result</div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono text-[11px] leading-5">
+            {message}
+          </pre>
+        </div>
+      )}
+    </div>
+  )
 }
 
 function BrowserSnapshotView({ snapshot }: { snapshot: string }) {
@@ -984,6 +1088,11 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
     <BrowserSnapshotView snapshot={snapshotText!} />
   ) : bodyKind === 'browserScreenshot' ? (
     <BrowserScreenshotView path={screenshotPath!} />
+  ) : bodyKind === 'subagent' ? (
+    <SubAgentHistoryView
+      data={resultData ?? {}}
+      message={call.result?.message}
+    />
   ) : bodyKind === 'editDiff' ? (
      <EditDiffView
       filePath={String(normalizedArgs.path ?? '')}
@@ -1057,7 +1166,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
             <TooltipContent side="top">Open terminal</TooltipContent>
           </Tooltip>
         )}
-        {bodyKind === 'editDiff' && onOpenDiff && call.status === 'success' && (
+        {bodyKind === 'editDiff' && onOpenDiff && call.status === 'success' && filePath && (
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -1068,7 +1177,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
                 onClick={(e) => {
                   e.preventDefault()
                   e.stopPropagation()
-                  onOpenDiff(String(normalizedArgs.path ?? ''))
+                  onOpenDiff(filePath)
                 }}
               >
                 <ExternalLink className="h-3.5 w-3.5" />
@@ -1123,7 +1232,7 @@ function ToolCallGroupInner({ calls, onOpenTerminal, onOpenDiff }: ToolCallGroup
   const errorCount = hiddenCount - successCount
 
   return (
-    <div className="my-2 overflow-hidden rounded-xl bg-muted/[0.18] divide-y divide-border/30">
+    <div className="my-2 overflow-hidden rounded-xl border border-border/40 bg-muted/[0.18] divide-y divide-border/30">
       {needsCollapse && (
         <button
           type="button"

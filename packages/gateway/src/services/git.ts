@@ -40,6 +40,11 @@ export interface GitStatusPr {
 export interface GitStatusResult {
   branch: string | null;
   hasWorkingTreeChanges: boolean;
+  index: {
+    files: GitStatusFile[];
+    insertions: number;
+    deletions: number;
+  };
   workingTree: {
     files: GitStatusFile[];
     insertions: number;
@@ -81,6 +86,14 @@ export interface GitDiffResult {
   diff: string;
   files: string[];
   hasChanges: boolean;
+}
+
+function normalizeStatusChar(char: string): string {
+  if (char === "?") return "?";
+  if (char === "A") return "A";
+  if (char === "D") return "D";
+  if (char === "R" || char === "C") return "R";
+  return "M";
 }
 
 export interface FileDiffEntry {
@@ -373,6 +386,7 @@ export class GitService {
       return {
         branch: null,
         hasWorkingTreeChanges: false,
+        index: { files: [], insertions: 0, deletions: 0 },
         workingTree: { files: [], insertions: 0, deletions: 0 },
         hasUpstream: false,
         aheadCount: 0,
@@ -395,43 +409,65 @@ export class GitService {
     const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
     const hasChanges = porcelain.length > 0;
 
-    // Build per-file status map from porcelain output
-    const statusMap = new Map<string, string>();
+    // Build per-file staged/unstaged status maps from porcelain output
+    const indexStatusMap = new Map<string, string>();
+    const workingTreeStatusMap = new Map<string, string>();
     for (const line of porcelain.split("\n").filter(Boolean)) {
       const xy = line.slice(0, 2);
+      const staged = xy[0] ?? " ";
+      const unstaged = xy[1] ?? " ";
       let fp = line.slice(3).trim();
       if (fp.includes(" -> ")) fp = fp.split(" -> ").pop()!.trim();
-      let st = "M";
-      if (xy.includes("?")) st = "?";
-      else if (xy.includes("A")) st = "A";
-      else if (xy.includes("D")) st = "D";
-      else if (xy.includes("R")) st = "R";
-      if (fp) statusMap.set(fp, st);
+      if (!fp) continue;
+      if (xy === "??") {
+        workingTreeStatusMap.set(fp, "?");
+        continue;
+      }
+      if (staged !== " ") indexStatusMap.set(fp, normalizeStatusChar(staged));
+      if (unstaged !== " ") workingTreeStatusMap.set(fp, normalizeStatusChar(unstaged));
     }
 
-    // Diff stats for changed files
-    const files: GitStatusFile[] = [];
-    let totalInsertions = 0;
-    let totalDeletions = 0;
+    // Diff stats for staged and unstaged files
+    const indexFiles: GitStatusFile[] = [];
+    const workingTreeFiles: GitStatusFile[] = [];
+    let indexInsertions = 0;
+    let indexDeletions = 0;
+    let workingTreeInsertions = 0;
+    let workingTreeDeletions = 0;
     if (hasChanges) {
       try {
-        const diffStat = await gitExec(cwd, "diff --numstat HEAD").catch(() => gitExec(cwd, "diff --numstat"));
-        for (const line of diffStat.split("\n").filter(Boolean)) {
+        const stagedDiffStat = await gitExec(cwd, "diff --cached --numstat").catch(() => "");
+        for (const line of stagedDiffStat.split("\n").filter(Boolean)) {
           const [ins, del, filePath] = line.split("\t");
           const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
           const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
           if (filePath) {
-            files.push({ path: filePath, insertions, deletions, status: statusMap.get(filePath) ?? "M" });
-            totalInsertions += insertions;
-            totalDeletions += deletions;
+            indexFiles.push({ path: filePath, insertions, deletions, status: indexStatusMap.get(filePath) ?? "M" });
+            indexInsertions += insertions;
+            indexDeletions += deletions;
           }
         }
-        // Also count untracked files
-        const untracked = porcelain.split("\n").filter((l) => l.startsWith("??"));
-        for (const line of untracked) {
-          const filePath = line.slice(3).trim();
-          if (filePath && !files.some((f) => f.path === filePath)) {
-            files.push({ path: filePath, insertions: 0, deletions: 0, status: "?" });
+
+        const workingTreeDiffStat = await gitExec(cwd, "diff --numstat").catch(() => "");
+        for (const line of workingTreeDiffStat.split("\n").filter(Boolean)) {
+          const [ins, del, filePath] = line.split("\t");
+          const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
+          const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
+          if (filePath) {
+            workingTreeFiles.push({ path: filePath, insertions, deletions, status: workingTreeStatusMap.get(filePath) ?? "M" });
+            workingTreeInsertions += insertions;
+            workingTreeDeletions += deletions;
+          }
+        }
+
+        for (const [filePath, status] of indexStatusMap) {
+          if (!indexFiles.some((f) => f.path === filePath)) {
+            indexFiles.push({ path: filePath, insertions: 0, deletions: 0, status });
+          }
+        }
+        for (const [filePath, status] of workingTreeStatusMap) {
+          if (!workingTreeFiles.some((f) => f.path === filePath)) {
+            workingTreeFiles.push({ path: filePath, insertions: 0, deletions: 0, status });
           }
         }
       } catch { /* ignore diff failures */ }
@@ -505,7 +541,8 @@ export class GitService {
     return {
       branch,
       hasWorkingTreeChanges: hasChanges,
-      workingTree: { files, insertions: totalInsertions, deletions: totalDeletions },
+      index: { files: indexFiles, insertions: indexInsertions, deletions: indexDeletions },
+      workingTree: { files: workingTreeFiles, insertions: workingTreeInsertions, deletions: workingTreeDeletions },
       hasUpstream,
       aheadCount,
       behindCount,

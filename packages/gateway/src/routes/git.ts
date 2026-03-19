@@ -69,6 +69,14 @@ function normalizeGitRouteDeps(deps?: WsControlPlane | GitRouteDeps): GitRouteDe
   return deps as GitRouteDeps;
 }
 
+function normalizeStatusChar(char: string): string {
+  if (char === "?") return "?";
+  if (char === "A") return "A";
+  if (char === "D") return "D";
+  if (char === "R" || char === "C") return "R";
+  return "M";
+}
+
 async function generateCommitMessageWithCliProvider(
   provider: CliProviderAdapter,
   cwd: string,
@@ -153,33 +161,49 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         try { currentBranch = await gitProxy("rev-parse --abbrev-ref HEAD"); if (currentBranch === "HEAD") currentBranch = null; } catch { /* */ }
         const porcelain = await gitProxy("status --porcelain").catch(() => "");
         const hasChanges = porcelain.length > 0;
-        // Build per-file status map from porcelain
-        const statusMap = new Map<string, string>();
+        // Build per-file staged/unstaged maps from porcelain
+        const indexStatusMap = new Map<string, string>();
+        const workingTreeStatusMap = new Map<string, string>();
         for (const pLine of porcelain.split("\n").filter(Boolean)) {
           const xy = pLine.slice(0, 2);
+          const staged = xy[0] ?? " ";
+          const unstaged = xy[1] ?? " ";
           let fp = pLine.slice(3).trim();
           if (fp.includes(" -> ")) fp = fp.split(" -> ").pop()!.trim();
-          let st = "M";
-          if (xy.includes("?")) st = "?";
-          else if (xy.includes("A")) st = "A";
-          else if (xy.includes("D")) st = "D";
-          else if (xy.includes("R")) st = "R";
-          if (fp) statusMap.set(fp, st);
+          if (!fp) continue;
+          if (xy === "??") {
+            workingTreeStatusMap.set(fp, "?");
+            continue;
+          }
+          if (staged !== " ") indexStatusMap.set(fp, normalizeStatusChar(staged));
+          if (unstaged !== " ") workingTreeStatusMap.set(fp, normalizeStatusChar(unstaged));
         }
-        const files: { path: string; insertions: number; deletions: number; status: string }[] = [];
+        const stagedFiles: { path: string; insertions: number; deletions: number; status: string }[] = [];
+        const workingTreeFiles: { path: string; insertions: number; deletions: number; status: string }[] = [];
         if (hasChanges) {
           try {
-            const diffStat = await gitProxy("diff --numstat HEAD").catch(() => gitProxy("diff --numstat"));
-            for (const line of diffStat.split("\n").filter(Boolean)) {
+            const stagedDiffStat = await gitProxy("diff --cached --numstat").catch(() => "");
+            for (const line of stagedDiffStat.split("\n").filter(Boolean)) {
               const [ins, del, filePath] = line.split("\t");
               const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
               const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
-              if (filePath) files.push({ path: filePath, insertions, deletions, status: statusMap.get(filePath) ?? "M" });
+              if (filePath) stagedFiles.push({ path: filePath, insertions, deletions, status: indexStatusMap.get(filePath) ?? "M" });
             }
-            // Also count untracked files
-            for (const [fp, st] of statusMap) {
-              if (st === "?" && !files.some((f) => f.path === fp)) {
-                files.push({ path: fp, insertions: 0, deletions: 0, status: "?" });
+            const workingTreeDiffStat = await gitProxy("diff --numstat").catch(() => "");
+            for (const line of workingTreeDiffStat.split("\n").filter(Boolean)) {
+              const [ins, del, filePath] = line.split("\t");
+              const insertions = ins === "-" ? 0 : parseInt(ins ?? "0", 10);
+              const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
+              if (filePath) workingTreeFiles.push({ path: filePath, insertions, deletions, status: workingTreeStatusMap.get(filePath) ?? "M" });
+            }
+            for (const [fp, st] of indexStatusMap) {
+              if (!stagedFiles.some((f) => f.path === fp)) {
+                stagedFiles.push({ path: fp, insertions: 0, deletions: 0, status: st });
+              }
+            }
+            for (const [fp, st] of workingTreeStatusMap) {
+              if (!workingTreeFiles.some((f) => f.path === fp)) {
+                workingTreeFiles.push({ path: fp, insertions: 0, deletions: 0, status: st });
               }
             }
           } catch { /* */ }
@@ -209,7 +233,16 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         return {
           branch: currentBranch,
           hasWorkingTreeChanges: hasChanges,
-          workingTree: { files, insertions: files.reduce((s, f) => s + f.insertions, 0), deletions: files.reduce((s, f) => s + f.deletions, 0) },
+          index: {
+            files: stagedFiles,
+            insertions: stagedFiles.reduce((s, f) => s + f.insertions, 0),
+            deletions: stagedFiles.reduce((s, f) => s + f.deletions, 0),
+          },
+          workingTree: {
+            files: workingTreeFiles,
+            insertions: workingTreeFiles.reduce((s, f) => s + f.insertions, 0),
+            deletions: workingTreeFiles.reduce((s, f) => s + f.deletions, 0),
+          },
           hasUpstream: false,
           aheadCount: 0,
           behindCount: 0,

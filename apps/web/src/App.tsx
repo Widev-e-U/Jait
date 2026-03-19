@@ -1196,7 +1196,7 @@ function App() {
     setChangedFiles,
     setOnChangedFilesSync,
     refreshMessages,
-  } = useChat(activeSessionId, token, onLoginRequired)
+  } = useChat(activeSessionId, token, onLoginRequired, activeWorkspace?.surfaceId ?? null)
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
   const managerQueueProcessingRef = useRef(new Set<string>())
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals(token)
@@ -1665,9 +1665,13 @@ function App() {
         setCurrentView('chat')
         setDevPreviewTarget(target)
         setDevPreviewAutoOpenKey((prev) => prev + 1)
-        setShowDevPreview(true)
         setSavedDevPreview({ open: true, target })
-      }, [setSavedDevPreview]),
+        if (routePreviewToWorkspace(target)) {
+          setShowDevPreview(false)
+          return
+        }
+        setShowDevPreview(true)
+      }, [routePreviewToWorkspace, setSavedDevPreview]),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
         setSavedScreenShare({ open: true })
@@ -3558,23 +3562,6 @@ function App() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    variant={showDebugPanel ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-6 text-[11px] px-2 shrink-0"
-                    onClick={() => setShowDebugPanel(d => !d)}
-                  >
-                    <Bug className="h-3 w-3 mr-1" />
-                    Debug
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">SSE debug stream</TooltipContent>
-              </Tooltip>
-            )}
-
-            {viewMode === 'developer' && showWorkspace && activeWorkspace && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
                     variant={showArchitecture ? 'secondary' : 'ghost'}
                     size="sm"
                     className="h-6 text-[11px] px-2 shrink-0"
@@ -3594,6 +3581,22 @@ function App() {
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Software architecture diagram</TooltipContent>
+              </Tooltip>
+            )}
+
+            {viewMode === 'developer' && showWorkspace && activeWorkspace && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showDebugPanel ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="ml-auto h-6 w-6 shrink-0 p-0"
+                    onClick={() => setShowDebugPanel(d => !d)}
+                  >
+                    <Bug className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">SSE debug stream</TooltipContent>
               </Tooltip>
             )}
 

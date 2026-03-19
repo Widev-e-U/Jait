@@ -125,6 +125,8 @@ interface QueuedChatMessage extends QueuedMessage {
   attachments?: ChatAttachment[]
 }
 
+type SendMessageResult = 'sent' | 'retry' | 'aborted'
+
 function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
   const sourceIndex = items.findIndex((item) => item.id === sourceId)
   const targetIndex = items.findIndex((item) => item.id === targetId)
@@ -143,6 +145,7 @@ export function useChat(
   sessionId: string | null,
   authToken?: string | null,
   onLoginRequired?: () => void,
+  workspaceSurfaceId?: string | null,
 ) {
   const [state, setState] = useState<ChatState>({
     messages: [],
@@ -566,7 +569,7 @@ export function useChat(
   const sendMessage = useCallback(async (
     content: string,
     options: SendMessageOptions = {}
-  ): Promise<boolean> => {
+  ): Promise<SendMessageResult> => {
     const { token, sessionId: explicitSessionId, onLoginRequired: requestLoginRequired } = options
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
@@ -631,7 +634,7 @@ export function useChat(
             ),
           }))
           if (data.detail === 'login_required') notifyLoginRequired?.()
-          return false
+          return 'retry'
         }
       }
 
@@ -873,7 +876,7 @@ export function useChat(
                       ),
                 }))
               }
-              return true
+              return 'sent'
             } else if (data.type === 'error') {
               throw new Error(data.message)
             }
@@ -914,7 +917,7 @@ export function useChat(
               }),
           }))
         }
-        return false
+        return 'aborted'
       }
       if (!isStale()) {
         setState(prev => ({
@@ -928,9 +931,9 @@ export function useChat(
           ),
         }))
       }
-      return false
+      return 'retry'
     }
-    return true
+    return 'sent'
   }, [authToken, onLoginRequired, sessionId])
 
   // --- Message queue (queueing & steering) ---
@@ -984,7 +987,7 @@ export function useChat(
       return prev.filter(item => item.id !== next.id)
     })
     try {
-      const ok = await sendMessage(next.content, {
+      const result = await sendMessage(next.content, {
         ...options,
         queued: true,
         ...(next.mode ? { mode: next.mode } : {}),
@@ -994,7 +997,7 @@ export function useChat(
         ...(next.referencedFiles?.length ? { referencedFiles: next.referencedFiles } : {}),
         ...(next.attachments?.length ? { attachments: next.attachments } : {}),
       })
-      if (!ok) {
+      if (result === 'retry') {
         setMessageQueue(prev => (prev.some(item => item.id === next.id) ? prev : [next, ...prev]))
       }
     } finally {
@@ -1105,10 +1108,14 @@ export function useChat(
       await fetch(`${API_URL}/api/workspace/apply-diff`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ path, content: null }), // null content = just clear backup
+        body: JSON.stringify({
+          path,
+          content: null,
+          ...(workspaceSurfaceId ? { surfaceId: workspaceSurfaceId } : {}),
+        }), // null content = just clear backup
       })
     } catch { /* ignore */ }
-  }, [authToken, updateAndBroadcastFiles])
+  }, [authToken, updateAndBroadcastFiles, workspaceSurfaceId])
 
   const rejectFile = useCallback(async (path: string) => {
     // Call undo endpoint to restore the original file
@@ -1118,13 +1125,16 @@ export function useChat(
       await fetch(`${API_URL}/api/workspace/undo`, {
         method: 'POST',
         headers,
-        body: JSON.stringify({ path }),
+        body: JSON.stringify({
+          path,
+          ...(workspaceSurfaceId ? { surfaceId: workspaceSurfaceId } : {}),
+        }),
       })
     } catch {
       // Silently ignore — we still mark it rejected visually
     }
     updateAndBroadcastFiles(prev => prev.map(f => f.path === path ? { ...f, state: 'rejected' as FileChangeState } : f))
-  }, [authToken, updateAndBroadcastFiles])
+  }, [authToken, updateAndBroadcastFiles, workspaceSurfaceId])
 
   const acceptAllFiles = useCallback(() => {
     updateAndBroadcastFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'accepted' as FileChangeState } : f))
@@ -1140,14 +1150,17 @@ export function useChat(
         await fetch(`${API_URL}/api/workspace/undo-all`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ paths: undecidedPaths }),
+          body: JSON.stringify({
+            paths: undecidedPaths,
+            ...(workspaceSurfaceId ? { surfaceId: workspaceSurfaceId } : {}),
+          }),
         })
       } catch {
         // Silently ignore
       }
     }
     updateAndBroadcastFiles(prev => prev.map(f => f.state === 'undecided' ? { ...f, state: 'rejected' as FileChangeState } : f))
-  }, [authToken, changedFiles, updateAndBroadcastFiles])
+  }, [authToken, changedFiles, updateAndBroadcastFiles, workspaceSurfaceId])
 
   // Auto-hide the files-changed list once every file has been decided
   useEffect(() => {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor, { DiffEditor } from '@monaco-editor/react'
-import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
@@ -733,8 +733,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const gitStatusRequestSeqRef = useRef(0)
   /** Map of relative file path → status code (A/M/D/R/?) */
   const gitStatusMap = useMemo(() => {
-    if (!gitStatus?.workingTree.files.length) return new Map<string, string>()
+    if (!gitStatus) return new Map<string, string>()
     const m = new Map<string, string>()
+    for (const f of gitStatus.index.files) {
+      m.set(f.path, (f as { status?: string }).status ?? 'M')
+    }
     for (const f of gitStatus.workingTree.files) {
       m.set(f.path, (f as { status?: string }).status ?? 'M')
     }
@@ -2139,7 +2142,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- Discard all changes ---- */
   const handleDiscardAll = useCallback(async () => {
-    const count = gitStatus?.workingTree.files.length ?? 0
+    const count = new Set([
+      ...(gitStatus?.index.files.map((file) => file.path) ?? []),
+      ...(gitStatus?.workingTree.files.map((file) => file.path) ?? []),
+    ]).size
     if (!remoteRoot || gitActionBusy || count === 0) return
     const confirmed = window.confirm(`Discard all ${count} change${count > 1 ? 's' : ''}? This cannot be undone.`)
     if (!confirmed) return
@@ -2184,6 +2190,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (!remoteRoot || gitActionBusy) return
     try {
       await gitApi.stage(remoteRoot, [filePath])
+      await fetchGitStatus()
+    } catch { /* ignore */ }
+  }, [remoteRoot, gitActionBusy, fetchGitStatus])
+
+  /* ---- Unstage file ---- */
+  const handleUnstageFile = useCallback(async (filePath: string) => {
+    if (!remoteRoot || gitActionBusy) return
+    try {
+      await gitApi.unstage(remoteRoot, [filePath])
       await fetchGitStatus()
     } catch { /* ignore */ }
   }, [remoteRoot, gitActionBusy, fetchGitStatus])
@@ -2323,9 +2338,107 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Mobile: tab-based view (Files vs Git vs Editor)
   const [mobileTab, setMobileTab] = useState<'files' | 'git' | 'editor'>('files')
-  const changedFileCount = gitStatus?.workingTree.files.length ?? 0
+  const stagedFiles = gitStatus?.index.files ?? []
+  const workingTreeFiles = gitStatus?.workingTree.files ?? []
+  const stagedFileCount = stagedFiles.length
+  const unstagedFileCount = workingTreeFiles.length
+  const changedFileCount = useMemo(() => {
+    const paths = new Set<string>()
+    for (const file of stagedFiles) paths.add(file.path)
+    for (const file of workingTreeFiles) paths.add(file.path)
+    return paths.size
+  }, [stagedFiles, workingTreeFiles])
   const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
+
+  const renderSourceControlSection = useCallback((
+    title: string,
+    files: typeof stagedFiles,
+    totals: { insertions: number; deletions: number },
+    actions: 'stage' | 'unstage',
+  ) => {
+    if (files.length === 0) return null
+
+    return (
+      <div className="mt-1">
+        <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          {title} ({files.length})
+          <span className="ml-1 normal-case tracking-normal">
+            <span className="text-green-500">+{totals.insertions}</span>
+            {' '}
+            <span className="text-red-500">-{totals.deletions}</span>
+          </span>
+        </div>
+        <div className="mt-1 space-y-1">
+          {files.map((f) => {
+            const fileStatus = (f as { status?: string }).status ?? 'M'
+            const fileName = f.path.split('/').pop() ?? f.path
+            const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
+            const isActiveDiff = scDiffFile?.path === f.path
+            return (
+              <div
+                key={`${actions}:${f.path}`}
+                className={`grid w-full cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs ${
+                  isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
+                }`}
+                draggable
+                onClick={() => handleScOpenDiff(f.path)}
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'copy'
+                  e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: f.path, name: fileName }))
+                }}
+                title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
+              >
+                <GitStatusBadge status={fileStatus} />
+                <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
+                <div className="min-w-0">
+                  <div className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
+                    {fileName}
+                  </div>
+                  <div className="truncate text-[10px] text-muted-foreground">
+                    {dirPath || '\u00A0'}
+                  </div>
+                </div>
+                <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
+                  {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
+                  {f.deletions > 0 && <span className="ml-0.5 text-red-500">-{f.deletions}</span>}
+                </span>
+                <span className="flex w-[3.5rem] shrink-0 items-center justify-end gap-0.5">
+                  {actions === 'stage' ? (
+                    <button
+                      type="button"
+                      className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
+                      onClick={(e) => { e.stopPropagation(); void handleStageFile(f.path) }}
+                      title="Stage file (git add)"
+                    >
+                      <Plus className="h-3 w-3" />
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
+                      onClick={(e) => { e.stopPropagation(); void handleUnstageFile(f.path) }}
+                      title="Unstage file"
+                    >
+                      <Minus className="h-3 w-3" />
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-red-500"
+                    onClick={(e) => { e.stopPropagation(); void handleDiscardFile(f.path) }}
+                    title="Discard changes"
+                  >
+                    <Undo2 className="h-3 w-3" />
+                  </button>
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    )
+  }, [handleDiscardFile, handleScOpenDiff, handleStageFile, handleUnstageFile, scDiffFile?.path])
 
   // Switch to editor tab when a file is selected on mobile
   const handleSelectNativeFileMobile = useCallback(async (node: LazyFile) => {
@@ -2673,36 +2786,65 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               {gitStatus && changedFileCount > 0 && (
                 <div className="p-1">
                   <div className="text-[11px] text-muted-foreground px-2 py-1.5 font-medium">
-                    Changes ({changedFileCount})
+                    Source Control ({changedFileCount})
                     <span className="ml-1">
-                      <span className="text-green-500">+{gitStatus.workingTree.insertions}</span>
+                      <span className="text-green-500">+{gitStatus.index.insertions + gitStatus.workingTree.insertions}</span>
                       {' '}
-                      <span className="text-red-500">-{gitStatus.workingTree.deletions}</span>
+                      <span className="text-red-500">-{gitStatus.index.deletions + gitStatus.workingTree.deletions}</span>
                     </span>
                   </div>
-                  <div className="mt-1">
-                  {gitStatus.workingTree.files.map((f) => {
-                    const fileStatus = (f as { status?: string }).status ?? 'M'
-                    const fileName = f.path.split('/').pop() ?? f.path
-                    return (
-                      <button
-                        type="button"
-                        key={f.path}
-                        className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm hover:bg-muted"
-                        onClick={() => {
-                          handleScOpenDiff(f.path)
-                          setMobileTab('editor')
-                        }}
-                      >
-                        <GitStatusBadge status={fileStatus} className="text-[10px]" />
-                        <FileIcon filename={fileName} className="h-4 w-4 shrink-0" />
-                        <span className={`truncate flex-1 ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
-                          {fileName}
-                        </span>
-                      </button>
-                    )
-                  })}
-                  </div>
+                  {stagedFileCount > 0 && (
+                    <div className="mt-1">
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">Staged ({stagedFileCount})</div>
+                      {stagedFiles.map((f) => {
+                        const fileStatus = (f as { status?: string }).status ?? 'M'
+                        const fileName = f.path.split('/').pop() ?? f.path
+                        return (
+                          <button
+                            type="button"
+                            key={`mobile-staged:${f.path}`}
+                            className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm hover:bg-muted"
+                            onClick={() => {
+                              handleScOpenDiff(f.path)
+                              setMobileTab('editor')
+                            }}
+                          >
+                            <GitStatusBadge status={fileStatus} className="text-[10px]" />
+                            <FileIcon filename={fileName} className="h-4 w-4 shrink-0" />
+                            <span className={`truncate flex-1 ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
+                              {fileName}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
+                  {unstagedFileCount > 0 && (
+                    <div className="mt-1">
+                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">Changes ({unstagedFileCount})</div>
+                      {workingTreeFiles.map((f) => {
+                        const fileStatus = (f as { status?: string }).status ?? 'M'
+                        const fileName = f.path.split('/').pop() ?? f.path
+                        return (
+                          <button
+                            type="button"
+                            key={`mobile-working:${f.path}`}
+                            className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm hover:bg-muted"
+                            onClick={() => {
+                              handleScOpenDiff(f.path)
+                              setMobileTab('editor')
+                            }}
+                          >
+                            <GitStatusBadge status={fileStatus} className="text-[10px]" />
+                            <FileIcon filename={fileName} className="h-4 w-4 shrink-0" />
+                            <span className={`truncate flex-1 ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
+                              {fileName}
+                            </span>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )}
                 </div>
               )}
               {!remoteRoot && (
@@ -3202,66 +3344,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             {gitStatus && changedFileCount > 0 && (
               <div className="p-1">
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 py-1 font-medium">
-                  Changes ({changedFileCount})
+                  Source Control ({changedFileCount})
                   <span className="normal-case tracking-normal ml-1">
-                    <span className="text-green-500">+{gitStatus.workingTree.insertions}</span>
+                    <span className="text-green-500">+{gitStatus.index.insertions + gitStatus.workingTree.insertions}</span>
                     {' '}
-                    <span className="text-red-500">-{gitStatus.workingTree.deletions}</span>
+                    <span className="text-red-500">-{gitStatus.index.deletions + gitStatus.workingTree.deletions}</span>
                   </span>
                 </div>
-                <div className="mt-1">
-                {gitStatus.workingTree.files.map((f) => {
-                  const fileStatus = (f as { status?: string }).status ?? 'M'
-                  const fileName = f.path.split('/').pop() ?? f.path
-                  const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
-                  const isActiveDiff = scDiffFile?.path === f.path
-                  return (
-                    <div
-                      key={f.path}
-                      className={`group flex w-full items-center gap-1.5 rounded px-1 py-1 text-left text-xs cursor-pointer ${
-                        isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
-                      }`}
-                      style={{ paddingLeft: 8 }}
-                      onClick={() => handleScOpenDiff(f.path)}
-                      title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
-                    >
-                      <GitStatusBadge status={fileStatus} />
-                      <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
-                      <span className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
-                        {fileName}
-                      </span>
-                      {dirPath && (
-                        <span className="text-[10px] text-muted-foreground truncate ml-auto shrink-0 max-w-[40%]">
-                          {dirPath}
-                        </span>
-                      )}
-                      <span className="text-[10px] text-muted-foreground shrink-0 ml-1">
-                        {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
-                        {f.deletions > 0 && <span className="text-red-500 ml-0.5">-{f.deletions}</span>}
-                      </span>
-                      {/* Per-file actions */}
-                      <span className="flex items-center gap-0.5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
-                        <button
-                          type="button"
-                          className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
-                          onClick={(e) => { e.stopPropagation(); void handleStageFile(f.path) }}
-                          title="Stage file (git add)"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                        <button
-                          type="button"
-                          className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-red-500"
-                          onClick={(e) => { e.stopPropagation(); void handleDiscardFile(f.path) }}
-                          title="Discard changes"
-                        >
-                          <Undo2 className="h-3 w-3" />
-                        </button>
-                      </span>
-                    </div>
-                  )
-                })}
-                </div>
+                {renderSourceControlSection('Staged', stagedFiles, gitStatus.index, 'unstage')}
+                {renderSourceControlSection('Changes', workingTreeFiles, gitStatus.workingTree, 'stage')}
               </div>
             )}
             {!remoteRoot && (

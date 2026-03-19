@@ -36,6 +36,11 @@ export interface GitStatusPr {
 export interface GitStatusResult {
   branch: string | null
   hasWorkingTreeChanges: boolean
+  index: {
+    files: GitStatusFile[]
+    insertions: number
+    deletions: number
+  }
   workingTree: {
     files: GitStatusFile[]
     insertions: number

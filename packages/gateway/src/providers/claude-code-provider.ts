@@ -44,6 +44,8 @@ interface ClaudeSessionState {
   hasStreamedTokens: boolean;
   /** Whether the first turn has been sent (determines --session-id vs --resume) */
   hasSentFirstTurn: boolean;
+  /** Promise tracking in-flight drip-feed token emissions */
+  pendingDrip: Promise<void> | null;
 }
 
 interface ClaudePendingToolCall {

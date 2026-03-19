@@ -80,7 +80,7 @@ function QueueItem({
   onDragStart?: (id: string, event: React.PointerEvent<HTMLButtonElement>) => void
 }) {
   const [editing, setEditing] = useState(false)
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(true)
   const [draft, setDraft] = useState(item.displayContent ?? item.content)
   const inputRef = useRef<HTMLTextAreaElement>(null)
   const showActions = editing || !dragActive
