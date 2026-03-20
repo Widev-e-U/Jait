@@ -93,6 +93,8 @@ export interface WorkspacePanelHandle {
   openPreviewTarget: (target: string) => boolean
   /** Close the current workspace preview tab, if any. */
   closePreviewTarget: () => void
+  /** Refresh the current workspace preview tab, if any. */
+  refreshPreviewTarget: () => void
   /** Open the architecture tab. */
   openArchitectureTab: () => void
   /** Close the architecture tab, if any. */
@@ -2060,6 +2062,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     })
   }, [activeTabId])
 
+  const handleRefreshPreviewTarget = useCallback(() => {
+    setOpenTabs((prev) => prev.map((tab) => (
+      tab.type === 'preview'
+        ? { ...tab, version: (tab.version ?? 0) + 1 }
+        : tab
+    )))
+  }, [])
+
   useImperativeHandle(ref, () => ({
     openDirectory: handleOpenDirectory,
     openRemoteWorkspace: handleOpenRemoteWorkspace,
@@ -2068,10 +2078,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     openReviewDiff: handleOpenReviewDiff,
     openPreviewTarget: handleOpenPreviewTarget,
     closePreviewTarget: handleClosePreviewTarget,
+    refreshPreviewTarget: handleRefreshPreviewTarget,
     openArchitectureTab: handleOpenArchitectureTab,
     closeArchitectureTab: handleCloseArchitectureTab,
     searchFiles: handleSearchFiles,
-  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleOpenArchitectureTab, handleCloseArchitectureTab, handleSearchFiles])
+  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleRefreshPreviewTarget, handleOpenArchitectureTab, handleCloseArchitectureTab, handleSearchFiles])
 
   useEffect(() => {
     if (!previewRequest) return
@@ -2913,6 +2924,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 )
               })}
               <div className="flex-1" />
+              {activeTab?.type === 'preview' && (
+                <button
+                  onClick={handleRefreshPreviewTarget}
+                  className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
+                  title="Refresh preview"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                </button>
+              )}
               {onToggleEditor && (
                 <button
                   onClick={onToggleEditor}
@@ -2980,7 +3000,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               ) : activeTab?.type === 'preview' ? (
                 activeTab.previewSrc ? (
                   <iframe
-                    key={activeTab.id}
+                    key={`${activeTab.id}:${activeTab.version ?? 0}`}
                     src={activeTab.previewSrc}
                     title={activeTab.label || 'Workspace preview'}
                     className="h-full w-full bg-white"
@@ -3498,7 +3518,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )
             })}
           </div>
-          {(activeTabEditable || onToggleEditor) && (
+          {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor) && (
             <div className="flex items-center shrink-0">
               {activeTabEditable && (
                 <button
@@ -3508,6 +3528,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   disabled={activeTab?.isSaving}
                 >
                   <Save className={`h-3 w-3 ${activeTab?.isSaving ? 'animate-pulse' : ''}`} />
+                </button>
+              )}
+              {activeTab?.type === 'preview' && (
+                <button
+                  onClick={handleRefreshPreviewTarget}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  title="Refresh preview"
+                >
+                  <RefreshCw className="h-3 w-3" />
                 </button>
               )}
               {onToggleEditor && (
@@ -3562,7 +3591,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         ) : activeTab?.type === 'preview' ? (
           activeTab.previewSrc ? (
             <iframe
-              key={activeTab.id}
+              key={`${activeTab.id}:${activeTab.version ?? 0}`}
               src={activeTab.previewSrc}
               title={activeTab.label || 'Workspace preview'}
               className="h-full w-full bg-white"

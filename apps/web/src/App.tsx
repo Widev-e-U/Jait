@@ -3683,6 +3683,13 @@ function App() {
                               closeDevPreviewPanel()
                             }
                           } else {
+                            const nextTarget = workspacePreviewState.target
+                              ?? devPreviewTarget?.trim()
+                              ?? savedDevPreview?.target?.trim()
+                              ?? null
+                            if (nextTarget && routePreviewToWorkspace(nextTarget)) {
+                              return
+                            }
                             openDevPreviewPanel()
                           }
                         }}
