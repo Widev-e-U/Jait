@@ -198,6 +198,40 @@ describe("POST /api/workspace/open", () => {
     await expect(readFile(writableTestFile, "utf-8")).resolves.toBe("after");
   });
 
+  it("should return filename and content search results via GET /api/workspace/search", async () => {
+    const searchFile = join(writableTestRoot, "nested", "unique-search-target.ts");
+    const searchSessionId = `test-session-search-${Date.now()}`;
+    await writeFile(searchFile, "const UNIQUE_SEARCH_TOKEN = 'workspace-search-regression';\n", "utf-8");
+
+    const openRes = await fetch(`${address}/api/workspace/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId: searchSessionId }),
+    });
+    const { surfaceId } = (await openRes.json()) as { surfaceId: string };
+
+    const fileSearchRes = await fetch(
+      `${address}/api/workspace/search?query=${encodeURIComponent("unique-search-target")}&mode=files&surfaceId=${encodeURIComponent(surfaceId)}`,
+    );
+    expect(fileSearchRes.ok).toBe(true);
+    const fileSearchData = (await fileSearchRes.json()) as { files: { path: string; name: string }[] };
+    expect(fileSearchData.files).toContainEqual({
+      path: "nested/unique-search-target.ts",
+      name: "unique-search-target.ts",
+    });
+
+    const contentSearchRes = await fetch(
+      `${address}/api/workspace/search?query=${encodeURIComponent("workspace-search-regression")}&mode=content&surfaceId=${encodeURIComponent(surfaceId)}`,
+    );
+    expect(contentSearchRes.ok).toBe(true);
+    const contentSearchData = (await contentSearchRes.json()) as { matches: { file: string; line: number; content: string }[] };
+    expect(contentSearchData.matches).toContainEqual({
+      file: "nested/unique-search-target.ts",
+      line: 1,
+      content: "const UNIQUE_SEARCH_TOKEN = 'workspace-search-regression';",
+    });
+  });
+
   it("should reject path traversal in POST /api/workspace/write", async () => {
     const openRes = await fetch(`${address}/api/workspace/open`, {
       method: "POST",
