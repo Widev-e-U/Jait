@@ -1070,15 +1070,27 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const handledArchitectureRequestKeyRef = useRef<number | null>(null)
 
   const syncPreviewTab = useCallback((updater: (prev: EditorTab | null) => EditorTab | null, activate = false) => {
-    const currentPreviewTab = openTabs.find((tab) => tab.type === 'preview') ?? null
-    const nextTab = updater(currentPreviewTab)
+    let nextTab: EditorTab | null = null
     setOpenTabs((prev) => {
+      const currentPreviewTab = prev.find((tab) => tab.type === 'preview') ?? null
+      nextTab = updater(currentPreviewTab)
       const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
       if (!nextTab) {
         if (previewIndex < 0) return prev
         return prev.filter((tab) => tab.type !== 'preview')
       }
+      // Skip update if nothing meaningful changed
       if (previewIndex >= 0) {
+        const existing = prev[previewIndex]
+        if (
+          existing.label === nextTab.label &&
+          existing.previewTarget === nextTab.previewTarget &&
+          existing.previewSrc === nextTab.previewSrc &&
+          existing.previewMode === nextTab.previewMode &&
+          existing.path === nextTab.path
+        ) {
+          return prev
+        }
         const next = [...prev]
         next[previewIndex] = nextTab
         return next
@@ -1087,15 +1099,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     })
 
     if (activate && nextTab) {
-      setActiveTabId(nextTab.id)
+      setActiveTabId((nextTab as EditorTab).id)
       setScDiffFile(null)
       setActiveNativePath(null)
       setPreviewContent(null)
-      setPreviewPath(nextTab.previewTarget ?? nextTab.path)
+      setPreviewPath((nextTab as EditorTab).previewTarget ?? (nextTab as EditorTab).path)
       setPreviewLanguage('plaintext')
       onActiveFileChange('')
     }
-  }, [onActiveFileChange, openTabs])
+  }, [onActiveFileChange])
 
   const stopManagedPreviewSession = useCallback(async (preserveTab: boolean) => {
     if (previewSessionId && previewToken) {
