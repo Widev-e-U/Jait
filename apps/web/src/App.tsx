@@ -4099,13 +4099,13 @@ function App() {
                 {automation.selectedThread ? (
                   <>
                     {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
-                      <div className="flex items-center gap-1 px-2 py-1 border-b bg-muted/20 shrink-0">
+                      <div className="flex h-[35px] items-center gap-1 px-2 border-b bg-muted/20 shrink-0">
                         {!showWorkspaceTree && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
                                 onClick={showWorkspaceTreePanel}
-                                className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               >
                                 <Eye className="h-3 w-3" />
                                 <FolderTree className="h-3 w-3" />
@@ -4121,7 +4121,7 @@ function App() {
                             <TooltipTrigger asChild>
                               <button
                                 onClick={showWorkspaceEditorPanel}
-                                className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               >
                                 <Eye className="h-3 w-3" />
                                 <Code className="h-3 w-3" />
@@ -4420,13 +4420,13 @@ function App() {
                 )}
                 {/* Sticky show-panel buttons when workspace panels are hidden */}
                 {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
-                  <div className="flex items-center gap-1 px-2 py-1 border-b bg-muted/20 shrink-0">
+                  <div className="flex h-[35px] items-center gap-1 px-2 border-b bg-muted/20 shrink-0">
                     {!showWorkspaceTree && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button
                             onClick={showWorkspaceTreePanel}
-                            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                           >
                             <Eye className="h-3 w-3" />
                             <FolderTree className="h-3 w-3" />
@@ -4442,7 +4442,7 @@ function App() {
                         <TooltipTrigger asChild>
                           <button
                             onClick={showWorkspaceEditorPanel}
-                            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                           >
                             <Eye className="h-3 w-3" />
                             <Code className="h-3 w-3" />
