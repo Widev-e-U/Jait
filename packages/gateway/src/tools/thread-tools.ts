@@ -42,7 +42,7 @@ interface ThreadControlInput {
   prUrl?: string | null;
   prNumber?: number | null;
   prTitle?: string | null;
-  prState?: "open" | "closed" | "merged" | null;
+  prState?: "creating" | "open" | "closed" | "merged" | null;
   cwd?: string;
   gitAction?: GitStackedAction;
   commitMessage?: string;
@@ -279,7 +279,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         prUrl: { type: "string", description: "PR URL metadata for update." },
         prNumber: { type: "number", description: "PR number metadata for update." },
         prTitle: { type: "string", description: "PR title metadata for update." },
-        prState: { type: "string", enum: ["open", "closed", "merged"], description: "PR state metadata for update." },
+        prState: { type: "string", enum: ["creating", "open", "closed", "merged"], description: "PR state metadata for update." },
         cwd: { type: "string", description: "Repo path for create_pr action. Defaults to thread working directory." },
         gitAction: { type: "string", enum: ["commit", "commit_push", "commit_push_pr"], description: "Git stacked action for create_pr (default commit_push_pr)." },
         commitMessage: { type: "string", description: "Commit/PR title override for create_pr." },
@@ -423,7 +423,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               prNumber: typeof input.prNumber === "number" ? input.prNumber : input.prNumber === null ? null : undefined,
               prTitle: typeof input.prTitle === "string" ? input.prTitle : input.prTitle === null ? null : undefined,
               prState:
-                input.prState === "open" || input.prState === "closed" || input.prState === "merged"
+                input.prState === "creating" || input.prState === "open" || input.prState === "closed" || input.prState === "merged"
                   ? input.prState
                   : input.prState === null
                     ? null

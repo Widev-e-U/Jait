@@ -236,16 +236,20 @@ function ManagerStatusDot({ status }: { status: string }) {
   return <Icon className={`h-3 w-3 shrink-0 ${color}`} />
 }
 
-function ThreadPrBadge({ prState }: { prState: 'open' | 'closed' | 'merged' | null | undefined }) {
+function ThreadPrBadge({ prState }: { prState: 'creating' | 'open' | 'closed' | 'merged' | null | undefined }) {
   if (!prState) return null
   const label =
-    prState === 'open'
+    prState === 'creating'
+      ? 'PR creating'
+      : prState === 'open'
       ? 'PR created'
       : prState === 'merged'
         ? 'PR merged'
         : 'PR closed'
   const className =
-    prState === 'open'
+    prState === 'creating'
+      ? 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-300 dark:bg-amber-500/20 dark:border-amber-400/30'
+      : prState === 'open'
       ? 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300 dark:bg-blue-500/20 dark:border-blue-400/30'
       : prState === 'merged'
         ? 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/30'
@@ -513,7 +517,7 @@ interface ManagerThreadListItemProps {
   thread: AgentThread
   repo: AutomationRepository | null
   repoName: string
-  prState: 'open' | 'closed' | 'merged' | null | undefined
+  prState: 'creating' | 'open' | 'closed' | 'merged' | null | undefined
   ghAvailable: boolean
   onOpen: () => void
   onStop: () => void
@@ -651,7 +655,7 @@ function ManagerThreadListItem({
 interface ManagerActiveThreadsMenuProps {
   threads: AgentThread[]
   getRepositoryForThread: (thread: Pick<AgentThread, 'title' | 'workingDirectory'>) => AutomationRepository | null
-  threadPrStates: Record<string, 'open' | 'closed' | 'merged' | null>
+  threadPrStates: Record<string, 'creating' | 'open' | 'closed' | 'merged' | null>
   ghAvailable: boolean
   onOpenThread: (threadId: string) => void
   onStopThread: (threadId: string) => void
@@ -756,7 +760,7 @@ function ManagerActiveThreadsMenu({
                         threadStatus={thread.status}
                         threadKind={thread.kind}
                         prUrl={thread.prUrl}
-                        prState={(thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
+                        prState={(thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState) as 'creating' | 'open' | 'closed' | 'merged' | null | undefined}
                         ghAvailable={ghAvailable}
                         showStatusBadge={false}
                       />
@@ -3929,7 +3933,7 @@ function App() {
                             threadStatus={automation.selectedThread.status}
                             threadKind={automation.selectedThread.kind}
                             prUrl={automation.selectedThread.prUrl}
-                            prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
+                            prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'creating' | 'open' | 'closed' | 'merged' | null | undefined}
                             ghAvailable={automation.ghAvailable}
                             showStatusBadge={!isMobile}
                           />

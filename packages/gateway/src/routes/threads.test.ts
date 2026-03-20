@@ -228,6 +228,70 @@ describe("thread routes", () => {
     sqlite.close();
   });
 
+  it("marks the thread PR state as creating while PR creation is in flight", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const prUrl = "https://github.com/acme/repo/pull/42";
+    let resolveRun: ((result: GitStepResult) => void) | null = null;
+    const runStackedAction = vi.fn(
+      () =>
+        new Promise<GitStepResult>((resolve) => {
+          resolveRun = resolve;
+        }),
+    );
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry: new ProviderRegistry(),
+      gitService: { runStackedAction },
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "Implement feature",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+    });
+    threadService.markCompleted(thread.id);
+
+    const responsePromise = app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/create-pr`,
+      headers,
+      payload: { commitMessage: "feat: implement feature", baseBranch: "main" },
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(threadService.getById(thread.id)?.prState).toBe("creating");
+
+    resolveRun?.({
+      commit: { status: "created", commitSha: "abc123", subject: "feat: implement feature" },
+      push: { status: "pushed", branch: "feature/awesome" },
+      branch: { status: "skipped_not_requested" },
+      pr: {
+        status: "created",
+        url: prUrl,
+        number: 42,
+        baseBranch: "main",
+        headBranch: "feature/awesome",
+        title: "feat: implement feature",
+      },
+    });
+
+    const response = await responsePromise;
+    expect(response.statusCode).toBe(200);
+    expect(threadService.getById(thread.id)?.prState).toBe("open");
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("broadcasts the full thread row with running status updates", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

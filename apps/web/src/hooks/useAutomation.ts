@@ -32,7 +32,7 @@ import { generateDeviceId } from '@/lib/device-id'
 
 export type RepositoryConnection = AutomationRepository
 
-export type ThreadPrState = GitStatusPr['state'] | null
+export type ThreadPrState = GitStatusPr['state'] | 'creating' | null
 const THREAD_LIST_LIMIT = 10
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -430,7 +430,7 @@ export function useAutomation(enabled = true) {
             statusCwd,
             thread.branch ?? undefined,
           )
-          const prState: ThreadPrState = status.pr?.state ?? null
+          const prState: ThreadPrState = status.pr?.state ?? (thread.prState === 'creating' ? 'creating' : null)
 
           // Sync discovered PR metadata back to the thread DB so it
           // persists across sessions and shows in ThreadActions / sidebar.

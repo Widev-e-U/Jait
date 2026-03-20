@@ -33,7 +33,7 @@ export interface AgentThread {
   prUrl: string | null
   prNumber: number | null
   prTitle: string | null
-  prState: 'open' | 'closed' | 'merged' | null
+  prState: 'creating' | 'open' | 'closed' | 'merged' | null
   executionNodeId: string | null
   executionNodeName: string | null
   createdAt: string
@@ -87,7 +87,7 @@ export interface UpdateThreadRequest {
   prUrl?: string | null
   prNumber?: number | null
   prTitle?: string | null
-  prState?: 'open' | 'closed' | 'merged' | null
+  prState?: 'creating' | 'open' | 'closed' | 'merged' | null
 }
 
 export interface ThreadReferencedFile {
