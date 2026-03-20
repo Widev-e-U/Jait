@@ -231,7 +231,7 @@ export function SettingsPage({
     'session archive archived clear delete messages history',
   )
   const showSpeechSection = matchesSearch(
-    'speech stt input microphone whisper wyoming browser home assistant transcription',
+    'speech stt input microphone whisper wyoming home assistant transcription',
     sttProvider,
     draft.WHISPER_URL,
     draft.HA_URL,
@@ -415,8 +415,6 @@ export function SettingsPage({
                     <SelectValue placeholder="STT-Anbieter wählen" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="simulated">Simuliert (Eingabe-Prompt)</SelectItem>
-                    <SelectItem value="browser">Browser (Web Speech API)</SelectItem>
                     <SelectItem value="whisper">Faster Whisper (lokal)</SelectItem>
                     <SelectItem value="wyoming">Wyoming / Whisper (Home Assistant)</SelectItem>
                   </SelectContent>

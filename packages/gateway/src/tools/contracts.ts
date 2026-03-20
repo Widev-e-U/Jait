@@ -1,3 +1,8 @@
+export interface ToolOutputStreamMetadata {
+  streamId: string;
+  seq: number;
+}
+
 export interface ToolContext {
   sessionId: string;
   actionId: string;
@@ -6,7 +11,7 @@ export interface ToolContext {
   userId?: string;
   apiKeys?: Record<string, string>;
   /** Optional callback for streaming tool output chunks (e.g. terminal) */
-  onOutputChunk?: (chunk: string) => void;
+  onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */
   signal?: AbortSignal;
 }

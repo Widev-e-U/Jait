@@ -4,7 +4,7 @@ import { RemoteCliProvider } from "./remote-cli-provider.js";
 import type { ProviderEvent } from "./contracts.js";
 
 function createMockWs() {
-  let remoteHandler: ((sessionId: string, event: unknown) => void) | undefined;
+  let remoteHandler: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined;
 
   const ws = {
     findNodeByDeviceId: vi.fn(() => ({
@@ -21,7 +21,7 @@ function createMockWs() {
     get onRemoteProviderEvent() {
       return remoteHandler;
     },
-    set onRemoteProviderEvent(fn: ((sessionId: string, event: unknown) => void) | undefined) {
+    set onRemoteProviderEvent(fn: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined) {
       remoteHandler = fn;
     },
   } as unknown as WsControlPlane;

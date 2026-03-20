@@ -349,6 +349,88 @@ function buildDirChangesSet(gitStatusMap: Map<string, string>): Set<string> {
   return dirs
 }
 
+interface SourceControlEntry {
+  path: string
+  status?: string
+  insertions: number
+  deletions: number
+}
+
+interface SourceControlFileNode {
+  kind: 'file'
+  name: string
+  path: string
+  entry: SourceControlEntry
+}
+
+interface SourceControlDirectoryNode {
+  kind: 'dir'
+  name: string
+  path: string
+  children: SourceControlTreeNode[]
+}
+
+type SourceControlTreeNode = SourceControlFileNode | SourceControlDirectoryNode
+
+function buildSourceControlTree(files: SourceControlEntry[]): SourceControlTreeNode[] {
+  const root: SourceControlDirectoryNode = {
+    kind: 'dir',
+    name: '',
+    path: '',
+    children: [],
+  }
+
+  for (const entry of files) {
+    const normalized = entry.path.replace(/\\/g, '/')
+    const parts = normalized.split('/').filter(Boolean)
+    if (parts.length === 0) continue
+
+    let current = root
+    for (let i = 0; i < parts.length; i++) {
+      const part = parts[i]!
+      const currentPath = parts.slice(0, i + 1).join('/')
+      const isLeaf = i === parts.length - 1
+
+      if (isLeaf) {
+        current.children.push({
+          kind: 'file',
+          name: part,
+          path: normalized,
+          entry,
+        })
+        continue
+      }
+
+      let next = current.children.find(
+        (child): child is SourceControlDirectoryNode => child.kind === 'dir' && child.path === currentPath,
+      )
+      if (!next) {
+        next = {
+          kind: 'dir',
+          name: part,
+          path: currentPath,
+          children: [],
+        }
+        current.children.push(next)
+      }
+      current = next
+    }
+  }
+
+  const sortNodes = (nodes: SourceControlTreeNode[]): SourceControlTreeNode[] => (
+    [...nodes]
+      .sort((a, b) => {
+        if (a.kind !== b.kind) return a.kind === 'dir' ? -1 : 1
+        return a.name.localeCompare(b.name)
+      })
+      .map((node) => node.kind === 'dir'
+        ? { ...node, children: sortNodes(node.children) }
+        : node)
+  )
+
+  return sortNodes(root.children)
+}
+
 const gitApi = gitApiImport
 
 function isEditableWorkspaceTab(tab: EditorTab | null): boolean {
@@ -823,6 +905,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const dirChangesSet = useMemo(() => buildDirChangesSet(gitStatusMap), [gitStatusMap])
   /** Tree pane active tab */
   const [treeTab, setTreeTab] = useState<'files' | 'git'>('files')
+  const [sourceControlView, setSourceControlView] = useState<'list' | 'tree'>('list')
+  const [collapsedSourceControlDirs, setCollapsedSourceControlDirs] = useState<Set<string>>(new Set())
   /** Currently viewing diff for a file in the source control tab */
   const [scDiffFile, setScDiffFile] = useState<FileDiffEntry | null>(null)
   const [scDiffLoading, setScDiffLoading] = useState(false)
@@ -2624,20 +2708,160 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [mobileTab, setMobileTab] = useState<'files' | 'git' | 'editor'>('files')
   const stagedFiles = gitStatus?.index.files ?? []
   const workingTreeFiles = gitStatus?.workingTree.files ?? []
-  const stagedFileCount = stagedFiles.length
-  const unstagedFileCount = workingTreeFiles.length
+  const stagedTree = useMemo(
+    () => buildSourceControlTree(stagedFiles.map((file) => ({
+      path: file.path,
+      status: (file as { status?: string }).status,
+      insertions: file.insertions,
+      deletions: file.deletions,
+    }))),
+    [stagedFiles],
+  )
+  const workingTree = useMemo(
+    () => buildSourceControlTree(workingTreeFiles.map((file) => ({
+      path: file.path,
+      status: (file as { status?: string }).status,
+      insertions: file.insertions,
+      deletions: file.deletions,
+    }))),
+    [workingTreeFiles],
+  )
   const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
+
+  const toggleSourceControlDir = useCallback((path: string) => {
+    setCollapsedSourceControlDirs((prev) => {
+      const next = new Set(prev)
+      if (next.has(path)) next.delete(path)
+      else next.add(path)
+      return next
+    })
+  }, [])
 
   useEffect(() => {
     mobileTreeDragRef.current = mobileTreeDrag
   }, [mobileTreeDrag])
 
+  const renderSourceControlFileActions = useCallback((
+    filePath: string,
+    actions: 'stage' | 'unstage',
+    mobile = false,
+  ) => (
+    <span
+      className={`flex shrink-0 items-center justify-end gap-0.5 ${
+        mobile ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100'
+      }`}
+    >
+      {actions === 'stage' ? (
+        <button
+          type="button"
+          className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+          onClick={(e) => { e.stopPropagation(); void handleStageFile(filePath) }}
+          title="Stage file (git add)"
+        >
+          <Plus className="h-3 w-3" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+          onClick={(e) => { e.stopPropagation(); void handleUnstageFile(filePath) }}
+          title="Unstage file"
+        >
+          <Minus className="h-3 w-3" />
+        </button>
+      )}
+      <button
+        type="button"
+        className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-red-500"
+        onClick={(e) => {
+          e.stopPropagation()
+          setDiscardConfirm((prev) => prev?.kind === 'file' && prev.path === filePath ? null : { kind: 'file', path: filePath })
+        }}
+        title="Discard changes"
+      >
+        <Undo2 className="h-3 w-3" />
+      </button>
+    </span>
+  ), [handleStageFile, handleUnstageFile])
+
+  const renderSourceControlTreeNodes = useCallback((
+    nodes: SourceControlTreeNode[],
+    actions: 'stage' | 'unstage',
+    mobile = false,
+    depth = 0,
+  ): React.ReactNode => nodes.map((node) => {
+    if (node.kind === 'dir') {
+      const expanded = !collapsedSourceControlDirs.has(node.path)
+      return (
+        <div key={`${actions}:dir:${node.path}`}>
+          <button
+            type="button"
+            className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left ${
+              mobile ? 'text-sm' : 'text-xs hover:bg-muted'
+            }`}
+            style={{ paddingLeft: 8 + depth * 14 }}
+            onClick={() => toggleSourceControlDir(node.path)}
+          >
+            <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
+            <FolderIcon name={node.name} open={expanded} className="h-3.5 w-3.5 shrink-0" />
+            <span className="truncate">{node.name}</span>
+          </button>
+          {expanded ? renderSourceControlTreeNodes(node.children, actions, mobile, depth + 1) : null}
+        </div>
+      )
+    }
+
+    const fileStatus = node.entry.status ?? 'M'
+    const fileName = node.name
+    const dirPath = node.path.includes('/') ? node.path.slice(0, node.path.lastIndexOf('/')) : ''
+    const isActiveDiff = scDiffFile?.path === node.path
+    return (
+      <div key={`${actions}:file:${node.path}`}>
+        <button
+          type="button"
+          className={`group grid w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded px-2 py-1.5 text-left ${
+            mobile ? 'text-sm' : 'text-xs'
+          } ${isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'}`}
+          style={{ paddingLeft: 22 + depth * 14 }}
+          onClick={() => {
+            handleScOpenDiff(node.path)
+            if (mobile) setMobileTab('editor')
+          }}
+          title={`${node.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
+        >
+          <div className="flex min-w-0 items-center gap-1.5">
+            <GitStatusBadge status={fileStatus} className={mobile ? 'text-[10px]' : undefined} />
+            <FileIcon filename={fileName} className={`${mobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
+          </div>
+          <div className="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
+            <span className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>{fileName}</span>
+            {dirPath ? <span className="truncate text-[10px] text-muted-foreground">{dirPath}</span> : null}
+          </div>
+          <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
+            {node.entry.insertions > 0 && <span className="text-green-500">+{node.entry.insertions}</span>}
+            {node.entry.deletions > 0 && <span className="ml-0.5 text-red-500">-{node.entry.deletions}</span>}
+          </span>
+          {renderSourceControlFileActions(node.path, actions, mobile)}
+        </button>
+        {discardConfirm?.kind === 'file' && discardConfirm.path === node.path && (
+          <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+            <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
+            <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardFile(node.path)} disabled={gitActionBusy}>Discard</Button>
+            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+          </div>
+        )}
+      </div>
+    )
+  }), [collapsedSourceControlDirs, discardConfirm, gitActionBusy, handleDiscardFile, handleScOpenDiff, renderSourceControlFileActions, toggleSourceControlDir, scDiffFile?.path])
+
   const renderSourceControlSection = useCallback((
     title: string,
     files: typeof stagedFiles,
+    treeNodes: SourceControlTreeNode[],
     totals: { insertions: number; deletions: number },
     actions: 'stage' | 'unstage',
+    mobile = false,
   ) => {
     if (files.length === 0) return null
 
@@ -2701,86 +2925,61 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
         )}
         <div className="mt-1 space-y-1">
-          {files.map((f) => {
-            const fileStatus = (f as { status?: string }).status ?? 'M'
-            const fileName = f.path.split('/').pop() ?? f.path
-            const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
-            const isActiveDiff = scDiffFile?.path === f.path
-            return (
-              <div key={`${actions}:${f.path}`}>
-                <div
-                  className={`grid w-full cursor-pointer grid-cols-[auto_auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded px-2 py-1.5 text-left text-xs ${
-                    isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'
-                  }`}
-                  draggable
-                  onClick={() => handleScOpenDiff(f.path)}
-                  onDragStart={(e) => {
-                    e.dataTransfer.effectAllowed = 'copy'
-                    e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: f.path, name: fileName }))
-                  }}
-                  title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
-                >
-                  <GitStatusBadge status={fileStatus} />
-                  <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
-                  <div className="min-w-0">
-                    <div className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
-                      {fileName}
+          {sourceControlView === 'tree'
+            ? renderSourceControlTreeNodes(treeNodes, actions, mobile)
+            : files.map((f) => {
+              const fileStatus = (f as { status?: string }).status ?? 'M'
+              const fileName = f.path.split('/').pop() ?? f.path
+              const dirPath = f.path.includes('/') ? f.path.slice(0, f.path.lastIndexOf('/')) : ''
+              const isActiveDiff = scDiffFile?.path === f.path
+              return (
+                <div key={`${actions}:${f.path}`}>
+                  <div
+                    className={`group grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded px-2 py-1.5 text-left ${
+                      mobile ? 'text-sm' : 'text-xs'
+                    } ${isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'}`}
+                    draggable={!mobile}
+                    onClick={() => {
+                      handleScOpenDiff(f.path)
+                      if (mobile) setMobileTab('editor')
+                    }}
+                    onDragStart={(e) => {
+                      if (mobile) return
+                      e.dataTransfer.effectAllowed = 'copy'
+                      e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: f.path, name: fileName }))
+                    }}
+                    title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
+                  >
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <GitStatusBadge status={fileStatus} className={mobile ? 'text-[10px]' : undefined} />
+                      <FileIcon filename={fileName} className={`${mobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
                     </div>
-                    <div className="truncate text-[10px] text-muted-foreground">
-                      {dirPath || '\u00A0'}
+                    <div className="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
+                      <span className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
+                        {fileName}
+                      </span>
+                      {dirPath ? <span className="truncate text-[10px] text-muted-foreground">{dirPath}</span> : null}
                     </div>
+                    <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
+                      {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
+                      {f.deletions > 0 && <span className="ml-0.5 text-red-500">-{f.deletions}</span>}
+                    </span>
+                    {renderSourceControlFileActions(f.path, actions, mobile)}
                   </div>
-                  <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
-                    {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
-                    {f.deletions > 0 && <span className="ml-0.5 text-red-500">-{f.deletions}</span>}
-                  </span>
-                  <span className="flex w-[3.5rem] shrink-0 items-center justify-end gap-0.5">
-                    {actions === 'stage' ? (
-                      <button
-                        type="button"
-                        className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
-                        onClick={(e) => { e.stopPropagation(); void handleStageFile(f.path) }}
-                        title="Stage file (git add)"
-                      >
-                        <Plus className="h-3 w-3" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-foreground"
-                        onClick={(e) => { e.stopPropagation(); void handleUnstageFile(f.path) }}
-                        title="Unstage file"
-                      >
-                        <Minus className="h-3 w-3" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      className="p-0.5 rounded hover:bg-background text-muted-foreground hover:text-red-500"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        setDiscardConfirm((prev) => prev?.kind === 'file' && prev.path === f.path ? null : { kind: 'file', path: f.path })
-                      }}
-                      title="Discard changes"
-                    >
-                      <Undo2 className="h-3 w-3" />
-                    </button>
-                  </span>
+                  {discardConfirm?.kind === 'file' && discardConfirm.path === f.path && (
+                    <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+                      <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
+                      <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardFile(f.path)} disabled={gitActionBusy}>Discard</Button>
+                      <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+                    </div>
+                  )}
                 </div>
-                {discardConfirm?.kind === 'file' && discardConfirm.path === f.path && (
-                  <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
-                    <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
-                    <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardFile(f.path)} disabled={gitActionBusy}>Discard</Button>
-                    <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
-                  </div>
-                )}
-              </div>
-            )
-          })}
+              )
+            })}
         </div>
       </div>
     )
-  }, [changedFileCount, discardConfirm?.kind, discardConfirm?.kind === 'file' ? discardConfirm.path : null, gitActionBusy, handleDiscardAll, handleDiscardFile, handleScOpenDiff, handleStageAll, handleStageFile, handleUnstageAll, handleUnstageFile, scDiffFile?.path])
+  }, [changedFileCount, discardConfirm?.kind, discardConfirm?.kind === 'file' ? discardConfirm.path : null, gitActionBusy, handleDiscardAll, handleDiscardFile, handleScOpenDiff, handleStageAll, handleUnstageAll, renderSourceControlFileActions, renderSourceControlTreeNodes, scDiffFile?.path, sourceControlView])
 
   // Switch to editor tab when a file is selected on mobile
   const handleSelectNativeFileMobile = useCallback(async (node: LazyFile) => {
@@ -3115,6 +3314,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     Push ({gitStatus.aheadCount})
                   </button>
                 )}
+                <select
+                  className="ml-auto h-8 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm"
+                  value={sourceControlView}
+                  onChange={(e) => setSourceControlView(e.target.value as 'list' | 'tree')}
+                  title="Source control view"
+                >
+                  <option value="list">List</option>
+                  <option value="tree">Tree</option>
+                </select>
               </div>
               {gitActionError && (
                 <div className="text-xs text-red-500">{gitActionError}</div>
@@ -3141,94 +3349,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       <span className="text-red-500">-{gitStatus.index.deletions + gitStatus.workingTree.deletions}</span>
                     </span>
                   </div>
-                  {stagedFileCount > 0 && (
-                    <div className="mt-1">
-                      <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        <span>Staged ({stagedFileCount})</span>
-                        <div className="flex items-center gap-1">
-                          <button
-                            type="button"
-                            className="flex h-6 w-6 items-center justify-center rounded bg-muted hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={() => void handleUnstageAll()}
-                            disabled={gitActionBusy}
-                            title="Unstage all files"
-                            aria-label="Unstage all files"
-                          >
-                            <Minus className="h-3 w-3" />
-                          </button>
-                          <button
-                            type="button"
-                            className="flex h-6 w-6 items-center justify-center rounded bg-muted text-red-500 hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
-                            onClick={handleDiscardAll}
-                            disabled={gitActionBusy}
-                            title="Discard all changes"
-                            aria-label="Discard all changes"
-                          >
-                            <Undo2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-                      {stagedFiles.map((f) => {
-                        const fileStatus = (f as { status?: string }).status ?? 'M'
-                        const fileName = f.path.split('/').pop() ?? f.path
-                        return (
-                          <button
-                            type="button"
-                            key={`mobile-staged:${f.path}`}
-                            className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm hover:bg-muted"
-                            onClick={() => {
-                              handleScOpenDiff(f.path)
-                              setMobileTab('editor')
-                            }}
-                          >
-                            <GitStatusBadge status={fileStatus} className="text-[10px]" />
-                            <FileIcon filename={fileName} className="h-4 w-4 shrink-0" />
-                            <span className={`truncate flex-1 ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
-                              {fileName}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
-                  {unstagedFileCount > 0 && (
-                    <div className="mt-1">
-                      <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
-                        <span>Changes ({unstagedFileCount})</span>
-                        <button
-                          type="button"
-                          className="flex h-6 w-6 items-center justify-center rounded bg-muted hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
-                          onClick={() => void handleStageAll()}
-                          disabled={gitActionBusy}
-                          title="Stage all changes"
-                          aria-label="Stage all changes"
-                        >
-                          <Plus className="h-3 w-3" />
-                        </button>
-                      </div>
-                      {workingTreeFiles.map((f) => {
-                        const fileStatus = (f as { status?: string }).status ?? 'M'
-                        const fileName = f.path.split('/').pop() ?? f.path
-                        return (
-                          <button
-                            type="button"
-                            key={`mobile-working:${f.path}`}
-                            className="flex w-full items-center gap-1.5 rounded px-2 py-2 text-left text-sm hover:bg-muted"
-                            onClick={() => {
-                              handleScOpenDiff(f.path)
-                              setMobileTab('editor')
-                            }}
-                          >
-                            <GitStatusBadge status={fileStatus} className="text-[10px]" />
-                            <FileIcon filename={fileName} className="h-4 w-4 shrink-0" />
-                            <span className={`truncate flex-1 ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
-                              {fileName}
-                            </span>
-                          </button>
-                        )
-                      })}
-                    </div>
-                  )}
+                  {renderSourceControlSection('Staged', stagedFiles, stagedTree, gitStatus.index, 'unstage', true)}
+                  {renderSourceControlSection('Changes', workingTreeFiles, workingTree, gitStatus.workingTree, 'stage', true)}
                 </div>
               )}
               {!remoteRoot && (
@@ -3733,6 +3855,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   Push ({gitStatus.aheadCount})
                 </Button>
               )}
+              <select
+                className="ml-auto h-8 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm"
+                value={sourceControlView}
+                onChange={(e) => setSourceControlView(e.target.value as 'list' | 'tree')}
+                title="Source control view"
+              >
+                <option value="list">List</option>
+                <option value="tree">Tree</option>
+              </select>
             </div>
             {gitActionError && (
               <div className="ui-caption px-0.5 text-red-500">{gitActionError}</div>
@@ -3763,8 +3894,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     <span className="text-red-500">-{gitStatus.index.deletions + gitStatus.workingTree.deletions}</span>
                   </span>
                 </div>
-                {renderSourceControlSection('Staged', stagedFiles, gitStatus.index, 'unstage')}
-                {renderSourceControlSection('Changes', workingTreeFiles, gitStatus.workingTree, 'stage')}
+                {renderSourceControlSection('Staged', stagedFiles, stagedTree, gitStatus.index, 'unstage')}
+                {renderSourceControlSection('Changes', workingTreeFiles, workingTree, gitStatus.workingTree, 'stage')}
               </div>
             )}
             {!remoteRoot && (

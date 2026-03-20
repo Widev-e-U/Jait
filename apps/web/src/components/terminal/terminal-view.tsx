@@ -4,6 +4,7 @@ import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
+import { shouldAcceptTerminalOutput, type TerminalOutputPayload } from './terminal-stream'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
@@ -120,6 +121,7 @@ export function TerminalView({ terminalId, className, token }: TerminalViewProps
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let disposed = false
+    const lastSeqByStream = new Map<string, number>()
 
     function connect() {
       if (disposed) return
@@ -133,8 +135,8 @@ export function TerminalView({ terminalId, className, token }: TerminalViewProps
 
       ws.onmessage = (e) => {
         try {
-          const msg = JSON.parse(e.data as string) as { payload?: { type?: string; data?: string; terminalId?: string } }
-          if (msg.payload?.type === 'terminal.output' && msg.payload.terminalId === terminalId) {
+          const msg = JSON.parse(e.data as string) as { payload?: TerminalOutputPayload }
+          if (shouldAcceptTerminalOutput(lastSeqByStream, terminalId, msg.payload)) {
             term.write(msg.payload.data ?? '')
           }
         } catch {

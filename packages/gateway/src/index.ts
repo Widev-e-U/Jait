@@ -9,6 +9,7 @@ import { SessionService } from "./services/sessions.js";
 import { SessionStateService } from "./services/session-state.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory } from "./surfaces/index.js";
+import type { SurfaceRegistrySnapshot } from "@jait/shared";
 import { createToolRegistry } from "./tools/index.js";
 import { SchedulerService } from "./scheduler/service.js";
 import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
@@ -124,10 +125,20 @@ async function main() {
   surfaceRegistry.register(new RemoteFileSystemSurfaceFactory(ws));
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
   const previewService = new PreviewService(surfaceRegistry);
+  ws.getSurfaceSnapshot = (): SurfaceRegistrySnapshot => ({
+    serverTime: new Date().toISOString(),
+    surfaces: surfaceRegistry.listSnapshots(),
+  });
 
   // Auto-wire terminal output → WebSocket for ALL terminals (REST, tool, etc.)
   // Also broadcast workspace activation for filesystem surfaces.
   surfaceRegistry.onSurfaceStarted = (id, surface) => {
+    ws.broadcastAll({
+      type: "surface.updated",
+      sessionId: surface.sessionId ?? "",
+      timestamp: new Date().toISOString(),
+      payload: { surface: surface.snapshot() },
+    });
     if (surface.type === "terminal" && "write" in surface) {
       (surface as import("./surfaces/terminal.js").TerminalSurface).onOutput = (data) =>
         ws.broadcastTerminalOutput(id, data);
@@ -179,6 +190,12 @@ async function main() {
   };
 
   surfaceRegistry.onSurfaceStopped = (id, surface, context) => {
+    ws.broadcastAll({
+      type: "surface.disconnected",
+      sessionId: surface.sessionId ?? "",
+      timestamp: new Date().toISOString(),
+      payload: { surfaceId: id, surface: surface.snapshot(), reason: context?.reason ?? null },
+    });
     if (surface.type === "filesystem" || surface.type === "remote-filesystem") {
       // Stop the file watcher if it was watching this surface
       if (watcherSurfaceId === id) {

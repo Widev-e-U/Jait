@@ -12,6 +12,7 @@
  */
 
 import type { ChatMode } from "../chat-modes.js";
+import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS } from "./shared-sections.js";
 
 // ── Interfaces ───────────────────────────────────────────────────────
 
@@ -85,7 +86,7 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
   const safety = resolver.resolveSafetyRules?.(endpoint) ?? DEFAULT_SAFETY;
   const systemPrompt = resolver.resolveSystemPrompt(mode, endpoint);
 
-  let prompt = `${identity}\n\n${safety}\n\n${systemPrompt}`;
+  let prompt = `${identity}\n\n${safety}\n\n<jaitExternalProvider>\n${JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS}\n</jaitExternalProvider>\n\n${systemPrompt}`;
 
   // Inject workspace context so the agent knows its working directory
   if (ctx?.workspaceRoot) {

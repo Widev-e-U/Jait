@@ -49,9 +49,16 @@ export interface ThreadInfo {
   prNumber: number | null;
   prTitle: string | null;
   prState: "creating" | "open" | "closed" | "merged" | null;
+  executionNodeId: string | null;
+  executionNodeName: string | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
+}
+
+export interface ThreadRegistrySnapshot {
+  serverTime: string;
+  threads: ThreadInfo[];
 }
 
 // ── Thread activity ──────────────────────────────────────────────────

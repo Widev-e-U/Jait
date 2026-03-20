@@ -5,7 +5,7 @@ import type { JaitDB } from "../db/index.js";
 import type { SessionService } from "../services/sessions.js";
 import type { UserService } from "../services/users.js";
 import type { ToolRegistry } from "../tools/registry.js";
-import type { ToolContext } from "../tools/contracts.js";
+import type { ToolContext, ToolOutputStreamMetadata } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { ToolResult } from "../tools/contracts.js";
 import type { MemoryService } from "../memory/contracts.js";
@@ -673,7 +673,7 @@ export function registerChatRoutes(
     args: unknown,
     sessionId: string,
     auth?: { userId?: string; apiKeys?: Record<string, string> },
-    onOutputChunk?: (chunk: string) => void,
+    onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void,
     signal?: AbortSignal,
   ): Promise<ToolResult> {
     if (!toolRegistry) {

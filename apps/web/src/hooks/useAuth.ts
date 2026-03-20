@@ -5,7 +5,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 const API_URL = getApiUrl()
 
 export type ThemeMode = 'light' | 'dark' | 'system'
-export type SttProvider = 'simulated' | 'browser' | 'wyoming' | 'whisper'
+export type SttProvider = 'wyoming' | 'whisper'
 export type ChatProvider = 'jait' | 'codex' | 'claude-code'
 
 interface User {
@@ -38,7 +38,7 @@ interface AuthResponse {
 const EMPTY_SETTINGS: UserSettings = {
   theme: 'system',
   api_keys: {},
-  stt_provider: 'simulated',
+  stt_provider: 'whisper',
   chat_provider: 'jait',
   workspace_picker_path: null,
   workspace_picker_node_id: null,

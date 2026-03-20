@@ -53,7 +53,7 @@ function createMockWsControlPlane() {
   };
 
   // Track the onRemoteProviderEvent callback — RemoteCliProvider sets this
-  let onRemoteProviderEvent: ((sessionId: string, event: unknown) => void) | undefined;
+  let onRemoteProviderEvent: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined;
 
   // Track pending provider ops for assertions
   const providerOpCalls: Array<{ op: string; params: Record<string, unknown> }> = [];
@@ -144,7 +144,7 @@ function createMockWsControlPlane() {
 
     // ── Provider event callback ────────────────────────────────────
     get onRemoteProviderEvent() { return onRemoteProviderEvent; },
-    set onRemoteProviderEvent(fn: ((sessionId: string, event: unknown) => void) | undefined) {
+    set onRemoteProviderEvent(fn: ((sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void) | undefined) {
       onRemoteProviderEvent = fn;
     },
 

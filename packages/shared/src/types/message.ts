@@ -22,6 +22,9 @@ export interface ToolCall {
 export type WsEventType =
   | "session.created"
   | "session.closed"
+  | "node.registry"
+  | "node.updated"
+  | "node.disconnected"
   | "message.delta"
   | "message.complete"
   | "tool.call"
@@ -30,6 +33,8 @@ export type WsEventType =
   | "consent.resolved"
   | "surface.connected"
   | "surface.disconnected"
+  | "surface.registry"
+  | "surface.updated"
   | "ui.command"
   | "ui.state-sync"
   | "ui.full-state"

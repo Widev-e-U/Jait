@@ -1,5 +1,5 @@
 import { useEffect, useRef, useCallback } from 'react'
-import type {
+import {
   UICommandType,
   UICommandPayload,
   UIStateKey,
@@ -10,6 +10,7 @@ import type {
   DevPreviewOpenData,
   ArchitectureUpdateData,
   FsChangesPayload,
+  NODE_PROTOCOL_VERSION,
 } from '@jait/shared'
 
 import { getWsUrl } from '@/lib/gateway-url'
@@ -249,8 +250,14 @@ export function useUICommands(opts: UseUICommandsOptions) {
         void handleGatewayNotification(msg.payload as {
           id: string; title: string; body: string; level: string; link?: string
         })
-      } else if (msg.type.startsWith('thread.') || msg.type.startsWith('repo.') || msg.type.startsWith('plan.') || msg.type.startsWith('fs.node-')) {
-        // Thread, repo, plan lifecycle & FsNode change events — forward to automation hook
+      } else if (
+        msg.type.startsWith('thread.') ||
+        msg.type.startsWith('repo.') ||
+        msg.type.startsWith('plan.') ||
+        msg.type.startsWith('fs.node-') ||
+        msg.type.startsWith('node.')
+      ) {
+        // Thread, repo, plan, filesystem-node and node-registry events — forward to automation hook
         onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
       }
     } catch {
@@ -494,6 +501,18 @@ export function useUICommands(opts: UseUICommandsOptions) {
         const reconnected = hasConnectedRef.current
         hasConnectedRef.current = true
         onConnectionStateChangeRef.current?.({ connected: true, reconnected })
+        ws.send(JSON.stringify({
+          type: 'resource.subscribe',
+          payload: { resource: 'root:/nodes' },
+        }))
+        ws.send(JSON.stringify({
+          type: 'resource.subscribe',
+          payload: { resource: 'root:/threads' },
+        }))
+        ws.send(JSON.stringify({
+          type: 'resource.subscribe',
+          payload: { resource: 'root:/surfaces' },
+        }))
         // Subscribe to current session on connect
         const sid = sessionIdRef.current
         if (sid) subscribeToSession(ws, sid)
@@ -509,6 +528,25 @@ export function useUICommands(opts: UseUICommandsOptions) {
               try { providers = await window.jaitDesktop.detectProviders() } catch { /* */ }
             }
             const nodeMsg = JSON.stringify({
+              type: 'node.hello',
+              payload: {
+                id: deviceId,
+                name: getDeviceName(),
+                platform: detectFsNodePlatform(),
+                role: detectPlatform() === 'electron' ? 'desktop' : 'mobile',
+                protocolVersion: NODE_PROTOCOL_VERSION,
+                capabilities: {
+                  providers,
+                  surfaces: ['filesystem'],
+                  tools: [],
+                  screenShare: true,
+                  voice: false,
+                  preview: false,
+                },
+              },
+            })
+            if (ws.readyState === WebSocket.OPEN) ws.send(nodeMsg)
+            const fsNodeMsg = JSON.stringify({
               type: 'fs.register-node',
               payload: {
                 id: deviceId,
@@ -517,7 +555,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
                 providers,
               },
             })
-            if (ws.readyState === WebSocket.OPEN) ws.send(nodeMsg)
+            if (ws.readyState === WebSocket.OPEN) ws.send(fsNodeMsg)
           })
         }
       }

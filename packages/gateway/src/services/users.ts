@@ -5,8 +5,12 @@ import { messages, sessions, userSettings, users } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 export type ThemeMode = "light" | "dark" | "system";
-export type SttProvider = "simulated" | "browser" | "wyoming" | "whisper";
+export type SttProvider = "wyoming" | "whisper";
 export type ChatProvider = "jait" | "codex" | "claude-code";
+
+function normalizeSttProvider(value: string | null | undefined): SttProvider {
+  return value === "wyoming" ? "wyoming" : "whisper";
+}
 
 export interface UserRecord {
   id: string;
@@ -120,7 +124,7 @@ export class UserService {
       userId: id,
       theme: "system",
       apiKeys: JSON.stringify({}),
-      sttProvider: "simulated",
+      sttProvider: "whisper",
       workspacePickerPath: null,
       workspacePickerNodeId: null,
       updatedAt: now,
@@ -150,7 +154,7 @@ export class UserService {
         theme: "system",
         apiKeys: JSON.stringify({}),
         disabledTools: JSON.stringify([]),
-        sttProvider: "simulated",
+        sttProvider: "whisper",
         chatProvider: "jait",
         workspacePickerPath: null,
         workspacePickerNodeId: null,
@@ -161,7 +165,7 @@ export class UserService {
         theme: "system",
         apiKeys: {},
         disabledTools: [],
-        sttProvider: "simulated",
+        sttProvider: "whisper",
         chatProvider: "jait",
         workspacePickerPath: null,
         workspacePickerNodeId: null,
@@ -173,7 +177,7 @@ export class UserService {
       theme: (row.theme as ThemeMode) || "system",
       apiKeys: parseApiKeys(row.apiKeys),
       disabledTools: parseStringArray((row as any).disabledTools ?? null),
-      sttProvider: ((row as any).sttProvider as SttProvider) || "simulated",
+      sttProvider: normalizeSttProvider(typeof (row as any).sttProvider === "string" ? (row as any).sttProvider : null),
       chatProvider: ((row as any).chatProvider as ChatProvider) || "jait",
       workspacePickerPath: typeof (row as any).workspacePickerPath === "string" ? (row as any).workspacePickerPath : null,
       workspacePickerNodeId: typeof (row as any).workspacePickerNodeId === "string" ? (row as any).workspacePickerNodeId : null,

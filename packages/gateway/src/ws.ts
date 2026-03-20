@@ -8,11 +8,17 @@ import type {
   ScreenShareSessionState,
   FsNode,
   FsBrowseEntry,
+  NodeHelloPayload,
+  NodeRegistrySnapshot,
+  NodeState,
 } from "@jait/shared";
 import type { AppConfig } from "./config.js";
 import { nanoid } from "nanoid";
 import * as jose from "jose";
 import type { Server as HttpServer } from "node:http";
+import { NODE_PROTOCOL_VERSION } from "@jait/shared";
+import { NodeStateManager } from "./services/node-state-manager.js";
+import type { ToolOutputStreamMetadata } from "./tools/contracts.js";
 
 interface ConnectedClient {
   id: string;
@@ -62,8 +68,14 @@ export class WsControlPlane {
     resolve: (value: any) => void;
     reject: (reason: Error) => void;
     timer: ReturnType<typeof setTimeout>;
-    onOutputChunk?: (chunk: string) => void;
+    onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void;
   }>();
+  private nodeStates = new NodeStateManager();
+  private terminalStreamState = new Map<string, { nextSeq: number; streamId: string }>();
+  private providerStreamState = new Map<string, { nextSeq: number; streamId: string }>();
+  private toolStreamState = new Map<string, { nextSeq: number; streamId: string }>();
+  getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[] };
+  getSurfaceSnapshot?: () => { serverTime: string; surfaces: unknown[] };
 
   constructor(private config: AppConfig) {
     // Use the configured JWT secret, or a dev-mode fallback
@@ -138,11 +150,13 @@ export class WsControlPlane {
       });
 
       ws.on("close", () => {
+        this.broadcastDisconnectedNodes(clientId);
         this.clients.delete(clientId);
         this.broadcastFsNodeChange(clientId);
       });
 
       ws.on("error", () => {
+        this.broadcastDisconnectedNodes(clientId);
         this.clients.delete(clientId);
         this.broadcastFsNodeChange(clientId);
       });
@@ -223,6 +237,102 @@ export class WsControlPlane {
         }
         break;
       }
+      case "resource.subscribe": {
+        if (!client.authenticated) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Must authenticate before subscribing", code: "UNAUTHORIZED" },
+          });
+          return;
+        }
+        const resource = (msg.payload as { resource?: string } | undefined)?.resource;
+        if (resource === "root:/nodes") {
+          this.sendNodeRegistrySnapshot(client.ws);
+          return;
+        }
+        if (resource === "root:/threads") {
+          const userId = client.userId?.trim();
+          if (!userId || !this.getThreadSnapshot) {
+            this.send(client.ws, {
+              type: "error",
+              sessionId: client.sessionId ?? "",
+              timestamp: new Date().toISOString(),
+              payload: { message: "Thread registry unavailable" },
+            });
+            return;
+          }
+          this.send(client.ws, {
+            type: "thread.updated",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: this.getThreadSnapshot(userId),
+          });
+          return;
+        }
+        if (resource === "root:/surfaces") {
+          if (!this.getSurfaceSnapshot) {
+            this.send(client.ws, {
+              type: "error",
+              sessionId: client.sessionId ?? "",
+              timestamp: new Date().toISOString(),
+              payload: { message: "Surface registry unavailable" },
+            });
+            return;
+          }
+          this.send(client.ws, {
+            type: "surface.registry",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: this.getSurfaceSnapshot(),
+          });
+          return;
+        }
+        this.send(client.ws, {
+          type: "error",
+          sessionId: client.sessionId ?? "",
+          timestamp: new Date().toISOString(),
+          payload: { message: `Unknown resource: ${resource ?? "undefined"}` },
+        });
+        break;
+      }
+      case "resource.unsubscribe": {
+        break;
+      }
+      case "node.hello": {
+        if (!client.authenticated) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Must authenticate before registering a node", code: "UNAUTHORIZED" },
+          });
+          return;
+        }
+        const payload = msg.payload as NodeHelloPayload | undefined;
+        if (!payload?.id || !payload.name || !payload.platform) {
+          this.send(client.ws, {
+            type: "error",
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: { message: "Invalid node.hello payload" },
+          });
+          return;
+        }
+        client.deviceId = client.deviceId ?? payload.id;
+        const node = this.nodeStates.upsertNode({
+          id: payload.id,
+          name: payload.name,
+          platform: payload.platform,
+          role: payload.role ?? "remote",
+          clientId: client.id,
+          protocolVersion: payload.protocolVersion ?? NODE_PROTOCOL_VERSION,
+          capabilities: payload.capabilities,
+        });
+        this.broadcastNodeUpdate(node);
+        break;
+      }
       case "terminal.subscribe": {
         if (!client.authenticated) {
           this.send(client.ws, {
@@ -246,11 +356,19 @@ export class WsControlPlane {
           if (this.onTerminalReplay) {
             const buffered = this.onTerminalReplay(termId);
             if (buffered) {
+              const replay = this.currentTerminalStreamEvent(termId);
               this.send(client.ws, {
                 type: "surface.connected",
                 sessionId: client.sessionId ?? "",
                 timestamp: new Date().toISOString(),
-                payload: { type: "terminal.output", terminalId: termId, data: buffered },
+                payload: {
+                  type: "terminal.output",
+                  terminalId: termId,
+                  data: buffered,
+                  streamId: replay.streamId,
+                  seq: replay.seq,
+                  replay: true,
+                },
               });
             }
           }
@@ -375,6 +493,17 @@ export class WsControlPlane {
             registeredAt: new Date().toISOString(),
           };
           this.fsNodes.set(node.id, node);
+          this.nodeStates.upsertNode({
+            id: node.id,
+            name: node.name,
+            platform: node.platform,
+            role: "remote",
+            clientId: client.id,
+            capabilities: {
+              providers: node.providers ?? [],
+              surfaces: ["filesystem"],
+            },
+          });
           console.log(`[ws] fs node registered: ${node.name} (${node.id}) on client ${client.id} — providers: ${node.providers?.join(", ") ?? "none"}`);
           this.onFsNodeRegistered?.(node);
           // Notify all clients so frontends can refresh provider/device lists
@@ -384,6 +513,10 @@ export class WsControlPlane {
             timestamp: new Date().toISOString(),
             payload: { nodeId: node.id, name: node.name, platform: node.platform, providers: node.providers ?? [] },
           });
+          const nodeState = this.nodeStates.getNode(node.id);
+          if (nodeState) {
+            this.broadcastNodeUpdate(nodeState);
+          }
         }
         break;
       }
@@ -413,11 +546,12 @@ export class WsControlPlane {
         // A remote node is forwarding a provider event (token, tool.start, etc.)
         const evtPayload = msg.payload as { sessionId?: string; event?: unknown } | undefined;
         if (evtPayload?.sessionId && evtPayload.event && this.onRemoteProviderEvent) {
+          const metadata = this.nextOrderedStreamEvent(this.providerStreamState, "provider", evtPayload.sessionId);
           const evtMethod = (evtPayload.event as { method?: string })?.method;
           if (evtMethod && evtMethod !== "item/agentMessage/delta") {
             console.log(`[remote-event] session=${evtPayload.sessionId.slice(0, 8)} method=${evtMethod}`);
           }
-          this.onRemoteProviderEvent(evtPayload.sessionId, evtPayload.event);
+          this.onRemoteProviderEvent(evtPayload.sessionId, evtPayload.event, metadata);
         }
         break;
       }
@@ -502,7 +636,8 @@ export class WsControlPlane {
         if (outPayload?.requestId && outPayload.chunk) {
           const pending = this.pendingToolOps.get(outPayload.requestId);
           if (pending?.onOutputChunk) {
-            pending.onOutputChunk(outPayload.chunk);
+            const metadata = this.nextOrderedStreamEvent(this.toolStreamState, "tool", outPayload.requestId);
+            pending.onOutputChunk(outPayload.chunk, metadata);
           }
         }
         break;
@@ -598,13 +733,14 @@ export class WsControlPlane {
 
   /** Send terminal output data to all clients subscribed to this terminal */
   broadcastTerminalOutput(terminalId: string, data: string) {
+    const stream = this.nextTerminalStreamEvent(terminalId);
     for (const client of this.clients.values()) {
       if (client.terminalSubscriptions.has(terminalId) && client.ws.readyState === 1) {
         this.send(client.ws, {
           type: "surface.connected", // reuse event type
           sessionId: client.sessionId ?? "",
           timestamp: new Date().toISOString(),
-          payload: { type: "terminal.output", terminalId, data },
+          payload: { type: "terminal.output", terminalId, data, streamId: stream.streamId, seq: stream.seq },
         });
       }
     }
@@ -629,10 +765,46 @@ export class WsControlPlane {
   /** Callback when a screen-share stop is requested via WS */
   onScreenShareStop?: (sessionId: string) => void;
   /** Callback when a remote node sends a provider event (token, tool.start, etc.) */
-  onRemoteProviderEvent?: (sessionId: string, event: unknown) => void;
+  onRemoteProviderEvent?: (sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => void;
 
   /** Called when a filesystem node (desktop/mobile) registers. */
   onFsNodeRegistered?: (node: FsNode) => void;
+
+  private getTerminalStreamState(terminalId: string) {
+    let state = this.terminalStreamState.get(terminalId);
+    if (!state) {
+      state = { nextSeq: 1, streamId: `terminal:${terminalId}` };
+      this.terminalStreamState.set(terminalId, state);
+    }
+    return state;
+  }
+
+  private nextTerminalStreamEvent(terminalId: string) {
+    const state = this.getTerminalStreamState(terminalId);
+    const event = { streamId: state.streamId, seq: state.nextSeq };
+    state.nextSeq += 1;
+    return event;
+  }
+
+  private currentTerminalStreamEvent(terminalId: string) {
+    const state = this.getTerminalStreamState(terminalId);
+    return { streamId: state.streamId, seq: Math.max(0, state.nextSeq - 1) };
+  }
+
+  private nextOrderedStreamEvent(
+    stateMap: Map<string, { nextSeq: number; streamId: string }>,
+    kind: string,
+    id: string,
+  ) {
+    let state = stateMap.get(id);
+    if (!state) {
+      state = { nextSeq: 1, streamId: `${kind}:${id}` };
+      stateMap.set(id, state);
+    }
+    const event = { streamId: state.streamId, seq: state.nextSeq };
+    state.nextSeq += 1;
+    return event;
+  }
 
   // ── Screen sharing helpers ────────────────────────────────────────
 
@@ -716,9 +888,16 @@ export class WsControlPlane {
 
   /** Find all connected device IDs */
   getConnectedDeviceIds(): string[] {
-    return [...this.clients.values()]
-      .filter((c) => c.deviceId && c.authenticated)
-      .map((c) => c.deviceId!);
+    const ids = new Set<string>();
+    for (const node of this.nodeStates.listNodes()) {
+      if (node.role !== "gateway") ids.add(node.id);
+    }
+    for (const client of this.clients.values()) {
+      if (client.authenticated && client.deviceId) {
+        ids.add(client.deviceId);
+      }
+    }
+    return [...ids];
   }
 
   // ── Filesystem node helpers ─────────────────────────────────────
@@ -737,6 +916,22 @@ export class WsControlPlane {
   /** Register the gateway itself as a filesystem node */
   registerGatewayFsNode(node: FsNode) {
     this.fsNodes.set(node.id, node);
+    this.nodeStates.upsertNode({
+      id: node.id,
+      name: node.name,
+      platform: node.platform,
+      role: "gateway",
+      clientId: node.clientId,
+      isGateway: true,
+      capabilities: {
+        providers: node.providers ?? [],
+        surfaces: ["filesystem"],
+      },
+    });
+  }
+
+  getNodeRegistry(): NodeRegistrySnapshot {
+    return this.nodeStates.getSnapshot();
   }
 
   /**
@@ -861,7 +1056,7 @@ export class WsControlPlane {
     nodeId: string,
     tool: string,
     args: Record<string, unknown>,
-    options: { timeoutMs?: number; sessionId?: string; workspaceRoot?: string; onOutputChunk?: (chunk: string) => void } = {},
+    options: { timeoutMs?: number; sessionId?: string; workspaceRoot?: string; onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void } = {},
   ): Promise<T> {
     const { timeoutMs = 120_000, sessionId, workspaceRoot, onOutputChunk } = options;
     const node = this.fsNodes.get(nodeId);
@@ -921,6 +1116,36 @@ export class WsControlPlane {
 
   private send(ws: WebSocket, event: WsEvent) {
     ws.send(JSON.stringify(event));
+  }
+
+  private sendNodeRegistrySnapshot(ws: WebSocket) {
+    this.send(ws, {
+      type: "node.registry",
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: this.nodeStates.getSnapshot(),
+    });
+  }
+
+  private broadcastNodeUpdate(node: NodeState) {
+    this.broadcastAll({
+      type: "node.updated",
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: node,
+    });
+  }
+
+  private broadcastDisconnectedNodes(clientId: string) {
+    const removed = this.nodeStates.removeNodesByClientId(clientId);
+    for (const node of removed) {
+      this.broadcastAll({
+        type: "node.disconnected",
+        sessionId: "",
+        timestamp: new Date().toISOString(),
+        payload: { nodeId: node.id, node },
+      });
+    }
   }
 
   stop() {

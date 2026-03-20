@@ -38,6 +38,7 @@ import {
   normalizeGeneratedThreadTitle,
 } from "../services/thread-title.js";
 import type { WsEventType } from "@jait/shared";
+import type { ThreadInfo, ThreadRegistrySnapshot } from "@jait/shared";
 
 export interface ThreadRouteDeps {
   threadService: ThreadService;
@@ -72,6 +73,36 @@ export function registerThreadRoutes(
   // Track RemoteCliProvider instances per thread so /send, /stop, /interrupt
   // can access them (they're not in the global providerRegistry)
   const remoteProviders = new Map<string, RemoteCliProvider>();
+
+  if (ws) {
+    ws.getThreadSnapshot = (userId: string): ThreadRegistrySnapshot => ({
+      serverTime: new Date().toISOString(),
+      threads: threadService.list(userId).map((thread): ThreadInfo => ({
+        id: thread.id,
+        userId: thread.userId,
+        sessionId: thread.sessionId,
+        title: thread.title,
+        providerId: thread.providerId as ThreadInfo["providerId"],
+        model: thread.model,
+        runtimeMode: thread.runtimeMode as ThreadInfo["runtimeMode"],
+        kind: thread.kind as ThreadInfo["kind"],
+        workingDirectory: thread.workingDirectory,
+        branch: thread.branch,
+        status: thread.status as ThreadInfo["status"],
+        providerSessionId: thread.providerSessionId,
+        error: thread.error,
+        prUrl: thread.prUrl,
+        prNumber: thread.prNumber,
+        prTitle: thread.prTitle,
+        prState: normalizeThreadPrState(thread.prState),
+        executionNodeId: thread.executionNodeId ?? null,
+        executionNodeName: thread.executionNodeName ?? null,
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
+        completedAt: thread.completedAt,
+      })),
+    });
+  }
 
   // ── Helpers ──────────────────────────────────────────────────────
 

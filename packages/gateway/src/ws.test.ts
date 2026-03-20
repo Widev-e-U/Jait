@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import WebSocket from "ws";
 import * as jose from "jose";
 import { WsControlPlane } from "./ws.js";
@@ -465,11 +465,16 @@ describe("WsControlPlane", () => {
       expect(ack.payload.subscribed).toBe(true);
       const replay = await subscribed.collector.next();
       expect(replay.payload.data).toContain("buffered prompt>");
+      expect(replay.payload.streamId).toBe("terminal:term-sync");
+      expect(replay.payload.seq).toBe(0);
+      expect(replay.payload.replay).toBe(true);
 
       plane.broadcastTerminalOutput("term-sync", "live output line");
 
       const streamed = await subscribed.collector.next();
       expect(streamed.payload.data).toContain("live output line");
+      expect(streamed.payload.streamId).toBe("terminal:term-sync");
+      expect(streamed.payload.seq).toBe(1);
 
       const noStream = await observer.collector.maybeNext(500);
       expect(noStream).toBeNull();
@@ -500,6 +505,122 @@ describe("WsControlPlane", () => {
       unauth.ws.close();
     });
 
+    it("increments terminal stream sequence numbers across output events", async () => {
+      const token = await createToken("user-terminal-seq");
+
+      const subscribed = openWs(port, { token });
+      await waitForOpen(subscribed.ws);
+      await subscribed.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+      subscribed.ws.send(JSON.stringify({ type: "subscribe", sessionId: "term-seq-session", deviceId: "term-seq-device" }));
+      await subscribed.collector.next();
+
+      subscribed.ws.send(JSON.stringify({ type: "terminal.subscribe", terminalId: "term-seq" }));
+      await subscribed.collector.next();
+
+      plane.broadcastTerminalOutput("term-seq", "first");
+      plane.broadcastTerminalOutput("term-seq", "second");
+
+      const first = await subscribed.collector.next();
+      const second = await subscribed.collector.next();
+
+      expect(first.payload.streamId).toBe("terminal:term-seq");
+      expect(first.payload.seq).toBe(1);
+      expect(second.payload.streamId).toBe("terminal:term-seq");
+      expect(second.payload.seq).toBe(2);
+
+      subscribed.ws.close();
+    });
+
+    it("orders remote provider events per session", async () => {
+      const token = await createToken("user-provider-stream");
+      const received: Array<{ sessionId: string; event: unknown; metadata?: { streamId: string; seq: number } }> = [];
+      plane.onRemoteProviderEvent = (sessionId, event, metadata) => {
+        received.push({ sessionId, event, metadata });
+      };
+
+      const remote = openWs(port, { token });
+      await waitForOpen(remote.ws);
+      await remote.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      remote.ws.send(JSON.stringify({
+        type: "provider.event",
+        payload: { sessionId: "provider-session-1", event: { type: "turn.started", sessionId: "provider-session-1" } },
+      }));
+      remote.ws.send(JSON.stringify({
+        type: "provider.event",
+        payload: { sessionId: "provider-session-1", event: { type: "turn.completed", sessionId: "provider-session-1" } },
+      }));
+
+      await new Promise((r) => setTimeout(r, 100));
+
+      expect(received).toHaveLength(2);
+      expect(received[0]?.metadata).toEqual({ streamId: "provider:provider-session-1", seq: 1 });
+      expect(received[1]?.metadata).toEqual({ streamId: "provider:provider-session-1", seq: 2 });
+
+      remote.ws.close();
+    });
+
+    it("orders remote tool output chunks per request", async () => {
+      const token = await createToken("user-tool-stream");
+
+      const remote = openWs(port, { token });
+      await waitForOpen(remote.ws);
+      await remote.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      remote.ws.send(JSON.stringify({
+        type: "fs.register-node",
+        payload: { id: "remote-tool-node", name: "Remote Tool Node", platform: "linux", providers: [] },
+      }));
+      await new Promise((r) => setTimeout(r, 50));
+
+      const chunks: Array<{ chunk: string; metadata?: { streamId: string; seq: number } }> = [];
+      const resultPromise = plane.proxyToolOp<{ ok: boolean }>(
+        "remote-tool-node",
+        "terminal.exec",
+        { command: "echo hi" },
+        {
+          sessionId: "tool-stream-session",
+          workspaceRoot: "/tmp",
+          onOutputChunk: (chunk, metadata) => {
+            chunks.push({ chunk, metadata });
+          },
+        },
+      );
+
+      const nodeRegistered = await remote.collector.next();
+      expect(nodeRegistered.type).toBe("fs.node-registered");
+      let request = await remote.collector.next();
+      while (request.type === "node.updated") {
+        request = await remote.collector.next();
+      }
+      expect(request.type).toBe("tool.op-request");
+      const requestId = request.payload.requestId as string;
+
+      remote.ws.send(JSON.stringify({
+        type: "tool.op-output",
+        payload: { requestId, chunk: "first\n" },
+      }));
+      remote.ws.send(JSON.stringify({
+        type: "tool.op-output",
+        payload: { requestId, chunk: "second\n" },
+      }));
+      remote.ws.send(JSON.stringify({
+        type: "tool.op-response",
+        payload: { requestId, result: { ok: true } },
+      }));
+
+      await expect(resultPromise).resolves.toEqual({ ok: true });
+      expect(chunks).toEqual([
+        { chunk: "first\n", metadata: { streamId: `tool:${requestId}`, seq: 1 } },
+        { chunk: "second\n", metadata: { streamId: `tool:${requestId}`, seq: 2 } },
+      ]);
+
+      remote.ws.close();
+    });
+
     it("reconnects with same device id without creating duplicates", async () => {
       const token = await createToken("user-reconnect");
 
@@ -523,6 +644,39 @@ describe("WsControlPlane", () => {
 
       expect(plane.getConnectedDeviceIds()).toEqual(["device-r1"]);
       second.ws.close();
+    });
+
+    it("returns a surface registry snapshot for root:/surfaces subscriptions", async () => {
+      const token = await createToken("user-surface-registry");
+      plane.getSurfaceSnapshot = () => ({
+        serverTime: new Date().toISOString(),
+        surfaces: [
+          {
+            id: "surface-1",
+            type: "terminal",
+            state: "running",
+            sessionId: "session-1",
+            metadata: { workspaceRoot: "/tmp/project" },
+          },
+        ],
+      });
+
+      const client = openWs(port, { token });
+      await waitForOpen(client.ws);
+      await client.collector.next();
+      await new Promise((r) => setTimeout(r, 100));
+
+      client.ws.send(JSON.stringify({
+        type: "resource.subscribe",
+        payload: { resource: "root:/surfaces" },
+      }));
+
+      const registry = await client.collector.next();
+      expect(registry.type).toBe("surface.registry");
+      expect(Array.isArray(registry.payload.surfaces)).toBe(true);
+      expect(registry.payload.surfaces).toHaveLength(1);
+      expect(registry.payload.surfaces[0]?.id).toBe("surface-1");
+      client.ws.close();
     });
 
     it("handles subscribe/auth race: rejects before auth and accepts after authenticate", async () => {

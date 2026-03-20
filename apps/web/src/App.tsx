@@ -3351,30 +3351,6 @@ function App() {
       } finally {
         setVoiceTranscribing(false)
       }
-    } else if (settings.stt_provider === 'browser') {
-      // Use Web Speech API on the captured audio (fallback: re-trigger recognition)
-      setVoiceTranscribing(true)
-      try {
-        const win = window as typeof window & { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any }
-        const speechApi = win.SpeechRecognition ?? win.webkitSpeechRecognition
-        if (!speechApi) {
-          window.alert('Browser Speech-to-Text is not supported.')
-          return
-        }
-        // Play the audio back through recognition isn't possible — for browser mode
-        // we fall back to a simpler approach: submit the blob text  
-        // Actually for browser mode we just insert a note that browser STT
-        // doesn't support audio blob transcription and should use direct mode
-        window.alert('Browser STT works best with direct microphone input. Consider switching to Wyoming for push-to-talk.')
-      } finally {
-        setVoiceTranscribing(false)
-      }
-    } else {
-      // simulated — show a prompt
-      const transcript = window.prompt('Transcription (simulated):')?.trim() ?? ''
-      if (transcript) {
-        setInputValue((prev) => appendTranscript(prev, transcript))
-      }
     }
   }, [activeSessionId, buildWavBlob, settings.stt_provider, token])
 
@@ -3384,72 +3360,7 @@ function App() {
       return
     }
 
-    // For browser provider, keep the old direct recognition flow
-    if (settings.stt_provider === 'browser') {
-      const win = window as typeof window & { SpeechRecognition?: new () => any; webkitSpeechRecognition?: new () => any }
-      const speechApi = win.SpeechRecognition ?? win.webkitSpeechRecognition
-      if (!speechApi) {
-        window.alert('Speech-to-Text provider "Browser" is not supported in this browser.')
-        return
-      }
-      const transcript = await new Promise<string>((resolve) => {
-        const recognition = new speechApi()
-        let resolved = false
-        const finish = (value: string) => {
-          if (resolved) return
-          resolved = true
-          resolve(value)
-        }
-        recognition.lang = 'de-DE'
-        recognition.interimResults = false
-        recognition.maxAlternatives = 1
-        recognition.onresult = (event: any) => {
-          const spoken = event.results?.[0]?.[0]?.transcript?.trim() ?? ''
-          finish(spoken)
-        }
-        recognition.onerror = () => finish('')
-        recognition.onnomatch = () => finish('')
-        recognition.onend = () => finish('')
-        recognition.start()
-      })
-      if (!transcript) return
-      try {
-        const res = await fetch(`${API_URL}/api/voice/transcribe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: activeSessionId ?? 'voice-input', transcript }),
-        })
-        const data = (await res.json()) as { text?: string }
-        if (data.text) {
-          await submitVoiceTranscript(data.text)
-        }
-      } catch {
-        // noop
-      }
-      return
-    }
-
-    // For simulated provider, keep the old prompt flow
-    if (settings.stt_provider === 'simulated') {
-      const transcript = window.prompt('Speak now (simulated transcript):')?.trim() ?? ''
-      if (!transcript) return
-      try {
-        const res = await fetch(`${API_URL}/api/voice/transcribe`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: activeSessionId ?? 'voice-input', transcript }),
-        })
-        const data = (await res.json()) as { text?: string }
-        if (data.text) {
-          await submitVoiceTranscript(data.text)
-        }
-      } catch {
-        // noop
-      }
-      return
-    }
-
-    // Wyoming / Whisper provider: push-to-talk with MediaRecorder
+    // Whisper / Wyoming provider: push-to-talk with MediaRecorder
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         audio: { echoCancellation: true, noiseSuppression: true, sampleRate: 16000 },
@@ -4133,7 +4044,7 @@ function App() {
                   onClick={toggleWorkspaceTree}
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                     showWorkspaceTree
-                      ? 'border-foreground/15 bg-foreground text-background'
+                      ? 'border-border bg-background text-foreground shadow-sm'
                       : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
                   }`}
                 >
@@ -4145,7 +4056,7 @@ function App() {
                   onClick={toggleWorkspaceEditor}
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                     showWorkspaceEditor
-                      ? 'border-foreground/15 bg-foreground text-background'
+                      ? 'border-border bg-background text-foreground shadow-sm'
                       : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
                   }`}
                 >

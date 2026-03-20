@@ -1,4 +1,4 @@
-export type { SurfaceType, SurfaceCapabilities, SurfaceInfo } from "./surface.js";
+export type { SurfaceType, SurfaceCapabilities, SurfaceInfo, SurfaceRegistryEntry, SurfaceRegistrySnapshot } from "./surface.js";
 export { SURFACE_TYPES } from "./surface.js";
 export type { SessionInfo, SessionCreateParams } from "./session.js";
 export type {
@@ -28,6 +28,16 @@ export type {
   FsChangesPayload,
 } from "./message.js";
 export type { GatewayStatus, DeviceInfo, FsNode, FsBrowseEntry, FsBrowseResponse, FsRootsResponse } from "./gateway.js";
+export type {
+  NodePlatform,
+  NodeRole,
+  NodeSurfaceType,
+  NodeCapabilities,
+  NodeHelloPayload,
+  NodeState,
+  NodeRegistrySnapshot,
+} from "./node.js";
+export { NODE_PROTOCOL_VERSION } from "./node.js";
 
 export type {
   NetworkHost,
@@ -60,6 +70,7 @@ export type {
   ThreadInfo,
   ThreadActivityKind,
   ThreadActivity,
+  ThreadRegistrySnapshot,
   CreateThreadParams,
   UpdateThreadParams,
   ThreadWsEventType,

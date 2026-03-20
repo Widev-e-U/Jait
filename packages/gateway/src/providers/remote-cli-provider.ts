@@ -46,9 +46,9 @@ export class RemoteCliProvider implements CliProviderAdapter {
 
     // Listen for events forwarded from the remote node
     const prevHandler = ws.onRemoteProviderEvent;
-    ws.onRemoteProviderEvent = (sessionId: string, event: unknown) => {
+    ws.onRemoteProviderEvent = (sessionId: string, event: unknown, metadata?: { streamId: string; seq: number }) => {
       // Call previous handler if present (another RemoteCliProvider)
-      if (prevHandler) prevHandler(sessionId, event);
+      if (prevHandler) prevHandler(sessionId, event, metadata);
       this.handleRemoteEvent(sessionId, event);
     };
   }

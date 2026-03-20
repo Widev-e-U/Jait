@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth-token'
+import type { NodeRegistrySnapshot, NodeState, ThreadRegistrySnapshot } from '@jait/shared'
 import {
   type RemoteProviderInfo,
   agentsApi,
@@ -81,6 +82,17 @@ function dbRepoToLocal(repo: AutomationRepo, localDeviceId: string): RepositoryC
   }
 }
 
+function mapNodeStatesToRemoteProviders(nodes: NodeState[]): RemoteProviderInfo[] {
+  return nodes
+    .filter((node) => node.role !== 'gateway')
+    .map((node) => ({
+      nodeId: node.id,
+      nodeName: node.name,
+      platform: node.platform,
+      providers: node.capabilities.providers,
+    }))
+}
+
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function useAutomation(enabled = true) {
@@ -103,6 +115,7 @@ export function useAutomation(enabled = true) {
   const [ghAvailable, setGhAvailable] = useState(true)
   const [providers, setProviders] = useState<ProviderInfo[]>([])
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
+  const [nodeRegistry, setNodeRegistry] = useState<NodeState[]>([])
   const [loading, setLoading] = useState(false)
   const [providersLoaded, setProvidersLoaded] = useState(false)
   const [loadingActivities, setLoadingActivities] = useState(false)
@@ -178,7 +191,7 @@ export function useAutomation(enabled = true) {
       setThreads(ts.threads)
       setHasMoreThreads(ts.hasMore)
       setProviders(provResult.providers)
-      setRemoteProviders(provResult.remoteProviders)
+      setRemoteProviders(nodeRegistry.length > 0 ? mapNodeStatesToRemoteProviders(nodeRegistry) : provResult.remoteProviders)
       setProvidersLoaded(true)
       setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
       setError(null)
@@ -198,10 +211,10 @@ export function useAutomation(enabled = true) {
         agentsApi.listRepos(),
       ])
       setProviders(provResult.providers)
-      setRemoteProviders(provResult.remoteProviders)
+      setRemoteProviders(nodeRegistry.length > 0 ? mapNodeStatesToRemoteProviders(nodeRegistry) : provResult.remoteProviders)
       setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
     } catch { /* best-effort */ }
-  }, [localDeviceId])
+  }, [localDeviceId, nodeRegistry])
 
   const getRuntimeInfoForRepository = useCallback(
     (repository: RepositoryConnection) => getRepositoryRuntimeInfo(repository, {
@@ -238,6 +251,11 @@ export function useAutomation(enabled = true) {
         break
       }
       case 'thread.updated': {
+        const snapshot = payload as unknown as ThreadRegistrySnapshot | undefined
+        if (Array.isArray(snapshot?.threads)) {
+          setThreads(snapshot.threads as AgentThread[])
+          break
+        }
         const thread = payload.thread as AgentThread | undefined
         if (thread) setThreads(prev => prev.map(t => t.id === thread.id ? thread : t))
         break
@@ -326,6 +344,38 @@ export function useAutomation(enabled = true) {
       case 'fs.node-registered':
       case 'fs.node-disconnected': {
         void refreshProviders()
+        break
+      }
+      case 'node.registry': {
+        const snapshot = payload as unknown as NodeRegistrySnapshot | undefined
+        const nodes = snapshot?.nodes ?? []
+        setNodeRegistry(nodes)
+        setRemoteProviders(mapNodeStatesToRemoteProviders(nodes))
+        setProvidersLoaded(true)
+        break
+      }
+      case 'node.updated': {
+        const node = payload as unknown as NodeState | undefined
+        if (!node) break
+        setNodeRegistry(prev => {
+          const next = prev.some((entry) => entry.id === node.id)
+            ? prev.map((entry) => entry.id === node.id ? node : entry)
+            : [...prev, node]
+          setRemoteProviders(mapNodeStatesToRemoteProviders(next))
+          return next
+        })
+        setProvidersLoaded(true)
+        break
+      }
+      case 'node.disconnected': {
+        const nodeId = (payload.nodeId as string | undefined) ?? ((payload.node as unknown as NodeState | undefined)?.id)
+        if (!nodeId) break
+        setNodeRegistry(prev => {
+          const next = prev.filter((entry) => entry.id !== nodeId)
+          setRemoteProviders(mapNodeStatesToRemoteProviders(next))
+          return next
+        })
+        setProvidersLoaded(true)
         break
       }
     }

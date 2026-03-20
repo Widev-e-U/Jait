@@ -30,3 +30,17 @@ export interface SurfaceInfo {
   deviceId: string;
   connectedAt: string | null;
 }
+
+export interface SurfaceRegistryEntry {
+  id: string;
+  type: string;
+  state: string;
+  sessionId: string;
+  startedAt?: string;
+  metadata: Record<string, string | number | boolean | null>;
+}
+
+export interface SurfaceRegistrySnapshot {
+  serverTime: string;
+  surfaces: SurfaceRegistryEntry[];
+}
