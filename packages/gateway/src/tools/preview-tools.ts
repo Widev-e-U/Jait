@@ -13,6 +13,10 @@ interface PreviewStartInput {
   frameworkHint?: string;
 }
 
+function resolvePreviewSessionId(context: { sessionId?: string }): string {
+  return context.sessionId?.trim() || "";
+}
+
 export function createPreviewStartTool(
   ws?: WsControlPlane,
   sessionState?: SessionStateService,
@@ -51,9 +55,7 @@ export function createPreviewStartTool(
     },
     async execute(input, context) {
       const target = input.target?.trim() || "";
-      const sessionId = context.sessionId && context.sessionId !== "mcp-session"
-        ? context.sessionId
-        : "";
+      const sessionId = resolvePreviewSessionId(context);
       const workspaceRoot = input.workspaceRoot?.trim() || context.workspaceRoot || "";
 
       if (!previewService) return { ok: false, message: "Preview service is not available" };
@@ -125,8 +127,7 @@ export function createPreviewStopTool(
     parameters: { type: "object", properties: {} },
     async execute(_input, context) {
       if (!previewService) return { ok: false, message: "Preview service is not available" };
-      const sessionId = context.sessionId && context.sessionId !== "mcp-session"
-        ? context.sessionId : "";
+      const sessionId = resolvePreviewSessionId(context);
       if (!sessionId) return { ok: false, message: "No active session" };
 
       const stopped = await previewService.stop(sessionId);
@@ -170,8 +171,7 @@ export function createPreviewRestartTool(
     parameters: { type: "object", properties: {} },
     async execute(_input, context) {
       if (!previewService) return { ok: false, message: "Preview service is not available" };
-      const sessionId = context.sessionId && context.sessionId !== "mcp-session"
-        ? context.sessionId : "";
+      const sessionId = resolvePreviewSessionId(context);
       if (!sessionId) return { ok: false, message: "No active session" };
 
       const session = await previewService.restart(sessionId);
@@ -206,8 +206,7 @@ export function createPreviewStatusTool(
     parameters: { type: "object", properties: {} },
     async execute(_input, context) {
       if (!previewService) return { ok: false, message: "Preview service is not available" };
-      const sessionId = context.sessionId && context.sessionId !== "mcp-session"
-        ? context.sessionId : "";
+      const sessionId = resolvePreviewSessionId(context);
       if (!sessionId) return { ok: false, message: "No active session" };
 
       const session = previewService.get(sessionId);
@@ -266,8 +265,7 @@ export function createPreviewLogsTool(
     },
     async execute(input, context) {
       if (!previewService) return { ok: false, message: "Preview service is not available" };
-      const sessionId = context.sessionId && context.sessionId !== "mcp-session"
-        ? context.sessionId : "";
+      const sessionId = resolvePreviewSessionId(context);
       if (!sessionId) return { ok: false, message: "No active session" };
 
       const session = previewService.get(sessionId);
@@ -324,8 +322,7 @@ export function createPreviewInspectTool(
     },
     async execute(input, context) {
       if (!previewService) return { ok: false, message: "Preview service is not available" };
-      const sessionId = context.sessionId && context.sessionId !== "mcp-session"
-        ? context.sessionId : "";
+      const sessionId = resolvePreviewSessionId(context);
       if (!sessionId) return { ok: false, message: "No active session" };
 
       const result = await previewService.inspect(sessionId);

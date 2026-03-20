@@ -57,7 +57,7 @@ describe("createPreviewOpenTool", () => {
     });
   });
 
-  it("broadcasts to all clients for MCP calls without persisting fake session state", async () => {
+  it("uses the MCP session when starting previews from MCP calls", async () => {
     const sendUICommand = vi.fn();
     const broadcast = vi.fn();
     const set = vi.fn();
@@ -82,10 +82,23 @@ describe("createPreviewOpenTool", () => {
 
     const result = await tool.execute({ target: "8765" }, context);
 
-    // mcp-session is filtered out, so previewService.start should fail due to empty sessionId
-    expect(result.ok).toBe(false);
-    expect(result.message).toContain("session");
-    expect(broadcast).not.toHaveBeenCalled();
-    expect(set).not.toHaveBeenCalled();
+    expect(result.ok).toBe(true);
+    expect(previewService.start).toHaveBeenCalledWith(
+      expect.objectContaining({ sessionId: "mcp-session", target: "8765" }),
+    );
+    expect(sendUICommand).toHaveBeenCalledWith(
+      { command: "dev-preview.open", data: { target: "http://127.0.0.1:8765/" } },
+      "mcp-session",
+    );
+    expect(broadcast).toHaveBeenCalledWith(
+      "mcp-session",
+      expect.objectContaining({
+        type: "ui.state-sync",
+        sessionId: "mcp-session",
+      }),
+    );
+    expect(set).toHaveBeenCalledWith("mcp-session", {
+      "dev-preview.panel": { open: true, target: "http://127.0.0.1:8765/" },
+    });
   });
 });
