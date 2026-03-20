@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react'
-
-const MOBILE_BREAKPOINT = 768
+import { detectMobileViewport } from '@/lib/device-layout'
 
 export function useIsMobile() {
-  const getIsMobile = () => window.innerWidth < MOBILE_BREAKPOINT
+  const getIsMobile = () => detectMobileViewport()
   const [isMobile, setIsMobile] = useState(getIsMobile)
 
   useEffect(() => {
