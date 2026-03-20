@@ -16,6 +16,7 @@ import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
   parseLegacyReferencedFilesBlock,
+  userMessageTextFromSegments,
   serializeUserMessageSegmentsForClipboard,
   serializeUserMessageSegmentsToMarkdown,
   type UserMessageSegment,

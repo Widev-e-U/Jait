@@ -112,7 +112,7 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
   if (!markdown.includes('@')) return []
 
   const segments: UserMessageSegment[] = []
-  const pattern = /(^|[\s(])@((?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)(?=$|[\s),.:;!?])/g
+  const pattern = /(^|[\s(])@([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)(?=$|[\s),:;!?])/g
   let lastIndex = 0
 
   for (const match of markdown.matchAll(pattern)) {
@@ -138,7 +138,8 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
     segments.push({ type: 'text', text: markdown.slice(lastIndex) })
   }
 
-  return normalizeUserMessageSegments(segments)
+  const normalized = normalizeUserMessageSegments(segments)
+  return normalized.some((segment) => segment.type === 'file') ? normalized : []
 }
 
 export function serializeUserMessageSegmentsForClipboard(segments: UserMessageSegment[] | null | undefined): string | null {

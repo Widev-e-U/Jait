@@ -144,7 +144,7 @@ export function StrategyModal({ open, onOpenChange, repoId, repoName }: Strategy
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : (
-            <div className="min-h-0 flex-1">
+            <div className="relative min-h-0 flex-1">
               <Editor
                 height="55vh"
                 language="markdown"
@@ -164,6 +164,19 @@ export function StrategyModal({ open, onOpenChange, repoId, repoName }: Strategy
                   tabSize: 2,
                 }}
               />
+              {!strategy.trim() && (
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center px-8 text-center">
+                  <div className="max-w-md space-y-2">
+                    <p className="text-sm font-medium text-muted-foreground">
+                      Add repository guidance for your agents
+                    </p>
+                    <p className="text-xs leading-5 text-muted-foreground/80">
+                      This works like a <code>CLAUDE.md</code> or <code>AGENTS.md</code> file:
+                      describe build commands, test workflow, code conventions, and repo-specific rules.
+                    </p>
+                  </div>
+                </div>
+              )}
             </div>
           )}
 
