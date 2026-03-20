@@ -71,7 +71,7 @@ export function ProviderRuntimeSelector({ provider, value, onChange, disabled, c
           aria-label={`Runtime: ${activeDef.label}`}
         >
           <ActiveIcon className="h-4 w-4" />
-          <span>{activeDef.label}</span>
+          <span className="hidden sm:inline">{activeDef.label}</span>
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </DropdownMenuTrigger>

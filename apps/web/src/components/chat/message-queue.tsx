@@ -14,7 +14,7 @@ interface MessageQueueProps {
   items: QueuedMessage[]
   onRemove?: (id: string) => void
   onEdit?: (id: string, newContent: string) => void
-  onReorder?: (sourceId: string, targetId: string) => void
+  onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
   className?: string
 }
 
@@ -29,14 +29,27 @@ interface DragPreviewState {
   height: number
 }
 
-function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
+function moveItemByPlacement<T extends { id: string }>(
+  items: T[],
+  sourceId: string,
+  targetId: string | null,
+  placement: 'before' | 'after',
+): T[] {
   const sourceIndex = items.findIndex((item) => item.id === sourceId)
-  const targetIndex = items.findIndex((item) => item.id === targetId)
-  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items
+  if (sourceIndex < 0) return items
 
   const next = [...items]
   const [moved] = next.splice(sourceIndex, 1)
-  next.splice(targetIndex, 0, moved!)
+  if (!moved) return items
+
+  if (targetId == null) {
+    next.push(moved)
+    return next
+  }
+
+  const targetIndex = next.findIndex((item) => item.id === targetId)
+  if (targetIndex < 0) return items
+  next.splice(targetIndex + (placement === 'after' ? 1 : 0), 0, moved)
   return next
 }
 
@@ -78,17 +91,19 @@ function QueueItem({
   onEdit,
   onReorder,
   dragActive,
-  dragOver,
+  dropBefore,
+  dropAfter,
   onDragStart,
 }: {
   item: QueuedMessage
   index: number
   onRemove?: (id: string) => void
   onEdit?: (id: string, content: string) => void
-  onReorder?: (sourceId: string, targetId: string) => void
+  onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
   dragActive?: boolean
-  dragOver?: boolean
-  onDragStart?: (id: string, event: React.PointerEvent<HTMLButtonElement>) => void
+  dropBefore?: boolean
+  dropAfter?: boolean
+  onDragStart?: (id: string, event: React.PointerEvent<HTMLDivElement>) => void
 }) {
   const [editing, setEditing] = useState(false)
   const [collapsed, setCollapsed] = useState(true)
@@ -136,17 +151,29 @@ function QueueItem({
   }, [commitEdit, cancelEdit])
 
   return (
-    <div
+    <>
+      {dropBefore && (
+        <div className="relative h-0">
+          <div className="absolute inset-x-2 -top-px h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]" />
+        </div>
+      )}
+      <div
       data-queue-id={item.id}
       className={cn(
-        'group flex items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70',
+        'group flex cursor-grab items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70 active:cursor-grabbing',
         dragActive && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
-        dragOver && 'border-primary/60 bg-primary/7 ring-1 ring-primary/15',
       )}
+      onPointerDown={(event) => {
+        if (editing || !onReorder) return
+        const target = event.target as HTMLElement
+        if (target.closest('button, textarea, input, a, [data-no-drag="true"]')) return
+        onDragStart?.(item.id, event)
+      }}
     >
       {/* Position indicator */}
       <button
         type="button"
+        data-no-drag="true"
         className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground transition-colors"
         onClick={() => setCollapsed((prev) => !prev)}
         aria-label={collapsed ? 'Expand queued message' : 'Collapse queued message'}
@@ -162,15 +189,14 @@ function QueueItem({
       </button>
 
       {onReorder && !editing && (
-        <button
-          type="button"
-          className="mt-0.5 shrink-0 cursor-grab touch-none select-none rounded p-0.5 text-muted-foreground hover:bg-foreground/10 hover:text-foreground active:cursor-grabbing"
+        <div
+          data-no-drag="true"
+          className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground"
           title="Drag to reorder"
           aria-label="Drag to reorder"
-          onPointerDown={(event) => onDragStart?.(item.id, event)}
         >
           <GripVertical className="h-3.5 w-3.5" />
-        </button>
+        </div>
       )}
 
       {/* Content: read-only or editable */}
@@ -196,13 +222,7 @@ function QueueItem({
             className="w-full resize-none rounded border border-primary/30 bg-background px-2 py-1 text-sm outline-none focus:border-primary focus:ring-1 focus:ring-primary/20"
           />
         ) : collapsed ? (
-          <button
-            type="button"
-            className="block w-full text-left"
-            onClick={() => setCollapsed(false)}
-          >
-            <span className="block truncate text-foreground">{item.displayContent ?? item.content}</span>
-          </button>
+          <span className="block truncate text-foreground">{item.displayContent ?? item.content}</span>
         ) : (
           <span className="whitespace-pre-wrap break-words text-foreground">{item.displayContent ?? item.content}</span>
         )}
@@ -210,13 +230,14 @@ function QueueItem({
 
       {/* Action buttons */}
       <div className={cn(
-        'flex items-center gap-0.5 shrink-0 mt-0.5 transition-opacity',
+        'mt-0.5 flex shrink-0 items-center gap-0.5 transition-opacity',
         showActions ? 'opacity-0 group-hover:opacity-100' : 'opacity-0',
       )}>
         {editing ? (
           <>
             <button
               type="button"
+              data-no-drag="true"
               className="p-1 rounded hover:bg-primary/10 text-primary transition-colors"
               onClick={commitEdit}
               title="Save"
@@ -225,6 +246,7 @@ function QueueItem({
             </button>
             <button
               type="button"
+              data-no-drag="true"
               className="p-1 rounded hover:bg-foreground/10 text-muted-foreground transition-colors"
               onClick={cancelEdit}
               title="Cancel"
@@ -237,6 +259,7 @@ function QueueItem({
             {onEdit && (
               <button
                 type="button"
+                data-no-drag="true"
                 className="p-1 rounded hover:bg-foreground/10 text-muted-foreground transition-colors"
                 onClick={() => setEditing(true)}
                 title="Edit message"
@@ -246,6 +269,7 @@ function QueueItem({
             )}
             <button
               type="button"
+              data-no-drag="true"
               className="p-1 rounded hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
               onClick={() => onRemove?.(item.id)}
               title="Remove from queue"
@@ -256,6 +280,12 @@ function QueueItem({
         )}
       </div>
     </div>
+    {dropAfter && (
+      <div className="relative h-0">
+        <div className="absolute inset-x-2 -top-px h-0.5 rounded-full bg-primary shadow-[0_0_0_1px_hsl(var(--background))]" />
+      </div>
+    )}
+    </>
   )
 }
 
@@ -264,20 +294,20 @@ function QueueItem({
 export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: MessageQueueProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
-  const [dragTargetId, setDragTargetId] = useState<string | null>(null)
+  const [dropTarget, setDropTarget] = useState<{ targetId: string | null; placement: 'before' | 'after' } | null>(null)
   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
 
   useEffect(() => {
     if (dragSourceId && !items.some((item) => item.id === dragSourceId)) {
       setDragSourceId(null)
-      setDragTargetId(null)
+      setDropTarget(null)
       setDragPreview(null)
       return
     }
-    if (dragTargetId && !items.some((item) => item.id === dragTargetId)) {
-      setDragTargetId(dragSourceId)
+    if (dropTarget?.targetId && !items.some((item) => item.id === dropTarget.targetId)) {
+      setDropTarget(dragSourceId ? { targetId: dragSourceId, placement: 'before' } : null)
     }
-  }, [dragSourceId, dragTargetId, items])
+  }, [dragSourceId, dropTarget, items])
 
   useEffect(() => {
     if (!dragSourceId || !dragPreview) return
@@ -289,26 +319,29 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
         containerRef.current?.querySelectorAll<HTMLElement>('[data-queue-id]') ?? [],
       )
       if (rows.length === 0) {
-        setDragTargetId(null)
+        setDropTarget(null)
         return
       }
 
-      let nextTargetId: string | null = null
-      let smallestDistance = Number.POSITIVE_INFINITY
+      const candidateRows = rows.filter((row) => row.dataset.queueId && row.dataset.queueId !== dragSourceId)
+      if (candidateRows.length === 0) {
+        setDropTarget({ targetId: null, placement: 'after' })
+        return
+      }
 
-      for (const row of rows) {
+      for (const row of candidateRows) {
         const rowId = row.dataset.queueId
-        if (!rowId || rowId === dragSourceId) continue
+        if (!rowId) continue
         const rect = row.getBoundingClientRect()
-        const centerY = rect.top + rect.height / 2
-        const distance = Math.abs(clientY - centerY)
-        if (distance < smallestDistance) {
-          smallestDistance = distance
-          nextTargetId = rowId
+        const midpoint = rect.top + rect.height / 2
+        if (clientY < midpoint) {
+          setDropTarget({ targetId: rowId, placement: 'before' })
+          return
         }
       }
 
-      setDragTargetId(nextTargetId ?? dragSourceId)
+      const lastRowId = candidateRows[candidateRows.length - 1]?.dataset.queueId ?? null
+      setDropTarget(lastRowId ? { targetId: lastRowId, placement: 'after' } : { targetId: null, placement: 'after' })
     }
 
     const handlePointerMove = (event: PointerEvent) => {
@@ -319,11 +352,13 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
 
     const finishDrag = (event?: PointerEvent) => {
       if (event && event.pointerId !== dragPreview.pointerId) return
-      if (dragSourceId && dragTargetId && dragSourceId !== dragTargetId) {
-        onReorder?.(dragSourceId, dragTargetId)
+      if (dragSourceId && dropTarget) {
+        if (dropTarget.targetId !== dragSourceId) {
+          onReorder?.(dragSourceId, dropTarget.targetId, dropTarget.placement)
+        }
       }
       setDragSourceId(null)
-      setDragTargetId(null)
+      setDropTarget(null)
       setDragPreview(null)
     }
 
@@ -337,9 +372,9 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
       window.removeEventListener('pointerup', finishDrag)
       window.removeEventListener('pointercancel', finishDrag)
     }
-  }, [dragPreview, dragSourceId, dragTargetId, onReorder])
+  }, [dragPreview, dragSourceId, dropTarget, onReorder])
 
-  const handleDragStart = useCallback((id: string, event: React.PointerEvent<HTMLButtonElement>) => {
+  const handleDragStart = useCallback((id: string, event: React.PointerEvent<HTMLDivElement>) => {
     if (!onReorder) return
     if (event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') return
     event.preventDefault()
@@ -348,7 +383,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
     if (!row) return
     const rect = row.getBoundingClientRect()
     setDragSourceId(id)
-    setDragTargetId(id)
+    setDropTarget({ targetId: id, placement: 'before' })
     setDragPreview({
       id,
       pointerId: event.pointerId,
@@ -363,8 +398,8 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
 
   if (items.length === 0) return null
 
-  const displayItems = dragSourceId && dragTargetId && dragSourceId !== dragTargetId
-    ? reorderById(items, dragSourceId, dragTargetId)
+  const displayItems = dragSourceId && dropTarget && (dropTarget.targetId !== dragSourceId || dropTarget.placement === 'after')
+    ? moveItemByPlacement(items, dragSourceId, dropTarget.targetId, dropTarget.placement)
     : items
   const dragItemIndex = dragPreview ? displayItems.findIndex(item => item.id === dragPreview.id) : -1
   const dragItem = dragItemIndex >= 0 ? displayItems[dragItemIndex] : null
@@ -385,7 +420,8 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
           onEdit={onEdit}
           onReorder={onReorder}
           dragActive={dragSourceId === item.id}
-          dragOver={Boolean(dragSourceId && dragTargetId === item.id && dragSourceId !== item.id)}
+          dropBefore={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'before' && dragSourceId !== item.id)}
+          dropAfter={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'after' && dragSourceId !== item.id)}
           onDragStart={handleDragStart}
         />
       ))}

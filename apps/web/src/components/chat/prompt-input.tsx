@@ -47,6 +47,7 @@ interface PromptInputProps {
   placeholder?: string
   className?: string
   footerLeadingContent?: ReactNode
+  footerTrailingContent?: ReactNode
   onVoiceInput?: () => void
   /** True while mic is actively recording */
   voiceRecording?: boolean
@@ -351,6 +352,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   placeholder = 'Ask anything...',
   className,
   footerLeadingContent,
+  footerTrailingContent,
   onVoiceInput,
   voiceRecording,
   voiceLevels,
@@ -580,7 +582,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const el = editableRef.current
     if (!el || isSyncing.current) return
 
-    if (!shouldSyncComposerDraft(lastAppliedDraftSignatureRef.current, value, segments, draftSegmentsRef.current)) {
+    const hasRenderedContent = el.childNodes.length > 0
+      && (((el.textContent ?? '').length > 0) || el.querySelector('[data-file-path]'))
+
+    if (hasRenderedContent && !shouldSyncComposerDraft(lastAppliedDraftSignatureRef.current, value, segments, draftSegmentsRef.current)) {
       lastAppliedDraftSignatureRef.current = getPromptDraftSignature(value, segments)
       return
     }
@@ -914,7 +919,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   return (
     <div
       className={cn(
-        'relative z-10 flex flex-col rounded-2xl border bg-background dark:bg-card shadow-sm focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
+        'relative z-10 flex flex-col rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         dragging && 'ring-2 ring-primary/30 border-primary/40',
         className,
       )}
@@ -1104,6 +1109,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               Transcribing...
             </div>
           )}
+          {footerTrailingContent}
           {isLoading && (
             <Button
               type="button"

@@ -139,6 +139,7 @@ export function DevPreviewPanel({
   const [panelError, setPanelError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues'>('preview')
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [isFrameLoading, setIsFrameLoading] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const consoleEndRef = useRef<HTMLDivElement>(null)
 
@@ -149,6 +150,7 @@ export function DevPreviewPanel({
   )
   const previewSrc = managedResolved?.iframeSrc ?? rawSrc
   const previewLabel = managedResolved?.label ?? rawLabel ?? managedSession?.url ?? null
+  const showLoadingBar = (managedSession?.status === 'starting' || isBusy || isFrameLoading) && activeTab === 'preview' && !screenshotUrl
 
   const fetchManagedSession = useCallback(async () => {
     if (!sessionId || !token) return null
@@ -178,6 +180,14 @@ export function DevPreviewPanel({
     if (!next) return
     setInput(next)
   }, [initialTarget])
+
+  useEffect(() => {
+    if (!previewSrc || screenshotUrl) {
+      setIsFrameLoading(false)
+      return
+    }
+    setIsFrameLoading(true)
+  }, [frameKey, previewSrc, screenshotUrl])
 
   const startManagedPreview = useCallback(async () => {
     if (!sessionId || !token) {
@@ -225,6 +235,7 @@ export function DevPreviewPanel({
   }, [resolved])
 
   const handleOpenPreview = useCallback(() => {
+    setIsFrameLoading(true)
     if (workspaceRoot && !isHtmlFilePath(input)) {
       void startManagedPreview()
       return
@@ -235,6 +246,7 @@ export function DevPreviewPanel({
   const handleRestart = useCallback(async () => {
     if (!sessionId || !token) return
     setIsBusy(true)
+    setIsFrameLoading(true)
     setPanelError(null)
     try {
       const response = await fetch(`${getApiUrl()}/api/preview/restart`, {
@@ -368,6 +380,10 @@ export function DevPreviewPanel({
                 <RefreshCw className="mr-1 h-3 w-3" />
                 Restart
               </Button>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setActiveTab('console')}>
+                <MessageSquare className="mr-1 h-3 w-3" />
+                Console
+              </Button>
               <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={handleStop} disabled={isBusy}>
                 <Square className="mr-1 h-3 w-3" />
                 Stop
@@ -456,13 +472,21 @@ export function DevPreviewPanel({
               </Button>
             </div>
           ) : previewSrc ? (
-            <iframe
-              key={frameKey}
-              src={previewSrc}
-              title="Managed preview"
-              className="h-full w-full bg-white"
-              sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-            />
+            <div className="relative h-full">
+              {showLoadingBar ? (
+                <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
+                  <div className="h-full w-full animate-pulse bg-primary/80" />
+                </div>
+              ) : null}
+              <iframe
+                key={frameKey}
+                src={previewSrc}
+                title="Managed preview"
+                className="h-full w-full bg-white"
+                sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
+                onLoad={() => setIsFrameLoading(false)}
+              />
+            </div>
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
               Start a managed preview from the active workspace or open a raw loopback/static preview target.

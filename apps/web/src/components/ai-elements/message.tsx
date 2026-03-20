@@ -30,9 +30,9 @@ export function MessageContent({
   return (
     <div
       className={cn(
-        'relative min-w-0 max-w-[min(100%,52rem)] rounded-[1.25rem] border px-4 py-3 shadow-sm backdrop-blur-sm',
-        'data-[message-from=user]:border-primary/20 data-[message-from=user]:bg-primary/[0.08] data-[message-from=user]:shadow-[0_16px_36px_-28px_hsl(var(--primary)/0.7)]',
-        'data-[message-from=assistant]:border-border/70 data-[message-from=assistant]:bg-card/75 data-[message-from=assistant]:shadow-[0_20px_48px_-36px_hsl(var(--foreground)/0.32)]',
+        'relative min-w-0 max-w-[min(100%,52rem)] rounded-lg border px-0 py-0',
+        'data-[message-from=user]:border-primary/20 data-[message-from=user]:bg-primary/[0.08]',
+        'data-[message-from=assistant]:border-transparent data-[message-from=assistant]:bg-transparent',
         className,
       )}
       {...props}

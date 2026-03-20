@@ -10,7 +10,7 @@ export function Conversation({
   return (
     <div
       className={cn(
-        'relative flex-1 overflow-hidden rounded-[1.4rem] border border-border/70 bg-[radial-gradient(circle_at_top,hsl(var(--card))_0%,hsl(var(--background))_72%)] shadow-[0_24px_80px_-48px_hsl(var(--foreground)/0.28)]',
+        'relative flex-1 overflow-hidden bg-transparent shadow-none',
         className,
       )}
       {...props}
@@ -34,7 +34,7 @@ export function ConversationScrollButton({
       variant="outline"
       size="icon"
       className={cn(
-        'absolute bottom-4 left-1/2 h-9 w-9 -translate-x-1/2 rounded-full border-border/80 bg-background/92 shadow-lg backdrop-blur',
+        'absolute bottom-4 left-1/2 h-9 w-9 -translate-x-1/2 rounded-full border-border/80 bg-background shadow-lg',
         className,
       )}
       {...props}

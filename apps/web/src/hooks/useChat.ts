@@ -142,17 +142,6 @@ interface QueuedChatMessage extends QueuedMessage {
 
 type SendMessageResult = 'sent' | 'retry' | 'aborted'
 
-function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
-  const sourceIndex = items.findIndex((item) => item.id === sourceId)
-  const targetIndex = items.findIndex((item) => item.id === targetId)
-  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items
-
-  const next = [...items]
-  const [moved] = next.splice(sourceIndex, 1)
-  next.splice(targetIndex, 0, moved!)
-  return next
-}
-
 /**
  * @param sessionId - externally managed session ID (from useSessions)
  */
@@ -1004,8 +993,25 @@ export function useChat(
       : q))
   }, [])
 
-  const reorderQueueItem = useCallback((sourceId: string, targetId: string) => {
-    setMessageQueue(prev => reorderById(prev, sourceId, targetId))
+  const reorderQueueItem = useCallback((sourceId: string, targetId: string | null, placement: 'before' | 'after') => {
+    setMessageQueue(prev => {
+      const sourceIndex = prev.findIndex(item => item.id === sourceId)
+      if (sourceIndex < 0) return prev
+
+      const next = [...prev]
+      const [moved] = next.splice(sourceIndex, 1)
+      if (!moved) return prev
+
+      if (targetId == null) {
+        next.push(moved)
+        return next
+      }
+
+      const targetIndex = next.findIndex(item => item.id === targetId)
+      if (targetIndex < 0) return prev
+      next.splice(targetIndex + (placement === 'after' ? 1 : 0), 0, moved)
+      return next
+    })
   }, [])
 
   const setMessageQueueState = useCallback((items: QueuedChatMessage[]) => {

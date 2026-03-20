@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from 'react'
 import { Check, FileText, Undo2, ExternalLink } from 'lucide-react'
 import { FileIcon } from '@/components/icons/file-icons'
 import { Button } from '@/components/ui/button'
@@ -31,44 +32,66 @@ export function FilesChanged({
   onFileClick,
   className,
 }: FilesChangedProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null)
+  const [compactActions, setCompactActions] = useState(false)
+
+  useEffect(() => {
+    const node = rootRef.current
+    if (!node || typeof ResizeObserver === 'undefined') return
+
+    const updateLayout = () => {
+      setCompactActions(node.clientWidth < 560)
+    }
+
+    updateLayout()
+
+    const observer = new ResizeObserver(() => updateLayout())
+    observer.observe(node)
+    return () => observer.disconnect()
+  }, [])
+
   if (files.length === 0) return null
 
   const undecided = files.filter((f) => f.state === 'undecided').length
 
   return (
-    <div className={cn('rounded-lg border bg-muted/30 overflow-hidden', className)}>
+    <div ref={rootRef} className={cn('overflow-hidden rounded-lg border bg-muted/30', className)}>
       {/* Header */}
-      <div className="flex flex-col gap-2 px-3 py-2 border-b bg-muted/20 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2">
+        <div className="flex min-w-0 items-center gap-1.5">
           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="text-xs font-medium">
+          <span className="truncate text-xs font-medium">
             Files changed ({files.length})
           </span>
           {undecided > 0 && (
-            <span className="text-[10px] text-amber-500 dark:text-amber-400">
+            <span className="shrink-0 text-[10px] text-amber-500 dark:text-amber-400">
               {undecided} pending
             </span>
           )}
         </div>
         {undecided > 0 && (
-          <div className="flex flex-wrap items-center gap-1">
+          <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
-              size="sm"
+              size={compactActions ? 'icon' : 'sm'}
               variant="ghost"
-              className="h-6 px-2 text-[11px]"
+              className={cn('h-6 shrink-0 text-[11px]', compactActions ? 'w-6 p-0' : 'px-2')}
               onClick={onAcceptAll}
+              title="Keep all"
+              aria-label="Keep all"
             >
-              <Check className="h-3 w-3 mr-1" />
-              Keep all
+              <Check className={cn('h-3 w-3 shrink-0', !compactActions && 'mr-1')} />
+              {!compactActions && 'Keep all'}
             </Button>
             <Button
-              size="sm"
+              size={compactActions ? 'icon' : 'sm'}
               variant="ghost"
-              className="h-6 px-2 text-[11px]"
+              className={cn('h-6 shrink-0 text-[11px]', compactActions ? 'w-6 p-0' : 'px-2')}
               onClick={onRejectAll}
+              title="Undo all"
+              aria-label="Undo all"
             >
-              <Undo2 className="h-3 w-3 mr-1" />
-              Undo all
+              <Undo2 className={cn('h-3 w-3 shrink-0', !compactActions && 'mr-1')} />
+              {!compactActions && 'Undo all'}
             </Button>
           </div>
         )}
@@ -80,7 +103,7 @@ export function FilesChanged({
           <div
             key={file.path}
             className={cn(
-              'flex flex-wrap items-center gap-2 px-3 py-1.5 text-xs sm:flex-nowrap',
+              'flex items-center gap-2 px-3 py-1.5 text-xs',
               file.state === 'accepted' && 'bg-green-500/5',
               file.state === 'rejected' && 'bg-red-500/5 text-muted-foreground',
             )}
@@ -89,7 +112,7 @@ export function FilesChanged({
             <button
               type="button"
               className={cn(
-                'min-w-0 flex-1 text-left hover:underline cursor-pointer break-all sm:truncate',
+                'min-w-0 flex-1 truncate text-left hover:underline cursor-pointer',
                 file.state === 'rejected' && 'line-through',
               )}
               title={`Review diff for ${file.path}`}

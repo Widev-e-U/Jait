@@ -128,6 +128,50 @@ function getBaseName(path: string): string {
   return parts[parts.length - 1] ?? normalized
 }
 
+function getUrlHost(value: unknown): string | null {
+  if (typeof value !== 'string') return null
+  try {
+    return new URL(value).host || null
+  } catch {
+    return null
+  }
+}
+
+function summarizeUrlTargets(values: unknown[]): string | null {
+  const hosts = values
+    .map((value) => getUrlHost(value))
+    .filter((host): host is string => Boolean(host))
+
+  if (hosts.length === 0) return null
+
+  const uniqueHosts = Array.from(new Set(hosts))
+  if (uniqueHosts.length === 1) return uniqueHosts[0]!
+  if (uniqueHosts.length === 2) return `${uniqueHosts[0]} + ${uniqueHosts[1]}`
+  return `${uniqueHosts[0]} +${uniqueHosts.length - 1} more`
+}
+
+function firstDisplayString(...values: unknown[]): string | null {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value
+  }
+  return null
+}
+
+function extractSiteFromText(value: string | null | undefined): string | null {
+  if (!value) return null
+
+  const urlMatch = value.match(/https?:\/\/[^\s)`\]]+/i)
+  if (urlMatch?.[0]) return getUrlHost(urlMatch[0])
+
+  const domainMatch = value.match(/`([a-z0-9.-]+\.[a-z]{2,})`/i)
+  if (domainMatch?.[1]) return domainMatch[1]
+
+  const plainDomainMatch = value.match(/\b([a-z0-9.-]+\.[a-z]{2,})\b/i)
+  if (plainDomainMatch?.[1]) return plainDomainMatch[1]
+
+  return null
+}
+
 function isEditLikeTool(tool: string): boolean {
   const normalized = normalizeTool(tool)
   return normalized === 'edit' || normalized === 'file.write' || normalized === 'file.patch'
@@ -161,7 +205,12 @@ function getEditDiffCountLabel(tool: string, args: Record<string, unknown>): str
 }
 
 /** Format a tool call's primary display text (e.g. the command or file path) */
-function getCallSummary(tool: string, args: Record<string, unknown>): string {
+function getCallSummary(
+  tool: string,
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+  resultMessage?: string | null,
+): string {
   const normalized = normalizeTool(tool)
   const normalizedArgs = normalizeToolArgs(normalized, args)
   // ── Core tools ──────────────────────────────────────────
@@ -181,8 +230,19 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
     return mode === 'files' ? `Find: ${pattern}` : pattern
   }
   if (normalized === 'web') {
-    if (normalizedArgs.url) return displayStr(normalizedArgs.url)
-    if (Array.isArray(normalizedArgs.urls)) return `${normalizedArgs.urls.length} URLs`
+    if (normalizedArgs.url) return getUrlHost(normalizedArgs.url) ?? displayStr(normalizedArgs.url)
+    if (Array.isArray(normalizedArgs.urls)) {
+      return summarizeUrlTargets(normalizedArgs.urls) ?? `${normalizedArgs.urls.length} URLs`
+    }
+    const resultSite = extractSiteFromText(
+      firstDisplayString(
+        resultMessage,
+        typeof resultData?.url === 'string' ? resultData.url : undefined,
+        typeof resultData?.finalUrl === 'string' ? resultData.finalUrl : undefined,
+        typeof resultData?.content === 'string' ? resultData.content : undefined,
+      ),
+    )
+    if (resultSite) return resultSite
     return displayStr(normalizedArgs.query)
   }
   if (normalized === 'agent') return truncate(displayStr(args.description ?? args.prompt), 80)
@@ -237,7 +297,7 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (normalized === 'cron.list') return 'List cron jobs'
   if (tool === 'os.query') return displayStr(args.query)
   if (tool === 'os.install') return displayStr(args.package)
-  if (normalized === 'browser.navigate') return displayStr(normalizedArgs.url)
+  if (normalized === 'browser.navigate') return getUrlHost(normalizedArgs.url) ?? displayStr(normalizedArgs.url)
   if (normalized === 'browser.snapshot') return 'Describe page'
   if (normalized === 'browser.click') return displayStr(args.selector)
   if (normalized === 'browser.type') return `${displayStr(args.selector)} ← ${displayStr(args.text)}`
@@ -245,8 +305,8 @@ function getCallSummary(tool: string, args: Record<string, unknown>): string {
   if (normalized === 'browser.select') return `${displayStr(args.selector)} = ${displayStr(args.value)}`
   if (normalized === 'browser.wait') return `${displayStr(args.selector)} (${displayStr(args.timeoutMs, '10000')}ms)`
   if (normalized === 'browser.screenshot') return displayStr(args.path, 'auto path')
-  if (normalized === 'browser.search') return displayStr(normalizedArgs.query)
-  if (normalized === 'browser.fetch') return displayStr(normalizedArgs.url)
+  if (normalized === 'browser.search') return displayStr(normalizedArgs.query) || extractSiteFromText(resultMessage) || 'search'
+  if (normalized === 'browser.fetch') return getUrlHost(normalizedArgs.url) ?? extractSiteFromText(resultMessage) ?? displayStr(normalizedArgs.url)
   if (normalized === 'preview.open') return displayStr(normalizedArgs.target ?? args.target)
   if (normalized === 'surfaces.start') return `Start ${displayStr(args.type, 'surface')}`
   if (normalized === 'surfaces.stop') return `Stop ${displayStr(args.surfaceId, 'surface')}`
@@ -755,6 +815,23 @@ function extractStreamingStringField(streamingArgs: string | undefined, key: str
   return match[1].replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\')
 }
 
+function extractStreamingWebTarget(streamingArgs: string | undefined): string | null {
+  if (!streamingArgs) return null
+  const direct = extractStreamingStringField(streamingArgs, 'url')
+    ?? extractStreamingStringField(streamingArgs, 'uri')
+    ?? extractStreamingStringField(streamingArgs, 'href')
+    ?? extractStreamingStringField(streamingArgs, 'query')
+    ?? extractStreamingStringField(streamingArgs, 'q')
+
+  if (direct) return getUrlHost(direct) ?? direct
+
+  const type = extractStreamingStringField(streamingArgs, 'type')
+  const action = extractStreamingStringField(streamingArgs, 'action')
+  if (type === 'webSearch' || action === 'webSearch') return 'web search'
+  if (type === 'fetch' || action === 'fetch') return 'website'
+  return null
+}
+
 /** Header label shown while the tool call is being streamed (pending state) */
 function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs?: string }) {
   // Normalise OpenAI name (terminal_run → terminal.run) for meta lookup
@@ -762,6 +839,8 @@ function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs
   const meta = toolMeta[normalized]
   const isTerminalTool = normalized.startsWith('terminal.')
   const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
+  const isWebTool = normalized === 'web' || normalized === 'web.search' || normalized === 'web.fetch' || normalized === 'browser.search' || normalized === 'browser.fetch'
+  const webTarget = isWebTool ? extractStreamingWebTarget(streamingArgs) : null
 
   if (meta && isTerminalTool && command) {
     // Terminal with partial command — show like the running state
@@ -769,6 +848,16 @@ function PendingToolLabel({ tool, streamingArgs }: { tool: string; streamingArgs
       <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-foreground">
         <span className="shrink-0 text-xs text-emerald-500 dark:text-emerald-400 font-mono">$</span>
         <code className="min-w-0 truncate text-xs font-mono">{command}</code>
+        <span className="inline-block w-1 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
+      </span>
+    )
+  }
+
+  if (meta && isWebTool && webTarget) {
+    return (
+      <span className="inline-flex max-w-full min-w-0 items-center gap-1.5 text-foreground">
+        <span>{meta.label}:</span>
+        <code className="min-w-0 truncate text-xs font-mono">{webTarget}</code>
         <span className="inline-block w-1 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
       </span>
     )
@@ -799,6 +888,8 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
   const normalized = normalizeTool(tool)
   const isTerminalTool = normalized.startsWith('terminal.')
   const command = isTerminalTool ? extractStreamingCommand(streamingArgs) : null
+  const isWebTool = normalized === 'web' || normalized === 'web.search' || normalized === 'web.fetch' || normalized === 'browser.search' || normalized === 'browser.fetch'
+  const webTarget = isWebTool ? extractStreamingWebTarget(streamingArgs) : null
 
   // Terminal with partial command — show the command being built (no raw JSON)
   if (isTerminalTool && command) {
@@ -811,6 +902,21 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
         {command}
         <span className="inline-block w-1.5 h-3.5 bg-blue-400 animate-pulse ml-0.5 align-text-bottom" />
       </pre>
+    )
+  }
+
+  if (isWebTool && webTarget) {
+    const verb = normalized === 'web.search' || normalized === 'browser.search' ? 'Searching' : 'Fetching'
+    return (
+      <div className={cn(
+        'rounded-md border px-3 py-2 text-xs',
+        'bg-muted/40 text-foreground',
+      )}>
+        <div className="flex items-center gap-2">
+          <Loader2 className="h-3 w-3 animate-spin text-blue-400" />
+          <span>{verb} {webTarget}...</span>
+        </div>
+      </div>
     )
   }
 
@@ -945,7 +1051,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   const mcpLabel = normalizedTool === 'mcp-tool' ? getMcpToolLabel(normalizedArgs, resultData) : null
   const meta = getToolMeta(normalizedTool)
   const Icon = meta.icon
-  const summary = getCallSummary(normalizedTool, normalizedArgs)
+  const summary = getCallSummary(normalizedTool, normalizedArgs, resultData, call.result?.message)
   const editDiffCount = getEditDiffCountLabel(normalizedTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, normalizedTool)
   const displayOutput = finalOutput || call.streamingOutput || ''
@@ -999,6 +1105,40 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
     }
     prevStatusRef.current = call.status
   }, [call.status])
+
+  useEffect(() => {
+    if (
+      normalizedTool !== 'web'
+      && normalizedTool !== 'web.search'
+      && normalizedTool !== 'web.fetch'
+      && normalizedTool !== 'browser.search'
+      && normalizedTool !== 'browser.fetch'
+    ) {
+      return
+    }
+
+    console.debug('[tool-call-card:web]', {
+      tool: call.tool,
+      normalizedTool,
+      callId: call.callId,
+      status: call.status,
+      rawArgs: call.args,
+      normalizedArgs,
+      resultMessage: call.result?.message,
+      resultData,
+      streamingArgs: call.streamingArgs,
+    })
+  }, [
+    call.args,
+    call.callId,
+    call.result?.message,
+    call.status,
+    call.streamingArgs,
+    call.tool,
+    normalizedArgs,
+    normalizedTool,
+    resultData,
+  ])
 
   useEffect(() => {
     if (call.status !== 'running' && call.status !== 'pending') return

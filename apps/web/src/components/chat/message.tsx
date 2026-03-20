@@ -3,8 +3,16 @@ import { markdownLookBack } from '@llm-ui/markdown'
 import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import { codeToHtml } from 'shiki/bundle/web'
 import { Check, Copy, Pencil, RotateCcw, X } from 'lucide-react'
-import { AgentChatIndicator } from '@/components/agents-ui/agent-chat-indicator'
+import {
+  CodeBlock,
+  CodeBlockActions,
+  CodeBlockCopyButton,
+  CodeBlockFilename,
+  CodeBlockHeader,
+  CodeBlockTitle,
+} from '@/components/ai-elements/code-block'
 import {
   Message as AIMessage,
   MessageAction,
@@ -13,12 +21,18 @@ import {
 } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { Textarea } from '@/components/ui/textarea'
 import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
+import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
+import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
+import type { ChatMode } from './mode-selector'
+import type { ViewMode } from './view-mode-selector'
+import type { ReferencedFile } from './prompt-input'
+import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
+import type { SessionInfo } from '@/hooks/useChat'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
 import {
@@ -63,11 +77,109 @@ interface MessageProps {
       displaySegments?: UserMessageSegment[]
     },
   ) => Promise<void> | void
+  editComposer?: {
+    onVoiceInput?: () => void
+    voiceRecording?: boolean
+    voiceLevels?: number[]
+    voiceTranscribing?: boolean
+    onVoiceStop?: () => void
+    mode?: ChatMode
+    onModeChange?: (mode: ChatMode) => void
+    provider?: ProviderId
+    onProviderChange?: (provider: ProviderId) => void
+    providerRuntimeMode?: RuntimeMode
+    onProviderRuntimeModeChange?: (mode: RuntimeMode) => void
+    cliModel?: string | null
+    onCliModelChange?: (model: string | null) => void
+    viewMode?: ViewMode
+    onViewModeChange?: (viewMode: ViewMode) => void
+    repoRuntime?: RepositoryRuntimeInfo | null
+    onMoveToGateway?: () => void
+    sessionInfo?: SessionInfo | null
+    workspaceNodeId?: string
+    availableFiles?: ReferencedFile[]
+    onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
+    workspaceOpen?: boolean
+  }
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
   onOpenDiff?: (filePath: string) => void
 }
 
 const USER_MESSAGE_MIN_WIDTH_CLASS = 'min-w-[min(20rem,calc(100vw-5rem))]'
+const CODE_HTML_MATCHER = /<pre[^>]*><code>([\s\S]*)<\/code><\/pre>/
+
+function ThinkingDots() {
+  return (
+    <span className="inline-flex items-center gap-1">
+      {[0, 1, 2].map((index) => (
+        <span
+          key={index}
+          className="h-1.5 w-1.5 rounded-full bg-current animate-pulse"
+          style={{ animationDelay: `${index * 160}ms` }}
+        />
+      ))}
+    </span>
+  )
+}
+
+function normalizeCodeLanguage(language: string): string {
+  const normalized = language.toLowerCase()
+  if (!normalized || normalized === 'text' || normalized === 'plain') return 'txt'
+  if (normalized === 'shell' || normalized === 'sh') return 'bash'
+  return normalized
+}
+
+function HighlightedCode({
+  code,
+  language,
+  className,
+}: {
+  code: string
+  language: string
+  className?: string
+}) {
+  const [highlightedHtml, setHighlightedHtml] = useState<string | null>(null)
+
+  useEffect(() => {
+    let cancelled = false
+
+    const highlight = async () => {
+      const theme = document.documentElement.classList.contains('dark') ? 'github-dark' : 'github-light'
+      const normalizedLanguage = normalizeCodeLanguage(language)
+
+      try {
+        const html = await codeToHtml(code, {
+          lang: normalizedLanguage as any,
+          theme,
+        })
+        if (cancelled) return
+        setHighlightedHtml(html.match(CODE_HTML_MATCHER)?.[1] ?? null)
+      } catch {
+        try {
+          const html = await codeToHtml(code, {
+            lang: 'txt' as any,
+            theme,
+          })
+          if (cancelled) return
+          setHighlightedHtml(html.match(CODE_HTML_MATCHER)?.[1] ?? null)
+        } catch {
+          if (!cancelled) setHighlightedHtml(null)
+        }
+      }
+    }
+
+    void highlight()
+    return () => {
+      cancelled = true
+    }
+  }, [code, language])
+
+  if (!highlightedHtml) {
+    return <code className={cn(className, 'whitespace-pre')}>{code}</code>
+  }
+
+  return <code className={cn(className, 'whitespace-pre')} dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
+}
 
 function proseClassName(compact?: boolean) {
   return compact
@@ -122,13 +234,28 @@ function buildMarkdownComponents(
   onOpenPath?: MessageProps['onOpenPath'],
 ): Components | undefined {
   return {
+    pre: ({ children }) => <>{children}</>,
     code: ({ node, className, children, ref: _ref, ...props }: any) => {
       const inline = node?.position?.start.line === node?.position?.end.line && !className
       if (!inline) {
+        const language = typeof className === 'string'
+          ? className.replace(/^language-/, '').split(' ')[0] || 'text'
+          : 'text'
+        const code = String(children ?? '').replace(/\n$/, '')
         return (
-          <code className={className} {...props}>
-            {children}
-          </code>
+          <CodeBlock code={code} language={language}>
+            <CodeBlockHeader>
+              <CodeBlockTitle>
+                <CodeBlockFilename>{language}</CodeBlockFilename>
+              </CodeBlockTitle>
+              <CodeBlockActions>
+                <CodeBlockCopyButton />
+              </CodeBlockActions>
+            </CodeBlockHeader>
+            <div className="overflow-x-auto px-3 py-2 text-sm">
+              <HighlightedCode code={code} language={language} className={className} />
+            </div>
+          </CodeBlock>
         )
       }
 
@@ -287,6 +414,7 @@ function MessageInner({
   preferLlmUi,
   onOpenTerminal,
   onEditMessage,
+  editComposer,
   onOpenPath,
   onOpenDiff,
 }: MessageProps) {
@@ -319,11 +447,15 @@ function MessageInner({
   const [copied, setCopied] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
+  const [showEditComposer, setShowEditComposer] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [editDraft, setEditDraft] = useState('')
+  const [editSegments, setEditSegments] = useState<UserMessageSegment[]>([])
+  const [optimisticUserDisplayText, setOptimisticUserDisplayText] = useState<string | null>(null)
+  const [optimisticUserDisplaySegments, setOptimisticUserDisplaySegments] = useState<UserMessageSegment[] | null>(null)
   const copyTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
-  const editInputRef = useRef<HTMLTextAreaElement | null>(null)
+  const editPromptInputRef = useRef<PromptInputHandle | null>(null)
 
   useEffect(() => {
     return () => {
@@ -334,15 +466,30 @@ function MessageInner({
   useEffect(() => {
     if (!isEditing) {
       setEditDraft(userDisplayText)
+      setEditSegments(userDisplaySegments)
     }
-  }, [isEditing, userDisplayText])
+  }, [isEditing, userDisplaySegments, userDisplayText])
 
   useEffect(() => {
-    if (!isEditing) return
-    const input = editInputRef.current
-    if (!input) return
-    input.focus()
-    input.setSelectionRange(input.value.length, input.value.length)
+    if (!optimisticUserDisplaySegments && optimisticUserDisplayText == null) return
+    const matchesText = optimisticUserDisplayText === userDisplayText
+    const matchesSegments = JSON.stringify(optimisticUserDisplaySegments ?? []) === JSON.stringify(userDisplaySegments)
+    if (matchesText && matchesSegments) {
+      setOptimisticUserDisplayText(null)
+      setOptimisticUserDisplaySegments(null)
+    }
+  }, [optimisticUserDisplaySegments, optimisticUserDisplayText, userDisplaySegments, userDisplayText])
+
+  useEffect(() => {
+    if (!isEditing) {
+      setShowEditComposer(false)
+      return
+    }
+    const frameId = window.requestAnimationFrame(() => {
+      setShowEditComposer(true)
+    })
+    editPromptInputRef.current?.focus()
+    return () => window.cancelAnimationFrame(frameId)
   }, [isEditing])
 
   const buildCopyText = (): string => {
@@ -423,13 +570,15 @@ function MessageInner({
   const startEditing = useCallback(() => {
     if (!canEdit || isSavingEdit) return
     setEditDraft(userDisplayText)
+    setEditSegments(userDisplaySegments)
     setIsEditing(true)
-  }, [canEdit, isSavingEdit, userDisplayText])
+  }, [canEdit, isSavingEdit, userDisplaySegments, userDisplayText])
 
   const cancelEditing = useCallback(() => {
     setEditDraft(userDisplayText)
+    setEditSegments(userDisplaySegments)
     setIsEditing(false)
-  }, [userDisplayText])
+  }, [userDisplaySegments, userDisplayText])
 
   const handleUserBubbleClick = () => {
     if (!canEdit || isEditing) return
@@ -438,28 +587,36 @@ function MessageInner({
     startEditing()
   }
 
-  const saveEditedMessage = useCallback(async () => {
+  const saveEditedMessage = useCallback(async (nextText?: string, nextSegments?: UserMessageSegment[]) => {
     if (!canEdit || !messageId || !onEditMessage || isSavingEdit) return
-    const submission = createUserMessageEditSubmission(editDraft, userDisplaySegments)
+    const submission = createUserMessageEditSubmission(nextText ?? editDraft, nextSegments ?? editSegments)
     if (!submission) return
     if (isUserMessageEditUnchanged(submission.text, userDisplayText, userDisplaySegments)) {
       setIsEditing(false)
       return
     }
 
+    setOptimisticUserDisplayText(submission.text)
+    setOptimisticUserDisplaySegments(submission.displaySegments)
+    setIsEditing(false)
     setIsSavingEdit(true)
     try {
       await onEditMessage(messageId, submission.text, messageIndex, messageFromEnd, {
         referencedFiles: submission.referencedFiles,
         displaySegments: submission.displaySegments,
       })
-      setIsEditing(false)
+    } catch (error) {
+      setOptimisticUserDisplayText(null)
+      setOptimisticUserDisplaySegments(null)
+      setIsEditing(true)
+      throw error
     } finally {
       setIsSavingEdit(false)
     }
   }, [
     canEdit,
     editDraft,
+    editSegments,
     isSavingEdit,
     messageId,
     messageFromEnd,
@@ -468,21 +625,6 @@ function MessageInner({
     userDisplaySegments,
     userDisplayText,
   ])
-
-  const handleEditKeyDown = useCallback(
-    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      if (event.key === 'Enter' && !event.shiftKey) {
-        event.preventDefault()
-        void saveEditedMessage()
-        return
-      }
-      if (event.key === 'Escape') {
-        event.preventDefault()
-        cancelEditing()
-      }
-    },
-    [cancelEditing, saveEditedMessage],
-  )
 
   const sendFromMessage = async (nextContent: string, nextSegments?: UserMessageSegment[]) => {
     if (!canEdit || !messageId || !onEditMessage) return
@@ -511,7 +653,7 @@ function MessageInner({
     return (
       <div
         className={cn(
-          'absolute z-10 rounded-full border border-border/70 bg-background/92 p-1 shadow-sm backdrop-blur',
+          'absolute z-10 rounded-full border border-border/70 bg-background p-1',
           outsideBubble ? 'right-0 top-full mt-0.5' : 'bottom-1.5 right-1.5',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
           copied && 'opacity-100',
@@ -559,16 +701,6 @@ function MessageInner({
   return (
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn('min-w-0 max-w-[85%] space-y-2', isUser && 'order-1')}>
-        <div
-          className={cn(
-            'mb-1 flex items-center gap-2 px-1 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/80',
-            isUser && 'justify-end',
-          )}
-        >
-          <span>{isUser ? 'You' : 'Jait'}</span>
-          {!isUser && isStreaming ? <AgentChatIndicator size="sm" className="bg-primary/65" /> : null}
-        </div>
-
         {!isUser && thinking && (
           <Reasoning
             content={thinking}
@@ -610,8 +742,8 @@ function MessageInner({
             })}
 
             {isStreaming && !content && !segments.some((s) => s.type === 'text' && s.content.trim()) && (
-              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-card/70 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-sm">
-                <AgentChatIndicator size="sm" />
+              <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
+                <ThinkingDots />
                 <span>Thinking</span>
               </div>
             )}
@@ -626,78 +758,85 @@ function MessageInner({
 
             {content ? (
               isUser ? (
-                <div className={cn('relative w-fit max-w-full', USER_MESSAGE_MIN_WIDTH_CLASS)}>
-                  <AIMessageContent
-                    ref={userBubbleRef}
-                    data-message-from="user"
-                    className={cn(
-                      'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
-                      canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
-                      compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
-                    )}
-                    onClick={handleUserBubbleClick}
-                    title={canEdit && !isEditing ? 'Click to edit message' : undefined}
-                  >
-                    {isEditing ? (
-                      <div className="space-y-3" onClick={(event) => event.stopPropagation()}>
-                        <Textarea
-                          ref={editInputRef}
+                isEditing ? (
+                  <div className="w-full max-w-3xl" onClick={(event) => event.stopPropagation()}>
+                    <div
+                      className={cn(
+                        'space-y-3 origin-bottom transition-all duration-150 ease-out',
+                        showEditComposer ? 'translate-y-0 opacity-100' : 'translate-y-2 opacity-0',
+                      )}
+                    >
+                        <PromptInput
+                          key={`edit-${messageId ?? 'user-message'}`}
+                          ref={editPromptInputRef}
+                          draftStateKey={`edit:${messageId ?? 'user-message'}`}
                           value={editDraft}
-                          onChange={(event) => setEditDraft(event.target.value)}
-                          onKeyDown={handleEditKeyDown}
-                          rows={Math.min(Math.max(editDraft.split('\n').length, 3), 10)}
+                          segments={editSegments}
+                          onChange={(nextValue) => {
+                            setEditDraft(nextValue)
+                            setEditSegments(editPromptInputRef.current?.getSegments() ?? [])
+                          }}
+                          onSubmit={(_chipFiles, _attachments, nextSegments) => {
+                            setEditSegments(nextSegments ?? [])
+                            void saveEditedMessage(editDraft, nextSegments ?? [])
+                          }}
                           disabled={isSavingEdit}
-                          aria-label="Edit user message"
-                          className="min-h-[96px] resize-y border-primary/30 bg-background"
+                          controlsDisabled={isSavingEdit}
+                          placeholder="Edit message..."
+                          onVoiceInput={editComposer?.onVoiceInput}
+                          voiceRecording={editComposer?.voiceRecording}
+                          voiceLevels={editComposer?.voiceLevels}
+                          voiceTranscribing={editComposer?.voiceTranscribing}
+                          onVoiceStop={editComposer?.onVoiceStop}
+                          mode={editComposer?.mode}
+                          onModeChange={editComposer?.onModeChange}
+                          provider={editComposer?.provider}
+                          onProviderChange={editComposer?.onProviderChange}
+                          providerRuntimeMode={editComposer?.providerRuntimeMode}
+                          onProviderRuntimeModeChange={editComposer?.onProviderRuntimeModeChange}
+                          cliModel={editComposer?.cliModel}
+                          onCliModelChange={editComposer?.onCliModelChange}
+                          repoRuntime={editComposer?.repoRuntime}
+                          onMoveToGateway={editComposer?.onMoveToGateway}
+                          sessionInfo={editComposer?.sessionInfo}
+                          workspaceNodeId={editComposer?.workspaceNodeId}
+                          availableFiles={editComposer?.availableFiles ?? userReferencedFilesFromSegments(userDisplaySegments)}
+                          onSearchFiles={editComposer?.onSearchFiles}
+                          workspaceOpen={editComposer?.workspaceOpen ?? userReferencedFilesFromSegments(userDisplaySegments).length > 0}
+                          footerTrailingContent={(
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0 rounded-lg"
+                              onClick={cancelEditing}
+                              disabled={isSavingEdit}
+                              aria-label="Cancel editing message"
+                              title="Cancel editing"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </Button>
+                          )}
+                          className="rounded-lg border-primary/20 bg-primary/[0.08] dark:!bg-primary/[0.08] shadow-none [&_.text-muted-foreground]:text-muted-foreground [&>div]:!bg-transparent [&_[contenteditable='true']]:!bg-transparent"
                         />
-
-                        {userReferencedFilesFromSegments(userDisplaySegments).length > 0 && (
-                          <div className="flex flex-wrap gap-1.5">
-                            {userReferencedFilesFromSegments(userDisplaySegments).map((file) => (
-                              <span
-                                key={file.path}
-                                className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-background/65 px-2 py-0.5 text-[12px] leading-tight text-muted-foreground"
-                                title={file.path}
-                              >
-                                <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />
-                                <span className="max-w-[180px] truncate">{file.name}</span>
-                              </span>
-                            ))}
-                          </div>
-                        )}
-
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={cancelEditing}
-                            disabled={isSavingEdit}
-                            aria-label="Cancel editing message"
-                            title="Cancel editing"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </Button>
-                          <Button
-                            type="button"
-                            size="sm"
-                            className="h-8 px-2"
-                            onClick={() => {
-                              void saveEditedMessage()
-                            }}
-                            disabled={isSavingEdit || !editDraft.trim()}
-                            aria-label="Save edited message"
-                            title="Save edited message"
-                          >
-                            <Check className="h-3.5 w-3.5" />
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
+                    </div>
+                  </div>
+                ) : (
+                  <div className={cn('relative w-fit max-w-full', USER_MESSAGE_MIN_WIDTH_CLASS)}>
+                    <AIMessageContent
+                      ref={userBubbleRef}
+                      data-message-from="user"
+                      className={cn(
+                        'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
+                        canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
+                        compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
+                      )}
+                      onClick={handleUserBubbleClick}
+                      title={canEdit && !isEditing ? 'Click to edit message' : undefined}
+                    >
                       <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                        {userDisplaySegments.length > 0
-                          ? userDisplaySegments.map((segment, index) =>
+                        {(optimisticUserDisplaySegments ?? userDisplaySegments).length > 0
+                          ? (optimisticUserDisplaySegments ?? userDisplaySegments).map((segment, index) =>
                               segment.type === 'text' ? (
                                 <span key={`text-${index}`}>{segment.text}</span>
                               ) : (
@@ -711,13 +850,13 @@ function MessageInner({
                                 </span>
                               ),
                             )
-                          : userDisplayText}
+                          : (optimisticUserDisplayText ?? userDisplayText)}
                       </div>
-                    )}
-                  </AIMessageContent>
+                    </AIMessageContent>
 
-                  {renderActions()}
-                </div>
+                    {renderActions()}
+                  </div>
+                )
               ) : (
                 <AIMessageContent
                   data-message-from="assistant"
@@ -734,8 +873,8 @@ function MessageInner({
                 </AIMessageContent>
               )
             ) : showStreamingIndicator ? (
-              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-card/70 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-sm">
-                <AgentChatIndicator size="sm" />
+              <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
+                <ThinkingDots />
                 <span>Thinking</span>
               </div>
             ) : null}

@@ -155,17 +155,6 @@ type SavedQueuedMessage = QueuedChatMessage & {
   displaySegments?: UserMessageSegment[]
 }
 
-function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
-  const sourceIndex = items.findIndex((item) => item.id === sourceId)
-  const targetIndex = items.findIndex((item) => item.id === targetId)
-  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items
-
-  const next = [...items]
-  const [moved] = next.splice(sourceIndex, 1)
-  next.splice(targetIndex, 0, moved!)
-  return next
-}
-
 const suggestions = [
   'What can you help me with?',
   'Explain quantum computing',
@@ -2816,11 +2805,25 @@ function App() {
     })
   }, [])
 
-  const reorderManagerQueueItem = useCallback((threadId: string, sourceId: string, targetId: string) => {
+  const reorderManagerQueueItem = useCallback((threadId: string, sourceId: string, targetId: string | null, placement: 'before' | 'after') => {
     setManagerMessageQueues((prev) => {
       const existing = prev[threadId] ?? []
       if (existing.length === 0) return prev
-      const nextQueue = reorderById(existing, sourceId, targetId)
+      const sourceIndex = existing.findIndex((item) => item.id === sourceId)
+      if (sourceIndex < 0) return prev
+
+      const nextQueue = [...existing]
+      const [moved] = nextQueue.splice(sourceIndex, 1)
+      if (!moved) return prev
+
+      if (targetId == null) {
+        nextQueue.push(moved)
+      } else {
+        const targetIndex = nextQueue.findIndex((item) => item.id === targetId)
+        if (targetIndex < 0) return prev
+        nextQueue.splice(targetIndex + (placement === 'after' ? 1 : 0), 0, moved)
+      }
+
       if (nextQueue === existing) return prev
       return { ...prev, [threadId]: nextQueue }
     })
@@ -3397,7 +3400,7 @@ function App() {
         {!requiresAuthGate && (
           <>
             <header
-              className={`flex items-center gap-1 border-b bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
+              className={`flex items-center gap-1 border-b bg-background px-2 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
@@ -4157,7 +4160,7 @@ function App() {
                             items={selectedManagerQueue}
                             onRemove={(id) => dequeueManagerMessage(automation.selectedThread!.id, id)}
                             onEdit={(id, content) => updateManagerQueueItem(automation.selectedThread!.id, id, content)}
-                            onReorder={(sourceId, targetId) => reorderManagerQueueItem(automation.selectedThread!.id, sourceId, targetId)}
+                            onReorder={(sourceId, targetId, placement) => reorderManagerQueueItem(automation.selectedThread!.id, sourceId, targetId, placement)}
                             className="mb-2"
                           />
                         )}
@@ -4472,6 +4475,26 @@ function App() {
                       preferLlmUi
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
+                      editComposer={{
+                        onVoiceInput: handleVoiceInput,
+                        voiceRecording,
+                        voiceLevels,
+                        voiceTranscribing,
+                        onVoiceStop: () => { void stopRecordingAndTranscribe() },
+                        mode: chatMode,
+                        onModeChange: setChatMode,
+                        provider: chatProvider,
+                        onProviderChange: handleChatProviderChange,
+                        providerRuntimeMode: chatProviderRuntimeMode,
+                        onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
+                        cliModel,
+                        onCliModelChange: handleCliModelChange,
+                        availableFiles: availableFilesForMention,
+                        onSearchFiles: handleSearchFiles,
+                        workspaceOpen: showWorkspace,
+                        sessionInfo,
+                        workspaceNodeId: activeWorkspace?.nodeId,
+                      }}
                       onOpenPath={handleOpenMessagePath}
                       onOpenDiff={handleChangedFileClick}
                     />
