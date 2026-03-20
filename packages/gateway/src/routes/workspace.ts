@@ -7,6 +7,10 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { exec } from "node:child_process";
+import { platform } from "node:os";
+import { relative } from "node:path";
+import { promisify } from "node:util";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import { PathTraversalError } from "../security/path-guard.js";
 import type { SessionStateService } from "../services/session-state.js";
@@ -17,6 +21,73 @@ import type { WsControlPlane } from "../ws.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
 type AnyFsSurface = FileSystemSurface | RemoteFileSystemSurface;
+const execAsync = promisify(exec);
+
+async function runWorkspaceSearch(
+  workspaceRoot: string,
+  query: string,
+  mode: "files" | "content",
+  maxResults: number,
+) {
+  const isWin = platform() === "win32";
+  const safeDir = workspaceRoot.replace(/"/g, '\\"');
+  const safeQuery = query.replace(/"/g, '\\"');
+
+  try {
+    if (mode === "content") {
+      let cmd: string;
+      if (isWin) {
+        cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>nul`;
+        cmd += ` || findstr /s /n /i /l /c:"${safeQuery}" "${safeDir}\\*" 2>nul`;
+      } else {
+        cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
+        cmd += ` || grep -rn -i -F --max-count=${maxResults} -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
+      }
+
+      const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
+      const lines = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults);
+      const matches = lines.map((line) => {
+        const match = line.match(/^(.+?):(\d+):(.*)$/);
+        if (!match) return null;
+        const absPath = match[1]!;
+        const relPath = relative(workspaceRoot, absPath).replace(/\\/g, "/");
+        return { file: relPath, line: parseInt(match[2]!, 10), content: match[3]!.trim() };
+      }).filter(Boolean);
+
+      return { query, mode, matches };
+    }
+
+    const cleanedQuery = query.replace(/[*?[\]]/g, "").trim();
+    if (!cleanedQuery) {
+      return { query, mode, files: [] };
+    }
+    const safeFileQuery = cleanedQuery.replace(/"/g, '\\"');
+
+    let cmd: string;
+    if (isWin) {
+      cmd = `(rg --files "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}") || (dir /s /b "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}")`;
+    } else {
+      cmd = `rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}" | head -n ${maxResults}`;
+    }
+
+    const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
+    const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((absPath) => {
+      const relPath = relative(workspaceRoot, absPath.trim()).replace(/\\/g, "/");
+      const name = relPath.split("/").pop() || relPath;
+      return { path: relPath, name };
+    });
+
+    return { query, mode, files };
+  } catch (err: unknown) {
+    const stderr = (err as { stderr?: string })?.stderr || "";
+    if (stderr && !stderr.includes("No such file")) {
+      throw new Error(stderr.slice(0, 200));
+    }
+    return mode === "content"
+      ? { query, mode, matches: [] }
+      : { query, mode, files: [] };
+  }
+}
 
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
@@ -536,76 +607,24 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "NO_ROOT", message: "No workspace root configured" });
     }
 
-    const { exec } = await import("node:child_process");
-    const { promisify } = await import("node:util");
-    const { relative } = await import("node:path");
-    const { platform } = await import("node:os");
-    const execAsync = promisify(exec);
-    const isWin = platform() === "win32";
-    const safeDir = workspaceRoot.replace(/"/g, '\\"');
-    // Only allow printable characters, no shell metacharacters
-    const safeQuery = query.replace(/"/g, '\\"');
-
     try {
-      let stdout: string;
-
-      if (mode === "content") {
-        // Content search using ripgrep (with grep fallback)
-        let cmd: string;
-        if (isWin) {
-          cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>nul`;
-          cmd += ` || findstr /s /n /i /c:"${safeQuery}" "${safeDir}\\*" 2>nul`;
-        } else {
-          cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
-          cmd += ` || grep -rn -i -F --max-count=${maxResults} -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
+      if (fs instanceof RemoteFileSystemSurface) {
+        const nodeId = fs.nodeId ?? ((snap.metadata as Record<string, unknown>)?.nodeId as string | undefined);
+        if (!nodeId || !ws) {
+          return reply.status(501).send({ error: "NOT_SUPPORTED", message: "Workspace search is not available for this remote workspace" });
         }
-        const result = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
-        stdout = result.stdout;
-
-        const lines = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults);
-        const matches = lines.map((line) => {
-          const m = line.match(/^(.+?):(\d+):(.*)$/);
-          if (m) {
-            const absPath = m[1]!;
-            const relPath = relative(workspaceRoot, absPath).replace(/\\/g, "/");
-            return { file: relPath, line: parseInt(m[2]!, 10), content: m[3]!.trim() };
-          }
-          return null;
-        }).filter(Boolean);
-
-        return { query, mode, matches };
-      } else {
-        // File-name search using ripgrep --files + filter (or find)
-        const cleanedQuery = query.replace(/[*?[\]]/g, "");
-        if (!cleanedQuery) {
-          return { query, mode, files: [] };
-        }
-        const safeFileQuery = cleanedQuery.replace(/"/g, '\\"');
-
-        let cmd: string;
-        if (isWin) {
-          cmd = `(rg --files "${safeDir}" 2>nul | findstr /i "${safeFileQuery}") || (dir /s /b "${safeDir}" 2>nul | findstr /i "${safeFileQuery}")`;
-        } else {
-          cmd = `rg --files "${safeDir}" 2>/dev/null | grep -i "${safeFileQuery}" | head -n ${maxResults}`;
-        }
-        const result = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
-        stdout = result.stdout;
-
-        const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((absPath) => {
-          const relPath = relative(workspaceRoot, absPath.trim()).replace(/\\/g, "/");
-          const name = relPath.split("/").pop() || relPath;
-          return { path: relPath, name };
-        });
-
-        return { query, mode, files };
+        const result = await ws.proxyFsOp(nodeId, "search-workspace", {
+          path: workspaceRoot,
+          query,
+          mode,
+          limit: maxResults,
+        }, 20_000);
+        return result;
       }
+      return await runWorkspaceSearch(workspaceRoot, query, mode === "content" ? "content" : "files", maxResults);
     } catch (err: unknown) {
-      // exec rejects for non-zero exit (e.g. no matches) — treat as empty result
-      const stderr = (err as { stderr?: string })?.stderr || "";
-      if (stderr && !stderr.includes("No such file")) {
-        return reply.status(500).send({ error: "SEARCH_FAILED", message: stderr.slice(0, 200) });
-      }
-      return { query, mode, ...(mode === "content" ? { matches: [] } : { files: [] }) };
+      const message = err instanceof Error ? err.message : "Search failed";
+      return reply.status(500).send({ error: "SEARCH_FAILED", message });
     }
   });
 }

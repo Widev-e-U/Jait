@@ -933,12 +933,70 @@ ipcMain.handle("desktop:get-roots", async () => {
 
 // ── Generic filesystem operation handler (for remote workspace ops) ──────────
 ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string, unknown>) => {
-  const { resolve, dirname, join } = await import("node:path");
+  const { resolve, dirname, join, relative } = await import("node:path");
 
   /** Build a clean env with GH_TOKEN/GITHUB_TOKEN removed so gh uses stored keyring credentials. */
   const ghCleanEnv = (): NodeJS.ProcessEnv => {
     const { GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
     return rest;
+  };
+
+  const runWorkspaceSearch = async (
+    workspaceRoot: string,
+    query: string,
+    mode: "files" | "content",
+    maxResults: number,
+  ) => {
+    const { exec } = await import("node:child_process");
+    const { promisify } = await import("node:util");
+    const execAsync = promisify(exec);
+    const safeDir = workspaceRoot.replace(/"/g, '\\"');
+    const safeQuery = query.replace(/"/g, '\\"');
+    const isWin = process.platform === "win32";
+
+    try {
+      if (mode === "content") {
+        let cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>${isWin ? "nul" : "/dev/null"}`;
+        if (isWin) {
+          cmd += ` || findstr /s /n /i /l /c:"${safeQuery}" "${safeDir}\\*" 2>nul`;
+        } else {
+          cmd += ` || grep -rn -i -F --max-count=${maxResults} -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
+        }
+
+        const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
+        const matches = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((line) => {
+          const match = line.match(/^(.+?):(\d+):(.*)$/);
+          if (!match) return null;
+          return {
+            file: relative(workspaceRoot, match[1]!).replace(/\\/g, "/"),
+            line: parseInt(match[2]!, 10),
+            content: match[3]!.trim(),
+          };
+        }).filter(Boolean);
+        return { query, mode, matches };
+      }
+
+      const cleanedQuery = query.replace(/[*?[\]]/g, "").trim();
+      if (!cleanedQuery) return { query, mode, files: [] };
+      const safeFileQuery = cleanedQuery.replace(/"/g, '\\"');
+      const cmd = isWin
+        ? `(rg --files "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}") || (dir /s /b "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}")`
+        : `rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}" | head -n ${maxResults}`;
+      const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
+      const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((absPath) => {
+        const relPath = relative(workspaceRoot, absPath.trim()).replace(/\\/g, "/");
+        return { path: relPath, name: relPath.split("/").pop() || relPath };
+      });
+      return { query, mode, files };
+    } catch (err: unknown) {
+      const stderr = (err as { stderr?: string })?.stderr || "";
+      if (stderr && !stderr.includes("No such file")) {
+        throw new Error(stderr.slice(0, 200));
+      }
+      return mode === "content"
+        ? { query, mode, matches: [] }
+        : { query, mode, files: [] };
+    }
   };
 
   switch (op) {
@@ -991,6 +1049,13 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         path: join(dirPath, d.name),
         type: d.isDirectory() ? "dir" : "file",
       }));
+    }
+    case "search-workspace": {
+      const workspaceRoot = resolve(params.path as string);
+      const query = String(params.query ?? "");
+      const mode = params.mode === "content" ? "content" : "files";
+      const limit = Math.min(Math.max(Number(params.limit) || 50, 1), 200);
+      return runWorkspaceSearch(workspaceRoot, query, mode, limit);
     }
     case "git": {
       // Run a git command in a given cwd — used by the gateway to proxy git ops
