@@ -15,6 +15,7 @@ import { resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
 import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { ReviewableEditor } from './reviewable-editor'
+import { cn } from '@/lib/utils'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -429,6 +430,18 @@ function buildSourceControlTree(files: SourceControlEntry[]): SourceControlTreeN
   )
 
   return sortNodes(root.children)
+}
+
+function collectSourceControlFilePaths(nodes: SourceControlTreeNode[]): string[] {
+  const paths: string[] = []
+  for (const node of nodes) {
+    if (node.kind === 'file') {
+      paths.push(node.path)
+      continue
+    }
+    paths.push(...collectSourceControlFilePaths(node.children))
+  }
+  return paths
 }
 
 const gitApi = gitApiImport
@@ -936,7 +949,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [renameValue, setRenameValue] = useState('')
   const [newItemTarget, setNewItemTarget] = useState<{ parentDir: string; kind: 'file' | 'dir' } | null>(null)
   const [newItemValue, setNewItemValue] = useState('')
-  const [discardConfirm, setDiscardConfirm] = useState<{ kind: 'all' } | { kind: 'file'; path: string } | null>(null)
+  const [discardConfirm, setDiscardConfirm] = useState<
+    { kind: 'all' } | { kind: 'file'; path: string } | { kind: 'folder'; path: string; paths: string[] } | null
+  >(null)
   const [mobileTreeDrag, setMobileTreeDrag] = useState<MobileTreeDragState | null>(null)
   const mobileTreeDragRef = useRef<MobileTreeDragState | null>(null)
   const mobileTreeDragTimerRef = useRef<number | null>(null)
@@ -2535,23 +2550,52 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setGitActionBusy(false)
   }, [remoteRoot, gitActionBusy, scDiffFile, fetchGitStatus, bumpTree])
 
+  /* ---- Discard folder ---- */
+  const handleDiscardFolder = useCallback(async (paths: string[]) => {
+    if (!remoteRoot || gitActionBusy || paths.length === 0) return
+    const uniquePaths = [...new Set(paths)]
+    setGitActionBusy(true)
+    setGitActionError(null)
+    try {
+      await gitApi.discard(remoteRoot, uniquePaths)
+      setDiscardConfirm(null)
+      setOpenTabs((prev) => prev.filter((tab) => tab.type !== 'diff' || !uniquePaths.includes(tab.path)))
+      if (scDiffFile?.path && uniquePaths.includes(scDiffFile.path)) setScDiffFile(null)
+      await fetchGitStatus()
+      bumpTree()
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Discard failed')
+    }
+    setGitActionBusy(false)
+  }, [remoteRoot, gitActionBusy, scDiffFile, fetchGitStatus, bumpTree])
+
+  /* ---- Stage paths ---- */
+  const handleStagePaths = useCallback(async (paths: string[]) => {
+    if (!remoteRoot || gitActionBusy || paths.length === 0) return
+    try {
+      await gitApi.stage(remoteRoot, [...new Set(paths)])
+      await fetchGitStatus()
+    } catch { /* ignore */ }
+  }, [remoteRoot, gitActionBusy, fetchGitStatus])
+
   /* ---- Stage file ---- */
   const handleStageFile = useCallback(async (filePath: string) => {
-    if (!remoteRoot || gitActionBusy) return
+    await handleStagePaths([filePath])
+  }, [handleStagePaths])
+
+  /* ---- Unstage paths ---- */
+  const handleUnstagePaths = useCallback(async (paths: string[]) => {
+    if (!remoteRoot || gitActionBusy || paths.length === 0) return
     try {
-      await gitApi.stage(remoteRoot, [filePath])
+      await gitApi.unstage(remoteRoot, [...new Set(paths)])
       await fetchGitStatus()
     } catch { /* ignore */ }
   }, [remoteRoot, gitActionBusy, fetchGitStatus])
 
   /* ---- Unstage file ---- */
   const handleUnstageFile = useCallback(async (filePath: string) => {
-    if (!remoteRoot || gitActionBusy) return
-    try {
-      await gitApi.unstage(remoteRoot, [filePath])
-      await fetchGitStatus()
-    } catch { /* ignore */ }
-  }, [remoteRoot, gitActionBusy, fetchGitStatus])
+    await handleUnstagePaths([filePath])
+  }, [handleUnstagePaths])
 
   /* ---- Stage all files ---- */
   const handleStageAll = useCallback(async () => {
@@ -2785,6 +2829,71 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     </span>
   ), [handleStageFile, handleUnstageFile])
 
+  const renderSourceControlFolderActions = useCallback((
+    folderPath: string,
+    filePaths: string[],
+    actions: 'stage' | 'unstage',
+    mobile = false,
+  ) => {
+    if (filePaths.length === 0) return null
+
+    const uniquePaths = [...new Set(filePaths)]
+    return (
+      <span
+        className={`flex shrink-0 items-center justify-end gap-0.5 ${
+          mobile ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100'
+        }`}
+      >
+        {actions === 'stage' ? (
+          <button
+            type="button"
+            className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation()
+              void handleStagePaths(uniquePaths)
+            }}
+            title="Stage folder"
+          >
+            <Plus className="h-3 w-3" />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+            onClick={(e) => {
+              e.stopPropagation()
+              void handleUnstagePaths(uniquePaths)
+            }}
+            title="Unstage folder"
+          >
+            <Minus className="h-3 w-3" />
+          </button>
+        )}
+        <button
+          type="button"
+          className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-red-500"
+          onClick={(e) => {
+            e.stopPropagation()
+            setDiscardConfirm((prev) => prev?.kind === 'folder' && prev.path === folderPath
+              ? null
+              : { kind: 'folder', path: folderPath, paths: uniquePaths })
+          }}
+          title="Discard changes in folder"
+        >
+          <Undo2 className="h-3 w-3" />
+        </button>
+      </span>
+    )
+  }, [handleStagePaths, handleUnstagePaths])
+
+  const getSourceControlRowClassName = useCallback((isActive: boolean, mobile = false) => cn(
+    'group w-full rounded-md text-left transition-colors',
+    mobile ? 'text-sm' : 'text-xs',
+    isActive
+      ? 'bg-accent text-accent-foreground'
+      : 'hover:bg-accent/60 hover:text-accent-foreground',
+  ), [])
+
   const renderSourceControlTreeNodes = useCallback((
     nodes: SourceControlTreeNode[],
     actions: 'stage' | 'unstage',
@@ -2793,20 +2902,34 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   ): React.ReactNode => nodes.map((node) => {
     if (node.kind === 'dir') {
       const expanded = !collapsedSourceControlDirs.has(node.path)
+      const folderFilePaths = collectSourceControlFilePaths(node.children)
       return (
         <div key={`${actions}:dir:${node.path}`}>
-          <button
-            type="button"
-            className={`flex w-full items-center gap-1.5 rounded px-2 py-1.5 text-left ${
-              mobile ? 'text-sm' : 'text-xs hover:bg-muted'
-            }`}
+          <div
+            className={cn(
+              getSourceControlRowClassName(false, mobile),
+              'grid grid-cols-[minmax(0,1fr)_auto] items-center gap-1.5 px-2 py-1.5',
+            )}
             style={{ paddingLeft: 8 + depth * 14 }}
-            onClick={() => toggleSourceControlDir(node.path)}
           >
-            <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
-            <FolderIcon name={node.name} open={expanded} className="h-3.5 w-3.5 shrink-0" />
-            <span className="truncate">{node.name}</span>
-          </button>
+            <button
+              type="button"
+              className="flex min-w-0 items-center gap-1.5 text-left"
+              onClick={() => toggleSourceControlDir(node.path)}
+            >
+              <ChevronRight className={`h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform ${expanded ? 'rotate-90' : ''}`} />
+              <FolderIcon name={node.name} open={expanded} className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">{node.name}</span>
+            </button>
+            {renderSourceControlFolderActions(node.path, folderFilePaths, actions, mobile)}
+          </div>
+          {discardConfirm?.kind === 'folder' && discardConfirm.path === node.path && (
+            <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+              <span className="flex-1 text-red-500">Discard changes in {node.name}?</span>
+              <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardFolder(discardConfirm.paths)} disabled={gitActionBusy}>Discard</Button>
+              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+            </div>
+          )}
           {expanded ? renderSourceControlTreeNodes(node.children, actions, mobile, depth + 1) : null}
         </div>
       )
@@ -2820,9 +2943,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       <div key={`${actions}:file:${node.path}`}>
         <button
           type="button"
-          className={`group grid w-full grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded px-2 py-1.5 text-left ${
-            mobile ? 'text-sm' : 'text-xs'
-          } ${isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'}`}
+          className={cn(
+            getSourceControlRowClassName(isActiveDiff, mobile),
+            'grid grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-2 py-1.5',
+          )}
           style={{ paddingLeft: 22 + depth * 14 }}
           onClick={() => {
             handleScOpenDiff(node.path)
@@ -2853,7 +2977,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         )}
       </div>
     )
-  }), [collapsedSourceControlDirs, discardConfirm, gitActionBusy, handleDiscardFile, handleScOpenDiff, renderSourceControlFileActions, toggleSourceControlDir, scDiffFile?.path])
+  }), [collapsedSourceControlDirs, discardConfirm, getSourceControlRowClassName, gitActionBusy, handleDiscardFile, handleDiscardFolder, handleScOpenDiff, renderSourceControlFileActions, renderSourceControlFolderActions, toggleSourceControlDir, scDiffFile?.path])
 
   const renderSourceControlSection = useCallback((
     title: string,
@@ -2935,9 +3059,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               return (
                 <div key={`${actions}:${f.path}`}>
                   <div
-                    className={`group grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 rounded px-2 py-1.5 text-left ${
-                      mobile ? 'text-sm' : 'text-xs'
-                    } ${isActiveDiff ? 'bg-primary/15 text-foreground' : 'hover:bg-muted'}`}
+                    className={cn(
+                      getSourceControlRowClassName(isActiveDiff, mobile),
+                      'grid w-full cursor-pointer grid-cols-[auto_minmax(0,1fr)_auto_auto] items-center gap-1.5 px-2 py-1.5',
+                    )}
                     draggable={!mobile}
                     onClick={() => {
                       handleScOpenDiff(f.path)
@@ -2979,7 +3104,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         </div>
       </div>
     )
-  }, [changedFileCount, discardConfirm?.kind, discardConfirm?.kind === 'file' ? discardConfirm.path : null, gitActionBusy, handleDiscardAll, handleDiscardFile, handleScOpenDiff, handleStageAll, handleUnstageAll, renderSourceControlFileActions, renderSourceControlTreeNodes, scDiffFile?.path, sourceControlView])
+  }, [changedFileCount, discardConfirm?.kind, discardConfirm?.kind === 'file' ? discardConfirm.path : discardConfirm?.kind === 'folder' ? discardConfirm.path : null, getSourceControlRowClassName, gitActionBusy, handleDiscardAll, handleDiscardFile, handleScOpenDiff, handleStageAll, handleUnstageAll, renderSourceControlFileActions, renderSourceControlTreeNodes, scDiffFile?.path, sourceControlView])
 
   // Switch to editor tab when a file is selected on mobile
   const handleSelectNativeFileMobile = useCallback(async (node: LazyFile) => {
