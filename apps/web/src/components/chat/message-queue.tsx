@@ -29,6 +29,17 @@ interface DragPreviewState {
   height: number
 }
 
+function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
+  const sourceIndex = items.findIndex((item) => item.id === sourceId)
+  const targetIndex = items.findIndex((item) => item.id === targetId)
+  if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) return items
+
+  const next = [...items]
+  const [moved] = next.splice(sourceIndex, 1)
+  next.splice(targetIndex, 0, moved!)
+  return next
+}
+
 function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number }) {
   return (
     <div className="flex items-start gap-2 rounded-lg border border-border/40 bg-background px-3 py-2 text-sm shadow-2xl ring-1 ring-primary/10">
@@ -128,8 +139,8 @@ function QueueItem({
     <div
       data-queue-id={item.id}
       className={cn(
-        'group flex items-start gap-2 rounded-lg bg-muted/50 border border-border/40 px-3 py-2 text-sm transition-colors hover:bg-muted/70',
-        dragActive && 'opacity-35',
+        'group flex items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70',
+        dragActive && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
         dragOver && 'border-primary/60 bg-primary/7 ring-1 ring-primary/15',
       )}
     >
@@ -257,6 +268,18 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
 
   useEffect(() => {
+    if (dragSourceId && !items.some((item) => item.id === dragSourceId)) {
+      setDragSourceId(null)
+      setDragTargetId(null)
+      setDragPreview(null)
+      return
+    }
+    if (dragTargetId && !items.some((item) => item.id === dragTargetId)) {
+      setDragTargetId(dragSourceId)
+    }
+  }, [dragSourceId, dragTargetId, items])
+
+  useEffect(() => {
     if (!dragSourceId || !dragPreview) return
 
     document.body.style.cursor = 'grabbing'
@@ -340,8 +363,11 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
 
   if (items.length === 0) return null
 
-  const dragItemIndex = dragPreview ? items.findIndex(item => item.id === dragPreview.id) : -1
-  const dragItem = dragItemIndex >= 0 ? items[dragItemIndex] : null
+  const displayItems = dragSourceId && dragTargetId && dragSourceId !== dragTargetId
+    ? reorderById(items, dragSourceId, dragTargetId)
+    : items
+  const dragItemIndex = dragPreview ? displayItems.findIndex(item => item.id === dragPreview.id) : -1
+  const dragItem = dragItemIndex >= 0 ? displayItems[dragItemIndex] : null
 
   return (
     <div ref={containerRef} className={cn('space-y-1.5', className)}>
@@ -350,7 +376,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
           {items.length} queued message{items.length !== 1 ? 's' : ''}
         </span>
       </div>
-      {items.map((item, i) => (
+      {displayItems.map((item, i) => (
         <QueueItem
           key={item.id}
           item={item}

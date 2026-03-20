@@ -68,10 +68,10 @@ export function createPreviewStartTool(
         frameworkHint: input.frameworkHint?.trim() || undefined,
       });
 
-      const panelState = { open: true, target: null };
+      const panelState = { open: true, target: (preview.url ?? target) || null };
       if (ws) {
         ws.sendUICommand(
-          { command: "dev-preview.open", data: { target: null } },
+          { command: "dev-preview.open", data: { target: panelState.target } },
           sessionId,
         );
         ws.broadcast(sessionId, {

@@ -38,7 +38,7 @@ describe("createPreviewOpenTool", () => {
       expect.objectContaining({ sessionId: "session-123", target: "3000" }),
     );
     expect(sendUICommand).toHaveBeenCalledWith(
-      { command: "dev-preview.open", data: { target: null } },
+      { command: "dev-preview.open", data: { target: "http://127.0.0.1:5173/" } },
       "session-123",
     );
     expect(broadcast).toHaveBeenCalledWith(
@@ -48,12 +48,12 @@ describe("createPreviewOpenTool", () => {
         sessionId: "session-123",
         payload: {
           key: "dev-preview.panel",
-          value: { open: true, target: null },
+          value: { open: true, target: "http://127.0.0.1:5173/" },
         },
       }),
     );
     expect(set).toHaveBeenCalledWith("session-123", {
-      "dev-preview.panel": { open: true, target: null },
+      "dev-preview.panel": { open: true, target: "http://127.0.0.1:5173/" },
     });
   });
 

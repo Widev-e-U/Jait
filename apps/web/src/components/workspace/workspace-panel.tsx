@@ -2464,37 +2464,37 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <Button
                 size="sm"
                 variant="secondary"
-                className="h-6 rounded-md px-1.5 text-[10px] normal-case tracking-normal"
+                className="h-6 w-6 rounded-md p-0"
                 onClick={() => void handleStageAll()}
                 disabled={gitActionBusy || files.length === 0}
                 title="Stage all changes"
+                aria-label="Stage all changes"
               >
                 <Plus className="h-3 w-3" />
-                Stage all
               </Button>
             ) : (
               <>
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="h-6 rounded-md px-1.5 text-[10px] normal-case tracking-normal"
+                  className="h-6 w-6 rounded-md p-0"
                   onClick={() => void handleUnstageAll()}
                   disabled={gitActionBusy || files.length === 0}
                   title="Unstage all files"
+                  aria-label="Unstage all files"
                 >
                   <Minus className="h-3 w-3" />
-                  Unstage all
                 </Button>
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="h-6 rounded-md px-1.5 text-[10px] text-red-600 hover:text-red-700 dark:text-red-400 normal-case tracking-normal"
+                  className="h-6 w-6 rounded-md p-0 text-red-600 hover:text-red-700 dark:text-red-400"
                   onClick={() => setDiscardConfirm({ kind: 'all' })}
                   disabled={gitActionBusy || changedFileCount === 0}
                   title="Discard all changes"
+                  aria-label="Discard all changes"
                 >
                   <Undo2 className="h-3 w-3" />
-                  Discard all
                 </Button>
               </>
             )}
@@ -2940,23 +2940,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                         <div className="flex items-center gap-1">
                           <button
                             type="button"
-                            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] normal-case tracking-normal bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex h-6 w-6 items-center justify-center rounded bg-muted hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
                             onClick={() => void handleUnstageAll()}
                             disabled={gitActionBusy}
                             title="Unstage all files"
+                            aria-label="Unstage all files"
                           >
                             <Minus className="h-3 w-3" />
-                            Unstage all
                           </button>
                           <button
                             type="button"
-                            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] normal-case tracking-normal bg-muted hover:bg-muted/80 text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex h-6 w-6 items-center justify-center rounded bg-muted text-red-500 hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
                             onClick={handleDiscardAll}
                             disabled={gitActionBusy}
                             title="Discard all changes"
+                            aria-label="Discard all changes"
                           >
                             <Undo2 className="h-3 w-3" />
-                            Discard all
                           </button>
                         </div>
                       </div>
@@ -2989,13 +2989,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                         <span>Changes ({unstagedFileCount})</span>
                         <button
                           type="button"
-                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] normal-case tracking-normal bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                          className="flex h-6 w-6 items-center justify-center rounded bg-muted hover:bg-muted/80 disabled:cursor-not-allowed disabled:opacity-50"
                           onClick={() => void handleStageAll()}
                           disabled={gitActionBusy}
                           title="Stage all changes"
+                          aria-label="Stage all changes"
                         >
                           <Plus className="h-3 w-3" />
-                          Stage all
                         </button>
                       </div>
                       {workingTreeFiles.map((f) => {

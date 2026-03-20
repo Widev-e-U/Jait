@@ -73,6 +73,8 @@ interface PromptInputProps {
   onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
   /** Whether a workspace directory is currently open — @ mentions only work when true */
   workspaceOpen?: boolean
+  /** Stable key for preserving local attachment draft state across remounts. */
+  draftStateKey?: string
 }
 
 /* ------------------------------------------------------------------ */
@@ -243,6 +245,8 @@ export interface PromptInputHandle {
   getSegments: () => UserMessageSegment[]
 }
 
+const attachmentDraftStore = new Map<string, ChatAttachment[]>()
+
 function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
   const bars = levels.length > 0 ? levels : Array.from({ length: 28 }, () => 0.05)
   const visibleBars = compact ? bars.slice(-16) : bars
@@ -310,6 +314,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   segments,
   onSearchFiles,
   workspaceOpen = false,
+  draftStateKey,
 }: PromptInputProps, ref) {
   const editableRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
@@ -318,7 +323,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const [dragging, setDragging] = useState(false)
   const dragCounter = useRef(0)
   const [isEmpty, setIsEmpty] = useState(!value)
-  const [attachments, setAttachments] = useState<ChatAttachment[]>([])
+  const [attachments, setAttachments] = useState<ChatAttachment[]>(
+    () => (draftStateKey ? attachmentDraftStore.get(draftStateKey) ?? [] : []),
+  )
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   // @ mention state
@@ -354,6 +361,20 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
   // Track whether we're doing a controlled sync to avoid loops
   const isSyncing = useRef(false)
+
+  useEffect(() => {
+    if (!draftStateKey) return
+    setAttachments(attachmentDraftStore.get(draftStateKey) ?? [])
+  }, [draftStateKey])
+
+  useEffect(() => {
+    if (!draftStateKey) return
+    if (attachments.length === 0) {
+      attachmentDraftStore.delete(draftStateKey)
+      return
+    }
+    attachmentDraftStore.set(draftStateKey, attachments)
+  }, [draftStateKey, attachments])
 
   /** Remove a chip from the editable DOM and update isEmpty. */
   const handleRemoveChip = useCallback((path: string) => {

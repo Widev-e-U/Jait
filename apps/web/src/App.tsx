@@ -895,6 +895,9 @@ function App() {
     showWorkspaceEditorPanel()
     setArchitectureRequest({ key: Date.now() })
   }, [activeWorkspace, showWorkspace, showWorkspaceEditorPanel])
+  const closeWorkspacePreview = useCallback(() => {
+    workspaceRef.current?.closePreviewTarget()
+  }, [])
   const routePreviewToWorkspace = useCallback((target?: string | null) => {
     const trimmed = target?.trim()
     if (!trimmed || !activeWorkspace) return false
@@ -1584,14 +1587,20 @@ function App() {
       case 'dev-preview.panel':
         if (!value) {
           setShowDevPreview(false)
+          closeWorkspacePreview()
         } else {
           const v = value as { open?: boolean; target?: string | null }
+          if (v.open === false) {
+            setShowDevPreview(false)
+            closeWorkspacePreview()
+            break
+          }
           const nextTarget = typeof v.target === 'string' ? v.target : null
           if (nextTarget) setDevPreviewTarget(nextTarget)
-          if (v.open !== false && routePreviewToWorkspace(nextTarget)) {
+          if (routePreviewToWorkspace(nextTarget)) {
             setShowDevPreview(false)
           } else {
-            setShowDevPreview(v.open !== false)
+            setShowDevPreview(true)
           }
         }
         break
@@ -1661,7 +1670,7 @@ function App() {
         break
       }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace])
+  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   const handleFullState = useCallback((state: Record<string, unknown>) => {
@@ -1696,6 +1705,7 @@ function App() {
       }
     } else {
       setShowDevPreview(false)
+      closeWorkspacePreview()
     }
 
     // Terminal panel
@@ -1759,7 +1769,7 @@ function App() {
     } else {
       setMessageQueueState([])
     }
-  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider])
+  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider, closeWorkspacePreview])
 
   const { sendUIState } = useUICommands({
     sessionId: activeSessionId,
@@ -4168,6 +4178,7 @@ function App() {
                         )}
                         <PromptInput
                           ref={promptInputRef}
+                          draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
                           value={inputValue}
                           onChange={setInputValue}
                           onSubmit={handleSubmit}
@@ -4242,6 +4253,7 @@ function App() {
                           )}
                           <PromptInput
                             ref={promptInputRef}
+                            draftStateKey={`manager:${automation.selectedRepo?.id ?? 'repo-draft'}`}
                             value={inputValue}
                             onChange={setInputValue}
                             onSubmit={handleSubmit}
@@ -4366,6 +4378,7 @@ function App() {
                   <Suggestions suggestions={showWorkspace && activeWorkspace ? workspaceSuggestions : suggestions} onSelect={handleSuggestion} />
                   <PromptInput
                     ref={promptInputRef}
+                    draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
                     value={inputValue}
                     onChange={setInputValue}
                     onSubmit={handleSubmit}
@@ -4534,6 +4547,7 @@ function App() {
                     )}
                     <PromptInput
                       ref={promptInputRef}
+                      draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
                       value={inputValue}
                       onChange={setInputValue}
                       onSubmit={handleSubmit}
