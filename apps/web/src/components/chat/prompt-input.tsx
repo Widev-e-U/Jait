@@ -8,7 +8,8 @@ import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import { ProviderSelector } from '@/components/chat/provider-selector'
 import { CliModelSelector } from '@/components/chat/cli-model-selector'
-import type { ProviderId } from '@/lib/agents-api'
+import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
+import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import type { SessionInfo, ChatAttachment } from '@/hooks/useChat'
 import { FileIcon } from '@/components/icons/file-icons'
@@ -61,6 +62,8 @@ interface PromptInputProps {
   onModeChange?: (mode: ChatMode) => void
   provider?: ProviderId
   onProviderChange?: (provider: ProviderId) => void
+  providerRuntimeMode?: RuntimeMode
+  onProviderRuntimeModeChange?: (mode: RuntimeMode) => void
   /** Model override for CLI providers (codex / claude-code). */
   cliModel?: string | null
   onCliModelChange?: (model: string | null) => void
@@ -359,6 +362,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onModeChange,
   provider,
   onProviderChange,
+  providerRuntimeMode,
+  onProviderRuntimeModeChange,
   cliModel,
   onCliModelChange,
   repoRuntime,
@@ -412,9 +417,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const viewModeDisabled = controlsLocked
   const showViewModeSelector = Boolean(viewMode && onViewModeChange)
   const showProviderSelector = Boolean(provider && onProviderChange)
+  const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
   const showCliModelSelector = Boolean(provider && provider !== 'jait' && onCliModelChange)
   const showModeSelector = Boolean(mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager')
-  const hasFooterControls = showViewModeSelector || showProviderSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
+  const hasFooterControls = showViewModeSelector || showProviderSelector || showProviderRuntimeSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
 
   // Track whether we're doing a controlled sync to avoid loops
   const isSyncing = useRef(false)
@@ -1031,6 +1037,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   onMoveToGateway={onMoveToGateway}
                   sessionInfo={sessionInfo}
                   workspaceNodeId={workspaceNodeId}
+                />
+              )}
+              {showProviderRuntimeSelector && (
+                <ProviderRuntimeSelector
+                  provider={provider!}
+                  value={providerRuntimeMode!}
+                  onChange={onProviderRuntimeModeChange!}
+                  disabled={selectorsDisabled}
                 />
               )}
               {showCliModelSelector && (

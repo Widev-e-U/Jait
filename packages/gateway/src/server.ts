@@ -238,7 +238,11 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
 
   // MCP SSE server for external CLI agents
   if (deps.toolRegistry) {
-    registerMcpRoutes(app, { toolRegistry: deps.toolRegistry, config });
+    registerMcpRoutes(app, {
+      toolRegistry: deps.toolRegistry,
+      config,
+      sessionService: deps.sessionService,
+    });
   }
 
   // Self-update routes

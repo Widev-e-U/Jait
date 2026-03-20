@@ -98,7 +98,7 @@ import {
   getDefaultFloatingScreenSharePosition,
 } from '@/lib/floating-screen-share'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import { agentsApi, type AgentThread, type ProviderId, type ThreadStatus } from '@/lib/agents-api'
+import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
@@ -142,6 +142,7 @@ type ManagerQueuedMessage = QueuedChatMessage & {
   displaySegments?: UserMessageSegment[]
   attachments?: string[]
   providerId: ProviderId
+  runtimeMode?: RuntimeMode
   model?: string | null
 }
 
@@ -162,6 +163,7 @@ type ComposerDraft = {
 type SavedQueuedMessage = QueuedChatMessage & {
   mode?: ChatMode
   provider?: string
+  runtimeMode?: RuntimeMode
   model?: string | null
   referencedFiles?: { path: string; name: string }[]
   displaySegments?: UserMessageSegment[]
@@ -845,6 +847,7 @@ function App() {
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>('agent')
   const [chatProvider, setChatProvider] = useState<ProviderId>('jait')
+  const [chatProviderRuntimeMode, setChatProviderRuntimeMode] = useState<RuntimeMode>('full-access')
   const [cliModelsByProvider, setCliModelsByProvider] = useState<Partial<Record<CliProviderId, string | null>>>(
     () => loadLegacyCliModelsByProvider('jait')
   )
@@ -1443,6 +1446,9 @@ function App() {
   const [savedChatMode, setSavedChatMode, loadingChatMode] = useSessionState<ChatMode>(
     activeSessionId, 'chat.mode', token,
   )
+  const [savedProviderRuntimeMode, setSavedProviderRuntimeMode, loadingProviderRuntimeMode] = useSessionState<RuntimeMode>(
+    activeSessionId, 'chat.providerRuntimeMode', token,
+  )
   const [savedCliModels, setSavedCliModels, loadingCliModels] = useSessionState<Partial<Record<CliProviderId, string | null>>>(
     activeSessionId, 'chat.cliModels', token,
   )
@@ -1539,6 +1545,13 @@ function App() {
     if (wsFullStateReceivedRef.current) return
     if (savedChatMode) setChatMode(savedChatMode)
   }, [savedChatMode])
+
+  useEffect(() => {
+    if (wsFullStateReceivedRef.current) return
+    if (savedProviderRuntimeMode === 'supervised' || savedProviderRuntimeMode === 'full-access') {
+      setChatProviderRuntimeMode(savedProviderRuntimeMode)
+    }
+  }, [savedProviderRuntimeMode])
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
@@ -1657,6 +1670,13 @@ function App() {
           setChatMode(value)
         }
         break
+      case 'chat.providerRuntimeMode':
+        if (value === 'supervised' || value === 'full-access') {
+          setChatProviderRuntimeMode(value)
+        } else if (value === null) {
+          setChatProviderRuntimeMode('full-access')
+        }
+        break
       case 'chat.cliModels':
         if (value && typeof value === 'object' && !Array.isArray(value)) {
           setCliModelsByProvider(value as Partial<Record<CliProviderId, string | null>>)
@@ -1758,6 +1778,13 @@ function App() {
     const cm = state['chat.mode']
     if (cm === 'ask' || cm === 'agent' || cm === 'plan') {
       setChatMode(cm)
+    }
+
+    const cprm = state['chat.providerRuntimeMode']
+    if (cprm === 'supervised' || cprm === 'full-access') {
+      setChatProviderRuntimeMode(cprm)
+    } else {
+      setChatProviderRuntimeMode('full-access')
     }
 
     const ccm = state['chat.cliModels']
@@ -1897,6 +1924,15 @@ function App() {
     sendUIState('chat.mode', chatMode, activeSessionId)
   }, [chatMode, setSavedChatMode, sendUIState, activeSessionId, loadingChatMode, token])
 
+  const prevProviderRuntimeModePayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeSessionId && token && loadingProviderRuntimeMode) return
+    if (chatProviderRuntimeMode === prevProviderRuntimeModePayloadRef.current) return
+    prevProviderRuntimeModePayloadRef.current = chatProviderRuntimeMode
+    setSavedProviderRuntimeMode(chatProviderRuntimeMode)
+    sendUIState('chat.providerRuntimeMode', chatProviderRuntimeMode, activeSessionId)
+  }, [chatProviderRuntimeMode, setSavedProviderRuntimeMode, sendUIState, activeSessionId, loadingProviderRuntimeMode, token])
+
   const prevChatViewPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingChatView) return
@@ -1934,6 +1970,10 @@ function App() {
 
   const handleChatProviderChange = useCallback((provider: ProviderId) => {
     setChatProvider(provider)
+  }, [])
+
+  const handleChatProviderRuntimeModeChange = useCallback((runtimeMode: RuntimeMode) => {
+    setChatProviderRuntimeMode(runtimeMode)
   }, [])
 
   const handleCliModelChange = useCallback((model: string | null) => {
@@ -2661,6 +2701,7 @@ function App() {
       displayContent: prepared.displayContent || prepared.promptWithReferences,
       mode: chatMode,
       provider: chatProvider,
+      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       referencedFiles: prepared.referencedFiles,
       displaySegments: prepared.displaySegments,
@@ -2668,7 +2709,7 @@ function App() {
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [chatMode, chatProvider, cliModel, enqueueMessage, inputValue, pendingMessageEdit, preparePromptSubmission])
+  }, [chatMode, chatProvider, chatProviderRuntimeMode, cliModel, enqueueMessage, inputValue, pendingMessageEdit, preparePromptSubmission])
 
   const clearPendingMessageEdit = useCallback(() => {
     const previousDraft = preEditComposerDraftRef.current
@@ -2701,6 +2742,7 @@ function App() {
           sessionId: activeSessionId,
           mode: chatMode,
           provider: chatProvider,
+          runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
           model: chatProvider !== 'jait' ? cliModel : undefined,
           displayContent: prepared.displayContent,
           referencedFiles: prepared.referencedFiles,
@@ -2736,6 +2778,7 @@ function App() {
         displayContent: prepared?.displayContent || promptText,
         mode: chatMode,
         provider: chatProvider,
+        runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         model: chatProvider !== 'jait' ? cliModel : undefined,
         referencedFiles: prepared?.referencedFiles,
         displaySegments: prepared?.displaySegments,
@@ -2751,6 +2794,7 @@ function App() {
       sessionId: sid,
       mode: chatMode,
       provider: chatProvider,
+      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
       attachments: fileAttachments,
@@ -2773,6 +2817,7 @@ function App() {
     await automation.handleSend(
       prepared.promptWithReferences,
       chatProvider,
+      chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       chatProvider !== 'jait' ? cliModel : undefined,
       {
         displayContent: prepared.displayContent || prepared.promptWithReferences,
@@ -2854,12 +2899,13 @@ function App() {
       displaySegments: prepared.displaySegments,
       attachments: prepared.attachments,
       providerId: chatProvider,
+      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       queuedAt: Date.now(),
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [automation.selectedThread, chatProvider, cliModel, enqueueManagerMessage, inputValue, preparePromptSubmission])
+  }, [automation.selectedThread, chatProvider, chatProviderRuntimeMode, cliModel, enqueueManagerMessage, inputValue, preparePromptSubmission])
 
   useEffect(() => {
     for (const [threadId, queue] of Object.entries(managerMessageQueues)) {
@@ -2894,6 +2940,7 @@ function App() {
         threadId,
         nextItem.fullContent,
         nextItem.providerId,
+        nextItem.runtimeMode,
         nextItem.model,
         {
           displayContent: nextItem.displayContent ?? nextItem.content,
@@ -2946,11 +2993,11 @@ function App() {
       setShowArchitecture(true)
       sendMessage(
         'Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
-        { token, sessionId: sid, mode: chatMode, provider: chatProvider, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) },
+        { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) },
       )
       return
     }
-    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const startEditingPreviousMessage = useCallback((
@@ -2998,13 +3045,14 @@ function App() {
       sessionId: activeSessionId,
       mode: chatMode,
       provider: chatProvider,
+      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       displayContent: prepared.displayContent,
       referencedFiles: prepared.referencedFiles,
       displaySegments: prepared.displaySegments,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, cliModel, preparePromptSubmission])
+  }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, preparePromptSubmission])
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault()
@@ -3121,6 +3169,7 @@ function App() {
           referencedFiles: undefined,
           attachments: undefined,
           providerId: chatProvider,
+          runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
           model: chatProvider !== 'jait' ? cliModel : undefined,
           queuedAt: Date.now(),
         })
@@ -3129,6 +3178,7 @@ function App() {
       await automation.handleSend(
         normalizedTranscript,
         chatProvider,
+        chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         chatProvider !== 'jait' ? cliModel : undefined,
       )
       return
@@ -3147,6 +3197,7 @@ function App() {
         displayContent: normalizedTranscript,
         mode: chatMode,
         provider: chatProvider,
+        runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         model: chatProvider !== 'jait' ? cliModel : undefined,
       })
       return
@@ -3155,9 +3206,13 @@ function App() {
     sendMessage(normalizedTranscript, {
       token,
       sessionId: sid,
+      mode: chatMode,
+      provider: chatProvider,
+      runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, cliModel, createSession, enqueueManagerMessage, enqueueMessage, isLoading, messageQueue.length, sendMessage, token, viewMode])
+  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, isLoading, messageQueue.length, sendMessage, token, viewMode])
 
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
@@ -4208,6 +4263,8 @@ function App() {
                           onViewModeChange={setViewMode}
                           provider={chatProvider}
                           onProviderChange={handleChatProviderChange}
+                          providerRuntimeMode={chatProviderRuntimeMode}
+                          onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                           cliModel={cliModel}
                           onCliModelChange={handleCliModelChange}
                           repoRuntime={selectedThreadRepoRuntime}
@@ -4281,6 +4338,8 @@ function App() {
                             onViewModeChange={setViewMode}
                             provider={chatProvider}
                             onProviderChange={handleChatProviderChange}
+                            providerRuntimeMode={chatProviderRuntimeMode}
+                            onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                             cliModel={cliModel}
                             onCliModelChange={handleCliModelChange}
                             repoRuntime={selectedRepoRuntime}
@@ -4407,6 +4466,8 @@ function App() {
                     onModeChange={setChatMode}
                     provider={chatProvider}
                     onProviderChange={handleChatProviderChange}
+                    providerRuntimeMode={chatProviderRuntimeMode}
+                    onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                     cliModel={cliModel}
                     onCliModelChange={handleCliModelChange}
                     viewMode={pendingMessageEdit ? undefined : viewMode}
@@ -4593,6 +4654,8 @@ function App() {
                       onModeChange={setChatMode}
                       provider={chatProvider}
                       onProviderChange={handleChatProviderChange}
+                      providerRuntimeMode={chatProviderRuntimeMode}
+                      onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                       cliModel={cliModel}
                       onCliModelChange={handleCliModelChange}
                       viewMode={pendingMessageEdit ? undefined : viewMode}
@@ -4907,6 +4970,7 @@ function App() {
                 const thread = await agentsApi.createThread({
                   title: `[${repo.name}] ${task.title}`,
                   providerId: chatProvider,
+                  runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
                   kind: 'delivery',
                   workingDirectory: worktreePath ?? repo.localPath,
                   branch: branchName,

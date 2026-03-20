@@ -8,6 +8,8 @@
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
+import { verifyAuthToken, extractBearerToken } from "../security/http-auth.js";
+import type { SessionService } from "../services/sessions.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolDefinition } from "../tools/contracts.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -15,6 +17,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 interface McpDeps {
   toolRegistry: ToolRegistry;
   config: AppConfig;
+  sessionService?: SessionService;
 }
 
 // ── MCP JSON-RPC types ───────────────────────────────────────────────
@@ -85,6 +88,29 @@ function resolveMcpToolContextOverrides(
   };
 }
 
+async function resolveMcpToolContext(
+  request: FastifyRequest | null,
+  config: AppConfig,
+  sessionService?: SessionService,
+  params?: Record<string, unknown>,
+): Promise<McpToolContextOverrides> {
+  const overrides = resolveMcpToolContextOverrides(request, params);
+  if (overrides.sessionId) return overrides;
+  if (!request || !sessionService) return overrides;
+
+  const token = extractBearerToken(request.headers.authorization);
+  if (!token) return overrides;
+  const user = await verifyAuthToken(token, config.jwtSecret);
+  if (!user) return overrides;
+
+  const session = sessionService.lastActive(user.id);
+  if (!session?.id) return overrides;
+  return {
+    sessionId: session.id,
+    workspaceRoot: overrides.workspaceRoot ?? session.workspacePath ?? undefined,
+  };
+}
+
 // ── Connected client tracking ────────────────────────────────────────
 
 interface McpClient {
@@ -137,7 +163,7 @@ export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
 // ── Route registration ───────────────────────────────────────────────
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
-  const { toolRegistry, config } = deps;
+  const { toolRegistry, config, sessionService } = deps;
 
   app.get("/mcp", async (_request, reply) => {
     reply.raw.writeHead(200, {
@@ -180,7 +206,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       body,
       toolRegistry,
       negotiatedVersion,
-      resolveMcpToolContextOverrides(request, body.params),
+      await resolveMcpToolContext(request, config, sessionService, body.params),
     );
     if (body.id == null) {
       return reply.status(202).send();
@@ -259,7 +285,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       body,
       toolRegistry,
       DEFAULT_MCP_PROTOCOL_VERSION,
-      resolveMcpToolContextOverrides(request, body.params),
+      await resolveMcpToolContext(request, config, sessionService, body.params),
     );
 
     // Also push the response via SSE to the connected client
@@ -332,8 +358,22 @@ export async function handleMcpRequest(
         };
       }
 
+      if (!contextOverrides.sessionId) {
+        return {
+          jsonrpc: "2.0",
+          id: request.id ?? null,
+          result: {
+            content: [{
+              type: "text",
+              text: "Tool execution requires a sessionId. Authenticate with an active session or provide x-jait-session-id.",
+            }],
+            isError: true,
+          },
+        };
+      }
+
       const context: ToolContext = {
-        sessionId: contextOverrides.sessionId ?? "mcp-session",
+        sessionId: contextOverrides.sessionId,
         actionId: uuidv7(),
         workspaceRoot: contextOverrides.workspaceRoot ?? process.cwd(),
         requestedBy: "mcp-client",

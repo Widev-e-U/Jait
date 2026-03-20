@@ -141,6 +141,7 @@ export type UIStateKey =
   | "screen-share.panel"
   | "terminal.panel"
   | "chat.mode"
+  | "chat.providerRuntimeMode"
   | "chat.cliModels"
   | "chat.view"
   | "todo_list"

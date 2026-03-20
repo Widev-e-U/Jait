@@ -14,7 +14,7 @@ import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ProviderRegistry } from "../providers/registry.js";
-import type { ProviderId, ProviderEvent, CliProviderAdapter } from "../providers/contracts.js";
+import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { resolveWorkspaceRoot } from "../tools/core/get-fs.js";
 import { existsSync } from "node:fs";
@@ -245,7 +245,15 @@ function accumulateToolResult(sessionId: string, callId: string, ok: boolean, me
 }
 
 /** Persistent CLI provider sessions — kept alive across turns so the agent retains conversation context */
-const activeCliSessions = new Map<string, { providerId: ProviderId; providerSessionId: string; provider: CliProviderAdapter }>();
+const activeCliSessions = new Map<string, { providerId: ProviderId; runtimeMode: RuntimeMode; providerSessionId: string; provider: CliProviderAdapter }>();
+
+function parseRuntimeMode(raw: unknown): RuntimeMode {
+  return raw === "supervised" ? "supervised" : "full-access";
+}
+
+function resolveProviderRuntimeMode(provider: CliProviderAdapter, requestedMode: RuntimeMode): RuntimeMode {
+  return provider.info.modes.includes(requestedMode) ? requestedMode : (provider.info.modes[0] ?? "full-access");
+}
 
 function getRequestBaseUrl(request: FastifyRequest): string | undefined {
   const forwardedProto = request.headers["x-forwarded-proto"];
@@ -740,6 +748,7 @@ export function registerChatRoutes(
     const requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)
       : undefined;
+    const requestRuntimeMode = parseRuntimeMode(body["runtimeMode"]);
     const displaySegments = parseUserDisplaySegments(body["displaySegments"]);
     const displaySegmentsJson = displaySegments ? JSON.stringify(displaySegments) : undefined;
 
@@ -912,6 +921,8 @@ export function registerChatRoutes(
           return;
         }
 
+        const runtimeMode = resolveProviderRuntimeMode(cliProvider, requestRuntimeMode);
+
         const available = await cliProvider.checkAvailability();
         if (!available) {
           safeWrite(`data: ${JSON.stringify({ type: "error", message: `Provider ${requestProvider} is not available${isRemote ? " on the remote node" : ""}: ${cliProvider.info.unavailableReason ?? "CLI not found"}` })}\n\n`);
@@ -951,11 +962,11 @@ export function registerChatRoutes(
         const cachedCliSession = activeCliSessions.get(sessionId);
         let providerSessionId: string;
 
-        if (cachedCliSession && cachedCliSession.providerId === requestProvider) {
+        if (cachedCliSession && cachedCliSession.providerId === requestProvider && cachedCliSession.runtimeMode === runtimeMode) {
           // Existing session with the same provider — try to reuse it
           providerSessionId = cachedCliSession.providerSessionId;
           cliProvider = cachedCliSession.provider;
-          console.log(`[chat/cli] Reusing ${requestProvider} session ${providerSessionId} for ${sessionId}`);
+          console.log(`[chat/cli] Reusing ${requestProvider}/${runtimeMode} session ${providerSessionId} for ${sessionId}`);
         } else {
           // If the user switched providers, stop the old session first
           if (cachedCliSession) {
@@ -966,13 +977,13 @@ export function registerChatRoutes(
           const session = await cliProvider.startSession({
             threadId: sessionId,
             workingDirectory: cliWsRoot,
-            mode: "full-access",
+            mode: runtimeMode,
             model: typeof body["model"] === "string" ? body["model"] as string : undefined,
             mcpServers,
           });
           providerSessionId = session.id;
-          activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId, provider: cliProvider });
-          console.log(`[chat/cli] Started new ${requestProvider}${isRemote ? " (remote)" : ""} session ${providerSessionId} for ${sessionId}`);
+          activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider });
+          console.log(`[chat/cli] Started new ${requestProvider}/${runtimeMode}${isRemote ? " (remote)" : ""} session ${providerSessionId} for ${sessionId}`);
         }
 
         // Tell the frontend about the execution context (node, workspace)
@@ -1154,13 +1165,13 @@ export function registerChatRoutes(
           const freshSession = await cliProvider.startSession({
             threadId: sessionId,
             workingDirectory: cliWsRoot,
-            mode: "full-access",
+            mode: runtimeMode,
             model: typeof body["model"] === "string" ? body["model"] as string : undefined,
             mcpServers,
           });
           providerSessionId = freshSession.id;
-          activeCliSessions.set(sessionId, { providerId: requestProvider, providerSessionId, provider: cliProvider });
-          console.log(`[chat/cli] Recovered with new session ${providerSessionId}`);
+          activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider });
+          console.log(`[chat/cli] Recovered with new ${requestProvider}/${runtimeMode} session ${providerSessionId}`);
           await cliProvider.sendTurn(providerSessionId, content);
         }
 

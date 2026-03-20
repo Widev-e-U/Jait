@@ -1,5 +1,8 @@
 import Fastify from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
+import { migrateDatabase, openDatabase } from "../db/index.js";
+import { signAuthToken } from "../security/http-auth.js";
+import { SessionService } from "../services/sessions.js";
 import { ToolRegistry } from "../tools/registry.js";
 import {
   handleMcpRequest,
@@ -234,6 +237,121 @@ describe("mcp-server", () => {
     expect(capturedContext).toEqual({
       sessionId: "web-session-123",
       workspaceRoot: "/tmp/project",
+    });
+  });
+
+  it("rejects tool calls when no session can be resolved", async () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "surfaces.list",
+      description: "List surfaces",
+      tier: "standard",
+      category: "surfaces",
+      source: "builtin",
+      parameters: { type: "object", properties: {} },
+      async execute() {
+        return { ok: true, message: "ok" };
+      },
+    });
+
+    const response = await handleMcpRequest(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "surfaces.list",
+          arguments: {},
+        },
+      },
+      registry,
+      "2025-03-26",
+      {},
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        content: [{
+          type: "text",
+          text: "Tool execution requires a sessionId. Authenticate with an active session or provide x-jait-session-id.",
+        }],
+        isError: true,
+      },
+    });
+  });
+
+  it("uses the authenticated user's last active session for MCP tool calls", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    const sessionService = new SessionService(db);
+    const registry = new ToolRegistry();
+    const userId = "user-123";
+    const session = sessionService.create({
+      userId,
+      name: "Active Session",
+      workspacePath: "/tmp/current-workspace",
+    });
+    const token = await signAuthToken({ id: userId, username: "jakob" }, "test-secret");
+    let capturedContext: { sessionId: string; workspaceRoot: string } | null = null;
+
+    registry.register({
+      name: "surfaces.start",
+      description: "Start a surface",
+      tier: "standard",
+      category: "surfaces",
+      source: "builtin",
+      parameters: {
+        type: "object",
+        properties: {
+          type: { type: "string" },
+        },
+        required: ["type"],
+      },
+      async execute(_input, context) {
+        capturedContext = {
+          sessionId: context.sessionId,
+          workspaceRoot: context.workspaceRoot,
+        };
+        return { ok: true, message: "ok" };
+      },
+    });
+
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      sessionService,
+      config: {
+        host: "127.0.0.1",
+        port: 3000,
+        jwtSecret: "test-secret",
+      } as any,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "surfaces.start",
+          arguments: { type: "filesystem" },
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(capturedContext).toEqual({
+      sessionId: session.id,
+      workspaceRoot: "/tmp/current-workspace",
     });
   });
 });

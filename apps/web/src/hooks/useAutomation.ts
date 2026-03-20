@@ -17,6 +17,7 @@ import {
   type ThreadMessageMetadata,
   type ProviderInfo,
   type ProviderId,
+  type RuntimeMode,
   type AutomationRepo,
 } from '@/lib/agents-api'
 import {
@@ -621,6 +622,7 @@ export function useAutomation(enabled = true) {
       threadId: string | null,
       text: string,
       providerId: ProviderId = 'jait',
+      runtimeMode: RuntimeMode = 'full-access',
       model?: string | null,
       metadata: ThreadMessageMetadata = {},
     ) => {
@@ -710,6 +712,7 @@ export function useAutomation(enabled = true) {
             const thread = await agentsApi.createThread({
               title: `[${repo.name}] Generating title…`,
               providerId,
+              runtimeMode,
               ...(model ? { model } : {}),
               kind: 'delivery',
               workingDirectory: worktreePath ?? repo.localPath,
@@ -758,15 +761,15 @@ export function useAutomation(enabled = true) {
   )
 
   const handleSend = useCallback(
-    async (text: string, providerId: ProviderId = 'jait', model?: string | null, metadata?: ThreadMessageMetadata) => {
-      await sendThreadMessage(selectedThread?.id ?? null, text, providerId, model, metadata)
+    async (text: string, providerId: ProviderId = 'jait', runtimeMode: RuntimeMode = 'full-access', model?: string | null, metadata?: ThreadMessageMetadata) => {
+      await sendThreadMessage(selectedThread?.id ?? null, text, providerId, runtimeMode, model, metadata)
     },
     [selectedThread?.id, sendThreadMessage],
   )
 
   const handleSendToThread = useCallback(
-    async (threadId: string, text: string, providerId: ProviderId = 'jait', model?: string | null, metadata?: ThreadMessageMetadata) => {
-      await sendThreadMessage(threadId, text, providerId, model, metadata)
+    async (threadId: string, text: string, providerId: ProviderId = 'jait', runtimeMode: RuntimeMode = 'full-access', model?: string | null, metadata?: ThreadMessageMetadata) => {
+      await sendThreadMessage(threadId, text, providerId, runtimeMode, model, metadata)
     },
     [sendThreadMessage],
   )
