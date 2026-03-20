@@ -15,6 +15,7 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
 import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
+import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 
 const ICON_CDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@12.9.0/icons/'
 
@@ -327,6 +328,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     () => (draftStateKey ? attachmentDraftStore.get(draftStateKey) ?? [] : []),
   )
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const draftSegmentsRef = useRef<UserMessageSegment[]>(normalizeUserMessageSegments(segments))
+  const lastAppliedDraftSignatureRef = useRef<string | null>(null)
 
   // @ mention state
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -381,11 +384,24 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const el = editableRef.current
     if (!el) return
     el.querySelector(`[data-file-path="${CSS.escape(path)}"]`)?.remove()
+    draftSegmentsRef.current = getComposerSegments(el)
     isSyncing.current = true
     onChangeRef.current(getTextFromEditable(el))
     isSyncing.current = false
     setIsEmpty(!getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]'))
   }, [])
+
+  const resetComposer = useCallback(() => {
+    const el = editableRef.current
+    if (!el) return
+    buildEditableContent(el, [], '', handleRemoveChip)
+    draftSegmentsRef.current = []
+    lastAppliedDraftSignatureRef.current = getPromptDraftSignature('', [])
+    isSyncing.current = true
+    onChangeRef.current('')
+    isSyncing.current = false
+    setIsEmpty(true)
+  }, [handleRemoveChip])
 
   /** Expose imperative methods for parent components. */
   useImperativeHandle(ref, () => ({
@@ -397,6 +413,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const chip = createChipNode(file, handleRemoveChip)
       el.appendChild(chip)
       el.appendChild(document.createTextNode(' '))
+      draftSegmentsRef.current = getComposerSegments(el)
       moveCursorToEnd(el)
       isSyncing.current = true
       onChangeRef.current(getTextFromEditable(el))
@@ -497,21 +514,17 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const el = editableRef.current
     if (!el || isSyncing.current) return
 
-    const currentText = getTextFromEditable(el)
-    const currentSegments = getComposerSegments(el)
-    const normalizedSegments = normalizeUserMessageSegments(segments)
-    const shouldSyncSegments = normalizedSegments.length > 0 || currentSegments.some((segment) => segment.type === 'file')
-    const segmentsChanged = shouldSyncSegments
-      && JSON.stringify(currentSegments) !== JSON.stringify(normalizedSegments)
-
-    if (currentText !== value || segmentsChanged) {
-      // Value was changed externally (cleared on submit, suggestion, etc.)
-      // Re-render: put text nodes + chip nodes
-      isSyncing.current = true
-      buildEditableContent(el, segments, value, handleRemoveChip)
-      setIsEmpty(!value && !editableRef.current?.querySelector('[data-file-path]'))
-      isSyncing.current = false
+    if (!shouldSyncComposerDraft(lastAppliedDraftSignatureRef.current, value, segments, draftSegmentsRef.current)) {
+      lastAppliedDraftSignatureRef.current = getPromptDraftSignature(value, segments)
+      return
     }
+
+    isSyncing.current = true
+    buildEditableContent(el, segments, value, handleRemoveChip)
+    draftSegmentsRef.current = getComposerSegments(el)
+    setIsEmpty(!value && !editableRef.current?.querySelector('[data-file-path]'))
+    isSyncing.current = false
+    lastAppliedDraftSignatureRef.current = getPromptDraftSignature(value, segments)
   }, [value, segments, handleRemoveChip])
 
   // Close menu on outside click
@@ -578,6 +591,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     setMentionQuery('')
 
     // Sync text value
+    draftSegmentsRef.current = getComposerSegments(el)
     isSyncing.current = true
     onChange(getTextFromEditable(el))
     isSyncing.current = false
@@ -592,6 +606,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const handleNativeInput = () => {
       isSyncing.current = true
       const text = getTextFromEditable(el)
+      draftSegmentsRef.current = getComposerSegments(el)
       onChangeRef.current(text)
       setIsEmpty(!text.trim() && !el.querySelector('[data-file-path]'))
       isSyncing.current = false
@@ -690,14 +705,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       if (isLoading && onQueue) {
         onQueue(chips, attachments, nextSegments)
         setAttachments([])
+        resetComposer()
         return
       }
       if (!isLoading) {
         onSubmit(chips, attachments, nextSegments)
         setAttachments([])
+        resetComposer()
       }
     }
-  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit, attachments, segments])
+  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit, attachments, segments, resetComposer])
 
   const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
     return new Promise((resolve, reject) => {
@@ -797,6 +814,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           const chip = createChipNode(file, handleRemoveChip)
           el.appendChild(chip)
           el.appendChild(document.createTextNode(' '))
+          draftSegmentsRef.current = getComposerSegments(el)
           moveCursorToEnd(el)
           // Sync text
           isSyncing.current = true
@@ -1024,6 +1042,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
                 onQueue(chips, attachments, nextSegments)
                 setAttachments([])
+                resetComposer()
               }}
             >
               <ListPlus className="h-4 w-4" />
@@ -1040,6 +1059,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
                 onSubmit(chips, attachments, nextSegments)
                 setAttachments([])
+                resetComposer()
               }}
             >
               <ArrowUp className="h-4 w-4" />

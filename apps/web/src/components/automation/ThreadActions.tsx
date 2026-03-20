@@ -22,8 +22,8 @@ interface ThreadActionsProps {
   threadTitle: string
   /** Existing PR URL from previous creation (allows retry to just open it). */
   prUrl?: string | null
-  /** Current PR state synced from GitHub (open, merged, closed). */
-  prState?: 'open' | 'closed' | 'merged' | null
+  /** Current PR state synced from GitHub (creating, open, merged, closed). */
+  prState?: 'creating' | 'open' | 'closed' | 'merged' | null
   /** Legacy flag from repo polling; retained for prop compatibility. */
   ghAvailable?: boolean
   /** Current thread lifecycle status. */
@@ -52,6 +52,7 @@ export function ThreadActions({
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
   const pendingPrAction = useRef(false)
   const skipGhCheck = useRef(false)
+  const creatingPr = prState === 'creating'
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
     prUrl ? { url: prUrl, kind: 'created' } : null,
   )
@@ -99,13 +100,16 @@ export function ThreadActions({
   }, [branch, cwd, prUrl, prState])
 
   const existingPrLink = prLink ?? (prUrl ? { url: prUrl, kind: 'created' as const } : null)
-  const buttonLabel = existingPrLink
-    ? existingPrLink.kind === 'created'
-      ? 'Open PR'
-      : 'Open PR Page'
-    : 'Create Pull Request'
-  const prButtonTitle = existingPrLink ? buttonLabel : 'Create pull request'
+  const buttonLabel = creatingPr && !existingPrLink
+    ? 'Creating PR...'
+    : existingPrLink
+      ? existingPrLink.kind === 'created'
+        ? 'Open PR'
+        : 'Open PR Page'
+      : 'Create Pull Request'
+  const prButtonTitle = creatingPr && !existingPrLink ? 'Creating pull request' : existingPrLink ? buttonLabel : 'Create pull request'
   const canCreatePr = threadKind === 'delivery' && (existingPrLink != null || threadStatus === 'completed')
+  const isBusy = busy || creatingPr
 
   const handlePushAndPR = useCallback(async () => {
     // If PR already exists, just open it
@@ -204,7 +208,7 @@ export function ThreadActions({
           variant="ghost"
           size="sm"
           className={`h-5 text-[10px] gap-1 ${isMobile ? 'px-1.5' : ''}`}
-          disabled={busy || !canCreatePr}
+          disabled={isBusy || !canCreatePr}
           onClick={handlePushAndPR}
           title={threadKind !== 'delivery'
             ? 'Delegation threads do not create pull requests.'
@@ -213,7 +217,7 @@ export function ThreadActions({
               : prButtonTitle}
           aria-label={prButtonTitle}
         >
-          {busy ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitPullRequest className="h-3 w-3" />}
+          {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitPullRequest className="h-3 w-3" />}
           {!isMobile && buttonLabel}
         </Button>
         {showStatusBadge && existingPrLink && (
@@ -224,6 +228,8 @@ export function ThreadActions({
                 ? 'border-purple-500/40 text-purple-700 bg-purple-500/10 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/40'
                 : prState === 'closed'
                   ? 'border-red-500/40 text-red-700 bg-red-500/10 dark:text-red-300 dark:bg-red-500/20 dark:border-red-400/40'
+                  : prState === 'creating'
+                    ? 'border-amber-500/40 text-amber-700 bg-amber-500/10 dark:text-amber-300 dark:bg-amber-500/20 dark:border-amber-400/40'
                   : existingPrLink.kind === 'created'
                     ? 'border-green-500/40 text-green-700 dark:text-green-300 dark:border-green-400/40'
                     : 'border-amber-500/40 text-amber-700 dark:text-amber-300 dark:border-amber-400/40'
@@ -233,6 +239,8 @@ export function ThreadActions({
               ? 'PR merged'
               : prState === 'closed'
                 ? 'PR closed'
+                : prState === 'creating'
+                  ? 'PR creating'
                 : existingPrLink.kind === 'created'
                   ? 'PR open'
                   : 'PR ready to open'}

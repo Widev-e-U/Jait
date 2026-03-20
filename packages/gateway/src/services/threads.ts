@@ -46,7 +46,7 @@ export interface UpdateThreadParams {
   prUrl?: string | null;
   prNumber?: number | null;
   prTitle?: string | null;
-  prState?: "open" | "closed" | "merged" | null;
+  prState?: "creating" | "open" | "closed" | "merged" | null;
   status?: ThreadStatus;
   providerSessionId?: string | null;
   error?: string | null;

@@ -236,16 +236,20 @@ function ManagerStatusDot({ status }: { status: string }) {
   return <Icon className={`h-3 w-3 shrink-0 ${color}`} />
 }
 
-function ThreadPrBadge({ prState }: { prState: 'open' | 'closed' | 'merged' | null | undefined }) {
+function ThreadPrBadge({ prState }: { prState: 'creating' | 'open' | 'closed' | 'merged' | null | undefined }) {
   if (!prState) return null
   const label =
-    prState === 'open'
+    prState === 'creating'
+      ? 'PR creating'
+      : prState === 'open'
       ? 'PR created'
       : prState === 'merged'
         ? 'PR merged'
         : 'PR closed'
   const className =
-    prState === 'open'
+    prState === 'creating'
+      ? 'bg-amber-500/10 text-amber-700 border-amber-500/20 dark:text-amber-300 dark:bg-amber-500/20 dark:border-amber-400/30'
+      : prState === 'open'
       ? 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300 dark:bg-blue-500/20 dark:border-blue-400/30'
       : prState === 'merged'
         ? 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/30'
@@ -513,7 +517,7 @@ interface ManagerThreadListItemProps {
   thread: AgentThread
   repo: AutomationRepository | null
   repoName: string
-  prState: 'open' | 'closed' | 'merged' | null | undefined
+  prState: 'creating' | 'open' | 'closed' | 'merged' | null | undefined
   ghAvailable: boolean
   onOpen: () => void
   onStop: () => void
@@ -651,7 +655,7 @@ function ManagerThreadListItem({
 interface ManagerActiveThreadsMenuProps {
   threads: AgentThread[]
   getRepositoryForThread: (thread: Pick<AgentThread, 'title' | 'workingDirectory'>) => AutomationRepository | null
-  threadPrStates: Record<string, 'open' | 'closed' | 'merged' | null>
+  threadPrStates: Record<string, 'creating' | 'open' | 'closed' | 'merged' | null>
   ghAvailable: boolean
   onOpenThread: (threadId: string) => void
   onStopThread: (threadId: string) => void
@@ -756,7 +760,7 @@ function ManagerActiveThreadsMenu({
                         threadStatus={thread.status}
                         threadKind={thread.kind}
                         prUrl={thread.prUrl}
-                        prState={(thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
+                        prState={(thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState) as 'creating' | 'open' | 'closed' | 'merged' | null | undefined}
                         ghAvailable={ghAvailable}
                         showStatusBadge={false}
                       />
@@ -3929,7 +3933,7 @@ function App() {
                             threadStatus={automation.selectedThread.status}
                             threadKind={automation.selectedThread.kind}
                             prUrl={automation.selectedThread.prUrl}
-                            prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'open' | 'closed' | 'merged' | null | undefined}
+                            prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'creating' | 'open' | 'closed' | 'merged' | null | undefined}
                             ghAvailable={automation.ghAvailable}
                             showStatusBadge={!isMobile}
                           />
@@ -4099,13 +4103,13 @@ function App() {
                 {automation.selectedThread ? (
                   <>
                     {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
-                      <div className="flex items-center gap-1 px-2 py-1 border-b bg-muted/20 shrink-0">
+                      <div className="flex h-[35px] items-center gap-1 px-2 border-b bg-muted/20 shrink-0">
                         {!showWorkspaceTree && (
                           <Tooltip>
                             <TooltipTrigger asChild>
                               <button
                                 onClick={showWorkspaceTreePanel}
-                                className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               >
                                 <Eye className="h-3 w-3" />
                                 <FolderTree className="h-3 w-3" />
@@ -4121,7 +4125,7 @@ function App() {
                             <TooltipTrigger asChild>
                               <button
                                 onClick={showWorkspaceEditorPanel}
-                                className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                                className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                               >
                                 <Eye className="h-3 w-3" />
                                 <Code className="h-3 w-3" />
@@ -4420,13 +4424,13 @@ function App() {
                 )}
                 {/* Sticky show-panel buttons when workspace panels are hidden */}
                 {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
-                  <div className="flex items-center gap-1 px-2 py-1 border-b bg-muted/20 shrink-0">
+                  <div className="flex h-[35px] items-center gap-1 px-2 border-b bg-muted/20 shrink-0">
                     {!showWorkspaceTree && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <button
                             onClick={showWorkspaceTreePanel}
-                            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                           >
                             <Eye className="h-3 w-3" />
                             <FolderTree className="h-3 w-3" />
@@ -4442,7 +4446,7 @@ function App() {
                         <TooltipTrigger asChild>
                           <button
                             onClick={showWorkspaceEditorPanel}
-                            className="flex items-center gap-1 rounded px-2 py-0.5 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                            className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
                           >
                             <Eye className="h-3 w-3" />
                             <Code className="h-3 w-3" />

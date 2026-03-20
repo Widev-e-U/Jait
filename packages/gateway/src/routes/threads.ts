@@ -260,7 +260,7 @@ export function registerThreadRoutes(
     if (!assertOwnership(reply, existing, authUser.id, "Thread not found")) return;
     const body = request.body as Record<string, unknown>;
     const prState =
-      body["prState"] === "open" || body["prState"] === "closed" || body["prState"] === "merged"
+      body["prState"] === "creating" || body["prState"] === "open" || body["prState"] === "closed" || body["prState"] === "merged"
         ? body["prState"]
         : body["prState"] === null
           ? null
@@ -284,7 +284,9 @@ export function registerThreadRoutes(
     ) {
       const prUrl = thread.prUrl ?? existing.prUrl ?? null;
       const summary =
-        prState === "open"
+        prState === "creating"
+          ? "Creating pull request"
+          : prState === "open"
           ? prUrl ? `Pull request created: ${prUrl}` : "Pull request created"
           : prState === "merged"
             ? prUrl ? `Pull request merged: ${prUrl}` : "Pull request merged"
@@ -825,6 +827,17 @@ export function registerThreadRoutes(
     try {
       let result: GitStepResult;
       const cwd = thread.workingDirectory;
+      const creatingThread = threadService.update(thread.id, { prState: "creating" });
+      if (creatingThread) {
+        broadcastThreadEvent(thread.id, "updated", { thread: creatingThread });
+      }
+      const startedActivity = threadService.addActivity(
+        thread.id,
+        "activity",
+        "Creating pull request",
+        { action: "create_pr_started" },
+      );
+      broadcastThreadEvent(thread.id, "activity", { activity: startedActivity });
 
       // Check if the working directory is on a remote node
       const isRemotePath = !existsSync(cwd);
@@ -840,6 +853,10 @@ export function registerThreadRoutes(
           break;
         }
         if (!remoteNodeId) {
+          const resetThread = threadService.update(thread.id, { prState: null });
+          if (resetThread) {
+            broadcastThreadEvent(thread.id, "updated", { thread: resetThread });
+          }
           return reply.status(502).send({ error: "No remote node connected to run git operations on this path." });
         }
         result = await ws.proxyFsOp<GitStepResult>(remoteNodeId, "git-stacked-action", {
@@ -959,12 +976,21 @@ export function registerThreadRoutes(
 
         // If resume failed, revert thread to completed (not stuck as "running")
         if (!resumed) {
-          threadService.update(id, {
+          const completedThread = threadService.update(id, {
             status: "completed",
             error: "Push failed and automatic resume was not possible. Use the Start button to retry manually.",
             completedAt: new Date().toISOString(),
+            prState: null,
           });
+          if (completedThread) {
+            broadcastThreadEvent(id, "updated", { thread: completedThread });
+          }
           broadcastThreadStatus(id, "completed");
+        } else {
+          const resumedThread = threadService.update(id, { prState: null });
+          if (resumedThread) {
+            broadcastThreadEvent(id, "updated", { thread: resumedThread });
+          }
         }
 
         return reply.status(200).send({
@@ -984,7 +1010,7 @@ export function registerThreadRoutes(
         prState:
           result.pr.status === "created" || result.pr.status === "opened_existing"
             ? "open"
-            : undefined,
+            : null,
       });
 
       if (updatedThread) {
@@ -1012,6 +1038,17 @@ export function registerThreadRoutes(
         thread: updatedThread,
       });
     } catch (err) {
+      const failedThread = threadService.update(thread.id, { prState: null });
+      if (failedThread) {
+        broadcastThreadEvent(thread.id, "updated", { thread: failedThread });
+      }
+      const failedActivity = threadService.addActivity(
+        thread.id,
+        "error",
+        err instanceof Error ? err.message : "Failed to create pull request",
+        { action: "create_pr_failed" },
+      );
+      broadcastThreadEvent(thread.id, "activity", { activity: failedActivity });
       return reply.status(500).send({
         error: err instanceof Error ? err.message : "Failed to create pull request",
       });
