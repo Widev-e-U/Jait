@@ -67,7 +67,7 @@ async function runWorkspaceSearch(
     if (isWin) {
       cmd = `(rg --files "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}") || (dir /s /b "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}")`;
     } else {
-      cmd = `rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}" | head -n ${maxResults}`;
+      cmd = `((rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}") || (find "${safeDir}" -type f 2>/dev/null | grep -iF -- "${safeFileQuery}")) | head -n ${maxResults}`;
     }
 
     const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
