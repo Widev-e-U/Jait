@@ -67,6 +67,27 @@ interface PersistedToolCall {
   completedAt?: number;
 }
 
+function parseUserDisplaySegments(raw: unknown): Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const segments: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    if (record.type === "text" && typeof record.text === "string") {
+      segments.push({ type: "text", text: record.text });
+      continue;
+    }
+    if (record.type === "file" && typeof record.path === "string") {
+      segments.push({
+        type: "file",
+        path: record.path,
+        name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+      });
+    }
+  }
+  return segments.length > 0 ? segments : undefined;
+}
+
 // ── In-memory state ──────────────────────────────────────────────────
 
 const sessionHistory = new Map<string, ChatMessage[]>();
@@ -87,6 +108,35 @@ interface StreamingAccumulator {
   segments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] }>;
 }
 const sessionStreamingState = new Map<string, StreamingAccumulator>();
+
+export function getExternalFileMutationPath(tool: string, args: unknown): string | null {
+  const normalized = tool.trim().toLowerCase();
+  const fileMutationTools = new Set([
+    "edit",
+    "multiedit",
+    "file.write",
+    "write",
+    "create_file",
+    "create-file",
+    "replace_string_in_file",
+    "replace-string-in-file",
+    "insert_edit_into_file",
+    "insert-edit-into-file",
+  ]);
+  if (!fileMutationTools.has(normalized)) return null;
+
+  const input = args && typeof args === "object" && !Array.isArray(args)
+    ? args as Record<string, unknown>
+    : {};
+  const path = input["path"]
+    ?? input["file_path"]
+    ?? input["filePath"]
+    ?? input["file"]
+    ?? input["filename"]
+    ?? input["target_file"]
+    ?? input["targetFile"];
+  return typeof path === "string" && path.trim() ? path : null;
+}
 
 function getOrCreateAccumulator(sessionId: string): StreamingAccumulator {
   let acc = sessionStreamingState.get(sessionId);
@@ -640,6 +690,8 @@ export function registerChatRoutes(
     const requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)
       : undefined;
+    const displaySegments = parseUserDisplaySegments(body["displaySegments"]);
+    const displaySegmentsJson = displaySegments ? JSON.stringify(displaySegments) : undefined;
 
     // Parse file attachments (images / files sent as base64 from the client)
     const rawAttachments = Array.isArray(body["attachments"]) ? body["attachments"] as Array<Record<string, unknown>> : [];
@@ -731,11 +783,11 @@ export function registerChatRoutes(
           contentParts.push({ type: "text", text: `[File: ${att.name}]\n${decoded}` });
         }
       }
-      history.push({ role: "user", content: contentParts as unknown as string });
-      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""));
+      history.push({ role: "user", content: contentParts as unknown as string, segments: displaySegments });
+      persistMessage(sessionId, "user", content + attachments.map((a) => ` [attached: ${a.name}]`).join(""), undefined, displaySegmentsJson);
     } else {
-      history.push({ role: "user", content });
-      persistMessage(sessionId, "user", content);
+      history.push({ role: "user", content, segments: displaySegments });
+      persistMessage(sessionId, "user", content, undefined, displaySegmentsJson);
     }
     try { sessionService?.touch(sessionId); } catch { /* session may not exist */ }
 
@@ -955,12 +1007,10 @@ export function registerChatRoutes(
               });
               pendingToolGroup.push(callId);
 
-              // Save backup of original file *before* CLI provider writes it
-              if (event.tool === "edit" && cliFsSurface) {
-                const editPath = String((event.args as Record<string, unknown>)?.path ?? "");
-                if (editPath) {
-                  cliFsSurface.saveExternalBackup(editPath).catch(() => {});
-                }
+              // Save backup of the original file before external providers mutate it.
+              const mutationPath = getExternalFileMutationPath(event.tool, event.args);
+              if (mutationPath && cliFsSurface) {
+                cliFsSurface.saveExternalBackup(mutationPath).catch(() => {});
               }
 
               safeWrite(`data: ${JSON.stringify({ type: "tool_start", call_id: callId, tool: event.tool, args: event.args })}\n\n`);
@@ -992,19 +1042,18 @@ export function registerChatRoutes(
               emitToSubscribers(sessionId, { type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data } as StreamEvent);
               accumulateToolResult(sessionId, resultCallId, event.ok, event.message || "", event.data);
 
-              // Emit file_changed for successful edits → drives the keep/discard UI
-              if (event.ok && event.tool === "edit") {
-                const editPath = String(tc?.args ? (tc.args as Record<string, unknown>).path ?? "" : "");
-                if (editPath) {
-                  const editName = editPath.split(/[\/\\]/).pop() ?? editPath;
-                  safeWrite(`data: ${JSON.stringify({ type: "file_changed", path: editPath, name: editName })}\n\n`);
+              // Emit file_changed for successful external file mutations.
+              const mutationPath = getExternalFileMutationPath(tc?.tool ?? event.tool, tc?.args ?? {});
+              if (event.ok && mutationPath) {
+                  const editName = mutationPath.split(/[\/\\]/).pop() ?? mutationPath;
+                  safeWrite(`data: ${JSON.stringify({ type: "file_changed", path: mutationPath, name: editName })}\n\n`);
                   // Broadcast to other session clients
                   if (ws) {
                     ws.broadcast(sessionId, {
                       type: "ui.state-sync",
                       sessionId,
                       timestamp: new Date().toISOString(),
-                      payload: { key: "file_changed", value: { path: editPath, name: editName } },
+                      payload: { key: "file_changed", value: { path: mutationPath, name: editName } },
                     });
                   }
                   // Persist cumulative changed files list
@@ -1012,13 +1061,12 @@ export function registerChatRoutes(
                     try {
                       const existing = sessionStateService.get(sessionId, ["changed_files"]);
                       const files = Array.isArray(existing["changed_files"]) ? existing["changed_files"] as { path: string; name: string }[] : [];
-                      if (!files.some((f: { path: string }) => f.path === editPath)) {
-                        files.push({ path: editPath, name: editName });
+                      if (!files.some((f: { path: string }) => f.path === mutationPath)) {
+                        files.push({ path: mutationPath, name: editName });
                         sessionStateService.set(sessionId, { changed_files: files });
                       }
                     } catch { /* ignore */ }
                   }
-                }
               }
               break;
             }

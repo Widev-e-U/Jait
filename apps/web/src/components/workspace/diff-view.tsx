@@ -4,23 +4,11 @@ import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Undo2, X } fr
 import { Button } from '@/components/ui/button'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { cn } from '@/lib/utils'
+import { buildReviewHunks, computeMergedContent, getReviewAnchorLine, type ReviewHunk } from './review-hunks'
 
 /* ------------------------------------------------------------------ */
 /*  Types                                                              */
 /* ------------------------------------------------------------------ */
-
-export interface DiffHunk {
-  /** Index in the hunks array */
-  index: number
-  /** 1-based inclusive. 0 = pure insertion (nothing removed from original) */
-  originalStartLineNumber: number
-  originalEndLineNumber: number
-  /** 1-based inclusive. 0 = pure deletion (nothing added in modified) */
-  modifiedStartLineNumber: number
-  modifiedEndLineNumber: number
-  /** User decision for this hunk */
-  state: 'undecided' | 'accepted' | 'rejected'
-}
 
 export interface DiffViewProps {
   filePath: string
@@ -40,52 +28,6 @@ export interface DiffViewProps {
 /*  Helpers                                                            */
 /* ------------------------------------------------------------------ */
 
-/**
- * Compute the final file content by selectively applying accepted hunks
- * while reverting rejected hunks to the original.
- *
- * Hunks are processed from last-to-first so that earlier line numbers
- * remain valid after each splice.
- */
-function computeMergedContent(
-  originalLines: string[],
-  modifiedLines: string[],
-  hunks: DiffHunk[],
-): string {
-  // Start from the original content
-  const result = [...originalLines]
-
-  // Process hunks from bottom to top
-  for (let i = hunks.length - 1; i >= 0; i--) {
-    const h = hunks[i]
-    if (h.state === 'rejected') continue // keep original — nothing to do
-
-    // Determine new lines (from modified) for this hunk
-    let newLines: string[]
-    if (h.modifiedEndLineNumber === 0) {
-      // Pure deletion — accepted means delete these lines
-      newLines = []
-    } else {
-      newLines = modifiedLines.slice(
-        h.modifiedStartLineNumber - 1,
-        h.modifiedEndLineNumber,
-      )
-    }
-
-    // Determine splice position and count in the original
-    if (h.originalEndLineNumber === 0) {
-      // Pure insertion — insert after originalStartLineNumber
-      result.splice(h.originalStartLineNumber, 0, ...newLines)
-    } else {
-      const start = h.originalStartLineNumber - 1
-      const count = h.originalEndLineNumber - h.originalStartLineNumber + 1
-      result.splice(start, count, ...newLines)
-    }
-  }
-
-  return result.join('\n')
-}
-
 /* ------------------------------------------------------------------ */
 /*  Component                                                          */
 /* ------------------------------------------------------------------ */
@@ -101,8 +43,9 @@ export function DiffView({
   /* eslint-disable @typescript-eslint/no-explicit-any */
   const editorRef = useRef<any>(null)
   const monacoRef = useRef<any>(null)
+  const [actionPositions, setActionPositions] = useState<Array<{ hunkIndex: number; top: number }>>([])
 
-  const [hunks, setHunks] = useState<DiffHunk[]>([])
+  const [hunks, setHunks] = useState<ReviewHunk[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
   const theme = useResolvedTheme()
@@ -116,40 +59,60 @@ export function DiffView({
     return () => window.removeEventListener('resize', update)
   }, [])
 
+  useEffect(() => {
+    setHunks((prev) => {
+      const next = buildReviewHunks(originalContent, modifiedContent)
+      if (prev.length === next.length) {
+        return next.map((hunk, index) => ({ ...hunk, state: prev[index]?.state ?? 'undecided' }))
+      }
+      return next
+    })
+    setActiveIndex(0)
+  }, [originalContent, modifiedContent])
+
+  const updateActionPositions = useCallback(() => {
+    const editor = editorRef.current?.getModifiedEditor?.()
+    if (!editor || hunks.length === 0) {
+      setActionPositions([])
+      return
+    }
+
+    const scrollTop = editor.getScrollTop()
+    const layout = editor.getLayoutInfo()
+    const viewportHeight = editor.getScrollHeight() > 0 ? editor.getScrollHeight() : layout.height
+    const next = hunks.flatMap((hunk) => {
+      if (hunk.state !== 'undecided') return []
+      const lineNumber = getReviewAnchorLine(hunk)
+      const top = editor.getTopForLineNumber(lineNumber) - scrollTop + 2
+      if (!Number.isFinite(top) || top < -28 || top > viewportHeight) return []
+      return [{ hunkIndex: hunk.index, top }]
+    })
+    setActionPositions(next)
+  }, [hunks])
+
   /* ---- Monaco mount ---- */
   const handleMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor
     monacoRef.current = monaco
-
-    const extractChanges = () => {
-      const lineChanges = editor.getLineChanges()
-      if (!lineChanges || lineChanges.length === 0) return
-      setHunks(
-        lineChanges.map((c: any, i: number) => ({
-          index: i,
-          originalStartLineNumber: c.originalStartLineNumber,
-          originalEndLineNumber: c.originalEndLineNumber,
-          modifiedStartLineNumber: c.modifiedStartLineNumber,
-          modifiedEndLineNumber: c.modifiedEndLineNumber,
-          state: 'undecided' as const,
-        })),
-      )
+    const modEditor = editor.getModifiedEditor()
+    const disposables = [
+      modEditor.onDidScrollChange(() => updateActionPositions()),
+      modEditor.onDidLayoutChange(() => updateActionPositions()),
+      modEditor.onDidContentSizeChange(() => updateActionPositions()),
+      editor.onDidUpdateDiff(() => updateActionPositions()),
+    ]
+    window.setTimeout(updateActionPositions, 0)
+    return () => {
+      for (const disposable of disposables) disposable.dispose()
     }
-
-    // The diff is computed asynchronously
-    editor.onDidUpdateDiff(() => extractChanges())
-    // Also try immediately in case it's already done
-    extractChanges()
-  }, [])
+  }, [updateActionPositions])
 
   /* ---- Scroll to active hunk ---- */
   useEffect(() => {
     if (!editorRef.current || hunks.length === 0) return
     const h = hunks[activeIndex]
     if (!h) return
-    const line = h.modifiedEndLineNumber > 0
-      ? h.modifiedStartLineNumber
-      : h.originalStartLineNumber
+    const line = getReviewAnchorLine(h)
     try {
       editorRef.current.getModifiedEditor().revealLineInCenter(line)
     } catch { /* editor may not be ready */ }
@@ -185,6 +148,10 @@ export function DiffView({
       try { modEditor.deltaDecorations(ids, []) } catch { /* unmounted */ }
     }
   }, [hunks])
+
+  useEffect(() => {
+    updateActionPositions()
+  }, [updateActionPositions, activeIndex, hunks])
 
   /* ---- Highlight active hunk ---- */
   useEffect(() => {
@@ -337,6 +304,40 @@ export function DiffView({
             ignoreTrimWhitespace: false,
           }}
         />
+        {actionPositions.length > 0 && (
+          <div className="pointer-events-none absolute inset-0 z-20">
+            {actionPositions.map(({ hunkIndex, top }) => {
+              const hunk = hunks[hunkIndex]
+              if (!hunk || hunk.state !== 'undecided') return null
+              return (
+                <div
+                  key={`actions-${hunkIndex}`}
+                  className="pointer-events-auto absolute right-3 flex items-center gap-1 rounded-md border bg-background/95 p-1 shadow-md backdrop-blur-sm"
+                  style={{ top }}
+                >
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px] text-green-600 hover:bg-green-500/10 hover:text-green-500"
+                    onClick={() => setHunkState(hunkIndex, 'accepted')}
+                  >
+                    <Check className="mr-1 h-3 w-3" />
+                    Keep
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    className="h-7 px-2 text-[11px] text-red-600 hover:bg-red-500/10 hover:text-red-500"
+                    onClick={() => setHunkState(hunkIndex, 'rejected')}
+                  >
+                    <Undo2 className="mr-1 h-3 w-3" />
+                    Undo
+                  </Button>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* Floating navigation buttons overlaying the editor */}
         {hunks.length > 1 && (

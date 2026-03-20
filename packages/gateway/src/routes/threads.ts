@@ -526,6 +526,27 @@ export function registerThreadRoutes(
             return path && name ? [{ path, name }] : [];
           })
         : undefined;
+      const displaySegments = Array.isArray(body["displaySegments"])
+        ? (() => {
+            const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> = [];
+            for (const entry of body["displaySegments"] as unknown[]) {
+              if (!entry || typeof entry !== "object") continue;
+              const record = entry as Record<string, unknown>;
+              if (record.type === "text" && typeof record.text === "string") {
+                parsed.push({ type: "text", text: record.text });
+                continue;
+              }
+              if (record.type === "file" && typeof record.path === "string") {
+                parsed.push({
+                  type: "file",
+                  path: record.path,
+                  name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+                });
+              }
+            }
+            return parsed.length > 0 ? parsed : undefined;
+          })()
+        : undefined;
       const titlePrefix = typeof body["titlePrefix"] === "string" ? body["titlePrefix"] : "";
       const titleTask = typeof body["titleTask"] === "string" ? body["titleTask"] : displayContent ?? message ?? "";
 
@@ -582,6 +603,7 @@ export function registerThreadRoutes(
               content: displayContent ?? message,
               fullContent: message,
               referencedFiles,
+              displaySegments,
             });
             broadcastThreadEvent(id, "activity", { activity: userActivity });
             await provider.sendTurn(session.id, fullMessage, attachments);
@@ -620,6 +642,27 @@ export function registerThreadRoutes(
           return path && name ? [{ path, name }] : [];
         })
       : undefined;
+    const displaySegments = Array.isArray(body["displaySegments"])
+      ? (() => {
+          const parsed: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> = [];
+          for (const entry of body["displaySegments"] as unknown[]) {
+            if (!entry || typeof entry !== "object") continue;
+            const record = entry as Record<string, unknown>;
+            if (record.type === "text" && typeof record.text === "string") {
+              parsed.push({ type: "text", text: record.text });
+              continue;
+            }
+            if (record.type === "file" && typeof record.path === "string") {
+              parsed.push({
+                type: "file",
+                path: record.path,
+                name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+              });
+            }
+          }
+          return parsed.length > 0 ? parsed : undefined;
+        })()
+      : undefined;
 
     const thread = getOwnedThread(id, authUser.id);
     if (!assertOwnership(reply, thread, authUser.id, "Thread not found")) return;
@@ -636,6 +679,7 @@ export function registerThreadRoutes(
       content: displayContent ?? message,
       fullContent: message,
       referencedFiles,
+      displaySegments,
     });
     broadcastThreadEvent(id, "activity", { activity: userActivity });
 

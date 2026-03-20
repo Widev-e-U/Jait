@@ -33,6 +33,7 @@ interface CopilotSessionState {
   session: ProviderSession;
   process: ChildProcess | null;
   buffer: string;
+  stderr: string;
   workingDirectory: string;
   env: Record<string, string>;
   model?: string;
@@ -124,6 +125,7 @@ export class CopilotProvider implements CliProviderAdapter {
       session,
       process: null,
       buffer: "",
+      stderr: "",
       workingDirectory: options.workingDirectory,
       env,
       model: options.model,
@@ -180,6 +182,7 @@ export class CopilotProvider implements CliProviderAdapter {
 
     state.process = child;
     state.buffer = "";
+    state.stderr = "";
     state.exitMode = "normal";
     state.session.status = "running";
     this.emit({ type: "turn.started", sessionId });
@@ -192,6 +195,7 @@ export class CopilotProvider implements CliProviderAdapter {
     child.stderr?.on("data", (data: Buffer) => {
       const text = data.toString().trim();
       if (text) {
+        state.stderr = appendStderr(state.stderr, text);
         console.error(`[copilot:${sessionId}] stderr: ${text}`);
       }
     });
@@ -225,7 +229,7 @@ export class CopilotProvider implements CliProviderAdapter {
           return;
         }
 
-        const error = `Copilot CLI exited with code ${code}${signal ? ` (signal=${signal})` : ""}`;
+        const error = buildCopilotExitError(code, signal, state.stderr);
         state.session.status = "error";
         state.session.error = error;
         this.emit({ type: "session.error", sessionId, error });
@@ -541,21 +545,10 @@ export class CopilotProvider implements CliProviderAdapter {
       child.stderr?.on("data", (d: Buffer) => { output += d.toString(); });
       child.on("exit", () => {
         clearTimeout(timer);
-        // Look for --model choices pattern like: (choices: "model1", "model2", ...)
-        const match = output.match(/--model\s+.*?\(choices:\s*([^)]+)\)/s);
-        if (match?.[1]) {
-          const choices = match[1]
-            .split(",")
-            .map(s => s.trim().replace(/^["']|["']$/g, ""))
-            .filter(Boolean);
-          if (choices.length > 0) {
-            resolve(choices.map((id, i) => ({
-              id,
-              name: id.replace(/-/g, " ").replace(/\b\w/g, c => c.toUpperCase()),
-              isDefault: i === 0,
-            })));
-            return;
-          }
+        const models = parseCopilotModelsFromHelp(output);
+        if (models.length > 0) {
+          resolve(models);
+          return;
         }
         resolve([]);
       });
@@ -581,4 +574,44 @@ function killChildTree(child: ChildProcess, signal: "SIGINT" | "SIGTERM" | "SIGK
     } catch { /* fall through */ }
   }
   child.kill(signal);
+}
+
+function appendStderr(existing: string, chunk: string): string {
+  const next = existing ? `${existing}\n${chunk}` : chunk;
+  return next.length > 4000 ? next.slice(-4000) : next;
+}
+
+export function buildCopilotExitError(code: number | null, signal: NodeJS.Signals | null, stderr: string): string {
+  const base = `Copilot CLI exited with code ${code}${signal ? ` (signal=${signal})` : ""}`;
+  const detail = stderr.trim();
+  return detail ? `${base}: ${detail}` : base;
+}
+
+export function parseCopilotModelsFromHelp(output: string): ProviderModelInfo[] {
+  const lines = output.split(/\r?\n/);
+  const modelLineIndex = lines.findIndex((line) => line.includes("--model "));
+  if (modelLineIndex === -1) return [];
+
+  const choiceLines: string[] = [];
+  for (let i = modelLineIndex; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (i > modelLineIndex && /^\s{2,}--[a-z0-9-]/i.test(line)) break;
+    choiceLines.push(line);
+    if (line.includes(")")) break;
+  }
+
+  const block = choiceLines.join(" ");
+  const match = block.match(/\(choices:\s*([^)]+)\)/);
+  if (!match?.[1]) return [];
+
+  const choices = match[1]
+    .split(",")
+    .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+    .filter(Boolean);
+
+  return choices.map((id, i) => ({
+    id,
+    name: id.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()),
+    isDefault: i === 0,
+  }));
 }

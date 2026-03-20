@@ -13,6 +13,7 @@ import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
 import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
+import { ReviewableEditor } from './reviewable-editor'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -271,6 +272,15 @@ async function remoteWriteFile(filePath: string, content: string, surfaceId?: st
     const data = await res.json().catch(() => ({})) as { message?: string }
     throw new Error(data.message || `Failed to write file: ${res.statusText}`)
   }
+}
+
+async function remoteReadBackup(filePath: string, surfaceId?: string | null): Promise<string | null> {
+  let url = `${API_URL}/api/workspace/backup?path=${encodeURIComponent(filePath)}`
+  if (surfaceId) url += `&surfaceId=${encodeURIComponent(surfaceId)}`
+  const res = await fetch(url)
+  if (!res.ok) return null
+  const data = await res.json() as { originalContent: string | null }
+  return data.originalContent
 }
 
 /** Lightweight stat call — returns mtime ISO string (or null on error). */
@@ -1014,6 +1024,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     prevChangedPathsRef.current = new Set(changedPaths)
     if (newPaths.length === 0) return
     bumpTree()
+    for (const path of newPaths) {
+      const openTab = openTabs.find((tab) => tab.type === 'file' && normalizePath(tab.path) === normalizePath(path))
+      if (openTab) void loadTabReviewBaseline(openTab.id, openTab.path)
+    }
     if (remoteRoot) void fetchGitStatus()
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [changedPaths])
@@ -1174,10 +1188,24 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const setTabLoadedContent = useCallback((tabId: string, content: string) => {
     setOpenTabs((prev) => prev.map((tab) => (
       tab.id === tabId
-        ? { ...tab, content, savedContent: content, isDirty: false, isSaving: false, saveError: null }
+        ? { ...tab, content, modifiedContent: content, savedContent: content, isDirty: false, isSaving: false, saveError: null }
         : tab
     )))
   }, [])
+
+  const setTabOriginalContent = useCallback((tabId: string, originalContent: string | null) => {
+    setOpenTabs((prev) => prev.map((tab) => (
+      tab.id === tabId
+        ? { ...tab, originalContent, modifiedContent: tab.content ?? tab.modifiedContent ?? null }
+        : tab
+    )))
+  }, [])
+
+  const loadTabReviewBaseline = useCallback(async (tabId: string, filePath: string) => {
+    if (!surfaceId) return
+    const backup = await remoteReadBackup(filePath, surfaceId).catch(() => null)
+    setTabOriginalContent(tabId, backup)
+  }, [setTabOriginalContent, surfaceId])
 
   const handleTabContentChange = useCallback((tabId: string, nextContent: string | undefined) => {
     setOpenTabs((prev) => prev.map((tab) => {
@@ -1187,6 +1215,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       return {
         ...tab,
         content,
+        modifiedContent: content,
         isDirty: content !== savedContent,
         saveError: null,
       }
@@ -1478,13 +1507,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       const content = fileNode.handle ? await readFileHandle(fileNode.handle) : await remoteReadFile(fileNode.path, surfaceId)
       setPreviewContent(content)
       setTabLoadedContent(tabId, content)
+      void loadTabReviewBaseline(tabId, fileNode.path)
     } catch {
       setPreviewContent('// Failed to read file')
       setTabLoadedContent(tabId, '// Failed to read file')
     }
     setLoadingFile(false)
     return true
-  }, [bumpTree, lazyTree, onActiveFileChange, remoteRoot, setTabLoadedContent, surfaceId])
+  }, [bumpTree, lazyTree, loadTabReviewBaseline, onActiveFileChange, remoteRoot, setTabLoadedContent, surfaceId])
 
   /* ---- Toggle directory ---- */
   const handleToggleDir = useCallback(async (node: LazyDir) => {
@@ -1535,12 +1565,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       setPreviewContent(content)
       // Update tab content
       setTabLoadedContent(tabId, content)
+      void loadTabReviewBaseline(tabId, node.path)
     } catch {
       setPreviewContent('// Failed to read file')
       setTabLoadedContent(tabId, '// Failed to read file')
     }
     setLoadingFile(false)
-  }, [onActiveFileChange, setTabLoadedContent, surfaceId])
+  }, [loadTabReviewBaseline, onActiveFileChange, setTabLoadedContent, surfaceId])
 
   /* ---- Context / reference ---- */
   const handleContextNativeFile = useCallback(async (node: LazyFile) => {
@@ -2216,6 +2247,24 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } catch { /* ignore */ }
   }, [remoteRoot, gitActionBusy, fetchGitStatus])
 
+  /* ---- Stage all files ---- */
+  const handleStageAll = useCallback(async () => {
+    if (!remoteRoot || gitActionBusy || (gitStatus?.workingTree.files.length ?? 0) === 0) return
+    try {
+      await gitApi.stage(remoteRoot)
+      await fetchGitStatus()
+    } catch { /* ignore */ }
+  }, [remoteRoot, gitActionBusy, gitStatus, fetchGitStatus])
+
+  /* ---- Unstage all files ---- */
+  const handleUnstageAll = useCallback(async () => {
+    if (!remoteRoot || gitActionBusy || (gitStatus?.index.files.length ?? 0) === 0) return
+    try {
+      await gitApi.unstage(remoteRoot)
+      await fetchGitStatus()
+    } catch { /* ignore */ }
+  }, [remoteRoot, gitActionBusy, gitStatus, fetchGitStatus])
+
   /* ---- Select external file ---- */
   const handleSelectExtFile = useCallback((id: string) => {
     const extFile = files.find(f => f.id === id)
@@ -2374,14 +2423,63 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     return (
       <div className="mt-1">
-        <div className="px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
-          {title} ({files.length})
-          <span className="ml-1 normal-case tracking-normal">
-            <span className="text-green-500">+{totals.insertions}</span>
-            {' '}
-            <span className="text-red-500">-{totals.deletions}</span>
-          </span>
+        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <div>
+            {title} ({files.length})
+            <span className="ml-1 normal-case tracking-normal">
+              <span className="text-green-500">+{totals.insertions}</span>
+              {' '}
+              <span className="text-red-500">-{totals.deletions}</span>
+            </span>
+          </div>
+          <div className="flex items-center gap-1">
+            {actions === 'stage' ? (
+              <Button
+                size="sm"
+                variant="secondary"
+                className="h-6 rounded-md px-1.5 text-[10px] normal-case tracking-normal"
+                onClick={() => void handleStageAll()}
+                disabled={gitActionBusy || files.length === 0}
+                title="Stage all changes"
+              >
+                <Plus className="h-3 w-3" />
+                Stage all
+              </Button>
+            ) : (
+              <>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-6 rounded-md px-1.5 text-[10px] normal-case tracking-normal"
+                  onClick={() => void handleUnstageAll()}
+                  disabled={gitActionBusy || files.length === 0}
+                  title="Unstage all files"
+                >
+                  <Minus className="h-3 w-3" />
+                  Unstage all
+                </Button>
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  className="h-6 rounded-md px-1.5 text-[10px] text-red-600 hover:text-red-700 dark:text-red-400 normal-case tracking-normal"
+                  onClick={() => setDiscardConfirm({ kind: 'all' })}
+                  disabled={gitActionBusy || changedFileCount === 0}
+                  title="Discard all changes"
+                >
+                  <Undo2 className="h-3 w-3" />
+                  Discard all
+                </Button>
+              </>
+            )}
+          </div>
         </div>
+        {actions === 'unstage' && discardConfirm?.kind === 'all' && changedFileCount > 0 && (
+          <div className="mx-2 mb-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+            <span className="flex-1 text-red-500">Discard all changes?</span>
+            <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
+            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+          </div>
+        )}
         <div className="mt-1 space-y-1">
           {files.map((f) => {
             const fileStatus = (f as { status?: string }).status ?? 'M'
@@ -2462,7 +2560,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         </div>
       </div>
     )
-  }, [handleDiscardFile, handleScOpenDiff, handleStageFile, handleUnstageFile, scDiffFile?.path])
+  }, [changedFileCount, discardConfirm?.kind, discardConfirm?.kind === 'file' ? discardConfirm.path : null, gitActionBusy, handleDiscardAll, handleDiscardFile, handleScOpenDiff, handleStageAll, handleStageFile, handleUnstageAll, handleUnstageFile, scDiffFile?.path])
 
   // Switch to editor tab when a file is selected on mobile
   const handleSelectNativeFileMobile = useCallback(async (node: LazyFile) => {
@@ -2717,6 +2815,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               >
                 <RefreshCw className={`h-3.5 w-3.5 ${gitStatusLoading ? 'animate-spin' : ''}`} />
               </button>
+              {gitStatus?.behindCount ? (
+                <button
+                  className="relative p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                  onClick={handleGitPull}
+                  disabled={gitActionBusy}
+                  title={`Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}`}
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground">
+                    {gitStatus.behindCount}
+                  </span>
+                </button>
+              ) : null}
             </div>
             {/* Commit message + actions (mobile) */}
             {remoteRoot && gitStatus && (
@@ -2769,28 +2880,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     Push ({gitStatus.aheadCount})
                   </button>
                 )}
-                {(gitStatus.behindCount > 0 || gitStatus.hasUpstream) && (
-                  <button
-                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handleGitPull}
-                    disabled={gitActionBusy}
-                    title={gitStatus.behindCount > 0 ? `Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}` : 'Pull latest changes'}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                    Pull{gitStatus.behindCount > 0 ? ` (${gitStatus.behindCount})` : ''}
-                  </button>
-                )}
-                {changedFileCount > 0 && (
-                  <button
-                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-muted hover:bg-muted/80 text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={handleDiscardAll}
-                    disabled={gitActionBusy}
-                    title="Discard all changes"
-                  >
-                    <Undo2 className="h-3.5 w-3.5" />
-                    Discard All
-                  </button>
-                )}
               </div>
               {gitActionError && (
                 <div className="text-xs text-red-500">{gitActionError}</div>
@@ -2819,7 +2908,31 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   </div>
                   {stagedFileCount > 0 && (
                     <div className="mt-1">
-                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">Staged ({stagedFileCount})</div>
+                      <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <span>Staged ({stagedFileCount})</span>
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] normal-case tracking-normal bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={() => void handleUnstageAll()}
+                            disabled={gitActionBusy}
+                            title="Unstage all files"
+                          >
+                            <Minus className="h-3 w-3" />
+                            Unstage all
+                          </button>
+                          <button
+                            type="button"
+                            className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] normal-case tracking-normal bg-muted hover:bg-muted/80 text-red-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                            onClick={handleDiscardAll}
+                            disabled={gitActionBusy}
+                            title="Discard all changes"
+                          >
+                            <Undo2 className="h-3 w-3" />
+                            Discard all
+                          </button>
+                        </div>
+                      </div>
                       {stagedFiles.map((f) => {
                         const fileStatus = (f as { status?: string }).status ?? 'M'
                         const fileName = f.path.split('/').pop() ?? f.path
@@ -2845,7 +2958,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   )}
                   {unstagedFileCount > 0 && (
                     <div className="mt-1">
-                      <div className="px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">Changes ({unstagedFileCount})</div>
+                      <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] uppercase tracking-wider text-muted-foreground">
+                        <span>Changes ({unstagedFileCount})</span>
+                        <button
+                          type="button"
+                          className="flex items-center gap-1 rounded px-1.5 py-0.5 text-[10px] normal-case tracking-normal bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
+                          onClick={() => void handleStageAll()}
+                          disabled={gitActionBusy}
+                          title="Stage all changes"
+                        >
+                          <Plus className="h-3 w-3" />
+                          Stage all
+                        </button>
+                      </div>
                       {workingTreeFiles.map((f) => {
                         const fileStatus = (f as { status?: string }).status ?? 'M'
                         const fileName = f.path.split('/').pop() ?? f.path
@@ -3271,6 +3396,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             >
               <RefreshCw className={`h-3 w-3 ${gitStatusLoading ? 'animate-spin' : ''}`} />
             </button>
+            {gitStatus?.behindCount ? (
+              <button
+                className="relative ui-inline-action p-1"
+                onClick={handleGitPull}
+                disabled={gitActionBusy}
+                title={`Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}`}
+              >
+                <Download className="h-3 w-3" />
+                <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground">
+                  {gitStatus.behindCount}
+                </span>
+              </button>
+            ) : null}
           </div>
 
           {/* Commit message + actions */}
@@ -3336,40 +3474,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   <CloudUpload className="h-3 w-3" />
                   Push ({gitStatus.aheadCount})
                 </Button>
-              )}
-              {(gitStatus.behindCount > 0 || gitStatus.hasUpstream) && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 rounded-md px-2 text-xs"
-                  onClick={handleGitPull}
-                  disabled={gitActionBusy}
-                  title={gitStatus.behindCount > 0 ? `Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}` : 'Pull latest changes'}
-                >
-                  <Download className="h-3 w-3" />
-                  Pull{gitStatus.behindCount > 0 ? ` (${gitStatus.behindCount})` : ''}
-                </Button>
-              )}
-              {changedFileCount > 0 && (
-                discardConfirm?.kind === 'all' ? (
-                  <div className="flex items-center gap-1 rounded-lg border border-red-500/30 bg-red-500/5 px-2 py-1 text-xs">
-                    <span className="text-red-500">Discard all changes?</span>
-                    <Button size="sm" variant="destructive" className="h-7 rounded-md px-2 text-xs" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
-                    <Button size="sm" variant="ghost" className="h-7 rounded-md px-2 text-xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
-                  </div>
-                ) : (
-                  <Button
-                    variant="secondary"
-                    size="sm"
-                    className="h-8 rounded-md px-2 text-xs text-red-600 hover:text-red-700 dark:text-red-400"
-                    onClick={() => setDiscardConfirm({ kind: 'all' })}
-                    disabled={gitActionBusy}
-                    title="Discard all changes"
-                  >
-                    <Undo2 className="h-3 w-3" />
-                    Discard All
-                  </Button>
-                )
               )}
             </div>
             {gitActionError && (
@@ -3615,19 +3719,22 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             Loading...
           </div>
         ) : activeTab?.type === 'file' ? (
-          <Editor
+          <ReviewableEditor
             key={activeTab.id}
-            height="100%"
-            theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
             path={activeTab.path}
             language={activeTab.language ?? 'plaintext'}
             value={activeTab.content ?? ''}
+            originalContent={activeTab.originalContent}
+            theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
+            readOnly={!isEditableWorkspaceTab(activeTab)}
             onChange={(value) => handleTabContentChange(activeTab.id, value)}
-            options={{
-              readOnly: !isEditableWorkspaceTab(activeTab),
-              minimap: { enabled: false },
-              fontSize: 13,
-              automaticLayout: true,
+            onApplyReview={async (resultContent) => {
+              await onApplyDiff?.(activeTab.path, resultContent)
+              setOpenTabs((prev) => prev.map((tab) => (
+                tab.id === activeTab.id
+                  ? { ...tab, content: resultContent, modifiedContent: resultContent, savedContent: resultContent, originalContent: null, isDirty: false }
+                  : tab
+              )))
             }}
           />
         ) : editorFile ? (

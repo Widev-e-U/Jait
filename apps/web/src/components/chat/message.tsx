@@ -10,28 +10,15 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
+import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
-
-/** Parse "Referenced files:" block from message content and return clean text + file paths. */
-function parseReferencedFiles(content: string): { text: string; files: { path: string; name: string }[] } {
-  const marker = '\nReferenced files:\n'
-  const idx = content.indexOf(marker)
-  if (idx === -1) return { text: content, files: [] }
-
-  const text = content.slice(0, idx).trimEnd()
-  const refBlock = content.slice(idx + marker.length)
-  const files: { path: string; name: string }[] = []
-  // Each file starts with "- path/to/file"
-  for (const line of refBlock.split('\n')) {
-    const m = line.match(/^- (.+)$/)
-    if (m) {
-      const path = m[1].trim()
-      files.push({ path, name: path.split('/').pop() ?? path })
-    }
-  }
-  return { text, files }
-}
+import {
+  buildFallbackUserMessageSegments,
+  parseLegacyReferencedFilesBlock,
+  userMessageTextFromSegments,
+  type UserMessageSegment,
+} from '@/lib/user-message-segments'
 
 interface MessageProps {
   messageId?: string
@@ -43,6 +30,8 @@ interface MessageProps {
   displayContent?: string
   /** Files the user referenced via @ chips — rendered as inline badges. */
   referencedFiles?: { path: string; name: string }[]
+  /** Ordered text/file segments for consistent rendering and editing. */
+  displaySegments?: UserMessageSegment[]
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
@@ -57,6 +46,10 @@ interface MessageProps {
     newContent: string,
     messageIndex?: number,
     messageFromEnd?: number,
+    metadata?: {
+      referencedFiles?: { path: string; name: string }[]
+      displaySegments?: UserMessageSegment[]
+    },
   ) => Promise<void> | void
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
   onOpenDiff?: (filePath: string) => void
@@ -258,6 +251,7 @@ function MessageInner({
   content,
   displayContent: displayContentProp,
   referencedFiles: referencedFilesProp,
+  displaySegments: displaySegmentsProp,
   thinking,
   thinkingDuration,
   toolCalls,
@@ -275,23 +269,35 @@ function MessageInner({
   // Resolve display text & referenced files:
   // - If props carry them, use directly (new messages)
   // - Otherwise parse from content (historical messages)
-  const { userDisplayText, userFiles } = useMemo(() => {
-    if (!isUser) return { userDisplayText: content, userFiles: [] as { path: string; name: string }[] }
-    if (displayContentProp) {
-      return { userDisplayText: displayContentProp, userFiles: referencedFilesProp ?? [] }
+  const { userDisplayText, userDisplaySegments } = useMemo(() => {
+    if (!isUser) return {
+      userDisplayText: content,
+        userDisplaySegments: [] as UserMessageSegment[],
+      }
+    if (displaySegmentsProp?.length) {
+      return {
+        userDisplayText: userMessageTextFromSegments(displaySegmentsProp),
+        userDisplaySegments: displaySegmentsProp,
+      }
     }
-    const parsed = parseReferencedFiles(content)
-    return { userDisplayText: parsed.text, userFiles: parsed.files }
-  }, [isUser, content, displayContentProp, referencedFilesProp])
+    if (displayContentProp) {
+      const fallbackSegments = buildFallbackUserMessageSegments(displayContentProp, referencedFilesProp)
+      return { userDisplayText: displayContentProp, userDisplaySegments: fallbackSegments }
+    }
+    const parsed = parseLegacyReferencedFilesBlock(content)
+    return { userDisplayText: parsed.text, userDisplaySegments: parsed.displaySegments }
+  }, [isUser, content, displayContentProp, referencedFilesProp, displaySegmentsProp])
 
   const [copied, setCopied] = useState(false)
   const [isEditing, setIsEditing] = useState(false)
   const [draft, setDraft] = useState(userDisplayText)
+  const [draftSegments, setDraftSegments] = useState<UserMessageSegment[]>(userDisplaySegments)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
   const [editWidthPx, setEditWidthPx] = useState<number | null>(null)
   const copyTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
+  const editPromptRef = useRef<PromptInputHandle | null>(null)
 
   useEffect(() => {
     return () => {
@@ -300,8 +306,11 @@ function MessageInner({
   }, [])
 
   useEffect(() => {
-    if (!isEditing) setDraft(userDisplayText)
-  }, [userDisplayText, isEditing])
+    if (!isEditing) {
+      setDraft(userDisplayText)
+      setDraftSegments(userDisplaySegments)
+    }
+  }, [userDisplayText, userDisplaySegments, isEditing])
 
   /** Build copyable text including tool calls when present */
   const buildCopyText = (): string => {
@@ -369,7 +378,8 @@ function MessageInner({
     } else {
       setEditWidthPx(null)
     }
-    setDraft(content)
+    setDraft(userDisplayText)
+    setDraftSegments(userDisplaySegments)
     setIsEditing(true)
   }
 
@@ -380,17 +390,23 @@ function MessageInner({
     startEditing()
   }
 
-  const sendFromMessage = async (nextContent: string) => {
+  const sendFromMessage = async (nextContent: string, nextSegments?: UserMessageSegment[]) => {
     if (!canEdit || !messageId || !onEditMessage) return
     const next = nextContent.trim()
     if (!next) return
-    await onEditMessage(messageId, next, messageIndex, messageFromEnd)
+    await onEditMessage(messageId, next, messageIndex, messageFromEnd, {
+      referencedFiles: (nextSegments ?? draftSegments)
+        .filter((segment): segment is Extract<UserMessageSegment, { type: 'file' }> => segment.type === 'file')
+        .map((segment) => ({ path: segment.path, name: segment.name })),
+      displaySegments: nextSegments ?? draftSegments,
+    })
   }
 
   const handleSaveEdit = async () => {
     setIsSavingEdit(true)
     try {
-      await sendFromMessage(draft)
+      const nextSegments = editPromptRef.current?.getSegments() ?? draftSegments
+      await sendFromMessage(userMessageTextFromSegments(nextSegments), nextSegments)
       setIsEditing(false)
     } finally {
       setIsSavingEdit(false)
@@ -401,7 +417,7 @@ function MessageInner({
     if (!canRetry) return
     setIsRetrying(true)
     try {
-      await sendFromMessage(content)
+      await sendFromMessage(userDisplayText, userDisplaySegments)
     } finally {
       setIsRetrying(false)
     }
@@ -521,18 +537,32 @@ function MessageInner({
               className={cn('max-w-full rounded-lg border bg-muted/40 p-3', USER_MESSAGE_MIN_WIDTH_CLASS)}
               style={editWidthPx ? { width: `${editWidthPx}px` } : undefined}
             >
-              <textarea
+              <PromptInput
+                ref={editPromptRef}
                 value={draft}
-                onChange={(e) => setDraft(e.target.value)}
-                rows={Math.max(3, Math.min(10, draft.split('\n').length + 1))}
-                className="w-full resize-y rounded-md border bg-background p-2 text-sm leading-relaxed focus:outline-none focus:ring-1 focus:ring-ring"
+                segments={draftSegments}
+                onChange={setDraft}
+                onSubmit={async (_chipFiles, _attachments, nextSegments) => {
+                  const normalizedSegments = nextSegments ?? []
+                  setDraftSegments(normalizedSegments)
+                  setIsSavingEdit(true)
+                  try {
+                    await sendFromMessage(userMessageTextFromSegments(normalizedSegments), normalizedSegments)
+                    setIsEditing(false)
+                  } finally {
+                    setIsSavingEdit(false)
+                  }
+                }}
+                placeholder=""
+                availableFiles={[]}
+                className="rounded-xl border-border/60 shadow-none"
               />
               <div className="mt-2 flex items-center justify-end gap-2">
                 <Button
                   type="button"
                   size="sm"
                   variant="ghost"
-                  onClick={() => { setIsEditing(false); setDraft(content); setEditWidthPx(null) }}
+                  onClick={() => { setIsEditing(false); setDraft(userDisplayText); setDraftSegments(userDisplaySegments); setEditWidthPx(null) }}
                   disabled={isSavingEdit}
                 >
                   Cancel
@@ -559,21 +589,22 @@ function MessageInner({
                 onClick={handleUserBubbleClick}
                 title={canEdit ? 'Click to edit message' : undefined}
               >
-                <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">{userDisplayText}</div>
-                {userFiles.length > 0 && (
-                  <div className="mt-2 flex flex-wrap gap-1 border-t border-foreground/5 pt-2">
-                    {userFiles.map((f) => (
+                <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                  {userDisplaySegments.length > 0 ? userDisplaySegments.map((segment, index) => (
+                    segment.type === 'text' ? (
+                      <span key={`text-${index}`}>{segment.text}</span>
+                    ) : (
                       <span
-                        key={f.path}
-                        className="inline-flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-[12px] leading-tight text-muted-foreground select-none"
-                        title={f.path}
+                        key={`${segment.path}-${index}`}
+                        className="mx-[2px] inline-flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-[12px] leading-tight text-muted-foreground align-baseline select-none"
+                        title={segment.path}
                       >
-                        <FileIcon filename={f.name} className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate max-w-[180px]">{f.name}</span>
+                        <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate max-w-[180px]">{segment.name}</span>
                       </span>
-                    ))}
-                  </div>
-                )}
+                    )
+                  )) : userDisplayText}
+                </div>
               </div>
               {renderActions()}
             </div>

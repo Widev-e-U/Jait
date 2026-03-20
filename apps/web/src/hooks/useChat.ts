@@ -6,6 +6,13 @@ import type { QueuedMessage } from '@/components/chat/message-queue'
 import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getToolFilePath } from '@/lib/tool-call-body'
+import {
+  parseLegacyReferencedFilesBlock,
+  parseUserMessageSegments,
+  userMessageTextFromSegments,
+  userReferencedFilesFromSegments,
+  type UserMessageSegment,
+} from '@/lib/user-message-segments'
 
 const API_URL = getApiUrl()
 const STREAM_SNAPSHOT_LIMIT = 120
@@ -31,6 +38,8 @@ export interface ChatMessage {
   displayContent?: string
   /** File references attached by the user (shown as chips in the bubble) */
   referencedFiles?: { path: string; name: string }[]
+  /** Ordered display model for inline user text + file chips. */
+  displaySegments?: UserMessageSegment[]
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
@@ -111,6 +120,8 @@ interface SendMessageOptions {
   displayContent?: string
   /** File references to attach as metadata on the user message */
   referencedFiles?: { path: string; name: string }[]
+  /** Ordered text/file segments for UI rendering. */
+  displaySegments?: UserMessageSegment[]
   /** File attachments (images, documents) as base64 data */
   attachments?: ChatAttachment[]
   /** True when the message originates from the local queue and should roll back on send failure. */
@@ -122,6 +133,7 @@ interface QueuedChatMessage extends QueuedMessage {
   model?: string | null
   mode?: ChatMode
   referencedFiles?: { path: string; name: string }[]
+  displaySegments?: UserMessageSegment[]
   attachments?: ChatAttachment[]
 }
 
@@ -280,7 +292,7 @@ export function useChat(
                   id: string;
                   role: 'user' | 'assistant';
                   content: string;
-                  segments?: MessageSegment[];
+                  segments?: unknown[];
                   toolCalls?: Array<{
                     callId: string;
                     tool: string;
@@ -298,8 +310,19 @@ export function useChat(
                 const snapshotStreaming = data.streaming as boolean
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
                   const msg: ChatMessage = { id: m.id, role: m.role, content: m.content }
-                  if (m.segments && m.segments.length > 0) {
-                    msg.segments = m.segments
+                  if (m.role === 'user' && m.segments && m.segments.length > 0) {
+                    msg.displaySegments = parseUserMessageSegments(m.segments)
+                    msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
+                    msg.referencedFiles = userReferencedFilesFromSegments(msg.displaySegments)
+                  } else if (m.role === 'user') {
+                    const parsed = parseLegacyReferencedFilesBlock(m.content)
+                    if (parsed.files.length > 0) {
+                      msg.displayContent = parsed.text
+                      msg.referencedFiles = parsed.files
+                      msg.displaySegments = parsed.displaySegments
+                    }
+                  } else if (m.segments && m.segments.length > 0) {
+                    msg.segments = m.segments as MessageSegment[]
                   }
                   if (m.toolCalls && m.toolCalls.length > 0) {
                     msg.toolCalls = m.toolCalls.map(tc => {
@@ -584,6 +607,7 @@ export function useChat(
       content,
       ...(options.displayContent ? { displayContent: options.displayContent } : {}),
       ...(options.referencedFiles?.length ? { referencedFiles: options.referencedFiles } : {}),
+      ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
     }
 
     setState(prev => ({
@@ -612,7 +636,15 @@ export function useChat(
       const headers: Record<string, string> = { 'Content-Type': 'application/json' }
       if (effectiveToken) headers['Authorization'] = `Bearer ${effectiveToken}`
 
-      const requestBody = { content, sessionId: requestSessionId, ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}), ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}), ...(options.model ? { model: options.model } : {}), ...(options.attachments?.length ? { attachments: options.attachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}) }
+      const requestBody = {
+        content,
+        sessionId: requestSessionId,
+        ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}),
+        ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}),
+        ...(options.model ? { model: options.model } : {}),
+        ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
+        ...(options.attachments?.length ? { attachments: options.attachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}),
+      }
       pushSSEDebugEvent('request', JSON.stringify(requestBody))
 
       const response = await fetch(`${API_URL}/api/chat`, {
@@ -963,6 +995,7 @@ export function useChat(
         content: trimmed,
         displayContent: trimmed,
         referencedFiles: undefined,
+        displaySegments: undefined,
       }
       : q))
   }, [])
@@ -978,7 +1011,6 @@ export function useChat(
   // Process the next queued message when the model finishes
   const processQueue = useCallback(async (options: SendMessageOptions = {}) => {
     if (processingQueueRef.current || state.isLoading || state.isLoadingHistory || messageQueue.length === 0) return
-    if (typeof document !== 'undefined' && document.hidden) return
 
     const next = messageQueue[0]
     if (!next) return
@@ -998,6 +1030,7 @@ export function useChat(
         ...(next.model !== undefined ? { model: next.model } : {}),
         ...(next.displayContent ? { displayContent: next.displayContent } : {}),
         ...(next.referencedFiles?.length ? { referencedFiles: next.referencedFiles } : {}),
+        ...(next.displaySegments?.length ? { displaySegments: next.displaySegments } : {}),
         ...(next.attachments?.length ? { attachments: next.attachments } : {}),
       })
       if (result === 'retry') {
@@ -1008,11 +1041,11 @@ export function useChat(
     }
   }, [messageQueue, sendMessage, state.isLoading, state.isLoadingHistory])
 
-  // Auto-process queue when idle and the page is visible
+  // Auto-process queue when idle, even if the tab is backgrounded.
   useEffect(() => {
-    if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current && !document.hidden) {
+    if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
       const sid = prevSessionIdRef.current
-      processQueue({
+      void processQueue({
         token: authToken,
         sessionId: sid,
         onLoginRequired,
@@ -1068,7 +1101,6 @@ export function useChat(
     }
 
     const handleResume = () => {
-      if (typeof document !== 'undefined' && document.hidden) return
       resumeActiveStreamIfNeeded()
       resumeQueueIfNeeded()
     }
@@ -1317,6 +1349,10 @@ export function useChat(
         sessionId: requestSessionId,
         mode: options.mode,
         provider: options.provider,
+        model: options.model,
+        displayContent: editedContent.trim(),
+        referencedFiles: options.referencedFiles,
+        displaySegments: options.displaySegments,
         onLoginRequired: notifyLoginRequired,
       })
     } catch (error) {

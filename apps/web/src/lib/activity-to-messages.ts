@@ -14,6 +14,7 @@
 
 import type { ThreadActivity } from '@/lib/agents-api'
 import type { ChatMessage, MessageSegment } from '@/hooks/useChat'
+import { parseUserMessageSegments, userMessageTextFromSegments } from '@/lib/user-message-segments'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import { normalizeToolArgs } from '@/lib/tool-call-body'
 
@@ -165,13 +166,16 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
             return path && name ? [{ path, name }] : []
           })
           : undefined
+        const displaySegments = parseUserMessageSegments(payload.displaySegments)
         if (role === 'user') {
           flush()
           messages.push({
             id: act.id,
             role: 'user',
             content: fullContent,
+            displayContent: displaySegments.length > 0 ? userMessageTextFromSegments(displaySegments) : fullContent,
             referencedFiles,
+            displaySegments: displaySegments.length > 0 ? displaySegments : undefined,
           })
         } else {
           // assistant text — fold into current assistant message

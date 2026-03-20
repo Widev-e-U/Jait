@@ -5,6 +5,7 @@
 import type { GitStepResult } from './git-api'
 import { getAuthToken } from './auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
+import type { UserMessageSegment } from '@/lib/user-message-segments'
 
 const API_URL = getApiUrl()
 
@@ -98,6 +99,7 @@ export interface ThreadMessageMetadata {
   attachments?: string[]
   displayContent?: string
   referencedFiles?: ThreadReferencedFile[]
+  displaySegments?: UserMessageSegment[]
 }
 
 export interface StartThreadOptions {
@@ -109,6 +111,7 @@ export interface StartThreadOptions {
   attachments?: string[]
   displayContent?: string
   referencedFiles?: ThreadReferencedFile[]
+  displaySegments?: UserMessageSegment[]
 }
 
 export interface CreateThreadPrRequest {

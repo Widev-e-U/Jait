@@ -14,6 +14,7 @@ import type { SessionInfo, ChatAttachment } from '@/hooks/useChat'
 import { FileIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
+import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 
 const ICON_CDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@12.9.0/icons/'
 
@@ -28,10 +29,10 @@ export interface ReferencedFile {
 interface PromptInputProps {
   value: string
   onChange: (value: string) => void
-  onSubmit: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[]) => void
+  onSubmit: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
   onStop?: () => void
   /** Queue a message while the agent is busy. */
-  onQueue?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[]) => void
+  onQueue?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
   isLoading?: boolean
   disabled?: boolean
   controlsDisabled?: boolean
@@ -66,6 +67,8 @@ interface PromptInputProps {
   workspaceNodeId?: string
   /** All files available for @ mention (pre-loaded from visible tree) */
   availableFiles?: ReferencedFile[]
+  /** Ordered text/file segments for restoring an existing draft. */
+  segments?: UserMessageSegment[]
   /** Lazy search across the entire workspace directory */
   onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
   /** Whether a workspace directory is currently open — @ mentions only work when true */
@@ -163,6 +166,64 @@ function getChipFiles(el: HTMLElement): ReferencedFile[] {
   return files
 }
 
+function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
+  const segments: UserMessageSegment[] = []
+
+  const visit = (node: Node) => {
+    if (node.nodeType === Node.TEXT_NODE) {
+      const text = node.textContent ?? ''
+      if (text) segments.push({ type: 'text', text })
+      return
+    }
+
+    if (!(node instanceof HTMLElement)) return
+
+    if (node.hasAttribute('data-file-path')) {
+      const path = node.getAttribute('data-file-path')
+      if (!path) return
+      segments.push({
+        type: 'file',
+        path,
+        name: node.getAttribute('data-file-name') || path.split('/').pop() || path,
+      })
+      return
+    }
+
+    if (node.tagName === 'BR') {
+      segments.push({ type: 'text', text: '\n' })
+      return
+    }
+
+    for (const child of node.childNodes) visit(child)
+  }
+
+  for (const child of el.childNodes) visit(child)
+  return normalizeUserMessageSegments(segments)
+}
+
+function buildEditableContent(
+  el: HTMLElement,
+  segments: UserMessageSegment[] | undefined,
+  fallbackValue: string,
+  onRemove: (path: string) => void,
+) {
+  el.innerHTML = ''
+
+  const normalized = normalizeUserMessageSegments(segments)
+  if (normalized.length === 0) {
+    if (fallbackValue) el.appendChild(document.createTextNode(fallbackValue))
+    return
+  }
+
+  for (const segment of normalized) {
+    if (segment.type === 'text') {
+      el.appendChild(document.createTextNode(segment.text))
+    } else {
+      el.appendChild(createChipNode(segment, onRemove))
+    }
+  }
+}
+
 /** Move cursor to the end of a contentEditable element. */
 function moveCursorToEnd(el: HTMLElement) {
   const sel = window.getSelection()
@@ -178,6 +239,8 @@ function moveCursorToEnd(el: HTMLElement) {
 export interface PromptInputHandle {
   /** Insert a file chip into the input (used by workspace Send button). */
   insertChip: (file: ReferencedFile) => void
+  /** Read the current ordered text/file segments from the composer. */
+  getSegments: () => UserMessageSegment[]
 }
 
 function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
@@ -244,6 +307,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   sessionInfo,
   workspaceNodeId,
   availableFiles = EMPTY_FILES,
+  segments,
   onSearchFiles,
   workspaceOpen = false,
 }: PromptInputProps, ref) {
@@ -318,7 +382,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       isSyncing.current = false
       setIsEmpty(false)
     },
-  }), [handleRemoveChip])
+    getSegments: () => {
+      const el = editableRef.current
+      return el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+    },
+  }), [handleRemoveChip, segments])
 
   // Debounced search when mention query changes
   useEffect(() => {
@@ -409,18 +477,21 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     if (!el || isSyncing.current) return
 
     const currentText = getTextFromEditable(el)
-    if (currentText !== value) {
+    const currentSegments = getComposerSegments(el)
+    const normalizedSegments = normalizeUserMessageSegments(segments)
+    const shouldSyncSegments = normalizedSegments.length > 0 || currentSegments.some((segment) => segment.type === 'file')
+    const segmentsChanged = shouldSyncSegments
+      && JSON.stringify(currentSegments) !== JSON.stringify(normalizedSegments)
+
+    if (currentText !== value || segmentsChanged) {
       // Value was changed externally (cleared on submit, suggestion, etc.)
       // Re-render: put text nodes + chip nodes
       isSyncing.current = true
-      el.innerHTML = ''
-      if (value) {
-        el.appendChild(document.createTextNode(value))
-      }
+      buildEditableContent(el, segments, value, handleRemoveChip)
       setIsEmpty(!value && !editableRef.current?.querySelector('[data-file-path]'))
       isSyncing.current = false
     }
-  }, [value])
+  }, [value, segments, handleRemoveChip])
 
   // Close menu on outside click
   useEffect(() => {
@@ -593,18 +664,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const el = editableRef.current
       const text = el ? getTextFromEditable(el).trim() : value.trim()
       const chips = el ? getChipFiles(el) : []
+      const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
       if (!(text || chips.length > 0 || attachments.length > 0)) return
       if (isLoading && onQueue) {
-        onQueue(chips, attachments)
+        onQueue(chips, attachments, nextSegments)
         setAttachments([])
         return
       }
       if (!isLoading) {
-        onSubmit(chips, attachments)
+        onSubmit(chips, attachments, nextSegments)
         setAttachments([])
       }
     }
-  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit])
+  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit, attachments, segments])
 
   const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
     return new Promise((resolve, reject) => {
@@ -928,7 +1000,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []
-                onQueue(chips, attachments)
+                const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                onQueue(chips, attachments, nextSegments)
                 setAttachments([])
               }}
             >
@@ -943,7 +1016,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []
-                onSubmit(chips, attachments)
+                const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+                onSubmit(chips, attachments, nextSegments)
                 setAttachments([])
               }}
             >

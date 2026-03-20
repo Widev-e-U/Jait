@@ -108,6 +108,11 @@ import {
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
 } from '@/lib/mobile-workspace-layout'
+import {
+  type UserMessageSegment,
+  userMessageTextFromSegments,
+  userReferencedFilesFromSegments,
+} from '@/lib/user-message-segments'
 
 const API_URL = getApiUrl()
 const VOICE_LEVEL_BAR_COUNT = 28
@@ -134,6 +139,7 @@ type CliProviderId = Exclude<ProviderId, 'jait'>
 type ManagerQueuedMessage = QueuedChatMessage & {
   fullContent: string
   referencedFiles?: ReferencedFile[]
+  displaySegments?: UserMessageSegment[]
   attachments?: string[]
   providerId: ProviderId
   model?: string | null
@@ -144,6 +150,7 @@ type SavedQueuedMessage = QueuedChatMessage & {
   provider?: string
   model?: string | null
   referencedFiles?: { path: string; name: string }[]
+  displaySegments?: UserMessageSegment[]
 }
 
 function reorderById<T extends { id: string }>(items: T[], sourceId: string, targetId: string): T[] {
@@ -2548,27 +2555,38 @@ function App() {
     return workspaceRef.current?.searchFiles(query, limit, signal) ?? []
   }, [])
 
-  const preparePromptSubmission = useCallback(async (rawValue: string, chipFiles?: ReferencedFile[]) => {
-    const text = rawValue.trim()
-    if (!text && (!chipFiles || chipFiles.length === 0)) return null
+  const preparePromptSubmission = useCallback(async (
+    rawValue: string,
+    chipFiles?: ReferencedFile[],
+    displaySegments?: UserMessageSegment[],
+  ) => {
+    const normalizedSegments = displaySegments?.length ? displaySegments : undefined
+    const text = (normalizedSegments ? userMessageTextFromSegments(normalizedSegments) : rawValue).trim()
+    const referencedFiles = normalizedSegments?.length
+      ? userReferencedFilesFromSegments(normalizedSegments)
+      : chipFiles?.length
+        ? chipFiles.map((file) => ({ path: file.path, name: file.name }))
+        : []
+
+    if (!text && referencedFiles.length === 0) return null
 
     const fileContents: { path: string; content: string }[] = []
     const attachments = new Set<string>()
 
-    if (chipFiles?.length) {
+    if (referencedFiles.length) {
       const seen = new Set<string>()
-      for (const chip of chipFiles) {
-        if (seen.has(chip.path)) continue
-        seen.add(chip.path)
-        attachments.add(chip.path)
+      for (const fileRef of referencedFiles) {
+        if (seen.has(fileRef.path)) continue
+        seen.add(fileRef.path)
+        attachments.add(fileRef.path)
 
-        const cached = workspaceFiles.find((file) => file.path === chip.path)
+        const cached = workspaceFiles.find((file) => file.path === fileRef.path)
         if (cached) {
           fileContents.push({ path: cached.path, content: cached.content })
           continue
         }
 
-        const file = await workspaceRef.current?.readFileByPath(chip.path)
+        const file = await workspaceRef.current?.readFileByPath(fileRef.path)
         if (file) {
           fileContents.push({ path: file.path, content: file.content })
         }
@@ -2584,13 +2602,18 @@ function App() {
     return {
       promptWithReferences,
       displayContent: text,
-      referencedFiles: chipFiles?.length ? chipFiles.map((file) => ({ path: file.path, name: file.name })) : undefined,
+      referencedFiles: referencedFiles.length > 0 ? referencedFiles : undefined,
+      displaySegments: normalizedSegments,
       attachments: attachments.size > 0 ? [...attachments] : undefined,
     }
   }, [workspaceFiles])
 
-  const handleQueue = useCallback(async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[]) => {
-    const prepared = await preparePromptSubmission(inputValue, chipFiles)
+  const handleQueue = useCallback(async (
+    chipFiles?: ReferencedFile[],
+    fileAttachments?: ChatAttachment[],
+    displaySegments?: UserMessageSegment[],
+  ) => {
+    const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared) return
     enqueueMessage({
       content: prepared.promptWithReferences,
@@ -2599,17 +2622,22 @@ function App() {
       provider: chatProvider,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       referencedFiles: prepared.referencedFiles,
+      displaySegments: prepared.displaySegments,
       attachments: fileAttachments,
     })
     setInputValue('')
   }, [chatMode, chatProvider, cliModel, enqueueMessage, inputValue, preparePromptSubmission])
 
 
-  const handleSubmit = async (chipFiles?: ReferencedFile[], fileAttachments?: ChatAttachment[]) => {
+  const handleSubmit = async (
+    chipFiles?: ReferencedFile[],
+    fileAttachments?: ChatAttachment[],
+    displaySegments?: UserMessageSegment[],
+  ) => {
     if (viewMode === 'manager') {
-      return handleManagerSubmit(chipFiles)
+      return handleManagerSubmit(chipFiles, displaySegments)
     }
-    const prepared = await preparePromptSubmission(inputValue, chipFiles)
+    const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
     if (!token) {
       setShowLoginDialog(true)
@@ -2633,6 +2661,7 @@ function App() {
         provider: chatProvider,
         model: chatProvider !== 'jait' ? cliModel : undefined,
         referencedFiles: prepared?.referencedFiles,
+        displaySegments: prepared?.displaySegments,
         attachments: fileAttachments,
       })
       setInputValue('')
@@ -2650,14 +2679,15 @@ function App() {
       ...(prepared?.referencedFiles ? {
         displayContent: prepared.displayContent || promptText,
         referencedFiles: prepared.referencedFiles,
+        displaySegments: prepared.displaySegments,
       } : {}),
     })
     setInputValue('')
   }
 
   /** Submit for Manager mode — delegate to the automation hook. */
-  const handleManagerSubmit = async (chipFiles?: ReferencedFile[]) => {
-    const prepared = await preparePromptSubmission(inputValue, chipFiles)
+  const handleManagerSubmit = async (chipFiles?: ReferencedFile[], displaySegments?: UserMessageSegment[]) => {
+    const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared || managerComposerDisabled) return
     setInputValue('')
     await automation.handleSend(
@@ -2667,6 +2697,7 @@ function App() {
       {
         displayContent: prepared.displayContent || prepared.promptWithReferences,
         referencedFiles: prepared.referencedFiles,
+        displaySegments: prepared.displaySegments,
         attachments: prepared.attachments,
       },
     )
@@ -2707,6 +2738,7 @@ function App() {
             displayContent: trimmed,
             fullContent: trimmed,
             referencedFiles: undefined,
+            displaySegments: undefined,
             attachments: undefined,
           }
           : item),
@@ -2724,10 +2756,14 @@ function App() {
     })
   }, [])
 
-  const handleManagerQueue = useCallback(async (chipFiles?: ReferencedFile[]) => {
+  const handleManagerQueue = useCallback(async (
+    chipFiles?: ReferencedFile[],
+    _attachments?: ChatAttachment[],
+    displaySegments?: UserMessageSegment[],
+  ) => {
     const thread = automation.selectedThread
     if (!thread) return
-    const prepared = await preparePromptSubmission(inputValue, chipFiles)
+    const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared) return
     enqueueManagerMessage(thread.id, {
       id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -2735,6 +2771,7 @@ function App() {
       displayContent: prepared.displayContent || prepared.promptWithReferences,
       fullContent: prepared.promptWithReferences,
       referencedFiles: prepared.referencedFiles,
+      displaySegments: prepared.displaySegments,
       attachments: prepared.attachments,
       providerId: chatProvider,
       model: chatProvider !== 'jait' ? cliModel : undefined,
@@ -2840,6 +2877,10 @@ function App() {
     newContent: string,
     messageIndex?: number,
     messageFromEnd?: number,
+    metadata?: {
+      referencedFiles?: { path: string; name: string }[]
+      displaySegments?: UserMessageSegment[]
+    },
   ) => {
     if (!activeSessionId || !token) return
     await restartFromMessage(messageId, newContent, messageIndex, messageFromEnd, {
@@ -2848,6 +2889,8 @@ function App() {
       mode: chatMode,
       provider: chatProvider,
       model: chatProvider !== 'jait' ? cliModel : undefined,
+      referencedFiles: metadata?.referencedFiles,
+      displaySegments: metadata?.displaySegments,
       onLoginRequired: () => setShowLoginDialog(true),
     })
   }, [activeSessionId, restartFromMessage, token, chatMode, chatProvider, cliModel])
@@ -3332,6 +3375,10 @@ function App() {
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0 || isLoadingHistory
   const requiresAuthGate = !authLoading && !isAuthenticated
+  const showMobileWorkspaceFullscreen =
+    isMobile &&
+    showMobileWorkspace &&
+    (showWorkspaceTree || showWorkspaceEditor)
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
   const activityEvents: ActivityEvent[] = [
@@ -3999,8 +4046,8 @@ function App() {
               </div>
             )}
 
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && (showWorkspaceTree || showWorkspaceEditor) && (
-              <section className={`shrink-0 border-b bg-background overflow-hidden ${hasMessages ? 'h-[50dvh] min-h-[220px]' : 'h-[55dvh] min-h-[260px]'}`}>
+            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
+              <section className="flex-1 min-h-0 border-b bg-background overflow-hidden">
                 <WorkspacePanel
                   ref={workspaceRef}
                   autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
@@ -4036,7 +4083,7 @@ function App() {
               </section>
             )}
 
-            {viewMode === 'manager' ? (
+            {!showMobileWorkspaceFullscreen && (viewMode === 'manager' ? (
               /* ── Manager main content ────────────────────────────── */
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
                 {automation.selectedThread ? (
@@ -4410,6 +4457,7 @@ function App() {
                       content={msg.content}
                       displayContent={msg.displayContent}
                       referencedFiles={msg.referencedFiles}
+                      displaySegments={msg.displaySegments}
                       thinking={msg.thinking}
                       thinkingDuration={msg.thinkingDuration}
                       toolCalls={msg.toolCalls}
