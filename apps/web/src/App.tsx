@@ -4978,6 +4978,8 @@ function App() {
             repoName={planRepo.name}
             defaultBranch={planRepo.defaultBranch}
             repoLocalPath={planRepo.localPath}
+            provider={chatProvider}
+            model={chatProvider === 'jait' ? null : cliModel}
             onStartThread={(task, plan, _repo) => {
               void (async () => {
                 const repo = planRepo!

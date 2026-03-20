@@ -202,6 +202,12 @@ export interface UpdatePlanRequest {
   tasks?: PlanTask[]
 }
 
+export interface GeneratePlanTasksRequest {
+  prompt?: string
+  provider?: ProviderId
+  model?: string | null
+}
+
 // ── API Client ───────────────────────────────────────────────────────
 
 export class AgentsApi {
@@ -507,11 +513,11 @@ export class AgentsApi {
     if (!res.ok) throw new Error(`Failed to delete plan: ${res.statusText}`)
   }
 
-  async generatePlanTasks(planId: string, prompt?: string): Promise<{ plan: AutomationPlan; generated: number }> {
+  async generatePlanTasks(planId: string, params?: GeneratePlanTasksRequest): Promise<{ plan: AutomationPlan; generated: number }> {
     const res = await fetch(`${API_URL}/api/plans/${planId}/generate`, {
       method: 'POST',
       headers: this.getHeaders(true),
-      body: JSON.stringify({ prompt }),
+      body: JSON.stringify(params ?? {}),
     })
     if (!res.ok) {
       const err = await res.json().catch(() => ({ error: res.statusText })) as { error?: string }

@@ -12,12 +12,15 @@
  */
 
 import type { FastifyInstance } from "fastify";
+import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import type { PlanService, PlanTask } from "../services/plans.js";
 import { newTaskId } from "../services/plans.js";
 import type { RepositoryService } from "../services/repositories.js";
 import type { ThreadService } from "../services/threads.js";
 import type { ProviderRegistry } from "../providers/registry.js";
+import type { CliProviderAdapter, ProviderEvent, ProviderId } from "../providers/contracts.js";
+import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
@@ -41,6 +44,82 @@ export function registerPlanRoutes(
   deps: PlanRouteDeps,
 ): void {
   const { planService, repoService, userService, ws } = deps;
+
+  function findRemoteNodeForCwd(cwd: string, providerId: ProviderId): string | null {
+    if (!ws) return null;
+    if (existsSync(cwd)) return null;
+    const isWindowsPath = /^[A-Za-z]:[\\/]/.test(cwd);
+    const expectedPlatform = isWindowsPath ? "windows" : null;
+    for (const node of ws.getFsNodes()) {
+      if (node.isGateway) continue;
+      if (expectedPlatform && node.platform !== expectedPlatform) continue;
+      if (!node.providers?.includes(providerId)) continue;
+      return node.id;
+    }
+    return null;
+  }
+
+  async function runPromptWithCliProvider(
+    provider: CliProviderAdapter,
+    cwd: string,
+    prompt: string,
+    model?: string,
+  ): Promise<string> {
+    const session = await provider.startSession({
+      threadId: `plan-generate-${randomUUID()}`,
+      workingDirectory: cwd,
+      mode: "full-access",
+      ...(model ? { model } : {}),
+    });
+
+    let tokenContent = "";
+    let messageContent = "";
+    let sessionError: string | null = null;
+    let turnCompleted = false;
+
+    let resolveTurn: (() => void) | null = null;
+    let rejectTurn: ((error: Error) => void) | null = null;
+
+    const waitForTurn = new Promise<void>((resolve, reject) => {
+      resolveTurn = resolve;
+      rejectTurn = reject;
+    });
+
+    const unsubscribe = provider.onEvent((event: ProviderEvent) => {
+      if (event.sessionId !== session.id) return;
+      if (event.type === "token") tokenContent += event.content;
+      if (event.type === "message" && event.role === "assistant") {
+        messageContent += event.content;
+      }
+      if (event.type === "session.error") {
+        sessionError = event.error;
+        rejectTurn?.(new Error(event.error));
+        return;
+      }
+      if (event.type === "turn.completed" || event.type === "session.completed") {
+        turnCompleted = true;
+        resolveTurn?.();
+      }
+    });
+
+    try {
+      await provider.sendTurn(session.id, prompt);
+      await Promise.race([
+        waitForTurn,
+        new Promise<void>((_, reject) => {
+          setTimeout(() => reject(new Error("Timed out waiting for CLI provider response")), 60_000);
+        }),
+      ]);
+      if (sessionError) throw new Error(sessionError);
+      if (!turnCompleted && !sessionError) {
+        throw new Error("CLI provider turn did not complete");
+      }
+      return (tokenContent || messageContent).trim();
+    } finally {
+      unsubscribe();
+      try { await provider.stopSession(session.id); } catch { /* best effort */ }
+    }
+  }
 
   function broadcastPlanEvent(event: string, data: unknown): void {
     if (!ws) return;
@@ -161,8 +240,10 @@ export function registerPlanRoutes(
     const repo = getOwnedRepo(plan.repoId, user.id);
     if (!assertOwnership(reply, repo, user.id, "Repository not found")) return;
 
-    const body = request.body as { prompt?: string } | undefined;
+    const body = request.body as { prompt?: string; provider?: ProviderId; model?: string | null } | undefined;
     const userPromptHint = (body?.prompt ?? "").trim();
+    const requestProvider = body?.provider ?? "jait";
+    const requestModel = body?.model?.trim() || undefined;
 
     // Gather repo context
     let repoContext = "";
@@ -195,57 +276,81 @@ export function registerPlanRoutes(
       repoContext ? `\n\nRepository files:\n${repoContext}` : "",
     ].join("\n");
 
-    // Resolve API keys
-    const apiKeys = userService?.getSettings(user.id).apiKeys ?? {};
-    const apiKey = apiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey;
-    const baseUrl = (apiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl).replace(/\/+$/, "");
-    const model = apiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
-
-    if (!apiKey && config.llmProvider === "openai") {
-      return reply.status(400).send({ error: "No API key configured." });
-    }
-
     try {
       let rawJson: string;
 
-      if (apiKey || config.llmProvider === "openai") {
-        const response = await fetch(`${baseUrl}/chat/completions`, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${apiKey}`,
-          },
-          body: JSON.stringify({
-            model,
-            temperature: 0.4,
-            max_tokens: 3000,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userContent },
-            ],
-          }),
-        });
-        if (!response.ok) throw new Error(`LLM API returned ${response.status}`);
-        const data = await response.json() as {
-          choices?: Array<{ message?: { content?: string } }>;
-        };
-        rawJson = data.choices?.[0]?.message?.content?.trim() ?? "[]";
+      if (requestProvider === "jait") {
+        const apiKeys = userService?.getSettings(user.id).apiKeys ?? {};
+        const apiKey = apiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey;
+        const baseUrl = (apiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl).replace(/\/+$/, "");
+        const model = requestModel || apiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
+
+        if (!apiKey && config.llmProvider === "openai") {
+          return reply.status(400).send({ error: "No API key configured." });
+        }
+
+        if (apiKey || config.llmProvider === "openai") {
+          const response = await fetch(`${baseUrl}/chat/completions`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${apiKey}`,
+            },
+            body: JSON.stringify({
+              model,
+              temperature: 0.4,
+              max_tokens: 3000,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userContent },
+              ],
+            }),
+          });
+          if (!response.ok) throw new Error(`LLM API returned ${response.status}`);
+          const data = await response.json() as {
+            choices?: Array<{ message?: { content?: string } }>;
+          };
+          rawJson = data.choices?.[0]?.message?.content?.trim() ?? "[]";
+        } else {
+          const response = await fetch(`${config.ollamaUrl.replace(/\/+$/, "")}/api/chat`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              model: requestModel || config.ollamaModel,
+              stream: false,
+              messages: [
+                { role: "system", content: systemPrompt },
+                { role: "user", content: userContent },
+              ],
+            }),
+          });
+          if (!response.ok) throw new Error(`Ollama API returned ${response.status}`);
+          const data = await response.json() as { message?: { content?: string } };
+          rawJson = data.message?.content?.trim() ?? "[]";
+        }
       } else {
-        const response = await fetch(`${config.ollamaUrl.replace(/\/+$/, "")}/api/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            model: config.ollamaModel,
-            stream: false,
-            messages: [
-              { role: "system", content: systemPrompt },
-              { role: "user", content: userContent },
-            ],
-          }),
-        });
-        if (!response.ok) throw new Error(`Ollama API returned ${response.status}`);
-        const data = await response.json() as { message?: { content?: string } };
-        rawJson = data.message?.content?.trim() ?? "[]";
+        if (!deps.providerRegistry) {
+          return reply.status(501).send({ error: "CLI provider-backed task generation is not configured" });
+        }
+
+        let cliProvider: CliProviderAdapter | null = null;
+        const remoteNodeId = findRemoteNodeForCwd(repo.localPath, requestProvider);
+        if (remoteNodeId && ws) {
+          cliProvider = new RemoteCliProvider(ws, remoteNodeId, requestProvider);
+        }
+        if (!cliProvider) {
+          cliProvider = deps.providerRegistry.get(requestProvider) ?? null;
+        }
+        if (!cliProvider) {
+          return reply.status(400).send({ error: `Unknown provider: ${requestProvider}` });
+        }
+        const available = await cliProvider.checkAvailability();
+        if (!available) {
+          return reply.status(400).send({ error: cliProvider.info.unavailableReason ?? `Provider ${requestProvider} is not available` });
+        }
+
+        const prompt = `${systemPrompt}\n\n${userContent}`.trim();
+        rawJson = await runPromptWithCliProvider(cliProvider, repo.localPath, prompt, requestModel);
       }
 
       // Strip markdown fences if the model wrapped the output
