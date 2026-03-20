@@ -184,4 +184,56 @@ describe("mcp-server", () => {
     expect(response.statusCode).toBe(202);
     expect(response.body).toBe("");
   });
+
+  it("passes session and workspace overrides into MCP tool context", async () => {
+    const registry = new ToolRegistry();
+    let capturedContext: { sessionId: string; workspaceRoot: string } | null = null;
+
+    registry.register({
+      name: "surfaces.list",
+      description: "List surfaces",
+      tier: "standard",
+      category: "surfaces",
+      source: "builtin",
+      parameters: { type: "object", properties: {} },
+      async execute(_input, context) {
+        capturedContext = {
+          sessionId: context.sessionId,
+          workspaceRoot: context.workspaceRoot,
+        };
+        return { ok: true, message: "ok" };
+      },
+    });
+
+    const response = await handleMcpRequest(
+      {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "surfaces.list",
+          arguments: {},
+        },
+      },
+      registry,
+      "2025-03-26",
+      {
+        sessionId: "web-session-123",
+        workspaceRoot: "/tmp/project",
+      },
+    );
+
+    expect(response).toEqual({
+      jsonrpc: "2.0",
+      id: 1,
+      result: {
+        content: [{ type: "text", text: "ok" }],
+        isError: false,
+      },
+    });
+    expect(capturedContext).toEqual({
+      sessionId: "web-session-123",
+      workspaceRoot: "/tmp/project",
+    });
+  });
 });

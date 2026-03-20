@@ -33,6 +33,11 @@ interface McpResponse {
   error?: { code: number; message: string; data?: unknown };
 }
 
+interface McpToolContextOverrides {
+  sessionId?: string;
+  workspaceRoot?: string;
+}
+
 const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
   "2024-11-05",
   "2025-03-26",
@@ -57,6 +62,27 @@ function applyMcpProtocolVersionHeader(
   version: string,
 ): void {
   reply.header("MCP-Protocol-Version", version);
+}
+
+function readOptionalString(value: unknown): string | undefined {
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function resolveMcpToolContextOverrides(
+  request: Pick<FastifyRequest, "headers"> | null,
+  params?: Record<string, unknown>,
+): McpToolContextOverrides {
+  const headers = request?.headers as Record<string, unknown> | undefined;
+  return {
+    sessionId:
+      readOptionalString(headers?.["x-jait-session-id"])
+      ?? readOptionalString(params?.["sessionId"]),
+    workspaceRoot:
+      readOptionalString(headers?.["x-jait-workspace-root"])
+      ?? readOptionalString(params?.["workspaceRoot"]),
+  };
 }
 
 // ── Connected client tracking ────────────────────────────────────────
@@ -150,7 +176,12 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
     const negotiatedVersion = requestedVersion ?? DEFAULT_MCP_PROTOCOL_VERSION;
     applyMcpProtocolVersionHeader(reply, negotiatedVersion);
 
-    const response = await handleMcpRequest(body, toolRegistry, negotiatedVersion);
+    const response = await handleMcpRequest(
+      body,
+      toolRegistry,
+      negotiatedVersion,
+      resolveMcpToolContextOverrides(request, body.params),
+    );
     if (body.id == null) {
       return reply.status(202).send();
     }
@@ -224,7 +255,12 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       return reply.status(400).send({ error: "Invalid JSON-RPC request" });
     }
 
-    const response = await handleMcpRequest(body, toolRegistry, DEFAULT_MCP_PROTOCOL_VERSION);
+    const response = await handleMcpRequest(
+      body,
+      toolRegistry,
+      DEFAULT_MCP_PROTOCOL_VERSION,
+      resolveMcpToolContextOverrides(request, body.params),
+    );
 
     // Also push the response via SSE to the connected client
     const client = clients.get(clientId);
@@ -244,6 +280,7 @@ export async function handleMcpRequest(
   request: McpRequest,
   toolRegistry: ToolRegistry,
   protocolVersion = DEFAULT_MCP_PROTOCOL_VERSION,
+  contextOverrides: McpToolContextOverrides = {},
 ): Promise<McpResponse> {
   switch (request.method) {
     case "initialize":
@@ -296,9 +333,9 @@ export async function handleMcpRequest(
       }
 
       const context: ToolContext = {
-        sessionId: "mcp-session",
+        sessionId: contextOverrides.sessionId ?? "mcp-session",
         actionId: uuidv7(),
-        workspaceRoot: process.cwd(),
+        workspaceRoot: contextOverrides.workspaceRoot ?? process.cwd(),
         requestedBy: "mcp-client",
       };
 
