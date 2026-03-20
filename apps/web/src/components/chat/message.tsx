@@ -4,6 +4,13 @@ import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Check, Copy, Pencil, RotateCcw, X } from 'lucide-react'
+import { AgentChatIndicator } from '@/components/agents-ui/agent-chat-indicator'
+import {
+  Message as AIMessage,
+  MessageAction,
+  MessageActions,
+  MessageContent as AIMessageContent,
+} from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
@@ -139,17 +146,23 @@ function buildMarkdownComponents(
     },
     a: ({ href, ref: _ref, ...props }) => {
       if (!onOpenPath) {
-        return <a href={href} {...props}>{props.children}</a>
+        return (
+          <a href={href} {...props}>
+            {props.children}
+          </a>
+        )
       }
 
       const target = parseWorkspaceLinkTarget(href)
       if (!target) {
-        return <a href={href} {...props}>{props.children}</a>
+        return (
+          <a href={href} {...props}>
+            {props.children}
+          </a>
+        )
       }
 
-      return (
-        <WorkspacePathLink href={href} target={target} onOpenPath={onOpenPath} />
-      )
+      return <WorkspacePathLink href={href} target={target} onOpenPath={onOpenPath} />
     },
     img: ({ src, alt, ref: _ref, ...props }) => {
       const resolvedSrc = typeof src === 'string' ? resolveChatImageUrl(src) : null
@@ -162,7 +175,12 @@ function buildMarkdownComponents(
       }
 
       return (
-        <a href={resolvedSrc} target="_blank" rel="noreferrer" className="not-prose block overflow-hidden rounded-xl border border-border/60 bg-muted/20 no-underline">
+        <a
+          href={resolvedSrc}
+          target="_blank"
+          rel="noreferrer"
+          className="not-prose block overflow-hidden rounded-xl border border-border/60 bg-muted/20 no-underline"
+        >
           <img
             src={resolvedSrc}
             alt={alt ?? 'Chat image'}
@@ -188,7 +206,9 @@ function StaticMarkdown({
   const components = useMemo(() => buildMarkdownComponents(onOpenPath), [onOpenPath])
   return (
     <div className={proseClassName(compact)}>
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{content}</ReactMarkdown>
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+        {content}
+      </ReactMarkdown>
     </div>
   )
 }
@@ -204,7 +224,9 @@ function StreamingMarkdown({
 }) {
   const components = useMemo(() => buildMarkdownComponents(onOpenPath), [onOpenPath])
   const MarkdownBlock: LLMOutputComponent = ({ blockMatch }) => (
-    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>{blockMatch.output}</ReactMarkdown>
+    <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      {blockMatch.output}
+    </ReactMarkdown>
   )
   const { blockMatches } = useLLMOutput({
     llmOutput: content,
@@ -270,24 +292,26 @@ function MessageInner({
 }: MessageProps) {
   const isUser = role === 'user'
 
-  // Resolve display text & referenced files:
-  // - If props carry them, use directly (new messages)
-  // - Otherwise parse from content (historical messages)
   const { userDisplayText, userDisplaySegments } = useMemo(() => {
-    if (!isUser) return {
-      userDisplayText: content,
+    if (!isUser) {
+      return {
+        userDisplayText: content,
         userDisplaySegments: [] as UserMessageSegment[],
       }
+    }
+
     if (displaySegmentsProp?.length) {
       return {
         userDisplayText: userMessageTextFromSegments(displaySegmentsProp),
         userDisplaySegments: displaySegmentsProp,
       }
     }
+
     if (displayContentProp) {
       const fallbackSegments = buildFallbackUserMessageSegments(displayContentProp, referencedFilesProp)
       return { userDisplayText: displayContentProp, userDisplaySegments: fallbackSegments }
     }
+
     const parsed = parseLegacyReferencedFilesBlock(content)
     return { userDisplayText: parsed.text, userDisplaySegments: parsed.displaySegments }
   }, [isUser, content, displayContentProp, referencedFilesProp, displaySegmentsProp])
@@ -321,7 +345,6 @@ function MessageInner({
     input.setSelectionRange(input.value.length, input.value.length)
   }, [isEditing])
 
-  /** Build copyable text including tool calls when present */
   const buildCopyText = (): string => {
     const parts: string[] = []
 
@@ -333,15 +356,17 @@ function MessageInner({
           .map(([k, v]) => `${k}: ${typeof v === 'string' ? v : JSON.stringify(v)}`)
           .join(', ')
         const status = call.status === 'success' ? '\u2713' : call.status === 'error' ? '\u2717' : '\u2026'
-        const duration = call.completedAt && call.startedAt
-          ? `${((call.completedAt - call.startedAt) / 1000).toFixed(1)}s`
-          : ''
+        const duration =
+          call.completedAt && call.startedAt
+            ? `${((call.completedAt - call.startedAt) / 1000).toFixed(1)}s`
+            : ''
 
         parts.push(`[${status} ${label}] ${summary}`)
         if (call.result?.message) {
-          const msg = call.result.message.length > 500
-            ? call.result.message.slice(0, 500) + '\u2026'
-            : call.result.message
+          const msg =
+            call.result.message.length > 500
+              ? call.result.message.slice(0, 500) + '\u2026'
+              : call.result.message
           parts.push(msg)
         }
         if (duration) parts.push(`Duration: ${duration}`)
@@ -350,8 +375,11 @@ function MessageInner({
     }
 
     if (content) {
-      parts.push(isUser ? serializeUserMessageSegmentsToMarkdown(userDisplaySegments) || userDisplayText : content)
+      parts.push(
+        isUser ? serializeUserMessageSegmentsToMarkdown(userDisplaySegments) || userDisplayText : content,
+      )
     }
+
     return parts.join('\n').trim()
   }
 
@@ -359,6 +387,7 @@ function MessageInner({
     const text = buildCopyText()
     if (!text) return
     const clipboardPayload = isUser ? serializeUserMessageSegmentsForClipboard(userDisplaySegments) : null
+
     try {
       if (clipboardPayload && typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
         await navigator.clipboard.write([
@@ -389,6 +418,7 @@ function MessageInner({
 
   const canEdit = isUser && !!messageId && !!onEditMessage
   const canRetry = canEdit
+  const showStreamingIndicator = isStreaming && !thinking && !content.trim()
 
   const startEditing = useCallback(() => {
     if (!canEdit || isSavingEdit) return
@@ -439,17 +469,20 @@ function MessageInner({
     userDisplayText,
   ])
 
-  const handleEditKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (event.key === 'Enter' && !event.shiftKey) {
-      event.preventDefault()
-      void saveEditedMessage()
-      return
-    }
-    if (event.key === 'Escape') {
-      event.preventDefault()
-      cancelEditing()
-    }
-  }, [cancelEditing, saveEditedMessage])
+  const handleEditKeyDown = useCallback(
+    (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+      if (event.key === 'Enter' && !event.shiftKey) {
+        event.preventDefault()
+        void saveEditedMessage()
+        return
+      }
+      if (event.key === 'Escape') {
+        event.preventDefault()
+        cancelEditing()
+      }
+    },
+    [cancelEditing, saveEditedMessage],
+  )
 
   const sendFromMessage = async (nextContent: string, nextSegments?: UserMessageSegment[]) => {
     if (!canEdit || !messageId || !onEditMessage) return
@@ -478,61 +511,64 @@ function MessageInner({
     return (
       <div
         className={cn(
-          'absolute z-10 flex items-center gap-1 rounded-md border bg-background/90 p-0.5 shadow-sm',
+          'absolute z-10 rounded-full border border-border/70 bg-background/92 p-1 shadow-sm backdrop-blur',
           outsideBubble ? 'right-0 top-full mt-0.5' : 'bottom-1.5 right-1.5',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
           copied && 'opacity-100',
         )}
       >
-        {canEdit && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 rounded-sm"
-            onClick={startEditing}
-            aria-label="Edit message"
-            title="Edit message"
+        <MessageActions>
+          {canEdit ? (
+            <MessageAction
+              onClick={startEditing}
+              aria-label="Edit message"
+              tooltip="Edit message"
+              className="h-6 w-6"
+            >
+              <Pencil className="h-3.5 w-3.5" />
+            </MessageAction>
+          ) : null}
+          {canRetry ? (
+            <MessageAction
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                void handleRetryFromHere()
+              }}
+              disabled={isRetrying}
+              aria-label="Retry from this message"
+              tooltip="Retry from this message"
+              className="h-6 w-6"
+            >
+              <RotateCcw className={cn('h-3.5 w-3.5', isRetrying && 'animate-spin')} />
+            </MessageAction>
+          ) : null}
+          <MessageAction
+            onClick={copyToClipboard}
+            aria-label={copied ? 'Copied' : 'Copy message'}
+            tooltip={copied ? 'Copied' : 'Copy message'}
+            className="h-6 w-6"
           >
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-        )}
-        {canRetry && (
-          <Button
-            type="button"
-            variant="ghost"
-            size="icon"
-            className="h-6 w-6 rounded-sm"
-            onClick={(e) => {
-              e.preventDefault()
-              e.stopPropagation()
-              void handleRetryFromHere()
-            }}
-            disabled={isRetrying}
-            aria-label="Retry from this message"
-            title="Retry from this message"
-          >
-            <RotateCcw className={cn('h-3.5 w-3.5', isRetrying && 'animate-spin')} />
-          </Button>
-        )}
-        <Button
-          type="button"
-          variant="ghost"
-          size="icon"
-          onClick={copyToClipboard}
-          className="h-6 w-6 rounded-sm"
-          aria-label={copied ? 'Copied' : 'Copy message'}
-          title={copied ? 'Copied' : 'Copy message'}
-        >
-          {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-        </Button>
+            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+          </MessageAction>
+        </MessageActions>
       </div>
     )
   }
 
   return (
-    <div className={cn('group/message flex gap-3', compact ? 'py-2' : 'py-4', isUser && 'justify-end')}>
+    <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn('min-w-0 max-w-[85%] space-y-2', isUser && 'order-1')}>
+        <div
+          className={cn(
+            'mb-1 flex items-center gap-2 px-1 text-[11px] font-medium uppercase tracking-[0.18em] text-muted-foreground/80',
+            isUser && 'justify-end',
+          )}
+        >
+          <span>{isUser ? 'You' : 'Jait'}</span>
+          {!isUser && isStreaming ? <AgentChatIndicator size="sm" className="bg-primary/65" /> : null}
+        </div>
+
         {!isUser && thinking && (
           <Reasoning
             content={thinking}
@@ -541,19 +577,27 @@ function MessageInner({
           />
         )}
 
-        {/* Render segments in arrival order when available (live-streamed messages) */}
         {!isUser && segments && segments.length > 0 ? (
           <>
             {segments.map((seg, i) => {
               if (seg.type === 'toolGroup') {
-                const calls = (toolCalls ?? []).filter(tc => seg.callIds.includes(tc.callId))
+                const calls = (toolCalls ?? []).filter((tc) => seg.callIds.includes(tc.callId))
                 return calls.length > 0 ? (
-                  <ToolCallGroup key={`tg-${i}`} calls={calls} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+                  <ToolCallGroup
+                    key={`tg-${i}`}
+                    calls={calls}
+                    onOpenTerminal={onOpenTerminal}
+                    onOpenDiff={onOpenDiff}
+                  />
                 ) : null
               }
-              // text segment
+
               return seg.content.trim() ? (
-                <div key={`ts-${i}`}>
+                <AIMessageContent
+                  key={`ts-${i}`}
+                  data-message-from="assistant"
+                  className="max-w-full bg-card/78"
+                >
                   <AssistantMarkdown
                     content={seg.content}
                     compact={compact}
@@ -561,135 +605,144 @@ function MessageInner({
                     preferLlmUi={preferLlmUi}
                     onOpenPath={onOpenPath}
                   />
-                </div>
+                </AIMessageContent>
               ) : null
             })}
-            {/* Streaming dots when content hasn't started yet */}
-            {isStreaming && !content && !segments.some(s => s.type === 'text' && s.content.trim()) && (
-              <div className="flex gap-1 py-2">
-                <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:0ms]" />
-                <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:150ms]" />
-                <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:300ms]" />
+
+            {isStreaming && !content && !segments.some((s) => s.type === 'text' && s.content.trim()) && (
+              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-card/70 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-sm">
+                <AgentChatIndicator size="sm" />
+                <span>Thinking</span>
               </div>
             )}
+
             {renderActions()}
           </>
         ) : (
-          /* Fallback: old layout for historical messages without segments */
           <>
             {toolCalls && toolCalls.length > 0 && (
               <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
             )}
 
-        {content ? (
-          isUser ? (
-            <div className={cn('relative w-fit max-w-full', USER_MESSAGE_MIN_WIDTH_CLASS)}>
-              <div
-                ref={userBubbleRef}
-                className={cn(
-                  'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
-                  canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
-                  compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
-                )}
-                onClick={handleUserBubbleClick}
-                title={canEdit && !isEditing ? 'Click to edit message' : undefined}
-              >
-                {isEditing ? (
-                  <div className="space-y-3" onClick={(event) => event.stopPropagation()}>
-                    <Textarea
-                      ref={editInputRef}
-                      value={editDraft}
-                      onChange={(event) => setEditDraft(event.target.value)}
-                      onKeyDown={handleEditKeyDown}
-                      rows={Math.min(Math.max(editDraft.split('\n').length, 3), 10)}
-                      disabled={isSavingEdit}
-                      aria-label="Edit user message"
-                      className="min-h-[96px] resize-y border-primary/30 bg-background"
-                    />
-                    {userReferencedFilesFromSegments(userDisplaySegments).length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {userReferencedFilesFromSegments(userDisplaySegments).map((file) => (
-                          <span
-                            key={file.path}
-                            className="inline-flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-[12px] leading-tight text-muted-foreground"
-                            title={file.path}
+            {content ? (
+              isUser ? (
+                <div className={cn('relative w-fit max-w-full', USER_MESSAGE_MIN_WIDTH_CLASS)}>
+                  <AIMessageContent
+                    ref={userBubbleRef}
+                    data-message-from="user"
+                    className={cn(
+                      'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
+                      canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
+                      compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
+                    )}
+                    onClick={handleUserBubbleClick}
+                    title={canEdit && !isEditing ? 'Click to edit message' : undefined}
+                  >
+                    {isEditing ? (
+                      <div className="space-y-3" onClick={(event) => event.stopPropagation()}>
+                        <Textarea
+                          ref={editInputRef}
+                          value={editDraft}
+                          onChange={(event) => setEditDraft(event.target.value)}
+                          onKeyDown={handleEditKeyDown}
+                          rows={Math.min(Math.max(editDraft.split('\n').length, 3), 10)}
+                          disabled={isSavingEdit}
+                          aria-label="Edit user message"
+                          className="min-h-[96px] resize-y border-primary/30 bg-background"
+                        />
+
+                        {userReferencedFilesFromSegments(userDisplaySegments).length > 0 && (
+                          <div className="flex flex-wrap gap-1.5">
+                            {userReferencedFilesFromSegments(userDisplaySegments).map((file) => (
+                              <span
+                                key={file.path}
+                                className="inline-flex items-center gap-1 rounded-full border border-primary/15 bg-background/65 px-2 py-0.5 text-[12px] leading-tight text-muted-foreground"
+                                title={file.path}
+                              >
+                                <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />
+                                <span className="max-w-[180px] truncate">{file.name}</span>
+                              </span>
+                            ))}
+                          </div>
+                        )}
+
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={cancelEditing}
+                            disabled={isSavingEdit}
+                            aria-label="Cancel editing message"
+                            title="Cancel editing"
                           >
-                            <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />
-                            <span className="truncate max-w-[180px]">{file.name}</span>
-                          </span>
-                        ))}
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            type="button"
+                            size="sm"
+                            className="h-8 px-2"
+                            onClick={() => {
+                              void saveEditedMessage()
+                            }}
+                            disabled={isSavingEdit || !editDraft.trim()}
+                            aria-label="Save edited message"
+                            title="Save edited message"
+                          >
+                            <Check className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                        {userDisplaySegments.length > 0
+                          ? userDisplaySegments.map((segment, index) =>
+                              segment.type === 'text' ? (
+                                <span key={`text-${index}`}>{segment.text}</span>
+                              ) : (
+                                <span
+                                  key={`${segment.path}-${index}`}
+                                  className="mx-[2px] inline-flex items-center gap-1 rounded-full border border-primary/15 bg-background/65 px-2 py-0.5 text-[12px] leading-tight text-muted-foreground align-baseline select-none"
+                                  title={segment.path}
+                                >
+                                  <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
+                                  <span className="max-w-[180px] truncate">{segment.name}</span>
+                                </span>
+                              ),
+                            )
+                          : userDisplayText}
                       </div>
                     )}
-                    <div className="flex items-center justify-end gap-1.5">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 px-2"
-                        onClick={cancelEditing}
-                        disabled={isSavingEdit}
-                        aria-label="Cancel editing message"
-                        title="Cancel editing"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </Button>
-                      <Button
-                        type="button"
-                        size="sm"
-                        className="h-8 px-2"
-                        onClick={() => { void saveEditedMessage() }}
-                        disabled={isSavingEdit || !editDraft.trim()}
-                        aria-label="Save edited message"
-                        title="Save edited message"
-                      >
-                        <Check className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                    {userDisplaySegments.length > 0 ? userDisplaySegments.map((segment, index) => (
-                      segment.type === 'text' ? (
-                        <span key={`text-${index}`}>{segment.text}</span>
-                      ) : (
-                        <span
-                          key={`${segment.path}-${index}`}
-                          className="mx-[2px] inline-flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-[12px] leading-tight text-muted-foreground align-baseline select-none"
-                          title={segment.path}
-                        >
-                          <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
-                          <span className="truncate max-w-[180px]">{segment.name}</span>
-                        </span>
-                      )
-                    )) : userDisplayText}
-                  </div>
-                )}
+                  </AIMessageContent>
+
+                  {renderActions()}
+                </div>
+              ) : (
+                <AIMessageContent
+                  data-message-from="assistant"
+                  className="relative min-w-0 max-w-full break-words [overflow-wrap:anywhere]"
+                >
+                  <AssistantMarkdown
+                    content={content}
+                    compact={compact}
+                    isStreaming={isStreaming}
+                    preferLlmUi={preferLlmUi}
+                    onOpenPath={onOpenPath}
+                  />
+                  {renderActions()}
+                </AIMessageContent>
+              )
+            ) : showStreamingIndicator ? (
+              <div className="flex items-center gap-3 rounded-full border border-border/70 bg-card/70 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur-sm">
+                <AgentChatIndicator size="sm" />
+                <span>Thinking</span>
               </div>
-              {renderActions()}
-            </div>
-          ) : (
-            <div className="relative min-w-0 break-words [overflow-wrap:anywhere]">
-              <AssistantMarkdown
-                content={content}
-                compact={compact}
-                isStreaming={isStreaming}
-                preferLlmUi={preferLlmUi}
-                onOpenPath={onOpenPath}
-              />
-              {renderActions()}
-            </div>
-          )
-        ) : isStreaming && !thinking ? (
-          <div className="flex gap-1 py-2">
-            <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:0ms]" />
-            <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:150ms]" />
-            <span className="w-1.5 h-1.5 bg-muted-foreground/40 rounded-full animate-bounce [animation-delay:300ms]" />
-          </div>
-        ) : null}
+            ) : null}
           </>
         )}
       </div>
-    </div>
+    </AIMessage>
   )
 }
 

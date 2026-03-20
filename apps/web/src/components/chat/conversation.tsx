@@ -1,7 +1,7 @@
 import { Children, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { ArrowDown, Loader2 } from 'lucide-react'
-import { Button } from '@/components/ui/button'
+import { Loader2 } from 'lucide-react'
+import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { cn } from '@/lib/utils'
 
 interface ConversationProps {
@@ -81,10 +81,13 @@ export function Conversation({ children, className, compact, loading }: Conversa
   }, [childItems.length, totalSize, stickToBottom, loading, scrollToBottom])
 
   return (
-    <div className={cn('relative flex-1 overflow-hidden', className)}>
+    <AIConversation className={cn('relative flex-1 overflow-hidden', className)}>
       {loading ? (
         <div className="flex h-full items-center justify-center">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <div className="flex items-center gap-3 rounded-full border border-border/70 bg-background/85 px-4 py-2 text-sm text-muted-foreground shadow-sm backdrop-blur">
+            <Loader2 className="h-4 w-4 animate-spin text-primary" />
+            <span>Loading conversation</span>
+          </div>
         </div>
       ) : (
         <div
@@ -110,7 +113,7 @@ export function Conversation({ children, className, compact, loading }: Conversa
                     transform: `translateY(${virtualRow.start}px)`,
                   }}
                 >
-                  <div className={cn('mx-auto', 'max-w-3xl px-4')}>
+                  <div className="mx-auto max-w-4xl px-4 sm:px-5">
                     {child}
                   </div>
                 </div>
@@ -121,18 +124,14 @@ export function Conversation({ children, className, compact, loading }: Conversa
       )}
 
       {!loading && !isAtBottom && (
-        <Button
-          variant="outline"
-          size="icon"
-          className="absolute bottom-4 left-1/2 h-8 w-8 -translate-x-1/2 rounded-full shadow-md"
+        <ConversationScrollButton
+          className="bottom-5"
           onClick={() => {
             setStickToBottom(true)
             scrollToBottom()
           }}
-        >
-          <ArrowDown className="h-4 w-4" />
-        </Button>
+        />
       )}
-    </div>
+    </AIConversation>
   )
 }

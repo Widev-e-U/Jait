@@ -5,13 +5,7 @@
  * context between Developer (chat) mode and Manager (automation) mode.
  */
 
-import { Code, Users, ChevronDown, Check } from 'lucide-react'
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuTrigger,
-} from '@/components/ui/dropdown-menu'
+import { Code, Users } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export type ViewMode = 'developer' | 'manager'
@@ -45,53 +39,53 @@ const MODES: Array<{
 ]
 
 export function ViewModeSelector({ mode, onChange, disabled, className, compact = false }: ViewModeSelectorProps) {
-  const current = MODES.find((m) => m.value === mode) ?? MODES[0]
-  const CurrentIcon = current.icon
+  const activeIndex = MODES.findIndex((m) => m.value === mode)
+  const safeActiveIndex = activeIndex >= 0 ? activeIndex : 0
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild disabled={disabled}>
-        <button
-          type="button"
-          className={cn(
-            'flex h-8 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground',
-            'hover:text-foreground hover:bg-muted/60 transition-colors',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-            'disabled:pointer-events-none disabled:opacity-50',
-            className,
-          )}
-          title={`Mode: ${current.label}`}
-          aria-label={`Mode: ${current.label}`}
-        >
-          <CurrentIcon className="h-4 w-4" />
-          {!compact && <span>{current.label}</span>}
-          <ChevronDown className="h-3 w-3 opacity-60" />
-        </button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="w-72">
-        {MODES.map((m) => {
-          const Icon = m.icon
-          const isActive = mode === m.value
-          return (
-            <DropdownMenuItem
-              key={m.value}
-              onClick={() => {
-                // Defer so Radix closes the dropdown (and its FocusScope)
-                // before the parent tree re-renders with a different layout.
-                requestAnimationFrame(() => onChange(m.value))
-              }}
-              className="flex items-start gap-2.5 py-2 cursor-pointer"
-            >
-              <Icon className="h-4 w-4 mt-0.5 shrink-0" />
-              <div className="flex-1 min-w-0">
-                <div className="text-sm font-medium">{m.label}</div>
-                <div className="text-xs text-muted-foreground">{m.description}</div>
-              </div>
-              {isActive && <Check className="h-4 w-4 mt-0.5 shrink-0 text-primary" />}
-            </DropdownMenuItem>
-          )
-        })}
-      </DropdownMenuContent>
-    </DropdownMenu>
+    <div
+      role="tablist"
+      aria-label="View mode"
+      className={cn(
+        'relative inline-grid h-8 grid-cols-2 rounded-lg border border-border/70 bg-muted/40 p-0.5',
+        'shadow-sm transition-colors',
+        disabled && 'pointer-events-none opacity-50',
+        className,
+      )}
+    >
+      <div
+        aria-hidden="true"
+        className={cn(
+          'absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-md bg-background shadow-sm',
+          'transition-transform duration-200 ease-out',
+        )}
+        style={{ transform: `translateX(${safeActiveIndex * 100}%)` }}
+      />
+      {MODES.map((m) => {
+        const Icon = m.icon
+        const isActive = mode === m.value
+        return (
+          <button
+            key={m.value}
+            type="button"
+            role="tab"
+            aria-selected={isActive}
+            aria-label={m.label}
+            title={`${m.label}: ${m.description}`}
+            disabled={disabled}
+            onClick={() => onChange(m.value)}
+            className={cn(
+              'relative z-10 flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium',
+              'transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+              isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+              compact ? 'w-9' : 'min-w-[5.75rem]',
+            )}
+          >
+            <Icon className="h-3.5 w-3.5 shrink-0" />
+            {!compact && <span>{m.label}</span>}
+          </button>
+        )
+      })}
+    </div>
   )
 }
