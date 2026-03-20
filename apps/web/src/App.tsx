@@ -58,7 +58,6 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
 import type { ChatAttachment } from '@/hooks/useChat'
-import { DevPreviewPanel } from '@/components/chat/dev-preview-panel'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
 import { PlanReview } from '@/components/chat/plan-review'
 import { ContextIndicator } from '@/components/chat/context-indicator'
@@ -794,10 +793,8 @@ function App() {
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
-  const [showDevPreview, setShowDevPreview] = useState(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
-  const [devPreviewAutoOpenKey, setDevPreviewAutoOpenKey] = useState(0)
-  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target: string; key: number } | null>(null)
+  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
   const [workspacePreviewState, setWorkspacePreviewState] = useState<{ open: boolean; target: string | null }>({ open: false, target: null })
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
@@ -896,16 +893,20 @@ function App() {
   const closeWorkspacePreview = useCallback(() => {
     workspaceRef.current?.closePreviewTarget()
   }, [])
-  const routePreviewToWorkspace = useCallback((target?: string | null) => {
-    const trimmed = target?.trim()
-    if (!trimmed) return false
-    if (isMobile) return false
+  const routePreviewToWorkspace = useCallback((target?: string | null, workspaceRoot?: string | null) => {
+    const trimmed = target?.trim() || null
     setViewMode('developer')
+    if (workspaceRoot?.trim()) {
+      setActiveWorkspace((prev) => {
+        if (prev?.workspaceRoot === workspaceRoot.trim()) return prev
+        return { surfaceId: prev?.surfaceId ?? '', workspaceRoot: workspaceRoot.trim(), nodeId: prev?.nodeId }
+      })
+    }
     if (!showWorkspace) setShowWorkspace(true)
     showWorkspaceEditorPanel()
     setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
     return true
-  }, [isMobile, showWorkspace, showWorkspaceEditorPanel])
+  }, [showWorkspace, showWorkspaceEditorPanel])
 
   const getFloatingViewport = useCallback(() => ({
     width: window.innerWidth,
@@ -1471,18 +1472,10 @@ function App() {
     if (wsFullStateReceivedRef.current) return
     const nextTarget = savedDevPreview?.target?.trim() || null
     if (nextTarget) setDevPreviewTarget(nextTarget)
-    if (savedDevPreview?.open && routePreviewToWorkspace(nextTarget)) {
-      setShowDevPreview(false)
-      return
+    if (savedDevPreview?.open) {
+      routePreviewToWorkspace(nextTarget, savedDevPreview?.workspaceRoot ?? null)
     }
-    setShowDevPreview(savedDevPreview?.open === true)
   }, [savedDevPreview, routePreviewToWorkspace])
-
-  useEffect(() => {
-    if (!showDevPreview) return
-    if (!routePreviewToWorkspace(devPreviewTarget)) return
-    setShowDevPreview(false)
-  }, [showDevPreview, devPreviewTarget, routePreviewToWorkspace])
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
@@ -1600,22 +1593,16 @@ function App() {
         break
       case 'dev-preview.panel':
         if (!value) {
-          setShowDevPreview(false)
           closeWorkspacePreview()
         } else {
           const v = value as { open?: boolean; target?: string | null; workspaceRoot?: string | null }
           if (v.open === false) {
-            setShowDevPreview(false)
             closeWorkspacePreview()
             break
           }
           const nextTarget = typeof v.target === 'string' ? v.target : null
           if (nextTarget) setDevPreviewTarget(nextTarget)
-          if (routePreviewToWorkspace(nextTarget)) {
-            setShowDevPreview(false)
-          } else {
-            setShowDevPreview(true)
-          }
+          routePreviewToWorkspace(nextTarget, v.workspaceRoot ?? null)
         }
         break
       case 'terminal.panel':
@@ -1719,13 +1706,8 @@ function App() {
     if (dp && dp.open !== false) {
       const nextTarget = typeof dp.target === 'string' ? dp.target : null
       if (nextTarget) setDevPreviewTarget(nextTarget)
-      if (routePreviewToWorkspace(nextTarget)) {
-        setShowDevPreview(false)
-      } else {
-        setShowDevPreview(true)
-      }
+      routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
     } else {
-      setShowDevPreview(false)
       closeWorkspacePreview()
     }
 
@@ -1839,16 +1821,10 @@ function App() {
       }, [setSavedTerminal, setActiveTerminalId]),
       'dev-preview.open': useCallback((data: { target?: string | null; workspaceRoot?: string | null }) => {
         const target = typeof data.target === 'string' ? data.target.trim() : ''
-        if (!target) return
         setCurrentView('chat')
-        setDevPreviewTarget(target)
-        setDevPreviewAutoOpenKey((prev) => prev + 1)
-        setSavedDevPreview({ open: true, target, workspaceRoot: data.workspaceRoot ?? null })
-        if (routePreviewToWorkspace(target)) {
-          setShowDevPreview(false)
-          return
-        }
-        setShowDevPreview(true)
+        setDevPreviewTarget(target || null)
+        setSavedDevPreview({ open: true, target: target || null, workspaceRoot: data.workspaceRoot ?? null })
+        routePreviewToWorkspace(target || null, data.workspaceRoot ?? null)
       }, [routePreviewToWorkspace, setSavedDevPreview]),
       'screen-share.open': useCallback(() => {
         setShowScreenShare(true)
@@ -2040,12 +2016,28 @@ function App() {
         body: JSON.stringify({ sessionId: activeSessionId }),
       }).catch(() => {})
     }
-    setShowDevPreview(false)
+    closeWorkspacePreview()
     setSavedDevPreview(null)
     sendUIState('dev-preview.panel', null, activeSessionId)
-  }, [token, activeSessionId, setSavedDevPreview, sendUIState])
+  }, [token, activeSessionId, closeWorkspacePreview, setSavedDevPreview, sendUIState])
 
-  const previewOpen = showDevPreview || savedDevPreview?.open === true || workspacePreviewState.open
+  const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null }) => {
+    setWorkspacePreviewState(state)
+    if (state.open) {
+      const nextState = {
+        open: true,
+        target: state.target ?? devPreviewTarget ?? null,
+        workspaceRoot: activeWorkspace?.workspaceRoot ?? null,
+      }
+      setSavedDevPreview(nextState)
+      sendUIState('dev-preview.panel', nextState, activeSessionId)
+      return
+    }
+    setSavedDevPreview(null)
+    sendUIState('dev-preview.panel', null, activeSessionId)
+  }, [activeSessionId, activeWorkspace?.workspaceRoot, devPreviewTarget, sendUIState, setSavedDevPreview])
+
+  const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
   const openTerminalPanel = useCallback(() => {
     setShowTerminal(true)
@@ -2090,18 +2082,12 @@ function App() {
   const openDevPreviewPanel = useCallback((target?: string | null) => {
     setCurrentView('chat')
     const nextTarget = target?.trim() || devPreviewTarget?.trim() || null
-    if (nextTarget) {
-      setDevPreviewTarget(nextTarget)
-    }
-    const state = { open: true, target: nextTarget }
+    setDevPreviewTarget(nextTarget)
+    const state = { open: true, target: nextTarget, workspaceRoot: activeWorkspace?.workspaceRoot ?? null }
     setSavedDevPreview(state)
     sendUIState('dev-preview.panel', state, activeSessionId)
-    if (routePreviewToWorkspace(nextTarget)) {
-      setShowDevPreview(false)
-      return
-    }
-    setShowDevPreview(true)
-  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget, routePreviewToWorkspace])
+    routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)
+  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget, routePreviewToWorkspace, activeWorkspace?.workspaceRoot])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
@@ -2637,9 +2623,12 @@ function App() {
           continue
         }
 
-        const file = await workspaceRef.current?.readFileByPath(fileRef.path)
-        if (file) {
-          fileContents.push({ path: file.path, content: file.content })
+        const referenced = await workspaceRef.current?.readReferencePath(fileRef.path)
+        if (referenced?.length) {
+          for (const file of referenced) {
+            if (fileContents.some((entry) => entry.path === file.path)) continue
+            fileContents.push({ path: file.path, content: file.content })
+          }
         }
       }
     }
@@ -3734,7 +3723,7 @@ function App() {
                               ?? devPreviewTarget?.trim()
                               ?? savedDevPreview?.target?.trim()
                               ?? null
-                            if (nextTarget && routePreviewToWorkspace(nextTarget)) {
+                            if (routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)) {
                               return
                             }
                             openDevPreviewPanel()
@@ -3999,7 +3988,11 @@ function App() {
                 savedTabsState={workspaceTabsState}
                 previewRequest={workspacePreviewRequest}
                 onTabsStateChange={handleWorkspaceTabsStateChange}
-                onPreviewOpenChange={setWorkspacePreviewState}
+                onPreviewOpenChange={handleWorkspacePreviewOpenChange}
+                previewSessionId={activeSessionId}
+                previewToken={token}
+                previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
+                previewInitialTarget={devPreviewTarget}
                 architectureDiagram={architectureDiagram}
                 architectureGenerating={architectureGenerating}
                 architectureRequest={architectureRequest}
@@ -4065,7 +4058,11 @@ function App() {
                   savedTabsState={workspaceTabsState}
                   previewRequest={workspacePreviewRequest}
                   onTabsStateChange={handleWorkspaceTabsStateChange}
-                  onPreviewOpenChange={setWorkspacePreviewState}
+                  onPreviewOpenChange={handleWorkspacePreviewOpenChange}
+                  previewSessionId={activeSessionId}
+                  previewToken={token}
+                  previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
+                  previewInitialTarget={devPreviewTarget}
                   architectureDiagram={architectureDiagram}
                   architectureGenerating={architectureGenerating}
                   architectureRequest={architectureRequest}
@@ -4352,16 +4349,6 @@ function App() {
               <div className={`flex-1 min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
                 onAnimationEnd={() => setDeveloperAnimPhase('idle')}
               >
-                {showDevPreview && (
-                  <DevPreviewPanel
-                    onClose={closeDevPreviewPanel}
-                    initialTarget={devPreviewTarget}
-                    autoOpenKey={devPreviewAutoOpenKey}
-                    sessionId={activeSessionId}
-                    token={token}
-                    workspaceRoot={activeWorkspace?.workspaceRoot ?? null}
-                  />
-                )}
                 <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
@@ -4403,16 +4390,6 @@ function App() {
               </div>
             ) : (
               <div className="flex flex-col flex-1 min-w-0 min-h-0 transition-all duration-300 ease-out">
-                {showDevPreview && (
-                  <DevPreviewPanel
-                    onClose={closeDevPreviewPanel}
-                    initialTarget={devPreviewTarget}
-                    autoOpenKey={devPreviewAutoOpenKey}
-                    sessionId={activeSessionId}
-                    token={token}
-                    workspaceRoot={activeWorkspace?.workspaceRoot ?? null}
-                  />
-                )}
                 {/* Sticky show-panel buttons when workspace panels are hidden */}
                 {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
                   <div className="flex h-[35px] items-center gap-1 px-2 border-b bg-muted/20 shrink-0">
@@ -4471,7 +4448,7 @@ function App() {
                       toolCalls={msg.toolCalls}
                       segments={msg.segments}
                       isStreaming={isLoading && msg === messages[messages.length - 1]}
-                      compact={showWorkspace || showScreenShare || showDevPreview}
+                      compact={showWorkspace || showScreenShare || previewOpen}
                       preferLlmUi
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}

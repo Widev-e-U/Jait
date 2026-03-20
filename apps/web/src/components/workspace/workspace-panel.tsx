@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor from '@monaco-editor/react'
-import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, MoreVertical, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
@@ -67,9 +67,17 @@ interface WorkspacePanelProps {
   /** Active provider model override from the chat composer. */
   cliModel?: string | null
   /** Request to open a preview target in the editor. */
-  previewRequest?: { target: string; key: number } | null
+  previewRequest?: { target?: string | null; key: number } | null
   /** Notifies the app shell when a workspace preview tab is opened or closed. */
   onPreviewOpenChange?: (state: { open: boolean; target: string | null }) => void
+  /** Session id for managed preview actions. */
+  previewSessionId?: string | null
+  /** Auth token for managed preview actions. */
+  previewToken?: string | null
+  /** Workspace root for managed preview actions. */
+  previewWorkspaceRoot?: string | null
+  /** Initial preview target to prefill in the preview controls. */
+  previewInitialTarget?: string | null
   /** Mermaid source for the architecture tab. */
   architectureDiagram?: string | null
   /** Whether architecture generation is currently running. */
@@ -91,10 +99,12 @@ export interface WorkspacePanelHandle {
   openFileByPath: (path: string) => Promise<boolean>
   /** Read a file from the lazy tree by path and return a WorkspaceFile, or null. */
   readFileByPath: (path: string) => Promise<WorkspaceFile | null>
+  /** Read a file or expand a folder reference into multiple workspace files. */
+  readReferencePath: (path: string) => Promise<WorkspaceFile[]>
   /** Open a review diff tab with original/modified content. */
   openReviewDiff: (input: { path: string; originalContent: string; modifiedContent: string; language?: string }) => Promise<boolean>
   /** Open a preview target inside the workspace editor. */
-  openPreviewTarget: (target: string) => boolean
+  openPreviewTarget: (target?: string | null) => boolean
   /** Close the current workspace preview tab, if any. */
   closePreviewTarget: () => void
   /** Refresh the current workspace preview tab, if any. */
@@ -187,6 +197,8 @@ interface LazyFile {
 }
 
 type LazyNode = LazyDir | LazyFile
+
+const MAX_FOLDER_REFERENCE_FILES = 25
 
 async function scanDir(dirHandle: FileSystemDirectoryHandle, prefix: string): Promise<LazyNode[]> {
   const dirs: LazyDir[] = []
@@ -482,6 +494,53 @@ interface EditorTab {
   saveError?: string | null
   previewTarget?: string
   previewSrc?: string | null
+  previewMode?: 'raw' | 'managed' | null
+}
+
+interface PreviewBrowserEvent {
+  id: number
+  timestamp: string
+  type: 'console' | 'pageerror' | 'requestfailed' | 'response'
+  level?: string
+  text?: string
+  url?: string
+  method?: string
+  status?: number
+}
+
+interface PreviewLogEntry {
+  id: number
+  stream: 'stdout' | 'stderr' | 'system'
+  text: string
+  timestamp: string
+}
+
+interface PreviewSessionState {
+  id: string
+  sessionId: string
+  workspaceRoot: string | null
+  mode: 'local' | 'docker' | 'url'
+  status: 'starting' | 'ready' | 'error' | 'stopped'
+  target: string | null
+  command: string | null
+  port: number | null
+  url: string | null
+  browserId: string | null
+  processId: number | null
+  containerId: string | null
+  logs: PreviewLogEntry[]
+  browserEvents: PreviewBrowserEvent[]
+  lastError: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+function authHeaders(token?: string | null): HeadersInit {
+  return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
+}
+
+function isHtmlFilePath(input: string): boolean {
+  return /\.(?:html?)$/i.test(input.trim())
 }
 
 export interface WorkspaceTabsState {
@@ -664,7 +723,7 @@ function TreeNodeRow({
   expandedDirs: Set<string>
   onToggleDir: (node: LazyDir) => void
   onSelectFile: (node: LazyFile) => void
-  onContextFile: (node: LazyFile) => void
+  onContextFile: (node: LazyNode) => void
   onTreeContextMenu: (node: LazyNode, x: number, y: number) => void
   onMoveNode: (srcPath: string, destDir: string) => void
   onMobilePointerStart?: (node: LazyNode, event: React.PointerEvent<HTMLDivElement>) => void
@@ -755,6 +814,16 @@ function TreeNodeRow({
               <MoreVertical className="h-3.5 w-3.5" />
             </button>
           )}
+          {!isMobile && (
+            <button
+              type="button"
+              className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background"
+              onClick={(e) => { e.stopPropagation(); onContextFile(node) }}
+              title="Add to chat"
+            >
+              <Plus className="h-3 w-3" />
+            </button>
+          )}
         </div>
         {expanded && node.children?.map((child) => (
           <TreeNodeRow
@@ -831,7 +900,7 @@ function TreeNodeRow({
           onClick={(e) => { e.stopPropagation(); onContextFile(node) }}
           title="Add to chat"
         >
-          <Send className="h-3 w-3" />
+          <Plus className="h-3 w-3" />
         </button>
       )}
     </div>
@@ -865,6 +934,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   cliModel,
   previewRequest,
   onPreviewOpenChange,
+  previewSessionId,
+  previewToken,
+  previewWorkspaceRoot,
+  previewInitialTarget,
   architectureDiagram,
   architectureGenerating,
   architectureRequest,
@@ -968,11 +1041,114 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [fileSearchResults, setFileSearchResults] = useState<{ files?: { path: string; name: string }[]; matches?: { file: string; line: number; content: string }[] } | null>(null)
   const [fileSearchLoading, setFileSearchLoading] = useState(false)
   const fileSearchAbortRef = useRef<AbortController | null>(null)
+  const [managedPreviewSession, setManagedPreviewSession] = useState<PreviewSessionState | null>(null)
+  const [previewInput, setPreviewInput] = useState(previewInitialTarget?.trim() || '')
+  const [previewCommand, setPreviewCommand] = useState('')
+  const [previewPort, setPreviewPort] = useState('')
+  const [previewPanelError, setPreviewPanelError] = useState<string | null>(null)
+  const [previewBusy, setPreviewBusy] = useState(false)
+  const [previewFrameLoading, setPreviewFrameLoading] = useState(false)
+  const [previewSidePanelOpen, setPreviewSidePanelOpen] = useState(false)
+  const [previewSideTab, setPreviewSideTab] = useState<'controls' | 'logs' | 'console' | 'issues'>('controls')
+  const previewLogsEndRef = useRef<HTMLDivElement | null>(null)
+  const previewConsoleEndRef = useRef<HTMLDivElement | null>(null)
+  const activePreviewTab = useMemo(() => openTabs.find((tab) => tab.type === 'preview') ?? null, [openTabs])
+  const previewConsoleEvents = useMemo(
+    () => managedPreviewSession?.browserEvents.filter((event) => event.type === 'console') ?? [],
+    [managedPreviewSession],
+  )
+  const previewIssueEvents = useMemo(
+    () => managedPreviewSession?.browserEvents.filter((event) =>
+      event.type === 'pageerror' || event.type === 'requestfailed' || (event.type === 'response' && (event.status ?? 0) >= 400),
+    ) ?? [],
+    [managedPreviewSession],
+  )
 
   const restoredTabsRootRef = useRef<string | null>(null)
   const lastPersistedTabsRef = useRef<string>('')
   const handledPreviewRequestKeyRef = useRef<number | null>(null)
   const handledArchitectureRequestKeyRef = useRef<number | null>(null)
+
+  const syncPreviewTab = useCallback((updater: (prev: EditorTab | null) => EditorTab | null, activate = false) => {
+    const currentPreviewTab = openTabs.find((tab) => tab.type === 'preview') ?? null
+    const nextTab = updater(currentPreviewTab)
+    setOpenTabs((prev) => {
+      const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
+      if (!nextTab) {
+        if (previewIndex < 0) return prev
+        return prev.filter((tab) => tab.type !== 'preview')
+      }
+      if (previewIndex >= 0) {
+        const next = [...prev]
+        next[previewIndex] = nextTab
+        return next
+      }
+      return [...prev, nextTab]
+    })
+
+    if (activate && nextTab) {
+      setActiveTabId(nextTab.id)
+      setScDiffFile(null)
+      setActiveNativePath(null)
+      setPreviewContent(null)
+      setPreviewPath(nextTab.previewTarget ?? nextTab.path)
+      setPreviewLanguage('plaintext')
+      onActiveFileChange('')
+    }
+  }, [onActiveFileChange, openTabs])
+
+  const stopManagedPreviewSession = useCallback(async (preserveTab: boolean) => {
+    if (previewSessionId && previewToken) {
+      try {
+        await fetch(`${API_URL}/api/preview/stop`, {
+          method: 'POST',
+          headers: authHeaders(previewToken),
+          body: JSON.stringify({ sessionId: previewSessionId }),
+        })
+      } catch {
+        // ignore
+      }
+    }
+
+    setManagedPreviewSession(null)
+    setPreviewBusy(false)
+    setPreviewFrameLoading(false)
+    setPreviewPanelError(null)
+
+    if (preserveTab) {
+      syncPreviewTab((current) => current ? {
+        ...current,
+        label: current.previewTarget || 'Preview',
+        previewSrc: null,
+        previewMode: null,
+      } : {
+        id: 'preview',
+        type: 'preview',
+        path: '__preview__',
+        label: 'Preview',
+        previewSrc: null,
+        previewMode: null,
+      })
+    }
+  }, [previewSessionId, previewToken, syncPreviewTab])
+
+  const fetchManagedPreviewSession = useCallback(async () => {
+    if (!previewSessionId || !previewToken) return null
+    try {
+      const response = await fetch(`${API_URL}/api/preview/session/${previewSessionId}`, {
+        headers: authHeaders(previewToken),
+      })
+      if (!response.ok) {
+        setManagedPreviewSession(null)
+        return null
+      }
+      const data = await response.json() as { session: PreviewSessionState | null }
+      setManagedPreviewSession(data.session)
+      return data.session
+    } catch {
+      return null
+    }
+  }, [previewSessionId, previewToken])
 
   // Auto-scroll active tab into view (VS Code behaviour)
   useEffect(() => {
@@ -990,6 +1166,54 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       container.scrollLeft = tabRight - clientWidth
     }
   }, [activeTabId, openTabs.length])
+
+  useEffect(() => {
+    const next = previewInitialTarget?.trim()
+    if (!next) return
+    setPreviewInput(next)
+  }, [previewInitialTarget])
+
+  useEffect(() => {
+    void fetchManagedPreviewSession()
+  }, [fetchManagedPreviewSession])
+
+  useEffect(() => {
+    if (!previewSessionId || !previewToken) return
+    const intervalId = window.setInterval(() => {
+      void fetchManagedPreviewSession()
+    }, 2000)
+    return () => window.clearInterval(intervalId)
+  }, [fetchManagedPreviewSession, previewSessionId, previewToken])
+
+  useEffect(() => {
+    if (previewSideTab === 'logs') {
+      previewLogsEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [previewSideTab, managedPreviewSession?.logs.length])
+
+  useEffect(() => {
+    if (previewSideTab === 'console') {
+      previewConsoleEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    }
+  }, [previewSideTab, previewConsoleEvents.length])
+
+  useEffect(() => {
+    if (!managedPreviewSession) return
+    const resolved = managedPreviewSession.url ? resolvePreviewTarget(managedPreviewSession.url) : null
+    syncPreviewTab((current) => {
+      if (!current) return current
+      return {
+        ...current,
+        label: resolved?.label ?? managedPreviewSession.url ?? current.label,
+        previewTarget: managedPreviewSession.target ?? managedPreviewSession.url ?? current.previewTarget,
+        previewSrc: resolved?.iframeSrc ?? null,
+        previewMode: 'managed',
+      }
+    })
+    if (activeTab?.type === 'preview') {
+      setPreviewFrameLoading(managedPreviewSession.status === 'starting')
+    }
+  }, [activeTab?.type, managedPreviewSession, syncPreviewTab])
 
   // Restore saved file tabs for the current remote workspace once per root.
   useEffect(() => {
@@ -1452,6 +1676,205 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         ? { path: activeExtFile.path, language: activeExtFile.language, content: activeExtFile.content }
         : null
 
+  const renderPreviewSidePanel = () => (
+    <div className="absolute inset-y-0 right-0 z-20 flex w-full max-w-[360px] flex-col border-l bg-background/95 shadow-2xl backdrop-blur">
+      <div className="flex items-center gap-2 border-b px-3 py-2">
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <Settings2 className="h-4 w-4 text-muted-foreground" />
+            <span className="text-sm font-medium">Preview Controls</span>
+            {managedPreviewSession && (
+              <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                {managedPreviewSession.status}
+              </span>
+            )}
+          </div>
+          {activePreviewTab?.label ? (
+            <div className="truncate text-[11px] text-muted-foreground" title={activePreviewTab.label}>
+              {activePreviewTab.label}
+            </div>
+          ) : null}
+        </div>
+        <button
+          type="button"
+          className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground"
+          onClick={() => setPreviewSidePanelOpen(false)}
+          title="Hide preview controls"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
+
+      <div className="flex items-center gap-1 border-b px-2 py-1.5 text-[11px]">
+        {(['controls', 'logs', 'console', 'issues'] as const).map((tab) => (
+          <button
+            key={tab}
+            type="button"
+            className={`rounded px-2 py-1 transition-colors ${
+              previewSideTab === tab ? 'bg-muted text-foreground' : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setPreviewSideTab(tab)}
+          >
+            {tab === 'controls' ? 'Controls' : tab === 'logs' ? 'Logs' : tab === 'console' ? `Console${previewConsoleEvents.length ? ` (${previewConsoleEvents.length})` : ''}` : `Issues${previewIssueEvents.length ? ` (${previewIssueEvents.length})` : ''}`}
+          </button>
+        ))}
+      </div>
+
+      {previewSideTab === 'controls' ? (
+        <div className="flex-1 space-y-3 overflow-auto p-3">
+          <div className="space-y-2">
+            <Input
+              value={previewInput}
+              onChange={(event) => setPreviewInput(event.target.value)}
+              placeholder="3000, http://127.0.0.1:3000/, or index.html"
+              className="h-8"
+            />
+            <Input
+              value={previewCommand}
+              onChange={(event) => setPreviewCommand(event.target.value)}
+              placeholder="Optional command override"
+              className="h-8"
+              disabled={!previewWorkspaceRoot}
+            />
+            <Input
+              value={previewPort}
+              onChange={(event) => setPreviewPort(event.target.value)}
+              placeholder="Preferred port"
+              className="h-8"
+              disabled={!previewWorkspaceRoot}
+            />
+            <Button type="button" size="sm" className="h-8 w-full" onClick={handleOpenPreviewFromControls} disabled={previewBusy}>
+              <Play className="mr-1 h-3 w-3" />
+              {previewWorkspaceRoot && previewInput.trim() && !isHtmlFilePath(previewInput) ? 'Start Managed Preview' : 'Open Preview'}
+            </Button>
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={handleRefreshPreviewTarget}>
+              <RefreshCw className="mr-1 h-3 w-3" />
+              Refresh
+            </Button>
+            {managedPreviewSession && (
+              <>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => { void handleRestartManagedPreview() }} disabled={previewBusy}>
+                  <RefreshCw className="mr-1 h-3 w-3" />
+                  Restart
+                </Button>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => { void handleStopManagedPreview() }} disabled={previewBusy}>
+                  <Square className="mr-1 h-3 w-3" />
+                  Stop
+                </Button>
+              </>
+            )}
+            {previewExternalUrl && (
+              <a href={previewExternalUrl} target="_blank" rel="noreferrer" className="inline-flex">
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]">
+                  <ExternalLink className="mr-1 h-3 w-3" />
+                  Open
+                </Button>
+              </a>
+            )}
+          </div>
+
+          {previewWorkspaceRoot ? (
+            <div className="rounded border bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
+              Workspace: <code>{previewWorkspaceRoot}</code>
+            </div>
+          ) : null}
+          {managedPreviewSession?.lastError ? (
+            <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-destructive">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{managedPreviewSession.lastError}</span>
+            </div>
+          ) : null}
+          {previewPanelError ? (
+            <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-destructive">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{previewPanelError}</span>
+            </div>
+          ) : null}
+        </div>
+      ) : previewSideTab === 'logs' ? (
+        <div className="flex-1 overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
+          {managedPreviewSession?.logs.length ? managedPreviewSession.logs.map((entry) => (
+            <div key={entry.id} className="mb-1 whitespace-pre-wrap break-words">
+              <span className={entry.stream === 'stderr' ? 'text-red-400' : entry.stream === 'system' ? 'text-sky-300' : 'text-zinc-100'}>
+                [{entry.stream}]
+              </span>{' '}
+              {entry.text}
+            </div>
+          )) : (
+            <div className="text-zinc-400">No preview logs yet.</div>
+          )}
+          <div ref={previewLogsEndRef} />
+        </div>
+      ) : previewSideTab === 'console' ? (
+        <div className="flex-1 overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
+          {previewConsoleEvents.length ? previewConsoleEvents.map((event) => (
+            <div key={event.id} className="mb-1 whitespace-pre-wrap break-words">
+              <span className={
+                event.level === 'error' ? 'text-red-400'
+                  : event.level === 'warning' || event.level === 'warn' ? 'text-yellow-400'
+                  : event.level === 'info' ? 'text-sky-300'
+                  : 'text-zinc-300'
+              }>
+                [{event.level ?? 'log'}]
+              </span>{' '}
+              {event.text}
+            </div>
+          )) : (
+            <div className="text-zinc-400">No console messages yet.</div>
+          )}
+          <div ref={previewConsoleEndRef} />
+        </div>
+      ) : (
+        <div className="flex-1 overflow-auto p-3 text-[12px]">
+          {previewIssueEvents.length ? previewIssueEvents.map((event) => (
+            <div key={event.id} className="mb-2 rounded border bg-background px-2 py-1.5">
+              <div className="font-medium">
+                {event.type}
+                {event.status ? ` (${event.status})` : ''}
+                {event.level ? ` · ${event.level}` : ''}
+              </div>
+              {event.text ? <div className="mt-0.5 whitespace-pre-wrap break-words text-muted-foreground">{event.text}</div> : null}
+              {event.url ? <div className="mt-0.5 break-all text-[11px] text-muted-foreground">{event.method ? `${event.method} ` : ''}{event.url}</div> : null}
+            </div>
+          )) : (
+            <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
+              No browser issues captured yet.
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+
+  const renderPreviewPane = (emptyLabel: string) => (
+    <div className="relative h-full bg-muted/5">
+      {(previewFrameLoading || managedPreviewSession?.status === 'starting') && (
+        <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
+          <div className="h-full w-full animate-pulse bg-primary/80" />
+        </div>
+      )}
+      {activeTab?.previewSrc ? (
+        <iframe
+          key={`${activeTab.id}:${activeTab.version ?? 0}`}
+          src={activeTab.previewSrc}
+          title={activeTab.label || 'Workspace preview'}
+          className="h-full w-full bg-white"
+          style={disablePreviewPointerEvents ? { pointerEvents: 'none' } : undefined}
+          sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
+          onLoad={() => setPreviewFrameLoading(false)}
+        />
+      ) : (
+        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+          {emptyLabel}
+        </div>
+      )}
+      {previewSidePanelOpen && renderPreviewSidePanel()}
+    </div>
+  )
+
   /* ---- Open directory ---- */
   const handleOpenDirectory = useCallback(async (handle?: FileSystemDirectoryHandle) => {
     let root = handle
@@ -1547,6 +1970,105 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       return { id: path, name, path, content, language: inferLanguage(path) }
     } catch { return null }
   }, [lazyTree, remoteRoot, surfaceId])
+
+  const handleReadReferencePath = useCallback(async (path: string): Promise<WorkspaceFile[]> => {
+    const normalizedPath = normalizePath(path)
+    const collected: WorkspaceFile[] = []
+
+    const readWorkspaceFile = async (filePath: string, handle?: FileSystemFileHandle | null): Promise<WorkspaceFile | null> => {
+      try {
+        const content = handle ? await readFileHandle(handle) : await remoteReadFile(filePath, surfaceId)
+        return {
+          id: filePath,
+          name: filePath.split('/').pop() ?? filePath,
+          path: filePath,
+          content,
+          language: inferLanguage(filePath),
+        }
+      } catch {
+        return null
+      }
+    }
+
+    const collectLocalDirectory = async (dirHandle: FileSystemDirectoryHandle, prefix: string): Promise<void> => {
+      for await (const entry of (dirHandle as any).values()) {
+        if (collected.length >= MAX_FOLDER_REFERENCE_FILES) return
+        const entryName = entry.name as string
+        const entryPath = prefix ? `${prefix}/${entryName}` : entryName
+        if (entry.kind === 'directory') {
+          if (SKIP_DIRS.has(entryName)) continue
+          await collectLocalDirectory(entry as FileSystemDirectoryHandle, entryPath)
+          continue
+        }
+        const file = await readWorkspaceFile(entryPath, entry as FileSystemFileHandle)
+        if (file) collected.push(file)
+      }
+    }
+
+    const collectRemoteDirectory = async (dirPath: string): Promise<void> => {
+      const nodes = await remoteScanDir(dirPath, surfaceId)
+      for (const node of nodes) {
+        if (collected.length >= MAX_FOLDER_REFERENCE_FILES) return
+        if (node.kind === 'dir') {
+          await collectRemoteDirectory(node.path)
+          continue
+        }
+        const file = await readWorkspaceFile(node.path)
+        if (file) collected.push(file)
+      }
+    }
+
+    const findNode = (nodes: LazyNode[]): LazyNode | null => {
+      for (const node of nodes) {
+        if (normalizePath(node.path) === normalizedPath) return node
+        if (node.kind === 'dir' && node.children) {
+          const child = findNode(node.children)
+          if (child) return child
+        }
+      }
+      return null
+    }
+
+    const existingNode = findNode(lazyTree)
+    if (existingNode?.kind === 'file') {
+      const file = await readWorkspaceFile(existingNode.path, existingNode.handle)
+      return file ? [file] : []
+    }
+    if (existingNode?.kind === 'dir') {
+      if (existingNode.handle) {
+        await collectLocalDirectory(existingNode.handle, existingNode.path)
+      } else {
+        await collectRemoteDirectory(existingNode.path)
+      }
+      return collected
+    }
+
+    const singleFile = await handleReadFileByPath(normalizedPath)
+    if (singleFile) return [singleFile]
+
+    if (remoteRoot) {
+      try {
+        await collectRemoteDirectory(normalizedPath)
+      } catch {
+        return []
+      }
+      return collected
+    }
+
+    const root = rootDirHandle.current
+    if (!root) return []
+    const parts = normalizedPath.split('/').filter(Boolean)
+    try {
+      let dir: FileSystemDirectoryHandle = root
+      for (const part of parts) {
+        dir = await dir.getDirectoryHandle(part)
+      }
+      await collectLocalDirectory(dir, normalizedPath)
+      return collected
+    } catch {
+      return []
+    }
+  }, [handleReadFileByPath, lazyTree, remoteRoot, surfaceId])
 
   /* ---- Lazy search across the entire directory ---- */
   const handleSearchFiles = useCallback(async (
@@ -1754,7 +2276,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [consumeSuppressedTreeClick, handleSelectNativeFile])
 
   /* ---- Context / reference ---- */
-  const handleContextNativeFile = useCallback(async (node: LazyFile) => {
+  const handleContextNativeNode = useCallback(async (node: LazyNode) => {
+    if (node.kind === 'dir') {
+      onReferenceFile({
+        id: node.path,
+        name: node.name.endsWith('/') ? node.name : `${node.name}/`,
+        path: node.path,
+        content: '',
+        language: 'plaintext',
+      })
+      return
+    }
     try {
       const content = node.handle ? await readFileHandle(node.handle) : await remoteReadFile(node.path, surfaceId)
       onReferenceFile({ id: node.path, name: node.name, path: node.path, content, language: inferLanguage(node.path) })
@@ -2259,44 +2791,33 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     return true
   }, [])
 
-  const handleOpenPreviewTarget = useCallback((target: string): boolean => {
-    const trimmed = target.trim()
-    if (!trimmed) return false
-    const resolved = resolvePreviewTarget(trimmed)
-    if (!resolved) return false
+  const handleOpenPreviewTarget = useCallback((target?: string | null): boolean => {
+    const trimmed = target?.trim() ?? ''
+    const resolved = trimmed ? resolvePreviewTarget(trimmed) : null
+    if (trimmed && !resolved) return false
 
-    const tabId = `preview:${trimmed}`
-    const nextTab: EditorTab = {
-      id: tabId,
-      type: 'preview',
-      path: trimmed,
-      label: resolved.label,
-      previewTarget: trimmed,
-      previewSrc: resolved.iframeSrc,
+    if (managedPreviewSession) {
+      void stopManagedPreviewSession(false)
     }
 
-    setOpenTabs((prev) => {
-      const existing = prev.find((tab) => tab.id === tabId)
-      if (existing) {
-        return prev.map((tab) => (tab.id === tabId ? { ...tab, ...nextTab } : tab))
-      }
-      const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
-      if (previewIndex >= 0) {
-        const next = [...prev]
-        next[previewIndex] = nextTab
-        return next
-      }
-      return [...prev, nextTab]
-    })
-    setActiveTabId(tabId)
-    setScDiffFile(null)
-    setActiveNativePath(null)
-    setPreviewContent(null)
-    setPreviewPath(trimmed)
-    setPreviewLanguage('plaintext')
-    onActiveFileChange('')
+    setPreviewInput(trimmed || previewInput)
+    setPreviewPanelError(null)
+    setPreviewFrameLoading(Boolean(resolved))
+    if (!resolved) {
+      setPreviewSidePanelOpen(true)
+      setPreviewSideTab('controls')
+    }
+    syncPreviewTab(() => ({
+      id: 'preview',
+      type: 'preview',
+      path: trimmed || '__preview__',
+      label: resolved?.label ?? 'Preview',
+      previewTarget: trimmed || undefined,
+      previewSrc: resolved?.iframeSrc ?? null,
+      previewMode: resolved ? 'raw' : null,
+    }), true)
     return true
-  }, [onActiveFileChange])
+  }, [managedPreviewSession, previewInput, stopManagedPreviewSession, syncPreviewTab])
 
   const handleOpenArchitectureTab = useCallback(() => {
     const tabId = 'architecture'
@@ -2366,6 +2887,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [activeTabId])
 
   const handleClosePreviewTarget = useCallback(() => {
+    if (managedPreviewSession) {
+      void stopManagedPreviewSession(false)
+    }
+    setPreviewSidePanelOpen(false)
     setOpenTabs((prev) => {
       const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
       if (previewIndex < 0) return prev
@@ -2405,7 +2930,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       }
       return next
     })
-  }, [activeTabId])
+  }, [activeTabId, managedPreviewSession, stopManagedPreviewSession])
 
   const handleRefreshPreviewTarget = useCallback(() => {
     setOpenTabs((prev) => prev.map((tab) => (
@@ -2415,11 +2940,89 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     )))
   }, [])
 
+  const handleOpenPreviewFromControls = useCallback(() => {
+    const trimmed = previewInput.trim()
+    if (!trimmed) {
+      handleOpenPreviewTarget(null)
+      return
+    }
+    if (previewWorkspaceRoot && !isHtmlFilePath(trimmed)) {
+      void (async () => {
+        if (!previewSessionId || !previewToken) {
+          setPreviewPanelError('Login is required to start a managed preview session.')
+          return
+        }
+        setPreviewBusy(true)
+        setPreviewPanelError(null)
+        setPreviewFrameLoading(true)
+        handleOpenPreviewTarget(null)
+        try {
+          const response = await fetch(`${API_URL}/api/preview/start`, {
+            method: 'POST',
+            headers: authHeaders(previewToken),
+            body: JSON.stringify({
+              sessionId: previewSessionId,
+              workspaceRoot: previewWorkspaceRoot,
+              target: trimmed || null,
+              command: previewCommand.trim() || null,
+              port: previewPort.trim() ? Number.parseInt(previewPort.trim(), 10) : null,
+            }),
+          })
+          const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
+          if (!response.ok || !data.session) {
+            throw new Error(data.error || 'Failed to start preview')
+          }
+          setManagedPreviewSession(data.session)
+          setPreviewSideTab('controls')
+        } catch (error) {
+          setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start preview')
+          setPreviewFrameLoading(false)
+        } finally {
+          setPreviewBusy(false)
+        }
+      })()
+      return
+    }
+    handleOpenPreviewTarget(trimmed)
+  }, [handleOpenPreviewTarget, previewCommand, previewInput, previewPort, previewSessionId, previewToken, previewWorkspaceRoot])
+
+  const handleRestartManagedPreview = useCallback(async () => {
+    if (!previewSessionId || !previewToken) return
+    setPreviewBusy(true)
+    setPreviewPanelError(null)
+    setPreviewFrameLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/api/preview/restart`, {
+        method: 'POST',
+        headers: authHeaders(previewToken),
+        body: JSON.stringify({ sessionId: previewSessionId }),
+      })
+      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
+      if (!response.ok || !data.session) {
+        throw new Error(data.error || 'Failed to restart preview')
+      }
+      setManagedPreviewSession(data.session)
+    } catch (error) {
+      setPreviewPanelError(error instanceof Error ? error.message : 'Failed to restart preview')
+      setPreviewFrameLoading(false)
+    } finally {
+      setPreviewBusy(false)
+    }
+  }, [previewSessionId, previewToken])
+
+  const handleStopManagedPreview = useCallback(async () => {
+    setPreviewBusy(true)
+    await stopManagedPreviewSession(true)
+  }, [stopManagedPreviewSession])
+
+  const previewExternalUrl = managedPreviewSession?.url ?? activePreviewTab?.previewTarget ?? null
+
   useImperativeHandle(ref, () => ({
     openDirectory: handleOpenDirectory,
     openRemoteWorkspace: handleOpenRemoteWorkspace,
     openFileByPath: handleOpenFileByPath,
     readFileByPath: handleReadFileByPath,
+    readReferencePath: handleReadReferencePath,
     openReviewDiff: handleOpenReviewDiff,
     openPreviewTarget: handleOpenPreviewTarget,
     closePreviewTarget: handleClosePreviewTarget,
@@ -2427,7 +3030,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     openArchitectureTab: handleOpenArchitectureTab,
     closeArchitectureTab: handleCloseArchitectureTab,
     searchFiles: handleSearchFiles,
-  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleRefreshPreviewTarget, handleOpenArchitectureTab, handleCloseArchitectureTab, handleSearchFiles])
+  }), [handleOpenDirectory, handleOpenRemoteWorkspace, handleOpenFileByPath, handleReadFileByPath, handleReadReferencePath, handleOpenReviewDiff, handleOpenPreviewTarget, handleClosePreviewTarget, handleRefreshPreviewTarget, handleOpenArchitectureTab, handleCloseArchitectureTab, handleSearchFiles])
 
   useEffect(() => {
     if (!previewRequest) return
@@ -2642,6 +3245,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- Tab management ---- */
   const handleCloseTab = useCallback((tabId: string) => {
+    const closingTab = openTabs.find((tab) => tab.id === tabId) ?? null
+    if (closingTab?.type === 'preview' && managedPreviewSession) {
+      void stopManagedPreviewSession(false)
+      setPreviewSidePanelOpen(false)
+    }
     setOpenTabs(prev => {
       const idx = prev.findIndex(t => t.id === tabId)
       if (idx < 0) return prev
@@ -2676,7 +3284,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       }
       return next
     })
-  }, [activeTabId])
+  }, [activeTabId, managedPreviewSession, openTabs, stopManagedPreviewSession])
 
   const handleSwitchTab = useCallback((tabId: string) => {
     const tab = openTabs.find(t => t.id === tabId)
@@ -3300,7 +3908,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   expandedDirs={expandedDirs}
                   onToggleDir={handleToggleDirFromTree}
                   onSelectFile={handleSelectNativeFileMobile}
-                  onContextFile={handleContextNativeFile}
+                  onContextFile={handleContextNativeNode}
                   onTreeContextMenu={handleTreeContextMenu}
                   onMoveNode={handleMoveTreeNode}
                   onMobilePointerStart={handleMobileTreePointerStart}
@@ -3533,13 +4141,22 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               })}
               <div className="flex-1" />
               {activeTab?.type === 'preview' && (
-                <button
-                  onClick={handleRefreshPreviewTarget}
-                  className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
-                  title="Refresh preview"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </button>
+                <>
+                  <button
+                    onClick={handleRefreshPreviewTarget}
+                    className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
+                    title="Refresh preview"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => setPreviewSidePanelOpen((prev) => !prev)}
+                    className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
+                    title="Preview controls"
+                  >
+                    <Settings2 className="h-3 w-3" />
+                  </button>
+                </>
               )}
               {onToggleEditor && (
                 <button
@@ -3605,21 +4222,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     scrollBeyondLastLine: false,
                   }}
                 />
-              ) : activeTab?.type === 'preview' ? (
-                activeTab.previewSrc ? (
-                  <iframe
-                    key={`${activeTab.id}:${activeTab.version ?? 0}`}
-                    src={activeTab.previewSrc}
-                    title={activeTab.label || 'Workspace preview'}
-                    className="h-full w-full bg-white"
-                    style={disablePreviewPointerEvents ? { pointerEvents: 'none' } : undefined}
-                    sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-                  />
-                ) : (
-                  <div className="h-full flex items-center justify-center text-xs text-muted-foreground px-4 text-center">
-                    Preview target is not available.
-                  </div>
-                )
+              ) : activeTab?.type === 'preview' ? renderPreviewPane(
+                'Open or start a preview from the side controls.',
               ) : activeTab?.type === 'architecture' ? (
                 <ArchitecturePanel
                   diagram={architectureDiagram ?? null}
@@ -3819,7 +4423,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 expandedDirs={expandedDirs}
                 onToggleDir={handleToggleDirFromTree}
                 onSelectFile={handleSelectNativeFileFromTree}
-                onContextFile={handleContextNativeFile}
+                onContextFile={handleContextNativeNode}
                 onTreeContextMenu={handleTreeContextMenu}
                 onMoveNode={handleMoveTreeNode}
                 gitStatusMap={gitStatusMap}
@@ -3853,7 +4457,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       onClick={(e) => { e.stopPropagation(); onReferenceFile(file) }}
                       title="Add to chat"
                     >
-                      <Send className="h-3 w-3" />
+                      <Plus className="h-3 w-3" />
                     </button>
                   </div>
                 ))}
@@ -4150,13 +4754,22 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </button>
               )}
               {activeTab?.type === 'preview' && (
-                <button
-                  onClick={handleRefreshPreviewTarget}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                  title="Refresh preview"
-                >
-                  <RefreshCw className="h-3 w-3" />
-                </button>
+                <>
+                  <button
+                    onClick={handleRefreshPreviewTarget}
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                    title="Refresh preview"
+                  >
+                    <RefreshCw className="h-3 w-3" />
+                  </button>
+                  <button
+                    onClick={() => setPreviewSidePanelOpen((prev) => !prev)}
+                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                    title="Preview controls"
+                  >
+                    <Settings2 className="h-3 w-3" />
+                  </button>
+                </>
               )}
               {onToggleEditor && (
                 <button
@@ -4204,21 +4817,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               minimap: { enabled: false },
             }}
           />
-        ) : activeTab?.type === 'preview' ? (
-          activeTab.previewSrc ? (
-            <iframe
-              key={`${activeTab.id}:${activeTab.version ?? 0}`}
-              src={activeTab.previewSrc}
-              title={activeTab.label || 'Workspace preview'}
-              className="h-full w-full bg-white"
-              style={disablePreviewPointerEvents ? { pointerEvents: 'none' } : undefined}
-              sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-            />
-          ) : (
-            <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
-              Preview target is not available.
-            </div>
-          )
+        ) : activeTab?.type === 'preview' ? renderPreviewPane(
+          'Open or start a preview from the side controls.',
         ) : activeTab?.type === 'architecture' ? (
           <ArchitecturePanel
             diagram={architectureDiagram ?? null}
@@ -4332,6 +4932,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         }}
         onPointerDown={(e) => e.stopPropagation()}
       >
+        <button
+          className="ui-menu-item"
+          onClick={() => {
+            void handleContextNativeNode(fileContextMenu.node)
+            setFileContextMenu(null)
+          }}
+        >
+          <Plus className="h-3 w-3" />
+          Add to Chat
+        </button>
         {fileContextMenu.node.kind === 'file' && (
           <button
             className="ui-menu-item"
@@ -4342,19 +4952,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             }}
           >
             Open
-          </button>
-        )}
-        {fileContextMenu.node.kind === 'file' && (
-          <button
-            className="ui-menu-item"
-            onClick={() => {
-              const node = fileContextMenu.node as LazyFile
-              void handleContextNativeFile(node)
-              setFileContextMenu(null)
-            }}
-          >
-            <Send className="h-3 w-3" />
-            Add to Chat
           </button>
         )}
         <div className="my-1 h-px bg-border" />

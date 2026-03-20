@@ -407,12 +407,7 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
     }
 
     try {
-      const upstream = await fetch(targetUrl, {
-        method: request.method,
-        headers: buildProxyRequestHeaders(request.headers),
-        body: buildProxyRequestBody(request.method, request.body),
-        redirect: "follow",
-      });
+      const upstream = await fetchDevProxyUpstream(targetUrl, request, proxiedPath);
 
       reply.code(upstream.status);
       const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
@@ -437,7 +432,7 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
 
       if (contentType.includes("text/html") || contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
         const text = await upstream.text();
-        return reply.type(contentType).send(rewriteDevProxyText(text, contentType, `/api/dev-proxy/${port}`));
+        return reply.type(contentType).send(rewriteDevProxyText(text, contentType, `/api/dev-proxy/${port}`, proxiedPath));
       }
 
       const body = Buffer.from(await upstream.arrayBuffer());
@@ -452,6 +447,22 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
 
   app.all("/api/dev-proxy/:port", handler);
   app.all("/api/dev-proxy/:port/*", handler);
+}
+
+async function fetchDevProxyUpstream(targetUrl: URL, request: any, proxiedPath: string): Promise<Response> {
+  const doFetch = () => fetch(targetUrl, {
+    method: request.method,
+    headers: buildProxyRequestHeaders(request.headers),
+    body: buildProxyRequestBody(request.method, request.body),
+    redirect: "follow",
+  });
+
+  let upstream = await doFetch();
+  if (upstream.status === 504 && proxiedPath.startsWith("/node_modules/.vite/deps/")) {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    upstream = await doFetch();
+  }
+  return upstream;
 }
 
 function normalizeProxyPort(value?: string): number | null {
@@ -495,15 +506,26 @@ function rewritePreviewHtml(html: string, prefix: string): string {
   return rewritten;
 }
 
-function rewriteDevProxyText(body: string, contentType: string, prefix: string): string {
+function rewriteDevProxyText(body: string, contentType: string, prefix: string, proxiedPath = "/"): string {
   if (contentType.includes("text/html")) {
-    return rewritePreviewHtml(body, prefix);
+    const withoutViteClient = body.replace(
+      /<script\b[^>]*type=(["'])module\1[^>]*src=(["'])\/@vite\/client(?:\?[^"']*)?\2[^>]*>\s*<\/script>\s*/gi,
+      "",
+    );
+    return rewritePreviewHtml(withoutViteClient, prefix);
   }
 
   if (contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
-    return body.replace(/(["'`(])\/(@fs\/|@vite\/|node_modules\/|src\/)/g, (_match, boundary: string, pathPrefix: string) => {
+    let rewritten = body.replace(/(["'`(])\/(@fs\/|@vite\/|node_modules\/|src\/)/g, (_match, boundary: string, pathPrefix: string) => {
       return `${boundary}${prefix}/${pathPrefix}`;
     });
+    if (proxiedPath === "/@vite/client") {
+      rewritten = rewritten.replace(
+        /console\.info\(`\[vite\] connecting\.\.\.`\);?/g,
+        "",
+      );
+    }
+    return rewritten;
   }
 
   return body;

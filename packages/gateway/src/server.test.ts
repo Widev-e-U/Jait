@@ -151,7 +151,7 @@ describe("@jait/gateway health", () => {
     const upstream = createHttpServer((request, response) => {
       if (request.url === "/") {
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
-        response.end('<!DOCTYPE html><html><head></head><body><script type="module" src="/src/main.tsx"></script></body></html>');
+        response.end('<!DOCTYPE html><html><head></head><body><script type="module" src="/@vite/client"></script><script type="module" src="/src/main.tsx"></script></body></html>');
         return;
       }
 
@@ -181,6 +181,54 @@ describe("@jait/gateway health", () => {
     expect(String(response.headers["content-type"])).toContain("text/javascript");
     expect(response.body).toContain(`"/api/dev-proxy/${address.port}/@fs/home/user/project/node_modules/vite/dist/client/env.mjs"`);
     expect(response.body).toContain(`"/api/dev-proxy/${address.port}/node_modules/.vite/deps/react.js?v=1"`);
+
+    const htmlResponse = await app.inject({
+      method: "GET",
+      url: `/api/dev-proxy/${address.port}/`,
+    });
+
+    expect(htmlResponse.statusCode).toBe(200);
+    expect(htmlResponse.body).not.toContain("/@vite/client");
+    expect(htmlResponse.body).toContain(`/api/dev-proxy/${address.port}/src/main.tsx`);
+
+    await app.close();
+    await new Promise<void>((resolveClose, rejectClose) => upstream.close((error) => error ? rejectClose(error) : resolveClose()));
+  });
+
+  it("GET /api/dev-proxy retries transient vite dep 504 responses", async () => {
+    let attempts = 0;
+    const upstream = createHttpServer((request, response) => {
+      if (request.url?.startsWith("/node_modules/.vite/deps/react.js")) {
+        attempts += 1;
+        if (attempts === 1) {
+          response.writeHead(504, { "Content-Type": "text/plain; charset=utf-8" });
+          response.end("Outdated Optimize Dep");
+          return;
+        }
+        response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+        response.end("export default 'ok';");
+        return;
+      }
+
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("not found");
+    });
+
+    await new Promise<void>((resolveListen) => upstream.listen(0, "127.0.0.1", () => resolveListen()));
+    const address = upstream.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP address for upstream test server");
+    }
+
+    const app = await createServer(testConfig);
+    const response = await app.inject({
+      method: "GET",
+      url: `/api/dev-proxy/${address.port}/node_modules/.vite/deps/react.js?v=1`,
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("export default 'ok';");
+    expect(attempts).toBe(2);
 
     await app.close();
     await new Promise<void>((resolveClose, rejectClose) => upstream.close((error) => error ? rejectClose(error) : resolveClose()));
