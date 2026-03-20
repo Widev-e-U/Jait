@@ -101,6 +101,7 @@ import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRu
 import { agentsApi, type AgentThread, type ProviderId, type ThreadStatus } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
+import { canStopThread } from '@/lib/thread-status'
 import { getWorkspaceRootForPath, isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
   collapseMobileWorkspace,
@@ -262,10 +263,6 @@ function ThreadKindBadge({ kind }: { kind: 'delivery' | 'delegation' }) {
       {kind === 'delegation' ? 'Delegate' : 'Delivery'}
     </Badge>
   )
-}
-
-function hasLiveThreadSession(thread: Pick<AgentThread, 'providerSessionId'>): boolean {
-  return typeof thread.providerSessionId === 'string' && thread.providerSessionId.length > 0
 }
 
 const REPO_RUNTIME_PROVIDER_LABELS: Record<'codex' | 'claude-code', string> = {
@@ -527,7 +524,7 @@ function ManagerThreadListItem({
   onDelete,
 }: ManagerThreadListItemProps) {
   const showThreadActions = thread.kind === 'delivery' && repo != null && (thread.status === 'completed' || Boolean(thread.prUrl))
-  const canStopThread = hasLiveThreadSession(thread)
+  const stopThreadVisible = canStopThread(thread)
 
   return (
     <div
@@ -614,7 +611,7 @@ function ManagerThreadListItem({
             />
           </div>
         )}
-        {canStopThread && (
+        {stopThreadVisible && (
           <Button
             variant="ghost"
             size="icon"
@@ -758,18 +755,20 @@ function ManagerActiveThreadsMenu({
                       />
                     </div>
                   )}
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 rounded-lg"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void Promise.resolve(onStopThread(thread.id))
-                    }}
-                    title="Stop thread"
-                  >
-                    <Square className="h-3 w-3" />
-                  </Button>
+                  {canStopThread(thread) && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 rounded-lg"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        void Promise.resolve(onStopThread(thread.id))
+                      }}
+                      title="Stop thread"
+                    >
+                      <Square className="h-3 w-3" />
+                    </Button>
+                  )}
                 </div>
               </div>
             )
@@ -3841,7 +3840,7 @@ function App() {
                           {automation.selectedThread.branch}
                         </Badge>
                       )}
-                      {hasLiveThreadSession(automation.selectedThread) && (
+                      {canStopThread(automation.selectedThread) && (
                         <Button
                           variant="ghost"
                           size="icon"

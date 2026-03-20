@@ -39,6 +39,7 @@ import {
   type AutomationRepo,
 } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
+import { canStopThread } from '@/lib/thread-status'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { ThreadActions } from './ThreadActions'
 
@@ -489,7 +490,7 @@ export function AutomationPage() {
                     {selectedThread.branch}
                   </Badge>
                 )}
-                {selectedThread.providerSessionId && (
+                {canStopThread(selectedThread) && (
                   <Button
                     variant="ghost"
                     size="icon"

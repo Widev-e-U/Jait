@@ -36,6 +36,7 @@ import {
   type ProviderInfo,
   type ProviderId,
 } from '@/lib/agents-api'
+import { canStopThread } from '@/lib/thread-status'
 
 // ── Status helpers ───────────────────────────────────────────────────
 
@@ -368,7 +369,7 @@ export function AgentsPage() {
                     <Play className="w-3 h-3" /> Resume
                   </Button>
                 )}
-                {selected.providerSessionId && (
+                {canStopThread(selected) && (
                   <Button
                     size="sm"
                     variant="destructive"
