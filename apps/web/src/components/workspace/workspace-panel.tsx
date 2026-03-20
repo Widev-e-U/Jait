@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
-import Editor, { DiffEditor } from '@monaco-editor/react'
+import Editor from '@monaco-editor/react'
 import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
@@ -12,6 +12,7 @@ import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
 import { DiffView } from './diff-view'
+import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -2962,15 +2963,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   onApply={(result) => { void onApplyDiff?.(activeTab.path, result) }}
                 />
               ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
-                <DiffEditor
+                <ReadOnlyDiffView
                   key={activeTab.id}
+                  className="h-full"
+                  editorClassName="h-full"
                   original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
                   modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
                   language={activeTab.language ?? 'plaintext'}
-                  theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
+                  renderSideBySide={false}
                   options={{
-                    readOnly: true,
-                    renderSideBySide: false,
                     minimap: { enabled: false },
                     lineNumbers: 'on',
                     wordWrap: 'on',
@@ -3544,19 +3545,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             onApply={(result) => { void onApplyDiff?.(activeTab.path, result) }}
           />
         ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
-          <DiffEditor
+          <ReadOnlyDiffView
             key={activeTab.id}
-            height="100%"
-            theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
+            className="h-full"
+            editorClassName="h-full"
             original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
             modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
             language={activeTab.language ?? inferLanguage(activeTab.path)}
+            renderSideBySide={!isMobile}
             options={{
-              readOnly: true,
               minimap: { enabled: false },
-              fontSize: 13,
-              automaticLayout: true,
-              renderSideBySide: !isMobile,
             }}
           />
         ) : activeTab?.type === 'preview' ? (

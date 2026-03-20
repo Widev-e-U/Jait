@@ -6,13 +6,12 @@
  */
 
 import { useState, useCallback, useEffect } from 'react'
-import { DiffEditor } from '@monaco-editor/react'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
 import { Loader2, X, FileCode, FilePlus, FileX, FileEdit } from 'lucide-react'
 import { gitApi, type FileDiffEntry } from '@/lib/git-api'
-import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import { workspaceLanguageForPath } from '@/components/workspace'
+import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 
 interface GitDiffViewerProps {
   cwd: string
@@ -50,8 +49,6 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
   const [loading, setLoading] = useState(true)
   const [selectedIndex, setSelectedIndex] = useState(0)
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 960)
-  const theme = useResolvedTheme()
-
   useEffect(() => {
     let cancelled = false
     setLoading(true)
@@ -165,19 +162,17 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
               {/* Editor */}
               <div className="flex-1 min-h-0">
                 {selected && (
-                  <DiffEditor
+                  <ReadOnlyDiffView
                     key={selected.path}
                     original={selected.original}
                     modified={selected.modified}
                     language={language}
-                    theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+                    className="h-full"
+                    editorClassName="h-full"
+                    renderSideBySide={!isNarrow}
                     options={{
                       readOnly: true,
-                      renderSideBySide: !isNarrow,
                       minimap: { enabled: false },
-                      fontSize: 13,
-                      automaticLayout: true,
-                      scrollBeyondLastLine: false,
                       renderOverviewRuler: true,
                       ignoreTrimWhitespace: false,
                       enableSplitViewResizing: true,
