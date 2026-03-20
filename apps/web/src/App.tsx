@@ -3332,6 +3332,7 @@ function App() {
 
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0 || isLoadingHistory
+  const requiresAuthGate = !authLoading && !isAuthenticated
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
   const activityEvents: ActivityEvent[] = [
@@ -3352,14 +3353,16 @@ function App() {
   return (
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
-        <header
-          className={`flex items-center gap-1 border-b bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
-          style={isElectron ? {
-            WebkitAppRegion: 'drag',
-            paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
-            paddingRight: desktopPlatform === 'win32' ? 140 : undefined,
-          } as React.CSSProperties : undefined}
-        >
+        {!requiresAuthGate && (
+          <>
+            <header
+              className={`flex items-center gap-1 border-b bg-background/95 px-2 backdrop-blur supports-[backdrop-filter]:bg-background/85 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
+              style={isElectron ? {
+                WebkitAppRegion: 'drag',
+                paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
+                paddingRight: desktopPlatform === 'win32' ? 140 : undefined,
+              } as React.CSSProperties : undefined}
+            >
           {/* Left: Logo — always visible */}
           <div className="flex items-center shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 1024 1024" className="shrink-0">
@@ -3574,17 +3577,17 @@ function App() {
               </div>
             )}
           </div>
-        </header>
+            </header>
 
-        {/* Chat-specific toolbar */}
-        {currentView === 'chat' && (
-          <div
-            className={`flex border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${
-              compactManagerToolbar
-                ? 'min-h-9 flex-wrap items-start gap-2 py-1.5'
-                : 'h-9 items-center gap-1 overflow-x-auto scrollbar-none'
-            }`}
-          >
+            {/* Chat-specific toolbar */}
+            {currentView === 'chat' && (
+              <div
+                className={`flex border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${
+                  compactManagerToolbar
+                    ? 'min-h-9 flex-wrap items-start gap-2 py-1.5'
+                    : 'h-9 items-center gap-1 overflow-x-auto scrollbar-none'
+                }`}
+              >
             {viewMode === 'developer' && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -4538,54 +4541,62 @@ function App() {
                 </div>
               </div>
             )}
-          </div>
-        )}
-
-        {showTerminal && currentView === 'chat' && viewMode === 'developer' && (
-          <div className="shrink-0 border-t overflow-hidden" style={{ height: terminalHeight }}>
-            <div
-              onMouseDown={handleDragStart}
-              className="h-1 cursor-row-resize hover:bg-primary/30 transition-colors"
-            />
-            <div className="relative">
-              <TerminalTabs
-                terminals={terminals}
-                activeTerminalId={activeTerminalId}
-                onSelect={setActiveTerminalId}
-                onCreate={() => createTerminal(activeSessionId ?? 'default')}
-                onKill={handleKillTerminal}
-              />
-              <button
-                onClick={closeTerminalPanel}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                aria-label="Close terminal"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-            {activeTerminalId ? (
-              <TerminalView terminalId={activeTerminalId} className="h-[calc(100%-2rem)]" token={token} />
-            ) : (
-              <div className="flex items-center justify-center h-[calc(100%-2rem)] text-sm text-muted-foreground">
-                <button
-                  onClick={() => createTerminal(activeSessionId ?? 'default')}
-                  className="hover:text-foreground transition-colors"
-                >
-                  + New Terminal
-                </button>
               </div>
             )}
-          </div>
+
+            {showTerminal && currentView === 'chat' && viewMode === 'developer' && (
+              <div className="shrink-0 border-t overflow-hidden" style={{ height: terminalHeight }}>
+                <div
+                  onMouseDown={handleDragStart}
+                  className="h-1 cursor-row-resize hover:bg-primary/30 transition-colors"
+                />
+                <div className="relative">
+                  <TerminalTabs
+                    terminals={terminals}
+                    activeTerminalId={activeTerminalId}
+                    onSelect={setActiveTerminalId}
+                    onCreate={() => createTerminal(activeSessionId ?? 'default')}
+                    onKill={handleKillTerminal}
+                  />
+                  <button
+                    onClick={closeTerminalPanel}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Close terminal"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {activeTerminalId ? (
+                  <TerminalView terminalId={activeTerminalId} className="h-[calc(100%-2rem)]" token={token} />
+                ) : (
+                  <div className="flex items-center justify-center h-[calc(100%-2rem)] text-sm text-muted-foreground">
+                    <button
+                      onClick={() => createTerminal(activeSessionId ?? 'default')}
+                      className="hover:text-foreground transition-colors"
+                    >
+                      + New Terminal
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {viewMode === 'developer' && showDebugPanel && (
+              <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
+                <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
+              </div>
+            )}
+          </>
         )}
 
-        {viewMode === 'developer' && showDebugPanel && (
-          <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
-            <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
-          </div>
-        )}
-
-        <Dialog open={showLoginDialog} onOpenChange={setShowLoginDialog}>
-          <DialogContent className="sm:max-w-md">
+        <Dialog
+          open={showLoginDialog || requiresAuthGate}
+          onOpenChange={(open) => {
+            if (!open && requiresAuthGate) return
+            setShowLoginDialog(open)
+          }}
+        >
+          <DialogContent className="sm:max-w-md" showCloseButton={!requiresAuthGate}>
             {gatewayStep === 'url' ? (
               <>
                 <DialogHeader>
