@@ -20,6 +20,7 @@ import {
   type AutomationPlan,
   type PlanTask,
   type PlanTaskStatus,
+  type ProviderId,
 } from '@/lib/agents-api'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 
@@ -52,6 +53,8 @@ interface PlanModalProps {
   repoName: string
   defaultBranch: string
   repoLocalPath: string
+  provider: ProviderId
+  model?: string | null
   onStartThread: (task: PlanTask, plan: AutomationPlan, repo: { name: string; localPath: string; defaultBranch: string }) => void
 }
 
@@ -59,6 +62,7 @@ interface PlanModalProps {
 
 export function PlanModal({
   open, onOpenChange, repoId, repoName, defaultBranch, repoLocalPath,
+  provider, model,
   onStartThread,
 }: PlanModalProps) {
   const confirm = useConfirmDialog()
@@ -122,7 +126,11 @@ export function PlanModal({
     setGenerating(true)
     setError(null)
     try {
-      const result = await agentsApi.generatePlanTasks(activePlan.id, generatePrompt || undefined)
+      const result = await agentsApi.generatePlanTasks(activePlan.id, {
+        prompt: generatePrompt || undefined,
+        provider,
+        model: provider === 'jait' ? null : (model ?? null),
+      })
       setPlans((prev) => prev.map((p) => p.id === result.plan.id ? result.plan : p))
       setGeneratePrompt('')
     } catch (err) {
@@ -130,7 +138,7 @@ export function PlanModal({
     } finally {
       setGenerating(false)
     }
-  }, [activePlan, generatePrompt])
+  }, [activePlan, generatePrompt, model, provider])
 
   // ── Task actions ───────────────────────────────────────────────
 
