@@ -956,7 +956,10 @@ export function registerChatRoutes(
           }
         }
 
-        const mcpServers = [providerRegistry.buildJaitMcpServerRef(config, getRequestBaseUrl(request))];
+        const mcpServers = [providerRegistry.buildJaitMcpServerRef(config, getRequestBaseUrl(request), {
+          sessionId,
+          workspaceRoot: cliWsRoot,
+        })];
 
         // ── Reuse an existing CLI session if one is alive for this Jait session ──
         const cachedCliSession = activeCliSessions.get(sessionId);

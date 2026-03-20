@@ -354,4 +354,59 @@ describe("mcp-server", () => {
       workspaceRoot: "/tmp/current-workspace",
     });
   });
+
+  it("uses MCP URL query params as tool context overrides", async () => {
+    const registry = new ToolRegistry();
+    let capturedContext: { sessionId: string; workspaceRoot: string } | null = null;
+
+    registry.register({
+      name: "surfaces.list",
+      description: "List surfaces",
+      tier: "standard",
+      category: "surfaces",
+      source: "builtin",
+      parameters: { type: "object", properties: {} },
+      async execute(_input, context) {
+        capturedContext = {
+          sessionId: context.sessionId,
+          workspaceRoot: context.workspaceRoot,
+        };
+        return { ok: true, message: "ok" };
+      },
+    });
+
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      config: {
+        host: "127.0.0.1",
+        port: 3000,
+        jwtSecret: "test-secret",
+      } as any,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp?sessionId=query-session&workspaceRoot=%2Ftmp%2Fquery-workspace",
+      headers: {
+        "content-type": "application/json",
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "surfaces.list",
+          arguments: {},
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(capturedContext).toEqual({
+      sessionId: "query-session",
+      workspaceRoot: "/tmp/query-workspace",
+    });
+  });
 });

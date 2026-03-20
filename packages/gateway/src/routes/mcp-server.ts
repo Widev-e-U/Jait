@@ -74,16 +74,19 @@ function readOptionalString(value: unknown): string | undefined {
 }
 
 function resolveMcpToolContextOverrides(
-  request: Pick<FastifyRequest, "headers"> | null,
+  request: Pick<FastifyRequest, "headers" | "query"> | null,
   params?: Record<string, unknown>,
 ): McpToolContextOverrides {
   const headers = request?.headers as Record<string, unknown> | undefined;
+  const query = request?.query as Record<string, unknown> | undefined;
   return {
     sessionId:
       readOptionalString(headers?.["x-jait-session-id"])
+      ?? readOptionalString(query?.["sessionId"])
       ?? readOptionalString(params?.["sessionId"]),
     workspaceRoot:
       readOptionalString(headers?.["x-jait-workspace-root"])
+      ?? readOptionalString(query?.["workspaceRoot"])
       ?? readOptionalString(params?.["workspaceRoot"]),
   };
 }
@@ -150,6 +153,17 @@ export function resolveMcpBaseUrl(
     ? "127.0.0.1"
     : request.hostname?.trim() || config.host;
   return `${proto ?? "http"}://${host}:${config.port}`;
+}
+
+function appendMcpContextQuery(baseUrl: string, query?: Record<string, unknown>): string {
+  const sessionId = readOptionalString(query?.["sessionId"]);
+  const workspaceRoot = readOptionalString(query?.["workspaceRoot"]);
+  if (!sessionId && !workspaceRoot) return baseUrl;
+
+  const url = new URL(baseUrl);
+  if (sessionId) url.searchParams.set("sessionId", sessionId);
+  if (workspaceRoot) url.searchParams.set("workspaceRoot", workspaceRoot);
+  return url.toString();
 }
 
 export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
@@ -245,7 +259,11 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
 
     // Send the endpoint URL for the client to POST requests to
     const baseUrl = resolveMcpBaseUrl(request as FastifyRequest, config);
-    write(`event: endpoint\ndata: ${baseUrl}/mcp/messages?clientId=${clientId}\n\n`);
+    const endpointUrl = appendMcpContextQuery(
+      `${baseUrl}/mcp/messages?clientId=${encodeURIComponent(clientId)}`,
+      request.query as Record<string, unknown> | undefined,
+    );
+    write(`event: endpoint\ndata: ${endpointUrl}\n\n`);
 
     // Keepalive
     const interval = setInterval(() => {

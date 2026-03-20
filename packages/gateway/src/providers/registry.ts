@@ -64,15 +64,27 @@ export class ProviderRegistry {
    * The gateway exposes a Streamable HTTP MCP endpoint at /mcp.
    * that CLI agents can connect to.
    */
-  buildJaitMcpServerRef(config: { host: string; port: number }, baseUrl?: string): McpServerRef {
+  buildJaitMcpServerRef(
+    config: { host: string; port: number },
+    baseUrl?: string,
+    context?: { sessionId?: string; workspaceRoot?: string },
+  ): McpServerRef {
     const normalizedBaseUrl = baseUrl?.trim().replace(/\/+$/, "");
     const host = config.host === "0.0.0.0" ? "127.0.0.1" : config.host;
     const resolvedBaseUrl = normalizedBaseUrl || `http://${host}:${config.port}`;
+    const url = new URL("/mcp", `${resolvedBaseUrl}/`);
+
+    if (context?.sessionId) {
+      url.searchParams.set("sessionId", context.sessionId);
+    }
+    if (context?.workspaceRoot) {
+      url.searchParams.set("workspaceRoot", context.workspaceRoot);
+    }
 
     return {
       name: "jait",
       transport: "sse",
-      url: `${resolvedBaseUrl}/mcp`,
+      url: url.toString(),
     };
   }
 }
