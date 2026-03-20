@@ -1,3 +1,7 @@
+import { execSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it, vi } from "vitest";
 import { GitService, detectGitRemoteProvider, parseGitRemote } from "./services/git.js";
 
@@ -39,5 +43,31 @@ describe("buildCreatePrUrl", () => {
     await expect(git.buildCreatePrUrl("/repo", "feature/test", "origin", "main")).resolves.toBe(
       "https://gitea.example.com/acme/repo/compare/main...feature%2Ftest",
     );
+  });
+});
+
+describe("discardChanges", () => {
+  it("discards staged-only tracked file changes", async () => {
+    const root = mkdtempSync(join(tmpdir(), "jait-git-discard-"));
+    try {
+      execSync("git init", { cwd: root, stdio: "ignore" });
+      execSync('git config user.email "test@example.com"', { cwd: root, stdio: "ignore" });
+      execSync('git config user.name "Test User"', { cwd: root, stdio: "ignore" });
+
+      writeFileSync(join(root, "file.txt"), "base\n");
+      execSync("git add file.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "init"', { cwd: root, stdio: "ignore" });
+
+      writeFileSync(join(root, "file.txt"), "changed\n");
+      execSync("git add file.txt", { cwd: root, stdio: "ignore" });
+
+      const git = new GitService();
+      await expect(git.discardChanges(root, ["file.txt"])).resolves.toEqual({ discardedCount: 1 });
+
+      expect(readFileSync(join(root, "file.txt"), "utf8")).toBe("base\n");
+      expect(execSync("git status --short", { cwd: root, encoding: "utf8" }).trim()).toBe("");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });
