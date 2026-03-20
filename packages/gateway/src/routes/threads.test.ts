@@ -33,6 +33,9 @@ class MockThreadProvider implements CliProviderAdapter {
   };
 
   private emitter = new EventEmitter();
+  readonly sendTurn = vi.fn(async (): Promise<void> => {
+    return;
+  });
 
   async checkAvailability(): Promise<boolean> {
     return true;
@@ -49,10 +52,6 @@ class MockThreadProvider implements CliProviderAdapter {
       runtimeMode: options.mode,
       startedAt: new Date().toISOString(),
     };
-  }
-
-  async sendTurn(): Promise<void> {
-    return;
   }
 
   async interruptTurn(): Promise<void> {
@@ -224,6 +223,110 @@ describe("thread routes", () => {
     expect(updated?.prTitle).toBe("feat: implement feature");
     expect(updated?.prState).toBe("open");
 
+    await app.close();
+    sqlite.close();
+  });
+  
+  
+  it("adds existing PR instructions to follow-up send turns", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider();
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    );
+      
+  const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "Implement feature",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+       branch: "feature/existing-pr",
+    });
+    threadService.update(thread.id, {
+      providerSessionId: "mock-session-1",
+      prUrl: "https://github.com/acme/repo/pull/42",
+      prState: "open",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/send`,
+      headers,
+      payload: { message: "Address the review feedback" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(provider.sendTurn).toHaveBeenCalledWith(
+      "mock-session-1",
+      expect.stringContaining("This thread already has an open pull request: https://github.com/acme/repo/pull/42."),
+      undefined,
+    );
+    expect(provider.sendTurn).toHaveBeenCalledWith(
+      "mock-session-1",
+      expect.stringContaining("commit and push them to the same branch"),
+      undefined,
+    );
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("adds existing PR instructions when restarting a completed thread with a new message", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider();
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "Implement feature",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+      branch: "feature/existing-pr",
+    });
+    threadService.update(thread.id, {
+      status: "completed",
+      providerSessionId: null,
+      prUrl: "https://github.com/acme/repo/pull/42",
+      prState: "open",
+      completedAt: new Date().toISOString(),
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "Fix the failing test" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(provider.sendTurn).toHaveBeenCalledWith(
+      "mock-session-1",
+      expect.stringContaining("Apply this follow-up work to the existing PR on branch `feature/existing-pr`."),
+      undefined,
+    );
+    
     await app.close();
     sqlite.close();
   });

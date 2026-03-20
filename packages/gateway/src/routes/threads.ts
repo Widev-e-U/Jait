@@ -132,6 +132,35 @@ export function registerThreadRoutes(
     return Math.min(parsed, 100);
   }
 
+  function buildThreadTurnMessage(args: {
+    message: string;
+    repoStrategy?: string | null;
+    prUrl?: string | null;
+    prState?: "open" | "closed" | "merged" | null;
+    branch?: string | null;
+  }): string {
+    let fullMessage = args.message;
+
+    if (args.repoStrategy?.trim()) {
+      fullMessage = `<repository-strategy>\n${args.repoStrategy.trim()}\n</repository-strategy>\n\n${fullMessage}`;
+    }
+
+    if (args.prState === "open" && args.prUrl?.trim()) {
+      const branchLine = args.branch?.trim() ? ` on branch \`${args.branch.trim()}\`` : "";
+      fullMessage = [
+        fullMessage,
+        "<thread-pr-instructions>",
+        `This thread already has an open pull request: ${args.prUrl.trim()}.`,
+        `Apply this follow-up work to the existing PR${branchLine}.`,
+        "When you finish the requested changes, commit and push them to the same branch.",
+        "Do not open a new PR or switch to a different branch unless explicitly asked.",
+        "</thread-pr-instructions>",
+      ].join("\n\n");
+    }
+
+    return fullMessage;
+  }
+
   /**
    * Find a connected remote node that can run a provider for a given path.
    * Matches the path's platform format (e.g. Windows drive letter) to a
@@ -588,17 +617,21 @@ export function registerThreadRoutes(
 
           // ── Send the actual coding turn ────────────────────────
           if (message) {
-            // Look up repository strategy to prepend as agent instructions
-            let fullMessage = message;
+            let repoStrategy: string | null = null;
             if (repoService && workingDirectory) {
               const matchingRepo = repoService.list(authUser.id).find((r) =>
                 workingDirectory.startsWith(r.localPath) ||
                 workingDirectory.includes(r.name),
               );
-              if (matchingRepo?.strategy?.trim()) {
-                fullMessage = `<repository-strategy>\n${matchingRepo.strategy.trim()}\n</repository-strategy>\n\n${message}`;
-              }
+              repoStrategy = matchingRepo?.strategy ?? null;
             }
+            const fullMessage = buildThreadTurnMessage({
+              message,
+              repoStrategy,
+              prUrl: thread.prUrl,
+              prState: thread.prState,
+              branch: thread.branch,
+            });
 
             const userActivity = threadService.addActivity(id, "message", (displayContent ?? message).slice(0, 500), {
               role: "user",
@@ -688,7 +721,14 @@ export function registerThreadRoutes(
     threadService.update(id, { status: "running", error: null });
     broadcastThreadStatus(id, "running");
 
-    await provider.sendTurn(thread.providerSessionId, message, attachments);
+    const fullMessage = buildThreadTurnMessage({
+      message,
+      prUrl: thread.prUrl,
+      prState: thread.prState,
+      branch: thread.branch,
+    });
+
+    await provider.sendTurn(thread.providerSessionId, fullMessage, attachments);
     return reply.status(200).send({ ok: true });
   });
 
