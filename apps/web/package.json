@@ -55,6 +55,7 @@
     "es-toolkit": "^1.44.0",
     "lucide-react": "^0.456.0",
     "mermaid": "^11.13.0",
+    "motion": "^12.38.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-force-graph-2d": "^1.29.1",
