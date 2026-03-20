@@ -14,7 +14,13 @@ import type { SessionInfo, ChatAttachment } from '@/hooks/useChat'
 import { FileIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
-import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
+import {
+  JAIT_REF_MIME,
+  normalizeUserMessageSegments,
+  parseUserMessageClipboardPayload,
+  parseUserMessageMarkdown,
+  type UserMessageSegment,
+} from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 
 const ICON_CDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@12.9.0/icons/'
@@ -227,6 +233,52 @@ function buildEditableContent(
   }
 }
 
+function insertSegmentsAtCursor(
+  el: HTMLElement,
+  segments: UserMessageSegment[],
+  onRemove: (path: string) => void,
+) {
+  const selection = window.getSelection()
+  if (!selection || selection.rangeCount === 0) {
+    for (const segment of segments) {
+      if (segment.type === 'text') {
+        el.appendChild(document.createTextNode(segment.text))
+      } else {
+        el.appendChild(createChipNode(segment, onRemove))
+      }
+    }
+    moveCursorToEnd(el)
+    return
+  }
+
+  const range = selection.getRangeAt(0)
+  range.deleteContents()
+
+  const fragment = document.createDocumentFragment()
+  for (const segment of segments) {
+    if (segment.type === 'text') {
+      fragment.appendChild(document.createTextNode(segment.text))
+    } else {
+      fragment.appendChild(createChipNode(segment, onRemove))
+    }
+  }
+
+  const lastNode = fragment.lastChild
+  range.insertNode(fragment)
+
+  if (!lastNode) return
+
+  const nextRange = document.createRange()
+  if (lastNode.nodeType === Node.TEXT_NODE) {
+    nextRange.setStart(lastNode, lastNode.textContent?.length ?? 0)
+  } else {
+    nextRange.setStartAfter(lastNode)
+  }
+  nextRange.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(nextRange)
+}
+
 /** Move cursor to the end of a contentEditable element. */
 function moveCursorToEnd(el: HTMLElement) {
   const sel = window.getSelection()
@@ -244,6 +296,8 @@ export interface PromptInputHandle {
   insertChip: (file: ReferencedFile) => void
   /** Read the current ordered text/file segments from the composer. */
   getSegments: () => UserMessageSegment[]
+  /** Focus the editor and move the caret to the end. */
+  focus: () => void
 }
 
 const attachmentDraftStore = new Map<string, ChatAttachment[]>()
@@ -423,6 +477,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     getSegments: () => {
       const el = editableRef.current
       return el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
+    },
+    focus: () => {
+      const el = editableRef.current
+      if (!el) return
+      el.focus()
+      moveCursorToEnd(el)
     },
   }), [handleRemoveChip, segments])
 
@@ -756,6 +816,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   }, [])
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
+    const el = editableRef.current
     const items = e.clipboardData.items
     const imageFiles: File[] = []
     for (let i = 0; i < items.length; i++) {
@@ -769,10 +830,23 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       void addFilesAsAttachments(imageFiles)
       return
     }
+    if (!el) return
+    const structured = parseUserMessageClipboardPayload(e.clipboardData.getData(JAIT_REF_MIME))
+    const markdownSegments = structured.length > 0 ? structured : parseUserMessageMarkdown(e.clipboardData.getData('text/plain'))
+    if (markdownSegments.length > 0) {
+      e.preventDefault()
+      insertSegmentsAtCursor(el, markdownSegments, handleRemoveChip)
+      draftSegmentsRef.current = getComposerSegments(el)
+      isSyncing.current = true
+      onChange(getTextFromEditable(el))
+      isSyncing.current = false
+      setIsEmpty(!getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]'))
+      return
+    }
     e.preventDefault()
     const text = e.clipboardData.getData('text/plain')
     document.execCommand('insertText', false, text)
-  }, [addFilesAsAttachments])
+  }, [addFilesAsAttachments, handleRemoveChip, onChange])
 
   // Drag-and-drop handlers
   const onDragEnter = useCallback((e: React.DragEvent) => {

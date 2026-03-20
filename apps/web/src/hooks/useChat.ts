@@ -1350,7 +1350,7 @@ export function useChat(
         mode: options.mode,
         provider: options.provider,
         model: options.model,
-        displayContent: editedContent.trim(),
+        displayContent: options.displayContent ?? editedContent.trim(),
         referencedFiles: options.referencedFiles,
         displaySegments: options.displaySegments,
         onLoginRequired: notifyLoginRequired,
