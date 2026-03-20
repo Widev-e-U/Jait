@@ -97,7 +97,7 @@ export function ReadOnlyDiffView({
     const change = changes[activeIndex]
     if (!change) return
 
-    const nextDecorations = []
+    const nextDecorations: Array<{ editor: any; range: any }> = []
     if (change.originalStartLineNumber > 0 || change.originalEndLineNumber > 0) {
       nextDecorations.push({
         editor: editor.getOriginalEditor(),

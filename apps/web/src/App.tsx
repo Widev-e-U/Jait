@@ -4594,9 +4594,9 @@ function App() {
                   </div>
                 </div>
               </div>
-            )}
-              </div>
-            )}
+            ))}
+          </div>
+        )}
 
             {showTerminal && currentView === 'chat' && viewMode === 'developer' && (
               <div className="shrink-0 border-t overflow-hidden" style={{ height: terminalHeight }}>
