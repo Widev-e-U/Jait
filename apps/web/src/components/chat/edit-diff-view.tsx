@@ -1,12 +1,7 @@
-/**
- * EditDiffView — shows a unified diff for file edit tool calls.
- *
- * Inspired by VS Code Copilot Chat's inline diff/textEdit rendering.
- * Displays old vs new content as a color-coded unified diff.
- */
-
 import { useMemo } from 'react'
 import { FileIcon } from '@/components/icons/file-icons'
+import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
+import { workspaceLanguageForPath } from '@/components/workspace/workspace-panel'
 import { cn } from '@/lib/utils'
 
 interface EditDiffViewProps {
@@ -23,99 +18,6 @@ interface EditDiffViewProps {
   className?: string
 }
 
-interface DiffLine {
-  type: 'context' | 'add' | 'remove' | 'header'
-  content: string
-  oldLineNo?: number
-  newLineNo?: number
-}
-
-/**
- * Generate a minimal unified diff from search/replace strings.
- */
-function computeDiff(oldText: string, newText: string): DiffLine[] {
-  const oldLines = oldText.split('\n')
-  const newLines = newText.split('\n')
-  const lines: DiffLine[] = []
-
-  // Simple line-by-line diff for search/replace
-
-  // Find common prefix
-  let prefixLen = 0
-  while (
-    prefixLen < oldLines.length &&
-    prefixLen < newLines.length &&
-    oldLines[prefixLen] === newLines[prefixLen]
-  ) {
-    prefixLen++
-  }
-
-  // Find common suffix
-  let suffixLen = 0
-  while (
-    suffixLen < oldLines.length - prefixLen &&
-    suffixLen < newLines.length - prefixLen &&
-    oldLines[oldLines.length - 1 - suffixLen] === newLines[newLines.length - 1 - suffixLen]
-  ) {
-    suffixLen++
-  }
-
-  // Show up to 3 context lines before changes
-  const contextBefore = Math.min(3, prefixLen)
-  const contextAfter = Math.min(3, suffixLen)
-
-  // Header
-  lines.push({
-    type: 'header',
-    content: `@@ -${prefixLen - contextBefore + 1},${oldLines.length - prefixLen - suffixLen + contextBefore + contextAfter} +${prefixLen - contextBefore + 1},${newLines.length - prefixLen - suffixLen + contextBefore + contextAfter} @@`,
-  })
-
-  // Context before
-  for (let i = prefixLen - contextBefore; i < prefixLen; i++) {
-    lines.push({
-      type: 'context',
-      content: oldLines[i]!,
-      oldLineNo: i + 1,
-      newLineNo: i + 1,
-    })
-  }
-
-  // Removed lines
-  for (let i = prefixLen; i < oldLines.length - suffixLen; i++) {
-    lines.push({
-      type: 'remove',
-      content: oldLines[i]!,
-      oldLineNo: i + 1,
-    })
-  }
-
-  // Added lines
-  const newStart = prefixLen
-  const newEnd = newLines.length - suffixLen
-  for (let i = newStart; i < newEnd; i++) {
-    lines.push({
-      type: 'add',
-      content: newLines[i]!,
-      newLineNo: i + 1,
-    })
-  }
-
-  // Context after
-  for (let i = oldLines.length - suffixLen; i < oldLines.length - suffixLen + contextAfter; i++) {
-    if (i < oldLines.length) {
-      const newIdx = newLines.length - suffixLen + (i - (oldLines.length - suffixLen))
-      lines.push({
-        type: 'context',
-        content: oldLines[i]!,
-        oldLineNo: i + 1,
-        newLineNo: newIdx + 1,
-      })
-    }
-  }
-
-  return lines
-}
-
 export function EditDiffView({
   filePath,
   oldText,
@@ -125,119 +27,41 @@ export function EditDiffView({
   className,
 }: EditDiffViewProps) {
   const fileName = filePath.split('/').pop() ?? filePath
+  const language = workspaceLanguageForPath(filePath)
 
-  const diffLines = useMemo(() => {
+  const diffContent = useMemo(() => {
     if (oldText != null && newText != null) {
-      return computeDiff(oldText, newText)
+      return { original: oldText, modified: newText }
     }
-    // For file.write — show as all-addition
     if (writtenContent != null) {
-      const contentLines = writtenContent.split('\n')
-      const preview = contentLines.slice(0, 50) // Limit preview size
-      const lines: DiffLine[] = [
-        {
-          type: 'header',
-          content: isNewFile
-            ? `@@ -0,0 +1,${contentLines.length} @@ (new file)`
-            : `@@ +1,${contentLines.length} @@ (full write)`,
-        },
-      ]
-      for (let i = 0; i < preview.length; i++) {
-        lines.push({
-          type: 'add',
-          content: preview[i]!,
-          newLineNo: i + 1,
-        })
-      }
-      if (contentLines.length > 50) {
-        lines.push({
-          type: 'context',
-          content: `... ${contentLines.length - 50} more lines`,
-        })
-      }
-      return lines
+      return { original: '', modified: writtenContent }
     }
-    return []
+    return null
   }, [oldText, newText, writtenContent, isNewFile])
 
-  if (diffLines.length === 0) return null
+  if (!diffContent) return null
 
   return (
     <div className={cn('rounded-md border bg-background overflow-hidden', className)}>
-      {/* File header */}
       <div className="flex items-center gap-2 px-3 py-1.5 bg-muted/40 border-b">
         <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
         <span className="text-xs font-mono text-muted-foreground truncate">
           {filePath}
         </span>
       </div>
-
-      {/* Diff body */}
-      <div className="overflow-x-auto max-h-80 overflow-y-auto bg-background">
-        <table className="w-max min-w-full text-xs font-mono leading-5 border-collapse">
-          <tbody>
-            {diffLines.map((line, i) => (
-              <tr
-                key={i}
-                className={cn(
-                  line.type === 'add' && 'bg-emerald-500/10',
-                  line.type === 'remove' && 'bg-rose-500/10',
-                  line.type === 'header' && 'bg-muted/60',
-                )}
-              >
-                {/* Line numbers */}
-                <td className="select-none text-right px-2 text-muted-foreground/50 w-11 sm:w-12 align-top shrink-0 border-r border-border/60">
-                  {line.type === 'header'
-                    ? ''
-                    : line.type === 'add'
-                      ? ''
-                      : (line.oldLineNo ?? '')}
-                </td>
-                <td className="select-none text-right px-2 text-muted-foreground/50 w-11 sm:w-12 align-top shrink-0 border-r border-border/60">
-                  {line.type === 'header'
-                    ? ''
-                    : line.type === 'remove'
-                      ? ''
-                      : (line.newLineNo ?? '')}
-                </td>
-                {/* Gutter symbol */}
-                <td
-                  className={cn(
-                    'px-1 w-4 select-none text-center align-top',
-                    line.type === 'add' && 'text-emerald-600 dark:text-emerald-400',
-                    line.type === 'remove' && 'text-rose-600 dark:text-rose-400',
-                    line.type === 'header' && 'text-muted-foreground',
-                  )}
-                >
-                  {line.type === 'add'
-                    ? '+'
-                    : line.type === 'remove'
-                      ? '−'
-                      : line.type === 'header'
-                        ? '@@'
-                        : ' '}
-                </td>
-                {/* Content */}
-                <td className="min-w-[22rem] px-2 whitespace-pre-wrap break-all sm:min-w-[36rem]">
-                  {line.type === 'header' ? (
-                    <span className="italic text-muted-foreground">{line.content}</span>
-                  ) : (
-                    <span
-                      className={cn(
-                        line.type === 'add' && 'text-emerald-700 dark:text-emerald-300',
-                        line.type === 'remove' && 'text-rose-700 dark:text-rose-300 line-through opacity-80',
-                        line.type === 'context' && 'text-foreground',
-                      )}
-                    >
-                      {line.content || '\u00A0'}
-                    </span>
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+      <ReadOnlyDiffView
+        original={diffContent.original}
+        modified={diffContent.modified}
+        language={language}
+        className="h-80"
+        editorClassName="h-full"
+        emptyMessage={isNewFile ? 'New file contents.' : 'No visible changes.'}
+        options={{
+          renderSideBySide: false,
+          lineNumbers: 'on',
+          wordWrap: 'on',
+        }}
+      />
     </div>
   )
 }
