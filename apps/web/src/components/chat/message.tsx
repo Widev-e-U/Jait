@@ -1,13 +1,15 @@
-import { memo, useMemo, useEffect, useRef, useState } from 'react'
+import { memo, useMemo, useEffect, useRef, useState, useCallback } from 'react'
 import { markdownLookBack } from '@llm-ui/markdown'
 import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
-import { Check, Copy, Pencil, RotateCcw } from 'lucide-react'
+import { Check, Copy, Pencil, RotateCcw, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
 import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
+import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
 import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
@@ -17,6 +19,7 @@ import {
   buildFallbackUserMessageSegments,
   parseLegacyReferencedFilesBlock,
   userMessageTextFromSegments,
+  userReferencedFilesFromSegments,
   serializeUserMessageSegmentsForClipboard,
   serializeUserMessageSegmentsToMarkdown,
   type UserMessageSegment,
@@ -53,16 +56,6 @@ interface MessageProps {
       displaySegments?: UserMessageSegment[]
     },
   ) => Promise<void> | void
-  onStartEditMessage?: (
-    messageId: string,
-    currentContent: string,
-    messageIndex?: number,
-    messageFromEnd?: number,
-    metadata?: {
-      referencedFiles?: { path: string; name: string }[]
-      displaySegments?: UserMessageSegment[]
-    },
-  ) => void
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
   onOpenDiff?: (filePath: string) => void
 }
@@ -272,7 +265,6 @@ function MessageInner({
   preferLlmUi,
   onOpenTerminal,
   onEditMessage,
-  onStartEditMessage,
   onOpenPath,
   onOpenDiff,
 }: MessageProps) {
@@ -302,14 +294,32 @@ function MessageInner({
 
   const [copied, setCopied] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
+  const [isEditing, setIsEditing] = useState(false)
+  const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [editDraft, setEditDraft] = useState('')
   const copyTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
+  const editInputRef = useRef<HTMLTextAreaElement | null>(null)
 
   useEffect(() => {
     return () => {
       if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
     }
   }, [])
+
+  useEffect(() => {
+    if (!isEditing) {
+      setEditDraft(userDisplayText)
+    }
+  }, [isEditing, userDisplayText])
+
+  useEffect(() => {
+    if (!isEditing) return
+    const input = editInputRef.current
+    if (!input) return
+    input.focus()
+    input.setSelectionRange(input.value.length, input.value.length)
+  }, [isEditing])
 
   /** Build copyable text including tool calls when present */
   const buildCopyText = (): string => {
@@ -380,22 +390,66 @@ function MessageInner({
   const canEdit = isUser && !!messageId && !!onEditMessage
   const canRetry = canEdit
 
-  const startEditing = () => {
-    if (!messageId || !onStartEditMessage) return
-    onStartEditMessage(messageId, userDisplayText, messageIndex, messageFromEnd, {
-      referencedFiles: userDisplaySegments
-        .filter((segment): segment is Extract<UserMessageSegment, { type: 'file' }> => segment.type === 'file')
-        .map((segment) => ({ path: segment.path, name: segment.name })),
-      displaySegments: userDisplaySegments,
-    })
-  }
+  const startEditing = useCallback(() => {
+    if (!canEdit || isSavingEdit) return
+    setEditDraft(userDisplayText)
+    setIsEditing(true)
+  }, [canEdit, isSavingEdit, userDisplayText])
+
+  const cancelEditing = useCallback(() => {
+    setEditDraft(userDisplayText)
+    setIsEditing(false)
+  }, [userDisplayText])
 
   const handleUserBubbleClick = () => {
-    if (!canEdit) return
+    if (!canEdit || isEditing) return
     const selection = typeof window !== 'undefined' ? window.getSelection()?.toString().trim() : ''
     if (selection) return
     startEditing()
   }
+
+  const saveEditedMessage = useCallback(async () => {
+    if (!canEdit || !messageId || !onEditMessage || isSavingEdit) return
+    const submission = createUserMessageEditSubmission(editDraft, userDisplaySegments)
+    if (!submission) return
+    if (isUserMessageEditUnchanged(submission.text, userDisplayText, userDisplaySegments)) {
+      setIsEditing(false)
+      return
+    }
+
+    setIsSavingEdit(true)
+    try {
+      await onEditMessage(messageId, submission.text, messageIndex, messageFromEnd, {
+        referencedFiles: submission.referencedFiles,
+        displaySegments: submission.displaySegments,
+      })
+      setIsEditing(false)
+    } finally {
+      setIsSavingEdit(false)
+    }
+  }, [
+    canEdit,
+    editDraft,
+    isSavingEdit,
+    messageId,
+    messageFromEnd,
+    messageIndex,
+    onEditMessage,
+    userDisplaySegments,
+    userDisplayText,
+  ])
+
+  const handleEditKeyDown = useCallback((event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (event.key === 'Enter' && !event.shiftKey) {
+      event.preventDefault()
+      void saveEditedMessage()
+      return
+    }
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      cancelEditing()
+    }
+  }, [cancelEditing, saveEditedMessage])
 
   const sendFromMessage = async (nextContent: string, nextSegments?: UserMessageSegment[]) => {
     if (!canEdit || !messageId || !onEditMessage) return
@@ -420,7 +474,7 @@ function MessageInner({
   }
 
   const renderActions = (outsideBubble?: boolean) => {
-    if (!content) return null
+    if (!content || isEditing) return null
     return (
       <div
         className={cn(
@@ -533,29 +587,83 @@ function MessageInner({
               <div
                 ref={userBubbleRef}
                 className={cn(
-                'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
-                canEdit && 'cursor-text transition-colors hover:bg-muted/80',
-                compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
-              )}
+                  'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
+                  canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
+                  compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
+                )}
                 onClick={handleUserBubbleClick}
-                title={canEdit ? 'Click to edit message' : undefined}
+                title={canEdit && !isEditing ? 'Click to edit message' : undefined}
               >
-                <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                  {userDisplaySegments.length > 0 ? userDisplaySegments.map((segment, index) => (
-                    segment.type === 'text' ? (
-                      <span key={`text-${index}`}>{segment.text}</span>
-                    ) : (
-                      <span
-                        key={`${segment.path}-${index}`}
-                        className="mx-[2px] inline-flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-[12px] leading-tight text-muted-foreground align-baseline select-none"
-                        title={segment.path}
+                {isEditing ? (
+                  <div className="space-y-3" onClick={(event) => event.stopPropagation()}>
+                    <Textarea
+                      ref={editInputRef}
+                      value={editDraft}
+                      onChange={(event) => setEditDraft(event.target.value)}
+                      onKeyDown={handleEditKeyDown}
+                      rows={Math.min(Math.max(editDraft.split('\n').length, 3), 10)}
+                      disabled={isSavingEdit}
+                      aria-label="Edit user message"
+                      className="min-h-[96px] resize-y border-primary/30 bg-background"
+                    />
+                    {userReferencedFilesFromSegments(userDisplaySegments).length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {userReferencedFilesFromSegments(userDisplaySegments).map((file) => (
+                          <span
+                            key={file.path}
+                            className="inline-flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-[12px] leading-tight text-muted-foreground"
+                            title={file.path}
+                          >
+                            <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />
+                            <span className="truncate max-w-[180px]">{file.name}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
+                    <div className="flex items-center justify-end gap-1.5">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        className="h-8 px-2"
+                        onClick={cancelEditing}
+                        disabled={isSavingEdit}
+                        aria-label="Cancel editing message"
+                        title="Cancel editing"
                       >
-                        <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
-                        <span className="truncate max-w-[180px]">{segment.name}</span>
-                      </span>
-                    )
-                  )) : userDisplayText}
-                </div>
+                        <X className="h-3.5 w-3.5" />
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        className="h-8 px-2"
+                        onClick={() => { void saveEditedMessage() }}
+                        disabled={isSavingEdit || !editDraft.trim()}
+                        aria-label="Save edited message"
+                        title="Save edited message"
+                      >
+                        <Check className="h-3.5 w-3.5" />
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                    {userDisplaySegments.length > 0 ? userDisplaySegments.map((segment, index) => (
+                      segment.type === 'text' ? (
+                        <span key={`text-${index}`}>{segment.text}</span>
+                      ) : (
+                        <span
+                          key={`${segment.path}-${index}`}
+                          className="mx-[2px] inline-flex items-center gap-1 rounded bg-background/60 px-1.5 py-0.5 text-[12px] leading-tight text-muted-foreground align-baseline select-none"
+                          title={segment.path}
+                        >
+                          <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
+                          <span className="truncate max-w-[180px]">{segment.name}</span>
+                        </span>
+                      )
+                    )) : userDisplayText}
+                  </div>
+                )}
               </div>
               {renderActions()}
             </div>

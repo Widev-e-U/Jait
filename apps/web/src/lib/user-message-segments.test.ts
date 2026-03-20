@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import {
+  buildEditedUserMessageSegments,
   parseUserMessageClipboardPayload,
   parseUserMessageMarkdown,
   serializeUserMessageSegmentsForClipboard,
@@ -42,5 +43,18 @@ describe('user message segment serialization', () => {
 
   it('does not treat email addresses as file references', () => {
     expect(parseUserMessageMarkdown('email me at user@example.com')).toEqual([])
+  })
+
+  it('keeps referenced files when editing existing user text', () => {
+    const previous: UserMessageSegment[] = [
+      { type: 'text', text: 'check ' },
+      { type: 'file', path: 'apps/web/src/App.tsx', name: 'App.tsx' },
+      { type: 'text', text: ' now' },
+    ]
+
+    expect(buildEditedUserMessageSegments('please review this instead', previous)).toEqual([
+      { type: 'text', text: 'please review this instead' },
+      { type: 'file', path: 'apps/web/src/App.tsx', name: 'App.tsx' },
+    ])
   })
 })

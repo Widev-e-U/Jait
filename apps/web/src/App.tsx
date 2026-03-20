@@ -146,20 +146,6 @@ type ManagerQueuedMessage = QueuedChatMessage & {
   model?: string | null
 }
 
-type PendingMessageEdit = {
-  messageId: string
-  messageIndex?: number
-  messageFromEnd?: number
-  content: string
-  displaySegments?: UserMessageSegment[]
-  referencedFiles?: { path: string; name: string }[]
-}
-
-type ComposerDraft = {
-  value: string
-  segments?: UserMessageSegment[]
-}
-
 type SavedQueuedMessage = QueuedChatMessage & {
   mode?: ChatMode
   provider?: string
@@ -809,8 +795,6 @@ function ManagerActiveThreadsMenu({
 function App() {
   const [inputValue, setInputValue] = useState('')
   const [inputSegments, setInputSegments] = useState<UserMessageSegment[] | undefined>(undefined)
-  const [pendingMessageEdit, setPendingMessageEdit] = useState<PendingMessageEdit | null>(null)
-  const preEditComposerDraftRef = useRef<ComposerDraft | null>(null)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<AppView>('chat')
@@ -1325,8 +1309,6 @@ function App() {
   }, [activeSessionId])
 
   useEffect(() => {
-    preEditComposerDraftRef.current = null
-    setPendingMessageEdit(null)
     setInputSegments(undefined)
   }, [activeSessionId])
 
@@ -2693,7 +2675,6 @@ function App() {
     fileAttachments?: ChatAttachment[],
     displaySegments?: UserMessageSegment[],
   ) => {
-    if (pendingMessageEdit) return
     const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared) return
     enqueueMessage({
@@ -2709,15 +2690,7 @@ function App() {
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [chatMode, chatProvider, chatProviderRuntimeMode, cliModel, enqueueMessage, inputValue, pendingMessageEdit, preparePromptSubmission])
-
-  const clearPendingMessageEdit = useCallback(() => {
-    const previousDraft = preEditComposerDraftRef.current
-    preEditComposerDraftRef.current = null
-    setPendingMessageEdit(null)
-    setInputValue(previousDraft?.value ?? '')
-    setInputSegments(previousDraft?.segments)
-  }, [])
+  }, [chatMode, chatProvider, chatProviderRuntimeMode, cliModel, enqueueMessage, inputValue, preparePromptSubmission])
 
 
   const handleSubmit = async (
@@ -2727,34 +2700,6 @@ function App() {
   ) => {
     if (viewMode === 'manager') {
       return handleManagerSubmit(chipFiles, displaySegments)
-    }
-    if (pendingMessageEdit) {
-      if (!activeSessionId || !token) return
-      const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
-      if (!prepared) return
-      await restartFromMessage(
-        pendingMessageEdit.messageId,
-        prepared.promptWithReferences,
-        pendingMessageEdit.messageIndex,
-        pendingMessageEdit.messageFromEnd,
-        {
-          token,
-          sessionId: activeSessionId,
-          mode: chatMode,
-          provider: chatProvider,
-          runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-          model: chatProvider !== 'jait' ? cliModel : undefined,
-          displayContent: prepared.displayContent,
-          referencedFiles: prepared.referencedFiles,
-          displaySegments: prepared.displaySegments,
-          onLoginRequired: () => setShowLoginDialog(true),
-        },
-      )
-      preEditComposerDraftRef.current = null
-      setPendingMessageEdit(null)
-      setInputValue('')
-      setInputSegments(undefined)
-      return
     }
     const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
@@ -2999,33 +2944,6 @@ function App() {
     }
     sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) })
   }
-
-  const startEditingPreviousMessage = useCallback((
-    messageId: string,
-    currentContent: string,
-    messageIndex?: number,
-    messageFromEnd?: number,
-    metadata?: {
-      referencedFiles?: { path: string; name: string }[]
-      displaySegments?: UserMessageSegment[]
-    },
-  ) => {
-    preEditComposerDraftRef.current = {
-      value: inputValue,
-      segments: inputSegments,
-    }
-    setPendingMessageEdit({
-      messageId,
-      messageIndex,
-      messageFromEnd,
-      content: currentContent,
-      referencedFiles: metadata?.referencedFiles,
-      displaySegments: metadata?.displaySegments,
-    })
-    setInputValue(currentContent)
-    setInputSegments(metadata?.displaySegments)
-    requestAnimationFrame(() => promptInputRef.current?.focus())
-  }, [inputSegments, inputValue])
 
   const handleEditPreviousMessage = useCallback(async (
     messageId: string,
@@ -4470,22 +4388,8 @@ function App() {
                     onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                     cliModel={cliModel}
                     onCliModelChange={handleCliModelChange}
-                    viewMode={pendingMessageEdit ? undefined : viewMode}
-                    onViewModeChange={pendingMessageEdit ? undefined : setViewMode}
-                    footerLeadingContent={pendingMessageEdit ? (
-                      <div className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
-                        <span className="truncate">Editing previous message</span>
-                        <button
-                          type="button"
-                          className="rounded p-0.5 transition-colors hover:bg-amber-500/15"
-                          onClick={clearPendingMessageEdit}
-                          title="Cancel editing"
-                          aria-label="Cancel editing"
-                        >
-                          <X className="h-3 w-3" />
-                        </button>
-                      </div>
-                    ) : undefined}
+                    viewMode={viewMode}
+                    onViewModeChange={setViewMode}
                     availableFiles={availableFilesForMention}
                     onSearchFiles={handleSearchFiles}
                     workspaceOpen={showWorkspace}
@@ -4568,7 +4472,6 @@ function App() {
                       preferLlmUi
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
-                      onStartEditMessage={startEditingPreviousMessage}
                       onOpenPath={handleOpenMessagePath}
                       onOpenDiff={handleChangedFileClick}
                     />
@@ -4658,22 +4561,8 @@ function App() {
                       onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                       cliModel={cliModel}
                       onCliModelChange={handleCliModelChange}
-                      viewMode={pendingMessageEdit ? undefined : viewMode}
-                      onViewModeChange={pendingMessageEdit ? undefined : setViewMode}
-                      footerLeadingContent={pendingMessageEdit ? (
-                        <div className="flex items-center gap-1.5 rounded-md border border-amber-500/25 bg-amber-500/10 px-2 py-1 text-[11px] text-amber-700 dark:text-amber-300">
-                          <span className="truncate">Editing previous message</span>
-                          <button
-                            type="button"
-                            className="rounded p-0.5 transition-colors hover:bg-amber-500/15"
-                            onClick={clearPendingMessageEdit}
-                            title="Cancel editing"
-                            aria-label="Cancel editing"
-                          >
-                            <X className="h-3 w-3" />
-                          </button>
-                        </div>
-                      ) : undefined}
+                      viewMode={viewMode}
+                      onViewModeChange={setViewMode}
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}
                       workspaceOpen={showWorkspace}

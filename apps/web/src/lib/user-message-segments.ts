@@ -68,6 +68,13 @@ export function buildFallbackUserMessageSegments(
   return segments
 }
 
+export function buildEditedUserMessageSegments(
+  text: string,
+  previousSegments?: UserMessageSegment[] | null,
+): UserMessageSegment[] {
+  return buildFallbackUserMessageSegments(text, userReferencedFilesFromSegments(previousSegments))
+}
+
 export function parseLegacyReferencedFilesBlock(content: string): {
   text: string
   files: UserReferencedFile[]
