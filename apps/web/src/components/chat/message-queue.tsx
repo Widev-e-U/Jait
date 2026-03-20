@@ -190,8 +190,7 @@ function QueueItem({
 
       {onReorder && !editing && (
         <div
-          data-no-drag="true"
-          className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground"
+          className="mt-0.5 shrink-0 rounded p-0.5 text-muted-foreground cursor-grab active:cursor-grabbing touch-none"
           title="Drag to reorder"
           aria-label="Drag to reorder"
         >
