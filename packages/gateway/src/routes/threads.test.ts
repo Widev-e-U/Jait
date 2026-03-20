@@ -22,6 +22,16 @@ async function authHeader(jwtSecret: string, userId: string) {
   return { authorization: `Bearer ${token}` };
 }
 
+async function waitFor(condition: () => boolean, timeoutMs = 2000) {
+  const start = Date.now();
+  while (!condition()) {
+    if (Date.now() - start > timeoutMs) {
+      throw new Error("Timed out waiting for condition");
+    }
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
+
 class MockThreadProvider implements CliProviderAdapter {
   readonly id = "codex" as const;
   readonly info: ProviderInfo = {
@@ -242,15 +252,15 @@ describe("thread routes", () => {
     registerThreadRoutes(app, config, {
       threadService,
       providerRegistry,
-    );
-      
-  const headers = await authHeader(config.jwtSecret, "user-1");
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
     const thread = threadService.create({
       userId: "user-1",
       title: "Implement feature",
       providerId: "codex",
       workingDirectory: process.cwd(),
-       branch: "feature/existing-pr",
+      branch: "feature/existing-pr",
     });
     threadService.update(thread.id, {
       providerSessionId: "mock-session-1",
@@ -317,15 +327,16 @@ describe("thread routes", () => {
       method: "POST",
       url: `/api/threads/${thread.id}/start`,
       headers,
-      payload: { message: "Fix the failing test" },
+      payload: { message: "Fix the failing test", titleTask: "" },
     });
 
     expect(response.statusCode).toBe(200);
-    expect(provider.sendTurn).toHaveBeenCalledWith(
-      "mock-session-1",
-      expect.stringContaining("Apply this follow-up work to the existing PR on branch `feature/existing-pr`."),
-      undefined,
-    );
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+    expect(provider.sendTurn.mock.calls.some(([sessionId, content]) =>
+      sessionId === "mock-session-1"
+      && typeof content === "string"
+      && content.includes("Apply this follow-up work to the existing PR on branch `feature/existing-pr`."),
+    )).toBe(true);
     
     await app.close();
     sqlite.close();
@@ -369,8 +380,7 @@ describe("thread routes", () => {
       payload: { commitMessage: "feat: implement feature", baseBranch: "main" },
     });
 
-    await new Promise((resolve) => setTimeout(resolve, 0));
-
+    await waitFor(() => threadService.getById(thread.id)?.prState === "creating");
     expect(threadService.getById(thread.id)?.prState).toBe("creating");
 
     resolveRun?.({

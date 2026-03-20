@@ -904,12 +904,13 @@ function App() {
   }, [])
   const routePreviewToWorkspace = useCallback((target?: string | null) => {
     const trimmed = target?.trim()
-    if (!trimmed || !activeWorkspace) return false
+    if (!trimmed) return false
+    if (isMobile) return false
     if (!showWorkspace) setShowWorkspace(true)
     showWorkspaceEditorPanel()
     setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
     return true
-  }, [activeWorkspace, showWorkspace, showWorkspaceEditorPanel])
+  }, [isMobile, showWorkspace, showWorkspaceEditorPanel])
 
   const getFloatingViewport = useCallback(() => ({
     width: window.innerWidth,

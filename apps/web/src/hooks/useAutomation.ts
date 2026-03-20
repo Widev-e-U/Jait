@@ -27,6 +27,7 @@ import {
 } from '@/lib/automation-repositories'
 import { gitApi, type GitStatusPr } from '@/lib/git-api'
 import { generateDeviceId } from '@/lib/device-id'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -83,6 +84,7 @@ function dbRepoToLocal(repo: AutomationRepo, localDeviceId: string): RepositoryC
 // ── Hook ─────────────────────────────────────────────────────────────
 
 export function useAutomation(enabled = true) {
+  const confirm = useConfirmDialog()
   // Stable device ID for this client
   const localDeviceId = useMemo(() => generateDeviceId(), [])
 
@@ -603,9 +605,11 @@ export function useAutomation(enabled = true) {
           const code = (startErr as Error & { code?: string }).code
           if (code === 'NODE_OFFLINE' && targetRepo) {
             const githubUrl = (targetRepo as { githubUrl?: string | null }).githubUrl
-            if (githubUrl && confirm(
-              'The desktop app is not connected. Clone the repo to the gateway and run the thread there?',
-            )) {
+            if (githubUrl && await confirm({
+              title: 'Run on gateway instead?',
+              description: 'The desktop app is not connected. Clone the repo to the gateway and run the thread there?',
+              confirmLabel: 'Clone and run',
+            })) {
               const updated = await agentsApi.startThread(targetThread.id, {
                 message: text,
                 cloneToGateway: true,
@@ -673,9 +677,11 @@ export function useAutomation(enabled = true) {
               const code = (startErr as Error & { code?: string }).code
               if (code === 'NODE_OFFLINE') {
                 const githubUrl = (repo as { githubUrl?: string | null }).githubUrl
-                if (githubUrl && confirm(
-                  'The desktop app is not connected. Clone the repo to the gateway and run the thread there?',
-                )) {
+                if (githubUrl && await confirm({
+                  title: 'Run on gateway instead?',
+                  description: 'The desktop app is not connected. Clone the repo to the gateway and run the thread there?',
+                  confirmLabel: 'Clone and run',
+                })) {
                   await agentsApi.startThread(thread.id, {
                     message: text,
                     titleTask: metadata.displayContent?.trim() || text,
@@ -698,7 +704,7 @@ export function useAutomation(enabled = true) {
         })()
       }
     },
-    [getRuntimeInfoForRepository, getRepositoryForThread, refresh, selectedRepo, selectedThread, threads],
+    [confirm, getRuntimeInfoForRepository, getRepositoryForThread, refresh, selectedRepo, selectedThread, threads],
   )
 
   const handleSend = useCallback(

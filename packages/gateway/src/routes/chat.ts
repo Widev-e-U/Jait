@@ -109,6 +109,42 @@ interface StreamingAccumulator {
 }
 const sessionStreamingState = new Map<string, StreamingAccumulator>();
 
+function firstObject(...values: unknown[]): Record<string, unknown> | undefined {
+  for (const value of values) {
+    if (value && typeof value === "object" && !Array.isArray(value)) {
+      return value as Record<string, unknown>;
+    }
+  }
+  return undefined;
+}
+
+function firstNonEmptyString(...values: unknown[]): string | undefined {
+  for (const value of values) {
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+function firstPathFromChanges(value: unknown): string | undefined {
+  if (!Array.isArray(value)) return undefined;
+  for (const entry of value) {
+    if (!entry || typeof entry !== "object") continue;
+    const item = entry as Record<string, unknown>;
+    const path = firstNonEmptyString(
+      item["path"],
+      item["file_path"],
+      item["filePath"],
+      item["file"],
+      item["filename"],
+      item["target_file"],
+      item["targetFile"],
+      item["relative_path"],
+    );
+    if (path) return path;
+  }
+  return undefined;
+}
+
 export function getExternalFileMutationPath(tool: string, args: unknown): string | null {
   const normalized = tool.trim().toLowerCase();
   const fileMutationTools = new Set([
@@ -128,13 +164,27 @@ export function getExternalFileMutationPath(tool: string, args: unknown): string
   const input = args && typeof args === "object" && !Array.isArray(args)
     ? args as Record<string, unknown>
     : {};
-  const path = input["path"]
-    ?? input["file_path"]
-    ?? input["filePath"]
-    ?? input["file"]
-    ?? input["filename"]
-    ?? input["target_file"]
-    ?? input["targetFile"];
+  const nested = firstObject(input["action"], input["input"], input["arguments"]);
+  const path = firstNonEmptyString(
+    input["path"],
+    input["file_path"],
+    input["filePath"],
+    input["file"],
+    input["filename"],
+    input["target_file"],
+    input["targetFile"],
+    input["relative_path"],
+    firstPathFromChanges(input["changes"]),
+    nested?.["path"],
+    nested?.["file_path"],
+    nested?.["filePath"],
+    nested?.["file"],
+    nested?.["filename"],
+    nested?.["target_file"],
+    nested?.["targetFile"],
+    nested?.["relative_path"],
+    firstPathFromChanges(nested?.["changes"]),
+  );
   return typeof path === "string" && path.trim() ? path : null;
 }
 

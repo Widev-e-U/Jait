@@ -136,7 +136,7 @@ export function registerThreadRoutes(
     message: string;
     repoStrategy?: string | null;
     prUrl?: string | null;
-    prState?: "open" | "closed" | "merged" | null;
+    prState?: "creating" | "open" | "closed" | "merged" | null;
     branch?: string | null;
   }): string {
     let fullMessage = args.message;
@@ -159,6 +159,12 @@ export function registerThreadRoutes(
     }
 
     return fullMessage;
+  }
+
+  function normalizeThreadPrState(value: string | null | undefined): "creating" | "open" | "closed" | "merged" | null {
+    return value === "creating" || value === "open" || value === "closed" || value === "merged"
+      ? value
+      : null;
   }
 
   /**
@@ -629,7 +635,7 @@ export function registerThreadRoutes(
               message,
               repoStrategy,
               prUrl: thread.prUrl,
-              prState: thread.prState,
+              prState: normalizeThreadPrState(thread.prState),
               branch: thread.branch,
             });
 
@@ -724,7 +730,7 @@ export function registerThreadRoutes(
     const fullMessage = buildThreadTurnMessage({
       message,
       prUrl: thread.prUrl,
-      prState: thread.prState,
+      prState: normalizeThreadPrState(thread.prState),
       branch: thread.branch,
     });
 

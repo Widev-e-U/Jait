@@ -12,6 +12,7 @@ import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Loader2, Sparkles, Save, RotateCcw } from 'lucide-react'
 import { agentsApi } from '@/lib/agents-api'
 
@@ -27,6 +28,7 @@ interface StrategyModalProps {
 // ── Component ────────────────────────────────────────────────────────
 
 export function StrategyModal({ open, onOpenChange, repoId, repoName }: StrategyModalProps) {
+  const confirm = useConfirmDialog()
   const [strategy, setStrategy] = useState('')
   const [savedStrategy, setSavedStrategy] = useState('')
   const [loading, setLoading] = useState(false)
@@ -103,14 +105,25 @@ export function StrategyModal({ open, onOpenChange, repoId, repoName }: Strategy
     setStrategy(savedStrategy)
   }, [savedStrategy])
 
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen || !isDirty) {
+      onOpenChange(nextOpen)
+      return
+    }
+
+    void (async () => {
+      const discard = await confirm({
+        title: 'Discard changes',
+        description: 'You have unsaved changes. Discard them?',
+        confirmLabel: 'Discard',
+        variant: 'destructive',
+      })
+      if (discard) onOpenChange(false)
+    })()
+  }, [confirm, isDirty, onOpenChange])
+
   return (
-    <Dialog open={open} onOpenChange={(v) => {
-      if (!v && isDirty) {
-        // Confirm discard if there are unsaved changes
-        if (!window.confirm('You have unsaved changes. Discard them?')) return
-      }
-      onOpenChange(v)
-    }}>
+    <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent className="flex max-h-[85vh] w-full max-w-3xl flex-col gap-0 overflow-hidden p-0">
         <DialogHeader className="shrink-0 border-b px-4 py-3">
           <DialogTitle className="flex items-center gap-2 text-sm">

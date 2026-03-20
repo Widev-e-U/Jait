@@ -5,6 +5,7 @@ import { JobCard } from './JobCard'
 import { CreateJobDialog } from './CreateJobDialog'
 import { JobHistoryDialog } from './JobHistoryDialog'
 import { JobsApi, type ScheduledJob, type JobRun } from '@/lib/jobs-api'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Plus, RefreshCw, Calendar, AlertCircle, Loader2, ChevronLeft, ChevronRight } from 'lucide-react'
 
 const api = new JobsApi()
@@ -12,6 +13,7 @@ const DEFAULT_PAGE_SIZE = 20
 const PAGE_SIZE_OPTIONS = [10, 20, 50, 100]
 
 export function JobsPage() {
+  const confirm = useConfirmDialog()
   const [jobs, setJobs] = useState<ScheduledJob[]>([])
   const [recentRuns, setRecentRuns] = useState<Record<string, JobRun | null>>({})
   const [totalJobs, setTotalJobs] = useState(0)
@@ -78,7 +80,13 @@ export function JobsPage() {
   }
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this job?')) return
+    const confirmed = await confirm({
+      title: 'Delete job',
+      description: 'Are you sure you want to delete this job?',
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
     try {
       await api.deleteJob(id)
       const nextTotal = Math.max(0, totalJobs - 1)

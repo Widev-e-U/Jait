@@ -8,6 +8,9 @@ describe("getExternalFileMutationPath", () => {
     expect(getExternalFileMutationPath("write", { file_path: "/tmp/c.ts" })).toBe("/tmp/c.ts");
     expect(getExternalFileMutationPath("create_file", { filename: "/tmp/d.ts" })).toBe("/tmp/d.ts");
     expect(getExternalFileMutationPath("replace_string_in_file", { targetFile: "/tmp/e.ts" })).toBe("/tmp/e.ts");
+    expect(getExternalFileMutationPath("edit", { relative_path: "src/f.ts" })).toBe("src/f.ts");
+    expect(getExternalFileMutationPath("edit", { changes: [{ path: "src/g.ts" }] })).toBe("src/g.ts");
+    expect(getExternalFileMutationPath("edit", { input: { changes: [{ file_path: "src/h.ts" }] } })).toBe("src/h.ts");
   });
 
   it("ignores non-mutating tools", () => {

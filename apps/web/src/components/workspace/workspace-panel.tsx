@@ -5,6 +5,7 @@ import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type 
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
 import { Button } from '@/components/ui/button'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
@@ -775,6 +776,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onArchitectureOpenChange,
   onGenerateArchitecture,
 }, ref) {
+  const confirm = useConfirmDialog()
   const resolvedTheme = useResolvedTheme()
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
   /** When non-null, we're in remote (server-backed) mode */
@@ -1867,7 +1869,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /* ---- File management actions ---- */
   const handleDeleteNode = useCallback(async (node: LazyNode) => {
     if (!remoteRoot) return
-    const confirmed = window.confirm(`Delete "${node.name}"${node.kind === 'dir' ? ' and all its contents' : ''}?`)
+    const confirmed = await confirm({
+      title: node.kind === 'dir' ? 'Delete folder' : 'Delete file',
+      description: `Delete "${node.name}"${node.kind === 'dir' ? ' and all its contents' : ''}?`,
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    })
     if (!confirmed) return
     try {
       await fetch(`${API_URL}/api/workspace/delete`, {
@@ -1897,7 +1904,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       bumpTree()
       void fetchGitStatus()
     } catch { /* ignore */ }
-  }, [remoteRoot, surfaceId, bumpTree, lazyTree, fetchGitStatus])
+  }, [confirm, remoteRoot, surfaceId, bumpTree, lazyTree, fetchGitStatus])
 
   const handleRenameConfirm = useCallback(async () => {
     if (!remoteRoot || !renameTarget || !renameValue.trim()) { setRenameTarget(null); return }

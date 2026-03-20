@@ -21,6 +21,7 @@ import {
   type PlanTask,
   type PlanTaskStatus,
 } from '@/lib/agents-api'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 
 
 // ── Status helpers ───────────────────────────────────────────────────
@@ -60,6 +61,7 @@ export function PlanModal({
   open, onOpenChange, repoId, repoName, defaultBranch, repoLocalPath,
   onStartThread,
 }: PlanModalProps) {
+  const confirm = useConfirmDialog()
   const [plans, setPlans] = useState<AutomationPlan[]>([])
   const [activePlanId, setActivePlanId] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
@@ -245,7 +247,13 @@ export function PlanModal({
 
   const handleDeletePlan = useCallback(async () => {
     if (!activePlan) return
-    if (!window.confirm(`Delete plan "${activePlan.title}"?`)) return
+    const confirmed = await confirm({
+      title: 'Delete plan',
+      description: `Delete plan "${activePlan.title}"?`,
+      confirmLabel: 'Delete',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
     try {
       await agentsApi.deletePlan(activePlan.id)
       setPlans((prev) => prev.filter((p) => p.id !== activePlan.id))
@@ -253,7 +261,7 @@ export function PlanModal({
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to delete plan')
     }
-  }, [activePlan])
+  }, [activePlan, confirm])
 
   const toggleExpand = (taskId: string) => {
     setExpandedTasks((prev) => {
