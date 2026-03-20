@@ -13,6 +13,15 @@
 
 const STORAGE_KEY = 'jait-gateway-url'
 
+function isStandaloneClient(): boolean {
+  if (typeof window === 'undefined') return false
+  return Boolean((window as any).jaitDesktop || (window as any).Capacitor)
+}
+
+function supportsGatewayOverride(): boolean {
+  return import.meta.env.DEV || isStandaloneClient()
+}
+
 /**
  * When the web UI is served by the gateway itself (same origin),
  * use the page origin so it works behind reverse proxies / HTTPS.
@@ -43,6 +52,7 @@ function httpToWs(httpUrl: string): string {
 // ── Read / write user override ───────────────────────────────────────
 
 export function getStoredGatewayUrl(): string | null {
+  if (!supportsGatewayOverride()) return null
   try {
     const v = localStorage.getItem(STORAGE_KEY)
     return v && v.trim() ? v.trim() : null
@@ -52,6 +62,15 @@ export function getStoredGatewayUrl(): string | null {
 }
 
 export function setStoredGatewayUrl(url: string | null): void {
+  if (!supportsGatewayOverride()) {
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // localStorage unavailable (e.g. sandboxed iframe)
+    }
+    window.dispatchEvent(new Event('jait-gateway-url-changed'))
+    return
+  }
   try {
     if (url && url.trim()) {
       localStorage.setItem(STORAGE_KEY, stripTrailingSlash(url.trim()))
@@ -110,9 +129,10 @@ export function getWsUrl(): string {
  * and API calls should be deferred until the user sets a URL.
  */
 export function isGatewayConfigured(): boolean {
-  if (getStoredGatewayUrl()) return true
+  if (supportsGatewayOverride() && getStoredGatewayUrl()) return true
   if ((window as any).jaitDesktop?.gatewayUrl) return true
   if (import.meta.env.VITE_API_URL) return true
+  if (!supportsGatewayOverride()) return true
   return false
 }
 
