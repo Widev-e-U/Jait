@@ -13,6 +13,7 @@ import { ActivityFeed } from '@/components/activity'
 import type { ActivityEvent } from '@jait/ui-shared'
 import type { SttProvider } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
+import { highlightSearchMatchHtml } from './settings-search-highlight'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -208,6 +209,9 @@ export function SettingsPage({
   const matchesSearch = (...terms: Array<string | undefined | null>) => (
     !searchQuery || terms.some((term) => term?.toLowerCase().includes(searchQuery))
   )
+  const highlight = (text: string) => (
+    <span dangerouslySetInnerHTML={{ __html: highlightSearchMatchHtml(text, search) }} />
+  )
 
   const showUpdateSection = matchesSearch(
     'software update version gateway desktop release download install',
@@ -288,7 +292,7 @@ export function SettingsPage({
               <div>
                 <h2 className="flex items-center gap-2 text-base font-medium">
                   <ArrowUpCircle className="h-4 w-4" />
-                  Software Update
+                  {highlight('Software Update')}
                 </h2>
                 <p className="text-sm text-muted-foreground">
                   {updateInfo
@@ -339,7 +343,7 @@ export function SettingsPage({
           {showDesktopSection && (
             <Card className="space-y-4 p-5">
               <div>
-                <h2 className="text-base font-medium">Desktop</h2>
+                <h2 className="text-base font-medium">{highlight('Desktop')}</h2>
                 <p className="text-sm text-muted-foreground">
                   Settings specific to the desktop application.
                 </p>
@@ -366,7 +370,7 @@ export function SettingsPage({
           {showGatewaySection && (
             <Card className="space-y-4 p-5">
               <div>
-                <h2 className="text-base font-medium">Gateway connection</h2>
+                <h2 className="text-base font-medium">{highlight('Gateway connection')}</h2>
                 <p className="text-sm text-muted-foreground">
                   Desktop and mobile clients can connect to a different Jait gateway.
                 </p>
@@ -380,7 +384,7 @@ export function SettingsPage({
           {showArchiveSection && (
             <Card className="space-y-4 p-5">
               <div>
-                <h2 className="text-base font-medium">Session archive</h2>
+                <h2 className="text-base font-medium">{highlight('Session archive')}</h2>
                 <p className="text-sm text-muted-foreground">
                   Permanently remove archived sessions and their messages from your account.
                 </p>
@@ -396,7 +400,7 @@ export function SettingsPage({
           {showSpeechSection && (
             <Card className="space-y-4 p-5">
               <div>
-                <h2 className="text-base font-medium">Spracheingabe (Speech-to-Text)</h2>
+                <h2 className="text-base font-medium">{highlight('Spracheingabe (Speech-to-Text)')}</h2>
                 <p className="text-sm text-muted-foreground">
                   Wähle aus, wie gesprochene Sprache in Text umgewandelt wird, bevor sie als Nachricht gesendet wird.
                 </p>
@@ -454,7 +458,7 @@ export function SettingsPage({
             <Card key={group.label} className="p-5 space-y-3">
               <h3 className="flex items-center gap-2 text-sm font-semibold">
                 {GroupIcon ? <GroupIcon size={16} className="text-muted-foreground" /> : <Key className="h-4 w-4 text-muted-foreground" />}
-                {group.label}
+                {highlight(group.label)}
               </h3>
               <div className="grid gap-4 md:grid-cols-2">
                 {groupFields.map((field) => {
@@ -463,7 +467,7 @@ export function SettingsPage({
                   return (
                     <div key={field} className="space-y-1.5">
                       <div className="flex items-center gap-1.5">
-                        <Label htmlFor={`api-${field}`} className="font-mono text-xs">{field}</Label>
+                        <Label htmlFor={`api-${field}`} className="font-mono text-xs">{highlight(field)}</Label>
                         {renderSourceBadge(field as FieldName)}
                       </div>
                       <div className="relative">
@@ -514,7 +518,7 @@ export function SettingsPage({
       {showActivitySection && activityEvents && activityEvents.length > 0 && (
         <Card className="p-5 space-y-4">
           <div>
-            <h2 className="text-base font-medium">Recent activity</h2>
+            <h2 className="text-base font-medium">{highlight('Recent activity')}</h2>
             <p className="text-sm text-muted-foreground">
               Recent chat messages and terminal sessions.
             </p>
