@@ -1,15 +1,24 @@
 {
   "name": "@jait/web",
-  "version": "0.1.97",
+  "version": "0.1.98",
   "private": true,
   "description": "Jait web frontend — bundled into @jait/gateway at build time",
+  "author": "Jakob Wl <jakob@jait.dev>",
   "type": "module",
   "license": "MIT",
+  "homepage": "https://jait.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/JakobWl/Jait.git",
     "directory": "apps/web"
   },
+  "keywords": [
+    "ai",
+    "agent",
+    "web",
+    "react",
+    "local-first"
+  ],
   "scripts": {
     "dev": "vite",
     "build": "vite build --base ./",

@@ -157,7 +157,7 @@ describe("@jait/gateway health", () => {
 
       if (request.url === "/src/main.tsx") {
         response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
-        response.end('import "/@fs/home/jakob/jait/node_modules/vite/dist/client/env.mjs"; import "/node_modules/.vite/deps/react.js?v=1";');
+        response.end('import "/@fs/home/user/project/node_modules/vite/dist/client/env.mjs"; import "/node_modules/.vite/deps/react.js?v=1";');
         return;
       }
 
@@ -179,7 +179,7 @@ describe("@jait/gateway health", () => {
 
     expect(response.statusCode).toBe(200);
     expect(String(response.headers["content-type"])).toContain("text/javascript");
-    expect(response.body).toContain(`"/api/dev-proxy/${address.port}/@fs/home/jakob/jait/node_modules/vite/dist/client/env.mjs"`);
+    expect(response.body).toContain(`"/api/dev-proxy/${address.port}/@fs/home/user/project/node_modules/vite/dist/client/env.mjs"`);
     expect(response.body).toContain(`"/api/dev-proxy/${address.port}/node_modules/.vite/deps/react.js?v=1"`);
 
     await app.close();

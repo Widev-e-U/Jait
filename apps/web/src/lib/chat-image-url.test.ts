@@ -22,8 +22,8 @@ describe('resolveChatImageUrl', () => {
   })
 
   it('proxies local workspace image paths through the gateway', () => {
-    expect(resolveChatImageUrl('/home/jakob/jait/.tmp-docs-site.png', apiUrl)).toBe(
-      'http://localhost:8000/api/browser/screenshot?path=%2Fhome%2Fjakob%2Fjait%2F.tmp-docs-site.png',
+    expect(resolveChatImageUrl('/home/user/project/.tmp-docs-site.png', apiUrl)).toBe(
+      'http://localhost:8000/api/browser/screenshot?path=%2Fhome%2Fuser%2Fproject%2F.tmp-docs-site.png',
     )
   })
 

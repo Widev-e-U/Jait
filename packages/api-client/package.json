@@ -1,7 +1,9 @@
 {
   "name": "@jait/api-client",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
+  "description": "Typed API client for Jait apps and integrations",
+  "author": "Jakob Wl <jakob@jait.dev>",
   "type": "module",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -16,6 +18,19 @@
     "dev": "tsc --watch",
     "typecheck": "tsc --noEmit"
   },
+  "license": "MIT",
+  "homepage": "https://jait.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JakobWl/Jait.git",
+    "directory": "packages/api-client"
+  },
+  "keywords": [
+    "ai",
+    "agent",
+    "api-client",
+    "typescript"
+  ],
   "dependencies": {
     "@jait/shared": "workspace:*"
   },

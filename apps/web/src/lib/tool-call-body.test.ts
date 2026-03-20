@@ -117,10 +117,10 @@ describe('tool call body helpers', () => {
     expect(
       summarizeToolArguments({
         action: 'create',
-        workingDirectory: '/home/jakob/jait',
+        workingDirectory: '/home/user/project',
         start: true,
       }),
-    ).toBe('action: create • working directory: /home/jakob/jait • start: true')
+    ).toBe('action: create • working directory: /home/user/project • start: true')
   })
 
   it('extracts MCP tool identity and argument details from nested payloads', () => {
@@ -165,11 +165,11 @@ describe('tool call body helpers', () => {
         {},
         {
           result: {
-            path: '/home/jakob/jait/.tmp/jait-preview-live.png',
+            path: '/home/user/project/.tmp/jait-preview-live.png',
           },
         },
       ),
-    ).toBe('/home/jakob/jait/.tmp/jait-preview-live.png')
+    ).toBe('/home/user/project/.tmp/jait-preview-live.png')
   })
 
   it('extracts screenshot paths from result messages', () => {
@@ -178,8 +178,8 @@ describe('tool call body helpers', () => {
         'browser.screenshot',
         {},
         undefined,
-        'Saved screenshot to /home/jakob/jait/.tmp/jait-preview-live.png',
+        'Saved screenshot to /home/user/project/.tmp/jait-preview-live.png',
       ),
-    ).toBe('/home/jakob/jait/.tmp/jait-preview-live.png')
+    ).toBe('/home/user/project/.tmp/jait-preview-live.png')
   })
 })

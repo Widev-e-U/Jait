@@ -1,222 +1,129 @@
-# Jait Vision & Architecture
+# Jait Vision
 
-> Just Another Intelligent Tool — for Developers.
+Jait is a local-first AI developer agent for people who want an agent to act on a real workspace, not just chat about code.
 
-## What Jait Is
+It is built around a simple idea: the agent should be able to use tools, you should be able to see what it is doing, and you should be able to intervene when it matters.
 
-Jait is an **AI-powered developer agent** that sits on your devices — desktop (Electron) and phone (React Native) — and can actually **control your terminal, browser, and operating system** on your behalf. Think VSCode's agent mode, but not locked to an editor. Jait sees your screen, runs your commands, browses the web, and works alongside you — including via voice.
+## What Jait Is Trying To Be
 
-You can **watch everything it does in real-time** — through actual live screen sharing (like RustDesk) streamed directly to your desktop or phone. Open the app, see the agent's screen, approve or interrupt from anywhere.
+Jait combines:
 
-You talk to it. It shows you what it's doing. You approve or correct. It learns.
+- a local gateway that owns sessions, tools, state, and approvals
+- clients across web, desktop, and mobile
+- a tool-driven execution model for terminal, filesystem, browser, preview, and automation work
+- a product model centered on visibility, review, and control
 
-### The Developer Workflow
+The goal is not “autonomous magic.” The goal is a practical agent workspace for real developer workflows.
 
-```
-You (voice or text)
- │  "Set up a new Next.js project, install shadcn, and push to GitHub"
- │
- ▼
-┌──────────────────────────────────────────────────────────────┐
-│                        JAIT AGENT                            │
-│                                                              │
-│  1. Opens PowerShell → runs `npx create-next-app`           │
-│  2. You SEE the terminal output in real-time (textual view)  │
-│  3. Runs `npx shadcn@latest init` → you see it choosing      │
-│  4. Opens browser → navigates to github.com/new              │
-│  5. You SEE the browser state as a textual snapshot          │
-│  6. Creates repo → runs `git remote add && git push`         │
-│  7. Reports back: "Done. Repo at github.com/you/project"    │
-│                                                              │
-│  Meanwhile: you're watching the LIVE SCREEN on your phone    │
-│  via RustDesk-style streaming — tap to interrupt anytime.    │
-└──────────────────────────────────────────────────────────────┘
-```
+## Core Principles
 
-You're not just chatting with an AI. You're **watching it work** — via live screen sharing (RustDesk-style remote desktop streamed to any device) plus structured textual views of terminal output, browser state, and OS activity — and you can interrupt, correct, or take over at any point.
+1. Local-first by default.
+   State should live on the user’s machine, with minimal required infrastructure.
 
----
+2. Predictable over clever.
+   LLMs are useful for interpretation and planning, but execution should be observable and bounded.
 
-## Core Philosophy
+3. Human-in-the-loop where risk exists.
+   Sensitive actions should be reviewable, interruptible, and attributable.
 
-Jait is a **single-operator developer agent** — your personal AI that runs on your machine, controls your devices, and answers only to you. It is **not** a multi-user web service, not a SaaS platform, not something you deploy for a team. One developer, one agent, total control.
+4. One stack, shared contracts.
+   Jait uses TypeScript across the system so shared types and schemas stay aligned.
 
-Every feature follows these principles:
+5. Tools are the platform.
+   The same system that powers user workflows should power internal automation and orchestration.
 
-1. **Single-Operator, Local-First** — Your agent, your data, your machine. No cloud databases, no external services required. Everything stored in `~/.jait/` as SQLite + files.
-2. **Zero Infrastructure** — No PostgreSQL to install, no Redis to manage, no Docker required to run. `bun run dev` and you're working. External services are optional enhancements, never requirements.
-3. **Offline-Capable** — Works without internet when using a local LLM (Ollama). Your agent doesn't phone home.
-4. **Predictable > Magical** — LLM for understanding, deterministic execution
-5. **Secure by Default** — Least privilege, audited, cryptographically verifiable
-6. **Human-in-the-Loop** — Autopilot earned through trust, not assumed
-7. **You See Everything** — Live screen sharing (RustDesk-style) + textual views of terminal, browser, and screen state
-8. **Agent Controls Itself** — Every platform feature (scheduling, sessions, surfaces, memory) is a tool the agent calls. No backdoor APIs, no hidden control plane.
-9. **Voice-Native** — Talk to your agent, hands on keyboard or hands-free
-10. **Everywhere at Once** — Phone, desktop — one agent, all devices, same session
-11. **TypeScript Everywhere** — One language, shared types from database to UI, no translation layer
-12. **Data Portability** — Everything is files. Back up with `cp`, sync with `rsync`, version with `git`. No database dumps, no export tools needed.
+## Product Shape
 
----
+At a high level, Jait has three layers:
 
-## Why TypeScript End-to-End
+- Clients
+  Web, desktop, and mobile surfaces for chat, review, session control, and observation.
 
-The entire Jait stack — backend, frontend, worker, CLI, SDK — is **TypeScript**. No Python, no language boundary, no serialization mismatches. One `pnpm install`, one runtime, shared types from database to UI.
+- Gateway
+  The Fastify-based control plane that manages sessions, providers, permissions, tools, approvals, scheduling, and persistence.
 
-### Tech Stack
+- Workspace execution
+  The concrete actions the agent can take in a workspace: run commands, edit files, inspect previews, browse, and coordinate tasks.
 
-| Layer | Technology |
-|-------|-----------|
-| **Runtime** | Bun 1.x (ESM) |
-| **Language** | TypeScript 5.x (strict) |
-| **Backend Framework** | Fastify (HTTP) + ws (WebSocket) |
-| **Validation** | Zod (shared schemas) |
-| **Database** | bun:sqlite (built-in, zero-dependency) |
-| **ORM** | Drizzle ORM (SQLite) |
-| **Vector Search** | sqlite-vec (vector extension for semantic memory) |
-| **Scheduler** | croner (in-process cron) + JSON file persistence |
-| **Frontend** | React 19 + Vite + shadcn/ui |
-| **Mobile** | React Native + Expo |
-| **Desktop** | Electron |
-| **CLI** | Commander.js / yargs |
-| **Testing** | Vitest |
-| **Linting** | oxlint + oxfmt (fast, Rust-based) |
-| **Build** | tsdown / tsup |
-| **Monorepo** | Bun workspaces |
-| **Screen Sharing** | WebRTC (DataChannel + MediaStream) / RustDesk protocol concepts |
-| **Video Codec** | H.264 / VP9 (hardware-accelerated) via native encoder |
+## Current Direction
 
----
+The current product direction is strongest when Jait improves this loop:
 
-## Architecture Overview
+1. You ask for a real task.
+2. The agent acts using tools.
+3. You can see progress and outputs.
+4. You can review, approve, undo, or redirect.
+5. The result stays tied to the workspace and session.
 
-```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│                              JAIT PLATFORM                                  │
-│                        (TypeScript End-to-End)                              │
-├─────────────────────────────────────────────────────────────────────────────┤
-│                                                                             │
-│  ┌──────────────┐  ┌──────────────┐                                       │
-│  │  Electron /  │  │   Gateway    │                                       │
-│  │  React Native│  │  (Fastify)   │                                       │
-│  └──────┬───────┘  └──────┬───────┘                                       │
-│         │                 │                                              │
-│         └─────────────────┘                                              │
-│                           │                 │                              │
-│  ┌────────────────────────▼─────────────────▼────────────────────────┐    │
-│  │                        CORE SERVICES                               │    │
-│  ├────────────────────────────────────────────────────────────────────┤    │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │    │
-│  │  │ LLM Router  │  │ Tool Engine │  │ Scheduler   │  │ Memory    │ │    │
-│  │  │ (Vercel AI) │  │ (Sandboxed) │  │ (croner)    │  │ (Scoped)  │ │    │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘ │    │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │    │
-│  │  │ Surface     │  │ Extension   │  │ Session     │  │ Screen    │ │    │
-│  │  │ Manager     │  │ Runtime     │  │ Router      │  │ Renderer  │ │    │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘ │    │
-│  └────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  ┌────────────────────────────────────────────────────────────────────┐    │
-│  │                     SECURITY & COMPLIANCE                          │    │
-│  ├────────────────────────────────────────────────────────────────────┤    │
-│  │  ┌─────────────┐  ┌─────────────┐  ┌─────────────┐  ┌───────────┐ │    │
-│  │  │ Secrets     │  │ Audit Log   │  │ Policy      │  │ Consent   │ │    │
-│  │  │ Vault       │  │ (Signed)    │  │ Engine      │  │ Manager   │ │    │
-│  │  └─────────────┘  └─────────────┘  └─────────────┘  └───────────┘ │    │
-│  └────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  ┌────────────────────────────────────────────────────────────────────┐    │
-│  │                    CONTROL SURFACE LAYER                           │    │
-│  ├────────────────────────────────────────────────────────────────────┤    │
-│  │  Terminal (pwsh) │ Browser (CDP) │ Screen Share (WebRTC)          │   │
-│  │  Voice (STT/TTS) │ File System │ OS Control │ Clipboard          │   │
-│  └────────────────────────────────────────────────────────────────────┘    │
-│                                                                             │
-│  ┌────────────────────────────────────────────────────────────────────┐    │
-│  │                          DATA LAYER                                │    │
-│  ├────────────────────────────────────────────────────────────────────┤    │
-│  │  bun:sqlite (sessions, audit, state) │ sqlite-vec (memory) │ ~/.jait/  │    │
-│  └────────────────────────────────────────────────────────────────────┘    │
-└─────────────────────────────────────────────────────────────────────────────┘
-```
+That loop matters more than adding broad feature count.
 
----
+## Architecture Priorities
 
-## Feature Roadmap
+The public architecture priorities are:
 
-### Phase 1: Foundation ✅ (Current)
-- [x] Multi-provider LLM support (OpenAI, Anthropic, Ollama, Local)
-- [x] In-process cron scheduler (croner + JSON persistence)
-- [x] Basic tool execution
-- [x] Chat interface with SSE streaming
-- [x] Google OAuth authentication
+- reliable session and thread handling
+- strong workspace/file review flows
+- clear tool invocation and result streaming
+- safe local and remote execution boundaries
+- durable local state and recoverability
+- minimal hidden behavior
 
-### Phase 2: Control Surfaces — Terminal & OS 🔄 (Next)
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **PowerShell Surface** | Spawn, control, and stream PowerShell sessions (cross-platform: pwsh on Windows + Linux) | P0 |
-| **Terminal Multiplexer** | Multiple concurrent terminal sessions, named/tagged, with history | P0 |
-| **Textual Terminal Display** | Real-time terminal output rendered as structured text in the client UI | P0 |
-| **File System Surface** | Read, write, edit, `apply_patch` with path boundary enforcement | P0 |
-| **OS Control via PowerShell** | Install software, manage services, edit configs, query system state — all via pwsh | P0 |
-| **Clipboard Surface** | Read/write system clipboard | P1 |
-| **Notification Surface** | OS-native notifications for consent requests, job completions, alerts | P1 |
+## User Experience Priorities
 
-### Phase 3: Control Surfaces — Browser, Screen & Screen Sharing
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Browser Surface** | Playwright CDP control of dedicated Chrome — navigate, click, type, snapshot | P0 |
-| **Textual Browser Display** | Browser page state rendered as structured text: DOM snapshot, visible text, interactive elements | P0 |
-| **Live Screen Sharing** | RustDesk-style real-time screen streaming from agent device to any client (desktop or phone) via WebRTC | P0 |
-| **Remote Observation** | Watch the agent work on your desktop from your phone — see the actual screen, not just text | P0 |
-| **Remote Takeover** | Tap/click into the shared screen to take control — mouse, keyboard, touch input forwarded back | P0 |
-| **Screen Capture Surface** | Capture device screen, convert to textual description (accessibility tree / OCR) for agent context | P1 |
-| **Adaptive Streaming** | Auto-adjust resolution, FPS, and codec based on network quality (H.264/VP9, 1-30fps) | P1 |
-| **Sandbox Browser** | Separate container with Chromium + Xvfb + VNC/noVNC for safe browsing | P1 |
-| **Session Recording** | Record screen sharing sessions for playback, audit, and debugging | P1 |
-| **Multi-Monitor** | Select which monitor to share, or share all | P2 |
-| **Web Search** | Brave, Perplexity, xAI Grok search + `web_fetch` | P1 |
+The most important user-facing behaviors are:
 
-### Phase 4: Voice & Interaction
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Voice Input (STT)** | Real-time speech-to-text — talk to your agent hands-free (Whisper / Deepgram) | P0 |
-| **Voice Output (TTS)** | Agent speaks responses — ElevenLabs / native TTS | P0 |
-| **Voice Wake Word** | "Hey Jait" — always-on listening with wake word detection | P1 |
-| **Talk Mode** | Push-to-talk overlay / continuous conversation mode | P1 |
-| **Voice Consent** | Approve/reject actions by voice: "Yes, run it" / "No, stop" | P1 |
-| **Voice + Screen** | Agent narrates what it's doing while you watch via screen share or textual display | P2 |
+- inline visibility into what the agent changed
+- approval flows that are fast but explicit
+- resumable work across disconnects and device changes
+- workspace-native review instead of opaque “done” messages
+- queueing and manager-mode orchestration that remain understandable
 
-### Phase 5: Security & Control
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Consent Manager** | Explicit approval for dangerous actions (shell commands, file deletes, OS changes) | P0 |
-| **Audit Log** | Every action logged with who/what/why/tool/params | P0 |
-| **Dry-Run Mode** | Agent shows plan + expected side-effects before execution | P0 |
-| **Exec Approvals** | Structured approval flow for shell commands with frozen execution plans | P0 |
-| **Action IDs** | Unique IDs for idempotency, no double-executions | P1 |
-| **Secrets Vault** | OS Keychain/TPM integration, per-tool scoped, ref-only profiles | P1 |
+## Security Priorities
 
-### Phase 6: Reliability & UX
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Action Cards** | Visual previews: commands, file changes, browser actions with Approve/Reject | P0 |
-| **Status Queue** | "Running", "Awaiting Approval", "Needs Input" visibility | P0 |
-| **Session Model** | Per-project, per-device isolated sessions with history | P0 |
-| **Live Activity Feed** | Unified view of all surfaces: terminal output + browser state + files changed | P0 |
-| **Quick Edits** | "Use port 4000 instead of 3000" without restarting the plan | P1 |
-| **Error Handling** | Retries, timeouts, circuit breakers, partial-fail reports | P1 |
-| **Undo/Rollback** | Reverse actions where possible (git revert, file restore, etc.) | P2 |
+Security is part of the product, not a later add-on.
 
-### Phase 7: Memory & Context
-| Feature | Description | Priority |
-|---------|-------------|----------|
-| **Project Memory** | Per-project context: tech stack, conventions, recent decisions | P0 |
-| **Attributed Memory** | "I believe X because: file Y / terminal output Z / browser page A" | P0 |
-| **Semantic Search** | Vector-indexed memory retrieval (SQLite-vec / LanceDB) | P0 |
-| **Daily Memory Log** | Append-only `memory/YYYY-MM-DD.md` + curated `MEMORY.md` | P1 |
-| **Pre-Compaction Flush** | Silent agentic turn to persist durable memories before context trim | P1 |
-| **Forget + TTL** | One-click forget, auto-expiring sensitive data | P1 |
-| **Workspace Indexing** | Index project files, git history, terminal history as retrieval sources | P2 |
+Important directions include:
+
+- least-privilege execution paths
+- path and workspace boundaries
+- SSRF and network safety for fetch/browser tooling
+- explicit approvals for risky actions
+- auditable action history
+- support for secret handling that does not depend on committed config files
+
+## What Jait Is Not
+
+Jait is not primarily trying to be:
+
+- a generic hosted chat app
+- a team SaaS with heavy shared-cloud assumptions
+- an invisible autopilot that acts without review
+- an editor-only assistant tied to a single IDE
+
+## Near-Term Public Focus
+
+The strongest public version of Jait is one that is clearly useful for:
+
+- coding workflows in a real repository
+- reviewing and accepting agent-generated changes
+- coordinating longer-running work through sessions and threads
+- using local-first tooling without complex infrastructure
+
+## Tech Summary
+
+Jait is a Bun and TypeScript monorepo with:
+
+- Fastify in the gateway
+- React in the web client
+- shared schemas and types in workspace packages
+- SQLite-backed local persistence
+- tool and surface abstractions for execution
+
+## Documentation Boundary
+
+This file is intentionally a public overview, not an internal sprint log or exhaustive roadmap.
+
+If a detail only helps internal planning and would become stale quickly, it should not live here.
 
 ### Phase 8: Docker Sandboxing
 | Feature | Description | Priority |

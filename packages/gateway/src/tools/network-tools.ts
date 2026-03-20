@@ -110,7 +110,7 @@ export function createNetworkScanTool(): ToolDefinition {
           type: "array",
           items: { type: "string" },
           description:
-            'Specific IPs to force-include in the scan, for example ["192.168.178.53"].',
+            'Specific IPs to force-include in the scan, for example ["192.168.1.100"].',
         },
       },
     },

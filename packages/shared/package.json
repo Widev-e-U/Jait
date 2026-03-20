@@ -1,7 +1,8 @@
 {
   "name": "@jait/shared",
-  "version": "0.1.30",
+  "version": "0.1.31",
   "description": "Shared schemas, constants, and domain types for Jait",
+  "author": "Jakob Wl <jakob@jait.dev>",
   "type": "module",
   "main": "dist/index.js",
   "types": "src/index.ts",
@@ -27,11 +28,19 @@
     }
   },
   "license": "MIT",
+  "homepage": "https://jait.dev",
   "repository": {
     "type": "git",
     "url": "https://github.com/JakobWl/Jait.git",
     "directory": "packages/shared"
   },
+  "keywords": [
+    "ai",
+    "agent",
+    "typescript",
+    "schemas",
+    "shared"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",

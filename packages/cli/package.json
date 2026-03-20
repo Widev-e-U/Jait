@@ -1,13 +1,22 @@
 {
   "name": "@jait/cli",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "private": true,
+  "description": "CLI entrypoint for Jait",
+  "author": "Jakob Wl <jakob@jait.dev>",
   "type": "module",
   "bin": {
     "jait": "dist/index.js"
   },
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "license": "MIT",
+  "homepage": "https://jait.dev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/JakobWl/Jait.git",
+    "directory": "packages/cli"
+  },
   "scripts": {
     "build": "tsc",
     "dev": "bun --watch src/index.ts",

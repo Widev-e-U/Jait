@@ -78,7 +78,7 @@ export function loadConfig(): AppConfig {
     nodeEnv: process.env["NODE_ENV"] ?? "development",
     jwtSecret: process.env["JWT_SECRET"] ?? "jait-dev-secret-change-in-production",
     llmProvider: explicitProvider ?? (hasOpenAiKey ? "openai" : "ollama"),
-    ollamaUrl: process.env["OLLAMA_URL"] ?? "http://192.168.178.60:11434",
+    ollamaUrl: process.env["OLLAMA_URL"] ?? "http://localhost:11434",
     ollamaModel:
       process.env["OLLAMA_MODEL"] ??
       "CognitiveComputations/dolphin-mistral-nemo:12b",
@@ -91,6 +91,6 @@ export function loadConfig(): AppConfig {
     ) || inferContextWindow(process.env["OPENAI_MODEL"] ?? "gpt-4o"),
     hookSecret: process.env["HOOK_SECRET"] ?? "jait-hook-secret",
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
-    whisperUrl: process.env["WHISPER_URL"] ?? "http://192.168.178.60:8178",
+    whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
   };
 }

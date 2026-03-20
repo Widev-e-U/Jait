@@ -37,7 +37,7 @@ describe('automation repositories', () => {
   it('infers a shared repository from a worktree thread', () => {
     const thread = makeThread({
       title: '[Jait] Fix mobile thread sync',
-      workingDirectory: '/home/jakob/.jait/worktrees/Jait/jait-abcd1234',
+      workingDirectory: '/home/user/.jait/worktrees/Jait/jait-abcd1234',
     })
 
     expect(inferThreadRepositoryName(thread)).toBe('Jait')
@@ -55,12 +55,12 @@ describe('automation repositories', () => {
       id: 'repo-1',
       name: 'Jait',
       defaultBranch: 'main',
-      localPath: 'C:\\Users\\jakob\\code\\Jait',
+      localPath: 'C:\\Users\\user\\code\\Jait',
       source: 'local',
     }
     const thread = makeThread({
       title: '[Jait] Fix mobile thread sync',
-      workingDirectory: 'C:\\Users\\jakob\\.jait\\worktrees\\Jait\\jait-abcd1234',
+      workingDirectory: 'C:\\Users\\user\\.jait\\worktrees\\Jait\\jait-abcd1234',
     })
 
     expect(threadBelongsToRepository(thread, repository)).toBe(true)

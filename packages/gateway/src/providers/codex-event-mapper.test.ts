@@ -9,7 +9,7 @@ describe("mapCodexNotification", () => {
         type: "mcp_tool_call",
         status: "completed",
         output: {
-          path: "/home/jakob/jait/.tmp/jait-preview-live.png",
+          path: "/home/user/project/.tmp/jait-preview-live.png",
         },
       },
     }, "session-1");
@@ -22,7 +22,7 @@ describe("mapCodexNotification", () => {
       message: "",
       callId: "item-1",
       data: {
-        path: "/home/jakob/jait/.tmp/jait-preview-live.png",
+        path: "/home/user/project/.tmp/jait-preview-live.png",
       },
     });
   });
