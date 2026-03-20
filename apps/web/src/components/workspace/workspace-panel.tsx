@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor from '@monaco-editor/react'
 import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
@@ -786,6 +786,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null)
   const [tabContextMenu, setTabContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const [fileContextMenu, setFileContextMenu] = useState<{ node: LazyNode; x: number; y: number } | null>(null)
+  const [fileContextMenuPosition, setFileContextMenuPosition] = useState<{ left: number; top: number } | null>(null)
+  const fileContextMenuRef = useRef<HTMLDivElement | null>(null)
   const [renameTarget, setRenameTarget] = useState<{ path: string; name: string; kind: 'file' | 'dir' } | null>(null)
   const [renameValue, setRenameValue] = useState('')
   const [newItemTarget, setNewItemTarget] = useState<{ parentDir: string; kind: 'file' | 'dir' } | null>(null)
@@ -1583,8 +1585,32 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- File tree context menu ---- */
   const handleTreeContextMenu = useCallback((node: LazyNode, x: number, y: number) => {
+    setFileContextMenuPosition(null)
     setFileContextMenu({ node, x, y })
   }, [])
+
+  useLayoutEffect(() => {
+    if (!fileContextMenu) {
+      setFileContextMenuPosition(null)
+      return
+    }
+
+    const updatePosition = () => {
+      const menu = fileContextMenuRef.current
+      if (!menu) return
+      const rect = menu.getBoundingClientRect()
+      const margin = 8
+      const left = Math.max(margin, Math.min(fileContextMenu.x, window.innerWidth - rect.width - margin))
+      const top = Math.max(margin, Math.min(fileContextMenu.y, window.innerHeight - rect.height - margin))
+      setFileContextMenuPosition((current) => (
+        current && current.left === left && current.top === top ? current : { left, top }
+      ))
+    }
+
+    updatePosition()
+    window.addEventListener('resize', updatePosition)
+    return () => window.removeEventListener('resize', updatePosition)
+  }, [fileContextMenu])
 
   // Close file context menu on outside click
   useEffect(() => {
@@ -3800,8 +3826,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {/* File tree context menu */}
       {fileContextMenu && (
       <div
+        ref={fileContextMenuRef}
         className="ui-panel-surface fixed z-50 min-w-[180px] py-1"
-        style={{ left: fileContextMenu.x, top: fileContextMenu.y }}
+        style={{
+          left: fileContextMenuPosition?.left ?? fileContextMenu.x,
+          top: fileContextMenuPosition?.top ?? fileContextMenu.y,
+          visibility: fileContextMenuPosition ? 'visible' : 'hidden',
+        }}
         onPointerDown={(e) => e.stopPropagation()}
       >
         {fileContextMenu.node.kind === 'file' && (
