@@ -912,6 +912,7 @@ function App() {
   }, [isMobile])
   const openArchitectureInWorkspace = useCallback(() => {
     if (!activeWorkspace) return
+    setViewMode('developer')
     if (!showWorkspace) setShowWorkspace(true)
     showWorkspaceEditorPanel()
     setArchitectureRequest({ key: Date.now() })
@@ -923,6 +924,7 @@ function App() {
     const trimmed = target?.trim()
     if (!trimmed) return false
     if (isMobile) return false
+    setViewMode('developer')
     if (!showWorkspace) setShowWorkspace(true)
     showWorkspaceEditorPanel()
     setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
@@ -1429,7 +1431,7 @@ function App() {
   const [savedScreenShare, setSavedScreenShare] = useSessionState<{ open: boolean }>(
     activeSessionId, 'screen-share.panel', token,
   )
-  const [savedDevPreview, setSavedDevPreview] = useSessionState<{ open: boolean; target?: string | null }>(
+  const [savedDevPreview, setSavedDevPreview] = useSessionState<{ open: boolean; target?: string | null; workspaceRoot?: string | null }>(
     activeSessionId, 'dev-preview.panel', token,
   )
   const [savedTerminal, setSavedTerminal] = useSessionState<{ open: boolean }>(
@@ -1617,7 +1619,7 @@ function App() {
           setShowDevPreview(false)
           closeWorkspacePreview()
         } else {
-          const v = value as { open?: boolean; target?: string | null }
+          const v = value as { open?: boolean; target?: string | null; workspaceRoot?: string | null }
           if (v.open === false) {
             setShowDevPreview(false)
             closeWorkspacePreview()
@@ -1722,7 +1724,7 @@ function App() {
       setShowScreenShare(false)
     }
 
-    const dp = state['dev-preview.panel'] as { open?: boolean; target?: string | null } | null | undefined
+    const dp = state['dev-preview.panel'] as { open?: boolean; target?: string | null; workspaceRoot?: string | null } | null | undefined
     if (dp && dp.open !== false) {
       const nextTarget = typeof dp.target === 'string' ? dp.target : null
       if (nextTarget) setDevPreviewTarget(nextTarget)
@@ -1837,13 +1839,13 @@ function App() {
           })
         }
       }, [setSavedTerminal, setActiveTerminalId]),
-      'dev-preview.open': useCallback((data: { target?: string }) => {
+      'dev-preview.open': useCallback((data: { target?: string | null; workspaceRoot?: string | null }) => {
         const target = typeof data.target === 'string' ? data.target.trim() : ''
         if (!target) return
         setCurrentView('chat')
         setDevPreviewTarget(target)
         setDevPreviewAutoOpenKey((prev) => prev + 1)
-        setSavedDevPreview({ open: true, target })
+        setSavedDevPreview({ open: true, target, workspaceRoot: data.workspaceRoot ?? null })
         if (routePreviewToWorkspace(target)) {
           setShowDevPreview(false)
           return

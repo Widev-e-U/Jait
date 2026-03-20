@@ -99,7 +99,8 @@ export interface FileHighlightData {
 }
 
 export interface DevPreviewOpenData {
-  target: string;
+  target?: string | null;
+  workspaceRoot?: string | null;
 }
 
 export interface ScreenShareOpenData {

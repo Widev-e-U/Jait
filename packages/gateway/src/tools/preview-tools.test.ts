@@ -28,6 +28,7 @@ describe("createPreviewOpenTool", () => {
     const context: ToolContext = {
       sessionId: "session-123",
       actionId: "action-123",
+      workspaceRoot: "/workspace/app",
       requestedBy: "assistant",
     };
 
@@ -38,7 +39,10 @@ describe("createPreviewOpenTool", () => {
       expect.objectContaining({ sessionId: "session-123", target: "3000" }),
     );
     expect(sendUICommand).toHaveBeenCalledWith(
-      { command: "dev-preview.open", data: { target: "http://127.0.0.1:5173/" } },
+      {
+        command: "dev-preview.open",
+        data: { target: "http://127.0.0.1:5173/", workspaceRoot: "/workspace/app" },
+      },
       "session-123",
     );
     expect(broadcast).toHaveBeenCalledWith(
@@ -48,12 +52,12 @@ describe("createPreviewOpenTool", () => {
         sessionId: "session-123",
         payload: {
           key: "dev-preview.panel",
-          value: { open: true, target: "http://127.0.0.1:5173/" },
+          value: { open: true, target: "http://127.0.0.1:5173/", workspaceRoot: "/workspace/app" },
         },
       }),
     );
     expect(set).toHaveBeenCalledWith("session-123", {
-      "dev-preview.panel": { open: true, target: "http://127.0.0.1:5173/" },
+      "dev-preview.panel": { open: true, target: "http://127.0.0.1:5173/", workspaceRoot: "/workspace/app" },
     });
   });
 
@@ -77,6 +81,7 @@ describe("createPreviewOpenTool", () => {
     const context: ToolContext = {
       sessionId: "mcp-session",
       actionId: "action-456",
+      workspaceRoot: "/workspace/mcp",
       requestedBy: "mcp-client",
     };
 
@@ -87,7 +92,10 @@ describe("createPreviewOpenTool", () => {
       expect.objectContaining({ sessionId: "mcp-session", target: "8765" }),
     );
     expect(sendUICommand).toHaveBeenCalledWith(
-      { command: "dev-preview.open", data: { target: "http://127.0.0.1:8765/" } },
+      {
+        command: "dev-preview.open",
+        data: { target: "http://127.0.0.1:8765/", workspaceRoot: "/workspace/mcp" },
+      },
       "mcp-session",
     );
     expect(broadcast).toHaveBeenCalledWith(
@@ -98,7 +106,7 @@ describe("createPreviewOpenTool", () => {
       }),
     );
     expect(set).toHaveBeenCalledWith("mcp-session", {
-      "dev-preview.panel": { open: true, target: "http://127.0.0.1:8765/" },
+      "dev-preview.panel": { open: true, target: "http://127.0.0.1:8765/", workspaceRoot: "/workspace/mcp" },
     });
   });
 });

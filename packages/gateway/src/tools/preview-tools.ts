@@ -70,10 +70,17 @@ export function createPreviewStartTool(
         frameworkHint: input.frameworkHint?.trim() || undefined,
       });
 
-      const panelState = { open: true, target: (preview.url ?? target) || null };
+      const panelState = {
+        open: true,
+        target: (preview.url ?? target) || null,
+        workspaceRoot: workspaceRoot || null,
+      };
       if (ws) {
         ws.sendUICommand(
-          { command: "dev-preview.open", data: { target: panelState.target } },
+          {
+            command: "dev-preview.open",
+            data: { target: panelState.target, workspaceRoot: panelState.workspaceRoot },
+          },
           sessionId,
         );
         ws.broadcast(sessionId, {
@@ -133,10 +140,10 @@ export function createPreviewStopTool(
       const stopped = await previewService.stop(sessionId);
       if (!stopped) return { ok: false, message: "No active preview session found" };
 
-      const panelState = { open: false, target: null };
+      const panelState = { open: false, target: null, workspaceRoot: null };
       if (ws) {
         ws.sendUICommand(
-          { command: "dev-preview.open", data: { target: null } },
+          { command: "dev-preview.open", data: { target: null, workspaceRoot: null } },
           sessionId,
         );
         ws.broadcast(sessionId, {
