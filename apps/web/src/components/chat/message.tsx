@@ -10,13 +10,14 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
-import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
 import {
+  JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
   parseLegacyReferencedFilesBlock,
-  userMessageTextFromSegments,
+  serializeUserMessageSegmentsForClipboard,
+  serializeUserMessageSegmentsToMarkdown,
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
 
@@ -51,11 +52,20 @@ interface MessageProps {
       displaySegments?: UserMessageSegment[]
     },
   ) => Promise<void> | void
+  onStartEditMessage?: (
+    messageId: string,
+    currentContent: string,
+    messageIndex?: number,
+    messageFromEnd?: number,
+    metadata?: {
+      referencedFiles?: { path: string; name: string }[]
+      displaySegments?: UserMessageSegment[]
+    },
+  ) => void
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
   onOpenDiff?: (filePath: string) => void
 }
 
-const USER_MESSAGE_MIN_WIDTH_PX = 320
 const USER_MESSAGE_MIN_WIDTH_CLASS = 'min-w-[min(20rem,calc(100vw-5rem))]'
 
 function proseClassName(compact?: boolean) {
@@ -261,6 +271,7 @@ function MessageInner({
   preferLlmUi,
   onOpenTerminal,
   onEditMessage,
+  onStartEditMessage,
   onOpenPath,
   onOpenDiff,
 }: MessageProps) {
@@ -289,28 +300,15 @@ function MessageInner({
   }, [isUser, content, displayContentProp, referencedFilesProp, displaySegmentsProp])
 
   const [copied, setCopied] = useState(false)
-  const [isEditing, setIsEditing] = useState(false)
-  const [draft, setDraft] = useState(userDisplayText)
-  const [draftSegments, setDraftSegments] = useState<UserMessageSegment[]>(userDisplaySegments)
-  const [isSavingEdit, setIsSavingEdit] = useState(false)
   const [isRetrying, setIsRetrying] = useState(false)
-  const [editWidthPx, setEditWidthPx] = useState<number | null>(null)
   const copyTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
-  const editPromptRef = useRef<PromptInputHandle | null>(null)
 
   useEffect(() => {
     return () => {
       if (copyTimerRef.current !== null) window.clearTimeout(copyTimerRef.current)
     }
   }, [])
-
-  useEffect(() => {
-    if (!isEditing) {
-      setDraft(userDisplayText)
-      setDraftSegments(userDisplaySegments)
-    }
-  }, [userDisplayText, userDisplaySegments, isEditing])
 
   /** Build copyable text including tool calls when present */
   const buildCopyText = (): string => {
@@ -340,15 +338,27 @@ function MessageInner({
       }
     }
 
-    if (content) parts.push(content)
+    if (content) {
+      parts.push(isUser ? serializeUserMessageSegmentsToMarkdown(userDisplaySegments) || userDisplayText : content)
+    }
     return parts.join('\n').trim()
   }
 
   const copyToClipboard = async () => {
     const text = buildCopyText()
     if (!text) return
+    const clipboardPayload = isUser ? serializeUserMessageSegmentsForClipboard(userDisplaySegments) : null
     try {
-      await navigator.clipboard.writeText(text)
+      if (clipboardPayload && typeof ClipboardItem !== 'undefined' && navigator.clipboard.write) {
+        await navigator.clipboard.write([
+          new ClipboardItem({
+            'text/plain': new Blob([text], { type: 'text/plain' }),
+            [JAIT_REF_MIME]: new Blob([clipboardPayload], { type: JAIT_REF_MIME }),
+          }),
+        ])
+      } else {
+        await navigator.clipboard.writeText(text)
+      }
     } catch {
       const textArea = document.createElement('textarea')
       textArea.value = text
@@ -370,21 +380,17 @@ function MessageInner({
   const canRetry = canEdit
 
   const startEditing = () => {
-    const width = userBubbleRef.current?.getBoundingClientRect().width
-    if (width && Number.isFinite(width)) {
-      const viewportWidth = typeof window === 'undefined' ? USER_MESSAGE_MIN_WIDTH_PX : Math.max(window.innerWidth - 80, 0)
-      const minWidth = Math.min(USER_MESSAGE_MIN_WIDTH_PX, viewportWidth)
-      setEditWidthPx(Math.max(Math.round(width), minWidth))
-    } else {
-      setEditWidthPx(null)
-    }
-    setDraft(userDisplayText)
-    setDraftSegments(userDisplaySegments)
-    setIsEditing(true)
+    if (!messageId || !onStartEditMessage) return
+    onStartEditMessage(messageId, userDisplayText, messageIndex, messageFromEnd, {
+      referencedFiles: userDisplaySegments
+        .filter((segment): segment is Extract<UserMessageSegment, { type: 'file' }> => segment.type === 'file')
+        .map((segment) => ({ path: segment.path, name: segment.name })),
+      displaySegments: userDisplaySegments,
+    })
   }
 
   const handleUserBubbleClick = () => {
-    if (!canEdit || isEditing) return
+    if (!canEdit) return
     const selection = typeof window !== 'undefined' ? window.getSelection()?.toString().trim() : ''
     if (selection) return
     startEditing()
@@ -395,22 +401,11 @@ function MessageInner({
     const next = nextContent.trim()
     if (!next) return
     await onEditMessage(messageId, next, messageIndex, messageFromEnd, {
-      referencedFiles: (nextSegments ?? draftSegments)
+      referencedFiles: (nextSegments ?? userDisplaySegments)
         .filter((segment): segment is Extract<UserMessageSegment, { type: 'file' }> => segment.type === 'file')
         .map((segment) => ({ path: segment.path, name: segment.name })),
-      displaySegments: nextSegments ?? draftSegments,
+      displaySegments: nextSegments ?? userDisplaySegments,
     })
-  }
-
-  const handleSaveEdit = async () => {
-    setIsSavingEdit(true)
-    try {
-      const nextSegments = editPromptRef.current?.getSegments() ?? draftSegments
-      await sendFromMessage(userMessageTextFromSegments(nextSegments), nextSegments)
-      setIsEditing(false)
-    } finally {
-      setIsSavingEdit(false)
-    }
   }
 
   const handleRetryFromHere = async () => {
@@ -424,7 +419,7 @@ function MessageInner({
   }
 
   const renderActions = (outsideBubble?: boolean) => {
-    if (!content || isEditing) return null
+    if (!content) return null
     return (
       <div
         className={cn(
@@ -532,52 +527,7 @@ function MessageInner({
             )}
 
         {content ? (
-          isUser && isEditing ? (
-            <div
-              className={cn('max-w-full rounded-lg border bg-muted/40 p-3', USER_MESSAGE_MIN_WIDTH_CLASS)}
-              style={editWidthPx ? { width: `${editWidthPx}px` } : undefined}
-            >
-              <PromptInput
-                ref={editPromptRef}
-                value={draft}
-                segments={draftSegments}
-                onChange={setDraft}
-                onSubmit={async (_chipFiles, _attachments, nextSegments) => {
-                  const normalizedSegments = nextSegments ?? []
-                  setDraftSegments(normalizedSegments)
-                  setIsSavingEdit(true)
-                  try {
-                    await sendFromMessage(userMessageTextFromSegments(normalizedSegments), normalizedSegments)
-                    setIsEditing(false)
-                  } finally {
-                    setIsSavingEdit(false)
-                  }
-                }}
-                placeholder=""
-                availableFiles={[]}
-                className="rounded-xl border-border/60 shadow-none"
-              />
-              <div className="mt-2 flex items-center justify-end gap-2">
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="ghost"
-                  onClick={() => { setIsEditing(false); setDraft(userDisplayText); setDraftSegments(userDisplaySegments); setEditWidthPx(null) }}
-                  disabled={isSavingEdit}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  onClick={() => { void handleSaveEdit() }}
-                  disabled={isSavingEdit || !draft.trim()}
-                >
-                  {isSavingEdit ? 'Sending…' : 'Send'}
-                </Button>
-              </div>
-            </div>
-          ) : isUser ? (
+          isUser ? (
             <div className={cn('relative w-fit max-w-full', USER_MESSAGE_MIN_WIDTH_CLASS)}>
               <div
                 ref={userBubbleRef}

@@ -3,6 +3,8 @@ export interface UserReferencedFile {
   name: string
 }
 
+const JAIT_REF_MIME = 'application/x-jait-user-message+json'
+
 export type UserMessageSegment =
   | { type: 'text'; text: string }
   | ({ type: 'file' } & UserReferencedFile)
@@ -98,6 +100,64 @@ export function parseLegacyReferencedFilesBlock(content: string): {
     displaySegments: buildFallbackUserMessageSegments(text, files),
   }
 }
+
+export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegment[] | null | undefined): string {
+  return normalizeUserMessageSegments(segments).map((segment) => {
+    if (segment.type === 'text') return segment.text
+    return `@${segment.path}`
+  }).join('')
+}
+
+export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[] {
+  if (!markdown.includes('@')) return []
+
+  const segments: UserMessageSegment[] = []
+  const pattern = /(^|[\s(])@((?:[A-Za-z0-9._-]+\/)+[A-Za-z0-9._-]+)(?=$|[\s),.:;!?])/g
+  let lastIndex = 0
+
+  for (const match of markdown.matchAll(pattern)) {
+    const index = match.index ?? -1
+    if (index < 0) continue
+    const full = match[0] ?? ''
+    const prefix = match[1] ?? ''
+    const path = match[2]?.trim()
+    const pathStart = index + prefix.length
+    if (pathStart > lastIndex) {
+      segments.push({ type: 'text', text: markdown.slice(lastIndex, pathStart) })
+    }
+    if (path) {
+      segments.push({ type: 'file', path, name: path.split('/').pop() || path })
+      lastIndex = pathStart + 1 + path.length
+    } else {
+      segments.push({ type: 'text', text: full })
+      lastIndex = index + full.length
+    }
+  }
+
+  if (lastIndex < markdown.length) {
+    segments.push({ type: 'text', text: markdown.slice(lastIndex) })
+  }
+
+  return normalizeUserMessageSegments(segments)
+}
+
+export function serializeUserMessageSegmentsForClipboard(segments: UserMessageSegment[] | null | undefined): string | null {
+  const normalized = normalizeUserMessageSegments(segments)
+  return normalized.length > 0 ? JSON.stringify({ version: 1, segments: normalized }) : null
+}
+
+export function parseUserMessageClipboardPayload(raw: string): UserMessageSegment[] {
+  if (!raw) return []
+  try {
+    const parsed = JSON.parse(raw) as { version?: number; segments?: unknown }
+    if (parsed.version !== 1) return []
+    return parseUserMessageSegments(parsed.segments)
+  } catch {
+    return []
+  }
+}
+
+export { JAIT_REF_MIME }
 
 export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
   if (!Array.isArray(raw)) return []
