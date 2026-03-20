@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor from '@monaco-editor/react'
-import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
+import { ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, MoreVertical, Plus, RefreshCw, Save, Search, Send, Sparkles, Trash2, Undo2, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
@@ -217,6 +217,12 @@ function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
+function isDescendantPath(parentPath: string, candidatePath: string): boolean {
+  const normalizedParent = normalizePath(parentPath)
+  const normalizedCandidate = normalizePath(candidatePath)
+  return normalizedCandidate === normalizedParent || normalizedCandidate.startsWith(`${normalizedParent}/`)
+}
+
 /* ------------------------------------------------------------------ */
 /*  Remote (server-backed) workspace helpers                           */
 /* ------------------------------------------------------------------ */
@@ -388,6 +394,18 @@ export interface WorkspaceTabsState {
   activePath: string | null
 }
 
+interface MobileTreeDragState {
+  node: LazyNode
+  pointerId: number
+  startX: number
+  startY: number
+  x: number
+  y: number
+  ready: boolean
+  active: boolean
+  dropDir: string | null
+}
+
 /* ------------------------------------------------------------------ */
 /*  Drag resize hook                                                   */
 /* ------------------------------------------------------------------ */
@@ -537,9 +555,12 @@ function TreeNodeRow({
   onSelectFile,
   onContextFile,
   onTreeContextMenu,
+  onMoveNode,
+  onMobilePointerStart,
   isMobile,
   gitStatusMap,
   dirChangesSet,
+  mobileDragTargetPath,
 }: {
   node: LazyNode
   depth: number
@@ -549,9 +570,12 @@ function TreeNodeRow({
   onSelectFile: (node: LazyFile) => void
   onContextFile: (node: LazyFile) => void
   onTreeContextMenu: (node: LazyNode, x: number, y: number) => void
+  onMoveNode: (srcPath: string, destDir: string) => void
+  onMobilePointerStart?: (node: LazyNode, event: React.PointerEvent<HTMLDivElement>) => void
   isMobile?: boolean
   gitStatusMap?: Map<string, string>
   dirChangesSet?: Set<string>
+  mobileDragTargetPath?: string | null
 }) {
   const paddingLeft = isMobile ? 6 + depth * 12 : 8 + depth * 14
   const [dragOver, setDragOver] = useState(false)
@@ -571,10 +595,12 @@ function TreeNodeRow({
         <div
           className={`group flex items-center gap-1.5 rounded px-1 cursor-pointer hover:bg-muted active:bg-muted ${
             isMobile ? 'py-2 text-sm' : 'py-1 text-xs'
-          } ${dragOver ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
+          } ${(dragOver || mobileDragTargetPath === node.path) ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
           style={{ paddingLeft }}
+          data-tree-drop-dir={node.path}
           onClick={() => onToggleDir(node)}
           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTreeContextMenu(node, e.clientX, e.clientY) }}
+          onPointerDown={(e) => onMobilePointerStart?.(node, e)}
           onDragOver={(e) => {
             const hasFile = e.dataTransfer.types.includes('text/jait-tree-node')
             if (!hasFile) return
@@ -597,11 +623,10 @@ function TreeNodeRow({
             e.stopPropagation()
             const data = JSON.parse(raw) as { path: string; name: string; kind: string }
             if (data.path !== node.path) {
-              // Dispatch custom event for move operation
-              window.dispatchEvent(new CustomEvent('jait-move-file', { detail: { srcPath: data.path, destDir: node.path } }))
+              onMoveNode(data.path, node.path)
             }
           }}
-          draggable
+          draggable={!isMobile}
           onDragStart={(e) => {
             e.dataTransfer.setData('text/jait-tree-node', JSON.stringify({ path: node.path, name: node.name, kind: 'dir' }))
             e.dataTransfer.effectAllowed = 'move'
@@ -619,6 +644,21 @@ function TreeNodeRow({
           {folderHasChanges && (
             <span className="h-1.5 w-1.5 rounded-full bg-yellow-500 shrink-0" title="Contains modified files" />
           )}
+          {isMobile && (
+            <button
+              type="button"
+              className="rounded p-1.5 hover:bg-background"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => {
+                e.stopPropagation()
+                const rect = e.currentTarget.getBoundingClientRect()
+                onTreeContextMenu(node, rect.right - 8, rect.bottom + 4)
+              }}
+              title="More actions"
+            >
+              <MoreVertical className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
         {expanded && node.children?.map((child) => (
           <TreeNodeRow
@@ -631,9 +671,12 @@ function TreeNodeRow({
             onSelectFile={onSelectFile}
             onContextFile={onContextFile}
             onTreeContextMenu={onTreeContextMenu}
+            onMoveNode={onMoveNode}
+            onMobilePointerStart={onMobilePointerStart}
             isMobile={isMobile}
             gitStatusMap={gitStatusMap}
             dirChangesSet={dirChangesSet}
+            mobileDragTargetPath={mobileDragTargetPath}
           />
         ))}
       </>
@@ -660,7 +703,8 @@ function TreeNodeRow({
       style={{ paddingLeft: paddingLeft + (isMobile ? 12 : 14) }}
       onClick={() => onSelectFile(node)}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTreeContextMenu(node, e.clientX, e.clientY) }}
-      draggable
+      onPointerDown={(e) => onMobilePointerStart?.(node, e)}
+      draggable={!isMobile}
       onDragStart={(e) => {
         e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: node.path, name: node.name }))
         e.dataTransfer.setData('text/jait-tree-node', JSON.stringify({ path: node.path, name: node.name, kind: 'file' }))
@@ -670,16 +714,30 @@ function TreeNodeRow({
       <FileIcon filename={node.name} className={`${isMobile ? 'h-4 w-4' : 'h-3.5 w-3.5'}`} />
       <span className={`truncate flex-1 ${matchedStatus === 'D' ? 'line-through text-muted-foreground' : ''}`} title={node.path}>{node.name}</span>
       {matchedStatus && <GitStatusBadge status={matchedStatus} />}
-      <button
-        type="button"
-        className={`${
-          isMobile ? 'opacity-100 p-1.5' : 'opacity-0 group-hover:opacity-100 p-0.5'
-        } rounded hover:bg-background`}
-        onClick={(e) => { e.stopPropagation(); onContextFile(node) }}
-        title="Add to chat"
-      >
-        <Send className={`${isMobile ? 'h-3.5 w-3.5' : 'h-3 w-3'}`} />
-      </button>
+      {isMobile ? (
+        <button
+          type="button"
+          className="rounded p-1.5 hover:bg-background"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation()
+            const rect = e.currentTarget.getBoundingClientRect()
+            onTreeContextMenu(node, rect.right - 8, rect.bottom + 4)
+          }}
+          title="More actions"
+        >
+          <MoreVertical className="h-3.5 w-3.5" />
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="opacity-0 group-hover:opacity-100 p-0.5 rounded hover:bg-background"
+          onClick={(e) => { e.stopPropagation(); onContextFile(node) }}
+          title="Add to chat"
+        >
+          <Send className="h-3 w-3" />
+        </button>
+      )}
     </div>
   )
 }
@@ -793,6 +851,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [newItemTarget, setNewItemTarget] = useState<{ parentDir: string; kind: 'file' | 'dir' } | null>(null)
   const [newItemValue, setNewItemValue] = useState('')
   const [discardConfirm, setDiscardConfirm] = useState<{ kind: 'all' } | { kind: 'file'; path: string } | null>(null)
+  const [mobileTreeDrag, setMobileTreeDrag] = useState<MobileTreeDragState | null>(null)
+  const mobileTreeDragRef = useRef<MobileTreeDragState | null>(null)
+  const mobileTreeDragTimerRef = useRef<number | null>(null)
+  const suppressTreeClickRef = useRef(false)
+  const consumeSuppressedTreeClick = useCallback(() => {
+    if (!suppressTreeClickRef.current) return false
+    suppressTreeClickRef.current = false
+    return true
+  }, [])
 
   // ── File search state ──
   const [fileSearchQuery, setFileSearchQuery] = useState('')
@@ -1538,6 +1605,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setExpandedDirs((prev) => { const n = new Set(prev); n.add(node.path); return n })
   }, [expandedDirs, bumpTree, surfaceId])
 
+  const handleToggleDirFromTree = useCallback((node: LazyDir) => {
+    if (consumeSuppressedTreeClick()) return
+    void handleToggleDir(node)
+  }, [consumeSuppressedTreeClick, handleToggleDir])
+
   /* ---- Select native file ---- */
   const handleSelectNativeFile = useCallback(async (node: LazyFile) => {
     const tabId = `file:${node.path}`
@@ -1574,6 +1646,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
     setLoadingFile(false)
   }, [loadTabReviewBaseline, onActiveFileChange, setTabLoadedContent, surfaceId])
+
+  const handleSelectNativeFileFromTree = useCallback((node: LazyFile) => {
+    if (consumeSuppressedTreeClick()) return
+    void handleSelectNativeFile(node)
+  }, [consumeSuppressedTreeClick, handleSelectNativeFile])
 
   /* ---- Context / reference ---- */
   const handleContextNativeFile = useCallback(async (node: LazyFile) => {
@@ -1620,68 +1697,172 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     return () => window.removeEventListener('pointerdown', onPointerDown)
   }, [fileContextMenu])
 
-  // Listen for drag-move events from the tree
-  useEffect(() => {
-    const handler = (e: Event) => {
-      const { srcPath, destDir } = (e as CustomEvent).detail
-      if (!remoteRoot || !srcPath || !destDir) return
-      void (async () => {
-        try {
-          await fetch(`${API_URL}/api/workspace/move`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ srcPath, destDir, surfaceId }),
-          })
-          bumpTree()
-          // Invalidate children of the target dir so it gets re-fetched
-          const findDir = (nodes: LazyNode[]): LazyDir | null => {
-            for (const n of nodes) {
-              if (n.kind === 'dir' && n.path === destDir) return n
-              if (n.kind === 'dir' && n.children) {
-                const found = findDir(n.children)
-                if (found) return found
-              }
-            }
-            return null
+  const handleMoveTreeNode = useCallback(async (srcPath: string, destDir: string) => {
+    if (!remoteRoot) return
+    const normalizedSrc = normalizePath(srcPath)
+    const normalizedDest = normalizePath(destDir)
+    const normalizedRoot = normalizePath(remoteRoot)
+    if (!normalizedSrc || !normalizedDest || normalizedSrc === normalizedDest) return
+    if (isDescendantPath(normalizedSrc, normalizedDest)) return
+
+    try {
+      const res = await fetch(`${API_URL}/api/workspace/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ srcPath: normalizedSrc, destDir: normalizedDest, surfaceId }),
+      })
+      if (!res.ok) throw new Error('Move failed')
+
+      const findDirByPath = (nodes: LazyNode[], path: string): LazyDir | null => {
+        for (const entry of nodes) {
+          if (entry.kind === 'dir' && entry.path === path) return entry
+          if (entry.kind === 'dir' && entry.children) {
+            const found = findDirByPath(entry.children, path)
+            if (found) return found
           }
-          const targetDir = findDir(lazyTree)
-          if (targetDir) {
-            targetDir.children = null
-            if (expandedDirs.has(targetDir.path)) {
-              targetDir.children = await remoteScanDir(targetDir.path, surfaceId)
-            }
-          }
-          // Also invalidate the source parent
-          const srcDirPath = srcPath.includes('/') ? srcPath.slice(0, srcPath.lastIndexOf('/')) : remoteRoot
-          const srcDir = findDir(lazyTree) ?? (srcDirPath === remoteRoot ? null : (() => {
-            const find2 = (nodes: LazyNode[]): LazyDir | null => {
-              for (const n of nodes) {
-                if (n.kind === 'dir' && n.path === srcDirPath) return n
-                if (n.kind === 'dir' && n.children) { const f = find2(n.children); if (f) return f }
-              }
-              return null
-            }
-            return find2(lazyTree)
-          })())
-          if (srcDir && srcDir.kind === 'dir') {
-            srcDir.children = null
-            if (expandedDirs.has(srcDir.path)) {
-              srcDir.children = await remoteScanDir(srcDir.path, surfaceId)
-            }
-          }
-          // If source was at root level, re-scan root
-          if (!srcPath.includes('/') || srcDirPath === remoteRoot) {
-            const newRoot = await remoteScanDir(remoteRoot, surfaceId)
-            setLazyTree(newRoot)
-          }
-          bumpTree()
-          void fetchGitStatus()
-        } catch { /* best effort */ }
-      })()
+        }
+        return null
+      }
+
+      const targetDir = normalizedDest === normalizedRoot ? null : findDirByPath(lazyTree, normalizedDest)
+      if (targetDir) {
+        targetDir.children = null
+        if (expandedDirs.has(targetDir.path)) {
+          targetDir.children = await remoteScanDir(targetDir.path, surfaceId)
+        }
+      }
+
+      const srcDirPath = normalizedSrc.includes('/') ? normalizedSrc.slice(0, normalizedSrc.lastIndexOf('/')) : normalizedRoot
+      const srcDir = srcDirPath === normalizedRoot ? null : findDirByPath(lazyTree, srcDirPath)
+      if (srcDir) {
+        srcDir.children = null
+        if (expandedDirs.has(srcDir.path)) {
+          srcDir.children = await remoteScanDir(srcDir.path, surfaceId)
+        }
+      }
+
+      if (srcDirPath === normalizedRoot || normalizedDest === normalizedRoot) {
+        setLazyTree(await remoteScanDir(remoteRoot, surfaceId))
+      }
+      bumpTree()
+      void fetchGitStatus()
+    } catch {
+      /* ignore */
     }
-    window.addEventListener('jait-move-file', handler)
-    return () => window.removeEventListener('jait-move-file', handler)
-  }, [remoteRoot, surfaceId, bumpTree, lazyTree, expandedDirs, fetchGitStatus])
+  }, [remoteRoot, surfaceId, lazyTree, expandedDirs, bumpTree, fetchGitStatus])
+
+  const handleMobileTreePointerStart = useCallback((node: LazyNode, event: React.PointerEvent<HTMLDivElement>) => {
+    if (!isMobile || !remoteRoot || event.pointerType === 'mouse') return
+    const target = event.target as HTMLElement | null
+    if (target?.closest('button')) return
+    if (mobileTreeDragTimerRef.current !== null) {
+      window.clearTimeout(mobileTreeDragTimerRef.current)
+      mobileTreeDragTimerRef.current = null
+    }
+    const nextDragState: MobileTreeDragState = {
+      node,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      x: event.clientX,
+      y: event.clientY,
+      ready: false,
+      active: false,
+      dropDir: null,
+    }
+    mobileTreeDragRef.current = nextDragState
+    setMobileTreeDrag(nextDragState)
+    mobileTreeDragTimerRef.current = window.setTimeout(() => {
+      setMobileTreeDrag((current) => {
+        if (!current || current.pointerId !== event.pointerId) return current
+        const readyState = { ...current, ready: true }
+        mobileTreeDragRef.current = readyState
+        return readyState
+      })
+      mobileTreeDragTimerRef.current = null
+    }, 180)
+  }, [isMobile, remoteRoot])
+
+  useEffect(() => {
+    if (!mobileTreeDrag || !remoteRoot) return
+
+    const updateDropTarget = (clientX: number, clientY: number) => {
+      const element = document.elementFromPoint(clientX, clientY) as HTMLElement | null
+      const dropTarget = element?.closest<HTMLElement>('[data-tree-drop-dir], [data-tree-drop-root]')
+      let dropDir: string | null = null
+      if (dropTarget?.dataset.treeDropRoot === 'true') {
+        dropDir = remoteRoot
+      } else if (dropTarget?.dataset.treeDropDir) {
+        dropDir = dropTarget.dataset.treeDropDir
+      }
+      if (dropDir && isDescendantPath(mobileTreeDragRef.current?.node.path ?? '', dropDir)) {
+        dropDir = null
+      }
+      return dropDir
+    }
+
+    const onPointerMove = (event: PointerEvent) => {
+      const current = mobileTreeDragRef.current
+      if (!current || event.pointerId !== current.pointerId) return
+      const deltaX = event.clientX - current.startX
+      const deltaY = event.clientY - current.startY
+      const distance = Math.hypot(deltaX, deltaY)
+      if (!current.ready) {
+        if (distance > 6) {
+          if (mobileTreeDragTimerRef.current !== null) {
+            window.clearTimeout(mobileTreeDragTimerRef.current)
+            mobileTreeDragTimerRef.current = null
+          }
+          mobileTreeDragRef.current = null
+          setMobileTreeDrag(null)
+        }
+        return
+      }
+      const active = current.active || distance >= 4
+      const dropDir = active ? updateDropTarget(event.clientX, event.clientY) : null
+      if (active && event.cancelable) event.preventDefault()
+      const nextDragState = {
+        ...current,
+        x: event.clientX,
+        y: event.clientY,
+        active,
+        dropDir,
+      }
+      mobileTreeDragRef.current = nextDragState
+      setMobileTreeDrag(nextDragState)
+    }
+
+    const finishDrag = (pointerId: number) => {
+      const current = mobileTreeDragRef.current
+      if (!current || current.pointerId !== pointerId) return
+      if (mobileTreeDragTimerRef.current !== null) {
+        window.clearTimeout(mobileTreeDragTimerRef.current)
+        mobileTreeDragTimerRef.current = null
+      }
+      if (current.active) {
+        suppressTreeClickRef.current = true
+        if (current.dropDir) void handleMoveTreeNode(current.node.path, current.dropDir)
+      }
+      mobileTreeDragRef.current = null
+      setMobileTreeDrag(null)
+    }
+
+    const onPointerUp = (event: PointerEvent) => finishDrag(event.pointerId)
+    const onPointerCancel = (event: PointerEvent) => finishDrag(event.pointerId)
+
+    window.addEventListener('pointermove', onPointerMove, { passive: false })
+    window.addEventListener('pointerup', onPointerUp)
+    window.addEventListener('pointercancel', onPointerCancel)
+    return () => {
+      if (mobileTreeDragTimerRef.current !== null) {
+        window.clearTimeout(mobileTreeDragTimerRef.current)
+        mobileTreeDragTimerRef.current = null
+      }
+      window.removeEventListener('pointermove', onPointerMove)
+      window.removeEventListener('pointerup', onPointerUp)
+      window.removeEventListener('pointercancel', onPointerCancel)
+    }
+  }, [mobileTreeDrag, remoteRoot, handleMoveTreeNode])
 
   /* ---- File management actions ---- */
   const handleDeleteNode = useCallback(async (node: LazyNode) => {
@@ -2441,6 +2622,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
 
+  useEffect(() => {
+    mobileTreeDragRef.current = mobileTreeDrag
+  }, [mobileTreeDrag])
+
   const renderSourceControlSection = useCallback((
     title: string,
     files: typeof stagedFiles,
@@ -2592,9 +2777,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Switch to editor tab when a file is selected on mobile
   const handleSelectNativeFileMobile = useCallback(async (node: LazyFile) => {
+    if (consumeSuppressedTreeClick()) return
     await handleSelectNativeFile(node)
     if (isMobile) setMobileTab('editor')
-  }, [handleSelectNativeFile, isMobile])
+  }, [consumeSuppressedTreeClick, handleSelectNativeFile, isMobile])
 
   const handleSelectExtFileMobile = useCallback((id: string) => {
     handleSelectExtFile(id)
@@ -2763,6 +2949,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           ) : (
           <ScrollArea className="flex-1 min-h-0">
             <div className="p-1">
+              {remoteRoot && (
+                <div
+                  className={`mb-1 flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground ${
+                    mobileTreeDrag?.dropDir === remoteRoot ? 'bg-primary/15 ring-1 ring-primary/40 text-foreground' : 'bg-muted/30'
+                  }`}
+                  data-tree-drop-root="true"
+                >
+                  <FolderOpen className="h-4 w-4 shrink-0" />
+                  <span className="truncate">Workspace root</span>
+                </div>
+              )}
               {hasNativeTree && lazyTree.map((node) => (
                 <TreeNodeRow
                   key={node.path}
@@ -2770,13 +2967,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   depth={0}
                   activeFilePath={activeNativePath}
                   expandedDirs={expandedDirs}
-                  onToggleDir={handleToggleDir}
+                  onToggleDir={handleToggleDirFromTree}
                   onSelectFile={handleSelectNativeFileMobile}
                   onContextFile={handleContextNativeFile}
                   onTreeContextMenu={handleTreeContextMenu}
+                  onMoveNode={handleMoveTreeNode}
+                  onMobilePointerStart={handleMobileTreePointerStart}
                   isMobile
                   gitStatusMap={gitStatusMap}
                   dirChangesSet={dirChangesSet}
+                  mobileDragTargetPath={mobileTreeDrag?.dropDir ?? null}
                 />
               ))}
 
@@ -3335,6 +3535,27 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         ) : (
         <ScrollArea className="flex-1 min-h-0">
           <div className="p-1">
+            {remoteRoot && (
+              <div
+                className="mb-1 flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground bg-muted/30"
+                data-tree-drop-root="true"
+                onDragOver={(e) => {
+                  if (!e.dataTransfer.types.includes('text/jait-tree-node')) return
+                  e.preventDefault()
+                  e.dataTransfer.dropEffect = 'move'
+                }}
+                onDrop={(e) => {
+                  const raw = e.dataTransfer.getData('text/jait-tree-node')
+                  if (!raw) return
+                  e.preventDefault()
+                  const data = JSON.parse(raw) as { path: string }
+                  handleMoveTreeNode(data.path, remoteRoot)
+                }}
+              >
+                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
+                <span className="truncate">Workspace root</span>
+              </div>
+            )}
             {hasNativeTree && lazyTree.map((node) => (
               <TreeNodeRow
                 key={node.path}
@@ -3342,12 +3563,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 depth={0}
                 activeFilePath={activeNativePath}
                 expandedDirs={expandedDirs}
-                onToggleDir={handleToggleDir}
-                onSelectFile={handleSelectNativeFile}
+                onToggleDir={handleToggleDirFromTree}
+                onSelectFile={handleSelectNativeFileFromTree}
                 onContextFile={handleContextNativeFile}
                 onTreeContextMenu={handleTreeContextMenu}
+                onMoveNode={handleMoveTreeNode}
                 gitStatusMap={gitStatusMap}
                 dirChangesSet={dirChangesSet}
+                mobileDragTargetPath={mobileTreeDrag?.dropDir ?? null}
               />
             ))}
 
@@ -3785,6 +4008,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
         )}
         </div>
+      </div>
+      )}
+
+      {mobileTreeDrag?.active && (
+      <div
+        className="pointer-events-none fixed z-50 rounded-md border bg-background/95 px-2 py-1 text-xs shadow-lg"
+        style={{ left: mobileTreeDrag.x + 12, top: mobileTreeDrag.y + 12 }}
+      >
+        Move {mobileTreeDrag.node.name}
       </div>
       )}
 
