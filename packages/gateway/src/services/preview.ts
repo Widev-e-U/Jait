@@ -47,6 +47,7 @@ export interface StartPreviewInput {
 }
 
 interface InternalPreviewSession extends PreviewSession {
+  browserUrl: string | null;
   process: ChildProcessWithoutNullStreams | null;
   runnerResult: PreviewRunnerResult | null;
 }
@@ -112,6 +113,7 @@ export class PreviewService {
       lastError: null,
       createdAt,
       updatedAt: createdAt,
+      browserUrl: null,
       process: null,
       runnerResult: null,
     };
@@ -138,7 +140,8 @@ export class PreviewService {
         session.process = result.process;
         session.port = result.port;
         session.command = result.command;
-        session.url = result.url;
+        session.browserUrl = result.url;
+        session.url = `/api/preview/proxy/${input.sessionId}/`;
         session.processId = result.processId ?? null;
         session.containerId = result.containerId ?? null;
 
@@ -154,10 +157,11 @@ export class PreviewService {
           });
         }
       } else {
-        session.url = normalizeTargetUrl(input.target ?? "");
-        if (!session.url) {
+        session.browserUrl = normalizeTargetUrl(input.target ?? "");
+        if (!session.browserUrl) {
           throw new Error("A loopback target URL or port is required");
         }
+        session.url = `/api/preview/proxy/${input.sessionId}/`;
       }
 
       await this.ensureBrowser(session);
@@ -211,6 +215,16 @@ export class PreviewService {
     if (!session) return null;
     session.browserEvents = this.readBrowserEvents(session);
     return this.toPublicSession(session);
+  }
+
+  getProxyTarget(sessionId: string): URL | null {
+    const session = this.sessions.get(sessionId);
+    if (!session?.browserUrl) return null;
+    try {
+      return new URL(session.browserUrl);
+    } catch {
+      return null;
+    }
   }
 
   getLogs(sessionId: string, sinceId = 0): PreviewLogEntry[] {
@@ -280,7 +294,7 @@ export class PreviewService {
       throw new Error("Preview browser surface failed to start");
     }
     const browser = started as BrowserSurface;
-    await browser.navigate(session.url!);
+    await browser.navigate(session.browserUrl!);
     session.browserEvents = browser.getEvents();
   }
 

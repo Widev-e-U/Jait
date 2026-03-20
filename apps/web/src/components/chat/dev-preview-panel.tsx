@@ -18,6 +18,15 @@ interface ResolvedPreviewTarget {
   label: string
 }
 
+function isRemoteGatewayUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return !isLoopbackHost(parsed.hostname)
+  } catch {
+    return false
+  }
+}
+
 interface PreviewBrowserEvent {
   id: number
   timestamp: string
@@ -84,6 +93,13 @@ export function resolvePreviewTarget(input: string): ResolvedPreviewTarget | nul
   const trimmed = input.trim()
   if (!trimmed) return null
 
+  if (trimmed.startsWith('/')) {
+    return {
+      iframeSrc: `${getApiUrl()}${trimmed}`,
+      label: trimmed,
+    }
+  }
+
   if (!/^[a-z]+:\/\//i.test(trimmed) && isHtmlFilePath(trimmed)) {
     return {
       iframeSrc: `${getApiUrl()}/api/dev-file/${encodePreviewFilePath(trimmed)}`,
@@ -120,6 +136,28 @@ export function resolvePreviewTarget(input: string): ResolvedPreviewTarget | nul
   }
 }
 
+export function getPreviewTargetWarning(input: string): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+
+  const isLoopbackPort = /^\d+$/.test(trimmed)
+  const isLoopbackUrl = (() => {
+    if (!/^[a-z]+:\/\//i.test(trimmed)) return false
+    try {
+      return isLoopbackHost(new URL(trimmed).hostname)
+    } catch {
+      return false
+    }
+  })()
+
+  if (!isLoopbackPort && !isLoopbackUrl) return null
+
+  const apiUrl = getApiUrl()
+  if (!isRemoteGatewayUrl(apiUrl)) return null
+
+  return `Preview proxy requests go through ${apiUrl}, so localhost resolves on that gateway host, not this browser device. Use a workspace-backed managed preview or connect to a local gateway to preview local ports.`
+}
+
 export function DevPreviewPanel({
   onClose,
   initialTarget = null,
@@ -137,6 +175,7 @@ export function DevPreviewPanel({
   const [frameKey, setFrameKey] = useState(0)
   const [isBusy, setIsBusy] = useState(false)
   const [panelError, setPanelError] = useState<string | null>(null)
+  const [panelWarning, setPanelWarning] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues'>('preview')
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
   const [isFrameLoading, setIsFrameLoading] = useState(false)
@@ -226,6 +265,7 @@ export function DevPreviewPanel({
 
   const openRawPreview = useCallback(() => {
     if (!resolved) return
+    setPanelWarning(getPreviewTargetWarning(input))
     setManagedSession(null)
     setRawSrc(resolved.iframeSrc)
     setRawLabel(resolved.label)
@@ -298,6 +338,7 @@ export function DevPreviewPanel({
     }
     const nextResolved = resolvePreviewTarget(initialTarget)
     if (!nextResolved) return
+    setPanelWarning(getPreviewTargetWarning(initialTarget))
     setRawSrc(nextResolved.iframeSrc)
     setRawLabel(nextResolved.label)
     setFrameKey((prev) => prev + 1)
@@ -440,6 +481,12 @@ export function DevPreviewPanel({
           <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-[11px] text-destructive">
             <AlertCircle className="h-3.5 w-3.5" />
             {panelError}
+          </div>
+        ) : null}
+        {panelWarning ? (
+          <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-700">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{panelWarning}</span>
           </div>
         ) : null}
       </div>

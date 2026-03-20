@@ -11,7 +11,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
-import { resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
+import { getPreviewTargetWarning, resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
 import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { ReviewableEditor } from './reviewable-editor'
@@ -1046,6 +1046,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [previewCommand, setPreviewCommand] = useState('')
   const [previewPort, setPreviewPort] = useState('')
   const [previewPanelError, setPreviewPanelError] = useState<string | null>(null)
+  const [previewPanelWarning, setPreviewPanelWarning] = useState<string | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
   const [previewFrameLoading, setPreviewFrameLoading] = useState(false)
   const [previewSidePanelOpen, setPreviewSidePanelOpen] = useState(false)
@@ -1806,6 +1807,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-destructive">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{previewPanelError}</span>
+            </div>
+          ) : null}
+          {previewPanelWarning ? (
+            <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-700">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{previewPanelWarning}</span>
             </div>
           ) : null}
         </div>
@@ -2817,6 +2824,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     setPreviewInput(trimmed || previewInput)
     setPreviewPanelError(null)
+    setPreviewPanelWarning(trimmed ? getPreviewTargetWarning(trimmed) : null)
     setPreviewFrameLoading(Boolean(resolved))
     if (!resolved) {
       setPreviewSidePanelOpen(true)

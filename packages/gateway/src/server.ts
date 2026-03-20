@@ -179,6 +179,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerBrowserAssetRoutes(app);
   registerWorkspacePreviewRoutes(app);
   registerDevProxyRoutes(app);
+  registerPreviewSessionProxyRoutes(app, deps);
   if (deps.previewService) {
     registerPreviewRoutes(app, config, { previewService: deps.previewService });
   }
@@ -406,47 +407,88 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
       }
     }
 
-    try {
-      const upstream = await fetchDevProxyUpstream(targetUrl, request, proxiedPath);
-
-      reply.code(upstream.status);
-      const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
-      for (const [key, value] of upstream.headers.entries()) {
-        const lower = key.toLowerCase();
-        if (lower === "content-length" || lower === "content-encoding" || lower === "transfer-encoding" || lower === "x-frame-options" || lower === "content-security-policy") {
-          continue;
-        }
-        reply.header(key, value);
-      }
-      reply.header("Cache-Control", "no-store");
-
-      if (contentType.includes("text/html") && isModuleLikeProxyPath(proxiedPath)) {
-        return reply
-          .code(502)
-          .type("application/json; charset=utf-8")
-          .send({
-          error: "DEV_PROXY_MODULE_FALLBACK",
-          message: `Dev server returned HTML for module request ${proxiedPath}. Open the server root or fix absolute asset routing.`,
-        });
-      }
-
-      if (contentType.includes("text/html") || contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
-        const text = await upstream.text();
-        return reply.type(contentType).send(rewriteDevProxyText(text, contentType, `/api/dev-proxy/${port}`, proxiedPath));
-      }
-
-      const body = Buffer.from(await upstream.arrayBuffer());
-      return reply.type(contentType).send(body);
-    } catch (error) {
-      return reply.status(502).send({
-        error: "DEV_PROXY_FAILED",
-        message: error instanceof Error ? error.message : "Failed to reach local dev server",
-      });
-    }
+    return proxyPreviewRequest(request, reply, targetUrl, `/api/dev-proxy/${port}`, proxiedPath);
   };
 
   app.all("/api/dev-proxy/:port", handler);
   app.all("/api/dev-proxy/:port/*", handler);
+}
+
+function registerPreviewSessionProxyRoutes(app: FastifyInstance, deps: ServerDeps): void {
+  const handler = async (request: any, reply: any) => {
+    const params = request.params as { sessionId?: string; "*"?: string };
+    const sessionId = params.sessionId?.trim();
+    if (!sessionId || !deps.previewService) {
+      return reply.status(404).send({ error: "PREVIEW_NOT_FOUND", message: "Preview session not found" });
+    }
+
+    const proxiedPath = params["*"] ? `/${params["*"]}` : "/";
+    const baseTarget = deps.previewService.getProxyTarget(sessionId);
+    if (!baseTarget) {
+      return reply.status(404).send({ error: "PREVIEW_NOT_FOUND", message: "Preview session not found" });
+    }
+
+    const targetUrl = new URL(proxiedPath, baseTarget);
+    const query = request.query as Record<string, string | string[] | undefined>;
+    for (const [key, value] of Object.entries(query)) {
+      if (Array.isArray(value)) {
+        for (const entry of value) targetUrl.searchParams.append(key, entry);
+      } else if (typeof value === "string") {
+        targetUrl.searchParams.set(key, value);
+      }
+    }
+
+    return proxyPreviewRequest(request, reply, targetUrl, `/api/preview/proxy/${sessionId}`, proxiedPath);
+  };
+
+  app.all("/api/preview/proxy/:sessionId", handler);
+  app.all("/api/preview/proxy/:sessionId/*", handler);
+}
+
+async function proxyPreviewRequest(
+  request: any,
+  reply: any,
+  targetUrl: URL,
+  rewritePrefix: string,
+  proxiedPath: string,
+): Promise<unknown> {
+  try {
+    const upstream = await fetchDevProxyUpstream(targetUrl, request, proxiedPath);
+
+    reply.code(upstream.status);
+    const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+    for (const [key, value] of upstream.headers.entries()) {
+      const lower = key.toLowerCase();
+      if (lower === "content-length" || lower === "content-encoding" || lower === "transfer-encoding" || lower === "x-frame-options" || lower === "content-security-policy") {
+        continue;
+      }
+      reply.header(key, value);
+    }
+    reply.header("Cache-Control", "no-store");
+
+    if (contentType.includes("text/html") && isModuleLikeProxyPath(proxiedPath)) {
+      return reply
+        .code(502)
+        .type("application/json; charset=utf-8")
+        .send({
+          error: "DEV_PROXY_MODULE_FALLBACK",
+          message: `Dev server returned HTML for module request ${proxiedPath}. Open the server root or fix absolute asset routing.`,
+        });
+    }
+
+    if (contentType.includes("text/html") || contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
+      const text = await upstream.text();
+      return reply.type(contentType).send(rewriteDevProxyText(text, contentType, rewritePrefix, proxiedPath));
+    }
+
+    const body = Buffer.from(await upstream.arrayBuffer());
+    return reply.type(contentType).send(body);
+  } catch (error) {
+    return reply.status(502).send({
+      error: "DEV_PROXY_FAILED",
+      message: error instanceof Error ? error.message : "Failed to reach local dev server",
+    });
+  }
 }
 
 async function fetchDevProxyUpstream(targetUrl: URL, request: any, proxiedPath: string): Promise<Response> {
@@ -464,6 +506,7 @@ async function fetchDevProxyUpstream(targetUrl: URL, request: any, proxiedPath: 
   }
   return upstream;
 }
+
 
 function normalizeProxyPort(value?: string): number | null {
   if (!value) return null;

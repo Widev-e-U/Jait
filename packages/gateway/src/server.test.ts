@@ -234,6 +234,58 @@ describe("@jait/gateway health", () => {
     await new Promise<void>((resolveClose, rejectClose) => upstream.close((error) => error ? rejectClose(error) : resolveClose()));
   });
 
+  it("GET /api/preview/proxy/:sessionId proxies managed preview sessions", async () => {
+    const upstream = createHttpServer((request, response) => {
+      if (request.url === "/") {
+        response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
+        response.end('<!DOCTYPE html><html><body><script type="module" src="/src/main.tsx"></script></body></html>');
+        return;
+      }
+
+      if (request.url === "/src/main.tsx") {
+        response.writeHead(200, { "Content-Type": "text/javascript; charset=utf-8" });
+        response.end('import "/@vite/client"; console.log("ok");');
+        return;
+      }
+
+      response.writeHead(404, { "Content-Type": "text/plain; charset=utf-8" });
+      response.end("not found");
+    });
+
+    await new Promise<void>((resolveListen) => upstream.listen(0, "127.0.0.1", () => resolveListen()));
+    const address = upstream.address();
+    if (!address || typeof address === "string") {
+      throw new Error("Expected TCP address for upstream test server");
+    }
+
+    const app = await createServer(testConfig, {
+      previewService: {
+        getProxyTarget: (sessionId: string) => sessionId === "preview-session"
+          ? new URL(`http://127.0.0.1:${address.port}/`)
+          : null,
+      } as any,
+    });
+
+    const htmlResponse = await app.inject({
+      method: "GET",
+      url: "/api/preview/proxy/preview-session/",
+    });
+
+    expect(htmlResponse.statusCode).toBe(200);
+    expect(htmlResponse.body).toContain('/api/preview/proxy/preview-session/src/main.tsx');
+
+    const moduleResponse = await app.inject({
+      method: "GET",
+      url: "/api/preview/proxy/preview-session/src/main.tsx",
+    });
+
+    expect(moduleResponse.statusCode).toBe(200);
+    expect(moduleResponse.body).toContain('/api/preview/proxy/preview-session/@vite/client');
+
+    await app.close();
+    await new Promise<void>((resolveClose, rejectClose) => upstream.close((error) => error ? rejectClose(error) : resolveClose()));
+  });
+
   it("GET /api/dev-proxy rejects html fallback for module requests", async () => {
     const upstream = createHttpServer((request, response) => {
       if (request.url?.startsWith("/src/main.tsx")) {
