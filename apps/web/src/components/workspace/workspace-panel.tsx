@@ -2185,6 +2185,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setGitActionBusy(false)
   }, [remoteRoot, gitActionBusy, commitMessage, fetchGitStatus, openTabs])
 
+  const changedFileCount = useMemo(() => {
+    const paths = new Set<string>()
+    for (const file of gitStatus?.index.files ?? []) paths.add(file.path)
+    for (const file of gitStatus?.workingTree.files ?? []) paths.add(file.path)
+    return paths.size
+  }, [gitStatus])
+
   /* ---- Generate commit message via AI ---- */
   const handleGenerateCommitMessage = useCallback(async () => {
     if (!remoteRoot || changedFileCount === 0 || commitMsgGenerating || gitActionBusy) return
@@ -2431,12 +2438,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const workingTreeFiles = gitStatus?.workingTree.files ?? []
   const stagedFileCount = stagedFiles.length
   const unstagedFileCount = workingTreeFiles.length
-  const changedFileCount = useMemo(() => {
-    const paths = new Set<string>()
-    for (const file of stagedFiles) paths.add(file.path)
-    for (const file of workingTreeFiles) paths.add(file.path)
-    return paths.size
-  }, [stagedFiles, workingTreeFiles])
   const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
 
