@@ -555,15 +555,22 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
           return r.stdout.trim();
         };
         if (!body.paths?.length) {
-          await gitProxy("checkout -- .").catch(() => "");
+          await gitProxy("reset --hard HEAD").catch(() => "");
           await gitProxy("clean -fd").catch(() => "");
           return { ok: true, discardedCount: -1 };
         }
         let count = 0;
         for (const p of body.paths) {
           if (/[;&|`$]/.test(p)) continue;
-          try { await gitProxy(`checkout -- "${p}"`); count++; } catch {
-            try { await gitProxy(`clean -fd -- "${p}"`); count++; } catch { /* skip */ }
+          try {
+            await gitProxy(`reset HEAD -- "${p}"`);
+            await gitProxy(`checkout -- "${p}"`);
+            count++;
+          } catch {
+            try {
+              await gitProxy(`clean -fd -- "${p}"`);
+              count++;
+            } catch { /* skip */ }
           }
         }
         return { ok: true, discardedCount: count };

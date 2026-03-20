@@ -658,8 +658,8 @@ export class GitService {
   /** Discard working-tree changes for specific files, or all files if paths is empty. */
   async discardChanges(cwd: string, paths?: string[]): Promise<{ discardedCount: number }> {
     if (!paths || paths.length === 0) {
-      // Discard all: reset tracked changes + clean untracked files
-      await gitExec(cwd, "checkout -- .");
+      // Discard all staged + unstaged tracked changes, then remove untracked files.
+      await gitExec(cwd, "reset --hard HEAD");
       await gitExec(cwd, "clean -fd");
       return { discardedCount: -1 }; // -1 means "all"
     }
@@ -668,11 +668,13 @@ export class GitService {
       // Sanitize: reject filenames with shell-unsafe chars
       if (/[;&|`$]/.test(p)) continue;
       try {
-        // Try checkout (for tracked/modified files)
+        // Reset the index first so staged-only and mixed staged/unstaged paths fully discard.
+        await gitExec(cwd, `reset HEAD -- "${p}"`);
+        // Then restore the working tree for tracked files.
         await gitExec(cwd, `checkout -- "${p}"`);
         count++;
       } catch {
-        // If checkout fails, try clean (for untracked files)
+        // If restore fails, the path may now be untracked (e.g. staged add) or already absent.
         try {
           await gitExec(cwd, `clean -fd -- "${p}"`);
           count++;
