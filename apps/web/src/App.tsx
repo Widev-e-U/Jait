@@ -1468,9 +1468,13 @@ function App() {
     if (savedScreenShare?.open) setShowScreenShare(true)
   }, [savedScreenShare]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  const restoredDevPreviewKeyRef = useRef<string | null>(null)
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
     const nextTarget = savedDevPreview?.target?.trim() || null
+    const key = `${savedDevPreview?.open ?? false}:${nextTarget ?? ''}:${savedDevPreview?.workspaceRoot ?? ''}`
+    if (key === restoredDevPreviewKeyRef.current) return
+    restoredDevPreviewKeyRef.current = key
     if (nextTarget) setDevPreviewTarget(nextTarget)
     if (savedDevPreview?.open) {
       routePreviewToWorkspace(nextTarget, savedDevPreview?.workspaceRoot ?? null)
@@ -2021,18 +2025,27 @@ function App() {
     sendUIState('dev-preview.panel', null, activeSessionId)
   }, [token, activeSessionId, closeWorkspacePreview, setSavedDevPreview, sendUIState])
 
+  const prevPreviewSyncRef = useRef<string>('')
   const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null }) => {
-    setWorkspacePreviewState(state)
+    setWorkspacePreviewState((prev) => {
+      if (prev.open === state.open && prev.target === state.target) return prev
+      return state
+    })
     if (state.open) {
       const nextState = {
         open: true,
         target: state.target ?? devPreviewTarget ?? null,
         workspaceRoot: activeWorkspace?.workspaceRoot ?? null,
       }
+      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}`
+      if (key === prevPreviewSyncRef.current) return
+      prevPreviewSyncRef.current = key
       setSavedDevPreview(nextState)
       sendUIState('dev-preview.panel', nextState, activeSessionId)
       return
     }
+    if (prevPreviewSyncRef.current === '') return
+    prevPreviewSyncRef.current = ''
     setSavedDevPreview(null)
     sendUIState('dev-preview.panel', null, activeSessionId)
   }, [activeSessionId, activeWorkspace?.workspaceRoot, devPreviewTarget, sendUIState, setSavedDevPreview])

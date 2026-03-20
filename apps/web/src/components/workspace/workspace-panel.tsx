@@ -1298,13 +1298,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     onTabsStateChange(nextState)
   }, [openTabs, activeTab, remoteRoot, onTabsStateChange])
 
+  const lastNotifiedPreviewRef = useRef<string>('')
   useEffect(() => {
     if (!onPreviewOpenChange) return
     const previewTab = openTabs.find((tab) => tab.type === 'preview') ?? null
-    onPreviewOpenChange({
-      open: previewTab !== null,
-      target: previewTab?.previewTarget ?? previewTab?.path ?? null,
-    })
+    const nextOpen = previewTab !== null
+    const nextTarget = previewTab?.previewTarget ?? previewTab?.path ?? null
+    const key = `${nextOpen}:${nextTarget ?? ''}`
+    if (key === lastNotifiedPreviewRef.current) return
+    lastNotifiedPreviewRef.current = key
+    onPreviewOpenChange({ open: nextOpen, target: nextTarget })
   }, [openTabs, onPreviewOpenChange])
 
   useEffect(() => {
