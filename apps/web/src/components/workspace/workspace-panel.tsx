@@ -2161,16 +2161,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- Generate commit message via AI ---- */
   const handleGenerateCommitMessage = useCallback(async () => {
-    if (!remoteRoot || !gitStatus?.workingTree.files.length || commitMsgGenerating || gitActionBusy) return
+    if (!remoteRoot || changedFileCount === 0 || commitMsgGenerating || gitActionBusy) return
     setCommitMsgGenerating(true)
+    setGitActionError(null)
     try {
       const { message } = await gitApi.generateCommitMessage(remoteRoot, provider, cliModel)
       if (message) setCommitMessage(message)
-    } catch {
-      // fail silently — user can type manually
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
     }
     setCommitMsgGenerating(false)
-  }, [remoteRoot, gitStatus, commitMsgGenerating, gitActionBusy, provider, cliModel])
+  }, [remoteRoot, changedFileCount, commitMsgGenerating, gitActionBusy, provider, cliModel])
 
   /* ---- Git pull ---- */
   const handleGitPull = useCallback(async () => {
