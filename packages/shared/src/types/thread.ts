@@ -48,7 +48,7 @@ export interface ThreadInfo {
   prUrl: string | null;
   prNumber: number | null;
   prTitle: string | null;
-  prState: "open" | "closed" | "merged" | null;
+  prState: "creating" | "open" | "closed" | "merged" | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -98,7 +98,7 @@ export interface UpdateThreadParams {
   prUrl?: string | null;
   prNumber?: number | null;
   prTitle?: string | null;
-  prState?: "open" | "closed" | "merged" | null;
+  prState?: "creating" | "open" | "closed" | "merged" | null;
 }
 
 // ── Thread WS events ────────────────────────────────────────────────
