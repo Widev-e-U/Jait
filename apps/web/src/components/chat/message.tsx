@@ -1,4 +1,4 @@
-import { memo, useMemo, useEffect, useRef, useState, useCallback } from 'react'
+import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
 import { markdownLookBack } from '@llm-ui/markdown'
 import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
@@ -29,7 +29,7 @@ import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
-import type { ViewMode } from './view-mode-selector'
+import type { SendTarget } from './send-target-selector'
 import type { ReferencedFile } from './prompt-input'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import type { SessionInfo } from '@/hooks/useChat'
@@ -87,14 +87,14 @@ interface MessageProps {
     onVoiceStop?: () => void
     mode?: ChatMode
     onModeChange?: (mode: ChatMode) => void
+    sendTarget?: SendTarget
+    onSendTargetChange?: (target: SendTarget) => void
     provider?: ProviderId
     onProviderChange?: (provider: ProviderId) => void
     providerRuntimeMode?: RuntimeMode
     onProviderRuntimeModeChange?: (mode: RuntimeMode) => void
     cliModel?: string | null
     onCliModelChange?: (model: string | null) => void
-    viewMode?: ViewMode
-    onViewModeChange?: (viewMode: ViewMode) => void
     repoRuntime?: RepositoryRuntimeInfo | null
     onMoveToGateway?: () => void
     sessionInfo?: SessionInfo | null
@@ -102,6 +102,7 @@ interface MessageProps {
     availableFiles?: ReferencedFile[]
     onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
     workspaceOpen?: boolean
+    footerLeadingContent?: ReactNode
   }
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
   onOpenDiff?: (filePath: string) => void
@@ -808,6 +809,8 @@ function MessageInner({
                           onVoiceStop={editComposer?.onVoiceStop}
                           mode={editComposer?.mode}
                           onModeChange={editComposer?.onModeChange}
+                          sendTarget={editComposer?.sendTarget}
+                          onSendTargetChange={editComposer?.onSendTargetChange}
                           provider={editComposer?.provider}
                           onProviderChange={editComposer?.onProviderChange}
                           providerRuntimeMode={editComposer?.providerRuntimeMode}
@@ -816,6 +819,7 @@ function MessageInner({
                           onCliModelChange={editComposer?.onCliModelChange}
                           repoRuntime={editComposer?.repoRuntime}
                           onMoveToGateway={editComposer?.onMoveToGateway}
+                          footerLeadingContent={editComposer?.footerLeadingContent}
                           sessionInfo={editComposer?.sessionInfo}
                           workspaceNodeId={editComposer?.workspaceNodeId}
                           availableFiles={editComposer?.availableFiles ?? userReferencedFilesFromSegments(userDisplaySegments)}

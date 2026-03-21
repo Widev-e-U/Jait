@@ -1,4 +1,4 @@
-import { Archive, Check, Folder, FolderOpen, MessageSquarePlus, Monitor, Plus, Trash2 } from 'lucide-react'
+import { Folder, FolderOpen, Monitor, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -8,18 +8,13 @@ import type { SessionInfo } from '@/hooks/useChat'
 interface SessionSelectorProps {
   workspaces: WorkspaceRecord[]
   activeWorkspaceId: string | null
-  activeSessionId: string | null
   hasMoreWorkspaces?: boolean
   showFewerWorkspaces?: boolean
   onSelectWorkspace: (workspaceId: string) => void
-  onSelectSession: (workspaceId: string, sessionId: string) => void
   onCreateWorkspace: () => void
-  onCreateSession: (workspaceId: string) => void
-  onArchive: (sessionId: string) => void
   onRemoveWorkspace: (workspaceId: string) => void
   onShowMore?: () => void
   onShowFewer?: () => void
-  /** Info about the currently active session's execution context. */
   sessionInfo?: SessionInfo | null
 }
 
@@ -36,14 +31,10 @@ function formatTime(iso: string) {
 export function SessionSelector({
   workspaces,
   activeWorkspaceId,
-  activeSessionId,
   hasMoreWorkspaces = false,
   showFewerWorkspaces = false,
   onSelectWorkspace,
-  onSelectSession,
   onCreateWorkspace,
-  onCreateSession,
-  onArchive,
   onRemoveWorkspace,
   onShowMore,
   onShowFewer,
@@ -72,7 +63,7 @@ export function SessionSelector({
               No workspaces yet.
               <br />
               <button onClick={onCreateWorkspace} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
-                Create workspace
+                Choose workspace folder
               </button>
             </p>
           ) : (
@@ -100,25 +91,21 @@ export function SessionSelector({
                           {workspace.rootPath || 'No folder linked'}
                         </div>
                         <div className="text-[10px] text-muted-foreground">
-                          {workspace.sessions.length} {workspace.sessions.length === 1 ? 'session' : 'sessions'} · {formatTime(workspace.lastActiveAt)}
+                          {formatTime(workspace.lastActiveAt)}
                         </div>
+                        {isActiveWorkspace && sessionInfo && (
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-blue-500">
+                            <span className="truncate">{sessionInfo.provider}</span>
+                            <span className="shrink-0 text-muted-foreground">·</span>
+                            <Monitor className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">
+                              {sessionInfo.isRemote && sessionInfo.remoteNode
+                                ? sessionInfo.remoteNode.nodeName
+                                : 'Gateway'}
+                            </span>
+                          </div>
+                        )}
                       </div>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start"
-                            onClick={(e) => {
-                              e.stopPropagation()
-                              onCreateSession(workspace.id)
-                            }}
-                          >
-                            <MessageSquarePlus className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">New session</TooltipContent>
-                      </Tooltip>
                       {workspace.sessions.length === 0 && (
                         <Tooltip>
                           <TooltipTrigger asChild>
@@ -138,73 +125,6 @@ export function SessionSelector({
                         </Tooltip>
                       )}
                     </div>
-
-                    {isActiveWorkspace && (
-                      <div className="pb-1">
-                        {workspace.sessions.length === 0 ? (
-                          <button
-                            className="mx-2 mb-1 flex w-[calc(100%-1rem)] items-center gap-2 rounded-md px-2 py-1.5 text-left text-[11px] text-muted-foreground transition-colors hover:bg-muted/40 hover:text-foreground"
-                            onClick={() => onCreateSession(workspace.id)}
-                          >
-                            <MessageSquarePlus className="h-3 w-3 shrink-0" />
-                            Start first session
-                          </button>
-                        ) : workspace.sessions.map((session) => (
-                          <div
-                            key={session.id}
-                            className={`group mx-2 flex items-start gap-2 rounded-md px-2 py-1.5 cursor-pointer transition-colors text-sm ${
-                              session.id === activeSessionId
-                                ? 'bg-secondary text-secondary-foreground'
-                                : 'hover:bg-muted/40'
-                            }`}
-                            onClick={() => onSelectSession(workspace.id, session.id)}
-                          >
-                            {session.id === activeSessionId ? (
-                              <Check className="mt-0.5 h-3 w-3 shrink-0 text-primary" />
-                            ) : (
-                              <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-muted-foreground/50" />
-                            )}
-                            <div className="flex-1 min-w-0">
-                              <div className="truncate text-xs font-medium">
-                                {session.name || 'Untitled'}
-                              </div>
-                              <div className="text-[10px] text-muted-foreground">
-                                {formatTime(session.lastActiveAt)}
-                              </div>
-                              {session.id === activeSessionId && sessionInfo && (
-                                <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-blue-500">
-                                  <span className="truncate">{sessionInfo.provider}</span>
-                                  <span className="shrink-0 text-muted-foreground">·</span>
-                                  <Monitor className="h-2.5 w-2.5 shrink-0" />
-                                  <span className="truncate">
-                                    {sessionInfo.isRemote && sessionInfo.remoteNode
-                                      ? sessionInfo.remoteNode.nodeName
-                                      : 'Gateway'}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start"
-                                  onClick={(e) => {
-                                    e.stopPropagation()
-                                    onArchive(session.id)
-                                  }}
-                                >
-                                  <Archive className="h-3 w-3" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent side="right">Archive</TooltipContent>
-                            </Tooltip>
-                          </div>
-                        ))
-                        }
-                      </div>
-                    )}
                   </div>
                 )
               })}

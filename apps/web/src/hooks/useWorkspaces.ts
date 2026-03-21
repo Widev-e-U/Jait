@@ -27,6 +27,12 @@ export interface WorkspaceRecord {
   sessions: WorkspaceSession[]
 }
 
+export interface CreateWorkspaceOptions {
+  title?: string
+  rootPath?: string | null
+  nodeId?: string | null
+}
+
 function authHeaders(token?: string | null): Record<string, string> {
   if (!token) return {}
   return { Authorization: `Bearer ${token}` }
@@ -98,7 +104,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     }
   }, [onLoginRequired, token, visibleLimit])
 
-  const createWorkspace = useCallback(async (title?: string) => {
+  const createWorkspace = useCallback(async (options: CreateWorkspaceOptions = {}) => {
     if (!token) {
       onLoginRequired?.()
       return null
@@ -107,7 +113,11 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
       const res = await fetch(`${API_URL}/api/workspaces`, {
         method: 'POST',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
-        body: JSON.stringify({ title: title || 'Untitled Workspace' }),
+        body: JSON.stringify({
+          title: options.title,
+          rootPath: options.rootPath,
+          nodeId: options.nodeId,
+        }),
       })
       if (res.status === 401) {
         onLoginRequired?.()
@@ -116,7 +126,10 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
       if (!res.ok) return null
       const workspace = await res.json() as Omit<WorkspaceRecord, 'sessions'> & { sessions?: WorkspaceSession[] }
       const nextWorkspace: WorkspaceRecord = { ...workspace, sessions: workspace.sessions ?? [] }
-      setWorkspaces((prev) => [nextWorkspace, ...prev].slice(0, visibleLimit))
+      setWorkspaces((prev) => {
+        const withoutExisting = prev.filter((entry) => entry.id !== nextWorkspace.id)
+        return [nextWorkspace, ...withoutExisting].slice(0, visibleLimit)
+      })
       setActiveWorkspaceId(nextWorkspace.id)
       setActiveSessionId(null)
       return nextWorkspace
@@ -134,8 +147,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
 
     let targetWorkspaceId = workspaceIdOverride ?? activeWorkspaceId
     if (!targetWorkspaceId) {
-      const workspace = await createWorkspace()
-      targetWorkspaceId = workspace?.id ?? null
+      return null
     }
     if (!targetWorkspaceId) return null
 

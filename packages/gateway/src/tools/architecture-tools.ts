@@ -19,7 +19,7 @@ export function createArchitectureTool(
       "Generate and display a Mermaid architecture diagram of the current workspace. " +
       "Analyze the project structure, dependencies, modules, and data flow, then produce " +
       "a valid Mermaid diagram (flowchart, graph, C4, etc.). The diagram will be rendered " +
-      "in the workspace Architecture tab. Output the Mermaid source as the `diagram` parameter.",
+      "in the editor Architecture tab. Output the Mermaid source as the `diagram` parameter.",
     tier: "standard",
     category: "browser",
     source: "builtin",
@@ -83,7 +83,7 @@ export function createArchitectureTool(
 
       return {
         ok: true,
-        message: "Architecture diagram sent to the workspace panel.",
+        message: "Architecture diagram sent to the editor.",
         data: { requestId, diagramLength: diagram.length, workspaceRoot, updatedAt: saved?.updatedAt ?? null },
       };
     },

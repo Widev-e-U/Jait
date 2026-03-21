@@ -86,7 +86,9 @@ import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useWorkspaceState } from '@/hooks/useWorkspaceState'
 import { useAutomation } from '@/hooks/useAutomation'
+import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
+import type { SendTarget } from '@/components/chat/send-target-selector'
 import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
@@ -828,15 +830,14 @@ function App() {
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
+  const showWorkspaceRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
   const [workspacePreviewState, setWorkspacePreviewState] = useState<{ open: boolean; target: string | null }>({ open: false, target: null })
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
-  const [showCloseWorkspaceConfirm, setShowCloseWorkspaceConfirm] = useState(false)
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
-  const closeConfirmRef = useRef<HTMLDivElement>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [showArchitecture, setShowArchitecture] = useState(false)
   const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null)
@@ -853,6 +854,7 @@ function App() {
   const floatingResizeCleanupRef = useRef<(() => void) | null>(null)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>('agent')
+  const [sendTarget, setSendTarget] = useState<SendTarget>('agent')
   const [chatProvider, setChatProvider] = useState<ProviderId>('jait')
   const [chatProviderRuntimeMode, setChatProviderRuntimeMode] = useState<RuntimeMode>('full-access')
   const [cliModelsByProvider, setCliModelsByProvider] = useState<Partial<Record<CliProviderId, string | null>>>(
@@ -900,10 +902,15 @@ function App() {
   const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
   const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string }[]>([])
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
+  const [workspacePickerMode, setWorkspacePickerMode] = useState<'workspace' | 'editor'>('workspace')
   const isDragging = useRef(false)
   const workspaceRef = useRef<WorkspacePanelHandle>(null)
   const promptInputRef = useRef<PromptInputHandle>(null)
   const isMobile = useIsMobile()
+
+  useEffect(() => {
+    showWorkspaceRef.current = showWorkspace
+  }, [showWorkspace])
 
   // Native filesystem watcher — incremented whenever the server pushes fs.changes
   const [fsWatcherVersion, setFsWatcherVersion] = useState(0)
@@ -939,7 +946,10 @@ function App() {
       }
     })
     setViewMode('developer')
-    if (!showWorkspace) setShowWorkspace(true)
+    if (!showWorkspace) {
+      showWorkspaceRef.current = true
+      setShowWorkspace(true)
+    }
     showWorkspaceEditorPanel()
     setArchitectureRequest({ key: Date.now() })
   }, [activeWorkspace?.workspaceRoot, showWorkspace, showWorkspaceEditorPanel])
@@ -955,7 +965,10 @@ function App() {
         return { surfaceId: prev?.surfaceId ?? '', workspaceRoot: workspaceRoot.trim(), nodeId: prev?.nodeId }
       })
     }
-    if (!showWorkspace) setShowWorkspace(true)
+    if (!showWorkspace) {
+      showWorkspaceRef.current = true
+      setShowWorkspace(true)
+    }
     showWorkspaceEditorPanel()
     setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
     return true
@@ -1235,15 +1248,11 @@ function App() {
 
   const {
     workspaces,
-    archivedSessionsByWorkspace,
     activeWorkspaceId,
     activeSessionId,
     createSession,
     createWorkspace,
     switchWorkspace,
-    switchSession,
-    archiveSession,
-    fetchArchivedSessions,
     removeWorkspace,
     renameSession,
     fetchWorkspaces,
@@ -1259,20 +1268,10 @@ function App() {
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null,
     [workspaces, activeWorkspaceId],
   )
-  const activeArchivedSessions = activeWorkspaceId ? (archivedSessionsByWorkspace[activeWorkspaceId] ?? []) : []
   const activeSessionRecord = useMemo(
-    () => activeWorkspaceRecord?.sessions.find((session) => session.id === activeSessionId)
-      ?? activeArchivedSessions.find((session) => session.id === activeSessionId)
-      ?? null,
-    [activeArchivedSessions, activeSessionId, activeWorkspaceRecord],
+    () => activeWorkspaceRecord?.sessions.find((session) => session.id === activeSessionId) ?? null,
+    [activeSessionId, activeWorkspaceRecord],
   )
-  const handleSessionSwitcherOpen = useCallback((open: boolean) => {
-    if (!open) return
-    for (const workspace of workspaces) {
-      if (archivedSessionsByWorkspace[workspace.id]) continue
-      void fetchArchivedSessions(workspace.id)
-    }
-  }, [archivedSessionsByWorkspace, fetchArchivedSessions, workspaces])
   const handleRemoveWorkspace = useCallback(async (workspaceId: string) => {
     const removed = await removeWorkspace(workspaceId)
     if (removed) {
@@ -1360,11 +1359,16 @@ function App() {
     () => (automation.selectedThread ? managerMessageQueues[automation.selectedThread.id] ?? [] : []),
     [automation.selectedThread, managerMessageQueues],
   )
-  const managerCanCreateThread = automation.selectedRepo != null
-  const managerComposerDisabled = automation.creating || !managerCanCreateThread
-  const managerPlaceholder = !automation.selectedRepo
+  const canTargetThread = automation.selectedRepo != null
+  const threadComposerDisabled = automation.creating || !canTargetThread
+  const threadPlaceholder = !automation.selectedRepo
     ? 'Select a repository to start a thread...'
-    : 'Describe what you want to do...'
+    : automation.selectedThread
+      ? 'Send a follow-up to the selected thread...'
+      : 'Describe what you want to do...'
+  const developerPlaceholder = sendTarget === 'thread'
+    ? threadPlaceholder
+    : 'Ask anything...'
 
 
   // Detect Electron platform and listen for maximize/unmaximize (custom titlebar)
@@ -1553,12 +1557,14 @@ function App() {
     if (wsFullStateReceivedRef.current) return // WS already delivered authoritative state
     if (!savedWorkspace) return
     if (activeWorkspace) return
-    if (savedWorkspace.open && savedWorkspace.remotePath) {
+    if (savedWorkspace.remotePath) {
       setActiveWorkspace({
         surfaceId: savedWorkspace.surfaceId ?? '',
         workspaceRoot: savedWorkspace.remotePath,
         nodeId: savedWorkspace.nodeId,
       })
+      showWorkspaceRef.current = savedWorkspace.open === true
+      setShowWorkspace(savedWorkspace.open === true)
     }
   }, [savedWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -1818,12 +1824,12 @@ function App() {
     }, []),
     listeners: {
       'workspace.open': useCallback((data: WorkspaceOpenData) => {
-        setShowWorkspace(true)
         setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
-        const state = { open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
+        const state = { open: showWorkspaceRef.current, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
         setSavedWorkspace(state)
       }, [setSavedWorkspace]),
       'workspace.close': useCallback(() => {
+        showWorkspaceRef.current = false
         setShowWorkspace(false)
         setActiveWorkspace(null)
         setShowArchitecture(false)
@@ -2141,11 +2147,18 @@ function App() {
   }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   const closeWorkspacePanel = useCallback(() => {
+    showWorkspaceRef.current = false
     setShowWorkspace(false)
-    setActiveWorkspace(null)
-    setSavedWorkspace(null)
+    if (activeWorkspace) {
+      setSavedWorkspace({
+        open: false,
+        remotePath: activeWorkspace.workspaceRoot,
+        surfaceId: activeWorkspace.surfaceId,
+        nodeId: activeWorkspace.nodeId,
+      })
+    }
     setShowArchitecture(false)
-  }, [setSavedWorkspace])
+  }, [activeWorkspace, setSavedWorkspace])
 
   const toggleWorkspaceTree = useCallback(() => {
     if (isMobile) {
@@ -2201,13 +2214,39 @@ function App() {
     // All clients (including this one) will receive it and hydrate automatically.
   }, [activeSessionId, token, updateSettings])
 
-  const handleOpenWorkspace = useCallback(async () => {
+  const handleCreateWorkspace = useCallback(() => {
+    setWorkspacePickerMode('workspace')
+    setFolderPickerOpen(true)
+  }, [])
+
+  const promptForWorkspaceSelection = useCallback(() => {
+    setWorkspacePickerMode('workspace')
+    setFolderPickerOpen(true)
+    toast('Select a workspace directory first.')
+  }, [])
+
+  const handleWorkspaceFolderSelected = useCallback(async (
+    path: string,
+    nodeId: string,
+    options?: { openEditor?: boolean },
+  ) => {
+    const workspace = await createWorkspace({ rootPath: path, nodeId })
+    if (!workspace) {
+      throw new Error('Failed to create workspace')
+    }
+    const session = workspace.sessions[0] ?? await createSession(workspace.id)
+    if (!session) {
+      throw new Error('Failed to create workspace session')
+    }
+    const nextOpen = options?.openEditor ?? workspacePickerMode === 'editor'
+    showWorkspaceRef.current = nextOpen
+    await openRemoteWorkspaceOnGateway(path, nodeId, session.id)
+    setShowWorkspace(nextOpen)
+    setSavedWorkspace({ open: nextOpen, remotePath: path, nodeId })
+  }, [createSession, createWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
+
+  const handleToggleEditor = useCallback(async () => {
     if (showWorkspace) {
-      // If there are unsaved changed files, ask for confirmation
-      if (changedFiles.length > 0) {
-        setShowCloseWorkspaceConfirm(true)
-        return
-      }
       closeWorkspacePanel()
       return
     }
@@ -2216,15 +2255,16 @@ function App() {
       const threadWorkspace = automation.selectedThread.workingDirectory ?? selectedThreadRepo?.localPath
       if (threadWorkspace) {
         if (activeWorkspace?.workspaceRoot === threadWorkspace) {
+          showWorkspaceRef.current = true
           setShowWorkspace(true)
-          const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId }
+          const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId, nodeId: activeWorkspace.nodeId }
           setSavedWorkspace(state)
           return
         }
         let workspaceSessionId = activeSessionId
         if (!workspaceSessionId) {
-          const session = await createSession()
-          workspaceSessionId = session?.id ?? null
+          await handleWorkspaceFolderSelected(threadWorkspace, selectedThreadRepo?.deviceId ?? 'gateway', { openEditor: true })
+          return
         }
         if (!workspaceSessionId) return
         await openRemoteWorkspaceOnGateway(threadWorkspace, selectedThreadRepo?.deviceId ?? undefined, workspaceSessionId)
@@ -2234,13 +2274,14 @@ function App() {
 
     // If there's an existing remote workspace, just reopen the panel
     if (activeWorkspace) {
+      showWorkspaceRef.current = true
       setShowWorkspace(true)
-      const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId }
+      const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId, nodeId: activeWorkspace.nodeId }
       setSavedWorkspace(state)
       return
     }
 
-    // ── Open the folder picker dialog (browses the gateway's filesystem) ──
+    setWorkspacePickerMode('editor')
     setFolderPickerOpen(true)
   }, [
     showWorkspace,
@@ -2249,18 +2290,12 @@ function App() {
     setSavedWorkspace,
     activeSessionId,
     openRemoteWorkspaceOnGateway,
-    changedFiles.length,
     viewMode,
     automation.selectedThread,
     selectedThreadRepo,
     createSession,
+    handleWorkspaceFolderSelected,
   ])
-
-  // Auto-open workspace panel when a filesystem surface starts
-  useEffect(() => {
-    if (!activeWorkspace) return
-    if (!showWorkspace) setShowWorkspace(true)
-  }, [activeWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Verify workspace surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
@@ -2280,17 +2315,20 @@ function App() {
         const data = (await openRes.json()) as { surfaceId: string; workspaceRoot: string }
         if (cancelled) return
         setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
-        const state = { open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId }
+        const state = { open: showWorkspaceRef.current, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: activeWorkspace.nodeId }
         setSavedWorkspace(state)
       } catch { /* network error — ignore, panel will show error naturally */ }
     })()
     return () => { cancelled = true }
-  }, [activeWorkspace?.surfaceId, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeWorkspace?.nodeId, activeWorkspace?.surfaceId, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-open workspace panel when the agent modifies files
   useEffect(() => {
     if (changedFiles.length === 0) return
-    if (!showWorkspace) setShowWorkspace(true)
+    if (!showWorkspace) {
+      showWorkspaceRef.current = true
+      setShowWorkspace(true)
+    }
   }, [changedFiles.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Absolute paths of files the agent has modified (undecided only), used to auto-refresh the workspace editor
@@ -2525,7 +2563,10 @@ function App() {
           modifiedContent,
           language,
         })
-        if (!showWorkspace) setShowWorkspace(true)
+        if (!showWorkspace) {
+          showWorkspaceRef.current = true
+          setShowWorkspace(true)
+        }
         showWorkspaceEditorPanel()
       }
 
@@ -2594,7 +2635,10 @@ function App() {
 
       const openedInTree = await workspaceRef.current?.openFileByPath(filePath)
       if (openedInTree) {
-        if (!showWorkspace) setShowWorkspace(true)
+        if (!showWorkspace) {
+          showWorkspaceRef.current = true
+          setShowWorkspace(true)
+        }
         showWorkspaceEditorPanel()
         return
       }
@@ -2627,7 +2671,10 @@ function App() {
         setActiveWorkspaceFileId(file.id)
       }
 
-      if (!showWorkspace) setShowWorkspace(true)
+      if (!showWorkspace) {
+        showWorkspaceRef.current = true
+        setShowWorkspace(true)
+      }
       showWorkspaceEditorPanel()
     } catch (err) {
       toast(err instanceof Error ? err.message : 'Failed to open linked file')
@@ -2775,8 +2822,8 @@ function App() {
     fileAttachments?: ChatAttachment[],
     displaySegments?: UserMessageSegment[],
   ) => {
-    if (viewMode === 'manager') {
-      return handleManagerSubmit(chipFiles, displaySegments)
+    if (viewMode === 'manager' || sendTarget === 'thread') {
+      return handleThreadSubmit(chipFiles, displaySegments)
     }
     const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
@@ -2791,6 +2838,10 @@ function App() {
 
     let sid = activeSessionId
     if (!sid) {
+      if (!activeWorkspaceId) {
+        promptForWorkspaceSelection()
+        return
+      }
       const session = await createSession(undefined, generatedTitle)
       sid = session?.id ?? null
     }
@@ -2831,10 +2882,10 @@ function App() {
     setInputSegments(undefined)
   }
 
-  /** Submit for Manager mode — delegate to the automation hook. */
-  const handleManagerSubmit = async (chipFiles?: ReferencedFile[], displaySegments?: UserMessageSegment[]) => {
+  /** Submit to an automation thread from either developer or manager mode. */
+  const handleThreadSubmit = async (chipFiles?: ReferencedFile[], displaySegments?: UserMessageSegment[]) => {
     const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
-    if (!prepared || managerComposerDisabled) return
+    if (!prepared || threadComposerDisabled) return
     setInputValue('')
     setInputSegments(undefined)
     await automation.handleSend(
@@ -3020,6 +3071,10 @@ function App() {
     }
     let sid = activeSessionId
     if (!sid) {
+      if (!activeWorkspaceId) {
+        promptForWorkspaceSelection()
+        return
+      }
       const session = await createSession()
       sid = session?.id ?? null
     }
@@ -3168,7 +3223,7 @@ function App() {
     const normalizedTranscript = normalizeTranscript(transcript)
     if (!normalizedTranscript) return
 
-    if (viewMode === 'manager') {
+    if (viewMode === 'manager' || sendTarget === 'thread') {
       const thread = automation.selectedThread
       if (thread?.status === 'running') {
         enqueueManagerMessage(thread.id, {
@@ -3198,6 +3253,10 @@ function App() {
 
     let sid = activeSessionId
     if (!sid) {
+      if (!activeWorkspaceId) {
+        promptForWorkspaceSelection()
+        return
+      }
       const session = await createSession(undefined, generatedTitle)
       sid = session?.id ?? null
     }
@@ -3225,7 +3284,7 @@ function App() {
       model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, messageQueue.length, sendMessage, token, viewMode])
+  }, [activeSessionId, activeWorkspaceId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, messageQueue.length, promptForWorkspaceSelection, sendMessage, sendTarget, token, viewMode])
 
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
@@ -3556,6 +3615,12 @@ function App() {
             )}
           </nav>
 
+          {currentView === 'chat' && (
+            <div className="px-2 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+              <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
+            </div>
+          )}
+
           {/* Spacer */}
           <div className="flex-1 min-w-0" />
 
@@ -3568,9 +3633,9 @@ function App() {
                 threadPrStates={automation.threadPrStates}
                 ghAvailable={automation.ghAvailable}
                 onOpenThread={(threadId) => {
-                  if (viewMode !== 'manager') setViewMode('manager')
                   setCurrentView('chat')
                   automation.setSelectedThreadId(threadId)
+                  setSendTarget('thread')
                 }}
                 onStopThread={(threadId) => automation.handleStop(threadId)}
               />
@@ -3764,7 +3829,6 @@ function App() {
                   </Tooltip>
                 )}
 
-                {/* Workspace button with close-confirmation popover */}
                 <div className="relative flex items-center shrink-0">
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -3772,39 +3836,15 @@ function App() {
                         variant={showWorkspace ? 'secondary' : 'ghost'}
                         size="sm"
                         className="h-7 rounded-md px-2 text-xs"
-                        onClick={() => { void handleOpenWorkspace() }}
+                        onClick={() => { void handleToggleEditor() }}
                       >
-                        <FolderTree className="h-3 w-3 mr-1" />
-                        Workspace
+                        <Code className="h-3 w-3 mr-1" />
+                        Editor
                         {showWorkspace && <X className="h-3 w-3 ml-1" />}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="bottom">{showWorkspace ? 'Close workspace' : 'Open workspace'}</TooltipContent>
+                    <TooltipContent side="bottom">{showWorkspace ? 'Hide editor' : 'Show editor'}</TooltipContent>
                   </Tooltip>
-
-                  {showCloseWorkspaceConfirm && (
-                    <>
-                      <div className="fixed inset-0 z-40" onClick={() => setShowCloseWorkspaceConfirm(false)} />
-                      <div
-                        ref={closeConfirmRef}
-                        className="ui-panel-surface absolute top-full left-0 z-50 mt-1 w-64 space-y-3 p-3"
-                      >
-                        <div className="flex items-start gap-2">
-                          <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0 mt-0.5" />
-                          <div className="text-sm">
-                            <p className="font-medium">Close workspace?</p>
-                            <p className="ui-meta mt-1">
-                              You have {changedFiles.length} unsaved file {changedFiles.length === 1 ? 'change' : 'changes'} that will be discarded.
-                            </p>
-                          </div>
-                        </div>
-                        <div className="flex items-center justify-end gap-1.5">
-                          <Button variant="ghost" size="sm" className="h-7 rounded-md px-2 text-xs" onClick={() => setShowCloseWorkspaceConfirm(false)}>Cancel</Button>
-                          <Button variant="destructive" size="sm" className="h-7 rounded-md px-2 text-xs" onClick={() => { setShowCloseWorkspaceConfirm(false); closeWorkspacePanel() }}>Discard & Close</Button>
-                        </div>
-                      </div>
-                    </>
-                  )}
                 </div>
 
                 {viewMode === 'developer' && showWorkspace && activeWorkspace && (
@@ -4059,14 +4099,10 @@ function App() {
                 <SessionSelector
                   workspaces={workspaces}
                   activeWorkspaceId={activeWorkspaceId}
-                  activeSessionId={activeSessionId}
                   hasMoreWorkspaces={hasMoreWorkspaces}
                   showFewerWorkspaces={workspaces.length > workspaceListLimit}
                   onSelectWorkspace={switchWorkspace}
-                  onSelectSession={switchSession}
-                  onCreateWorkspace={() => { void createWorkspace() }}
-                  onCreateSession={(workspaceId) => { void createSession(workspaceId) }}
-                  onArchive={archiveSession}
+                  onCreateWorkspace={handleCreateWorkspace}
                   onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
                   onShowMore={showMoreWorkspaces}
                   onShowFewer={showFewerWorkspaces}
@@ -4286,8 +4322,6 @@ function App() {
                           voiceLevels={voiceLevels}
                           voiceTranscribing={voiceTranscribing}
                           onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                          viewMode={viewMode}
-                          onViewModeChange={setViewMode}
                           provider={chatProvider}
                           onProviderChange={handleChatProviderChange}
                           providerRuntimeMode={chatProviderRuntimeMode}
@@ -4348,23 +4382,21 @@ function App() {
                             </div>
                           )}
                           <PromptInput
-                            ref={promptInputRef}
-                            draftStateKey={`manager:${automation.selectedRepo?.id ?? 'repo-draft'}`}
-                            value={inputValue}
-                            onChange={setInputValue}
-                            onSubmit={handleSubmit}
-                            disabled={managerComposerDisabled}
-                            controlsDisabled={automation.creating}
-                            placeholder={managerPlaceholder}
-                            onVoiceInput={handleVoiceInput}
-                            voiceRecording={voiceRecording}
-                            voiceLevels={voiceLevels}
-                            voiceTranscribing={voiceTranscribing}
-                            onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                            viewMode={viewMode}
-                            onViewModeChange={setViewMode}
-                            provider={chatProvider}
-                            onProviderChange={handleChatProviderChange}
+                          ref={promptInputRef}
+                          draftStateKey={`manager:${automation.selectedRepo?.id ?? 'repo-draft'}`}
+                          value={inputValue}
+                          onChange={setInputValue}
+                          onSubmit={handleSubmit}
+                          disabled={threadComposerDisabled}
+                          controlsDisabled={automation.creating}
+                          placeholder={threadPlaceholder}
+                          onVoiceInput={handleVoiceInput}
+                          voiceRecording={voiceRecording}
+                          voiceLevels={voiceLevels}
+                          voiceTranscribing={voiceTranscribing}
+                          onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                          provider={chatProvider}
+                          onProviderChange={handleChatProviderChange}
                             providerRuntimeMode={chatProviderRuntimeMode}
                             onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                             cliModel={cliModel}
@@ -4463,15 +4495,10 @@ function App() {
                     <div className="flex items-center justify-center">
                       <SessionSwitcher
                         workspaces={workspaces}
-                        archivedSessionsByWorkspace={archivedSessionsByWorkspace}
                         activeWorkspaceId={activeWorkspaceId}
-                        activeSessionId={activeSessionId}
                         onSelectWorkspace={switchWorkspace}
-                        onSelectSession={switchSession}
-                        onCreateWorkspace={() => { void createWorkspace() }}
-                        onCreateSession={(workspaceId) => { void createSession(workspaceId) }}
+                        onCreateWorkspace={handleCreateWorkspace}
                         onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
-                        onOpenChange={handleSessionSwitcherOpen}
                       />
                     </div>
                   )}
@@ -4490,6 +4517,7 @@ function App() {
                     onStop={cancelRequest}
                     onQueue={handleQueue}
                     isLoading={isLoading}
+                    placeholder={developerPlaceholder}
                     onVoiceInput={handleVoiceInput}
                     voiceRecording={voiceRecording}
                     voiceLevels={voiceLevels}
@@ -4497,14 +4525,26 @@ function App() {
                     onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                     mode={chatMode}
                     onModeChange={setChatMode}
+                    sendTarget={sendTarget}
+                    onSendTargetChange={setSendTarget}
                     provider={chatProvider}
                     onProviderChange={handleChatProviderChange}
                     providerRuntimeMode={chatProviderRuntimeMode}
                     onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                     cliModel={cliModel}
                     onCliModelChange={handleCliModelChange}
-                    viewMode={viewMode}
-                    onViewModeChange={setViewMode}
+                    repoRuntime={sendTarget === 'thread' ? selectedRepoRuntime : null}
+                    onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
+                    footerLeadingContent={sendTarget === 'thread' ? (
+                      <ManagerRepoPicker
+                        repositories={automation.repositories}
+                        selectedRepo={automation.selectedRepo}
+                        disabled={automation.creating}
+                        getRuntimeInfo={automation.getRuntimeInfoForRepository}
+                        onSelect={automation.setSelectedRepoId}
+                        onAddRepository={() => automation.setFolderPickerOpen(true)}
+                      />
+                    ) : undefined}
                     availableFiles={availableFilesForMention}
                     onSearchFiles={handleSearchFiles}
                     workspaceOpen={showWorkspace}
@@ -4556,15 +4596,10 @@ function App() {
                     <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2">
                       <SessionSwitcher
                         workspaces={workspaces}
-                        archivedSessionsByWorkspace={archivedSessionsByWorkspace}
                         activeWorkspaceId={activeWorkspaceId}
-                        activeSessionId={activeSessionId}
                         onSelectWorkspace={switchWorkspace}
-                        onSelectSession={switchSession}
-                        onCreateWorkspace={() => { void createWorkspace() }}
-                        onCreateSession={(workspaceId) => { void createSession(workspaceId) }}
+                        onCreateWorkspace={handleCreateWorkspace}
                         onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
-                        onOpenChange={handleSessionSwitcherOpen}
                       />
                       <span className="truncate text-[11px] text-muted-foreground">
                         {activeWorkspaceRecord?.title || 'Workspace'}{activeSessionRecord?.status === 'archived' ? ' · archived session' : ''}
@@ -4607,12 +4642,26 @@ function App() {
                         onVoiceStop: () => { void stopRecordingAndTranscribe() },
                         mode: chatMode,
                         onModeChange: setChatMode,
+                        sendTarget,
+                        onSendTargetChange: setSendTarget,
                         provider: chatProvider,
                         onProviderChange: handleChatProviderChange,
                         providerRuntimeMode: chatProviderRuntimeMode,
                         onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
                         cliModel,
                         onCliModelChange: handleCliModelChange,
+                        repoRuntime: sendTarget === 'thread' ? selectedRepoRuntime : null,
+                        onMoveToGateway: sendTarget === 'thread' ? handleMoveRepoToGateway : undefined,
+                        footerLeadingContent: sendTarget === 'thread' ? (
+                          <ManagerRepoPicker
+                            repositories={automation.repositories}
+                            selectedRepo={automation.selectedRepo}
+                            disabled={automation.creating}
+                            getRuntimeInfo={automation.getRuntimeInfoForRepository}
+                            onSelect={automation.setSelectedRepoId}
+                            onAddRepository={() => automation.setFolderPickerOpen(true)}
+                          />
+                        ) : undefined,
                         availableFiles: availableFilesForMention,
                         onSearchFiles: handleSearchFiles,
                         workspaceOpen: showWorkspace,
@@ -4695,6 +4744,7 @@ function App() {
                       onQueue={handleQueue}
                       isLoading={isLoading}
                       disabled={limitReached}
+                      placeholder={developerPlaceholder}
                       onVoiceInput={handleVoiceInput}
                       voiceRecording={voiceRecording}
                       voiceLevels={voiceLevels}
@@ -4702,14 +4752,26 @@ function App() {
                       onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                       mode={chatMode}
                       onModeChange={setChatMode}
+                      sendTarget={sendTarget}
+                      onSendTargetChange={setSendTarget}
                       provider={chatProvider}
                       onProviderChange={handleChatProviderChange}
                       providerRuntimeMode={chatProviderRuntimeMode}
                       onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                       cliModel={cliModel}
                       onCliModelChange={handleCliModelChange}
-                      viewMode={viewMode}
-                      onViewModeChange={setViewMode}
+                      repoRuntime={sendTarget === 'thread' ? selectedRepoRuntime : null}
+                      onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
+                      footerLeadingContent={sendTarget === 'thread' ? (
+                        <ManagerRepoPicker
+                          repositories={automation.repositories}
+                          selectedRepo={automation.selectedRepo}
+                          disabled={automation.creating}
+                          getRuntimeInfo={automation.getRuntimeInfoForRepository}
+                          onSelect={automation.setSelectedRepoId}
+                          onAddRepository={() => automation.setFolderPickerOpen(true)}
+                        />
+                      ) : undefined}
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}
                       workspaceOpen={showWorkspace}
@@ -4718,7 +4780,14 @@ function App() {
                     />
                     <div className="flex items-center justify-between gap-2 px-1">
                       <div className="flex items-center gap-2 min-w-0">
-                        <button onClick={() => { clearMessages(); createSession() }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                        <button onClick={() => {
+                          clearMessages()
+                          if (!activeWorkspaceId) {
+                            promptForWorkspaceSelection()
+                            return
+                          }
+                          void createSession()
+                        }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
                           New chat
                         </button>
                         {(viewMode as string) === 'manager' && (
@@ -4950,9 +5019,9 @@ function App() {
           initialPath={settings.workspace_picker_path}
           initialNodeId={settings.workspace_picker_node_id}
           onSelect={(path, nodeId) => {
-            void openRemoteWorkspaceOnGateway(path, nodeId).catch((err) => {
-              console.error('Failed to open workspace:', err)
-              toast.error(`Failed to open workspace: ${err instanceof Error ? err.message : 'Unknown error'}`)
+            void handleWorkspaceFolderSelected(path, nodeId).catch((err) => {
+              console.error('Failed to select workspace:', err)
+              toast.error(`Failed to select workspace: ${err instanceof Error ? err.message : 'Unknown error'}`)
             })
           }}
         />

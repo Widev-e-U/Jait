@@ -72,6 +72,12 @@ jobs:
       tagged: ${{ steps.push-tag.outputs.tagged || 'false' }}
       changed: ${{ steps.version.outputs.changed || 'false' }}
       version: ${{ steps.version.outputs.version || '' }}
+      gateway_changed: ${{ steps.version.outputs.gateway_changed || 'false' }}
+      shared_changed: ${{ steps.version.outputs.shared_changed || 'false' }}
+      web_changed: ${{ steps.version.outputs.web_changed || 'false' }}
+      screen_share_changed: ${{ steps.version.outputs.screen_share_changed || 'false' }}
+      desktop_changed: ${{ steps.version.outputs.desktop_changed || 'false' }}
+      mobile_changed: ${{ steps.version.outputs.mobile_changed || 'false' }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -86,14 +92,35 @@ jobs:
 
           # Check if ANY watched package.json version changed
           CHANGED=false
+          GATEWAY_CHANGED=false
+          SHARED_CHANGED=false
+          WEB_CHANGED=false
+          SCREEN_SHARE_CHANGED=false
+          DESKTOP_CHANGED=false
+          MOBILE_CHANGED=false
           for PKG in packages/gateway/package.json packages/shared/package.json apps/web/package.json packages/screen-share/package.json apps/desktop/package.json apps/mobile/package.json; do
             NEW=$(jq -r '.version' "$PKG" 2>/dev/null || echo "")
             OLD=$(git show HEAD~1:"$PKG" 2>/dev/null | jq -r '.version' 2>/dev/null || echo "")
             if [ -n "$NEW" ] && [ "$NEW" != "$OLD" ]; then
               echo "$PKG changed: $OLD → $NEW"
               CHANGED=true
+              case "$PKG" in
+                packages/gateway/package.json) GATEWAY_CHANGED=true ;;
+                packages/shared/package.json) SHARED_CHANGED=true ;;
+                apps/web/package.json) WEB_CHANGED=true ;;
+                packages/screen-share/package.json) SCREEN_SHARE_CHANGED=true ;;
+                apps/desktop/package.json) DESKTOP_CHANGED=true ;;
+                apps/mobile/package.json) MOBILE_CHANGED=true ;;
+              esac
             fi
           done
+
+          echo "gateway_changed=$GATEWAY_CHANGED" >> $GITHUB_OUTPUT
+          echo "shared_changed=$SHARED_CHANGED" >> $GITHUB_OUTPUT
+          echo "web_changed=$WEB_CHANGED" >> $GITHUB_OUTPUT
+          echo "screen_share_changed=$SCREEN_SHARE_CHANGED" >> $GITHUB_OUTPUT
+          echo "desktop_changed=$DESKTOP_CHANGED" >> $GITHUB_OUTPUT
+          echo "mobile_changed=$MOBILE_CHANGED" >> $GITHUB_OUTPUT
 
           if [ "$CHANGED" = "true" ]; then
             echo "changed=true" >> $GITHUB_OUTPUT
@@ -133,10 +160,15 @@ jobs:
     needs: [auto-tag]
     if: |
       always() && (
-        needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.desktop_changed == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
+      )
+      && (
+        github.event_name != 'push' ||
+        github.ref != 'refs/heads/main' ||
+        needs.auto-tag.outputs.desktop_changed == 'true'
       )
     steps:
       - uses: actions/checkout@v4
@@ -258,10 +290,15 @@ jobs:
     needs: [auto-tag]
     if: |
       always() && (
-        needs.auto-tag.outputs.tagged == 'true' ||
+        needs.auto-tag.outputs.mobile_changed == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||
         github.event_name == 'workflow_dispatch'
+      )
+      && (
+        github.event_name != 'push' ||
+        github.ref != 'refs/heads/main' ||
+        needs.auto-tag.outputs.mobile_changed == 'true'
       )
     steps:
       - uses: actions/checkout@v4
@@ -342,6 +379,7 @@ jobs:
 
       # 1. Publish @jait/shared (no workspace deps)
       - name: Publish @jait/shared
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.shared_changed == 'true'
         working-directory: packages/shared
         run: |
           npm publish --access public 2>&1 | tee /tmp/npm-out.log
@@ -358,11 +396,13 @@ jobs:
 
       # 2. Publish @jait/screen-share (depends on shared)
       - name: Resolve workspace deps (screen-share)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.screen_share_changed == 'true'
         working-directory: packages/screen-share
         run: |
           VERSION=$(jq -r '.version' ../shared/package.json)
           jq --arg v "^$VERSION" '.dependencies["@jait/shared"] = $v' package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/screen-share
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.screen_share_changed == 'true'
         working-directory: packages/screen-share
         run: |
           npm publish --access public 2>&1 | tee /tmp/npm-out.log
@@ -379,12 +419,14 @@ jobs:
 
       # 3. Bundle web frontend into gateway package (no separate @jait/web publish)
       - name: Bundle web dist into gateway
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
         run: |
           cp -r apps/web/dist packages/gateway/web-dist
           echo "✅ Bundled web frontend into packages/gateway/web-dist"
 
       # 4. Publish @jait/gateway (depends on shared + screen-share, web bundled inside)
       - name: Resolve workspace deps (gateway)
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
         working-directory: packages/gateway
         run: |
           SHARED_V=$(jq -r '.version' ../shared/package.json)
@@ -393,6 +435,7 @@ jobs:
             '.dependencies["@jait/shared"] = $sv | .dependencies["@jait/screen-share"] = $scv | del(.dependencies["@jait/web"])' \
             package.json > tmp.json && mv tmp.json package.json
       - name: Publish @jait/gateway
+        if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
         working-directory: packages/gateway
         run: |
           npm publish --access public 2>&1 | tee /tmp/npm-out.log
@@ -415,8 +458,8 @@ jobs:
     if: |
       always() && 
       needs.npm-publish.result == 'success' && 
-      needs.desktop.result == 'success' && 
-      needs.android.result == 'success' && (
+      contains(fromJSON('["success","skipped"]'), needs.desktop.result) && 
+      contains(fromJSON('["success","skipped"]'), needs.android.result) && (
         needs.auto-tag.outputs.tagged == 'true' ||
         needs.auto-tag.outputs.changed == 'true' ||
         startsWith(github.ref, 'refs/tags/v') ||

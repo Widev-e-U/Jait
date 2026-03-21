@@ -4,8 +4,8 @@ import { getIconForFile, DEFAULT_FILE } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
-import { ViewModeSelector } from '@/components/chat/view-mode-selector'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
+import { SendTargetSelector } from '@/components/chat/send-target-selector'
+import type { SendTarget } from '@/components/chat/send-target-selector'
 import { ProviderSelector } from '@/components/chat/provider-selector'
 import { CliModelSelector } from '@/components/chat/cli-model-selector'
 import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
@@ -57,10 +57,10 @@ interface PromptInputProps {
   voiceTranscribing?: boolean
   /** Called when user clicks "Done" to stop recording */
   onVoiceStop?: () => void
-  viewMode?: ViewMode
-  onViewModeChange?: (viewMode: ViewMode) => void
   mode?: ChatMode
   onModeChange?: (mode: ChatMode) => void
+  sendTarget?: SendTarget
+  onSendTargetChange?: (target: SendTarget) => void
   provider?: ProviderId
   onProviderChange?: (provider: ProviderId) => void
   providerRuntimeMode?: RuntimeMode
@@ -365,10 +365,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   voiceLevels,
   voiceTranscribing,
   onVoiceStop,
-  viewMode,
-  onViewModeChange,
   mode,
   onModeChange,
+  sendTarget,
+  onSendTargetChange,
   provider,
   onProviderChange,
   providerRuntimeMode,
@@ -425,13 +425,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const composerDisabled = Boolean(disabled)
   const controlsLocked = Boolean(controlsDisabled ?? disabled ?? false)
   const selectorsDisabled = controlsLocked || Boolean(isLoading)
-  const viewModeDisabled = controlsLocked
-  const showViewModeSelector = Boolean(viewMode && onViewModeChange)
   const showProviderSelector = Boolean(provider && onProviderChange)
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
   const showCliModelSelector = Boolean(provider && provider !== 'jait' && onCliModelChange)
-  const showModeSelector = Boolean(mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager')
-  const hasFooterControls = showViewModeSelector || showProviderSelector || showProviderRuntimeSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
+  const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
+  const showSendTargetSelector = Boolean(sendTarget && onSendTargetChange)
+  const hasFooterControls = showSendTargetSelector || showProviderSelector || showProviderRuntimeSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
 
   useEffect(() => {
     const el = rootRef.current
@@ -1055,8 +1054,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         {hasFooterControls && (
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
-              {showViewModeSelector && (
-                <ViewModeSelector mode={viewMode!} onChange={onViewModeChange!} disabled={viewModeDisabled} compact={compactFooterControls} />
+              {showSendTargetSelector && (
+                <SendTargetSelector target={sendTarget!} onChange={onSendTargetChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
               )}
               {footerLeadingContent}
               {showProviderSelector && (
