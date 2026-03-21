@@ -808,6 +808,7 @@ function App() {
   const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null)
   const [architectureGenerating, setArchitectureGenerating] = useState(false)
   const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
+  const architectureRenderRequestIdRef = useRef<string | null>(null)
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
@@ -1798,7 +1799,7 @@ function App() {
     }
   }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider, closeWorkspacePreview, isMobile])
 
-  const { sendUIState } = useUICommands({
+  const { sendUIState, sendArchitectureRenderResult } = useUICommands({
     sessionId: activeSessionId,
     token,
     onStateSync: handleStateSync,
@@ -1853,6 +1854,7 @@ function App() {
       }, [setSavedScreenShare]),
       'architecture.update': useCallback((data: ArchitectureUpdateData) => {
         if (data.diagram) {
+          architectureRenderRequestIdRef.current = data.requestId ?? null
           setArchitectureDiagram(data.diagram)
           setArchitectureGenerating(false)
           setShowArchitecture(true)
@@ -1861,6 +1863,13 @@ function App() {
       }, [openArchitectureInWorkspace]),
     },
   })
+
+  const handleArchitectureRenderResult = useCallback((result: { ok: true } | { ok: false; error: string }) => {
+    const requestId = architectureRenderRequestIdRef.current
+    if (!requestId) return
+    architectureRenderRequestIdRef.current = null
+    sendArchitectureRenderResult(requestId, result)
+  }, [sendArchitectureRenderResult])
 
   const handleWorkspaceTabsStateChange = useCallback((state: WorkspaceTabsState | null) => {
     setWorkspaceTabsState(state)
@@ -4035,6 +4044,7 @@ function App() {
                 architectureGenerating={architectureGenerating}
                 architectureRequest={architectureRequest}
                 onArchitectureOpenChange={setShowArchitecture}
+                onArchitectureRenderResult={handleArchitectureRenderResult}
                 onGenerateArchitecture={() => {
                   setArchitectureGenerating(true)
                   handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
@@ -4105,6 +4115,7 @@ function App() {
                   architectureGenerating={architectureGenerating}
                   architectureRequest={architectureRequest}
                   onArchitectureOpenChange={setShowArchitecture}
+                  onArchitectureRenderResult={handleArchitectureRenderResult}
                   onGenerateArchitecture={() => {
                     setArchitectureGenerating(true)
                     handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')

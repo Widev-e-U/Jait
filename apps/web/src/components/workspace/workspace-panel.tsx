@@ -89,6 +89,8 @@ interface WorkspacePanelProps {
   onArchitectureOpenChange?: (open: boolean) => void
   /** Trigger architecture generation. */
   onGenerateArchitecture?: () => void
+  /** Reports render success/failure for generated Mermaid diagrams. */
+  onArchitectureRenderResult?: (result: { ok: true } | { ok: false; error: string }) => void
 }
 
 export interface WorkspacePanelHandle {
@@ -950,6 +952,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   architectureRequest,
   onArchitectureOpenChange,
   onGenerateArchitecture,
+  onArchitectureRenderResult,
 }, ref) {
   const confirm = useConfirmDialog()
   const resolvedTheme = useResolvedTheme()
@@ -4337,6 +4340,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   onGenerate={onGenerateArchitecture}
                   onRegenerate={onGenerateArchitecture}
                   theme={resolvedTheme}
+                  onRenderResult={onArchitectureRenderResult}
                 />
               ) : loadingFile ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
@@ -4932,6 +4936,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             onGenerate={onGenerateArchitecture}
             onRegenerate={onGenerateArchitecture}
             theme={resolvedTheme}
+            onRenderResult={onArchitectureRenderResult}
           />
         ) : loadingFile && activeTab?.id === activeTabId ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">

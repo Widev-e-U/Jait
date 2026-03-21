@@ -1,5 +1,6 @@
 import type { WsControlPlane } from "../ws.js";
 import type { ToolDefinition } from "./contracts.js";
+import { nanoid } from "nanoid";
 
 // ── architecture.generate ────────────────────────────────────────────
 
@@ -38,21 +39,40 @@ export function createArchitectureTool(
         return { ok: false, message: "No diagram content provided" };
       }
 
+      const requestId = nanoid();
+
       // Push the diagram to the frontend via WS
       if (ws) {
         ws.sendUICommand(
           {
             command: "architecture.update",
-            data: { diagram },
+            data: { diagram, requestId },
           },
           context.sessionId,
         );
+
+        try {
+          const renderResult = await ws.waitForArchitectureRenderResult(requestId);
+          if (!renderResult.ok) {
+            return {
+              ok: false,
+              message: `Architecture render failed: ${renderResult.error}`,
+              data: { requestId, diagramLength: diagram.length, error: renderResult.error },
+            };
+          }
+        } catch (error) {
+          return {
+            ok: false,
+            message: error instanceof Error ? error.message : "Architecture render confirmation failed",
+            data: { requestId, diagramLength: diagram.length },
+          };
+        }
       }
 
       return {
         ok: true,
         message: "Architecture diagram sent to the workspace panel.",
-        data: { diagramLength: diagram.length },
+        data: { requestId, diagramLength: diagram.length },
       };
     },
   };

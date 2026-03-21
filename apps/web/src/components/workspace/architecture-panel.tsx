@@ -17,6 +17,8 @@ export interface ArchitecturePanelProps {
   onGenerate?: () => void
   /** Current theme */
   theme?: 'dark' | 'light'
+  /** Reports render success/failure for the current diagram */
+  onRenderResult?: (result: { ok: true } | { ok: false; error: string }) => void
 }
 
 /* ------------------------------------------------------------------ */
@@ -61,6 +63,7 @@ export function ArchitecturePanel({
   onRegenerate,
   onGenerate,
   theme = 'dark',
+  onRenderResult,
 }: ArchitecturePanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const [renderError, setRenderError] = useState<string | null>(null)
@@ -83,11 +86,14 @@ export function ArchitecturePanel({
       if (id !== renderIdRef.current) return
       containerRef.current.innerHTML = svg
       setRenderError(null)
+      onRenderResult?.({ ok: true })
     } catch (err) {
       if (id !== renderIdRef.current) return
-      setRenderError(err instanceof Error ? err.message : 'Failed to render diagram')
+      const error = err instanceof Error ? err.message : 'Failed to render diagram'
+      setRenderError(error)
+      onRenderResult?.({ ok: false, error })
     }
-  }, [theme])
+  }, [onRenderResult, theme])
 
   // Re-init mermaid when theme changes
   useEffect(() => {

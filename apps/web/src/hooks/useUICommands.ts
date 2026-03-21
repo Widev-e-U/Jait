@@ -646,5 +646,22 @@ export function useUICommands(opts: UseUICommandsOptions) {
     }
   }, [])
 
-  return { sendUIState }
+  const sendArchitectureRenderResult = useCallback((requestId: string, result: { ok: true } | { ok: false; error: string }) => {
+    const msg = JSON.stringify({
+      type: 'architecture.render-result',
+      payload: {
+        requestId,
+        ok: result.ok,
+        ...(result.ok ? {} : { error: result.error }),
+      },
+    })
+    const ws = wsRef.current
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(msg)
+    } else {
+      outgoingQueueRef.current.push(msg)
+    }
+  }, [])
+
+  return { sendUIState, sendArchitectureRenderResult }
 }
