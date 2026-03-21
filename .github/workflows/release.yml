@@ -43,6 +43,7 @@ on:
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+  RELEASE_ASSET_DIR: /tmp/jait-release-assets/${{ github.run_id }}
 
 permissions:
   contents: write
@@ -129,6 +130,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: oven-sh/setup-bun@v2
+      - name: Prepare release asset directory
+        run: mkdir -p "$RELEASE_ASSET_DIR"
       - run: bun install --frozen-lockfile
       - run: bun run build
       - name: Check Linux runner prerequisites
@@ -187,21 +190,13 @@ jobs:
         env:
           USE_SYSTEM_7ZA: "true"
         run: bun run build:win
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-linux
-          if-no-files-found: error
-          path: |
-            apps/desktop/release/*.AppImage
-            apps/desktop/release/*.deb
-            apps/desktop/release/latest-linux.yml
-      - uses: actions/upload-artifact@v4
-        with:
-          name: desktop-windows
-          if-no-files-found: error
-          path: |
-            apps/desktop/release/*.exe
-            apps/desktop/release/latest.yml
+      - name: Stage desktop release assets on runner
+        run: |
+          cp -v apps/desktop/release/*.AppImage "$RELEASE_ASSET_DIR"/
+          cp -v apps/desktop/release/*.deb "$RELEASE_ASSET_DIR"/
+          cp -v apps/desktop/release/latest-linux.yml "$RELEASE_ASSET_DIR"/
+          cp -v apps/desktop/release/*.exe "$RELEASE_ASSET_DIR"/
+          cp -v apps/desktop/release/latest.yml "$RELEASE_ASSET_DIR"/
 
   # ── Build macOS desktop app (skipped — no macOS runner available) ─
   # To enable: add a macOS self-hosted runner or fix GitHub billing,
@@ -249,6 +244,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 22
+      - name: Prepare release asset directory
+        run: mkdir -p "$RELEASE_ASSET_DIR"
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -281,11 +278,8 @@ jobs:
       - name: Build APK
         working-directory: apps/mobile/android
         run: chmod +x gradlew && ./gradlew assembleRelease
-      - uses: actions/upload-artifact@v4
-        with:
-          name: android-apk
-          if-no-files-found: error
-          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
+      - name: Stage Android release assets on runner
+        run: cp -v apps/mobile/android/app/build/outputs/apk/release/*.apk "$RELEASE_ASSET_DIR"/
 
   # ── Publish npm packages (in dependency order) ─────────────────────
   npm-publish:
@@ -396,11 +390,10 @@ jobs:
       )
     steps:
       - uses: actions/checkout@v4
-
-      - uses: actions/download-artifact@v4
-        with:
-          path: release-assets
-          merge-multiple: true
+      - name: Verify staged release assets
+        run: |
+          test -d "$RELEASE_ASSET_DIR"
+          ls -lah "$RELEASE_ASSET_DIR"
 
       - name: Extract version
         id: version
@@ -428,6 +421,10 @@ jobs:
           tag_name: v${{ steps.version.outputs.version }}
           name: Jait v${{ steps.version.outputs.version }}
           generate_release_notes: true
-          files: release-assets/**/*
+          files: ${{ env.RELEASE_ASSET_DIR }}/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Clean up staged release assets
+        if: always()
+        run: rm -rf "$RELEASE_ASSET_DIR"
