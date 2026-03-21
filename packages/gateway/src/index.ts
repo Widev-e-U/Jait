@@ -514,6 +514,12 @@ async function main() {
         payload: { key, value },
       });
       console.log(`UI state synced: session=${sid} key=${key} value=${value === null ? "null" : "set"}`);
+      if (key === "queued_messages") {
+        const serverWithQueueDrain = server as typeof server & {
+          drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+        };
+        void serverWithQueueDrain.drainQueuedChatMessages?.(sid);
+      }
     } catch (err) {
       console.error(`Failed to persist UI state (${key}):`, err);
     }
@@ -535,6 +541,13 @@ async function main() {
       console.error(`Failed to push full state to client ${clientId}:`, err);
     }
   };
+
+  const serverWithQueueDrain = server as typeof server & {
+    drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+  };
+  for (const session of sessionService.list("active")) {
+    void serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+  }
 
   // Screen-share WS start callback is no longer needed here — the start-request
   // is relayed directly to clients by the WS handler, and session creation happens
