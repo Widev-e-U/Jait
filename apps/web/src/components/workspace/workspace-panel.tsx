@@ -3729,9 +3729,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   ) => {
     if (files.length === 0) return null
 
+    const headerActionClassName = cn(
+      'rounded p-0.5 text-muted-foreground transition-[background-color,color,opacity] hover:bg-background',
+      mobile
+        ? 'opacity-100'
+        : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+    )
+
     return (
       <div className="mt-1">
-        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="group flex items-center justify-between gap-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           <div>
             {title} ({files.length})
             <span className="ml-1 normal-case tracking-normal">
@@ -3740,43 +3747,45 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <span className="text-red-500">-{totals.deletions}</span>
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div
+            className={cn(
+              'flex items-center gap-1 transition-opacity',
+              mobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+            )}
+          >
             {actions === 'stage' ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-6 w-6 rounded-md p-0"
+              <button
+                type="button"
+                className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
                 onClick={() => void handleStageAll()}
                 disabled={gitActionBusy || files.length === 0}
                 title="Stage all changes"
                 aria-label="Stage all changes"
               >
                 <Plus className="h-3 w-3" />
-              </Button>
+              </button>
             ) : (
               <>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-6 w-6 rounded-md p-0"
+                <button
+                  type="button"
+                  className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
                   onClick={() => void handleUnstageAll()}
                   disabled={gitActionBusy || files.length === 0}
                   title="Unstage all files"
                   aria-label="Unstage all files"
                 >
                   <Minus className="h-3 w-3" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-6 w-6 rounded-md p-0 text-red-600 hover:text-red-700 dark:text-red-400"
+                </button>
+                <button
+                  type="button"
+                  className={cn(headerActionClassName, 'text-red-600 hover:text-red-700 disabled:pointer-events-none disabled:opacity-40 dark:text-red-400')}
                   onClick={() => setDiscardConfirm({ kind: 'all' })}
                   disabled={gitActionBusy || changedFileCount === 0}
                   title="Discard all changes"
                   aria-label="Discard all changes"
                 >
                   <Undo2 className="h-3 w-3" />
-                </Button>
+                </button>
               </>
             )}
           </div>
