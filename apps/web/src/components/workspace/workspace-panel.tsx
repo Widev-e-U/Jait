@@ -17,6 +17,7 @@ import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
 import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
+import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -2163,6 +2164,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     return results
   }, [lazyTree, remoteRoot])
 
+  const handleSearchFileContents = useCallback(async (
+    query: string,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<{ file: string; line: number; content: string }[]> => {
+    if (!query.trim()) return []
+
+    const root = rootDirHandle.current
+    if (!root || remoteRoot) return []
+
+    return searchWorkspaceContent(root as never, query, limit, signal, SKIP_DIRS)
+  }, [remoteRoot])
+
   const handleOpenFileByPath = useCallback(async (path: string): Promise<boolean> => {
     const targetPath = normalizePath(path)
     const rootPath = remoteRoot ? normalizePath(remoteRoot) : null
@@ -2667,7 +2681,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         if (!controller.signal.aborted) setFileSearchLoading(false)
       }
     } else {
-      // Local-only: use the existing handleSearchFiles for filename matching
+      // Local-only: use File System Access handles for filename/content matching.
       if (mode === 'files') {
         setFileSearchLoading(true)
         const controller = new AbortController()
@@ -2680,11 +2694,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         } catch { /* ignore */ }
         if (!controller.signal.aborted) setFileSearchLoading(false)
       } else {
-        // Content search not available locally
-        setFileSearchResults({ matches: [] })
+        setFileSearchLoading(true)
+        const controller = new AbortController()
+        fileSearchAbortRef.current = controller
+        try {
+          const results = await handleSearchFileContents(query, 50, controller.signal)
+          if (!controller.signal.aborted) {
+            setFileSearchResults({ matches: results })
+          }
+        } catch { /* ignore */ }
+        if (!controller.signal.aborted) setFileSearchLoading(false)
       }
     }
-  }, [remoteRoot, surfaceId, handleSearchFiles])
+  }, [remoteRoot, surfaceId, handleSearchFiles, handleSearchFileContents])
 
   // Debounced search effect
   const fileSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)

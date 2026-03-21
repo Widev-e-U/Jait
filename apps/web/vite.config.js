@@ -1,6 +1,8 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+const port = Number(process.env.PORT ?? 3000);
+const gatewayTarget = process.env.JAIT_GATEWAY_URL ?? 'http://localhost:8000';
 export default defineConfig({
     plugins: [react()],
     resolve: {
@@ -9,21 +11,21 @@ export default defineConfig({
         },
     },
     server: {
-        port: 3000,
+        port,
         strictPort: true,
         proxy: {
             '/api': {
-                target: 'http://localhost:8000',
+                target: gatewayTarget,
                 changeOrigin: true,
             },
             '/health': {
-                target: 'http://localhost:8000',
+                target: gatewayTarget,
                 changeOrigin: true,
             },
         },
         // Allow WebSocket upgrade for screen sharing signaling
         hmr: {
-            clientPort: 3000,
+            clientPort: port,
         },
     },
 });

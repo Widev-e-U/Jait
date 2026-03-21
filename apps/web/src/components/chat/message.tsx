@@ -262,7 +262,7 @@ function buildMarkdownComponents(
       return (
         <code
           className={cn(
-            'not-prose inline-flex max-w-full items-center rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-[12px] font-medium leading-none text-foreground',
+            'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1.5 align-middle font-mono text-[12px] font-medium leading-[1.2] text-foreground',
             'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
           )}
           {...props}
