@@ -74,6 +74,7 @@ import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
 import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
+import { DetachedTabView } from '@/components/workspace/detached-tab-view'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
@@ -837,6 +838,13 @@ function App() {
   const isElectron = !!(window as any).jaitDesktop
   const isCapacitor = !!(window as any).Capacitor
   const appPlatform: 'web' | 'electron' | 'capacitor' = isElectron ? 'electron' : isCapacitor ? 'capacitor' : 'web'
+  const detachedWorkspaceTabId = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('detachedWorkspaceTab')
+    : null
+
+  if (detachedWorkspaceTabId) {
+    return <DetachedTabView detachedTabId={detachedWorkspaceTabId} />
+  }
 
   // ── Update state ───────────────────────────────────────────────
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
@@ -922,8 +930,10 @@ function App() {
 
   const onFloatingDragStart = useCallback((e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType !== 'touch' && e.button !== 0) return
+    const target = e.target as HTMLElement | null
+    if (target?.closest('button, [role="button"], a, input, textarea, select')) return
     e.preventDefault()
-    const target = e.currentTarget
+    const dragTarget = e.currentTarget
 
     const viewport = getFloatingViewport()
     const nextSize = clampFloatingScreenShareSize({ size: floatingSSSize, viewport })
@@ -958,8 +968,8 @@ function App() {
       }))
     }
     const cleanup = () => {
-      if (target.hasPointerCapture?.(e.pointerId)) {
-        target.releasePointerCapture?.(e.pointerId)
+      if (dragTarget.hasPointerCapture?.(e.pointerId)) {
+        dragTarget.releasePointerCapture?.(e.pointerId)
       }
       document.removeEventListener('pointermove', onMove)
       document.removeEventListener('pointerup', onUp)
@@ -980,7 +990,7 @@ function App() {
     document.body.style.userSelect = 'none'
     floatingDragCleanupRef.current?.()
     floatingDragCleanupRef.current = cleanup
-    target.setPointerCapture?.(e.pointerId)
+    dragTarget.setPointerCapture?.(e.pointerId)
     document.addEventListener('pointermove', onMove)
     document.addEventListener('pointerup', onUp)
     document.addEventListener('pointercancel', onUp)
@@ -1617,6 +1627,7 @@ function App() {
         }
         break
       case 'workspace.layout': {
+        if (isMobile) break
         const layout = value as { tree?: boolean; editor?: boolean } | null
         if (!layout) {
           setShowWorkspaceTree(true)
@@ -1682,7 +1693,7 @@ function App() {
         break
       }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview])
+  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview, isMobile])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   const handleFullState = useCallback((state: Record<string, unknown>) => {
@@ -1724,12 +1735,14 @@ function App() {
     }
 
     const wl = state['workspace.layout'] as { tree?: boolean; editor?: boolean } | null | undefined
-    if (wl) {
-      setShowWorkspaceTree(wl.tree !== false)
-      setShowWorkspaceEditor(wl.editor !== false)
-    } else {
-      setShowWorkspaceTree(true)
-      setShowWorkspaceEditor(true)
+    if (!isMobile) {
+      if (wl) {
+        setShowWorkspaceTree(wl.tree !== false)
+        setShowWorkspaceEditor(wl.editor !== false)
+      } else {
+        setShowWorkspaceTree(true)
+        setShowWorkspaceEditor(true)
+      }
     }
 
     const cm = state['chat.mode']
@@ -1783,7 +1796,7 @@ function App() {
     } else {
       setMessageQueueState([])
     }
-  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider, closeWorkspacePreview])
+  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider, closeWorkspacePreview, isMobile])
 
   const { sendUIState } = useUICommands({
     sessionId: activeSessionId,
@@ -1858,13 +1871,17 @@ function App() {
   const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingWorkspaceLayout) return
+    if (isMobile) {
+      prevWorkspaceLayoutPayloadRef.current = null
+      return
+    }
     const layout = { tree: showWorkspaceTree, editor: showWorkspaceEditor }
     const serialized = JSON.stringify(layout)
     if (serialized === prevWorkspaceLayoutPayloadRef.current) return
     prevWorkspaceLayoutPayloadRef.current = serialized
     setSavedWorkspaceLayout(layout)
     sendUIState('workspace.layout', layout, activeSessionId)
-  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, sendUIState, activeSessionId, loadingWorkspaceLayout, token])
+  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, sendUIState, activeSessionId, loadingWorkspaceLayout, token, isMobile])
 
   const prevChatModePayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -4913,7 +4930,13 @@ function App() {
               <span className="text-xs font-medium flex items-center gap-1.5">
                 <Cast className="h-3 w-3" /> Screen Share
               </span>
-              <Button variant="ghost" size="sm" className="h-5 w-5 p-0" onClick={closeScreenSharePanel}>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-5 w-5 p-0"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={closeScreenSharePanel}
+              >
                 <X className="h-3 w-3" />
               </Button>
             </div>

@@ -305,6 +305,7 @@ export interface PromptInputHandle {
 }
 
 const attachmentDraftStore = new Map<string, ChatAttachment[]>()
+const COMPACT_FOOTER_CONTROLS_WIDTH = 560
 
 function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
   const bars = levels.length > 0 ? levels : Array.from({ length: 28 }, () => 0.05)
@@ -378,9 +379,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   workspaceOpen = false,
   draftStateKey,
 }: PromptInputProps, ref) {
+  const rootRef = useRef<HTMLDivElement>(null)
   const editableRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
+  const [compactFooterControls, setCompactFooterControls] = useState(false)
 
   const [dragging, setDragging] = useState(false)
   const dragCounter = useRef(0)
@@ -423,6 +426,23 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const showCliModelSelector = Boolean(provider && provider !== 'jait' && onCliModelChange)
   const showModeSelector = Boolean(mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager')
   const hasFooterControls = showViewModeSelector || showProviderSelector || showProviderRuntimeSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
+
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el || typeof ResizeObserver === 'undefined') {
+      setCompactFooterControls(false)
+      return
+    }
+
+    const updateCompact = () => {
+      setCompactFooterControls(el.clientWidth < COMPACT_FOOTER_CONTROLS_WIDTH)
+    }
+
+    updateCompact()
+    const observer = new ResizeObserver(() => updateCompact())
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   // Track whether we're doing a controlled sync to avoid loops
   const isSyncing = useRef(false)
@@ -918,6 +938,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
   return (
     <div
+      ref={rootRef}
       className={cn(
         'relative z-10 flex flex-col rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         dragging && 'ring-2 ring-primary/30 border-primary/40',
@@ -1029,7 +1050,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
               {showViewModeSelector && (
-                <ViewModeSelector mode={viewMode!} onChange={onViewModeChange!} disabled={viewModeDisabled} compact={isMobile} />
+                <ViewModeSelector mode={viewMode!} onChange={onViewModeChange!} disabled={viewModeDisabled} compact={compactFooterControls} />
               )}
               {footerLeadingContent}
               {showProviderSelector && (
@@ -1037,7 +1058,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   provider={provider!}
                   onChange={onProviderChange!}
                   disabled={selectorsDisabled}
-                  iconOnly={isMobile}
+                  iconOnly={compactFooterControls}
                   repoRuntime={repoRuntime}
                   onMoveToGateway={onMoveToGateway}
                   sessionInfo={sessionInfo}
@@ -1050,13 +1071,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   value={providerRuntimeMode!}
                   onChange={onProviderRuntimeModeChange!}
                   disabled={selectorsDisabled}
+                  compact={compactFooterControls}
                 />
               )}
               {showCliModelSelector && (
-                <CliModelSelector provider={provider!} model={cliModel ?? null} onChange={onCliModelChange!} disabled={selectorsDisabled} />
+                <CliModelSelector provider={provider!} model={cliModel ?? null} onChange={onCliModelChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
               )}
               {showModeSelector && (
-                <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} />
+                <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
               )}
             </div>
           </div>

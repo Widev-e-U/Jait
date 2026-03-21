@@ -94,7 +94,8 @@ export class PreviewService {
     await this.stop(input.sessionId);
 
     const createdAt = nowIso();
-    const isLocal = Boolean(input.command?.trim() || input.workspaceRoot?.trim());
+    const normalizedTarget = normalizeTargetUrl(input.target ?? "");
+    const isLocal = Boolean(input.command?.trim()) || (!normalizedTarget && Boolean(input.workspaceRoot?.trim()));
     const session: InternalPreviewSession = {
       id: `preview-${input.sessionId}`,
       sessionId: input.sessionId,
@@ -157,7 +158,7 @@ export class PreviewService {
           });
         }
       } else {
-        session.browserUrl = normalizeTargetUrl(input.target ?? "");
+        session.browserUrl = normalizedTarget;
         if (!session.browserUrl) {
           throw new Error("A loopback target URL or port is required");
         }

@@ -10,6 +10,7 @@ const allowedIpcChannels = {
         "terminal:start",
         "desktop:browse-path",
         "desktop:get-roots",
+        "desktop:open-preview-window",
     ],
     on: ["screen-share:start", "screen-share:stop", "gateway:event"],
 };

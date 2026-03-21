@@ -16,6 +16,7 @@ import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
+import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -337,6 +338,8 @@ const STATUS_LABELS: Record<string, string> = {
   '?': 'Untracked',
 }
 
+const TAB_POPOUT_VIEWPORT_MARGIN = 16
+
 function GitStatusBadge({ status, className = '' }: { status: string; className?: string }) {
   const label = status === '?' ? 'U' : status
   return (
@@ -495,6 +498,10 @@ interface EditorTab {
   previewTarget?: string
   previewSrc?: string | null
   previewMode?: 'raw' | 'managed' | null
+}
+
+interface CloseTabOptions {
+  preserveManagedPreview?: boolean
 }
 
 interface PreviewBrowserEvent {
@@ -1053,6 +1060,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [previewSideTab, setPreviewSideTab] = useState<'controls' | 'logs' | 'console' | 'issues'>('controls')
   const previewLogsEndRef = useRef<HTMLDivElement | null>(null)
   const previewConsoleEndRef = useRef<HTMLDivElement | null>(null)
+  const loadedPreviewSrcRef = useRef<string | null>(null)
   const activePreviewTab = useMemo(() => openTabs.find((tab) => tab.type === 'preview') ?? null, [openTabs])
   const previewConsoleEvents = useMemo(
     () => managedPreviewSession?.browserEvents.filter((event) => event.type === 'console') ?? [],
@@ -1223,10 +1231,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         previewMode: 'managed',
       }
     })
-    if (activeTab?.type === 'preview') {
-      setPreviewFrameLoading(managedPreviewSession.status === 'starting')
-    }
-  }, [activeTab?.type, managedPreviewSession, syncPreviewTab])
+  }, [managedPreviewSession, syncPreviewTab])
 
   // Restore saved file tabs for the current remote workspace once per root.
   useEffect(() => {
@@ -1873,7 +1878,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const renderPreviewPane = (emptyLabel: string) => (
     <div className="relative h-full bg-muted/5">
-      {(previewFrameLoading || managedPreviewSession?.status === 'starting') && (
+      {previewFrameLoading && activeTab?.previewSrc !== loadedPreviewSrcRef.current && (
         <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
           <div className="h-full w-full animate-pulse bg-primary/80" />
         </div>
@@ -1886,7 +1891,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           className="h-full w-full bg-white"
           style={disablePreviewPointerEvents ? { pointerEvents: 'none' } : undefined}
           sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-          onLoad={() => setPreviewFrameLoading(false)}
+          onLoad={() => {
+            loadedPreviewSrcRef.current = activeTab.previewSrc ?? null
+            setPreviewFrameLoading(false)
+          }}
         />
       ) : (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
@@ -3267,9 +3275,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [onActiveFileChange, files])
 
   /* ---- Tab management ---- */
-  const handleCloseTab = useCallback((tabId: string) => {
+  const handleCloseTab = useCallback((tabId: string, options?: CloseTabOptions) => {
     const closingTab = openTabs.find((tab) => tab.id === tabId) ?? null
-    if (closingTab?.type === 'preview' && managedPreviewSession) {
+    if (closingTab?.type === 'preview' && managedPreviewSession && !options?.preserveManagedPreview) {
       void stopManagedPreviewSession(false)
       setPreviewSidePanelOpen(false)
     }
@@ -3308,6 +3316,81 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       return next
     })
   }, [activeTabId, managedPreviewSession, openTabs, stopManagedPreviewSession])
+
+  const handleDetachTab = useCallback(async (tabId: string) => {
+    const tab = openTabs.find((entry) => entry.id === tabId) ?? null
+    if (!tab) return false
+
+    const detachedId = `detached-${tab.id}-${Date.now()}`
+    const payload: DetachedWorkspaceTabPayload = {
+      id: detachedId,
+      title: tab.label || getEditorTabTitle(tab),
+      theme: resolvedTheme,
+      surfaceId,
+      tab: {
+        id: tab.id,
+        type: tab.type,
+        path: tab.path,
+        label: tab.label,
+        language: tab.language,
+        content: tab.content ?? null,
+        originalContent: tab.originalContent ?? null,
+        modifiedContent: tab.modifiedContent ?? null,
+        diffMode: tab.diffMode,
+        previewTarget: tab.previewTarget,
+        previewSrc: tab.previewSrc ?? null,
+        previewMode: tab.previewMode ?? null,
+      },
+      architectureDiagram: tab.type === 'architecture' ? (architectureDiagram ?? null) : null,
+      architectureGenerating: tab.type === 'architecture' ? architectureGenerating : false,
+      createdAt: Date.now(),
+    }
+    saveDetachedWorkspaceTab(payload)
+
+    const detachedUrl = `${window.location.origin}${window.location.pathname}?detachedWorkspaceTab=${encodeURIComponent(detachedId)}`
+
+    let opened = false
+    try {
+      if (window.jaitDesktop?.openWorkspaceWindow) {
+        const result = await window.jaitDesktop.openWorkspaceWindow({
+          url: detachedUrl,
+          title: tab.label || getEditorTabTitle(tab),
+        })
+        opened = Boolean(result?.ok)
+      } else {
+        const popup = window.open(
+          detachedUrl,
+          `jait-detached-${tab.id}`,
+          'popup=yes,width=1280,height=860,resizable=yes,scrollbars=yes',
+        )
+        opened = Boolean(popup)
+        popup?.focus?.()
+      }
+    } catch {
+      opened = false
+    }
+
+    if (!opened) return false
+    handleCloseTab(tabId, { preserveManagedPreview: true })
+    return true
+  }, [architectureDiagram, architectureGenerating, handleCloseTab, openTabs, resolvedTheme, surfaceId])
+
+  const handleDetachedTabDragEnd = useCallback((event: React.DragEvent<HTMLDivElement>, tabId: string) => {
+    setDraggingTabId(null)
+
+    const outsideViewport =
+      event.clientX <= TAB_POPOUT_VIEWPORT_MARGIN ||
+      event.clientY <= TAB_POPOUT_VIEWPORT_MARGIN ||
+      event.clientX >= window.innerWidth - TAB_POPOUT_VIEWPORT_MARGIN ||
+      event.clientY >= window.innerHeight - TAB_POPOUT_VIEWPORT_MARGIN
+
+    const droppedOutsideWindow =
+      event.dataTransfer.dropEffect === 'none' &&
+      (event.clientX === 0 || event.clientY === 0)
+
+    if (!outsideViewport && !droppedOutsideWindow) return
+    void handleDetachTab(tabId)
+  }, [handleDetachTab])
 
   const handleSwitchTab = useCallback((tabId: string) => {
     const tab = openTabs.find(t => t.id === tabId)
@@ -4713,7 +4796,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: tab.path, name: tab.label }))
                     }
                   }}
-                  onDragEnd={() => setDraggingTabId(null)}
+                  onDragEnd={(e) => handleDetachedTabDragEnd(e, tab.id)}
                   onDragOver={(e) => {
                     if (!draggingTabId || draggingTabId === tab.id) return
                     e.preventDefault()
@@ -4917,6 +5000,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           onClick={() => handleCloseTab(tabContextMenu.tabId)}
         >
           Close
+        </button>
+        <button
+          className="ui-menu-item"
+          onClick={() => { void handleDetachTab(tabContextMenu.tabId) }}
+        >
+          Move to New Window
         </button>
         <button
           className="ui-menu-item"

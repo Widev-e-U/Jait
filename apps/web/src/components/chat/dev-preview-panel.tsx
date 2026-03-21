@@ -181,6 +181,7 @@ export function DevPreviewPanel({
   const [isFrameLoading, setIsFrameLoading] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const consoleEndRef = useRef<HTMLDivElement>(null)
+  const loadedPreviewSrcRef = useRef<string | null>(null)
 
   const resolved = useMemo(() => resolvePreviewTarget(input), [input])
   const managedResolved = useMemo(
@@ -189,7 +190,7 @@ export function DevPreviewPanel({
   )
   const previewSrc = managedResolved?.iframeSrc ?? rawSrc
   const previewLabel = managedResolved?.label ?? rawLabel ?? managedSession?.url ?? null
-  const showLoadingBar = (managedSession?.status === 'starting' || isBusy || isFrameLoading) && activeTab === 'preview' && !screenshotUrl
+  const showLoadingBar = isFrameLoading && activeTab === 'preview' && !screenshotUrl && previewSrc !== loadedPreviewSrcRef.current
 
   const fetchManagedSession = useCallback(async () => {
     if (!sessionId || !token) return null
@@ -223,9 +224,7 @@ export function DevPreviewPanel({
   useEffect(() => {
     if (!previewSrc || screenshotUrl) {
       setIsFrameLoading(false)
-      return
     }
-    setIsFrameLoading(true)
   }, [frameKey, previewSrc, screenshotUrl])
 
   const startManagedPreview = useCallback(async () => {
@@ -333,6 +332,7 @@ export function DevPreviewPanel({
   useEffect(() => {
     if (!initialTarget?.trim()) return
     if (workspaceRoot && !isHtmlFilePath(initialTarget)) {
+      setIsFrameLoading(true)
       void startManagedPreview()
       return
     }
@@ -341,6 +341,7 @@ export function DevPreviewPanel({
     setPanelWarning(getPreviewTargetWarning(initialTarget))
     setRawSrc(nextResolved.iframeSrc)
     setRawLabel(nextResolved.label)
+    setIsFrameLoading(true)
     setFrameKey((prev) => prev + 1)
   }, [autoOpenKey, initialTarget, startManagedPreview, workspaceRoot])
 
@@ -531,7 +532,10 @@ export function DevPreviewPanel({
                 title="Managed preview"
                 className="h-full w-full bg-white"
                 sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-                onLoad={() => setIsFrameLoading(false)}
+                onLoad={() => {
+                  loadedPreviewSrcRef.current = previewSrc
+                  setIsFrameLoading(false)
+                }}
               />
             </div>
           ) : (

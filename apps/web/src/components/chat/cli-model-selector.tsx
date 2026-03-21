@@ -5,7 +5,7 @@
  */
 
 import { useState, useEffect } from 'react'
-import { ChevronDown, Check, Loader2 } from 'lucide-react'
+import { Bot, ChevronDown, Check, Loader2 } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -23,6 +23,7 @@ interface CliModelSelectorProps {
   onChange: (model: string | null) => void
   disabled?: boolean
   className?: string
+  compact?: boolean
 }
 
 interface ModelDef {
@@ -32,7 +33,7 @@ interface ModelDef {
   isDefault?: boolean
 }
 
-export function CliModelSelector({ provider, model, onChange, disabled, className }: CliModelSelectorProps) {
+export function CliModelSelector({ provider, model, onChange, disabled, className, compact = false }: CliModelSelectorProps) {
   const [models, setModels] = useState<ModelDef[]>([])
   const [loading, setLoading] = useState(false)
 
@@ -92,7 +93,9 @@ export function CliModelSelector({ provider, model, onChange, disabled, classNam
         >
           {loading
             ? <Loader2 className="h-3 w-3 animate-spin" />
-            : <span className="font-mono text-[11px]">{displayLabel}</span>
+            : compact
+              ? <Bot className="h-3.5 w-3.5" />
+              : <span className="font-mono text-[11px]">{displayLabel}</span>
           }
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>

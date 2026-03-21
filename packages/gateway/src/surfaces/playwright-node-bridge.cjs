@@ -52,6 +52,21 @@ function normalizeText(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+const MAX_BROWSER_RUNTIME_EVENTS = 200;
+
+function pushRuntimeEvent(events, next) {
+  const event = {
+    id: (events.length > 0 ? events[events.length - 1].id : 0) + 1,
+    timestamp: new Date().toISOString(),
+    ...next,
+  };
+  events.push(event);
+  send({ event: "runtime", payload: event });
+  if (events.length > MAX_BROWSER_RUNTIME_EVENTS) {
+    events.splice(0, events.length - MAX_BROWSER_RUNTIME_EVENTS);
+  }
+}
+
 function send(payload) {
   process.stdout.write(`${JSON.stringify(payload)}\n`);
 }
@@ -82,6 +97,42 @@ async function main() {
     ignoreHTTPSErrors: process.env.BROWSER_IGNORE_HTTPS_ERRORS === "true",
   });
   const page = await context.newPage();
+  const events = [];
+
+  page.on("console", (msg) => {
+    const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
+    const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
+    pushRuntimeEvent(events, { type: "console", level, text });
+  });
+  page.on("pageerror", (err) => {
+    pushRuntimeEvent(events, {
+      type: "pageerror",
+      level: "error",
+      text: err?.message ?? String(err),
+    });
+  });
+  page.on("requestfailed", (request) => {
+    pushRuntimeEvent(events, {
+      type: "requestfailed",
+      level: "error",
+      text: request?.failure?.()?.errorText ?? "Request failed",
+      url: request?.url?.(),
+      method: request?.method?.(),
+    });
+  });
+  page.on("response", (response) => {
+    const status = typeof response?.status === "function" ? response.status() : undefined;
+    if (typeof status !== "number" || status < 400) return;
+    const request = response.request?.();
+    pushRuntimeEvent(events, {
+      type: "response",
+      level: status >= 500 ? "error" : "warn",
+      text: `HTTP ${status}`,
+      url: response.url?.(),
+      method: request?.method?.(),
+      status,
+    });
+  });
 
   const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 

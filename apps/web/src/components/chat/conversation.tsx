@@ -102,7 +102,7 @@ export function Conversation({ children, className, loading }: ConversationProps
           onScroll={updateBottomState}
           className="h-full overflow-y-auto"
         >
-          <div ref={contentRef} className="mx-auto max-w-4xl px-4 py-6 sm:px-5">
+          <div ref={contentRef} className="mx-auto max-w-3xl px-4 py-6 sm:px-5">
             {childItems.map((child, index) => (
               <div
                 key={typeof child === 'object' && child !== null && 'key' in child ? String(child.key) : index}
