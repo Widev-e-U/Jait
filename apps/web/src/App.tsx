@@ -809,6 +809,7 @@ function App() {
   const [architectureGenerating, setArchitectureGenerating] = useState(false)
   const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
   const architectureRenderRequestIdRef = useRef<string | null>(null)
+  const loadedArchitectureWorkspaceRef = useRef<string | null>(null)
   const [terminalHeight, setTerminalHeight] = useState(280)
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
@@ -892,13 +893,22 @@ function App() {
     }
     setShowWorkspaceTree(true)
   }, [isMobile])
-  const openArchitectureInWorkspace = useCallback(() => {
-    if (!activeWorkspace) return
+  const openArchitectureInWorkspace = useCallback((workspaceRoot?: string | null) => {
+    const targetWorkspaceRoot = workspaceRoot?.trim() || activeWorkspace?.workspaceRoot || null
+    if (!targetWorkspaceRoot) return
+    setActiveWorkspace((prev) => {
+      if (prev?.workspaceRoot === targetWorkspaceRoot) return prev
+      return {
+        surfaceId: prev?.surfaceId ?? '',
+        workspaceRoot: targetWorkspaceRoot,
+        nodeId: prev?.nodeId,
+      }
+    })
     setViewMode('developer')
     if (!showWorkspace) setShowWorkspace(true)
     showWorkspaceEditorPanel()
     setArchitectureRequest({ key: Date.now() })
-  }, [activeWorkspace, showWorkspace, showWorkspaceEditorPanel])
+  }, [activeWorkspace?.workspaceRoot, showWorkspace, showWorkspaceEditorPanel])
   const closeWorkspacePreview = useCallback(() => {
     workspaceRef.current?.closePreviewTarget()
   }, [])
@@ -1303,6 +1313,17 @@ function App() {
   // Track whether the WS has delivered an authoritative full-state push.
   // When true, the REST-based restore effects are skipped to avoid races.
   const wsFullStateReceivedRef = useRef(false)
+  const suppressedUiSyncKeysRef = useRef<Set<string>>(new Set())
+
+  const suppressNextUiSync = useCallback((key: string) => {
+    suppressedUiSyncKeysRef.current.add(key)
+  }, [])
+
+  const consumeSuppressedUiSync = useCallback((key: string): boolean => {
+    if (!suppressedUiSyncKeysRef.current.has(key)) return false
+    suppressedUiSyncKeysRef.current.delete(key)
+    return true
+  }, [])
 
   // Reset the flag on session switch so the next full-state push takes effect
   useEffect(() => {
@@ -1583,6 +1604,7 @@ function App() {
 
   // ── Cross-client state sync handler ───────────────────────────────
   const handleStateSync = useCallback((key: string, value: unknown) => {
+    suppressNextUiSync(key)
     switch (key) {
       case 'workspace.panel': {
         if (!value) {
@@ -1694,11 +1716,12 @@ function App() {
         break
       }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview, isMobile])
+  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview, isMobile, suppressNextUiSync])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   const handleFullState = useCallback((state: Record<string, unknown>) => {
     wsFullStateReceivedRef.current = true
+    for (const key of Object.keys(state)) suppressNextUiSync(key)
 
     // Workspace panel
     const wp = state['workspace.panel'] as WorkspacePanelState | null | undefined
@@ -1797,7 +1820,7 @@ function App() {
     } else {
       setMessageQueueState([])
     }
-  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider, closeWorkspacePreview, isMobile])
+  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider, closeWorkspacePreview, isMobile, suppressNextUiSync])
 
   const { sendUIState, sendArchitectureRenderResult } = useUICommands({
     sessionId: activeSessionId,
@@ -1858,7 +1881,10 @@ function App() {
           setArchitectureDiagram(data.diagram)
           setArchitectureGenerating(false)
           setShowArchitecture(true)
-          openArchitectureInWorkspace()
+          if (data.workspaceRoot?.trim()) {
+            loadedArchitectureWorkspaceRef.current = data.workspaceRoot.trim()
+          }
+          openArchitectureInWorkspace(data.workspaceRoot)
         }
       }, [openArchitectureInWorkspace]),
     },
@@ -1874,8 +1900,45 @@ function App() {
   const handleWorkspaceTabsStateChange = useCallback((state: WorkspaceTabsState | null) => {
     setWorkspaceTabsState(state)
     setSavedWorkspaceTabs(state)
+    if (consumeSuppressedUiSync('workspace.tabs')) return
     sendUIState('workspace.tabs', state, activeSessionId)
-  }, [setSavedWorkspaceTabs, sendUIState, activeSessionId])
+  }, [setSavedWorkspaceTabs, sendUIState, activeSessionId, consumeSuppressedUiSync])
+
+  useEffect(() => {
+    const workspaceRoot = activeWorkspace?.workspaceRoot?.trim() || null
+    if (!workspaceRoot || !token) {
+      loadedArchitectureWorkspaceRef.current = null
+      setArchitectureDiagram(null)
+      setArchitectureGenerating(false)
+      return
+    }
+    if (loadedArchitectureWorkspaceRef.current === workspaceRoot) return
+    loadedArchitectureWorkspaceRef.current = workspaceRoot
+    setArchitectureDiagram(null)
+    let cancelled = false
+
+    void fetch(`${API_URL}/api/architecture?workspaceRoot=${encodeURIComponent(workspaceRoot)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+    })
+      .then(async (response) => {
+        if (!response.ok) return null
+        const data = await response.json() as {
+          diagram: { workspaceRoot: string; diagram: string; updatedAt: string } | null
+        }
+        return data.diagram
+      })
+      .then((saved) => {
+        if (cancelled) return
+        setArchitectureDiagram(saved?.diagram ?? null)
+      })
+      .catch(() => {
+        if (!cancelled) setArchitectureDiagram(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeWorkspace?.workspaceRoot, token])
 
   const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1889,8 +1952,9 @@ function App() {
     if (serialized === prevWorkspaceLayoutPayloadRef.current) return
     prevWorkspaceLayoutPayloadRef.current = serialized
     setSavedWorkspaceLayout(layout)
+    if (consumeSuppressedUiSync('workspace.layout')) return
     sendUIState('workspace.layout', layout, activeSessionId)
-  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, sendUIState, activeSessionId, loadingWorkspaceLayout, token, isMobile])
+  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, sendUIState, activeSessionId, loadingWorkspaceLayout, token, isMobile, consumeSuppressedUiSync])
 
   const prevChatModePayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1898,8 +1962,9 @@ function App() {
     if (chatMode === prevChatModePayloadRef.current) return
     prevChatModePayloadRef.current = chatMode
     setSavedChatMode(chatMode)
+    if (consumeSuppressedUiSync('chat.mode')) return
     sendUIState('chat.mode', chatMode, activeSessionId)
-  }, [chatMode, setSavedChatMode, sendUIState, activeSessionId, loadingChatMode, token])
+  }, [chatMode, setSavedChatMode, sendUIState, activeSessionId, loadingChatMode, token, consumeSuppressedUiSync])
 
   const prevProviderRuntimeModePayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1907,8 +1972,9 @@ function App() {
     if (chatProviderRuntimeMode === prevProviderRuntimeModePayloadRef.current) return
     prevProviderRuntimeModePayloadRef.current = chatProviderRuntimeMode
     setSavedProviderRuntimeMode(chatProviderRuntimeMode)
+    if (consumeSuppressedUiSync('chat.providerRuntimeMode')) return
     sendUIState('chat.providerRuntimeMode', chatProviderRuntimeMode, activeSessionId)
-  }, [chatProviderRuntimeMode, setSavedProviderRuntimeMode, sendUIState, activeSessionId, loadingProviderRuntimeMode, token])
+  }, [chatProviderRuntimeMode, setSavedProviderRuntimeMode, sendUIState, activeSessionId, loadingProviderRuntimeMode, token, consumeSuppressedUiSync])
 
   const prevChatViewPayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1916,8 +1982,9 @@ function App() {
     if (viewMode === prevChatViewPayloadRef.current) return
     prevChatViewPayloadRef.current = viewMode
     setSavedChatView(viewMode)
+    if (consumeSuppressedUiSync('chat.view')) return
     sendUIState('chat.view', viewMode, activeSessionId)
-  }, [viewMode, setSavedChatView, sendUIState, activeSessionId, loadingChatView, token])
+  }, [viewMode, setSavedChatView, sendUIState, activeSessionId, loadingChatView, token, consumeSuppressedUiSync])
 
   const prevQueuePayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1926,16 +1993,18 @@ function App() {
     if (serialized === prevQueuePayloadRef.current) return
     prevQueuePayloadRef.current = serialized
     setSavedQueuedMessages(payload)
+    if (consumeSuppressedUiSync('queued_messages')) return
     sendUIState('queued_messages', payload, activeSessionId)
-  }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId])
+  }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   // Register broadcast callback: when file decisions change, sync to other clients
   useEffect(() => {
     setOnChangedFilesSync((files: ChangedFile[]) => {
+      if (consumeSuppressedUiSync('changed_files')) return
       sendUIState('changed_files', files, activeSessionId)
     })
     return () => setOnChangedFilesSync(null)
-  }, [sendUIState, activeSessionId, setOnChangedFilesSync])
+  }, [sendUIState, activeSessionId, setOnChangedFilesSync, consumeSuppressedUiSync])
 
   useEffect(() => {
     localStorage.setItem('showSessionsSidebar', showSidebar ? 'true' : 'false')
@@ -1977,11 +2046,12 @@ function App() {
     if (serialized === prevCliModelsPayloadRef.current) return
     prevCliModelsPayloadRef.current = serialized
     setSavedCliModels(payload)
+    if (consumeSuppressedUiSync('chat.cliModels')) return
     sendUIState('chat.cliModels', payload, activeSessionId)
 
     localStorage.removeItem('cliModelsByProvider')
     localStorage.removeItem('cliModel')
-  }, [cliModelsByProvider, activeSessionId, loadingCliModels, sendUIState, setSavedCliModels, token])
+  }, [cliModelsByProvider, activeSessionId, loadingCliModels, sendUIState, setSavedCliModels, token, consumeSuppressedUiSync])
 
   // Track whether the initial server sync has happened so we don't PATCH on mount
   const chatProviderInitialized = useRef(false)
@@ -2029,14 +2099,16 @@ function App() {
   const openScreenSharePanel = useCallback(() => {
     setShowScreenShare(true)
     setSavedScreenShare({ open: true })
+    if (consumeSuppressedUiSync('screen-share.panel')) return
     sendUIState('screen-share.panel', { open: true }, activeSessionId)
-  }, [setSavedScreenShare, sendUIState, activeSessionId])
+  }, [setSavedScreenShare, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   const closeScreenSharePanel = useCallback(() => {
     setShowScreenShare(false)
     setSavedScreenShare(null)
+    if (consumeSuppressedUiSync('screen-share.panel')) return
     sendUIState('screen-share.panel', null, activeSessionId)
-  }, [setSavedScreenShare, sendUIState, activeSessionId])
+  }, [setSavedScreenShare, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   const closeDevPreviewPanel = useCallback(async () => {
     if (token && activeSessionId) {
@@ -2067,36 +2139,41 @@ function App() {
       if (key === prevPreviewSyncRef.current) return
       prevPreviewSyncRef.current = key
       setSavedDevPreview(nextState)
+      if (consumeSuppressedUiSync('dev-preview.panel')) return
       sendUIState('dev-preview.panel', nextState, activeSessionId)
       return
     }
     if (prevPreviewSyncRef.current === '') return
     prevPreviewSyncRef.current = ''
     setSavedDevPreview(null)
+    if (consumeSuppressedUiSync('dev-preview.panel')) return
     sendUIState('dev-preview.panel', null, activeSessionId)
-  }, [activeSessionId, activeWorkspace?.workspaceRoot, devPreviewTarget, sendUIState, setSavedDevPreview])
+  }, [activeSessionId, activeWorkspace?.workspaceRoot, devPreviewTarget, sendUIState, setSavedDevPreview, consumeSuppressedUiSync])
 
   const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
   const openTerminalPanel = useCallback(() => {
     setShowTerminal(true)
     setSavedTerminal({ open: true })
+    if (consumeSuppressedUiSync('terminal.panel')) return
     sendUIState('terminal.panel', { open: true }, activeSessionId)
-  }, [setSavedTerminal, sendUIState, activeSessionId])
+  }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   const closeTerminalPanel = useCallback(() => {
     setShowTerminal(false)
     setSavedTerminal(null)
+    if (consumeSuppressedUiSync('terminal.panel')) return
     sendUIState('terminal.panel', null, activeSessionId)
-  }, [setSavedTerminal, sendUIState, activeSessionId])
+  }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   const closeWorkspacePanel = useCallback(() => {
     setShowWorkspace(false)
     setActiveWorkspace(null)
     setSavedWorkspace(null)
     setShowArchitecture(false)
+    if (consumeSuppressedUiSync('workspace.panel')) return
     sendUIState('workspace.panel', null, activeSessionId)
-  }, [setSavedWorkspace, sendUIState, activeSessionId])
+  }, [setSavedWorkspace, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   const toggleWorkspaceTree = useCallback(() => {
     if (isMobile) {
@@ -2124,9 +2201,13 @@ function App() {
     setDevPreviewTarget(nextTarget)
     const state = { open: true, target: nextTarget, workspaceRoot: activeWorkspace?.workspaceRoot ?? null }
     setSavedDevPreview(state)
+    if (consumeSuppressedUiSync('dev-preview.panel')) {
+      routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)
+      return
+    }
     sendUIState('dev-preview.panel', state, activeSessionId)
     routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)
-  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget, routePreviewToWorkspace, activeWorkspace?.workspaceRoot])
+  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget, routePreviewToWorkspace, activeWorkspace?.workspaceRoot, consumeSuppressedUiSync])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
@@ -3794,7 +3875,7 @@ function App() {
                   <Button
                     variant={showArchitecture ? 'secondary' : 'ghost'}
                     size="sm"
-                    className="h-6 text-[11px] px-2 shrink-0"
+                    className="h-7 shrink-0 rounded-md px-2 text-xs"
                     onClick={() => {
                       if (showArchitecture) {
                         workspaceRef.current?.closeArchitectureTab()

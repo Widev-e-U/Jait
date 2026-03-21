@@ -3,6 +3,7 @@ import { AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play, RefreshC
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getApiUrl } from '@/lib/gateway-url'
+import { isSamePreviewSession } from '@/lib/preview-session'
 
 interface DevPreviewPanelProps {
   onClose: () => void
@@ -199,7 +200,7 @@ export function DevPreviewPanel({
     })
     if (!response.ok) return null
     const data = await response.json() as { session: PreviewSessionState | null }
-    setManagedSession(data.session)
+    setManagedSession((current) => isSamePreviewSession(current, data.session) ? current : data.session)
     return data.session
   }, [sessionId, token])
 
@@ -208,12 +209,12 @@ export function DevPreviewPanel({
   }, [fetchManagedSession])
 
   useEffect(() => {
-    if (!sessionId || !token) return
+    if (!sessionId || !token || (!managedSession && !previewSrc)) return
     const id = window.setInterval(() => {
       void fetchManagedSession()
     }, 2000)
     return () => window.clearInterval(id)
-  }, [sessionId, token, fetchManagedSession])
+  }, [sessionId, token, fetchManagedSession, managedSession, previewSrc])
 
   useEffect(() => {
     const next = initialTarget?.trim()
@@ -252,7 +253,7 @@ export function DevPreviewPanel({
       if (!response.ok || !data.session) {
         throw new Error(data.error || 'Failed to start preview')
       }
-      setManagedSession(data.session)
+      setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
       setFrameKey((prev) => prev + 1)
       setActiveTab('preview')
     } catch (error) {
@@ -297,7 +298,7 @@ export function DevPreviewPanel({
       if (!response.ok || !data.session) {
         throw new Error(data.error || 'Failed to restart preview')
       }
-      setManagedSession(data.session)
+      setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
       setFrameKey((prev) => prev + 1)
     } catch (error) {
       setPanelError(error instanceof Error ? error.message : 'Failed to restart preview')

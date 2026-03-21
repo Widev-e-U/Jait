@@ -42,6 +42,7 @@ import { MaintenanceService } from "./services/maintenance.js";
 import { NotificationService } from "./services/notifications.js";
 import { PreviewService } from "./services/preview.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
+import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
 
 async function main() {
   const config = loadConfig();
@@ -79,6 +80,7 @@ async function main() {
   const repoService = new RepositoryService(db);
   const planService = new PlanService(db);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
+  const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
   providerRegistry.register(new JaitProvider());
   providerRegistry.register(new CodexProvider());
@@ -261,6 +263,7 @@ async function main() {
     maintenanceService,
     notifications,
     previewService,
+    architectureDiagramService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -363,6 +366,7 @@ async function main() {
     config,
     shutdown: shutdownRef,
     previewService,
+    architectureDiagramService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -458,6 +462,7 @@ async function main() {
     notifications,
     providerRegistry,
     previewService,
+    architectureDiagramService,
     shutdown: shutdownRef,
   });
 

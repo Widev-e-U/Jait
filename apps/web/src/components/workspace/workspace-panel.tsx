@@ -244,6 +244,7 @@ function isDescendantPath(parentPath: string, candidatePath: string): boolean {
 /*  Remote (server-backed) workspace helpers                           */
 /* ------------------------------------------------------------------ */
 import { getApiUrl } from '@/lib/gateway-url'
+import { isSamePreviewSession } from '@/lib/preview-session'
 
 const API_URL = getApiUrl()
 
@@ -1167,7 +1168,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         return null
       }
       const data = await response.json() as { session: PreviewSessionState | null }
-      setManagedPreviewSession(data.session)
+      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session) ? current : data.session)
       return data.session
     } catch {
       return null
@@ -1202,12 +1203,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [fetchManagedPreviewSession])
 
   useEffect(() => {
-    if (!previewSessionId || !previewToken) return
+    if (!previewSessionId || !previewToken || (!managedPreviewSession && !activePreviewTab)) return
     const intervalId = window.setInterval(() => {
       void fetchManagedPreviewSession()
     }, 2000)
     return () => window.clearInterval(intervalId)
-  }, [fetchManagedPreviewSession, previewSessionId, previewToken])
+  }, [activePreviewTab, fetchManagedPreviewSession, managedPreviewSession, previewSessionId, previewToken])
 
   useEffect(() => {
     if (previewSideTab === 'logs') {
@@ -3006,7 +3007,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           if (!response.ok || !data.session) {
             throw new Error(data.error || 'Failed to start preview')
           }
-          setManagedPreviewSession(data.session)
+          setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
           setPreviewSideTab('controls')
         } catch (error) {
           setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start preview')
@@ -3035,7 +3036,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       if (!response.ok || !data.session) {
         throw new Error(data.error || 'Failed to restart preview')
       }
-      setManagedPreviewSession(data.session)
+      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
     } catch (error) {
       setPreviewPanelError(error instanceof Error ? error.message : 'Failed to restart preview')
       setPreviewFrameLoading(false)

@@ -1,6 +1,7 @@
 import type { WsControlPlane } from "../ws.js";
 import type { ToolDefinition } from "./contracts.js";
 import { nanoid } from "nanoid";
+import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 
 // ── architecture.generate ────────────────────────────────────────────
 
@@ -10,6 +11,7 @@ interface ArchitectureInput {
 
 export function createArchitectureTool(
   ws?: WsControlPlane,
+  diagrams?: ArchitectureDiagramService,
 ): ToolDefinition<ArchitectureInput> {
   return {
     name: "architecture.generate",
@@ -38,6 +40,10 @@ export function createArchitectureTool(
       if (!diagram) {
         return { ok: false, message: "No diagram content provided" };
       }
+      const workspaceRoot = context.workspaceRoot?.trim();
+      if (!workspaceRoot) {
+        return { ok: false, message: "A workspace is required to store architecture diagrams" };
+      }
 
       const requestId = nanoid();
 
@@ -46,7 +52,7 @@ export function createArchitectureTool(
         ws.sendUICommand(
           {
             command: "architecture.update",
-            data: { diagram, requestId },
+            data: { diagram, requestId, workspaceRoot },
           },
           context.sessionId,
         );
@@ -69,10 +75,16 @@ export function createArchitectureTool(
         }
       }
 
+      const saved = diagrams?.save({
+        workspaceRoot,
+        diagram,
+        userId: context.userId,
+      });
+
       return {
         ok: true,
         message: "Architecture diagram sent to the workspace panel.",
-        data: { requestId, diagramLength: diagram.length },
+        data: { requestId, diagramLength: diagram.length, workspaceRoot, updatedAt: saved?.updatedAt ?? null },
       };
     },
   };

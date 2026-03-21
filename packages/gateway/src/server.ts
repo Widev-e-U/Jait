@@ -37,6 +37,7 @@ import { registerMcpRoutes } from "./routes/mcp-server.js";
 import { registerGitRoutes } from "./routes/git.js";
 import { registerUpdateRoutes } from "./routes/update.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
+import { registerArchitectureRoutes } from "./routes/architecture.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -97,6 +98,7 @@ export interface ServerDeps {
   shutdown?: () => Promise<void>;
   gitService?: import("./routes/threads.js").ThreadRouteDeps["gitService"];
   previewService?: import("./services/preview.js").PreviewService;
+  architectureDiagramService?: import("./services/architecture-diagrams.js").ArchitectureDiagramService;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -182,6 +184,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerPreviewSessionProxyRoutes(app, deps);
   if (deps.previewService) {
     registerPreviewRoutes(app, config, { previewService: deps.previewService });
+  }
+  if (deps.architectureDiagramService) {
+    registerArchitectureRoutes(app, config, deps.architectureDiagramService);
   }
 
   if (deps.surfaceRegistry) {

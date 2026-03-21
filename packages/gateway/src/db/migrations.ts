@@ -442,5 +442,23 @@ export const migrations: Migration[] = [
       try { db.exec(`ALTER TABLE user_settings ADD COLUMN workspace_picker_node_id TEXT`); } catch { /* exists */ }
     },
   },
+  {
+    id: 20,
+    name: "architecture_diagrams_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS architecture_diagrams (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          workspace_root TEXT NOT NULL,
+          diagram TEXT NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_architecture_diagrams_user_workspace ON architecture_diagrams(user_id, workspace_root)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_architecture_diagrams_updated ON architecture_diagrams(updated_at DESC)`);
+    },
+  },
 
 ];

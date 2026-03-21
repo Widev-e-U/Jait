@@ -162,6 +162,23 @@ export const sessionState = sqliteTable(
   ],
 );
 
+// ─── Workspace Architecture Diagrams ───────────────────────────────
+export const architectureDiagrams = sqliteTable(
+  "architecture_diagrams",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    workspaceRoot: text("workspace_root").notNull(),
+    diagram: text("diagram").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_architecture_diagrams_user_workspace").on(table.userId, table.workspaceRoot),
+    index("idx_architecture_diagrams_updated").on(table.updatedAt),
+  ],
+);
+
 // ─── Agent Threads ───────────────────────────────────────────────────
 export const agentThreads = sqliteTable(
   "agent_threads",
