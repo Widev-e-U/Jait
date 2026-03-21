@@ -2306,11 +2306,18 @@ function App() {
       return
     }
 
+    // If a workspace record exists with a rootPath, open it directly instead of showing the picker
+    if (activeWorkspaceRecord?.rootPath) {
+      await handleWorkspaceFolderSelected(activeWorkspaceRecord.rootPath, activeWorkspaceRecord.nodeId ?? 'gateway', { openEditor: true })
+      return
+    }
+
     setWorkspacePickerMode('editor')
     setFolderPickerOpen(true)
   }, [
     showWorkspace,
     activeWorkspace,
+    activeWorkspaceRecord,
     closeWorkspacePanel,
     setSavedWorkspace,
     activeSessionId,
