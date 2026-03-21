@@ -39,11 +39,22 @@ on:
       - apps/mobile/package.json
     tags:
       - 'v*'
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      release_asset_mode:
+        description: "How to move build outputs into the release job"
+        required: false
+        default: runner
+        type: choice
+        options:
+          - runner
+          - github-artifacts
 
 env:
   FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
   RELEASE_ASSET_DIR: /tmp/jait-release-assets/${{ github.run_id }}
+  RELEASE_ASSET_MODE: ${{ inputs.release_asset_mode || 'runner' }}
+  RELEASE_ASSET_RETENTION_DAYS: 1
 
 permissions:
   contents: write
@@ -191,12 +202,26 @@ jobs:
           USE_SYSTEM_7ZA: "true"
         run: bun run build:win
       - name: Stage desktop release assets on runner
+        if: env.RELEASE_ASSET_MODE == 'runner'
         run: |
           cp -v apps/desktop/release/*.AppImage "$RELEASE_ASSET_DIR"/
           cp -v apps/desktop/release/*.deb "$RELEASE_ASSET_DIR"/
           cp -v apps/desktop/release/latest-linux.yml "$RELEASE_ASSET_DIR"/
           cp -v apps/desktop/release/*.exe "$RELEASE_ASSET_DIR"/
           cp -v apps/desktop/release/latest.yml "$RELEASE_ASSET_DIR"/
+      - name: Upload desktop release assets to GitHub Artifacts
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-release-assets
+          retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: |
+            apps/desktop/release/*.AppImage
+            apps/desktop/release/*.deb
+            apps/desktop/release/latest-linux.yml
+            apps/desktop/release/*.exe
+            apps/desktop/release/latest.yml
 
   # ── Build macOS desktop app (skipped — no macOS runner available) ─
   # To enable: add a macOS self-hosted runner or fix GitHub billing,
@@ -279,7 +304,16 @@ jobs:
         working-directory: apps/mobile/android
         run: chmod +x gradlew && ./gradlew assembleRelease
       - name: Stage Android release assets on runner
+        if: env.RELEASE_ASSET_MODE == 'runner'
         run: cp -v apps/mobile/android/app/build/outputs/apk/release/*.apk "$RELEASE_ASSET_DIR"/
+      - name: Upload Android release assets to GitHub Artifacts
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-release-assets
+          retention-days: ${{ env.RELEASE_ASSET_RETENTION_DAYS }}
+          if-no-files-found: error
+          path: apps/mobile/android/app/build/outputs/apk/release/*.apk
 
   # ── Publish npm packages (in dependency order) ─────────────────────
   npm-publish:
@@ -390,10 +424,22 @@ jobs:
       )
     steps:
       - uses: actions/checkout@v4
+      - name: Prepare release asset directory
+        run: mkdir -p "$RELEASE_ASSET_DIR"
+      - name: Download GitHub Artifacts
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        uses: actions/download-artifact@v4
+        with:
+          path: ${{ env.RELEASE_ASSET_DIR }}
+          merge-multiple: true
       - name: Verify staged release assets
+        if: env.RELEASE_ASSET_MODE == 'runner'
         run: |
           test -d "$RELEASE_ASSET_DIR"
           ls -lah "$RELEASE_ASSET_DIR"
+      - name: Verify downloaded release assets
+        if: env.RELEASE_ASSET_MODE == 'github-artifacts'
+        run: ls -lah "$RELEASE_ASSET_DIR"
 
       - name: Extract version
         id: version
