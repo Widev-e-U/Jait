@@ -155,6 +155,15 @@ jobs:
             exit 0
           fi
 
+          BUNDLED_7ZA="$(node -p "try { require('7zip-bin').path7za || '' } catch { '' }")"
+          if [ -n "$BUNDLED_7ZA" ] && [ -x "$BUNDLED_7ZA" ]; then
+            mkdir -p "$RUNNER_TEMP/bin"
+            ln -sf "$BUNDLED_7ZA" "$RUNNER_TEMP/bin/7za"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+            echo "Using bundled 7za from $BUNDLED_7ZA"
+            exit 0
+          fi
+
           if command -v sudo &>/dev/null && command -v apt-get &>/dev/null; then
             if sudo -n true 2>/dev/null; then
               sudo apt-get update
