@@ -139,6 +139,33 @@ jobs:
             exit 1
           fi
           echo "Wine found: $(wine --version)"
+      - name: Ensure 7za is available for NSIS packaging
+        run: |
+          if command -v 7za &>/dev/null; then
+            echo "7za found: $(command -v 7za)"
+            exit 0
+          fi
+
+          if command -v 7zz &>/dev/null; then
+            mkdir -p "$RUNNER_TEMP/bin"
+            printf '%s\n' '#!/usr/bin/env bash' 'exec 7zz "$@"' > "$RUNNER_TEMP/bin/7za"
+            chmod +x "$RUNNER_TEMP/bin/7za"
+            echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+            echo "Using 7zz shim at $RUNNER_TEMP/bin/7za"
+            exit 0
+          fi
+
+          if command -v sudo &>/dev/null && command -v apt-get &>/dev/null; then
+            sudo apt-get update
+            sudo apt-get install -y p7zip-full
+          fi
+
+          if ! command -v 7za &>/dev/null; then
+            echo "::error::Missing 7za. Install p7zip-full or provide 7zz on the runner."
+            exit 1
+          fi
+
+          echo "7za found: $(command -v 7za)"
       - name: Build Electron (Linux)
         working-directory: apps/desktop
         run: bun run build:linux
