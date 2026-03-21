@@ -52,7 +52,7 @@ jobs:
   # ── Auto-tag on version bump (only on branch push, not tag push) ───
   auto-tag:
     name: Auto-tag if version changed
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     if: github.ref == 'refs/heads/main'
     permissions:
       contents: write
@@ -116,8 +116,8 @@ jobs:
 
   # ── Build desktop apps (Electron) ──────────────────────────────────
   desktop:
-    name: Desktop Builds (Linux + Windows)
-    runs-on: self-hosted
+    name: Desktop Builds (Linux runner: Linux + Windows)
+    runs-on: [self-hosted, linux]
     needs: [auto-tag]
     if: |
       always() && (
@@ -131,8 +131,9 @@ jobs:
       - uses: oven-sh/setup-bun@v2
       - run: bun install --frozen-lockfile
       - run: bun run build
-      - name: Check Wine for Windows cross-compile
+      - name: Check Linux runner prerequisites
         run: |
+          echo "Runner: $(uname -a)"
           if ! command -v wine &>/dev/null; then
             echo "::error::Wine is not installed. Install it on the runner: sudo apt install -y wine64"
             exit 1
@@ -143,10 +144,13 @@ jobs:
         run: bun run build:linux
       - name: Build Electron (Windows)
         working-directory: apps/desktop
+        env:
+          USE_SYSTEM_7ZA: "true"
         run: bun run build:win
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-linux
+          if-no-files-found: error
           path: |
             apps/desktop/release/*.AppImage
             apps/desktop/release/*.deb
@@ -154,6 +158,7 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-windows
+          if-no-files-found: error
           path: |
             apps/desktop/release/*.exe
             apps/desktop/release/latest.yml
@@ -189,7 +194,7 @@ jobs:
   # ── Build Android APK ──────────────────────────────────────────────
   android:
     name: Android APK
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     needs: [auto-tag]
     if: |
       always() && (
@@ -239,12 +244,13 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: android-apk
+          if-no-files-found: error
           path: apps/mobile/android/app/build/outputs/apk/release/*.apk
 
   # ── Publish npm packages (in dependency order) ─────────────────────
   npm-publish:
     name: Publish npm packages
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     needs: [auto-tag]
     if: |
       always() && (
@@ -336,7 +342,7 @@ jobs:
   # ── Create GitHub Release with all assets ──────────────────────────
   release:
     name: Create GitHub Release
-    runs-on: self-hosted
+    runs-on: [self-hosted, linux]
     needs: [auto-tag, npm-publish, desktop, android]
     if: |
       always() && 
