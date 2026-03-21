@@ -27,6 +27,7 @@ import { registerMobileRoutes } from "./routes/mobile.js";
 import { registerNetworkRoutes } from "./routes/network.js";
 import { registerVoiceRoutes } from "./routes/voice.js";
 import { registerWorkspaceRoutes } from "./routes/workspace.js";
+import { registerWorkspaceEntityRoutes } from "./routes/workspaces.js";
 import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import { registerFilesystemRoutes } from "./routes/filesystem.js";
 import { registerThreadRoutes } from "./routes/threads.js";
@@ -55,12 +56,14 @@ import type { DeviceRegistry } from "./services/device-registry.js";
 import type { VoiceService } from "./voice/service.js";
 import type { ScreenShareService } from "@jait/screen-share";
 import type { SessionStateService } from "./services/session-state.js";
+import type { WorkspaceStateService } from "./services/workspace-state.js";
 import type { ThreadService } from "./services/threads.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { PlanService } from "./services/plans.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { SqliteDatabase } from "./db/sqlite-shim.js";
 import { getSchemaVersion } from "./db/connection.js";
+import type { WorkspaceService } from "./services/workspaces.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -81,6 +84,8 @@ export interface ServerDeps {
   memoryService?: MemoryService;
   deviceRegistry?: DeviceRegistry;
   sessionState?: SessionStateService;
+  workspaceService?: WorkspaceService;
+  workspaceState?: WorkspaceStateService;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -131,11 +136,15 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     userService: deps.userService,
     ws: deps.ws,
     sessionState: deps.sessionState,
+    workspaceService: deps.workspaceService,
     providerRegistry: deps.providerRegistry,
   });
 
   if (deps.sessionService && deps.audit) {
-    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState);
+    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState, deps.workspaceService);
+  }
+  if (deps.workspaceService && deps.sessionService) {
+    registerWorkspaceEntityRoutes(app, config, deps.workspaceService, deps.sessionService, deps.workspaceState);
   }
 
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {
@@ -190,7 +199,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   }
 
   if (deps.surfaceRegistry) {
-    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws);
+    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws, deps.workspaceService, deps.workspaceState);
   }
 
   // Git API routes

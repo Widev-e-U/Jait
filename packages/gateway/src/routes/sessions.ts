@@ -16,6 +16,7 @@ import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type { HookBus } from "../scheduler/hooks.js";
 import { requireAuth } from "../security/http-auth.js";
+import type { WorkspaceService } from "../services/workspaces.js";
 
 export function registerSessionRoutes(
   app: FastifyInstance,
@@ -24,6 +25,7 @@ export function registerSessionRoutes(
   audit: AuditWriter,
   hooks?: HookBus,
   sessionState?: SessionStateService,
+  workspaceService?: WorkspaceService,
 ) {
   const parseSessionListLimit = (value: unknown) => {
     if (typeof value !== "string") return undefined;
@@ -37,8 +39,27 @@ export function registerSessionRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
+    let workspaceId =
+      typeof body["workspaceId"] === "string"
+        ? body["workspaceId"]
+        : undefined;
+    if (workspaceId) {
+      const workspace = workspaceService?.getById(workspaceId, authUser.id);
+      if (!workspace) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
+      }
+    } else if (workspaceService) {
+      const workspace = workspaceService.getOrCreateForRoot({
+        userId: authUser.id,
+        title: typeof body["workspaceTitle"] === "string" ? body["workspaceTitle"] : undefined,
+        rootPath: typeof body["workspacePath"] === "string" ? body["workspacePath"] : null,
+        nodeId: typeof body["nodeId"] === "string" ? body["nodeId"] : "gateway",
+      });
+      workspaceId = workspace.id;
+    }
     const session = sessionService.create({
       userId: authUser.id,
+      workspaceId,
       name: typeof body["name"] === "string" ? body["name"] : undefined,
       workspacePath:
         typeof body["workspacePath"] === "string"
@@ -58,6 +79,9 @@ export function registerSessionRoutes(
       sessionId: session.id,
       workspaceRoot: session.workspacePath ?? process.cwd(),
     });
+    if (session.workspaceId) {
+      workspaceService?.touch(session.workspaceId);
+    }
 
     return reply.status(201).send(session);
   });

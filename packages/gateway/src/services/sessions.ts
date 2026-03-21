@@ -8,6 +8,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 
 export interface CreateSessionParams {
   userId?: string;
+  workspaceId?: string | null;
   name?: string;
   workspacePath?: string;
   metadata?: Record<string, unknown>;
@@ -24,7 +25,8 @@ export class SessionService {
     this.db.insert(sessions).values({
       id,
       userId: params.userId ?? null,
-      name: params.name ?? `Session ${new Date().toLocaleString()}`,
+      workspaceId: params.workspaceId ?? null,
+      name: params.name ?? "New Chat",
       workspacePath: params.workspacePath ?? null,
       createdAt: now,
       lastActiveAt: now,
@@ -70,6 +72,23 @@ export class SessionService {
       .select()
       .from(sessions)
       .orderBy(desc(sessions.lastActiveAt));
+    return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
+  }
+
+  listByWorkspace(workspaceId: string, status?: string, userId?: string, limit?: number) {
+    const normalizedLimit =
+      typeof limit === "number" && Number.isFinite(limit) && limit > 0
+        ? Math.floor(limit)
+        : undefined;
+    let query = this.db.select().from(sessions).where(eq(sessions.workspaceId, workspaceId)).$dynamic();
+    if (status && userId) {
+      query = query.where(and(eq(sessions.workspaceId, workspaceId), eq(sessions.status, status), eq(sessions.userId, userId)));
+    } else if (status) {
+      query = query.where(and(eq(sessions.workspaceId, workspaceId), eq(sessions.status, status)));
+    } else if (userId) {
+      query = query.where(and(eq(sessions.workspaceId, workspaceId), eq(sessions.userId, userId)));
+    }
+    query = query.orderBy(desc(sessions.lastActiveAt));
     return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
   }
 
@@ -137,11 +156,12 @@ export class SessionService {
   }
 
   /** Update session name, metadata, or workspacePath. */
-  update(id: string, data: { name?: string; metadata?: Record<string, unknown>; workspacePath?: string }, userId?: string) {
+  update(id: string, data: { name?: string; metadata?: Record<string, unknown>; workspacePath?: string | null; workspaceId?: string | null }, userId?: string) {
     const set: Record<string, string> = {};
-    if (data.name) set["name"] = data.name;
-    if (data.metadata) set["metadata"] = JSON.stringify(data.metadata);
+    if (data.name !== undefined) set["name"] = data.name;
+    if (data.metadata !== undefined) set["metadata"] = JSON.stringify(data.metadata);
     if (data.workspacePath != null) set["workspacePath"] = data.workspacePath;
+    if (data.workspaceId != null) set["workspaceId"] = data.workspaceId;
     if (Object.keys(set).length > 0) {
       this.db
         .update(sessions)

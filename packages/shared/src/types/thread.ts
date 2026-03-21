@@ -24,6 +24,7 @@ export type ThreadKind = "delivery" | "delegation";
 // ── Thread status ────────────────────────────────────────────────────
 
 export type ThreadStatus =
+  | "idle"
   | "running"
   | "completed"
   | "error"

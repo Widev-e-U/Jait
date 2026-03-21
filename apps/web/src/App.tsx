@@ -81,9 +81,10 @@ import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
-import { useSessions } from '@/hooks/useSessions'
+import { useWorkspaces } from '@/hooks/useWorkspaces'
 import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
+import { useWorkspaceState } from '@/hooks/useWorkspaceState'
 import { useAutomation } from '@/hooks/useAutomation'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData } from '@jait/shared'
@@ -1200,17 +1201,20 @@ function App() {
   const onLoginRequired = useCallback(() => setShowLoginDialog(true), [])
 
   const {
-    sessions,
+    workspaces,
+    activeWorkspaceId,
     activeSessionId,
     createSession,
+    createWorkspace,
+    switchWorkspace,
     switchSession,
     archiveSession,
-    fetchSessions,
-    hasMoreSessions,
-    showMoreSessions,
-    showFewerSessions,
-    sessionListLimit,
-  } = useSessions(
+    fetchWorkspaces,
+    hasMoreWorkspaces,
+    showMoreWorkspaces,
+    showFewerWorkspaces,
+    workspaceListLimit,
+  } = useWorkspaces(
     token,
     onLoginRequired,
   )
@@ -1432,20 +1436,20 @@ function App() {
 
   // ── Persistent session state for panels ───────────────────────────
   interface WorkspacePanelState { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string }
-  const [savedWorkspace, setSavedWorkspace] = useSessionState<WorkspacePanelState>(
-    activeSessionId, 'workspace.panel', token,
+  const [savedWorkspace, setSavedWorkspace] = useWorkspaceState<WorkspacePanelState>(
+    activeWorkspaceId, 'workspace.panel', token,
   )
   const [savedScreenShare, setSavedScreenShare] = useSessionState<{ open: boolean }>(
     activeSessionId, 'screen-share.panel', token,
   )
-  const [savedDevPreview, setSavedDevPreview] = useSessionState<{ open: boolean; target?: string | null; workspaceRoot?: string | null }>(
-    activeSessionId, 'dev-preview.panel', token,
+  const [savedDevPreview, setSavedDevPreview] = useWorkspaceState<{ open: boolean; target?: string | null; workspaceRoot?: string | null }>(
+    activeWorkspaceId, 'dev-preview.panel', token,
   )
   const [savedTerminal, setSavedTerminal] = useSessionState<{ open: boolean }>(
     activeSessionId, 'terminal.panel', token,
   )
-  const [savedWorkspaceLayout, setSavedWorkspaceLayout, loadingWorkspaceLayout] = useSessionState<{ tree: boolean; editor: boolean }>(
-    activeSessionId, 'workspace.layout', token,
+  const [savedWorkspaceLayout, setSavedWorkspaceLayout, loadingWorkspaceLayout] = useWorkspaceState<{ tree: boolean; editor: boolean }>(
+    activeWorkspaceId, 'workspace.layout', token,
   )
   const [savedChatMode, setSavedChatMode, loadingChatMode] = useSessionState<ChatMode>(
     activeSessionId, 'chat.mode', token,
@@ -1459,8 +1463,8 @@ function App() {
   const [savedChatView, setSavedChatView, loadingChatView] = useSessionState<ViewMode>(
     activeSessionId, 'chat.view', token,
   )
-  const [savedWorkspaceTabs, setSavedWorkspaceTabs] = useSessionState<WorkspaceTabsState>(
-    activeSessionId, 'workspace.tabs', token,
+  const [savedWorkspaceTabs, setSavedWorkspaceTabs] = useWorkspaceState<WorkspaceTabsState>(
+    activeWorkspaceId, 'workspace.tabs', token,
   )
   const [savedQueuedMessages, setSavedQueuedMessages] = useSessionState<SavedQueuedMessage[]>(
     activeSessionId, 'queued_messages', token,
@@ -1469,11 +1473,11 @@ function App() {
 
   useEffect(() => {
     setWorkspaceTabsState(null)
-  }, [activeSessionId])
+  }, [activeWorkspaceId])
 
   useEffect(() => {
     setWorkspacePreviewRequest(null)
-  }, [activeSessionId])
+  }, [activeWorkspaceId])
 
   // ── Persistent session state for todos & changed files ────────────
   type SavedTodo = { id: number; title: string; status: 'not-started' | 'in-progress' | 'completed' }
@@ -1532,14 +1536,14 @@ function App() {
       mobileWorkspaceInitKeyRef.current = null
       return
     }
-    const workspaceKey = `${activeSessionId ?? 'no-session'}:${activeWorkspace?.surfaceId ?? activeWorkspace?.workspaceRoot ?? 'no-workspace'}`
+    const workspaceKey = `${activeWorkspaceId ?? 'no-workspace'}:${activeWorkspace?.surfaceId ?? activeWorkspace?.workspaceRoot ?? 'no-workspace'}`
     if (mobileWorkspaceInitKeyRef.current === workspaceKey) return
     mobileWorkspaceInitKeyRef.current = workspaceKey
     if (!showWorkspaceTree || !showWorkspaceEditor) return
     const nextLayout = collapseMobileWorkspace()
     setShowWorkspaceTree(nextLayout.tree)
     setShowWorkspaceEditor(nextLayout.editor)
-  }, [showMobileWorkspace, activeSessionId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor])
+  }, [showMobileWorkspace, activeWorkspaceId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor])
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
@@ -1606,40 +1610,11 @@ function App() {
   const handleStateSync = useCallback((key: string, value: unknown) => {
     suppressNextUiSync(key)
     switch (key) {
-      case 'workspace.panel': {
-        if (!value) {
-          setShowWorkspace(false)
-          setActiveWorkspace(null)
-        } else {
-          const v = value as WorkspacePanelState
-          if (v.open) {
-            setShowWorkspace(true)
-            if (v.remotePath) setActiveWorkspace({ surfaceId: v.surfaceId ?? '', workspaceRoot: v.remotePath, nodeId: v.nodeId })
-          } else {
-            setShowWorkspace(false)
-          }
-        }
-        break
-      }
       case 'screen-share.panel':
         if (!value) setShowScreenShare(false)
         else {
           const v = value as { open?: boolean }
           setShowScreenShare(v.open !== false)
-        }
-        break
-      case 'dev-preview.panel':
-        if (!value) {
-          closeWorkspacePreview()
-        } else {
-          const v = value as { open?: boolean; target?: string | null; workspaceRoot?: string | null }
-          if (v.open === false) {
-            closeWorkspacePreview()
-            break
-          }
-          const nextTarget = typeof v.target === 'string' ? v.target : null
-          if (nextTarget) setDevPreviewTarget(nextTarget)
-          routePreviewToWorkspace(nextTarget, v.workspaceRoot ?? null)
         }
         break
       case 'terminal.panel':
@@ -1649,18 +1624,6 @@ function App() {
           setShowTerminal(v.open !== false)
         }
         break
-      case 'workspace.layout': {
-        if (isMobile) break
-        const layout = value as { tree?: boolean; editor?: boolean } | null
-        if (!layout) {
-          setShowWorkspaceTree(true)
-          setShowWorkspaceEditor(true)
-        } else {
-          setShowWorkspaceTree(layout.tree !== false)
-          setShowWorkspaceEditor(layout.editor !== false)
-        }
-        break
-      }
       case 'chat.mode':
         if (value === 'ask' || value === 'agent' || value === 'plan') {
           setChatMode(value)
@@ -1702,11 +1665,6 @@ function App() {
         }
         break
       }
-      case 'workspace.tabs': {
-        const next = (value && typeof value === 'object') ? (value as WorkspaceTabsState) : null
-        setWorkspaceTabsState(next)
-        break
-      }
       case 'queued_messages': {
         if (Array.isArray(value)) {
           setMessageQueueState(value as SavedQueuedMessage[])
@@ -1723,16 +1681,6 @@ function App() {
     wsFullStateReceivedRef.current = true
     for (const key of Object.keys(state)) suppressNextUiSync(key)
 
-    // Workspace panel
-    const wp = state['workspace.panel'] as WorkspacePanelState | null | undefined
-    if (wp && wp.open) {
-      setShowWorkspace(true)
-      if (wp.remotePath) setActiveWorkspace({ surfaceId: wp.surfaceId ?? '', workspaceRoot: wp.remotePath, nodeId: wp.nodeId })
-    } else {
-      setShowWorkspace(false)
-      setActiveWorkspace(null)
-    }
-
     // Screen share panel
     const sp = state['screen-share.panel'] as { open?: boolean } | null | undefined
     if (sp && sp.open !== false) {
@@ -1741,32 +1689,12 @@ function App() {
       setShowScreenShare(false)
     }
 
-    const dp = state['dev-preview.panel'] as { open?: boolean; target?: string | null; workspaceRoot?: string | null } | null | undefined
-    if (dp && dp.open !== false) {
-      const nextTarget = typeof dp.target === 'string' ? dp.target : null
-      if (nextTarget) setDevPreviewTarget(nextTarget)
-      routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
-    } else {
-      closeWorkspacePreview()
-    }
-
     // Terminal panel
     const tp = state['terminal.panel'] as { open?: boolean } | null | undefined
     if (tp && tp.open !== false) {
       setShowTerminal(true)
     } else {
       setShowTerminal(false)
-    }
-
-    const wl = state['workspace.layout'] as { tree?: boolean; editor?: boolean } | null | undefined
-    if (!isMobile) {
-      if (wl) {
-        setShowWorkspaceTree(wl.tree !== false)
-        setShowWorkspaceEditor(wl.editor !== false)
-      } else {
-        setShowWorkspaceTree(true)
-        setShowWorkspaceEditor(true)
-      }
     }
 
     const cm = state['chat.mode']
@@ -1806,21 +1734,13 @@ function App() {
       setChangedFiles(cf as ChangedFile[])
     }
 
-    // Workspace editor tabs
-    const wt = state['workspace.tabs']
-    if (wt && typeof wt === 'object') {
-      setWorkspaceTabsState(wt as WorkspaceTabsState)
-    } else {
-      setWorkspaceTabsState(null)
-    }
-
     const qm = state['queued_messages']
     if (Array.isArray(qm)) {
       setMessageQueueState(qm as SavedQueuedMessage[])
     } else {
       setMessageQueueState([])
     }
-  }, [setTodoList, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, chatProvider, closeWorkspacePreview, isMobile, suppressNextUiSync])
+  }, [setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync])
 
   const { sendUIState, sendArchitectureRenderResult } = useUICommands({
     sessionId: activeSessionId,
@@ -1900,9 +1820,7 @@ function App() {
   const handleWorkspaceTabsStateChange = useCallback((state: WorkspaceTabsState | null) => {
     setWorkspaceTabsState(state)
     setSavedWorkspaceTabs(state)
-    if (consumeSuppressedUiSync('workspace.tabs')) return
-    sendUIState('workspace.tabs', state, activeSessionId)
-  }, [setSavedWorkspaceTabs, sendUIState, activeSessionId, consumeSuppressedUiSync])
+  }, [setSavedWorkspaceTabs])
 
   useEffect(() => {
     const workspaceRoot = activeWorkspace?.workspaceRoot?.trim() || null
@@ -1942,7 +1860,7 @@ function App() {
 
   const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeSessionId && token && loadingWorkspaceLayout) return
+    if (activeWorkspaceId && token && loadingWorkspaceLayout) return
     if (isMobile) {
       prevWorkspaceLayoutPayloadRef.current = null
       return
@@ -1952,9 +1870,7 @@ function App() {
     if (serialized === prevWorkspaceLayoutPayloadRef.current) return
     prevWorkspaceLayoutPayloadRef.current = serialized
     setSavedWorkspaceLayout(layout)
-    if (consumeSuppressedUiSync('workspace.layout')) return
-    sendUIState('workspace.layout', layout, activeSessionId)
-  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, sendUIState, activeSessionId, loadingWorkspaceLayout, token, isMobile, consumeSuppressedUiSync])
+  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token, isMobile])
 
   const prevChatModePayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -2120,8 +2036,7 @@ function App() {
     }
     closeWorkspacePreview()
     setSavedDevPreview(null)
-    sendUIState('dev-preview.panel', null, activeSessionId)
-  }, [token, activeSessionId, closeWorkspacePreview, setSavedDevPreview, sendUIState])
+  }, [token, activeSessionId, closeWorkspacePreview, setSavedDevPreview])
 
   const prevPreviewSyncRef = useRef<string>('')
   const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null }) => {
@@ -2139,16 +2054,12 @@ function App() {
       if (key === prevPreviewSyncRef.current) return
       prevPreviewSyncRef.current = key
       setSavedDevPreview(nextState)
-      if (consumeSuppressedUiSync('dev-preview.panel')) return
-      sendUIState('dev-preview.panel', nextState, activeSessionId)
       return
     }
     if (prevPreviewSyncRef.current === '') return
     prevPreviewSyncRef.current = ''
     setSavedDevPreview(null)
-    if (consumeSuppressedUiSync('dev-preview.panel')) return
-    sendUIState('dev-preview.panel', null, activeSessionId)
-  }, [activeSessionId, activeWorkspace?.workspaceRoot, devPreviewTarget, sendUIState, setSavedDevPreview, consumeSuppressedUiSync])
+  }, [activeWorkspace?.workspaceRoot, devPreviewTarget, setSavedDevPreview])
 
   const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
@@ -2171,9 +2082,7 @@ function App() {
     setActiveWorkspace(null)
     setSavedWorkspace(null)
     setShowArchitecture(false)
-    if (consumeSuppressedUiSync('workspace.panel')) return
-    sendUIState('workspace.panel', null, activeSessionId)
-  }, [setSavedWorkspace, sendUIState, activeSessionId, consumeSuppressedUiSync])
+  }, [setSavedWorkspace])
 
   const toggleWorkspaceTree = useCallback(() => {
     if (isMobile) {
@@ -2201,13 +2110,8 @@ function App() {
     setDevPreviewTarget(nextTarget)
     const state = { open: true, target: nextTarget, workspaceRoot: activeWorkspace?.workspaceRoot ?? null }
     setSavedDevPreview(state)
-    if (consumeSuppressedUiSync('dev-preview.panel')) {
-      routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)
-      return
-    }
-    sendUIState('dev-preview.panel', state, activeSessionId)
     routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)
-  }, [setSavedDevPreview, sendUIState, activeSessionId, devPreviewTarget, routePreviewToWorkspace, activeWorkspace?.workspaceRoot, consumeSuppressedUiSync])
+  }, [setSavedDevPreview, devPreviewTarget, routePreviewToWorkspace, activeWorkspace?.workspaceRoot])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
   // can browse the directory remotely (enables cross-device sync).
@@ -2252,7 +2156,6 @@ function App() {
           setShowWorkspace(true)
           const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId }
           setSavedWorkspace(state)
-          sendUIState('workspace.panel', state, activeSessionId)
           return
         }
         let workspaceSessionId = activeSessionId
@@ -2271,7 +2174,6 @@ function App() {
       setShowWorkspace(true)
       const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId }
       setSavedWorkspace(state)
-      sendUIState('workspace.panel', state, activeSessionId)
       return
     }
 
@@ -2282,7 +2184,6 @@ function App() {
     activeWorkspace,
     closeWorkspacePanel,
     setSavedWorkspace,
-    sendUIState,
     activeSessionId,
     openRemoteWorkspaceOnGateway,
     changedFiles.length,
@@ -2318,7 +2219,6 @@ function App() {
         setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
         const state = { open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId }
         setSavedWorkspace(state)
-        sendUIState('workspace.panel', state, activeSessionId)
       } catch { /* network error — ignore, panel will show error naturally */ }
     })()
     return () => { cancelled = true }
@@ -3176,7 +3076,7 @@ function App() {
 
   const handleClearArchive = async () => {
     const result = await clearSessionArchive()
-    await fetchSessions()
+    await fetchWorkspaces()
     return result.removed
   }
 
@@ -4082,15 +3982,18 @@ function App() {
             {viewMode === 'developer' && showSidebar && (
               <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-56 border-r shrink-0'}`}>
                 <SessionSelector
-                  sessions={sessions}
+                  workspaces={workspaces}
+                  activeWorkspaceId={activeWorkspaceId}
                   activeSessionId={activeSessionId}
-                  hasMoreSessions={hasMoreSessions}
-                  showFewerSessions={sessions.length > sessionListLimit}
-                  onSelect={switchSession}
-                  onCreate={() => createSession()}
+                  hasMoreWorkspaces={hasMoreWorkspaces}
+                  showFewerWorkspaces={workspaces.length > workspaceListLimit}
+                  onSelectWorkspace={switchWorkspace}
+                  onSelectSession={switchSession}
+                  onCreateWorkspace={() => createWorkspace()}
+                  onCreateSession={(workspaceId) => { void createSession(workspaceId) }}
                   onArchive={archiveSession}
-                  onShowMore={showMoreSessions}
-                  onShowFewer={showFewerSessions}
+                  onShowMore={showMoreWorkspaces}
+                  onShowFewer={showFewerWorkspaces}
                   sessionInfo={sessionInfo}
                 />
               </aside>

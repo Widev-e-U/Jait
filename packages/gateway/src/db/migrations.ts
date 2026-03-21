@@ -15,6 +15,7 @@
  *   - Give each migration a short human-readable `name`.
  */
 import type { SqliteDatabase } from "./sqlite-shim.js";
+import { uuidv7 } from "./uuidv7.js";
 
 export interface Migration {
   id: number;
@@ -458,6 +459,113 @@ export const migrations: Migration[] = [
       `);
       db.exec(`CREATE UNIQUE INDEX IF NOT EXISTS idx_architecture_diagrams_user_workspace ON architecture_diagrams(user_id, workspace_root)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_architecture_diagrams_updated ON architecture_diagrams(updated_at DESC)`);
+    },
+  },
+  {
+    id: 21,
+    name: "workspaces_and_workspace_state",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS workspaces (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          title TEXT,
+          root_path TEXT,
+          node_id TEXT,
+          created_at TEXT NOT NULL,
+          last_active_at TEXT NOT NULL,
+          status TEXT DEFAULT 'active',
+          metadata TEXT
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_user_status ON workspaces(user_id, status, last_active_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_workspaces_user_root ON workspaces(user_id, root_path, node_id)`);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS workspace_state (
+          workspace_id TEXT NOT NULL,
+          key TEXT NOT NULL,
+          value TEXT,
+          updated_at TEXT NOT NULL,
+          PRIMARY KEY (workspace_id, key)
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_workspace_state_workspace ON workspace_state(workspace_id)`);
+
+      try { db.exec(`ALTER TABLE sessions ADD COLUMN workspace_id TEXT`); } catch { /* exists */ }
+
+      type SessionRow = {
+        id: string;
+        user_id: string | null;
+        name: string | null;
+        workspace_path: string | null;
+        created_at: string;
+        last_active_at: string;
+        workspace_id: string | null;
+      };
+      const sessions = db.prepare(`
+        SELECT id, user_id, name, workspace_path, created_at, last_active_at, workspace_id
+        FROM sessions
+        ORDER BY created_at ASC
+      `).all() as SessionRow[];
+
+      const existingWorkspaceRows = db.prepare(`
+        SELECT id, user_id, root_path, node_id
+        FROM workspaces
+      `).all() as Array<{ id: string; user_id: string | null; root_path: string | null; node_id: string | null }>;
+
+      const workspaceByRootKey = new Map<string, string>();
+      for (const row of existingWorkspaceRows) {
+        if (!row.root_path) continue;
+        workspaceByRootKey.set(`${row.user_id ?? ""}::${row.node_id ?? "gateway"}::${row.root_path}`, row.id);
+      }
+
+      const titleFromPath = (value: string | null, fallback: string) => {
+        const normalized = value?.trim();
+        if (!normalized) return fallback;
+        const parts = normalized.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean);
+        return parts[parts.length - 1] || fallback;
+      };
+
+      for (const session of sessions) {
+        if (session.workspace_id) continue;
+
+        let workspaceId: string | null = null;
+        if (session.workspace_path) {
+          const key = `${session.user_id ?? ""}::gateway::${session.workspace_path}`;
+          workspaceId = workspaceByRootKey.get(key) ?? null;
+          if (!workspaceId) {
+            workspaceId = uuidv7();
+            db.prepare(`
+              INSERT INTO workspaces (id, user_id, title, root_path, node_id, created_at, last_active_at, status, metadata)
+              VALUES (?, ?, ?, ?, ?, ?, ?, 'active', NULL)
+            `).run(
+              workspaceId,
+              session.user_id,
+              titleFromPath(session.workspace_path, session.name?.trim() || "Workspace"),
+              session.workspace_path,
+              "gateway",
+              session.created_at,
+              session.last_active_at,
+            );
+            workspaceByRootKey.set(key, workspaceId);
+          }
+        } else {
+          workspaceId = uuidv7();
+          db.prepare(`
+            INSERT INTO workspaces (id, user_id, title, root_path, node_id, created_at, last_active_at, status, metadata)
+            VALUES (?, ?, ?, NULL, 'gateway', ?, ?, 'active', NULL)
+          `).run(
+            workspaceId,
+            session.user_id,
+            session.name?.trim() || "Untitled Workspace",
+            session.created_at,
+            session.last_active_at,
+          );
+        }
+
+        db.prepare(`UPDATE sessions SET workspace_id = ? WHERE id = ?`).run(workspaceId, session.id);
+      }
     },
   },
 

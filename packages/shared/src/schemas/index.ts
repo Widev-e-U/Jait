@@ -26,12 +26,14 @@ export const surfaceInfoSchema = z.object({
 // --- Session schemas ---
 
 export const sessionCreateSchema = z.object({
+  workspaceId: z.string().optional(),
   name: z.string().max(200).optional(),
   workspacePath: z.string().optional(),
 });
 
 export const sessionInfoSchema = z.object({
   id: z.string(),
+  workspaceId: z.string().nullable(),
   name: z.string().nullable(),
   workspacePath: z.string().nullable(),
   status: z.enum(["active", "archived", "deleted"]),

@@ -13,6 +13,7 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
+import type { WorkspaceService } from "../services/workspaces.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
@@ -587,6 +588,7 @@ export interface ChatRouteDeps {
   memoryService?: MemoryService;
   ws?: WsControlPlane;
   sessionState?: SessionStateService;
+  workspaceService?: WorkspaceService;
   providerRegistry?: ProviderRegistry;
   toolExecutor?: (
     toolName: string,
@@ -613,6 +615,7 @@ export function registerChatRoutes(
   let memoryService: MemoryService | undefined;
   let ws: WsControlPlane | undefined;
   let sessionStateService: SessionStateService | undefined;
+  let workspaceService: WorkspaceService | undefined;
   let providerRegistry: ProviderRegistry | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
@@ -627,6 +630,7 @@ export function registerChatRoutes(
     memoryService = deps.memoryService;
     ws = deps.ws;
     sessionStateService = deps.sessionState;
+    workspaceService = deps.workspaceService;
     providerRegistry = deps.providerRegistry;
   } else {
     db = depsOrDb as JaitDB | undefined;
@@ -638,6 +642,22 @@ export function registerChatRoutes(
   _appRef = app;
 
   const hasTools = !!toolRegistry && toolRegistry.list().length > 0;
+
+  const shouldAutoRenameSession = (name: string | null | undefined) => {
+    const normalized = name?.trim() ?? "";
+    return !normalized || normalized === "New Chat" || normalized.startsWith("Session ");
+  };
+
+  const deriveSessionTitle = (raw: string) => {
+    const singleLine = raw
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean) ?? "";
+    if (!singleLine) return "New Chat";
+    const cleaned = singleLine.replace(/\s+/g, " ").trim();
+    return cleaned.length > 80 ? cleaned.slice(0, 77).trimEnd() + "..." : cleaned;
+  };
 
   const broadcastQueuedMessagesState = (sessionId: string, value: QueuedChatMessage[] | null) => {
     if (!ws) return;
@@ -880,6 +900,9 @@ export function registerChatRoutes(
       if (!session) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
+      if (content.trim() && shouldAutoRenameSession(session.name)) {
+        sessionService.update(sessionId, { name: deriveSessionTitle(content) }, authUser.id);
+      }
     }
     const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
     const effectiveModel = userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
@@ -913,9 +936,12 @@ export function registerChatRoutes(
 
     // Resolve workspace root so the system prompt includes it
     const sessionRecord = sessionService?.getById(sessionId);
+    const workspaceRecord = sessionRecord?.workspaceId
+      ? workspaceService?.getById(sessionRecord.workspaceId, authUser.id)
+      : null;
     const wsRoot = surfaceRegistry
-      ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
-      : (sessionRecord?.workspacePath?.trim() || process.cwd());
+      ? resolveWorkspaceRoot(surfaceRegistry, sessionId, workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)
+      : ((workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)?.trim() || process.cwd());
     const promptCtx: PromptContext = { workspaceRoot: wsRoot };
 
     if (!sessionHistory.has(sessionId)) {
@@ -956,7 +982,12 @@ export function registerChatRoutes(
       history.push({ role: "user", content, segments: displaySegments });
       persistMessage(sessionId, "user", content, undefined, displaySegmentsJson);
     }
-    try { sessionService?.touch(sessionId); } catch { /* session may not exist */ }
+    try {
+      sessionService?.touch(sessionId);
+      if (sessionRecord?.workspaceId) {
+        workspaceService?.touch(sessionRecord.workspaceId);
+      }
+    } catch { /* session may not exist */ }
 
     const streamAbort = new AbortController();
     sessionAbortControllers.set(sessionId, streamAbort);
@@ -992,8 +1023,8 @@ export function registerChatRoutes(
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {
         const cliWsRoot = surfaceRegistry
-          ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
-          : (sessionRecord?.workspacePath?.trim() || process.cwd());
+          ? resolveWorkspaceRoot(surfaceRegistry, sessionId, workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)
+          : ((workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)?.trim() || process.cwd());
 
         // Detect if the workspace lives on a remote node (e.g. Windows
         // desktop) and route the CLI provider session there instead of

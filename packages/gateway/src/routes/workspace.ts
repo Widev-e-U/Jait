@@ -15,6 +15,8 @@ import type { SurfaceRegistry } from "../surfaces/index.js";
 import { PathTraversalError } from "../security/path-guard.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { SessionService } from "../services/sessions.js";
+import type { WorkspaceService } from "../services/workspaces.js";
+import type { WorkspaceStateService } from "../services/workspace-state.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import { RemoteFileSystemSurface } from "../surfaces/remote-filesystem.js";
 import type { WsControlPlane } from "../ws.js";
@@ -125,9 +127,11 @@ function findFsSurfaceWithBackup(
 export function registerWorkspaceRoutes(
   app: FastifyInstance,
   surfaceRegistry: SurfaceRegistry,
-  sessionState?: SessionStateService,
+  _sessionState?: SessionStateService,
   sessionService?: SessionService,
   ws?: WsControlPlane,
+  workspaceService?: WorkspaceService,
+  workspaceState?: WorkspaceStateService,
 ) {
   // GET /api/workspace/info — returns the active workspace root + surface ID
   app.get("/api/workspace/info", async (_req, reply) => {
@@ -213,14 +217,18 @@ export function registerWorkspaceRoutes(
       });
     }
 
-    // Persist workspace state to session DB so late-joiners get it
-    if (sessionState) {
-      sessionState.set(sessionId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId, nodeId } });
+    const session = sessionService?.getById(sessionId);
+    if (session?.workspaceId && workspaceState) {
+      workspaceState.set(session.workspaceId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId, nodeId } });
     }
 
-    // Also persist workspacePath on the session record so CLI providers
-    // can resolve it even if the filesystem surface is no longer running.
-    try { sessionService?.update(sessionId, { workspacePath }); } catch { /* best effort */ }
+    try {
+      sessionService?.update(sessionId, { workspacePath });
+      if (session?.workspaceId) {
+        workspaceService?.update(session.workspaceId, { rootPath: workspacePath, nodeId }, session.userId ?? undefined);
+        workspaceService?.touch(session.workspaceId);
+      }
+    } catch { /* best effort */ }
 
     return { surfaceId, workspaceRoot: workspacePath };
   });
