@@ -55,15 +55,27 @@ export interface DetectedFramework {
   likelyPort: number;
 }
 
+function buildExecCommand(
+  packageManager: "bun" | "pnpm" | "npm",
+  executable: string,
+  args: string[],
+): string {
+  const suffix = args.length > 0 ? ` ${args.join(" ")}` : "";
+  if (packageManager === "npm") {
+    return `npm exec -- ${executable}${suffix}`;
+  }
+  return `${packageManager} exec ${executable}${suffix}`;
+}
+
 export function detectFramework(workspaceRoot: string, hint?: string | null): DetectedFramework | null {
   if (hint) {
     const lower = hint.toLowerCase();
     const pm = detectPackageManager(workspaceRoot);
-    if (lower === "vite") return { name: "vite", devCommand: `${pm} exec vite`, likelyPort: 5173 };
-    if (lower === "next" || lower === "nextjs") return { name: "next", devCommand: `${pm} exec next dev`, likelyPort: 3000 };
-    if (lower === "nuxt" || lower === "nuxtjs") return { name: "nuxt", devCommand: `${pm} exec nuxt dev`, likelyPort: 3000 };
+    if (lower === "vite") return { name: "vite", devCommand: buildExecCommand(pm, "vite", []), likelyPort: 5173 };
+    if (lower === "next" || lower === "nextjs") return { name: "next", devCommand: buildExecCommand(pm, "next", ["dev"]), likelyPort: 3000 };
+    if (lower === "nuxt" || lower === "nuxtjs") return { name: "nuxt", devCommand: buildExecCommand(pm, "nuxt", ["dev"]), likelyPort: 3000 };
     if (lower === "remix") return { name: "remix", devCommand: `${pm} run dev`, likelyPort: 3000 };
-    if (lower === "astro") return { name: "astro", devCommand: `${pm} exec astro dev`, likelyPort: 4321 };
+    if (lower === "astro") return { name: "astro", devCommand: buildExecCommand(pm, "astro", ["dev"]), likelyPort: 4321 };
   }
 
   const pm = detectPackageManager(workspaceRoot);
@@ -72,23 +84,23 @@ export function detectFramework(workspaceRoot: string, hint?: string | null): De
 
   // Config-file detection (works even without deps in package.json)
   if (existsSync(join(workspaceRoot, "vite.config.ts")) || existsSync(join(workspaceRoot, "vite.config.js"))) {
-    return { name: "vite", devCommand: `${pm} exec vite`, likelyPort: 5173 };
+    return { name: "vite", devCommand: buildExecCommand(pm, "vite", []), likelyPort: 5173 };
   }
   if (existsSync(join(workspaceRoot, "next.config.ts")) || existsSync(join(workspaceRoot, "next.config.js")) || existsSync(join(workspaceRoot, "next.config.mjs"))) {
-    return { name: "next", devCommand: `${pm} exec next dev`, likelyPort: 3000 };
+    return { name: "next", devCommand: buildExecCommand(pm, "next", ["dev"]), likelyPort: 3000 };
   }
   if (existsSync(join(workspaceRoot, "nuxt.config.ts")) || existsSync(join(workspaceRoot, "nuxt.config.js"))) {
-    return { name: "nuxt", devCommand: `${pm} exec nuxt dev`, likelyPort: 3000 };
+    return { name: "nuxt", devCommand: buildExecCommand(pm, "nuxt", ["dev"]), likelyPort: 3000 };
   }
   if (existsSync(join(workspaceRoot, "astro.config.mjs")) || existsSync(join(workspaceRoot, "astro.config.ts"))) {
-    return { name: "astro", devCommand: `${pm} exec astro dev`, likelyPort: 4321 };
+    return { name: "astro", devCommand: buildExecCommand(pm, "astro", ["dev"]), likelyPort: 4321 };
   }
 
   // Dependency detection
-  if ("vite" in deps) return { name: "vite", devCommand: `${pm} exec vite`, likelyPort: 5173 };
-  if ("next" in deps) return { name: "next", devCommand: `${pm} exec next dev`, likelyPort: 3000 };
-  if ("nuxt" in deps) return { name: "nuxt", devCommand: `${pm} exec nuxt dev`, likelyPort: 3000 };
-  if ("astro" in deps) return { name: "astro", devCommand: `${pm} exec astro dev`, likelyPort: 4321 };
+  if ("vite" in deps) return { name: "vite", devCommand: buildExecCommand(pm, "vite", []), likelyPort: 5173 };
+  if ("next" in deps) return { name: "next", devCommand: buildExecCommand(pm, "next", ["dev"]), likelyPort: 3000 };
+  if ("nuxt" in deps) return { name: "nuxt", devCommand: buildExecCommand(pm, "nuxt", ["dev"]), likelyPort: 3000 };
+  if ("astro" in deps) return { name: "astro", devCommand: buildExecCommand(pm, "astro", ["dev"]), likelyPort: 4321 };
   if ("@remix-run/dev" in deps) return { name: "remix", devCommand: `${pm} run dev`, likelyPort: 3000 };
 
   return null;
@@ -103,13 +115,13 @@ export function detectPreviewCommand(workspaceRoot: string, requestedCommand: st
   if (framework) {
     switch (framework.name) {
       case "vite":
-        return `${pm} exec vite --host 127.0.0.1 --port ${port}`;
+        return buildExecCommand(pm, "vite", ["--host", "127.0.0.1", "--port", String(port)]);
       case "next":
-        return `${pm} exec next dev --hostname 127.0.0.1 --port ${port}`;
+        return buildExecCommand(pm, "next", ["dev", "--hostname", "127.0.0.1", "--port", String(port)]);
       case "nuxt":
-        return `${pm} exec nuxt dev --host 127.0.0.1 --port ${port}`;
+        return buildExecCommand(pm, "nuxt", ["dev", "--host", "127.0.0.1", "--port", String(port)]);
       case "astro":
-        return `${pm} exec astro dev --host 127.0.0.1 --port ${port}`;
+        return buildExecCommand(pm, "astro", ["dev", "--host", "127.0.0.1", "--port", String(port)]);
       default:
         return `${pm} run dev`;
     }

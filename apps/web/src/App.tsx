@@ -2448,12 +2448,20 @@ function App() {
   /** Open a changed file in the diff view (fetches backup + current content) */
   const handleChangedFileClick = useCallback(async (filePath: string) => {
     try {
+      let targetWorkspaceRoot = activeWorkspace?.workspaceRoot ?? null
+      if (!isPathWithinWorkspace(filePath, targetWorkspaceRoot)) {
+        targetWorkspaceRoot = getWorkspaceRootForPath(filePath)
+      }
+
+      if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
+        await openRemoteWorkspaceOnGateway(targetWorkspaceRoot, activeWorkspace?.nodeId, activeSessionId)
+      }
+
       const headers: Record<string, string> = {}
       if (token) headers['Authorization'] = `Bearer ${token}`
-      const surfaceQuery = activeWorkspace?.surfaceId
+      const surfaceQuery = activeWorkspace?.surfaceId && targetWorkspaceRoot === activeWorkspace.workspaceRoot
         ? `&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`
         : ''
-      const workspaceRoot = activeWorkspace?.workspaceRoot
       const name = filePath.split(/[\/\\]/).pop() ?? filePath
       const language = workspaceLanguageForPath(name)
 
@@ -2469,9 +2477,9 @@ function App() {
       }
 
       const openGitDiffFallback = async (path: string, currentContent: string): Promise<boolean> => {
-        if (!workspaceRoot) return false
+        if (!targetWorkspaceRoot) return false
         try {
-          const diffs = await gitApi.fileDiffs(workspaceRoot)
+          const diffs = await gitApi.fileDiffs(targetWorkspaceRoot)
           const normalizedPath = path.replace(/\\/g, '/')
           const entry = diffs.find((diff) => diff.path === normalizedPath)
             ?? diffs.find((diff) => normalizedPath.endsWith(`/${diff.path}`))
@@ -2518,7 +2526,7 @@ function App() {
     } catch {
       // silently ignore
     }
-  }, [token, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, showWorkspace, showWorkspaceEditorPanel])
+  }, [activeSessionId, activeWorkspace, openRemoteWorkspaceOnGateway, token, showWorkspace, showWorkspaceEditorPanel])
 
   const handleOpenMessagePath = useCallback(async (filePath: string) => {
     try {
