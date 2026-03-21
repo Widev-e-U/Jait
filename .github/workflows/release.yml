@@ -156,12 +156,16 @@ jobs:
           fi
 
           if command -v sudo &>/dev/null && command -v apt-get &>/dev/null; then
-            sudo apt-get update
-            sudo apt-get install -y p7zip-full
+            if sudo -n true 2>/dev/null; then
+              sudo apt-get update
+              sudo apt-get install -y p7zip-full
+            else
+              echo "::warning::sudo is available but requires a password; skipping automatic p7zip installation."
+            fi
           fi
 
           if ! command -v 7za &>/dev/null; then
-            echo "::error::Missing 7za. Install p7zip-full or provide 7zz on the runner."
+            echo "::error::Missing 7za. Install p7zip-full on the runner or provide 7zz/7za in PATH before starting the job."
             exit 1
           fi
 
