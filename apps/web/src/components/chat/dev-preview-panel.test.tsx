@@ -1,6 +1,7 @@
 import { beforeAll, describe, expect, it } from 'vitest'
 
 let resolvePreviewTarget: typeof import('./dev-preview-panel')['resolvePreviewTarget']
+let getPreviewTargetWarning: typeof import('./dev-preview-panel')['getPreviewTargetWarning']
 
 describe('resolvePreviewTarget', () => {
   beforeAll(async () => {
@@ -12,7 +13,15 @@ describe('resolvePreviewTarget', () => {
         hostname: 'localhost',
       },
     }
-    ;({ resolvePreviewTarget } = await import('./dev-preview-panel'))
+    ;(globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = {
+      getItem: () => null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    }
+    ;({ resolvePreviewTarget, getPreviewTargetWarning } = await import('./dev-preview-panel'))
   })
 
   it('accepts full loopback urls with paths', () => {
@@ -29,7 +38,38 @@ describe('resolvePreviewTarget', () => {
     })
   })
 
+  it('accepts gateway-relative managed preview paths', () => {
+    expect(resolvePreviewTarget('/api/preview/proxy/test-session/')).toEqual({
+      iframeSrc: 'http://localhost:8000/api/preview/proxy/test-session/',
+      label: '/api/preview/proxy/test-session/',
+    })
+  })
+
   it('rejects non-loopback hosts', () => {
     expect(resolvePreviewTarget('https://example.com:3000')).toBeNull()
+  })
+
+  it('warns when localhost preview goes through a remote gateway', () => {
+    expect(getPreviewTargetWarning('5173')).toBeNull()
+
+    ;(globalThis as typeof globalThis & { window?: unknown }).window = {
+      location: {
+        origin: 'https://jait.basenetwork.net',
+        port: '',
+        protocol: 'https:',
+        hostname: 'jait.basenetwork.net',
+      },
+      dispatchEvent: () => true,
+    }
+    ;(globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = {
+      getItem: (key: string) => key === 'jait-gateway-url' ? 'https://jait.basenetwork.net' : null,
+      setItem: () => undefined,
+      removeItem: () => undefined,
+      clear: () => undefined,
+      key: () => null,
+      length: 0,
+    }
+
+    expect(getPreviewTargetWarning('5173')).toContain('localhost resolves on that gateway host')
   })
 })

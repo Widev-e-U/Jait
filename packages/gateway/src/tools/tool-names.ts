@@ -18,6 +18,7 @@ export const ToolName = {
   FilePatch: "file.patch",
   FileList: "file.list",
   FileStat: "file.stat",
+  ImageView: "image.view",
 
   // ── OS ──
   OsQuery: "os.query",

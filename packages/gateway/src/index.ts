@@ -7,6 +7,7 @@ import { WsControlPlane } from "./ws.js";
 import { openDatabase, migrateDatabase } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
 import { SessionStateService } from "./services/session-state.js";
+import { WorkspaceStateService } from "./services/workspace-state.js";
 import { AuditWriter } from "./services/audit.js";
 import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory } from "./surfaces/index.js";
 import type { SurfaceRegistrySnapshot } from "@jait/shared";
@@ -42,6 +43,8 @@ import { MaintenanceService } from "./services/maintenance.js";
 import { NotificationService } from "./services/notifications.js";
 import { PreviewService } from "./services/preview.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
+import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
+import { WorkspaceService } from "./services/workspaces.js";
 
 async function main() {
   const config = loadConfig();
@@ -55,6 +58,8 @@ async function main() {
   // Services
   const sessionService = new SessionService(db);
   const sessionState = new SessionStateService(db);
+  const workspaceService = new WorkspaceService(db);
+  const workspaceState = new WorkspaceStateService(db);
   const userService = new UserService(db);
   const audit = new AuditWriter(db);
   const deviceRegistry = new DeviceRegistry();
@@ -79,6 +84,7 @@ async function main() {
   const repoService = new RepositoryService(db);
   const planService = new PlanService(db);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
+  const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
   providerRegistry.register(new JaitProvider());
   providerRegistry.register(new CodexProvider());
@@ -178,12 +184,14 @@ async function main() {
         timestamp: new Date().toISOString(),
         payload: { key: "workspace.panel", value: panelState },
       });
-      // Persist workspace state to DB so late-joining clients get it
       if (sid) {
-        try {
-          sessionState.set(sid, { "workspace.panel": panelState });
-        } catch (err) {
-          console.error("Failed to persist workspace state:", err);
+        const session = sessionService.getById(sid);
+        if (session?.workspaceId) {
+          try {
+            workspaceState.set(session.workspaceId, { "workspace.panel": panelState });
+          } catch (err) {
+            console.error("Failed to persist workspace state:", err);
+          }
         }
       }
     }
@@ -222,12 +230,14 @@ async function main() {
         timestamp: new Date().toISOString(),
         payload: { key: "workspace.panel", value: null },
       });
-      // Preserve DB state on shutdown so the workspace can be restored after restart.
       if (sid && context?.reason !== "shutdown") {
-        try {
-          sessionState.set(sid, { "workspace.panel": null });
-        } catch (err) {
-          console.error("Failed to clear workspace state:", err);
+        const session = sessionService.getById(sid);
+        if (session?.workspaceId) {
+          try {
+            workspaceState.set(session.workspaceId, { "workspace.panel": null });
+          } catch (err) {
+            console.error("Failed to clear workspace state:", err);
+          }
         }
       }
     }
@@ -261,6 +271,7 @@ async function main() {
     maintenanceService,
     notifications,
     previewService,
+    architectureDiagramService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -363,6 +374,7 @@ async function main() {
     config,
     shutdown: shutdownRef,
     previewService,
+    architectureDiagramService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -448,6 +460,8 @@ async function main() {
     memoryService: memory,
     deviceRegistry,
     sessionState,
+    workspaceService,
+    workspaceState,
     voiceService,
     toolExecutor,
     screenShare,
@@ -458,6 +472,7 @@ async function main() {
     notifications,
     providerRegistry,
     previewService,
+    architectureDiagramService,
     shutdown: shutdownRef,
   });
 
@@ -514,6 +529,12 @@ async function main() {
         payload: { key, value },
       });
       console.log(`UI state synced: session=${sid} key=${key} value=${value === null ? "null" : "set"}`);
+      if (key === "queued_messages") {
+        const serverWithQueueDrain = server as typeof server & {
+          drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+        };
+        void serverWithQueueDrain.drainQueuedChatMessages?.(sid);
+      }
     } catch (err) {
       console.error(`Failed to persist UI state (${key}):`, err);
     }
@@ -535,6 +556,13 @@ async function main() {
       console.error(`Failed to push full state to client ${clientId}:`, err);
     }
   };
+
+  const serverWithQueueDrain = server as typeof server & {
+    drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+  };
+  for (const session of sessionService.list("active")) {
+    void serverWithQueueDrain.drainQueuedChatMessages?.(session.id);
+  }
 
   // Screen-share WS start callback is no longer needed here — the start-request
   // is relayed directly to clients by the WS handler, and session creation happens

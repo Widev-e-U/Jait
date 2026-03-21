@@ -15,6 +15,7 @@ interface JaitDesktop {
   detectProviders: () => Promise<string[]>
   providerOp: (op: string, params: Record<string, unknown>) => Promise<unknown>
   toolOp: (tool: string, args: Record<string, unknown>, meta: Record<string, unknown>) => Promise<unknown>
+  openWorkspaceWindow: (opts: { url: string; title?: string }) => Promise<{ ok: boolean }>
   onScreenShareStart: (callback: () => void) => void
   onScreenShareStop: (callback: () => void) => void
   onGatewayEvent: (callback: (event: unknown, data: unknown) => void) => void

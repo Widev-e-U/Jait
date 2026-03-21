@@ -24,7 +24,7 @@ export function createPreviewStartTool(
 ): ToolDefinition<PreviewStartInput> {
   return {
     name: "preview.start",
-    description: "Start a managed preview session for the current workspace. Launches the dev server, opens a browser, and begins capturing console/network/errors.",
+    description: "Open a project preview. If `target` is a localhost URL or port, attach to the existing server. Otherwise, start a managed preview for the current workspace, launch the dev server, open a browser, and capture console/network/errors.",
     tier: "standard",
     category: "browser",
     source: "builtin",

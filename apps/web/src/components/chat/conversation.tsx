@@ -1,4 +1,4 @@
-import { Children, useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { cn } from '@/lib/utils'
@@ -22,6 +22,33 @@ export function Conversation({ children, className, loading }: ConversationProps
   const prevChildCount = useRef(0)
   const prevLoadingRef = useRef(loading)
   const prevScrollTopRef = useRef(0)
+  const stickToBottomRef = useRef(true)
+  const userScrollingRef = useRef(false)
+  const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  // Track user-initiated scroll gestures (wheel/touch) so we don't
+  // confuse layout-induced scrollTop changes (tool cards collapsing)
+  // with the user intentionally scrolling up.
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+
+    const markUserScroll = () => {
+      userScrollingRef.current = true
+      clearTimeout(userScrollTimerRef.current)
+      userScrollTimerRef.current = setTimeout(() => {
+        userScrollingRef.current = false
+      }, 150)
+    }
+
+    el.addEventListener('wheel', markUserScroll, { passive: true })
+    el.addEventListener('touchstart', markUserScroll, { passive: true })
+    return () => {
+      el.removeEventListener('wheel', markUserScroll)
+      el.removeEventListener('touchstart', markUserScroll)
+      clearTimeout(userScrollTimerRef.current)
+    }
+  }, [loading]) // re-attach when scroll element mounts (loading → !loading)
 
   const updateBottomState = useCallback(() => {
     const el = scrollRef.current
@@ -33,9 +60,13 @@ export function Conversation({ children, className, loading }: ConversationProps
 
     setIsAtBottom(nextIsAtBottom)
     setStickToBottom((prev) => {
-      if (nextIsAtBottom) return true
-      if (scrollingUp && distanceFromBottom > 8) return false
-      return prev
+      const next = nextIsAtBottom
+        ? true
+        : scrollingUp && userScrollingRef.current && distanceFromBottom > 8
+          ? false
+          : prev
+      stickToBottomRef.current = next
+      return next
     })
   }, [])
 
@@ -59,24 +90,34 @@ export function Conversation({ children, className, loading }: ConversationProps
 
     if (!loading && count > 0 && (wasEmpty || finishedLoading)) {
       setStickToBottom(true)
+      stickToBottomRef.current = true
       scrollToBottom('auto')
     }
   }, [childItems.length, loading, scrollToBottom])
 
-  useLayoutEffect(() => {
-    if (loading || childItems.length === 0 || !stickToBottom) return
-    const frameId = window.requestAnimationFrame(() => {
-      scrollToBottom('auto')
-    })
-    return () => window.cancelAnimationFrame(frameId)
-  }, [childItems.length, stickToBottom, loading, scrollToBottom])
+  // Continuous rAF loop: while stickToBottom is active, poll every frame
+  // so tool-card expansions/collapses (which may not trigger a
+  // ResizeObserver on the content wrapper) still keep us pinned.
+  useEffect(() => {
+    if (!stickToBottom || loading) return
+    const el = scrollRef.current
+    if (!el) return
+    let id: number
+    const tick = () => {
+      const dist = el.scrollHeight - el.scrollTop - el.clientHeight
+      if (dist > 1) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
+      id = requestAnimationFrame(tick)
+    }
+    id = requestAnimationFrame(tick)
+    return () => cancelAnimationFrame(id)
+  }, [stickToBottom, loading])
 
   useLayoutEffect(() => {
     const contentEl = contentRef.current
     if (!contentEl || typeof ResizeObserver === 'undefined') return
 
     const observer = new ResizeObserver(() => {
-      if (!stickToBottom) {
+      if (!stickToBottomRef.current) {
         updateBottomState()
         return
       }
@@ -85,7 +126,7 @@ export function Conversation({ children, className, loading }: ConversationProps
 
     observer.observe(contentEl)
     return () => observer.disconnect()
-  }, [scrollToBottom, stickToBottom, updateBottomState])
+  }, [scrollToBottom, updateBottomState])
 
   return (
     <AIConversation className={cn('relative flex-1 overflow-hidden', className)}>
@@ -102,7 +143,7 @@ export function Conversation({ children, className, loading }: ConversationProps
           onScroll={updateBottomState}
           className="h-full overflow-y-auto"
         >
-          <div ref={contentRef} className="mx-auto max-w-4xl px-4 py-6 sm:px-5">
+          <div ref={contentRef} className="mx-auto max-w-3xl px-4 py-6 sm:px-5">
             {childItems.map((child, index) => (
               <div
                 key={typeof child === 'object' && child !== null && 'key' in child ? String(child.key) : index}
@@ -120,6 +161,7 @@ export function Conversation({ children, className, loading }: ConversationProps
           className="bottom-5"
           onClick={() => {
             setStickToBottom(true)
+            stickToBottomRef.current = true
             scrollToBottom()
           }}
         />

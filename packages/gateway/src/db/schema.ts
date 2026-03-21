@@ -6,10 +6,31 @@
  */
 import { sqliteTable, text, integer, index } from "drizzle-orm/sqlite-core";
 
+// ─── Workspaces ──────────────────────────────────────────────────────
+export const workspaces = sqliteTable(
+  "workspaces",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    title: text("title"),
+    rootPath: text("root_path"),
+    nodeId: text("node_id"),
+    createdAt: text("created_at").notNull(),
+    lastActiveAt: text("last_active_at").notNull(),
+    status: text("status").default("active"),
+    metadata: text("metadata"),
+  },
+  (table) => [
+    index("idx_workspaces_user_status").on(table.userId, table.status, table.lastActiveAt),
+    index("idx_workspaces_user_root").on(table.userId, table.rootPath, table.nodeId),
+  ],
+);
+
 // ─── Sessions ────────────────────────────────────────────────────────
 export const sessions = sqliteTable("sessions", {
   id: text("id").primaryKey(), // UUIDv7
   userId: text("user_id"),
+  workspaceId: text("workspace_id"),
   name: text("name"),
   workspacePath: text("workspace_path"),
   createdAt: text("created_at").notNull(),
@@ -159,6 +180,37 @@ export const sessionState = sqliteTable(
   },
   (table) => [
     index("idx_session_state_session").on(table.sessionId),
+  ],
+);
+
+// ─── Workspace State (per-workspace key-value UI/app state) ─────────
+export const workspaceState = sqliteTable(
+  "workspace_state",
+  {
+    workspaceId: text("workspace_id").notNull(),
+    key: text("key").notNull(),
+    value: text("value"),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_workspace_state_workspace").on(table.workspaceId),
+  ],
+);
+
+// ─── Workspace Architecture Diagrams ───────────────────────────────
+export const architectureDiagrams = sqliteTable(
+  "architecture_diagrams",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    workspaceRoot: text("workspace_root").notNull(),
+    diagram: text("diagram").notNull(),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_architecture_diagrams_user_workspace").on(table.userId, table.workspaceRoot),
+    index("idx_architecture_diagrams_updated").on(table.updatedAt),
   ],
 );
 

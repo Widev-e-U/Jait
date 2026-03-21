@@ -19,6 +19,7 @@ import type {
 // ── Types ────────────────────────────────────────────────────────────
 
 export type ThreadStatus =
+  | "idle"
   | "running"
   | "completed"
   | "error"
@@ -89,7 +90,7 @@ export class ThreadService {
         kind: params.kind ?? "delivery",
         workingDirectory: params.workingDirectory ?? null,
         branch: params.branch ?? null,
-        status: "running",
+        status: "idle",
         createdAt: now,
         updatedAt: now,
       })

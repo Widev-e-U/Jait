@@ -74,6 +74,11 @@ export class WsControlPlane {
   private terminalStreamState = new Map<string, { nextSeq: number; streamId: string }>();
   private providerStreamState = new Map<string, { nextSeq: number; streamId: string }>();
   private toolStreamState = new Map<string, { nextSeq: number; streamId: string }>();
+  private pendingArchitectureRenders = new Map<string, {
+    resolve: (value: { ok: true } | { ok: false; error: string }) => void;
+    reject: (reason: Error) => void;
+    timer: ReturnType<typeof setTimeout>;
+  }>();
   getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[] };
   getSurfaceSnapshot?: () => { serverTime: string; surfaces: unknown[] };
 
@@ -478,6 +483,26 @@ export class WsControlPlane {
         }
         break;
       }
+      case "architecture.render-result": {
+        const payload = msg.payload as {
+          requestId?: string;
+          ok?: boolean;
+          error?: string;
+        } | undefined;
+        if (payload?.requestId) {
+          const pending = this.pendingArchitectureRenders.get(payload.requestId);
+          if (pending) {
+            this.pendingArchitectureRenders.delete(payload.requestId);
+            clearTimeout(pending.timer);
+            if (payload.ok) {
+              pending.resolve({ ok: true });
+            } else {
+              pending.resolve({ ok: false, error: payload.error ?? "Architecture render failed" });
+            }
+          }
+        }
+        break;
+      }
 
       // ── Filesystem node protocol ────────────────────────────────
       case "fs.register-node": {
@@ -716,6 +741,19 @@ export class WsControlPlane {
     } else {
       this.broadcastAll(event);
     }
+  }
+
+  waitForArchitectureRenderResult(
+    requestId: string,
+    timeoutMs = 10_000,
+  ): Promise<{ ok: true } | { ok: false; error: string }> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.pendingArchitectureRenders.delete(requestId);
+        reject(new Error("Timed out waiting for architecture render result"));
+      }, timeoutMs);
+      this.pendingArchitectureRenders.set(requestId, { resolve, reject, timer });
+    });
   }
 
   /**

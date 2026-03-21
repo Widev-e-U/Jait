@@ -4,8 +4,8 @@ import { getIconForFile, DEFAULT_FILE } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
-import { ViewModeSelector } from '@/components/chat/view-mode-selector'
-import type { ViewMode } from '@/components/chat/view-mode-selector'
+import { SendTargetSelector } from '@/components/chat/send-target-selector'
+import type { SendTarget } from '@/components/chat/send-target-selector'
 import { ProviderSelector } from '@/components/chat/provider-selector'
 import { CliModelSelector } from '@/components/chat/cli-model-selector'
 import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
@@ -57,10 +57,10 @@ interface PromptInputProps {
   voiceTranscribing?: boolean
   /** Called when user clicks "Done" to stop recording */
   onVoiceStop?: () => void
-  viewMode?: ViewMode
-  onViewModeChange?: (viewMode: ViewMode) => void
   mode?: ChatMode
   onModeChange?: (mode: ChatMode) => void
+  sendTarget?: SendTarget
+  onSendTargetChange?: (target: SendTarget) => void
   provider?: ProviderId
   onProviderChange?: (provider: ProviderId) => void
   providerRuntimeMode?: RuntimeMode
@@ -231,8 +231,10 @@ function buildEditableContent(
   for (const segment of normalized) {
     if (segment.type === 'text') {
       el.appendChild(document.createTextNode(segment.text))
-    } else {
+    } else if (segment.type === 'file') {
       el.appendChild(createChipNode(segment, onRemove))
+    } else {
+      el.appendChild(document.createTextNode(`[image:${segment.name}]`))
     }
   }
 }
@@ -247,8 +249,10 @@ function insertSegmentsAtCursor(
     for (const segment of segments) {
       if (segment.type === 'text') {
         el.appendChild(document.createTextNode(segment.text))
-      } else {
+      } else if (segment.type === 'file') {
         el.appendChild(createChipNode(segment, onRemove))
+      } else {
+        el.appendChild(document.createTextNode(`[image:${segment.name}]`))
       }
     }
     moveCursorToEnd(el)
@@ -262,8 +266,10 @@ function insertSegmentsAtCursor(
   for (const segment of segments) {
     if (segment.type === 'text') {
       fragment.appendChild(document.createTextNode(segment.text))
-    } else {
+    } else if (segment.type === 'file') {
       fragment.appendChild(createChipNode(segment, onRemove))
+    } else {
+      fragment.appendChild(document.createTextNode(`[image:${segment.name}]`))
     }
   }
 
@@ -305,6 +311,7 @@ export interface PromptInputHandle {
 }
 
 const attachmentDraftStore = new Map<string, ChatAttachment[]>()
+const COMPACT_FOOTER_CONTROLS_WIDTH = 560
 
 function VoiceLevelMeter({ levels = [], compact = false }: { levels?: number[]; compact?: boolean }) {
   const bars = levels.length > 0 ? levels : Array.from({ length: 28 }, () => 0.05)
@@ -358,10 +365,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   voiceLevels,
   voiceTranscribing,
   onVoiceStop,
-  viewMode,
-  onViewModeChange,
   mode,
   onModeChange,
+  sendTarget,
+  onSendTargetChange,
   provider,
   onProviderChange,
   providerRuntimeMode,
@@ -378,9 +385,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   workspaceOpen = false,
   draftStateKey,
 }: PromptInputProps, ref) {
+  const rootRef = useRef<HTMLDivElement>(null)
   const editableRef = useRef<HTMLDivElement>(null)
   const menuRef = useRef<HTMLDivElement>(null)
   const isMobile = useIsMobile()
+  const [compactFooterControls, setCompactFooterControls] = useState(false)
 
   const [dragging, setDragging] = useState(false)
   const dragCounter = useRef(0)
@@ -416,13 +425,29 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const composerDisabled = Boolean(disabled)
   const controlsLocked = Boolean(controlsDisabled ?? disabled ?? false)
   const selectorsDisabled = controlsLocked || Boolean(isLoading)
-  const viewModeDisabled = controlsLocked
-  const showViewModeSelector = Boolean(viewMode && onViewModeChange)
   const showProviderSelector = Boolean(provider && onProviderChange)
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
   const showCliModelSelector = Boolean(provider && provider !== 'jait' && onCliModelChange)
-  const showModeSelector = Boolean(mode && onModeChange && (!provider || provider === 'jait') && viewMode !== 'manager')
-  const hasFooterControls = showViewModeSelector || showProviderSelector || showProviderRuntimeSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
+  const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
+  const showSendTargetSelector = Boolean(sendTarget && onSendTargetChange)
+  const hasFooterControls = showSendTargetSelector || showProviderSelector || showProviderRuntimeSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
+
+  useEffect(() => {
+    const el = rootRef.current
+    if (!el || typeof ResizeObserver === 'undefined') {
+      setCompactFooterControls(false)
+      return
+    }
+
+    const updateCompact = () => {
+      setCompactFooterControls(el.clientWidth < COMPACT_FOOTER_CONTROLS_WIDTH)
+    }
+
+    updateCompact()
+    const observer = new ResizeObserver(() => updateCompact())
+    observer.observe(el)
+    return () => observer.disconnect()
+  }, [])
 
   // Track whether we're doing a controlled sync to avoid loops
   const isSyncing = useRef(false)
@@ -918,6 +943,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
   return (
     <div
+      ref={rootRef}
       className={cn(
         'relative z-10 flex flex-col rounded-2xl border bg-background dark:bg-card focus-within:border-primary/50 focus-within:ring-2 focus-within:ring-primary/20',
         dragging && 'ring-2 ring-primary/30 border-primary/40',
@@ -1028,8 +1054,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         {hasFooterControls && (
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
-              {showViewModeSelector && (
-                <ViewModeSelector mode={viewMode!} onChange={onViewModeChange!} disabled={viewModeDisabled} compact={isMobile} />
+              {showSendTargetSelector && (
+                <SendTargetSelector target={sendTarget!} onChange={onSendTargetChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
               )}
               {footerLeadingContent}
               {showProviderSelector && (
@@ -1037,7 +1063,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   provider={provider!}
                   onChange={onProviderChange!}
                   disabled={selectorsDisabled}
-                  iconOnly={isMobile}
+                  iconOnly={compactFooterControls}
                   repoRuntime={repoRuntime}
                   onMoveToGateway={onMoveToGateway}
                   sessionInfo={sessionInfo}
@@ -1050,13 +1076,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   value={providerRuntimeMode!}
                   onChange={onProviderRuntimeModeChange!}
                   disabled={selectorsDisabled}
+                  compact={compactFooterControls}
                 />
               )}
               {showCliModelSelector && (
-                <CliModelSelector provider={provider!} model={cliModel ?? null} onChange={onCliModelChange!} disabled={selectorsDisabled} />
+                <CliModelSelector provider={provider!} model={cliModel ?? null} onChange={onCliModelChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
               )}
               {showModeSelector && (
-                <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} />
+                <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
               )}
             </div>
           </div>

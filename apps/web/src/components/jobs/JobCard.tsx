@@ -6,6 +6,7 @@ import { Button } from '../ui/button'
 import { ModelIcon } from '../icons/model-icons'
 import { describeCron, formatRelativeTime, getNextRunTime } from '@/lib/cron-utils'
 import type { ScheduledJob, JobRun } from '@/lib/jobs-api'
+import { cn } from '@/lib/utils'
 import { Play, Trash2, History, Edit, Clock, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react'
 
 interface JobCardProps {
@@ -59,16 +60,20 @@ export function JobCard({
   return (
     <Card
       data-testid={`job-card-${job.id}`}
-      className={`transition-opacity ${isLoading ? 'opacity-50' : ''} ${!job.enabled ? 'opacity-75' : ''}`}
+      className={cn(
+        'transition-opacity',
+        isLoading && 'opacity-50',
+        !job.enabled && 'opacity-75',
+      )}
     >
-      <CardHeader className="pb-2">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+      <CardHeader className="space-y-3 pb-3">
+        <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
           <div className="flex min-w-0 items-start gap-3">
             {job.job_type === 'agent_task' && job.model && job.provider && (
               <ModelIcon provider={job.provider} model={job.model} size={32} />
             )}
             <div className="min-w-0 flex-1">
-              <CardTitle className="truncate text-base sm:text-lg">{job.name}</CardTitle>
+              <CardTitle className="truncate text-base md:text-lg">{job.name}</CardTitle>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <Badge variant={job.job_type === 'agent_task' ? 'default' : 'secondary'}>
                   {jobTypeLabels[job.job_type]}
@@ -81,8 +86,8 @@ export function JobCard({
               </div>
             </div>
           </div>
-          <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 sm:min-w-[92px] sm:justify-end sm:border-0 sm:bg-transparent sm:p-0">
-            <span className="text-xs text-muted-foreground sm:hidden">
+          <div className="flex items-center justify-between rounded-md border bg-muted/20 px-3 py-2 md:min-w-[92px] md:justify-end md:border-0 md:bg-transparent md:p-0">
+            <span className="text-xs text-muted-foreground md:hidden">
               {job.enabled ? 'Enabled' : 'Paused'}
             </span>
             <Switch
@@ -94,31 +99,31 @@ export function JobCard({
         </div>
       </CardHeader>
 
-      <CardContent>
+      <CardContent className="space-y-3 pt-0">
         {/* Schedule */}
-        <div className="mb-2 flex flex-col gap-1 text-sm text-muted-foreground sm:flex-row sm:items-center sm:gap-2">
+        <div className="flex flex-col gap-1 text-sm text-muted-foreground md:flex-row md:items-center md:gap-2">
           <Clock className="h-4 w-4" />
           <span className="break-all font-mono">{job.cron_expression}</span>
-          <span className="text-xs sm:text-[11px]">({describeCron(job.cron_expression)})</span>
+          <span className="text-xs md:text-[11px]">({describeCron(job.cron_expression)})</span>
         </div>
 
         {/* Next run */}
         {nextRun && (
-          <div className="text-sm text-muted-foreground mb-2">
+          <div className="text-sm text-muted-foreground">
             Next run: {nextRun.toLocaleString()} ({formatRelativeTime(nextRun)})
           </div>
         )}
 
         {/* Prompt preview for agent tasks */}
         {job.prompt && (
-          <div className="text-sm text-muted-foreground mb-3 line-clamp-2 italic">
+          <div className="line-clamp-2 text-sm italic text-muted-foreground">
             "{job.prompt}"
           </div>
         )}
 
         {/* Last run status */}
         {recentRun && (
-          <div className="mb-3 flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:gap-2">
+          <div className="flex flex-col gap-1 text-sm md:flex-row md:items-center md:gap-2">
             <div className="flex items-center gap-2">
               {recentRun.status === 'completed' && (
                 <>
@@ -148,14 +153,14 @@ export function JobCard({
         )}
 
         {/* Actions */}
-        <div className="grid grid-cols-2 gap-2 border-t pt-2 sm:flex sm:flex-wrap sm:items-center">
+        <div className="grid grid-cols-2 gap-2 border-t pt-3 md:grid-cols-[minmax(0,1fr)_auto_auto_auto] md:items-center">
           <Button
             variant="outline"
             size="sm"
             onClick={handleTrigger}
             disabled={isTriggering || !job.enabled}
             data-testid={`job-trigger-${job.id}`}
-            className="w-full"
+            className="w-full md:justify-self-start"
           >
             {isTriggering ? (
               <Loader2 className="h-4 w-4 mr-1 animate-spin" />
@@ -169,26 +174,26 @@ export function JobCard({
             size="sm"
             onClick={() => onViewHistory(job)}
             data-testid={`job-history-${job.id}`}
-            className="w-full"
+            className="w-full md:w-auto"
           >
             <History className="h-4 w-4 mr-1" />
-            History
+            <span className="md:hidden lg:inline">History</span>
           </Button>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={() => onEdit(job)}
             aria-label={`Edit job ${job.name}`}
             data-testid={`job-edit-${job.id}`}
-            className="w-full"
+            className="h-8 w-full md:w-8"
           >
             <Edit className="h-4 w-4" />
           </Button>
           <Button
             variant="ghost"
-            size="sm"
+            size="icon"
             onClick={() => onDelete(job.id)}
-            className="w-full text-destructive hover:bg-destructive/10 hover:text-destructive"
+            className="h-8 w-full text-destructive hover:bg-destructive/10 hover:text-destructive md:w-8"
             aria-label={`Delete job ${job.name}`}
             data-testid={`job-delete-${job.id}`}
           >

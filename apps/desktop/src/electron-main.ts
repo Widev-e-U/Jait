@@ -23,6 +23,7 @@ const IS_DEV = !app.isPackaged;
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
+const detachedPreviewWindows = new Set<BrowserWindow>();
 
 // ── Persistent settings ───────────────────────────────────────────────
 const settingsPath = path.join(app.getPath("userData"), "desktop-settings.json");
@@ -127,6 +128,46 @@ function createMainWindow(): BrowserWindow {
   return win;
 }
 
+function createDetachedPreviewWindow(url: string, title?: string): BrowserWindow {
+  const win = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 640,
+    minHeight: 480,
+    title: title?.trim() || "Jait Preview",
+    icon: path.join(__dirname, "..", "assets", "icon.png"),
+    backgroundColor: "#202020",
+    show: false,
+    autoHideMenuBar: true,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  win.once("ready-to-show", () => {
+    win.show();
+    win.focus();
+  });
+
+  win.on("closed", () => {
+    detachedPreviewWindows.delete(win);
+  });
+
+  win.webContents.setWindowOpenHandler(({ url: nextUrl }) => {
+    if (nextUrl.startsWith("http://") || nextUrl.startsWith("https://")) {
+      shell.openExternal(nextUrl);
+      return { action: "deny" };
+    }
+    return { action: "allow" };
+  });
+
+  detachedPreviewWindows.add(win);
+  void win.loadURL(url);
+  return win;
+}
+
 // ── Load the web app ──────────────────────────────────────────────────
 async function loadApp(win: BrowserWindow): Promise<void> {
   if (IS_DEV) {
@@ -202,6 +243,12 @@ ipcMain.handle("desktop:set-setting", (_event, key: string, value: unknown) => {
 ipcMain.handle("window:is-maximized", () => mainWindow?.isMaximized() ?? false);
 ipcMain.handle("window:set-title-bar-overlay", (_event, opts: { color?: string; symbolColor?: string; height?: number }) => {
   mainWindow?.setTitleBarOverlay(opts);
+});
+ipcMain.handle("desktop:open-preview-window", (_event, opts: { url?: string; title?: string }) => {
+  const url = opts?.url?.trim();
+  if (!url) return { ok: false };
+  createDetachedPreviewWindow(url, opts.title);
+  return { ok: true };
 });
 
 // Expose device info to the renderer

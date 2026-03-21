@@ -14,6 +14,7 @@ interface ModeSelectorProps {
   onChange: (mode: ChatMode) => void
   disabled?: boolean
   className?: string
+  compact?: boolean
 }
 
 const MODES: Array<{
@@ -42,7 +43,7 @@ const MODES: Array<{
   },
 ]
 
-export function ModeSelector({ mode, onChange, disabled, className }: ModeSelectorProps) {
+export function ModeSelector({ mode, onChange, disabled, className, compact = false }: ModeSelectorProps) {
   const current = MODES.find((m) => m.value === mode) ?? MODES[1]
   const CurrentIcon = current.icon
 
@@ -61,7 +62,7 @@ export function ModeSelector({ mode, onChange, disabled, className }: ModeSelect
           title={`Mode: ${current.label}`}
         >
           <CurrentIcon className="h-4 w-4" />
-          <span>{current.label}</span>
+          {!compact && <span>{current.label}</span>}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </DropdownMenuTrigger>

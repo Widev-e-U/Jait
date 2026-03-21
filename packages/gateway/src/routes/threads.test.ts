@@ -87,6 +87,38 @@ class MockThreadProvider implements CliProviderAdapter {
 }
 
 describe("thread routes", () => {
+  it("creates threads in idle state until a provider session actually starts", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry: new ProviderRegistry(),
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Helper", providerId: "codex", kind: "delegation" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      title: "Helper",
+      status: "idle",
+      providerSessionId: null,
+    });
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("lists threads with a bounded page and hasMore", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

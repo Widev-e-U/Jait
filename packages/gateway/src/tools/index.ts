@@ -13,6 +13,7 @@ export {
   createFilePatchTool,
   createFileListTool,
   createFileStatTool,
+  createImageViewTool,
 } from "./file-tools.js";
 export { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 export {
@@ -118,6 +119,7 @@ import {
   createFilePatchTool,
   createFileListTool,
   createFileStatTool,
+  createImageViewTool,
 } from "./file-tools.js";
 import { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 import {
@@ -170,6 +172,7 @@ import type { UserService } from "../services/users.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { PreviewService } from "../services/preview.js";
+import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -203,6 +206,7 @@ export interface ToolRegistryDeps {
   /** Graceful shutdown callback — needed by the redeploy tool */
   shutdown?: () => Promise<void>;
   previewService?: PreviewService;
+  architectureDiagramService?: ArchitectureDiagramService;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -247,6 +251,7 @@ export function createToolRegistry(
   tools.register(createFilePatchTool(surfaceRegistry));
   tools.register(createFileListTool(surfaceRegistry));
   tools.register(createFileStatTool(surfaceRegistry));
+  tools.register(createImageViewTool(surfaceRegistry));
 
   // OS tools
   tools.register(createOsQueryTool());
@@ -345,7 +350,7 @@ export function createToolRegistry(
   tools.register(createNetworkScanTool());
 
   // Architecture tools
-  tools.register(createArchitectureTool(deps.ws));
+  tools.register(createArchitectureTool(deps.ws, deps.architectureDiagramService));
 
   // Maintenance tools
   if (deps.maintenanceService) {

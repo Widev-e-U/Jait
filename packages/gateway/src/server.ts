@@ -27,6 +27,7 @@ import { registerMobileRoutes } from "./routes/mobile.js";
 import { registerNetworkRoutes } from "./routes/network.js";
 import { registerVoiceRoutes } from "./routes/voice.js";
 import { registerWorkspaceRoutes } from "./routes/workspace.js";
+import { registerWorkspaceEntityRoutes } from "./routes/workspaces.js";
 import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import { registerFilesystemRoutes } from "./routes/filesystem.js";
 import { registerThreadRoutes } from "./routes/threads.js";
@@ -37,6 +38,7 @@ import { registerMcpRoutes } from "./routes/mcp-server.js";
 import { registerGitRoutes } from "./routes/git.js";
 import { registerUpdateRoutes } from "./routes/update.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
+import { registerArchitectureRoutes } from "./routes/architecture.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -54,12 +56,14 @@ import type { DeviceRegistry } from "./services/device-registry.js";
 import type { VoiceService } from "./voice/service.js";
 import type { ScreenShareService } from "@jait/screen-share";
 import type { SessionStateService } from "./services/session-state.js";
+import type { WorkspaceStateService } from "./services/workspace-state.js";
 import type { ThreadService } from "./services/threads.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { PlanService } from "./services/plans.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { SqliteDatabase } from "./db/sqlite-shim.js";
 import { getSchemaVersion } from "./db/connection.js";
+import type { WorkspaceService } from "./services/workspaces.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -80,6 +84,8 @@ export interface ServerDeps {
   memoryService?: MemoryService;
   deviceRegistry?: DeviceRegistry;
   sessionState?: SessionStateService;
+  workspaceService?: WorkspaceService;
+  workspaceState?: WorkspaceStateService;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -97,6 +103,7 @@ export interface ServerDeps {
   shutdown?: () => Promise<void>;
   gitService?: import("./routes/threads.js").ThreadRouteDeps["gitService"];
   previewService?: import("./services/preview.js").PreviewService;
+  architectureDiagramService?: import("./services/architecture-diagrams.js").ArchitectureDiagramService;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -129,11 +136,15 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     userService: deps.userService,
     ws: deps.ws,
     sessionState: deps.sessionState,
+    workspaceService: deps.workspaceService,
     providerRegistry: deps.providerRegistry,
   });
 
   if (deps.sessionService && deps.audit) {
-    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState);
+    registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState, deps.workspaceService);
+  }
+  if (deps.workspaceService && deps.sessionService) {
+    registerWorkspaceEntityRoutes(app, config, deps.workspaceService, deps.sessionService, deps.workspaceState);
   }
 
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {
@@ -179,12 +190,16 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerBrowserAssetRoutes(app);
   registerWorkspacePreviewRoutes(app);
   registerDevProxyRoutes(app);
+  registerPreviewSessionProxyRoutes(app, deps);
   if (deps.previewService) {
     registerPreviewRoutes(app, config, { previewService: deps.previewService });
   }
+  if (deps.architectureDiagramService) {
+    registerArchitectureRoutes(app, config, deps.architectureDiagramService);
+  }
 
   if (deps.surfaceRegistry) {
-    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws);
+    registerWorkspaceRoutes(app, deps.surfaceRegistry, deps.sessionState, deps.sessionService, deps.ws, deps.workspaceService, deps.workspaceState);
   }
 
   // Git API routes
@@ -406,47 +421,88 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
       }
     }
 
-    try {
-      const upstream = await fetchDevProxyUpstream(targetUrl, request, proxiedPath);
-
-      reply.code(upstream.status);
-      const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
-      for (const [key, value] of upstream.headers.entries()) {
-        const lower = key.toLowerCase();
-        if (lower === "content-length" || lower === "content-encoding" || lower === "transfer-encoding" || lower === "x-frame-options" || lower === "content-security-policy") {
-          continue;
-        }
-        reply.header(key, value);
-      }
-      reply.header("Cache-Control", "no-store");
-
-      if (contentType.includes("text/html") && isModuleLikeProxyPath(proxiedPath)) {
-        return reply
-          .code(502)
-          .type("application/json; charset=utf-8")
-          .send({
-          error: "DEV_PROXY_MODULE_FALLBACK",
-          message: `Dev server returned HTML for module request ${proxiedPath}. Open the server root or fix absolute asset routing.`,
-        });
-      }
-
-      if (contentType.includes("text/html") || contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
-        const text = await upstream.text();
-        return reply.type(contentType).send(rewriteDevProxyText(text, contentType, `/api/dev-proxy/${port}`, proxiedPath));
-      }
-
-      const body = Buffer.from(await upstream.arrayBuffer());
-      return reply.type(contentType).send(body);
-    } catch (error) {
-      return reply.status(502).send({
-        error: "DEV_PROXY_FAILED",
-        message: error instanceof Error ? error.message : "Failed to reach local dev server",
-      });
-    }
+    return proxyPreviewRequest(request, reply, targetUrl, `/api/dev-proxy/${port}`, proxiedPath);
   };
 
   app.all("/api/dev-proxy/:port", handler);
   app.all("/api/dev-proxy/:port/*", handler);
+}
+
+function registerPreviewSessionProxyRoutes(app: FastifyInstance, deps: ServerDeps): void {
+  const handler = async (request: any, reply: any) => {
+    const params = request.params as { sessionId?: string; "*"?: string };
+    const sessionId = params.sessionId?.trim();
+    if (!sessionId || !deps.previewService) {
+      return reply.status(404).send({ error: "PREVIEW_NOT_FOUND", message: "Preview session not found" });
+    }
+
+    const proxiedPath = params["*"] ? `/${params["*"]}` : "/";
+    const baseTarget = deps.previewService.getProxyTarget(sessionId);
+    if (!baseTarget) {
+      return reply.status(404).send({ error: "PREVIEW_NOT_FOUND", message: "Preview session not found" });
+    }
+
+    const targetUrl = new URL(proxiedPath, baseTarget);
+    const query = request.query as Record<string, string | string[] | undefined>;
+    for (const [key, value] of Object.entries(query)) {
+      if (Array.isArray(value)) {
+        for (const entry of value) targetUrl.searchParams.append(key, entry);
+      } else if (typeof value === "string") {
+        targetUrl.searchParams.set(key, value);
+      }
+    }
+
+    return proxyPreviewRequest(request, reply, targetUrl, `/api/preview/proxy/${sessionId}`, proxiedPath);
+  };
+
+  app.all("/api/preview/proxy/:sessionId", handler);
+  app.all("/api/preview/proxy/:sessionId/*", handler);
+}
+
+async function proxyPreviewRequest(
+  request: any,
+  reply: any,
+  targetUrl: URL,
+  rewritePrefix: string,
+  proxiedPath: string,
+): Promise<unknown> {
+  try {
+    const upstream = await fetchDevProxyUpstream(targetUrl, request, proxiedPath);
+
+    reply.code(upstream.status);
+    const contentType = upstream.headers.get("content-type") ?? "application/octet-stream";
+    for (const [key, value] of upstream.headers.entries()) {
+      const lower = key.toLowerCase();
+      if (lower === "content-length" || lower === "content-encoding" || lower === "transfer-encoding" || lower === "x-frame-options" || lower === "content-security-policy") {
+        continue;
+      }
+      reply.header(key, value);
+    }
+    reply.header("Cache-Control", "no-store");
+
+    if (contentType.includes("text/html") && isModuleLikeProxyPath(proxiedPath)) {
+      return reply
+        .code(502)
+        .type("application/json; charset=utf-8")
+        .send({
+          error: "DEV_PROXY_MODULE_FALLBACK",
+          message: `Dev server returned HTML for module request ${proxiedPath}. Open the server root or fix absolute asset routing.`,
+        });
+    }
+
+    if (contentType.includes("text/html") || contentType.includes("javascript") || contentType.includes("ecmascript") || contentType.includes("css")) {
+      const text = await upstream.text();
+      return reply.type(contentType).send(rewriteDevProxyText(text, contentType, rewritePrefix, proxiedPath));
+    }
+
+    const body = Buffer.from(await upstream.arrayBuffer());
+    return reply.type(contentType).send(body);
+  } catch (error) {
+    return reply.status(502).send({
+      error: "DEV_PROXY_FAILED",
+      message: error instanceof Error ? error.message : "Failed to reach local dev server",
+    });
+  }
 }
 
 async function fetchDevProxyUpstream(targetUrl: URL, request: any, proxiedPath: string): Promise<Response> {
@@ -464,6 +520,7 @@ async function fetchDevProxyUpstream(targetUrl: URL, request: any, proxiedPath: 
   }
   return upstream;
 }
+
 
 function normalizeProxyPort(value?: string): number | null {
   if (!value) return null;

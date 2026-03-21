@@ -13,6 +13,7 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { FileSystemSurface } from "../surfaces/filesystem.js";
 import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
+import type { WorkspaceService } from "../services/workspaces.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { ProviderId, ProviderEvent, CliProviderAdapter, RuntimeMode } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
@@ -22,6 +23,7 @@ import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { requireAuth } from "../security/http-auth.js";
+import { signAuthToken } from "../security/http-auth.js";
 import {
   runAgentLoop,
   retryToolCall,
@@ -67,9 +69,31 @@ interface PersistedToolCall {
   completedAt?: number;
 }
 
-function parseUserDisplaySegments(raw: unknown): Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> | undefined {
+interface QueuedChatMessage {
+  id?: string;
+  content: string;
+  mode?: ChatMode;
+  provider?: ProviderId;
+  runtimeMode?: RuntimeMode;
+  model?: string | null;
+  displaySegments?: Array<
+    { type: "text"; text: string }
+    | { type: "file"; path: string; name: string }
+    | { type: "image"; name: string; mimeType: string; data: string }
+  >;
+}
+
+function parseUserDisplaySegments(raw: unknown): Array<
+  { type: "text"; text: string }
+  | { type: "file"; path: string; name: string }
+  | { type: "image"; name: string; mimeType: string; data: string }
+> | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const segments: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> = [];
+  const segments: Array<
+    { type: "text"; text: string }
+    | { type: "file"; path: string; name: string }
+    | { type: "image"; name: string; mimeType: string; data: string }
+  > = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
     const record = entry as Record<string, unknown>;
@@ -83,9 +107,48 @@ function parseUserDisplaySegments(raw: unknown): Array<{ type: "text"; text: str
         path: record.path,
         name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
       });
+      continue;
+    }
+    if (
+      record.type === "image"
+      && typeof record.data === "string"
+      && typeof record.mimeType === "string"
+      && record.mimeType.startsWith("image/")
+    ) {
+      segments.push({
+        type: "image",
+        data: record.data,
+        mimeType: record.mimeType,
+        name: typeof record.name === "string" ? record.name : "Image",
+      });
     }
   }
   return segments.length > 0 ? segments : undefined;
+}
+
+function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
+  if (!Array.isArray(raw)) return [];
+  const queue: QueuedChatMessage[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.content !== "string" || !record.content.trim()) continue;
+    const displaySegments = parseUserDisplaySegments(record.displaySegments);
+    queue.push({
+      id: typeof record.id === "string" ? record.id : undefined,
+      content: record.content,
+      mode: isValidChatMode(record.mode) ? record.mode : undefined,
+      provider: record.provider === "jait" || record.provider === "codex" || record.provider === "claude-code"
+        ? record.provider
+        : undefined,
+      runtimeMode: record.runtimeMode === "full-access" || record.runtimeMode === "supervised"
+        ? record.runtimeMode
+        : undefined,
+      model: typeof record.model === "string" ? record.model : null,
+      displaySegments,
+    });
+  }
+  return queue;
 }
 
 // ── In-memory state ──────────────────────────────────────────────────
@@ -93,6 +156,7 @@ function parseUserDisplaySegments(raw: unknown): Array<{ type: "text"; text: str
 const sessionHistory = new Map<string, ChatMessage[]>();
 const activeStreams = new Set<string>();
 const sessionAbortControllers = new Map<string, AbortController>();
+const drainingQueuedSessions = new Set<string>();
 
 /**
  * Live streaming accumulator — holds the current assistant message's partial
@@ -550,6 +614,7 @@ export interface ChatRouteDeps {
   memoryService?: MemoryService;
   ws?: WsControlPlane;
   sessionState?: SessionStateService;
+  workspaceService?: WorkspaceService;
   providerRegistry?: ProviderRegistry;
   toolExecutor?: (
     toolName: string,
@@ -576,6 +641,7 @@ export function registerChatRoutes(
   let memoryService: MemoryService | undefined;
   let ws: WsControlPlane | undefined;
   let sessionStateService: SessionStateService | undefined;
+  let workspaceService: WorkspaceService | undefined;
   let providerRegistry: ProviderRegistry | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
@@ -590,6 +656,7 @@ export function registerChatRoutes(
     memoryService = deps.memoryService;
     ws = deps.ws;
     sessionStateService = deps.sessionState;
+    workspaceService = deps.workspaceService;
     providerRegistry = deps.providerRegistry;
   } else {
     db = depsOrDb as JaitDB | undefined;
@@ -601,6 +668,93 @@ export function registerChatRoutes(
   _appRef = app;
 
   const hasTools = !!toolRegistry && toolRegistry.list().length > 0;
+
+  const shouldAutoRenameSession = (name: string | null | undefined) => {
+    const normalized = name?.trim() ?? "";
+    return !normalized || normalized === "New Chat" || normalized.startsWith("Session ");
+  };
+
+  const deriveSessionTitle = (raw: string) => {
+    const singleLine = raw
+      .replace(/\r/g, "\n")
+      .split("\n")
+      .map((line) => line.trim())
+      .find(Boolean) ?? "";
+    if (!singleLine) return "New Chat";
+    const cleaned = singleLine.replace(/\s+/g, " ").trim();
+    return cleaned.length > 80 ? cleaned.slice(0, 77).trimEnd() + "..." : cleaned;
+  };
+
+  const broadcastQueuedMessagesState = (sessionId: string, value: QueuedChatMessage[] | null) => {
+    if (!ws) return;
+    ws.broadcast(sessionId, {
+      type: "ui.state-sync",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      payload: { key: "queued_messages", value },
+    });
+  };
+
+  const drainQueuedChatMessages = async (sessionId: string): Promise<void> => {
+    if (!sessionStateService || !sessionService || !userService) return;
+    if (!sessionId || drainingQueuedSessions.has(sessionId) || activeStreams.has(sessionId)) return;
+
+    drainingQueuedSessions.add(sessionId);
+    try {
+      while (!activeStreams.has(sessionId)) {
+        const session = sessionService.getById(sessionId);
+        if (!session || session.status !== "active" || !session.userId) return;
+
+        const state = sessionStateService.get(sessionId, ["queued_messages"]);
+        const queue = parseQueuedChatMessages(state["queued_messages"]);
+        if (queue.length === 0) return;
+
+        const [nextMessage, ...rest] = queue;
+        if (!nextMessage) return;
+
+        const user = userService.findById(session.userId);
+        if (!user) return;
+
+        sessionStateService.set(sessionId, { queued_messages: rest.length > 0 ? rest : null });
+        broadcastQueuedMessagesState(sessionId, rest.length > 0 ? rest : null);
+
+        const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+        const response = await app.inject({
+          method: "POST",
+          url: "/api/chat",
+          headers: { authorization: `Bearer ${token}` },
+          payload: {
+            content: nextMessage.content,
+            sessionId,
+            ...(nextMessage.mode ? { mode: nextMessage.mode } : {}),
+            ...(nextMessage.provider ? { provider: nextMessage.provider } : {}),
+            ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
+            ...(nextMessage.model ? { model: nextMessage.model } : {}),
+            ...(nextMessage.displaySegments ? { displaySegments: nextMessage.displaySegments } : {}),
+          },
+        });
+
+        if (response.statusCode >= 400) {
+          const restoredQueue = [nextMessage, ...rest];
+          sessionStateService.set(sessionId, { queued_messages: restoredQueue });
+          broadcastQueuedMessagesState(sessionId, restoredQueue);
+          app.log.warn({ sessionId, statusCode: response.statusCode }, "Failed to process queued chat message");
+          return;
+        }
+      }
+    } finally {
+      drainingQueuedSessions.delete(sessionId);
+    }
+  };
+
+  const appWithQueueDrain = app as FastifyInstance & {
+    drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+  };
+  if (!appWithQueueDrain.drainQueuedChatMessages) {
+    app.decorate("drainQueuedChatMessages", drainQueuedChatMessages);
+  } else {
+    appWithQueueDrain.drainQueuedChatMessages = drainQueuedChatMessages;
+  }
 
   // ── Per-session steering controllers and executed tool call tracking ──
   const sessionSteeringControllers = new Map<string, SteeringController>();
@@ -772,6 +926,9 @@ export function registerChatRoutes(
       if (!session) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Session not found" });
       }
+      if (content.trim() && shouldAutoRenameSession(session.name)) {
+        sessionService.update(sessionId, { name: deriveSessionTitle(content) }, authUser.id);
+      }
     }
     const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
     const effectiveModel = userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
@@ -805,9 +962,12 @@ export function registerChatRoutes(
 
     // Resolve workspace root so the system prompt includes it
     const sessionRecord = sessionService?.getById(sessionId);
+    const workspaceRecord = sessionRecord?.workspaceId
+      ? workspaceService?.getById(sessionRecord.workspaceId, authUser.id)
+      : null;
     const wsRoot = surfaceRegistry
-      ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
-      : (sessionRecord?.workspacePath?.trim() || process.cwd());
+      ? resolveWorkspaceRoot(surfaceRegistry, sessionId, workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)
+      : ((workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)?.trim() || process.cwd());
     const promptCtx: PromptContext = { workspaceRoot: wsRoot };
 
     if (!sessionHistory.has(sessionId)) {
@@ -848,7 +1008,12 @@ export function registerChatRoutes(
       history.push({ role: "user", content, segments: displaySegments });
       persistMessage(sessionId, "user", content, undefined, displaySegmentsJson);
     }
-    try { sessionService?.touch(sessionId); } catch { /* session may not exist */ }
+    try {
+      sessionService?.touch(sessionId);
+      if (sessionRecord?.workspaceId) {
+        workspaceService?.touch(sessionRecord.workspaceId);
+      }
+    } catch { /* session may not exist */ }
 
     const streamAbort = new AbortController();
     sessionAbortControllers.set(sessionId, streamAbort);
@@ -884,8 +1049,8 @@ export function registerChatRoutes(
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {
         const cliWsRoot = surfaceRegistry
-          ? resolveWorkspaceRoot(surfaceRegistry, sessionId, sessionRecord?.workspacePath)
-          : (sessionRecord?.workspacePath?.trim() || process.cwd());
+          ? resolveWorkspaceRoot(surfaceRegistry, sessionId, workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)
+          : ((workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)?.trim() || process.cwd());
 
         // Detect if the workspace lives on a remote node (e.g. Windows
         // desktop) and route the CLI provider session there instead of
@@ -1405,6 +1570,7 @@ export function registerChatRoutes(
         payload: {},
       });
     }
+    void drainQueuedChatMessages(sessionId);
   });
 
   // Cancel an active stream for a session

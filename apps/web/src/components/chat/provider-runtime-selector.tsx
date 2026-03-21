@@ -15,6 +15,7 @@ interface ProviderRuntimeSelectorProps {
   onChange: (mode: RuntimeMode) => void
   disabled?: boolean
   className?: string
+  compact?: boolean
 }
 
 const MODE_LABELS: Record<RuntimeMode, { label: string; description: string; icon: typeof Shield }> = {
@@ -30,7 +31,7 @@ const MODE_LABELS: Record<RuntimeMode, { label: string; description: string; ico
   },
 }
 
-export function ProviderRuntimeSelector({ provider, value, onChange, disabled, className }: ProviderRuntimeSelectorProps) {
+export function ProviderRuntimeSelector({ provider, value, onChange, disabled, className, compact = false }: ProviderRuntimeSelectorProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
 
   useEffect(() => {
@@ -71,7 +72,7 @@ export function ProviderRuntimeSelector({ provider, value, onChange, disabled, c
           aria-label={`Runtime: ${activeDef.label}`}
         >
           <ActiveIcon className="h-4 w-4" />
-          <span className="hidden sm:inline">{activeDef.label}</span>
+          {!compact && <span>{activeDef.label}</span>}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </DropdownMenuTrigger>

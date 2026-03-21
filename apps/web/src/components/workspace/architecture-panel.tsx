@@ -17,6 +17,8 @@ export interface ArchitecturePanelProps {
   onGenerate?: () => void
   /** Current theme */
   theme?: 'dark' | 'light'
+  /** Reports render success/failure for the current diagram */
+  onRenderResult?: (result: { ok: true } | { ok: false; error: string }) => void
 }
 
 /* ------------------------------------------------------------------ */
@@ -24,6 +26,26 @@ export interface ArchitecturePanelProps {
 /* ------------------------------------------------------------------ */
 
 let mermaidInitialized = false
+const MIN_ZOOM = 0.25
+const MAX_ZOOM = 4
+
+function clampZoom(value: number): number {
+  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
+}
+
+function zoomAroundPoint(
+  scale: number,
+  nextScale: number,
+  pan: { x: number; y: number },
+  point: { x: number; y: number },
+): { x: number; y: number } {
+  if (scale === nextScale) return pan
+  const ratio = nextScale / scale
+  return {
+    x: point.x - (point.x - pan.x) * ratio,
+    y: point.y - (point.y - pan.y) * ratio,
+  }
+}
 
 function initMermaid(theme: 'dark' | 'light') {
   mermaid.initialize({
@@ -61,12 +83,18 @@ export function ArchitecturePanel({
   onRegenerate,
   onGenerate,
   theme = 'dark',
+  onRenderResult,
 }: ArchitecturePanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const viewportRef = useRef<HTMLDivElement>(null)
   const [renderError, setRenderError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
   const [zoom, setZoom] = useState(1)
+  const [pan, setPan] = useState({ x: 0, y: 0 })
   const renderIdRef = useRef(0)
+  const pointersRef = useRef(new Map<number, { x: number; y: number }>())
+  const dragRef = useRef<{ pointerId: number; x: number; y: number } | null>(null)
+  const pinchRef = useRef<{ distance: number; scale: number; pan: { x: number; y: number } } | null>(null)
 
   const renderDiagram = useCallback(async (source: string) => {
     if (!containerRef.current) return
@@ -82,12 +110,17 @@ export function ArchitecturePanel({
       const { svg } = await mermaid.render(`arch-${id}`, source)
       if (id !== renderIdRef.current) return
       containerRef.current.innerHTML = svg
+      setZoom(1)
+      setPan({ x: 0, y: 0 })
       setRenderError(null)
+      onRenderResult?.({ ok: true })
     } catch (err) {
       if (id !== renderIdRef.current) return
-      setRenderError(err instanceof Error ? err.message : 'Failed to render diagram')
+      const error = err instanceof Error ? err.message : 'Failed to render diagram'
+      setRenderError(error)
+      onRenderResult?.({ ok: false, error })
     }
-  }, [theme])
+  }, [onRenderResult, theme])
 
   // Re-init mermaid when theme changes
   useEffect(() => {
@@ -127,6 +160,96 @@ export function ArchitecturePanel({
     URL.revokeObjectURL(url)
   }, [])
 
+  const getViewportPoint = useCallback((clientX: number, clientY: number) => {
+    const rect = viewportRef.current?.getBoundingClientRect()
+    if (!rect) return null
+    return {
+      x: clientX - rect.left - rect.width / 2,
+      y: clientY - rect.top - rect.height / 2,
+    }
+  }, [])
+
+  const updateZoom = useCallback((nextZoom: number, point?: { x: number; y: number } | null) => {
+    setZoom((currentZoom) => {
+      const clamped = clampZoom(nextZoom)
+      if (clamped === currentZoom) return currentZoom
+      setPan((currentPan) => point ? zoomAroundPoint(currentZoom, clamped, currentPan, point) : currentPan)
+      return clamped
+    })
+  }, [])
+
+  const handleWheel = useCallback((event: React.WheelEvent<HTMLDivElement>) => {
+    const point = getViewportPoint(event.clientX, event.clientY)
+    if (!point) return
+    event.preventDefault()
+    const factor = event.deltaY < 0 ? 1.1 : 0.9
+    updateZoom(zoom * factor, point)
+  }, [getViewportPoint, updateZoom, zoom])
+
+  const handlePointerDown = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    const point = { x: event.clientX, y: event.clientY }
+    pointersRef.current.set(event.pointerId, point)
+    event.currentTarget.setPointerCapture(event.pointerId)
+
+    if (pointersRef.current.size === 1) {
+      dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
+      pinchRef.current = null
+      return
+    }
+
+    if (pointersRef.current.size === 2) {
+      const [first, second] = [...pointersRef.current.values()]
+      const distance = Math.hypot(second.x - first.x, second.y - first.y)
+      pinchRef.current = { distance, scale: zoom, pan }
+      dragRef.current = null
+    }
+  }, [pan, zoom])
+
+  const handlePointerMove = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    if (!pointersRef.current.has(event.pointerId)) return
+    const previous = pointersRef.current.get(event.pointerId)!
+    pointersRef.current.set(event.pointerId, { x: event.clientX, y: event.clientY })
+
+    if (pointersRef.current.size === 1 && dragRef.current?.pointerId === event.pointerId) {
+      const deltaX = event.clientX - previous.x
+      const deltaY = event.clientY - previous.y
+      setPan((current) => ({ x: current.x + deltaX, y: current.y + deltaY }))
+      dragRef.current = { pointerId: event.pointerId, x: event.clientX, y: event.clientY }
+      return
+    }
+
+    if (pointersRef.current.size === 2 && pinchRef.current) {
+      const [first, second] = [...pointersRef.current.values()]
+      const midpoint = {
+        x: (first.x + second.x) / 2,
+        y: (first.y + second.y) / 2,
+      }
+      const relativeMidpoint = getViewportPoint(midpoint.x, midpoint.y)
+      const distance = Math.hypot(second.x - first.x, second.y - first.y)
+      if (!relativeMidpoint || pinchRef.current.distance <= 0) return
+      const nextZoom = clampZoom(pinchRef.current.scale * (distance / pinchRef.current.distance))
+      const zoomedPan = zoomAroundPoint(pinchRef.current.scale, nextZoom, pinchRef.current.pan, relativeMidpoint)
+      setZoom(nextZoom)
+      setPan(zoomedPan)
+    }
+  }, [getViewportPoint])
+
+  const handlePointerEnd = useCallback((event: React.PointerEvent<HTMLDivElement>) => {
+    pointersRef.current.delete(event.pointerId)
+    if (dragRef.current?.pointerId === event.pointerId) {
+      dragRef.current = null
+    }
+    if (pointersRef.current.size < 2) {
+      pinchRef.current = null
+    }
+    if (pointersRef.current.size === 1) {
+      const [remainingId, remainingPoint] = [...pointersRef.current.entries()][0] ?? []
+      if (typeof remainingId === 'number' && remainingPoint) {
+        dragRef.current = { pointerId: remainingId, x: remainingPoint.x, y: remainingPoint.y }
+      }
+    }
+  }, [])
+
   // Empty state — no diagram yet 
   if (!diagram && !isGenerating) {
     return (
@@ -158,7 +281,7 @@ export function ArchitecturePanel({
       <div className="flex items-center gap-1 px-2 h-8 border-b bg-muted/20 shrink-0">
         <span className="text-[11px] font-medium text-muted-foreground mr-auto">Architecture</span>
         <button
-          onClick={() => setZoom(z => Math.max(0.25, z - 0.25))}
+          onClick={() => updateZoom(zoom - 0.25)}
           className="p-1 rounded hover:bg-muted transition-colors"
           title="Zoom out"
         >
@@ -166,14 +289,17 @@ export function ArchitecturePanel({
         </button>
         <span className="text-[10px] text-muted-foreground min-w-[3ch] text-center">{Math.round(zoom * 100)}%</span>
         <button
-          onClick={() => setZoom(z => Math.min(3, z + 0.25))}
+          onClick={() => updateZoom(zoom + 0.25)}
           className="p-1 rounded hover:bg-muted transition-colors"
           title="Zoom in"
         >
           <ZoomIn className="h-3 w-3" />
         </button>
         <button
-          onClick={() => setZoom(1)}
+          onClick={() => {
+            setZoom(1)
+            setPan({ x: 0, y: 0 })
+          }}
           className="p-1 rounded hover:bg-muted transition-colors"
           title="Reset zoom"
         >
@@ -211,7 +337,17 @@ export function ArchitecturePanel({
       </div>
 
       {/* Diagram area */}
-      <div className="flex-1 overflow-auto relative">
+      <div
+        ref={viewportRef}
+        className="flex-1 overflow-hidden relative touch-none"
+        onWheel={handleWheel}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={handlePointerEnd}
+        onPointerCancel={handlePointerEnd}
+        onPointerLeave={handlePointerEnd}
+        style={{ cursor: pointersRef.current.size > 0 ? 'grabbing' : 'grab' }}
+      >
         {isGenerating && !diagram && (
           <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-3">
             <Loader2 className="h-6 w-6 animate-spin" />
@@ -237,10 +373,11 @@ export function ArchitecturePanel({
           </div>
         )}
         <div
-          ref={containerRef}
-          className="flex items-center justify-center min-h-full p-4"
-          style={{ transform: `scale(${zoom})`, transformOrigin: 'top center' }}
-        />
+          className="absolute inset-0 flex items-center justify-center p-4"
+          style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: 'center center' }}
+        >
+          <div ref={containerRef} className="flex items-center justify-center" />
+        </div>
       </div>
     </div>
   )

@@ -641,7 +641,8 @@ export function useAutomation(enabled = true) {
         void refresh()
       } else if (
         targetThread &&
-        (targetThread.status === 'completed' ||
+        (targetThread.status === 'idle' ||
+          targetThread.status === 'completed' ||
           targetThread.status === 'error' ||
           targetThread.status === 'interrupted')
       ) {

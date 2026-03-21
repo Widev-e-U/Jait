@@ -160,7 +160,7 @@ function QueueItem({
       <div
       data-queue-id={item.id}
       className={cn(
-        'group flex cursor-grab items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70 active:cursor-grabbing',
+        'group flex cursor-grab touch-none items-start gap-2 rounded-lg border border-border/40 bg-muted/50 px-3 py-2 text-sm transition-all duration-150 ease-out hover:bg-muted/70 active:cursor-grabbing',
         dragActive && 'border-dashed border-primary/35 bg-primary/5 opacity-0',
       )}
       onPointerDown={(event) => {
@@ -292,6 +292,7 @@ function QueueItem({
 
 export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: MessageQueueProps) {
   const containerRef = useRef<HTMLDivElement>(null)
+  const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
   const [dropTarget, setDropTarget] = useState<{ targetId: string | null; placement: 'before' | 'after' } | null>(null)
   const [dragPreview, setDragPreview] = useState<DragPreviewState | null>(null)
@@ -312,6 +313,8 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
     if (!dragSourceId || !dragPreview) return
 
     document.body.style.cursor = 'grabbing'
+    document.body.style.userSelect = 'none'
+    document.body.style.touchAction = 'none'
 
     const updateTarget = (_clientX: number, clientY: number) => {
       const rows = Array.from(
@@ -356,20 +359,39 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
           onReorder?.(dragSourceId, dropTarget.targetId, dropTarget.placement)
         }
       }
+      const captureElement = dragCaptureElementRef.current
+      if (captureElement?.hasPointerCapture?.(dragPreview.pointerId)) {
+        captureElement.releasePointerCapture?.(dragPreview.pointerId)
+      }
+      dragCaptureElementRef.current = null
       setDragSourceId(null)
       setDropTarget(null)
       setDragPreview(null)
     }
 
+    const handleLostPointerCapture = () => {
+      finishDrag()
+    }
+
+    const handleWindowBlur = () => {
+      finishDrag()
+    }
+
     window.addEventListener('pointermove', handlePointerMove)
     window.addEventListener('pointerup', finishDrag)
     window.addEventListener('pointercancel', finishDrag)
+    window.addEventListener('blur', handleWindowBlur)
+    dragCaptureElementRef.current?.addEventListener('lostpointercapture', handleLostPointerCapture)
 
     return () => {
       document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+      document.body.style.touchAction = ''
       window.removeEventListener('pointermove', handlePointerMove)
       window.removeEventListener('pointerup', finishDrag)
       window.removeEventListener('pointercancel', finishDrag)
+      window.removeEventListener('blur', handleWindowBlur)
+      dragCaptureElementRef.current?.removeEventListener('lostpointercapture', handleLostPointerCapture)
     }
   }, [dragPreview, dragSourceId, dropTarget, onReorder])
 
@@ -377,9 +399,10 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
     if (!onReorder) return
     if (event.button !== 0 && event.pointerType !== 'touch' && event.pointerType !== 'pen') return
     event.preventDefault()
-    event.currentTarget.setPointerCapture?.(event.pointerId)
     const row = event.currentTarget.closest<HTMLElement>('[data-queue-id]')
     if (!row) return
+    dragCaptureElementRef.current = row
+    row.setPointerCapture?.(event.pointerId)
     const rect = row.getBoundingClientRect()
     setDragSourceId(id)
     setDropTarget({ targetId: id, placement: 'before' })

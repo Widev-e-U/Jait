@@ -111,6 +111,10 @@ export interface ScreenShareOpenData {
 export interface ArchitectureUpdateData {
   /** Mermaid diagram source code */
   diagram: string;
+  /** Correlates the browser render result with the originating tool call */
+  requestId?: string;
+  /** Workspace the diagram belongs to */
+  workspaceRoot?: string;
 }
 
 // ── Filesystem change events (server → client) ──────────────────────

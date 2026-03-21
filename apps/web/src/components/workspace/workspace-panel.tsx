@@ -11,11 +11,13 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
-import { resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
+import { getPreviewTargetWarning, resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
 import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
+import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
+import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -88,6 +90,8 @@ interface WorkspacePanelProps {
   onArchitectureOpenChange?: (open: boolean) => void
   /** Trigger architecture generation. */
   onGenerateArchitecture?: () => void
+  /** Reports render success/failure for generated Mermaid diagrams. */
+  onArchitectureRenderResult?: (result: { ok: true } | { ok: false; error: string }) => void
 }
 
 export interface WorkspacePanelHandle {
@@ -241,6 +245,7 @@ function isDescendantPath(parentPath: string, candidatePath: string): boolean {
 /*  Remote (server-backed) workspace helpers                           */
 /* ------------------------------------------------------------------ */
 import { getApiUrl } from '@/lib/gateway-url'
+import { isSamePreviewSession } from '@/lib/preview-session'
 
 const API_URL = getApiUrl()
 
@@ -336,6 +341,8 @@ const STATUS_LABELS: Record<string, string> = {
   R: 'Renamed',
   '?': 'Untracked',
 }
+
+const TAB_POPOUT_VIEWPORT_MARGIN = 16
 
 function GitStatusBadge({ status, className = '' }: { status: string; className?: string }) {
   const label = status === '?' ? 'U' : status
@@ -495,6 +502,10 @@ interface EditorTab {
   previewTarget?: string
   previewSrc?: string | null
   previewMode?: 'raw' | 'managed' | null
+}
+
+interface CloseTabOptions {
+  preserveManagedPreview?: boolean
 }
 
 interface PreviewBrowserEvent {
@@ -943,6 +954,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   architectureRequest,
   onArchitectureOpenChange,
   onGenerateArchitecture,
+  onArchitectureRenderResult,
 }, ref) {
   const confirm = useConfirmDialog()
   const resolvedTheme = useResolvedTheme()
@@ -1046,12 +1058,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [previewCommand, setPreviewCommand] = useState('')
   const [previewPort, setPreviewPort] = useState('')
   const [previewPanelError, setPreviewPanelError] = useState<string | null>(null)
+  const [previewPanelWarning, setPreviewPanelWarning] = useState<string | null>(null)
   const [previewBusy, setPreviewBusy] = useState(false)
   const [previewFrameLoading, setPreviewFrameLoading] = useState(false)
   const [previewSidePanelOpen, setPreviewSidePanelOpen] = useState(false)
   const [previewSideTab, setPreviewSideTab] = useState<'controls' | 'logs' | 'console' | 'issues'>('controls')
   const previewLogsEndRef = useRef<HTMLDivElement | null>(null)
   const previewConsoleEndRef = useRef<HTMLDivElement | null>(null)
+  const loadedPreviewSrcRef = useRef<string | null>(null)
   const activePreviewTab = useMemo(() => openTabs.find((tab) => tab.type === 'preview') ?? null, [openTabs])
   const previewConsoleEvents = useMemo(
     () => managedPreviewSession?.browserEvents.filter((event) => event.type === 'console') ?? [],
@@ -1155,7 +1169,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         return null
       }
       const data = await response.json() as { session: PreviewSessionState | null }
-      setManagedPreviewSession(data.session)
+      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session) ? current : data.session)
       return data.session
     } catch {
       return null
@@ -1190,12 +1204,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [fetchManagedPreviewSession])
 
   useEffect(() => {
-    if (!previewSessionId || !previewToken) return
+    if (!previewSessionId || !previewToken || (!managedPreviewSession && !activePreviewTab)) return
     const intervalId = window.setInterval(() => {
       void fetchManagedPreviewSession()
     }, 2000)
     return () => window.clearInterval(intervalId)
-  }, [fetchManagedPreviewSession, previewSessionId, previewToken])
+  }, [activePreviewTab, fetchManagedPreviewSession, managedPreviewSession, previewSessionId, previewToken])
 
   useEffect(() => {
     if (previewSideTab === 'logs') {
@@ -1222,10 +1236,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         previewMode: 'managed',
       }
     })
-    if (activeTab?.type === 'preview') {
-      setPreviewFrameLoading(managedPreviewSession.status === 'starting')
-    }
-  }, [activeTab?.type, managedPreviewSession, syncPreviewTab])
+  }, [managedPreviewSession, syncPreviewTab])
 
   // Restore saved file tabs for the current remote workspace once per root.
   useEffect(() => {
@@ -1808,6 +1819,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <span>{previewPanelError}</span>
             </div>
           ) : null}
+          {previewPanelWarning ? (
+            <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-700">
+              <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{previewPanelWarning}</span>
+            </div>
+          ) : null}
         </div>
       ) : previewSideTab === 'logs' ? (
         <div className="flex-1 overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
@@ -1866,7 +1883,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const renderPreviewPane = (emptyLabel: string) => (
     <div className="relative h-full bg-muted/5">
-      {(previewFrameLoading || managedPreviewSession?.status === 'starting') && (
+      {previewFrameLoading && activeTab?.previewSrc !== loadedPreviewSrcRef.current && (
         <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
           <div className="h-full w-full animate-pulse bg-primary/80" />
         </div>
@@ -1879,7 +1896,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           className="h-full w-full bg-white"
           style={disablePreviewPointerEvents ? { pointerEvents: 'none' } : undefined}
           sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-          onLoad={() => setPreviewFrameLoading(false)}
+          onLoad={() => {
+            loadedPreviewSrcRef.current = activeTab.previewSrc ?? null
+            setPreviewFrameLoading(false)
+          }}
         />
       ) : (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
@@ -1934,7 +1954,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Auto-open remote workspace when prop changes
   useEffect(() => {
-    if (!autoOpenRemotePath) return
+    if (!autoOpenRemotePath) {
+      // Clear stale remote root when workspace is deselected / switched
+      if (remoteRoot) setRemoteRoot(null)
+      return
+    }
     // Skip if we're already showing this remote root
     if (remoteRoot === autoOpenRemotePath) return
     handleOpenRemoteWorkspace(autoOpenRemotePath)
@@ -2143,6 +2167,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     return results
   }, [lazyTree, remoteRoot])
+
+  const handleSearchFileContents = useCallback(async (
+    query: string,
+    limit: number,
+    signal?: AbortSignal,
+  ): Promise<{ file: string; line: number; content: string }[]> => {
+    if (!query.trim()) return []
+
+    const root = rootDirHandle.current
+    if (!root || remoteRoot) return []
+
+    return searchWorkspaceContent(root as never, query, limit, signal, SKIP_DIRS)
+  }, [remoteRoot])
 
   const handleOpenFileByPath = useCallback(async (path: string): Promise<boolean> => {
     const targetPath = normalizePath(path)
@@ -2648,7 +2685,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         if (!controller.signal.aborted) setFileSearchLoading(false)
       }
     } else {
-      // Local-only: use the existing handleSearchFiles for filename matching
+      // Local-only: use File System Access handles for filename/content matching.
       if (mode === 'files') {
         setFileSearchLoading(true)
         const controller = new AbortController()
@@ -2661,11 +2698,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         } catch { /* ignore */ }
         if (!controller.signal.aborted) setFileSearchLoading(false)
       } else {
-        // Content search not available locally
-        setFileSearchResults({ matches: [] })
+        setFileSearchLoading(true)
+        const controller = new AbortController()
+        fileSearchAbortRef.current = controller
+        try {
+          const results = await handleSearchFileContents(query, 50, controller.signal)
+          if (!controller.signal.aborted) {
+            setFileSearchResults({ matches: results })
+          }
+        } catch { /* ignore */ }
+        if (!controller.signal.aborted) setFileSearchLoading(false)
       }
     }
-  }, [remoteRoot, surfaceId, handleSearchFiles])
+  }, [remoteRoot, surfaceId, handleSearchFiles, handleSearchFileContents])
 
   // Debounced search effect
   const fileSearchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -2817,6 +2862,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     setPreviewInput(trimmed || previewInput)
     setPreviewPanelError(null)
+    setPreviewPanelWarning(trimmed ? getPreviewTargetWarning(trimmed) : null)
     setPreviewFrameLoading(Boolean(resolved))
     if (!resolved) {
       setPreviewSidePanelOpen(true)
@@ -2987,7 +3033,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           if (!response.ok || !data.session) {
             throw new Error(data.error || 'Failed to start preview')
           }
-          setManagedPreviewSession(data.session)
+          setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
           setPreviewSideTab('controls')
         } catch (error) {
           setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start preview')
@@ -3016,7 +3062,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       if (!response.ok || !data.session) {
         throw new Error(data.error || 'Failed to restart preview')
       }
-      setManagedPreviewSession(data.session)
+      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
     } catch (error) {
       setPreviewPanelError(error instanceof Error ? error.message : 'Failed to restart preview')
       setPreviewFrameLoading(false)
@@ -3259,9 +3305,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [onActiveFileChange, files])
 
   /* ---- Tab management ---- */
-  const handleCloseTab = useCallback((tabId: string) => {
+  const handleCloseTab = useCallback((tabId: string, options?: CloseTabOptions) => {
     const closingTab = openTabs.find((tab) => tab.id === tabId) ?? null
-    if (closingTab?.type === 'preview' && managedPreviewSession) {
+    if (closingTab?.type === 'preview' && managedPreviewSession && !options?.preserveManagedPreview) {
       void stopManagedPreviewSession(false)
       setPreviewSidePanelOpen(false)
     }
@@ -3300,6 +3346,81 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       return next
     })
   }, [activeTabId, managedPreviewSession, openTabs, stopManagedPreviewSession])
+
+  const handleDetachTab = useCallback(async (tabId: string) => {
+    const tab = openTabs.find((entry) => entry.id === tabId) ?? null
+    if (!tab) return false
+
+    const detachedId = `detached-${tab.id}-${Date.now()}`
+    const payload: DetachedWorkspaceTabPayload = {
+      id: detachedId,
+      title: tab.label || getEditorTabTitle(tab),
+      theme: resolvedTheme,
+      surfaceId,
+      tab: {
+        id: tab.id,
+        type: tab.type,
+        path: tab.path,
+        label: tab.label,
+        language: tab.language,
+        content: tab.content ?? null,
+        originalContent: tab.originalContent ?? null,
+        modifiedContent: tab.modifiedContent ?? null,
+        diffMode: tab.diffMode,
+        previewTarget: tab.previewTarget,
+        previewSrc: tab.previewSrc ?? null,
+        previewMode: tab.previewMode ?? null,
+      },
+      architectureDiagram: tab.type === 'architecture' ? (architectureDiagram ?? null) : null,
+      architectureGenerating: tab.type === 'architecture' ? architectureGenerating : false,
+      createdAt: Date.now(),
+    }
+    saveDetachedWorkspaceTab(payload)
+
+    const detachedUrl = `${window.location.origin}${window.location.pathname}?detachedWorkspaceTab=${encodeURIComponent(detachedId)}`
+
+    let opened = false
+    try {
+      if (window.jaitDesktop?.openWorkspaceWindow) {
+        const result = await window.jaitDesktop.openWorkspaceWindow({
+          url: detachedUrl,
+          title: tab.label || getEditorTabTitle(tab),
+        })
+        opened = Boolean(result?.ok)
+      } else {
+        const popup = window.open(
+          detachedUrl,
+          `jait-detached-${tab.id}`,
+          'popup=yes,width=1280,height=860,resizable=yes,scrollbars=yes',
+        )
+        opened = Boolean(popup)
+        popup?.focus?.()
+      }
+    } catch {
+      opened = false
+    }
+
+    if (!opened) return false
+    handleCloseTab(tabId, { preserveManagedPreview: true })
+    return true
+  }, [architectureDiagram, architectureGenerating, handleCloseTab, openTabs, resolvedTheme, surfaceId])
+
+  const handleDetachedTabDragEnd = useCallback((event: React.DragEvent<HTMLDivElement>, tabId: string) => {
+    setDraggingTabId(null)
+
+    const outsideViewport =
+      event.clientX <= TAB_POPOUT_VIEWPORT_MARGIN ||
+      event.clientY <= TAB_POPOUT_VIEWPORT_MARGIN ||
+      event.clientX >= window.innerWidth - TAB_POPOUT_VIEWPORT_MARGIN ||
+      event.clientY >= window.innerHeight - TAB_POPOUT_VIEWPORT_MARGIN
+
+    const droppedOutsideWindow =
+      event.dataTransfer.dropEffect === 'none' &&
+      (event.clientX === 0 || event.clientY === 0)
+
+    if (!outsideViewport && !droppedOutsideWindow) return
+    void handleDetachTab(tabId)
+  }, [handleDetachTab])
 
   const handleSwitchTab = useCallback((tabId: string) => {
     const tab = openTabs.find(t => t.id === tabId)
@@ -3612,9 +3733,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   ) => {
     if (files.length === 0) return null
 
+    const headerActionClassName = cn(
+      'rounded p-0.5 text-muted-foreground transition-[background-color,color,opacity] hover:bg-background',
+      mobile
+        ? 'opacity-100'
+        : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+    )
+
     return (
       <div className="mt-1">
-        <div className="flex items-center justify-between gap-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="group flex items-center justify-between gap-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
           <div>
             {title} ({files.length})
             <span className="ml-1 normal-case tracking-normal">
@@ -3623,43 +3751,45 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <span className="text-red-500">-{totals.deletions}</span>
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div
+            className={cn(
+              'flex items-center gap-1 transition-opacity',
+              mobile ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+            )}
+          >
             {actions === 'stage' ? (
-              <Button
-                size="sm"
-                variant="secondary"
-                className="h-6 w-6 rounded-md p-0"
+              <button
+                type="button"
+                className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
                 onClick={() => void handleStageAll()}
                 disabled={gitActionBusy || files.length === 0}
                 title="Stage all changes"
                 aria-label="Stage all changes"
               >
                 <Plus className="h-3 w-3" />
-              </Button>
+              </button>
             ) : (
               <>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-6 w-6 rounded-md p-0"
+                <button
+                  type="button"
+                  className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
                   onClick={() => void handleUnstageAll()}
                   disabled={gitActionBusy || files.length === 0}
                   title="Unstage all files"
                   aria-label="Unstage all files"
                 >
                   <Minus className="h-3 w-3" />
-                </Button>
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  className="h-6 w-6 rounded-md p-0 text-red-600 hover:text-red-700 dark:text-red-400"
+                </button>
+                <button
+                  type="button"
+                  className={cn(headerActionClassName, 'text-red-600 hover:text-red-700 disabled:pointer-events-none disabled:opacity-40 dark:text-red-400')}
                   onClick={() => setDiscardConfirm({ kind: 'all' })}
                   disabled={gitActionBusy || changedFileCount === 0}
                   title="Discard all changes"
                   aria-label="Discard all changes"
                 >
                   <Undo2 className="h-3 w-3" />
-                </Button>
+                </button>
               </>
             )}
           </div>
@@ -4246,6 +4376,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   onGenerate={onGenerateArchitecture}
                   onRegenerate={onGenerateArchitecture}
                   theme={resolvedTheme}
+                  onRenderResult={onArchitectureRenderResult}
                 />
               ) : loadingFile ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
@@ -4705,7 +4836,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: tab.path, name: tab.label }))
                     }
                   }}
-                  onDragEnd={() => setDraggingTabId(null)}
+                  onDragEnd={(e) => handleDetachedTabDragEnd(e, tab.id)}
                   onDragOver={(e) => {
                     if (!draggingTabId || draggingTabId === tab.id) return
                     e.preventDefault()
@@ -4841,6 +4972,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             onGenerate={onGenerateArchitecture}
             onRegenerate={onGenerateArchitecture}
             theme={resolvedTheme}
+            onRenderResult={onArchitectureRenderResult}
           />
         ) : loadingFile && activeTab?.id === activeTabId ? (
           <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
@@ -4909,6 +5041,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           onClick={() => handleCloseTab(tabContextMenu.tabId)}
         >
           Close
+        </button>
+        <button
+          className="ui-menu-item"
+          onClick={() => { void handleDetachTab(tabContextMenu.tabId) }}
+        >
+          Move to New Window
         </button>
         <button
           className="ui-menu-item"

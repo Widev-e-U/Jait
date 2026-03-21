@@ -3,11 +3,18 @@ export interface UserReferencedFile {
   name: string
 }
 
+export interface UserImageAttachment {
+  name: string
+  mimeType: string
+  data: string
+}
+
 const JAIT_REF_MIME = 'application/x-jait-user-message+json'
 
 export type UserMessageSegment =
   | { type: 'text'; text: string }
   | ({ type: 'file' } & UserReferencedFile)
+  | ({ type: 'image' } & UserImageAttachment)
 
 export function normalizeUserMessageSegments(segments: UserMessageSegment[] | null | undefined): UserMessageSegment[] {
   if (!segments?.length) return []
@@ -25,11 +32,22 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
       continue
     }
 
-    if (!segment.path.trim()) continue
+    if (segment.type === 'file') {
+      if (!segment.path.trim()) continue
+      normalized.push({
+        type: 'file',
+        path: segment.path,
+        name: segment.name || segment.path.split('/').pop() || segment.path,
+      })
+      continue
+    }
+
+    if (!segment.data.trim() || !segment.mimeType.startsWith('image/')) continue
     normalized.push({
-      type: 'file',
-      path: segment.path,
-      name: segment.name || segment.path.split('/').pop() || segment.path,
+      type: 'image',
+      name: segment.name || 'Image',
+      mimeType: segment.mimeType,
+      data: segment.data,
     })
   }
 
@@ -72,7 +90,11 @@ export function buildEditedUserMessageSegments(
   text: string,
   previousSegments?: UserMessageSegment[] | null,
 ): UserMessageSegment[] {
-  return buildFallbackUserMessageSegments(text, userReferencedFilesFromSegments(previousSegments))
+  const next = buildFallbackUserMessageSegments(text, userReferencedFilesFromSegments(previousSegments))
+  for (const segment of normalizeUserMessageSegments(previousSegments)) {
+    if (segment.type === 'image') next.push(segment)
+  }
+  return next
 }
 
 export function parseLegacyReferencedFilesBlock(content: string): {
@@ -111,7 +133,8 @@ export function parseLegacyReferencedFilesBlock(content: string): {
 export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegment[] | null | undefined): string {
   return normalizeUserMessageSegments(segments).map((segment) => {
     if (segment.type === 'text') return segment.text
-    return `@${segment.path}`
+    if (segment.type === 'file') return `@${segment.path}`
+    return `[image:${segment.name}]`
   }).join('')
 }
 
@@ -183,6 +206,20 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
         type: 'file',
         path: record.path,
         name: typeof record.name === 'string' ? record.name : record.path.split('/').pop() ?? record.path,
+      })
+      continue
+    }
+    if (
+      record.type === 'image'
+      && typeof record.data === 'string'
+      && typeof record.mimeType === 'string'
+      && record.mimeType.startsWith('image/')
+    ) {
+      parsed.push({
+        type: 'image',
+        data: record.data,
+        mimeType: record.mimeType,
+        name: typeof record.name === 'string' ? record.name : 'Image',
       })
     }
   }

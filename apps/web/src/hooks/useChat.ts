@@ -23,6 +23,21 @@ function authHeaders(token?: string | null): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
+function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
+  if (!segments?.length) return undefined
+  const attachments = segments.flatMap((segment) => (
+    segment.type === 'image'
+      ? [{
+          name: segment.name,
+          mimeType: segment.mimeType,
+          data: segment.data,
+          preview: `data:${segment.mimeType};base64,${segment.data}`,
+        }]
+      : []
+  ))
+  return attachments.length > 0 ? attachments : undefined
+}
+
 /**
  * A segment in the ordered response stream. Consecutive tool calls
  * are grouped; text between tool-call groups forms its own segment.
@@ -41,6 +56,8 @@ export interface ChatMessage {
   referencedFiles?: { path: string; name: string }[]
   /** Ordered display model for inline user text + file chips. */
   displaySegments?: UserMessageSegment[]
+  /** Inline image/file attachments associated with the user message. */
+  attachments?: ChatAttachment[]
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
@@ -306,12 +323,14 @@ export function useChat(
                     msg.displaySegments = parseUserMessageSegments(m.segments)
                     msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
                     msg.referencedFiles = userReferencedFilesFromSegments(msg.displaySegments)
+                    msg.attachments = attachmentsFromSegments(msg.displaySegments)
                   } else if (m.role === 'user') {
                     const parsed = parseLegacyReferencedFilesBlock(m.content)
                     if (parsed.files.length > 0) {
                       msg.displayContent = parsed.text
                       msg.referencedFiles = parsed.files
                       msg.displaySegments = parsed.displaySegments
+                      msg.attachments = attachmentsFromSegments(msg.displaySegments)
                     }
                   } else if (m.segments && m.segments.length > 0) {
                     msg.segments = m.segments as MessageSegment[]
@@ -528,27 +547,31 @@ export function useChat(
                   return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
                 })
               } else if (data.type === 'done') {
-                setState(prev => ({
-                  ...prev,
-                  isLoading: false,
-                  promptCount: (data.prompt_count as number) ?? prev.promptCount,
-                  remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
-                  // Mark any tool calls still stuck in 'running' as cancelled
-                  // (can happen if reload snapshot races with cancel processing)
-                  messages: prev.messages.map(m =>
-                    m.toolCalls?.some(tc => tc.status === 'running')
-                      ? {
-                          ...m,
-                          toolCalls: m.toolCalls!.map(tc =>
-                            tc.status === 'running'
-                              ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
-                              : tc
-                          ),
-                        }
-                      : m
-                  ),
-                }))
-                setCompletionCount((prev) => prev + 1)
+                setState(prev => {
+                  // Only signal completion if this was an active chat response,
+                  // not just the end of a history-only stream.
+                  if (prev.isLoading) setCompletionCount(c => c + 1)
+                  return {
+                    ...prev,
+                    isLoading: false,
+                    promptCount: (data.prompt_count as number) ?? prev.promptCount,
+                    remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
+                    // Mark any tool calls still stuck in 'running' as cancelled
+                    // (can happen if reload snapshot races with cancel processing)
+                    messages: prev.messages.map(m =>
+                      m.toolCalls?.some(tc => tc.status === 'running')
+                        ? {
+                            ...m,
+                            toolCalls: m.toolCalls!.map(tc =>
+                              tc.status === 'running'
+                                ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
+                                : tc
+                            ),
+                          }
+                        : m
+                    ),
+                  }
+                })
               } else if (data.type === 'error') {
                 setState(prev => ({
                   ...prev,
@@ -600,6 +623,7 @@ export function useChat(
       ...(options.displayContent ? { displayContent: options.displayContent } : {}),
       ...(options.referencedFiles?.length ? { referencedFiles: options.referencedFiles } : {}),
       ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
+      ...(options.attachments?.length ? { attachments: options.attachments } : {}),
     }
 
     setState(prev => ({

@@ -3,6 +3,7 @@ import { AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play, RefreshC
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getApiUrl } from '@/lib/gateway-url'
+import { isSamePreviewSession } from '@/lib/preview-session'
 
 interface DevPreviewPanelProps {
   onClose: () => void
@@ -16,6 +17,15 @@ interface DevPreviewPanelProps {
 interface ResolvedPreviewTarget {
   iframeSrc: string
   label: string
+}
+
+function isRemoteGatewayUrl(url: string): boolean {
+  try {
+    const parsed = new URL(url)
+    return !isLoopbackHost(parsed.hostname)
+  } catch {
+    return false
+  }
 }
 
 interface PreviewBrowserEvent {
@@ -84,6 +94,13 @@ export function resolvePreviewTarget(input: string): ResolvedPreviewTarget | nul
   const trimmed = input.trim()
   if (!trimmed) return null
 
+  if (trimmed.startsWith('/')) {
+    return {
+      iframeSrc: `${getApiUrl()}${trimmed}`,
+      label: trimmed,
+    }
+  }
+
   if (!/^[a-z]+:\/\//i.test(trimmed) && isHtmlFilePath(trimmed)) {
     return {
       iframeSrc: `${getApiUrl()}/api/dev-file/${encodePreviewFilePath(trimmed)}`,
@@ -120,6 +137,28 @@ export function resolvePreviewTarget(input: string): ResolvedPreviewTarget | nul
   }
 }
 
+export function getPreviewTargetWarning(input: string): string | null {
+  const trimmed = input.trim()
+  if (!trimmed) return null
+
+  const isLoopbackPort = /^\d+$/.test(trimmed)
+  const isLoopbackUrl = (() => {
+    if (!/^[a-z]+:\/\//i.test(trimmed)) return false
+    try {
+      return isLoopbackHost(new URL(trimmed).hostname)
+    } catch {
+      return false
+    }
+  })()
+
+  if (!isLoopbackPort && !isLoopbackUrl) return null
+
+  const apiUrl = getApiUrl()
+  if (!isRemoteGatewayUrl(apiUrl)) return null
+
+  return `Preview proxy requests go through ${apiUrl}, so localhost resolves on that gateway host, not this browser device. Use a workspace-backed managed preview or connect to a local gateway to preview local ports.`
+}
+
 export function DevPreviewPanel({
   onClose,
   initialTarget = null,
@@ -137,11 +176,13 @@ export function DevPreviewPanel({
   const [frameKey, setFrameKey] = useState(0)
   const [isBusy, setIsBusy] = useState(false)
   const [panelError, setPanelError] = useState<string | null>(null)
+  const [panelWarning, setPanelWarning] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues'>('preview')
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
   const [isFrameLoading, setIsFrameLoading] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const consoleEndRef = useRef<HTMLDivElement>(null)
+  const loadedPreviewSrcRef = useRef<string | null>(null)
 
   const resolved = useMemo(() => resolvePreviewTarget(input), [input])
   const managedResolved = useMemo(
@@ -150,7 +191,7 @@ export function DevPreviewPanel({
   )
   const previewSrc = managedResolved?.iframeSrc ?? rawSrc
   const previewLabel = managedResolved?.label ?? rawLabel ?? managedSession?.url ?? null
-  const showLoadingBar = (managedSession?.status === 'starting' || isBusy || isFrameLoading) && activeTab === 'preview' && !screenshotUrl
+  const showLoadingBar = isFrameLoading && activeTab === 'preview' && !screenshotUrl && previewSrc !== loadedPreviewSrcRef.current
 
   const fetchManagedSession = useCallback(async () => {
     if (!sessionId || !token) return null
@@ -159,7 +200,7 @@ export function DevPreviewPanel({
     })
     if (!response.ok) return null
     const data = await response.json() as { session: PreviewSessionState | null }
-    setManagedSession(data.session)
+    setManagedSession((current) => isSamePreviewSession(current, data.session) ? current : data.session)
     return data.session
   }, [sessionId, token])
 
@@ -168,12 +209,12 @@ export function DevPreviewPanel({
   }, [fetchManagedSession])
 
   useEffect(() => {
-    if (!sessionId || !token) return
+    if (!sessionId || !token || (!managedSession && !previewSrc)) return
     const id = window.setInterval(() => {
       void fetchManagedSession()
     }, 2000)
     return () => window.clearInterval(id)
-  }, [sessionId, token, fetchManagedSession])
+  }, [sessionId, token, fetchManagedSession, managedSession, previewSrc])
 
   useEffect(() => {
     const next = initialTarget?.trim()
@@ -184,9 +225,7 @@ export function DevPreviewPanel({
   useEffect(() => {
     if (!previewSrc || screenshotUrl) {
       setIsFrameLoading(false)
-      return
     }
-    setIsFrameLoading(true)
   }, [frameKey, previewSrc, screenshotUrl])
 
   const startManagedPreview = useCallback(async () => {
@@ -214,7 +253,7 @@ export function DevPreviewPanel({
       if (!response.ok || !data.session) {
         throw new Error(data.error || 'Failed to start preview')
       }
-      setManagedSession(data.session)
+      setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
       setFrameKey((prev) => prev + 1)
       setActiveTab('preview')
     } catch (error) {
@@ -226,6 +265,7 @@ export function DevPreviewPanel({
 
   const openRawPreview = useCallback(() => {
     if (!resolved) return
+    setPanelWarning(getPreviewTargetWarning(input))
     setManagedSession(null)
     setRawSrc(resolved.iframeSrc)
     setRawLabel(resolved.label)
@@ -258,7 +298,7 @@ export function DevPreviewPanel({
       if (!response.ok || !data.session) {
         throw new Error(data.error || 'Failed to restart preview')
       }
-      setManagedSession(data.session)
+      setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
       setFrameKey((prev) => prev + 1)
     } catch (error) {
       setPanelError(error instanceof Error ? error.message : 'Failed to restart preview')
@@ -293,13 +333,16 @@ export function DevPreviewPanel({
   useEffect(() => {
     if (!initialTarget?.trim()) return
     if (workspaceRoot && !isHtmlFilePath(initialTarget)) {
+      setIsFrameLoading(true)
       void startManagedPreview()
       return
     }
     const nextResolved = resolvePreviewTarget(initialTarget)
     if (!nextResolved) return
+    setPanelWarning(getPreviewTargetWarning(initialTarget))
     setRawSrc(nextResolved.iframeSrc)
     setRawLabel(nextResolved.label)
+    setIsFrameLoading(true)
     setFrameKey((prev) => prev + 1)
   }, [autoOpenKey, initialTarget, startManagedPreview, workspaceRoot])
 
@@ -442,6 +485,12 @@ export function DevPreviewPanel({
             {panelError}
           </div>
         ) : null}
+        {panelWarning ? (
+          <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-700">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{panelWarning}</span>
+          </div>
+        ) : null}
       </div>
 
       <div className="border-b px-3 py-1.5">
@@ -484,7 +533,10 @@ export function DevPreviewPanel({
                 title="Managed preview"
                 className="h-full w-full bg-white"
                 sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-                onLoad={() => setIsFrameLoading(false)}
+                onLoad={() => {
+                  loadedPreviewSrcRef.current = previewSrc
+                  setIsFrameLoading(false)
+                }}
               />
             </div>
           ) : (

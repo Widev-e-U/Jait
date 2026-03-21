@@ -194,7 +194,7 @@ export function JobsPage() {
         </div>
       ) : (
         /* Jobs grid */
-        <div className="grid gap-4 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
           {jobs.map((job) => (
             <JobCard
               key={job.id}

@@ -92,9 +92,10 @@ interface NodeBridgeResponse {
 }
 
 interface NodeBridgeEvent {
-  event: "ready" | "fatal";
+  event: "ready" | "fatal" | "runtime";
   strategy?: string;
   error?: string;
+  payload?: BrowserRuntimeEvent;
 }
 
 const DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS = 45_000;
@@ -560,6 +561,7 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
     timer: ReturnType<typeof setTimeout>;
   };
   const pending = new Map<number, PendingRequest>();
+  const events: BrowserRuntimeEvent[] = [];
   let nextId = 1;
   let stopped = false;
 
@@ -596,6 +598,10 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
     if ("event" in payload) {
       if (payload.event === "ready") {
         startResolve?.();
+        return;
+      }
+      if (payload.event === "runtime") {
+        if (payload.payload) pushBrowserRuntimeEvent(events, payload.payload);
         return;
       }
       if (payload.event === "fatal") {
@@ -742,7 +748,7 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
       return result as BrowserPageSnapshot;
     },
     getEvents() {
-      return [];
+      return [...events];
     },
     async close() {
       await closeBridge();

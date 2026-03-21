@@ -19,6 +19,13 @@ function authHeaders(token?: string | null): Record<string, string> {
   return h
 }
 
+export function shouldApplySessionStateFetchResult(
+  fetchWriteVersion: number,
+  currentWriteVersion: number,
+): boolean {
+  return fetchWriteVersion === currentWriteVersion
+}
+
 export function useSessionState<T>(
   sessionId: string | null,
   key: string,
@@ -28,6 +35,7 @@ export function useSessionState<T>(
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestRef = useRef<T | null>(null)
+  const localWriteVersionRef = useRef(0)
 
   // Fetch on mount / session change
   useEffect(() => {
@@ -37,6 +45,7 @@ export function useSessionState<T>(
     }
 
     let cancelled = false
+    const fetchVersion = localWriteVersionRef.current
     setLoading(true)
 
     fetch(`${API_URL}/api/sessions/${sessionId}/state?keys=${encodeURIComponent(key)}`, {
@@ -45,6 +54,7 @@ export function useSessionState<T>(
       .then((res) => (res.ok ? res.json() : null))
       .then((data: Record<string, unknown> | null) => {
         if (cancelled) return
+        if (!shouldApplySessionStateFetchResult(fetchVersion, localWriteVersionRef.current)) return
         const val = data?.[key] ?? null
         setValueLocal(val as T | null)
         latestRef.current = val as T | null
@@ -64,6 +74,7 @@ export function useSessionState<T>(
   // Setter: optimistic local + debounced PATCH
   const setValue = useCallback(
     (next: T | null) => {
+      localWriteVersionRef.current += 1
       setValueLocal(next)
       latestRef.current = next
 

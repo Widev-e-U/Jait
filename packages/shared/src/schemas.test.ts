@@ -70,6 +70,7 @@ describe("@jait/shared schemas", () => {
   describe("sessionCreateSchema", () => {
     it("accepts valid session creation", () => {
       const result = sessionCreateSchema.parse({
+        workspaceId: "workspace-1",
         name: "My session",
         workspacePath: "/home/user/project",
       });
@@ -94,6 +95,7 @@ describe("@jait/shared schemas", () => {
     it("accepts valid session info", () => {
       const result = sessionInfoSchema.parse({
         id: "01912345-6789-7abc-8def-0123456789ab",
+        workspaceId: "workspace-1",
         name: "Test session",
         workspacePath: "/home/user/project",
         status: "active",
@@ -108,6 +110,7 @@ describe("@jait/shared schemas", () => {
       for (const status of ["archived", "deleted"] as const) {
         const result = sessionInfoSchema.parse({
           id: "test-id",
+          workspaceId: null,
           name: null,
           workspacePath: null,
           status,
