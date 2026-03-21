@@ -116,7 +116,7 @@ jobs:
 
   # ── Build desktop apps (Electron) ──────────────────────────────────
   desktop:
-    name: Desktop Builds (Linux runner: Linux + Windows)
+    name: "Desktop Builds (Linux runner: Linux + Windows)"
     runs-on: [self-hosted, linux]
     needs: [auto-tag]
     if: |
