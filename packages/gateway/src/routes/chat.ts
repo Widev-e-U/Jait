@@ -22,6 +22,7 @@ import { messages as messagesTable } from "../db/schema.js";
 import { eq } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { requireAuth } from "../security/http-auth.js";
+import { signAuthToken } from "../security/http-auth.js";
 import {
   runAgentLoop,
   retryToolCall,
@@ -67,6 +68,16 @@ interface PersistedToolCall {
   completedAt?: number;
 }
 
+interface QueuedChatMessage {
+  id?: string;
+  content: string;
+  mode?: ChatMode;
+  provider?: ProviderId;
+  runtimeMode?: RuntimeMode;
+  model?: string | null;
+  displaySegments?: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }>;
+}
+
 function parseUserDisplaySegments(raw: unknown): Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> | undefined {
   if (!Array.isArray(raw)) return undefined;
   const segments: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> = [];
@@ -88,11 +99,37 @@ function parseUserDisplaySegments(raw: unknown): Array<{ type: "text"; text: str
   return segments.length > 0 ? segments : undefined;
 }
 
+function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
+  if (!Array.isArray(raw)) return [];
+  const queue: QueuedChatMessage[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== "object") continue;
+    const record = entry as Record<string, unknown>;
+    if (typeof record.content !== "string" || !record.content.trim()) continue;
+    const displaySegments = parseUserDisplaySegments(record.displaySegments);
+    queue.push({
+      id: typeof record.id === "string" ? record.id : undefined,
+      content: record.content,
+      mode: isValidChatMode(record.mode) ? record.mode : undefined,
+      provider: record.provider === "jait" || record.provider === "codex" || record.provider === "claude-code"
+        ? record.provider
+        : undefined,
+      runtimeMode: record.runtimeMode === "full-access" || record.runtimeMode === "supervised"
+        ? record.runtimeMode
+        : undefined,
+      model: typeof record.model === "string" ? record.model : null,
+      displaySegments,
+    });
+  }
+  return queue;
+}
+
 // ── In-memory state ──────────────────────────────────────────────────
 
 const sessionHistory = new Map<string, ChatMessage[]>();
 const activeStreams = new Set<string>();
 const sessionAbortControllers = new Map<string, AbortController>();
+const drainingQueuedSessions = new Set<string>();
 
 /**
  * Live streaming accumulator — holds the current assistant message's partial
@@ -601,6 +638,77 @@ export function registerChatRoutes(
   _appRef = app;
 
   const hasTools = !!toolRegistry && toolRegistry.list().length > 0;
+
+  const broadcastQueuedMessagesState = (sessionId: string, value: QueuedChatMessage[] | null) => {
+    if (!ws) return;
+    ws.broadcast(sessionId, {
+      type: "ui.state-sync",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      payload: { key: "queued_messages", value },
+    });
+  };
+
+  const drainQueuedChatMessages = async (sessionId: string): Promise<void> => {
+    if (!sessionStateService || !sessionService || !userService) return;
+    if (!sessionId || drainingQueuedSessions.has(sessionId) || activeStreams.has(sessionId)) return;
+
+    drainingQueuedSessions.add(sessionId);
+    try {
+      while (!activeStreams.has(sessionId)) {
+        const session = sessionService.getById(sessionId);
+        if (!session || session.status !== "active" || !session.userId) return;
+
+        const state = sessionStateService.get(sessionId, ["queued_messages"]);
+        const queue = parseQueuedChatMessages(state["queued_messages"]);
+        if (queue.length === 0) return;
+
+        const [nextMessage, ...rest] = queue;
+        if (!nextMessage) return;
+
+        const user = userService.findById(session.userId);
+        if (!user) return;
+
+        sessionStateService.set(sessionId, { queued_messages: rest.length > 0 ? rest : null });
+        broadcastQueuedMessagesState(sessionId, rest.length > 0 ? rest : null);
+
+        const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+        const response = await app.inject({
+          method: "POST",
+          url: "/api/chat",
+          headers: { authorization: `Bearer ${token}` },
+          payload: {
+            content: nextMessage.content,
+            sessionId,
+            ...(nextMessage.mode ? { mode: nextMessage.mode } : {}),
+            ...(nextMessage.provider ? { provider: nextMessage.provider } : {}),
+            ...(nextMessage.runtimeMode ? { runtimeMode: nextMessage.runtimeMode } : {}),
+            ...(nextMessage.model ? { model: nextMessage.model } : {}),
+            ...(nextMessage.displaySegments ? { displaySegments: nextMessage.displaySegments } : {}),
+          },
+        });
+
+        if (response.statusCode >= 400) {
+          const restoredQueue = [nextMessage, ...rest];
+          sessionStateService.set(sessionId, { queued_messages: restoredQueue });
+          broadcastQueuedMessagesState(sessionId, restoredQueue);
+          app.log.warn({ sessionId, statusCode: response.statusCode }, "Failed to process queued chat message");
+          return;
+        }
+      }
+    } finally {
+      drainingQueuedSessions.delete(sessionId);
+    }
+  };
+
+  const appWithQueueDrain = app as FastifyInstance & {
+    drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+  };
+  if (!appWithQueueDrain.drainQueuedChatMessages) {
+    app.decorate("drainQueuedChatMessages", drainQueuedChatMessages);
+  } else {
+    appWithQueueDrain.drainQueuedChatMessages = drainQueuedChatMessages;
+  }
 
   // ── Per-session steering controllers and executed tool call tracking ──
   const sessionSteeringControllers = new Map<string, SteeringController>();
@@ -1405,6 +1513,7 @@ export function registerChatRoutes(
         payload: {},
       });
     }
+    void drainQueuedChatMessages(sessionId);
   });
 
   // Cancel an active stream for a session
