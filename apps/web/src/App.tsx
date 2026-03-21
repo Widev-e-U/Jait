@@ -1248,11 +1248,14 @@ function App() {
 
   const {
     workspaces,
+    archivedSessionsByWorkspace,
     activeWorkspaceId,
     activeSessionId,
     createSession,
     createWorkspace,
     switchWorkspace,
+    switchSession,
+    fetchArchivedSessions,
     removeWorkspace,
     renameSession,
     fetchWorkspaces,
@@ -1272,6 +1275,15 @@ function App() {
     () => activeWorkspaceRecord?.sessions.find((session) => session.id === activeSessionId) ?? null,
     [activeSessionId, activeWorkspaceRecord],
   )
+  const activeWorkspaceSessions = useMemo(() => {
+    if (!activeWorkspaceRecord) return []
+    const active = activeWorkspaceRecord.sessions
+    const archived = archivedSessionsByWorkspace[activeWorkspaceRecord.id] ?? []
+    const seen = new Set<string>()
+    return [...active, ...archived]
+      .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
+      .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
+  }, [activeWorkspaceRecord, archivedSessionsByWorkspace])
   const handleRemoveWorkspace = useCallback(async (workspaceId: string) => {
     const removed = await removeWorkspace(workspaceId)
     if (removed) {
@@ -1446,7 +1458,7 @@ function App() {
       title: queueFinished ? 'Queued chat finished' : 'Chat finished',
       body: queueFinished
         ? 'All queued chat messages finished generating.'
-        : 'Assistant response finished generating.',
+        : 'Agent response finished generating.',
       level: 'success',
       includeToast: false,
     })
@@ -1544,6 +1556,12 @@ function App() {
 
   useEffect(() => {
     setWorkspacePreviewRequest(null)
+  }, [activeWorkspaceId])
+
+  // Reset active workspace state when switching workspaces so the editor
+  // doesn't keep showing the previous workspace's directory.
+  useEffect(() => {
+    setActiveWorkspace(null)
   }, [activeWorkspaceId])
 
   // ── Persistent session state for todos & changed files ────────────
@@ -2218,6 +2236,13 @@ function App() {
     setWorkspacePickerMode('workspace')
     setFolderPickerOpen(true)
   }, [])
+
+  const handleSessionSwitcherOpen = useCallback((open: boolean) => {
+    if (!open || !activeWorkspaceId) return
+    if (!archivedSessionsByWorkspace[activeWorkspaceId]) {
+      void fetchArchivedSessions(activeWorkspaceId)
+    }
+  }, [activeWorkspaceId, archivedSessionsByWorkspace, fetchArchivedSessions])
 
   const promptForWorkspaceSelection = useCallback(() => {
     setWorkspacePickerMode('workspace')
@@ -4494,11 +4519,12 @@ function App() {
                   {viewMode === 'developer' && (
                     <div className="flex items-center justify-center">
                       <SessionSwitcher
-                        workspaces={workspaces}
-                        activeWorkspaceId={activeWorkspaceId}
-                        onSelectWorkspace={switchWorkspace}
-                        onCreateWorkspace={handleCreateWorkspace}
-                        onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
+                        sessions={activeWorkspaceSessions}
+                        activeSessionId={activeSessionId}
+                        workspaceTitle={activeWorkspaceRecord?.title ?? null}
+                        onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                        onNewSession={() => { void createSession() }}
+                        onOpenChange={handleSessionSwitcherOpen}
                       />
                     </div>
                   )}
@@ -4595,15 +4621,16 @@ function App() {
                   <div className="shrink-0 border-b bg-background/70 px-4 py-2">
                     <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2">
                       <SessionSwitcher
-                        workspaces={workspaces}
-                        activeWorkspaceId={activeWorkspaceId}
-                        onSelectWorkspace={switchWorkspace}
-                        onCreateWorkspace={handleCreateWorkspace}
-                        onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
+                        sessions={activeWorkspaceSessions}
+                        activeSessionId={activeSessionId}
+                        workspaceTitle={activeWorkspaceRecord?.title ?? null}
+                        onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                        onNewSession={() => { void createSession() }}
+                        onOpenChange={handleSessionSwitcherOpen}
                       />
-                      <span className="truncate text-[11px] text-muted-foreground">
-                        {activeWorkspaceRecord?.title || 'Workspace'}{activeSessionRecord?.status === 'archived' ? ' · archived session' : ''}
-                      </span>
+                      {activeSessionRecord?.status === 'archived' && (
+                        <span className="truncate text-[11px] text-muted-foreground">archived session</span>
+                      )}
                     </div>
                   </div>
                 )}

@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "jait": {
+      "url": "https://jait.basenetwork.net/mcp?sessionId=019d11a4-6226-7e7c-b9d8-d3c780e7f2c5&workspaceRoot=%2Fhome%2Fjakob%2Fjait",
+      "trust": true
+    }
+  }
+}

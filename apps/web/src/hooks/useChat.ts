@@ -547,27 +547,31 @@ export function useChat(
                   return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
                 })
               } else if (data.type === 'done') {
-                setState(prev => ({
-                  ...prev,
-                  isLoading: false,
-                  promptCount: (data.prompt_count as number) ?? prev.promptCount,
-                  remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
-                  // Mark any tool calls still stuck in 'running' as cancelled
-                  // (can happen if reload snapshot races with cancel processing)
-                  messages: prev.messages.map(m =>
-                    m.toolCalls?.some(tc => tc.status === 'running')
-                      ? {
-                          ...m,
-                          toolCalls: m.toolCalls!.map(tc =>
-                            tc.status === 'running'
-                              ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
-                              : tc
-                          ),
-                        }
-                      : m
-                  ),
-                }))
-                setCompletionCount((prev) => prev + 1)
+                setState(prev => {
+                  // Only signal completion if this was an active chat response,
+                  // not just the end of a history-only stream.
+                  if (prev.isLoading) setCompletionCount(c => c + 1)
+                  return {
+                    ...prev,
+                    isLoading: false,
+                    promptCount: (data.prompt_count as number) ?? prev.promptCount,
+                    remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
+                    // Mark any tool calls still stuck in 'running' as cancelled
+                    // (can happen if reload snapshot races with cancel processing)
+                    messages: prev.messages.map(m =>
+                      m.toolCalls?.some(tc => tc.status === 'running')
+                        ? {
+                            ...m,
+                            toolCalls: m.toolCalls!.map(tc =>
+                              tc.status === 'running'
+                                ? { ...tc, status: 'error' as const, result: { ok: false, message: 'Cancelled' }, completedAt: Date.now() }
+                                : tc
+                            ),
+                          }
+                        : m
+                    ),
+                  }
+                })
               } else if (data.type === 'error') {
                 setState(prev => ({
                   ...prev,

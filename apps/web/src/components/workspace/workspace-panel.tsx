@@ -1954,7 +1954,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Auto-open remote workspace when prop changes
   useEffect(() => {
-    if (!autoOpenRemotePath) return
+    if (!autoOpenRemotePath) {
+      // Clear stale remote root when workspace is deselected / switched
+      if (remoteRoot) setRemoteRoot(null)
+      return
+    }
     // Skip if we're already showing this remote root
     if (remoteRoot === autoOpenRemotePath) return
     handleOpenRemoteWorkspace(autoOpenRemotePath)
