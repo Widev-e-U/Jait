@@ -31,6 +31,12 @@ interface FileStatInput {
   path: string;
 }
 
+interface ImageViewInput {
+  path: string;
+}
+
+const IMAGE_FILE_PATTERN = /\.(?:png|jpe?g|gif|webp)$/i;
+
 export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<FileReadInput> {
   return {
     name: "file.read",
@@ -196,6 +202,45 @@ export function createFileStatTool(registry: SurfaceRegistry): ToolDefinition<Fi
         return {
           ok: false,
           message: err instanceof Error ? err.message : "Stat failed",
+        };
+      }
+    },
+  };
+}
+
+export function createImageViewTool(registry: SurfaceRegistry): ToolDefinition<ImageViewInput> {
+  return {
+    name: "image.view",
+    description: "Display an image file from the workspace in chat",
+    tier: "standard",
+    category: "filesystem",
+    source: "builtin",
+    parameters: {
+      type: "object",
+      properties: {
+        path: { type: "string", description: "Path to the image file" },
+      },
+      required: ["path"],
+    },
+    async execute(input: ImageViewInput, context: ToolContext): Promise<ToolResult> {
+      try {
+        if (!IMAGE_FILE_PATTERN.test(input.path.trim())) {
+          return { ok: false, message: "Only PNG, JPG, GIF, or WEBP images are supported" };
+        }
+        const fs = await getFs(registry, context, input.path);
+        const info = await fs.statFile(input.path);
+        if (info.isDirectory) {
+          return { ok: false, message: `${input.path} is not a file` };
+        }
+        return {
+          ok: true,
+          message: `Displaying image ${input.path}`,
+          data: { path: input.path, ...info },
+        };
+      } catch (err) {
+        return {
+          ok: false,
+          message: err instanceof Error ? err.message : "View image failed",
         };
       }
     },

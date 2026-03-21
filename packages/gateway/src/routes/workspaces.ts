@@ -85,6 +85,28 @@ export function registerWorkspaceEntityRoutes(
     return workspaceService.getById(id, authUser.id);
   });
 
+  app.delete("/api/workspaces/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const workspace = workspaceService.getById(id, authUser.id);
+    if (!workspace) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
+    }
+
+    const sessionsInWorkspace = sessionService.listByWorkspace(id, undefined, authUser.id);
+    const hasRetainedSessions = sessionsInWorkspace.some((session) => session.status !== "deleted");
+    if (hasRetainedSessions) {
+      return reply.status(409).send({
+        error: "WORKSPACE_NOT_EMPTY",
+        details: "Workspace still has sessions. Archive or move them before deleting the workspace.",
+      });
+    }
+
+    workspaceService.delete(id, authUser.id);
+    return reply.status(204).send();
+  });
+
   app.get("/api/workspaces/:id/sessions", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;

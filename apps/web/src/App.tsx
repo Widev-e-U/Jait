@@ -55,7 +55,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
-import { Conversation, Message, PromptInput, SessionSelector, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
+import { Conversation, Message, PromptInput, SessionSelector, SessionSwitcher, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
@@ -118,6 +118,39 @@ import {
 const API_URL = getApiUrl()
 const VOICE_LEVEL_BAR_COUNT = 28
 const VOICE_LEVEL_FLOOR = 0.05
+
+function shouldAutoTitleSession(name: string | null | undefined) {
+  const normalized = name?.trim() ?? ''
+  return !normalized || normalized === 'New Chat' || normalized.startsWith('Session ')
+}
+
+function deriveSessionTitle(raw: string) {
+  const singleLine = raw
+    .replace(/\r/g, '\n')
+    .split('\n')
+    .map((line) => line.trim())
+    .find(Boolean) ?? ''
+  if (!singleLine) return 'New Chat'
+  const cleaned = singleLine.replace(/\s+/g, ' ').trim()
+  return cleaned.length > 80 ? `${cleaned.slice(0, 77).trimEnd()}...` : cleaned
+}
+
+function mergeImageAttachmentsIntoSegments(
+  segments: UserMessageSegment[] | undefined,
+  attachments: ChatAttachment[] | undefined,
+) {
+  const nextSegments = [...(segments ?? [])]
+  for (const attachment of attachments ?? []) {
+    if (!attachment.mimeType.startsWith('image/')) continue
+    nextSegments.push({
+      type: 'image',
+      name: attachment.name,
+      mimeType: attachment.mimeType,
+      data: attachment.data,
+    })
+  }
+  return nextSegments.length > 0 ? nextSegments : undefined
+}
 
 function createSilentVoiceLevels(): number[] {
   return Array.from({ length: VOICE_LEVEL_BAR_COUNT }, () => VOICE_LEVEL_FLOOR)
@@ -1202,6 +1235,7 @@ function App() {
 
   const {
     workspaces,
+    archivedSessionsByWorkspace,
     activeWorkspaceId,
     activeSessionId,
     createSession,
@@ -1209,6 +1243,9 @@ function App() {
     switchWorkspace,
     switchSession,
     archiveSession,
+    fetchArchivedSessions,
+    removeWorkspace,
+    renameSession,
     fetchWorkspaces,
     hasMoreWorkspaces,
     showMoreWorkspaces,
@@ -1218,6 +1255,32 @@ function App() {
     token,
     onLoginRequired,
   )
+  const activeWorkspaceRecord = useMemo(
+    () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null,
+    [workspaces, activeWorkspaceId],
+  )
+  const activeArchivedSessions = activeWorkspaceId ? (archivedSessionsByWorkspace[activeWorkspaceId] ?? []) : []
+  const activeSessionRecord = useMemo(
+    () => activeWorkspaceRecord?.sessions.find((session) => session.id === activeSessionId)
+      ?? activeArchivedSessions.find((session) => session.id === activeSessionId)
+      ?? null,
+    [activeArchivedSessions, activeSessionId, activeWorkspaceRecord],
+  )
+  const handleSessionSwitcherOpen = useCallback((open: boolean) => {
+    if (!open) return
+    for (const workspace of workspaces) {
+      if (archivedSessionsByWorkspace[workspace.id]) continue
+      void fetchArchivedSessions(workspace.id)
+    }
+  }, [archivedSessionsByWorkspace, fetchArchivedSessions, workspaces])
+  const handleRemoveWorkspace = useCallback(async (workspaceId: string) => {
+    const removed = await removeWorkspace(workspaceId)
+    if (removed) {
+      toast.success('Workspace removed.')
+      return
+    }
+    toast.error('Only empty workspaces can be removed.')
+  }, [removeWorkspace])
   const {
     messages,
     isLoading,
@@ -2683,6 +2746,7 @@ function App() {
   ) => {
     const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared) return
+    const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
     enqueueMessage({
       content: prepared.promptWithReferences,
       displayContent: prepared.displayContent || prepared.promptWithReferences,
@@ -2691,12 +2755,19 @@ function App() {
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
       model: chatProvider !== 'jait' ? cliModel : undefined,
       referencedFiles: prepared.referencedFiles,
-      displaySegments: prepared.displaySegments,
+      displaySegments: nextDisplaySegments,
       attachments: fileAttachments,
     })
     setInputValue('')
     setInputSegments(undefined)
   }, [chatMode, chatProvider, chatProviderRuntimeMode, cliModel, enqueueMessage, inputValue, preparePromptSubmission])
+
+  const ensureSessionTitle = useCallback(async (sessionId: string, prompt: string) => {
+    if (!shouldAutoTitleSession(activeSessionRecord?.name)) return
+    const nextTitle = deriveSessionTitle(prompt)
+    if (!nextTitle || nextTitle === 'New Chat') return
+    await renameSession(sessionId, nextTitle)
+  }, [activeSessionRecord?.name, renameSession])
 
 
   const handleSubmit = async (
@@ -2714,14 +2785,17 @@ function App() {
       return
     }
 
+    const promptText = prepared?.promptWithReferences ?? inputValue.trim()
+    const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
+    const generatedTitle = deriveSessionTitle(prepared?.displayContent || promptText)
+
     let sid = activeSessionId
     if (!sid) {
-      const session = await createSession()
+      const session = await createSession(undefined, generatedTitle)
       sid = session?.id ?? null
     }
     if (!sid) return
-
-    const promptText = prepared?.promptWithReferences ?? inputValue.trim()
+    await ensureSessionTitle(sid, prepared?.displayContent || promptText)
 
     if (isLoading || messageQueue.length > 0) {
       enqueueMessage({
@@ -2732,7 +2806,7 @@ function App() {
         runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         model: chatProvider !== 'jait' ? cliModel : undefined,
         referencedFiles: prepared?.referencedFiles,
-        displaySegments: prepared?.displaySegments,
+        displaySegments: nextDisplaySegments,
         attachments: fileAttachments,
       })
       setInputValue('')
@@ -2749,11 +2823,9 @@ function App() {
       model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
       attachments: fileAttachments,
-      ...(prepared?.referencedFiles ? {
-        displayContent: prepared.displayContent || promptText,
-        referencedFiles: prepared.referencedFiles,
-        displaySegments: prepared.displaySegments,
-      } : {}),
+      ...(prepared?.displayContent ? { displayContent: prepared.displayContent || promptText } : {}),
+      ...(prepared?.referencedFiles ? { referencedFiles: prepared.referencedFiles } : {}),
+      ...(nextDisplaySegments?.length ? { displaySegments: nextDisplaySegments } : {}),
     })
     setInputValue('')
     setInputSegments(undefined)
@@ -3122,12 +3194,15 @@ function App() {
       return
     }
 
+    const generatedTitle = deriveSessionTitle(normalizedTranscript)
+
     let sid = activeSessionId
     if (!sid) {
-      const session = await createSession()
+      const session = await createSession(undefined, generatedTitle)
       sid = session?.id ?? null
     }
     if (!sid || !token) return
+    await ensureSessionTitle(sid, normalizedTranscript)
 
     if (isLoading || messageQueue.length > 0) {
       enqueueMessage({
@@ -3150,7 +3225,7 @@ function App() {
       model: chatProvider !== 'jait' ? cliModel : undefined,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, isLoading, messageQueue.length, sendMessage, token, viewMode])
+  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, messageQueue.length, sendMessage, token, viewMode])
 
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
@@ -3662,10 +3737,10 @@ function App() {
                       ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
                       : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
                     }
-                    Sessions
+                    Workspaces
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Toggle sessions sidebar</TooltipContent>
+                <TooltipContent side="bottom">Toggle workspaces sidebar</TooltipContent>
               </Tooltip>
             )}
 
@@ -3989,9 +4064,10 @@ function App() {
                   showFewerWorkspaces={workspaces.length > workspaceListLimit}
                   onSelectWorkspace={switchWorkspace}
                   onSelectSession={switchSession}
-                  onCreateWorkspace={() => createWorkspace()}
+                  onCreateWorkspace={() => { void createWorkspace() }}
                   onCreateSession={(workspaceId) => { void createSession(workspaceId) }}
                   onArchive={archiveSession}
+                  onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
                   onShowMore={showMoreWorkspaces}
                   onShowFewer={showFewerWorkspaces}
                   sessionInfo={sessionInfo}
@@ -4383,6 +4459,22 @@ function App() {
                 onAnimationEnd={() => setDeveloperAnimPhase('idle')}
               >
                 <div className="w-full max-w-3xl space-y-8">
+                  {viewMode === 'developer' && (
+                    <div className="flex items-center justify-center">
+                      <SessionSwitcher
+                        workspaces={workspaces}
+                        archivedSessionsByWorkspace={archivedSessionsByWorkspace}
+                        activeWorkspaceId={activeWorkspaceId}
+                        activeSessionId={activeSessionId}
+                        onSelectWorkspace={switchWorkspace}
+                        onSelectSession={switchSession}
+                        onCreateWorkspace={() => { void createWorkspace() }}
+                        onCreateSession={(workspaceId) => { void createSession(workspaceId) }}
+                        onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
+                        onOpenChange={handleSessionSwitcherOpen}
+                      />
+                    </div>
+                  )}
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
                     <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
@@ -4459,6 +4551,27 @@ function App() {
                     )}
                   </div>
                 )}
+                {viewMode === 'developer' && (
+                  <div className="shrink-0 border-b bg-background/70 px-4 py-2">
+                    <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2">
+                      <SessionSwitcher
+                        workspaces={workspaces}
+                        archivedSessionsByWorkspace={archivedSessionsByWorkspace}
+                        activeWorkspaceId={activeWorkspaceId}
+                        activeSessionId={activeSessionId}
+                        onSelectWorkspace={switchWorkspace}
+                        onSelectSession={switchSession}
+                        onCreateWorkspace={() => { void createWorkspace() }}
+                        onCreateSession={(workspaceId) => { void createSession(workspaceId) }}
+                        onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
+                        onOpenChange={handleSessionSwitcherOpen}
+                      />
+                      <span className="truncate text-[11px] text-muted-foreground">
+                        {activeWorkspaceRecord?.title || 'Workspace'}{activeSessionRecord?.status === 'archived' ? ' · archived session' : ''}
+                      </span>
+                    </div>
+                  </div>
+                )}
                 <Conversation
                   key={activeSessionId ?? 'developer-empty'}
                   className="min-h-0 flex-1 border-b"
@@ -4476,6 +4589,7 @@ function App() {
                       displayContent={msg.displayContent}
                       referencedFiles={msg.referencedFiles}
                       displaySegments={msg.displaySegments}
+                      attachments={msg.attachments}
                       thinking={msg.thinking}
                       thinkingDuration={msg.thinkingDuration}
                       toolCalls={msg.toolCalls}

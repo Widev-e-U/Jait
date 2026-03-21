@@ -231,8 +231,10 @@ function buildEditableContent(
   for (const segment of normalized) {
     if (segment.type === 'text') {
       el.appendChild(document.createTextNode(segment.text))
-    } else {
+    } else if (segment.type === 'file') {
       el.appendChild(createChipNode(segment, onRemove))
+    } else {
+      el.appendChild(document.createTextNode(`[image:${segment.name}]`))
     }
   }
 }
@@ -247,8 +249,10 @@ function insertSegmentsAtCursor(
     for (const segment of segments) {
       if (segment.type === 'text') {
         el.appendChild(document.createTextNode(segment.text))
-      } else {
+      } else if (segment.type === 'file') {
         el.appendChild(createChipNode(segment, onRemove))
+      } else {
+        el.appendChild(document.createTextNode(`[image:${segment.name}]`))
       }
     }
     moveCursorToEnd(el)
@@ -262,8 +266,10 @@ function insertSegmentsAtCursor(
   for (const segment of segments) {
     if (segment.type === 'text') {
       fragment.appendChild(document.createTextNode(segment.text))
-    } else {
+    } else if (segment.type === 'file') {
       fragment.appendChild(createChipNode(segment, onRemove))
+    } else {
+      fragment.appendChild(document.createTextNode(`[image:${segment.name}]`))
     }
   }
 

@@ -38,6 +38,7 @@ import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
 import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
+  normalizeUserMessageSegments,
   parseLegacyReferencedFilesBlock,
   userMessageTextFromSegments,
   userReferencedFilesFromSegments,
@@ -58,6 +59,7 @@ interface MessageProps {
   referencedFiles?: { path: string; name: string }[]
   /** Ordered text/file segments for consistent rendering and editing. */
   displaySegments?: UserMessageSegment[]
+  attachments?: { name: string; mimeType: string; data: string; preview?: string }[]
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
@@ -405,6 +407,7 @@ function MessageInner({
   displayContent: displayContentProp,
   referencedFiles: referencedFilesProp,
   displaySegments: displaySegmentsProp,
+  attachments: attachmentsProp,
   thinking,
   thinkingDuration,
   toolCalls,
@@ -453,6 +456,21 @@ function MessageInner({
   const [editSegments, setEditSegments] = useState<UserMessageSegment[]>([])
   const [optimisticUserDisplayText, setOptimisticUserDisplayText] = useState<string | null>(null)
   const [optimisticUserDisplaySegments, setOptimisticUserDisplaySegments] = useState<UserMessageSegment[] | null>(null)
+  const userImageAttachments = useMemo(() => {
+    if (!isUser) return []
+    const fromSegments = normalizeUserMessageSegments(optimisticUserDisplaySegments ?? userDisplaySegments)
+      .flatMap((segment) => (
+        segment.type === 'image'
+          ? [{
+              name: segment.name,
+              mimeType: segment.mimeType,
+              data: segment.data,
+              preview: `data:${segment.mimeType};base64,${segment.data}`,
+            }]
+          : []
+      ))
+    return fromSegments.length > 0 ? fromSegments : (attachmentsProp ?? [])
+  }, [attachmentsProp, isUser, optimisticUserDisplaySegments, userDisplaySegments])
   const copyTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
   const editPromptInputRef = useRef<PromptInputHandle | null>(null)
@@ -834,23 +852,46 @@ function MessageInner({
                       onClick={handleUserBubbleClick}
                       title={canEdit && !isEditing ? 'Click to edit message' : undefined}
                     >
-                      <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
-                        {(optimisticUserDisplaySegments ?? userDisplaySegments).length > 0
-                          ? (optimisticUserDisplaySegments ?? userDisplaySegments).map((segment, index) =>
-                              segment.type === 'text' ? (
-                                <span key={`text-${index}`}>{segment.text}</span>
-                              ) : (
-                                <span
-                                  key={`${segment.path}-${index}`}
-                                  className="mx-[2px] inline-flex items-center gap-1 rounded-full border border-primary/15 bg-background/65 px-2 py-0.5 text-[12px] leading-tight text-muted-foreground align-baseline select-none"
-                                  title={segment.path}
+                      <div className="min-w-0 space-y-3">
+                        <div className="min-w-0 whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+                          {(optimisticUserDisplaySegments ?? userDisplaySegments).length > 0
+                            ? (optimisticUserDisplaySegments ?? userDisplaySegments).map((segment, index) =>
+                                segment.type === 'text' ? (
+                                  <span key={`text-${index}`}>{segment.text}</span>
+                                ) : segment.type === 'file' ? (
+                                  <span
+                                    key={`${segment.path}-${index}`}
+                                    className="mx-[2px] inline-flex items-center gap-1 rounded-full border border-primary/15 bg-background/65 px-2 py-0.5 text-[12px] leading-tight text-muted-foreground align-baseline select-none"
+                                    title={segment.path}
+                                  >
+                                    <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="max-w-[180px] truncate">{segment.name}</span>
+                                  </span>
+                                ) : null,
+                              )
+                            : (optimisticUserDisplayText ?? userDisplayText)}
+                        </div>
+                        {userImageAttachments.length > 0 && (
+                          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                            {userImageAttachments.map((attachment, index) => {
+                              const src = attachment.preview ?? `data:${attachment.mimeType};base64,${attachment.data}`
+                              return (
+                                <a
+                                  key={`${attachment.name}-${index}`}
+                                  href={src}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                  className="block overflow-hidden rounded-lg border border-primary/10 bg-background/65"
                                 >
-                                  <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
-                                  <span className="max-w-[180px] truncate">{segment.name}</span>
-                                </span>
-                              ),
-                            )
-                          : (optimisticUserDisplayText ?? userDisplayText)}
+                                  <img src={src} alt={attachment.name} className="max-h-72 w-full object-cover" />
+                                  <div className="truncate border-t border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
+                                    {attachment.name}
+                                  </div>
+                                </a>
+                              )
+                            })}
+                          </div>
+                        )}
                       </div>
                     </AIMessageContent>
 

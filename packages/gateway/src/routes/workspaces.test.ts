@@ -163,4 +163,47 @@ describe("workspace routes", () => {
     expect(lastActive.session?.workspaceId).toBe(workspace.id);
     expect(lastActive.session?.id).not.toBe(firstSession.id);
   });
+
+  it("deletes an empty workspace and rejects deleting one that still has sessions", async () => {
+    const user = userService.createUser("delete-user", "password123");
+    const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
+
+    const emptyWorkspaceRes = await app.inject({
+      method: "POST",
+      url: "/api/workspaces",
+      headers,
+      payload: { title: "Scratch" },
+    });
+    const emptyWorkspace = JSON.parse(emptyWorkspaceRes.body) as { id: string };
+
+    const deleteEmptyRes = await app.inject({
+      method: "DELETE",
+      url: `/api/workspaces/${emptyWorkspace.id}`,
+      headers,
+    });
+    expect(deleteEmptyRes.statusCode).toBe(204);
+
+    const seededWorkspaceRes = await app.inject({
+      method: "POST",
+      url: "/api/workspaces",
+      headers,
+      payload: { title: "Keep me" },
+    });
+    const seededWorkspace = JSON.parse(seededWorkspaceRes.body) as { id: string };
+
+    const createSessionRes = await app.inject({
+      method: "POST",
+      url: `/api/workspaces/${seededWorkspace.id}/sessions`,
+      headers,
+      payload: { name: "Existing chat" },
+    });
+    expect(createSessionRes.statusCode).toBe(201);
+
+    const deleteSeededRes = await app.inject({
+      method: "DELETE",
+      url: `/api/workspaces/${seededWorkspace.id}`,
+      headers,
+    });
+    expect(deleteSeededRes.statusCode).toBe(409);
+  });
 });

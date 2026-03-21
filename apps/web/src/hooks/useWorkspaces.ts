@@ -34,6 +34,7 @@ function authHeaders(token?: string | null): Record<string, string> {
 
 export function useWorkspaces(token?: string | null, onLoginRequired?: () => void) {
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
+  const [archivedSessionsByWorkspace, setArchivedSessionsByWorkspace] = useState<Record<string, WorkspaceSession[]>>({})
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
   const [visibleLimit, setVisibleLimit] = useState(WORKSPACE_LIST_LIMIT)
@@ -48,6 +49,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
   const fetchWorkspaces = useCallback(async () => {
     if (!token) {
       setWorkspaces([])
+      setArchivedSessionsByWorkspace({})
       setActiveWorkspaceId(null)
       setActiveSessionId(null)
       setHasMoreWorkspaces(false)
@@ -70,6 +72,9 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
         const data = await workspacesRes.json() as { workspaces: WorkspaceRecord[]; hasMore?: boolean }
         nextWorkspaces = data.workspaces
         setWorkspaces(nextWorkspaces)
+        setArchivedSessionsByWorkspace((prev) => Object.fromEntries(
+          Object.entries(prev).filter(([workspaceId]) => nextWorkspaces.some((workspace) => workspace.id === workspaceId)),
+        ))
         setHasMoreWorkspaces(Boolean(data.hasMore))
       }
 
@@ -195,6 +200,97 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     }
   }, [fetchWorkspaces, onLoginRequired, token])
 
+  const fetchArchivedSessions = useCallback(async (workspaceId: string) => {
+    if (!token) {
+      onLoginRequired?.()
+      return []
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/workspaces/${workspaceId}/sessions?status=archived`, {
+        headers: authHeaders(token),
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return []
+      }
+      if (!response.ok) return []
+      const data = await response.json() as { sessions: WorkspaceSession[] }
+      setArchivedSessionsByWorkspace((prev) => ({ ...prev, [workspaceId]: data.sessions }))
+      return data.sessions
+    } catch (err) {
+      console.error('Failed to fetch archived sessions:', err)
+      return []
+    }
+  }, [onLoginRequired, token])
+
+  const removeWorkspace = useCallback(async (workspaceId: string) => {
+    if (!token) {
+      onLoginRequired?.()
+      return false
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/workspaces/${workspaceId}`, {
+        method: 'DELETE',
+        headers: authHeaders(token),
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return false
+      }
+      if (!response.ok) return false
+
+      const nextWorkspaces = workspaces.filter((workspace) => workspace.id !== workspaceId)
+      setWorkspaces(nextWorkspaces)
+      if (activeWorkspaceId === workspaceId) {
+        setActiveWorkspaceId(nextWorkspaces[0]?.id ?? null)
+        setActiveSessionId(nextWorkspaces[0]?.sessions[0]?.id ?? null)
+      }
+      setArchivedSessionsByWorkspace((prev) => {
+        const next = { ...prev }
+        delete next[workspaceId]
+        return next
+      })
+      return true
+    } catch (err) {
+      console.error('Failed to delete workspace:', err)
+      return false
+    }
+  }, [activeWorkspaceId, onLoginRequired, token, workspaces])
+
+  const renameSession = useCallback(async (sessionId: string, name: string) => {
+    if (!token) {
+      onLoginRequired?.()
+      return null
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/sessions/${sessionId}`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name }),
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return null
+      }
+      if (!response.ok) return null
+      const session = await response.json() as WorkspaceSession
+      setWorkspaces((prev) => prev.map((workspace) => ({
+        ...workspace,
+        sessions: workspace.sessions.map((entry) => entry.id === sessionId ? { ...entry, name: session.name } : entry),
+      })))
+      setArchivedSessionsByWorkspace((prev) => Object.fromEntries(
+        Object.entries(prev).map(([workspaceId, sessions]) => [
+          workspaceId,
+          sessions.map((entry) => entry.id === sessionId ? { ...entry, name: session.name } : entry),
+        ]),
+      ))
+      return session
+    } catch (err) {
+      console.error('Failed to rename session:', err)
+      return null
+    }
+  }, [onLoginRequired, token])
+
   const showMoreWorkspaces = useCallback(() => {
     setVisibleLimit((prev) => prev + WORKSPACE_LIST_LIMIT)
   }, [])
@@ -209,6 +305,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
 
   return {
     workspaces,
+    archivedSessionsByWorkspace,
     activeWorkspace,
     activeWorkspaceId,
     activeSessionId,
@@ -220,6 +317,9 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     switchWorkspace,
     switchSession,
     archiveSession,
+    fetchArchivedSessions,
+    removeWorkspace,
+    renameSession,
     showMoreWorkspaces,
     showFewerWorkspaces,
     workspaceListLimit: WORKSPACE_LIST_LIMIT,

@@ -1,4 +1,4 @@
-import { Archive, Check, Folder, FolderOpen, MessageSquarePlus, Monitor, Plus } from 'lucide-react'
+import { Archive, Check, Folder, FolderOpen, MessageSquarePlus, Monitor, Plus, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -16,6 +16,7 @@ interface SessionSelectorProps {
   onCreateWorkspace: () => void
   onCreateSession: (workspaceId: string) => void
   onArchive: (sessionId: string) => void
+  onRemoveWorkspace: (workspaceId: string) => void
   onShowMore?: () => void
   onShowFewer?: () => void
   /** Info about the currently active session's execution context. */
@@ -43,6 +44,7 @@ export function SessionSelector({
   onCreateWorkspace,
   onCreateSession,
   onArchive,
+  onRemoveWorkspace,
   onShowMore,
   onShowFewer,
   sessionInfo,
@@ -117,6 +119,24 @@ export function SessionSelector({
                         </TooltipTrigger>
                         <TooltipContent side="right">New session</TooltipContent>
                       </Tooltip>
+                      {workspace.sessions.length === 0 && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start text-muted-foreground hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onRemoveWorkspace(workspace.id)
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">Remove empty workspace</TooltipContent>
+                        </Tooltip>
+                      )}
                     </div>
 
                     {isActiveWorkspace && (

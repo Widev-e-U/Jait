@@ -13,6 +13,7 @@ export {
   createFilePatchTool,
   createFileListTool,
   createFileStatTool,
+  createImageViewTool,
 } from "./file-tools.js";
 export { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 export {
@@ -118,6 +119,7 @@ import {
   createFilePatchTool,
   createFileListTool,
   createFileStatTool,
+  createImageViewTool,
 } from "./file-tools.js";
 import { createOsQueryTool, createOsInstallTool } from "./os-tools.js";
 import {
@@ -249,6 +251,7 @@ export function createToolRegistry(
   tools.register(createFilePatchTool(surfaceRegistry));
   tools.register(createFileListTool(surfaceRegistry));
   tools.register(createFileStatTool(surfaceRegistry));
+  tools.register(createImageViewTool(surfaceRegistry));
 
   // OS tools
   tools.register(createOsQueryTool());

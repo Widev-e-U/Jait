@@ -23,6 +23,21 @@ function authHeaders(token?: string | null): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
+function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
+  if (!segments?.length) return undefined
+  const attachments = segments.flatMap((segment) => (
+    segment.type === 'image'
+      ? [{
+          name: segment.name,
+          mimeType: segment.mimeType,
+          data: segment.data,
+          preview: `data:${segment.mimeType};base64,${segment.data}`,
+        }]
+      : []
+  ))
+  return attachments.length > 0 ? attachments : undefined
+}
+
 /**
  * A segment in the ordered response stream. Consecutive tool calls
  * are grouped; text between tool-call groups forms its own segment.
@@ -41,6 +56,8 @@ export interface ChatMessage {
   referencedFiles?: { path: string; name: string }[]
   /** Ordered display model for inline user text + file chips. */
   displaySegments?: UserMessageSegment[]
+  /** Inline image/file attachments associated with the user message. */
+  attachments?: ChatAttachment[]
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
@@ -306,12 +323,14 @@ export function useChat(
                     msg.displaySegments = parseUserMessageSegments(m.segments)
                     msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
                     msg.referencedFiles = userReferencedFilesFromSegments(msg.displaySegments)
+                    msg.attachments = attachmentsFromSegments(msg.displaySegments)
                   } else if (m.role === 'user') {
                     const parsed = parseLegacyReferencedFilesBlock(m.content)
                     if (parsed.files.length > 0) {
                       msg.displayContent = parsed.text
                       msg.referencedFiles = parsed.files
                       msg.displaySegments = parsed.displaySegments
+                      msg.attachments = attachmentsFromSegments(msg.displaySegments)
                     }
                   } else if (m.segments && m.segments.length > 0) {
                     msg.segments = m.segments as MessageSegment[]
@@ -600,6 +619,7 @@ export function useChat(
       ...(options.displayContent ? { displayContent: options.displayContent } : {}),
       ...(options.referencedFiles?.length ? { referencedFiles: options.referencedFiles } : {}),
       ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
+      ...(options.attachments?.length ? { attachments: options.attachments } : {}),
     }
 
     setState(prev => ({

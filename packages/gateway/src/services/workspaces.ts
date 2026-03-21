@@ -141,4 +141,12 @@ export class WorkspaceService {
       .where(userId ? and(eq(workspaces.id, id), eq(workspaces.userId, userId)) : eq(workspaces.id, id))
       .run();
   }
+
+  delete(id: string, userId?: string) {
+    this.db
+      .update(workspaces)
+      .set({ status: "deleted" })
+      .where(userId ? and(eq(workspaces.id, id), eq(workspaces.userId, userId)) : eq(workspaces.id, id))
+      .run();
+  }
 }

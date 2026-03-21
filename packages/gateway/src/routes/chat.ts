@@ -76,12 +76,24 @@ interface QueuedChatMessage {
   provider?: ProviderId;
   runtimeMode?: RuntimeMode;
   model?: string | null;
-  displaySegments?: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }>;
+  displaySegments?: Array<
+    { type: "text"; text: string }
+    | { type: "file"; path: string; name: string }
+    | { type: "image"; name: string; mimeType: string; data: string }
+  >;
 }
 
-function parseUserDisplaySegments(raw: unknown): Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> | undefined {
+function parseUserDisplaySegments(raw: unknown): Array<
+  { type: "text"; text: string }
+  | { type: "file"; path: string; name: string }
+  | { type: "image"; name: string; mimeType: string; data: string }
+> | undefined {
   if (!Array.isArray(raw)) return undefined;
-  const segments: Array<{ type: "text"; text: string } | { type: "file"; path: string; name: string }> = [];
+  const segments: Array<
+    { type: "text"; text: string }
+    | { type: "file"; path: string; name: string }
+    | { type: "image"; name: string; mimeType: string; data: string }
+  > = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== "object") continue;
     const record = entry as Record<string, unknown>;
@@ -94,6 +106,20 @@ function parseUserDisplaySegments(raw: unknown): Array<{ type: "text"; text: str
         type: "file",
         path: record.path,
         name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+      });
+      continue;
+    }
+    if (
+      record.type === "image"
+      && typeof record.data === "string"
+      && typeof record.mimeType === "string"
+      && record.mimeType.startsWith("image/")
+    ) {
+      segments.push({
+        type: "image",
+        data: record.data,
+        mimeType: record.mimeType,
+        name: typeof record.name === "string" ? record.name : "Image",
       });
     }
   }

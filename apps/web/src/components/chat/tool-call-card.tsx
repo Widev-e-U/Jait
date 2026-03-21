@@ -60,6 +60,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'file.patch':      { icon: FileText,  label: 'Patch File', color: 'text-blue-500' },
   'file.list':       { icon: FileText,  label: 'List Files', color: 'text-blue-500' },
   'file.stat':       { icon: FileText,  label: 'File Info',  color: 'text-blue-500' },
+  'image.view':      { icon: Globe,     label: 'Image',      color: 'text-cyan-500' },
   'os.query':        { icon: Monitor,   label: 'System',     color: 'text-green-500' },
   'os.install':      { icon: Monitor,   label: 'Install',    color: 'text-green-500' },
   'surfaces.list':   { icon: Server,    label: 'Surfaces',   color: 'text-purple-500' },
