@@ -2,8 +2,11 @@ import { describe, it, expect } from "vitest";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { signAuthToken } from "./security/http-auth.js";
-import { resolve } from "node:path";
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { createServer as createHttpServer } from "node:http";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const testConfig = {
   ...loadConfig(),
@@ -103,7 +106,8 @@ describe("@jait/gateway health", () => {
 
   it("GET /api/dev-file serves workspace html previews with rewritten asset paths", async () => {
     const app = await createServer(testConfig);
-    const encodedPath = Buffer.from(resolve("docs/site/index.html"), "utf8")
+    const fixturePath = resolve(__dirname, "__fixtures__/preview.html");
+    const encodedPath = Buffer.from(fixturePath, "utf8")
       .toString("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
@@ -131,7 +135,8 @@ describe("@jait/gateway health", () => {
 
   it("GET /api/dev-file accepts relative workspace html paths", async () => {
     const app = await createServer(testConfig);
-    const encodedPath = Buffer.from("docs/site/index.html", "utf8")
+    const fixturePath = resolve(__dirname, "__fixtures__/preview.html");
+    const encodedPath = Buffer.from(fixturePath, "utf8")
       .toString("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
