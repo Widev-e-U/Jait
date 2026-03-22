@@ -1137,7 +1137,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </div>
           )}
           {footerTrailingContent}
-          {isLoading && (
+          {isLoading && sendTarget !== 'thread' && (
             <Button
               type="button"
               size="icon"
@@ -1149,7 +1149,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               <Square className="h-3.5 w-3.5 fill-current" />
             </Button>
           )}
-          {isLoading && onQueue ? (
+          {isLoading && sendTarget !== 'thread' && onQueue ? (
             <Button
               type="button"
               size="icon"
@@ -1168,7 +1168,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             >
               <ListPlus className="h-4 w-4" />
             </Button>
-          ) : !isLoading ? (
+          ) : !isLoading || sendTarget === 'thread' ? (
             <Button
               type="button"
               size="icon"

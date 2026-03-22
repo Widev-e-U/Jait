@@ -41,10 +41,18 @@ export function Conversation({ children, className, loading }: ConversationProps
       }, 150)
     }
 
-    el.addEventListener('wheel', markUserScroll, { passive: true })
+    const handleWheel = (e: WheelEvent) => {
+      markUserScroll()
+      if (e.deltaY < 0 && stickToBottomRef.current) {
+        setStickToBottom(false)
+        stickToBottomRef.current = false
+      }
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: true })
     el.addEventListener('touchstart', markUserScroll, { passive: true })
     return () => {
-      el.removeEventListener('wheel', markUserScroll)
+      el.removeEventListener('wheel', handleWheel)
       el.removeEventListener('touchstart', markUserScroll)
       clearTimeout(userScrollTimerRef.current)
     }

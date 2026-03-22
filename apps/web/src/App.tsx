@@ -3001,6 +3001,41 @@ function App() {
     })
   }, [])
 
+  const sendManagerQueueItemToParallelThread = useCallback((id: string) => {
+    const thread = automation.selectedThread
+    const repo = automation.selectedRepo
+    if (!thread || !repo) return
+    const item = managerMessageQueues[thread.id]?.find((i) => i.id === id)
+    if (!item) return
+    dequeueManagerMessage(thread.id, id)
+    void (async () => {
+      const branchName = `jait/${Math.random().toString(16).slice(2, 10)}`
+      let worktreePath: string | undefined
+      try {
+        const wt = await gitApi.createWorktree(repo.localPath, repo.defaultBranch, branchName)
+        worktreePath = wt.path
+      } catch {
+        try { await gitApi.createBranch(repo.localPath, branchName, repo.defaultBranch) } catch { /* ignore */ }
+      }
+      const newThread = await agentsApi.createThread({
+        title: `[${repo.name}] Generating title…`,
+        providerId: item.providerId,
+        runtimeMode: item.runtimeMode,
+        ...(item.model ? { model: item.model } : {}),
+        kind: 'delivery',
+        workingDirectory: worktreePath ?? repo.localPath,
+        branch: branchName,
+      })
+      await agentsApi.startThread(newThread.id, {
+        message: item.fullContent,
+        titlePrefix: `[${repo.name}] `,
+        ...(item.displayContent ? { displayContent: item.displayContent } : {}),
+        ...(item.referencedFiles ? { referencedFiles: item.referencedFiles } : {}),
+        ...(item.attachments ? { attachments: item.attachments } : {}),
+      })
+    })()
+  }, [automation.selectedThread, automation.selectedRepo, managerMessageQueues, dequeueManagerMessage])
+
   const handleManagerQueue = useCallback(async (
     chipFiles?: ReferencedFile[],
     _attachments?: ChatAttachment[],
@@ -4335,6 +4370,7 @@ function App() {
                             onRemove={(id) => dequeueManagerMessage(automation.selectedThread!.id, id)}
                             onEdit={(id, content) => updateManagerQueueItem(automation.selectedThread!.id, id, content)}
                             onReorder={(sourceId, targetId, placement) => reorderManagerQueueItem(automation.selectedThread!.id, sourceId, targetId, placement)}
+                            onSendToParallelThread={sendManagerQueueItemToParallelThread}
                             className="mb-2"
                           />
                         )}
