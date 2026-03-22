@@ -37,16 +37,26 @@ async function runWorkspaceSearch(
 
   try {
     if (mode === "content") {
-      let cmd: string;
+      let stdout = "";
       if (isWin) {
-        cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>nul`;
-        cmd += ` || findstr /s /n /i /l /c:"${safeQuery}" "${safeDir}\\*" 2>nul`;
+        // Try rg first, fall back to findstr (separate calls to avoid cmd.exe || issues)
+        try {
+          ({ stdout } = await execAsync(
+            `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}"`,
+            { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 },
+          ));
+        } catch {
+          ({ stdout } = await execAsync(
+            `findstr /s /n /i /l /c:"${safeQuery}" "${safeDir}\\*"`,
+            { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 },
+          ));
+        }
       } else {
-        cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
-        cmd += ` || grep -rn -i -F --max-count=${maxResults} -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
+        const cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>/dev/null`
+          + ` || grep -rn -i -F --max-count=${maxResults} -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
+        ({ stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 }));
       }
 
-      const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
       const lines = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults);
       const matches = lines.map((line) => {
         const match = line.match(/^(.+?):(\d+):(.*)$/);
@@ -65,14 +75,25 @@ async function runWorkspaceSearch(
     }
     const safeFileQuery = cleanedQuery.replace(/"/g, '\\"');
 
-    let cmd: string;
+    let stdout = "";
     if (isWin) {
-      cmd = `(rg --files "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}") || (dir /s /b "${safeDir}" 2>nul | findstr /i /l "${safeFileQuery}")`;
+      // Try rg first, fall back to dir (separate calls to avoid cmd.exe || issues)
+      try {
+        ({ stdout } = await execAsync(
+          `rg --files "${safeDir}" | findstr /i /l "${safeFileQuery}"`,
+          { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 },
+        ));
+      } catch {
+        ({ stdout } = await execAsync(
+          `dir /s /b "${safeDir}" | findstr /i /l "${safeFileQuery}"`,
+          { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 },
+        ));
+      }
     } else {
-      cmd = `((rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}") || (find "${safeDir}" -type f 2>/dev/null | grep -iF -- "${safeFileQuery}")) | head -n ${maxResults}`;
+      const cmd = `((rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}") || (find "${safeDir}" -type f 2>/dev/null | grep -iF -- "${safeFileQuery}")) | head -n ${maxResults}`;
+      ({ stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 }));
     }
 
-    const { stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 });
     const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((absPath) => {
       const relPath = relative(workspaceRoot, absPath.trim()).replace(/\\/g, "/");
       const name = relPath.split("/").pop() || relPath;

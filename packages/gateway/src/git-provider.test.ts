@@ -53,6 +53,7 @@ describe("discardChanges", () => {
       execSync("git init", { cwd: root, stdio: "ignore" });
       execSync('git config user.email "test@example.com"', { cwd: root, stdio: "ignore" });
       execSync('git config user.name "Test User"', { cwd: root, stdio: "ignore" });
+      execSync("git config core.autocrlf false", { cwd: root, stdio: "ignore" });
 
       writeFileSync(join(root, "file.txt"), "base\n");
       execSync("git add file.txt", { cwd: root, stdio: "ignore" });
