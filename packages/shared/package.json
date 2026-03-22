@@ -2,7 +2,7 @@
   "name": "@jait/shared",
   "version": "0.1.36",
   "description": "Shared schemas, constants, and domain types for Jait",
-  "author": "Jakob Wl <jakob@jait.dev>",
+  "author": "JakobWl",
   "type": "module",
   "main": "dist/index.js",
   "types": "src/index.ts",

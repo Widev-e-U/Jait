@@ -2,10 +2,7 @@
   "name": "@jait/desktop",
   "version": "0.1.39",
   "description": "Jait AI desktop app",
-  "author": {
-    "name": "JakobWl",
-    "email": "jakob@jait.dev"
-  },
+  "author": "JakobWl",
   "homepage": "https://github.com/JakobWl/Jait",
   "private": true,
   "type": "module",

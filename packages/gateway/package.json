@@ -2,7 +2,7 @@
   "name": "@jait/gateway",
   "version": "0.1.207",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
-  "author": "Jakob Wl <jakob@jait.dev>",
+  "author": "JakobWl",
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

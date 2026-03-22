@@ -3,7 +3,7 @@
   "version": "0.1.8",
   "private": true,
   "description": "CLI entrypoint for Jait",
-  "author": "Jakob Wl <jakob@jait.dev>",
+  "author": "JakobWl",
   "type": "module",
   "bin": {
     "jait": "dist/index.js"

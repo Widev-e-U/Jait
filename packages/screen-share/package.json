@@ -2,7 +2,7 @@
   "name": "@jait/screen-share",
   "version": "0.1.21",
   "description": "Screen-share service for Jait gateway",
-  "author": "Jakob Wl <jakob@jait.dev>",
+  "author": "JakobWl",
   "type": "module",
   "main": "dist/index.js",
   "types": "src/index.ts",

@@ -3,7 +3,7 @@
   "version": "0.1.8",
   "private": true,
   "description": "Typed API client for Jait apps and integrations",
-  "author": "Jakob Wl <jakob@jait.dev>",
+  "author": "JakobWl",
   "type": "module",
   "main": "dist/index.js",
   "types": "src/index.ts",

@@ -3,7 +3,7 @@
   "version": "0.1.8",
   "private": true,
   "description": "Shared UI utilities and components for Jait clients",
-  "author": "Jakob Wl <jakob@jait.dev>",
+  "author": "JakobWl",
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",

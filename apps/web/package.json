@@ -3,7 +3,7 @@
   "version": "0.1.114",
   "private": true,
   "description": "Jait web frontend — bundled into @jait/gateway at build time",
-  "author": "Jakob Wl <jakob@jait.dev>",
+  "author": "JakobWl",
   "type": "module",
   "license": "MIT",
   "homepage": "https://jait.dev",
