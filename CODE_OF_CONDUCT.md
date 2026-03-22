@@ -21,5 +21,3 @@ Examples of unacceptable behavior:
 ## Enforcement
 
 Project maintainers may remove comments, close discussions, or block participation for conduct that harms the project or its contributors.
-
-Contact `jakob@jait.dev` for conduct concerns.
