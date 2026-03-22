@@ -87,6 +87,82 @@ export function migrateDatabase(sqlite: SqliteDatabase) {
   if (ran > 0) {
     console.log(`  ${ran} migration(s) applied (schema now at v${migrations.length}).`);
   }
+
+  // Safety net: verify expected columns exist even if migrations were
+  // silently swallowed via try/catch in earlier versions.
+  verifySchema(sqlite);
+}
+
+/**
+ * Post-migration safety net: verify that every column the Drizzle schema
+ * expects actually exists in the SQLite table, and add any that are missing.
+ *
+ * This guards against migrations that silently swallowed errors via try/catch,
+ * or against historical migrations being modified in-place after they were
+ * already marked as applied.
+ */
+export function verifySchema(sqlite: SqliteDatabase) {
+  // Map of table -> expected columns with their DDL fragments
+  const expectedColumns: Record<string, Record<string, string>> = {
+    agent_threads: {
+      kind: "TEXT NOT NULL DEFAULT 'delivery'",
+      pr_url: "TEXT",
+      pr_number: "INTEGER",
+      pr_title: "TEXT",
+      pr_state: "TEXT",
+      execution_node_id: "TEXT",
+      execution_node_name: "TEXT",
+    },
+    user_settings: {
+      disabled_tools: "TEXT",
+      stt_provider: "TEXT NOT NULL DEFAULT 'simulated'",
+      chat_provider: "TEXT NOT NULL DEFAULT 'jait'",
+      workspace_picker_path: "TEXT",
+      workspace_picker_node_id: "TEXT",
+    },
+    messages: {
+      tool_calls: "TEXT",
+      segments: "TEXT",
+    },
+    sessions: {
+      user_id: "TEXT",
+      workspace_id: "TEXT",
+    },
+    automation_repositories: {
+      device_id: "TEXT",
+      github_url: "TEXT",
+      strategy: "TEXT",
+    },
+  };
+
+  let repaired = 0;
+  for (const [table, columns] of Object.entries(expectedColumns)) {
+    // Check if table even exists before querying its columns
+    const tableExists = sqlite.prepare(
+      "SELECT 1 FROM sqlite_master WHERE type='table' AND name=?"
+    ).get(table);
+    if (!tableExists) continue;
+
+    const existing = new Set(
+      (sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[])
+        .map((c) => c.name),
+    );
+
+    for (const [col, ddl] of Object.entries(columns)) {
+      if (existing.has(col)) continue;
+      try {
+        sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${ddl}`);
+        console.log(`  Schema repair: added missing column ${table}.${col}`);
+        repaired++;
+      } catch (err) {
+        // Log the actual error so we never silently fail again
+        console.error(`  Schema repair failed for ${table}.${col}:`, err);
+      }
+    }
+  }
+  if (repaired > 0) {
+    console.log(`  ${repaired} column(s) repaired.`);
+  }
 }
 
 /**

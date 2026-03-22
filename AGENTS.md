@@ -6,7 +6,8 @@ Jait is a Bun/TypeScript monorepo.
 - `packages/shared`: shared schemas, constants, and domain types.
 - `packages/api-client`: typed client used by apps.
 - `apps/web`: Vite + React frontend.
-- `e2e`: Playwright end-to-end tests.
+- `tests/e2e`: Playwright end-to-end tests.
+- `tests/shims`: test shims (e.g. bun:sqlite adapter for Vitest).
 
 Prefer placing new domain logic in `packages/*/src` and keeping UI concerns in `apps/web/src`.
 
@@ -18,7 +19,7 @@ Run from repository root unless noted.
 - `bun run typecheck`: strict TypeScript checks.
 - `bun run test`: run Vitest unit/integration tests.
 - `bun run lint`: run `oxlint` across repo.
-- `cd e2e && npm test`: run Playwright suite.
+- `cd tests/e2e && npm test`: run Playwright suite.
 
 ## Coding Style & Naming Conventions
 - Language: TypeScript (ES modules, strict mode).
@@ -30,7 +31,7 @@ Run from repository root unless noted.
 
 ## Testing Guidelines
 - Unit tests: colocate as `*.test.ts` under `packages/*/src` or `apps/*/src`.
-- E2E tests: place specs in `e2e/tests/*.spec.ts`.
+- E2E tests: place specs in `tests/e2e/*.spec.ts`.
 - Add tests for new tools/routes/schemas and regression fixes.
 - Before opening a PR, run: `bun run typecheck && bun run test` (and E2E when UI behavior changes).
 

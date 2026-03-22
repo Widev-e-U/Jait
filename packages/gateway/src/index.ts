@@ -4,7 +4,7 @@ import "./crypto-polyfill.js";
 import { loadConfig } from "./config.js";
 import { createServer } from "./server.js";
 import { WsControlPlane } from "./ws.js";
-import { openDatabase, migrateDatabase } from "./db/index.js";
+import { openDatabase, migrateDatabase, sqliteBackend } from "./db/index.js";
 import { SessionService } from "./services/sessions.js";
 import { SessionStateService } from "./services/session-state.js";
 import { WorkspaceStateService } from "./services/workspace-state.js";
@@ -53,7 +53,7 @@ async function main() {
   const { db, sqlite } = await openDatabase();
   migrateDatabase(sqlite);
   setNetworkScanDb(sqlite);
-  console.log("Database initialized at ~/.jait/data/jait.db");
+  console.log(`Database initialized at ~/.jait/data/jait.db (${sqliteBackend})`);
 
   // Services
   const sessionService = new SessionService(db);

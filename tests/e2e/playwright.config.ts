@@ -5,7 +5,7 @@ import { defineConfig, devices } from '@playwright/test'
  * @see https://playwright.dev/docs/test-configuration
  */
 export default defineConfig({
-  testDir: './tests',
+  testDir: '.',
   
   /* Run tests in files in parallel */
   fullyParallel: true,
@@ -77,13 +77,13 @@ export default defineConfig({
   /* Run your local dev server before starting the tests */
   webServer: [
     {
-      command: 'cd ../apps/web && bun run dev',
+      command: 'cd ../../apps/web && bun run dev',
       url: 'http://localhost:3000',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,
     },
     {
-      command: 'cd ../packages/gateway && bun run dev',
+      command: 'cd ../../packages/gateway && bun run dev',
       url: 'http://localhost:8000',
       reuseExistingServer: !process.env.CI,
       timeout: 120000,

@@ -18,6 +18,10 @@ web-dist/
 *.tsbuildinfo
 
 # TypeScript compiled output (emitted alongside .ts sources)
+vitest.config.js
+vitest.config.js.map
+vitest.config.d.ts
+vitest.config.d.ts.map
 packages/*/src/**/*.js
 packages/*/src/**/*.js.map
 packages/*/src/**/*.d.ts
@@ -47,7 +51,8 @@ logs/
 .coverage
 htmlcov/
 .pytest_cache/
-e2e/test-results/
+tests/e2e/test-results/
+tests/e2e/playwright-report/
 
 # Temp
 temp-*/

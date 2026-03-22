@@ -1,12 +1,16 @@
 /**
  * Runtime-agnostic SQLite shim.
  *
- * Uses `bun:sqlite` when running under Bun, `better-sqlite3` under Node.js.
- * Both expose the same subset we need (.exec, .prepare, .close) so the rest
- * of the gateway code never needs to know which engine is active.
+ * Priority order:
+ *   1. `bun:sqlite`      — when running under Bun
+ *   2. `node:sqlite`     — Node.js 22.5+ built-in (no native addon needed)
+ *   3. `better-sqlite3`  — Node.js fallback (uses prebuild-install)
  *
- * Drizzle ORM has matching adapters for both backends; `createDrizzle()`
- * returns the correct one.
+ * All three backends expose the same subset we need (.exec, .prepare, .close)
+ * so the rest of the gateway code never needs to know which engine is active.
+ *
+ * Drizzle ORM's `better-sqlite3` adapter works with both `better-sqlite3` and
+ * `node:sqlite` because `DatabaseSync` is API-compatible (duck-typed).
  */
 import * as schema from "./schema.js";
 
@@ -28,6 +32,61 @@ export interface SqliteDatabase {
 
 const isBun = typeof (globalThis as { Bun?: unknown }).Bun !== "undefined";
 
+/** Which SQLite backend was actually loaded. Useful for diagnostics. */
+export let sqliteBackend: "bun:sqlite" | "node:sqlite" | "better-sqlite3" = "better-sqlite3";
+
+// ── node:sqlite compatibility wrapper ──────────────────────────────────────
+
+/**
+ * Wrap a node:sqlite DatabaseSync to be compatible with drizzle-orm's
+ * better-sqlite3 adapter, which calls `stmt.raw(true/false)` to toggle
+ * between object and array result modes.
+ *
+ * node:sqlite's StatementSync doesn't have `.raw()`, so we shim it.
+ */
+function wrapNodeSqlite(rawDb: unknown): SqliteDatabase {
+  const db = rawDb as {
+    exec(sql: string): void;
+    prepare(sql: string): {
+      all(...params: unknown[]): Record<string, unknown>[];
+      get(...params: unknown[]): Record<string, unknown> | undefined;
+      run(...params: unknown[]): unknown;
+    };
+    close(): void;
+  };
+
+  return {
+    exec: (sql: string) => db.exec(sql),
+    close: () => db.close(),
+    prepare: (sql: string) => {
+      const stmt = db.prepare(sql);
+      let rawMode = false;
+
+      return {
+        // better-sqlite3 API: .raw() with no args enables raw mode,
+        // .raw(true) enables, .raw(false) disables.
+        raw(enabled?: boolean) {
+          rawMode = enabled !== false;
+          return this;
+        },
+        all(...params: unknown[]) {
+          const rows = stmt.all(...params);
+          if (!rawMode || rows.length === 0) return rows;
+          return rows.map((row) => Object.values(row));
+        },
+        get(...params: unknown[]) {
+          const row = stmt.get(...params);
+          if (!rawMode || !row) return row;
+          return Object.values(row);
+        },
+        run(...params: unknown[]) {
+          return stmt.run(...params);
+        },
+      } as unknown as SqliteStatement;
+    },
+  };
+}
+
 // ── Factory: open a raw SQLite database ────────────────────────────────────
 
 /**
@@ -38,12 +97,24 @@ export async function openRawSqlite(path: string): Promise<SqliteDatabase> {
   if (isBun) {
     // @ts-ignore — bun:sqlite only exists at runtime under Bun
     const { Database } = await import("bun:sqlite");
-    return new Database(path) as unknown as SqliteDatabase;
-  } else {
-    const mod = await import("better-sqlite3");
-    const Database = mod.default;
+    sqliteBackend = "bun:sqlite";
     return new Database(path) as unknown as SqliteDatabase;
   }
+
+  // Node.js path: prefer built-in node:sqlite, fall back to better-sqlite3
+  try {
+    // @ts-ignore — node:sqlite is experimental in Node 22, stable in later versions
+    const { DatabaseSync } = await import("node:sqlite");
+    sqliteBackend = "node:sqlite";
+    return wrapNodeSqlite(new DatabaseSync(path));
+  } catch {
+    // node:sqlite not available (flag not set or Node < 22.5)
+  }
+
+  const mod = await import("better-sqlite3");
+  const Database = mod.default;
+  sqliteBackend = "better-sqlite3";
+  return new Database(path) as unknown as SqliteDatabase;
 }
 
 // ── Factory: wrap a raw handle with the Drizzle adapter ────────────────────
@@ -53,6 +124,10 @@ type SchemaType = typeof schema;
 /**
  * Wrap a raw SQLite handle with the matching Drizzle ORM adapter.
  * Returns a fully-typed Drizzle instance regardless of runtime.
+ *
+ * For both `node:sqlite` and `better-sqlite3`, we use the
+ * `drizzle-orm/better-sqlite3` adapter since `DatabaseSync` from node:sqlite
+ * is API-compatible (duck-typed — same .prepare/.exec/.close surface).
  */
 export async function createDrizzle(rawDb: SqliteDatabase) {
   if (isBun) {
@@ -61,6 +136,7 @@ export async function createDrizzle(rawDb: SqliteDatabase) {
     // but are structurally compatible for all query-builder operations.
     return drizzle(rawDb as never, { schema }) as unknown as DrizzleDB;
   } else {
+    // Works for both node:sqlite DatabaseSync and better-sqlite3 Database
     const { drizzle } = await import("drizzle-orm/better-sqlite3");
     return drizzle(rawDb as never, { schema }) as DrizzleDB;
   }
