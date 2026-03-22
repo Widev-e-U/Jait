@@ -142,7 +142,7 @@ export function SessionSelector({
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-5 w-5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                              className="h-5 w-5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 onChangeDirectory(workspace.id)
@@ -159,7 +159,7 @@ export function SessionSelector({
                               <Button
                                 variant="ghost"
                                 size="icon"
-                                className="h-5 w-5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
+                                className="h-5 w-5 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
                                 onClick={(e) => {
                                   e.stopPropagation()
                                   onRemoveWorkspace(workspace.id)
