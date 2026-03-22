@@ -168,7 +168,8 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
           const xy = pLine.slice(0, 2);
           const staged = xy[0] ?? " ";
           const unstaged = xy[1] ?? " ";
-          let fp = pLine.slice(3).trim();
+          // Robustly strip the two status chars plus following whitespace without truncating the path.
+          let fp = pLine.replace(/^[ MADRCU?!]{2}\s+/, "");
           if (fp.includes(" -> ")) fp = fp.split(" -> ").pop()!.trim();
           if (!fp) continue;
           if (xy === "??") {

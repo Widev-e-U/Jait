@@ -416,7 +416,8 @@ export class GitService {
       const xy = line.slice(0, 2);
       const staged = xy[0] ?? " ";
       const unstaged = xy[1] ?? " ";
-      let fp = line.slice(3).trim();
+      // Strip the two status columns plus any whitespace, without chopping off the first path character.
+      let fp = line.replace(/^[ MADRCU?!]{2}\s+/, "");
       if (fp.includes(" -> ")) fp = fp.split(" -> ").pop()!.trim();
       if (!fp) continue;
       if (xy === "??") {
