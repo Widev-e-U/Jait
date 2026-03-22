@@ -763,7 +763,6 @@ function MessageInner({
             {isStreaming && !content && !segments.some((s) => s.type === 'text' && s.content.trim()) && (
               <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
                 <ThinkingDots />
-                <span>Thinking</span>
               </div>
             )}
 
@@ -920,7 +919,6 @@ function MessageInner({
             ) : showStreamingIndicator ? (
               <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
                 <ThinkingDots />
-                <span>Thinking</span>
               </div>
             ) : null}
           </>
