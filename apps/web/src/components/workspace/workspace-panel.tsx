@@ -4447,7 +4447,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {/* File explorer pane */}
       {showTreeProp && (
       <div
-        className={`border-r bg-background transition-colors flex flex-col shrink-0`}
+        className={`border-r bg-background transition-colors flex flex-col shrink-0 overflow-hidden`}
         style={{ width: tree.size }}
       >
         {/* Tab bar: Files | Source Control */}
@@ -4660,17 +4660,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         {treeTab === 'git' && (
         <div className="flex-1 min-h-0 flex flex-col">
           {/* Branch + refresh header */}
-          <div className="flex h-[35px] items-center gap-1.5 px-2 border-b bg-muted/10 shrink-0">
+          <div className="flex h-[35px] items-center gap-1.5 px-2 border-b bg-muted/10 shrink-0 min-w-0">
             {gitStatus?.branch && (
-              <span className="ui-caption truncate flex-1" title={gitStatus.branch}>
+              <span className="ui-caption truncate flex-1 min-w-0" title={gitStatus.branch}>
                 <GitBranch className="h-3 w-3 inline mr-0.5 -mt-px" />
                 {gitStatus.branch}
               </span>
             )}
-            {!gitStatus?.branch && <span className="ui-caption flex-1">No repo</span>}
+            {!gitStatus?.branch && <span className="ui-caption flex-1 min-w-0">No repo</span>}
             {remoteRoot && (
               <select
-                className="h-7 rounded-md border border-input bg-background/90 px-2 text-xs text-muted-foreground shadow-sm"
+                className="h-7 rounded-md border border-input bg-background/90 px-2 text-xs text-muted-foreground shadow-sm shrink-0"
                 value={String(gitAutoFetchMode)}
                 onChange={(e) => handleGitAutoFetchModeChange(e.target.value)}
                 title={`${describeGitAutoFetchMode(gitAutoFetchMode)}. Interval: ${gitAutoFetchPeriodSeconds}s`}
@@ -4732,7 +4732,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   : <Sparkles className="h-3 w-3" />}
               </button>
             </div>
-            <div className="flex items-center gap-1 flex-wrap">
+            <div className="flex items-center gap-1 flex-wrap min-w-0">
               <Button
                 size="sm"
                 className="h-8 rounded-md px-2 text-xs"

@@ -2250,6 +2250,29 @@ function App() {
     // All clients (including this one) will receive it and hydrate automatically.
   }, [activeSessionId, token, updateSettings])
 
+  // Wrap switchWorkspace so clicking a workspace also opens its remote directory
+  // and shows the correct files/session in the editor.
+  const handleSwitchWorkspace = useCallback((workspaceId: string) => {
+    const workspace = workspaces.find((w) => w.id === workspaceId)
+    if (!workspace) return
+
+    // Determine which session to activate (mirrors switchWorkspace logic)
+    const hasCurrentSession = workspace.sessions.some((s) => s.id === activeSessionId)
+    const nextSessionId = hasCurrentSession ? activeSessionId : workspace.sessions[0]?.id ?? null
+
+    switchWorkspace(workspaceId)
+
+    // Open the workspace directory on the gateway so the file tree refreshes
+    if (workspace.rootPath) {
+      openRemoteWorkspaceOnGateway(workspace.rootPath, workspace.nodeId || undefined, nextSessionId)
+        .then(() => {
+          showWorkspaceRef.current = true
+          setShowWorkspace(true)
+        })
+        .catch(console.error)
+    }
+  }, [workspaces, activeSessionId, switchWorkspace, openRemoteWorkspaceOnGateway])
+
   const handleCreateWorkspace = useCallback(() => {
     setWorkspacePickerMode('workspace')
     setFolderPickerOpen(true)
@@ -4189,7 +4212,7 @@ function App() {
                   activeWorkspaceId={activeWorkspaceId}
                   hasMoreWorkspaces={hasMoreWorkspaces}
                   showFewerWorkspaces={workspaces.length > workspaceListLimit}
-                  onSelectWorkspace={switchWorkspace}
+                  onSelectWorkspace={handleSwitchWorkspace}
                   onCreateWorkspace={handleCreateWorkspace}
                   onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
                   onChangeDirectory={handleChangeDirectory}

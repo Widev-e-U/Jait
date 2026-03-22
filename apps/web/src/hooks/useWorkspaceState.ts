@@ -25,6 +25,10 @@ export function useWorkspaceState<T>(
       return
     }
 
+    // Reset immediately so stale values from the previous workspace are not
+    // consumed before the fetch for the new workspace completes.
+    setValueLocal(null)
+
     let cancelled = false
     setLoading(true)
 
