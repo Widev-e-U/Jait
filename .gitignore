@@ -13,6 +13,7 @@ venv/
 # Build outputs
 dist/
 build/
+web-dist/
 *.egg-info/
 *.tsbuildinfo
 

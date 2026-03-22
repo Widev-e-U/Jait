@@ -421,6 +421,7 @@ jobs:
       - name: Bundle web dist into gateway
         if: github.event_name != 'push' || github.ref != 'refs/heads/main' || needs.auto-tag.outputs.gateway_changed == 'true'
         run: |
+          rm -rf packages/gateway/web-dist
           cp -r apps/web/dist packages/gateway/web-dist
           echo "✅ Bundled web frontend into packages/gateway/web-dist"
 
