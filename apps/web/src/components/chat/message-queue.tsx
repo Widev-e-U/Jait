@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
-import { Check, ChevronDown, ChevronRight, GripVertical, ListPlus, Pencil, X } from 'lucide-react'
+import { Check, ChevronDown, ChevronRight, GitBranch, GripVertical, ListPlus, Pencil, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface QueuedMessage {
@@ -15,6 +15,7 @@ interface MessageQueueProps {
   onRemove?: (id: string) => void
   onEdit?: (id: string, newContent: string) => void
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
+  onSendToParallelThread?: (id: string) => void
   className?: string
 }
 
@@ -90,6 +91,7 @@ function QueueItem({
   onRemove,
   onEdit,
   onReorder,
+  onSendToParallelThread,
   dragActive,
   dropBefore,
   dropAfter,
@@ -100,6 +102,7 @@ function QueueItem({
   onRemove?: (id: string) => void
   onEdit?: (id: string, content: string) => void
   onReorder?: (sourceId: string, targetId: string | null, placement: 'before' | 'after') => void
+  onSendToParallelThread?: (id: string) => void
   dragActive?: boolean
   dropBefore?: boolean
   dropAfter?: boolean
@@ -266,6 +269,17 @@ function QueueItem({
                 <Pencil className="h-3 w-3" />
               </button>
             )}
+            {onSendToParallelThread && (
+              <button
+                type="button"
+                data-no-drag="true"
+                className="p-1 rounded hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors"
+                onClick={() => onSendToParallelThread(item.id)}
+                title="Send to parallel thread"
+              >
+                <GitBranch className="h-3 w-3" />
+              </button>
+            )}
             <button
               type="button"
               data-no-drag="true"
@@ -290,7 +304,7 @@ function QueueItem({
 
 /* ── Queue container ────────────────────────────────────────────────── */
 
-export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: MessageQueueProps) {
+export function MessageQueue({ items, onRemove, onEdit, onReorder, onSendToParallelThread, className }: MessageQueueProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const dragCaptureElementRef = useRef<HTMLElement | null>(null)
   const [dragSourceId, setDragSourceId] = useState<string | null>(null)
@@ -441,6 +455,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, className }: 
           onRemove={onRemove}
           onEdit={onEdit}
           onReorder={onReorder}
+          onSendToParallelThread={onSendToParallelThread}
           dragActive={dragSourceId === item.id}
           dropBefore={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'before' && dragSourceId !== item.id)}
           dropAfter={Boolean(dragSourceId && dropTarget?.targetId === item.id && dropTarget.placement === 'after' && dragSourceId !== item.id)}

@@ -599,9 +599,14 @@ function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className
 }
 
 interface SubAgentToolCall {
+  callId?: string
   tool: string
+  args?: unknown
   ok: boolean
   message: string
+  data?: unknown
+  startedAt?: number
+  completedAt?: number
 }
 
 function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>; message?: string }) {
@@ -609,6 +614,18 @@ function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>;
   const content = typeof data.content === 'string' ? data.content.trim() : ''
   const rounds = typeof data.rounds === 'number' ? data.rounds : null
   const durationMs = typeof data.durationMs === 'number' ? data.durationMs : null
+
+  const nestedCalls: ToolCallInfo[] = toolCalls.map((tc, i) => ({
+    callId: tc.callId ?? `sub-${i}`,
+    tool: tc.tool,
+    args: (tc.args && typeof tc.args === 'object' && !Array.isArray(tc.args))
+      ? tc.args as Record<string, unknown>
+      : {},
+    status: tc.ok ? 'success' : 'error',
+    result: { ok: tc.ok, message: tc.message, data: tc.data },
+    startedAt: tc.startedAt ?? 0,
+    completedAt: tc.completedAt,
+  }))
 
   return (
     <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
@@ -621,25 +638,12 @@ function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>;
         )}
       </div>
 
-      {/* Tool call history */}
-      {toolCalls.length > 0 && (
+      {/* Nested tool calls rendered as full ToolCallCards */}
+      {nestedCalls.length > 0 && (
         <div className="space-y-1">
-          <div className="text-[11px] uppercase tracking-wide text-muted-foreground">Tool calls</div>
-          <div className="rounded bg-background/80 divide-y divide-border/30">
-            {toolCalls.map((tc, i) => (
-              <div key={`${tc.tool}-${i}`} className="flex items-center gap-2 px-2 py-1.5">
-                {tc.ok ? (
-                  <CheckCircle2 className="h-3 w-3 shrink-0 text-green-500" />
-                ) : (
-                  <XCircle className="h-3 w-3 shrink-0 text-red-500" />
-                )}
-                <span className="font-mono text-[11px] text-foreground/80 shrink-0">{tc.tool}</span>
-                {tc.message && (
-                  <span className="text-[11px] text-muted-foreground truncate min-w-0">{truncate(tc.message, 100)}</span>
-                )}
-              </div>
-            ))}
-          </div>
+          {nestedCalls.map((call) => (
+            <ToolCallCard key={call.callId} call={call} />
+          ))}
         </div>
       )}
 

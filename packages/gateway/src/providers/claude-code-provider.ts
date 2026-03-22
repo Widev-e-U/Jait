@@ -439,7 +439,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
             if (b["type"] === "tool_result") {
               const toolUseId = String(b["tool_use_id"] ?? "");
               const isError = b["is_error"] === true;
-              const resultText = String(event["tool_use_result"] ?? b["content"] ?? "");
+              const resultText = extractResultText(event["tool_use_result"] ?? b["content"] ?? "");
               const match = toolUseId
                 ? state.pendingToolCalls.find(p => p.providerCallId === toolUseId)
                 : state.pendingToolCalls[0];
@@ -725,7 +725,23 @@ function normalizeClaudeToolName(tool: string): string {
   if (normalized === "write") return "file.write";
   if (normalized === "read") return "read";
   if (normalized === "websearch") return "web";
+  if (normalized === "bash") return "execute";
+  if (normalized === "glob") return "search";
+  if (normalized === "grep") return "search";
+  if (normalized === "todowrite") return "todo";
   return tool;
+}
+
+/** Extract plain text from a Claude Code tool result content value (string or content-block array). */
+function extractResultText(content: unknown): string {
+  if (typeof content === "string") return content;
+  if (Array.isArray(content)) {
+    return content
+      .filter((b): b is Record<string, unknown> => Boolean(b && typeof b === "object"))
+      .map((b) => (typeof b["text"] === "string" ? b["text"] : ""))
+      .join("");
+  }
+  return "";
 }
 
 function normalizeClaudeToolArgs(
@@ -750,6 +766,36 @@ function normalizeClaudeToolArgs(
       ...(input["url"] != null ? { url: input["url"] } : {}),
       ...input,
     };
+  }
+
+  if (normalized === "execute") {
+    return {
+      command: String(input["command"] ?? ""),
+      ...input,
+    };
+  }
+
+  if (normalized === "search") {
+    return {
+      pattern: String(input["pattern"] ?? input["query"] ?? ""),
+      ...input,
+    };
+  }
+
+  if (normalized === "todo") {
+    // Claude Code TodoWrite uses {todos: [{id, content, status, priority}]}
+    // Jait's todo tool uses {todoList: [{id, title, status}]}
+    const claudeTodos = Array.isArray(input["todos"]) ? input["todos"] : [];
+    const todoList = claudeTodos.map((item: unknown) => {
+      const t = (item && typeof item === "object" ? item : {}) as Record<string, unknown>;
+      const rawStatus = String(t["status"] ?? "pending");
+      const status: "not-started" | "in-progress" | "completed" =
+        rawStatus === "completed" ? "completed"
+        : rawStatus === "in_progress" || rawStatus === "in-progress" ? "in-progress"
+        : "not-started";
+      return { id: Number(t["id"]) || 0, title: String(t["content"] ?? t["title"] ?? ""), status };
+    });
+    return { todoList, ...input };
   }
 
   return input;

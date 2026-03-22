@@ -77,7 +77,7 @@ import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type Work
 import { DetachedTabView } from '@/components/workspace/detached-tab-view'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
-import { ModelIcon, getModelDisplayName } from '@/components/icons/model-icons'
+import { ModelIcon, getModelDisplayName, JaitIcon } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
 import { useChat, type ChatMode } from '@/hooks/useChat'
 import { useModelInfo } from '@/hooks/useModelInfo'
@@ -903,6 +903,8 @@ function App() {
   const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string }[]>([])
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
   const [workspacePickerMode, setWorkspacePickerMode] = useState<'workspace' | 'editor'>('workspace')
+  const [changeDirectoryWorkspaceId, setChangeDirectoryWorkspaceId] = useState<string | null>(null)
+  const [fsNodes, setFsNodes] = useState<import('@jait/shared').FsNode[]>([])
   const isDragging = useRef(false)
   const workspaceRef = useRef<WorkspacePanelHandle>(null)
   const promptInputRef = useRef<PromptInputHandle>(null)
@@ -1246,6 +1248,15 @@ function App() {
 
   const onLoginRequired = useCallback(() => setShowLoginDialog(true), [])
 
+  // Fetch filesystem nodes for workspace node tags
+  useEffect(() => {
+    if (!token) return
+    void fetch(`${API_URL}/api/filesystem/nodes`, { headers: token ? { Authorization: `Bearer ${token}` } : {} })
+      .then((res) => res.ok ? res.json() : null)
+      .then((data) => { if (data?.nodes) setFsNodes(data.nodes) })
+      .catch(() => {})
+  }, [token])
+
   const {
     workspaces,
     archivedSessionsByWorkspace,
@@ -1253,6 +1264,7 @@ function App() {
     activeSessionId,
     createSession,
     createWorkspace,
+    updateWorkspace,
     switchWorkspace,
     switchSession,
     fetchArchivedSessions,
@@ -1284,6 +1296,11 @@ function App() {
       .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
       .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
   }, [activeWorkspaceRecord, archivedSessionsByWorkspace])
+  const handleChangeDirectory = useCallback((workspaceId: string) => {
+    setChangeDirectoryWorkspaceId(workspaceId)
+    setFolderPickerOpen(true)
+  }, [])
+
   const handleRemoveWorkspace = useCallback(async (workspaceId: string) => {
     const removed = await removeWorkspace(workspaceId)
     if (removed) {
@@ -2255,6 +2272,12 @@ function App() {
     nodeId: string,
     options?: { openEditor?: boolean },
   ) => {
+    // If we're changing the directory of an existing workspace
+    if (changeDirectoryWorkspaceId) {
+      setChangeDirectoryWorkspaceId(null)
+      await updateWorkspace(changeDirectoryWorkspaceId, { rootPath: path, nodeId })
+      return
+    }
     const workspace = await createWorkspace({ rootPath: path, nodeId })
     if (!workspace) {
       throw new Error('Failed to create workspace')
@@ -2268,7 +2291,7 @@ function App() {
     await openRemoteWorkspaceOnGateway(path, nodeId, session.id)
     setShowWorkspace(nextOpen)
     setSavedWorkspace({ open: nextOpen, remotePath: path, nodeId })
-  }, [createSession, createWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
+  }, [changeDirectoryWorkspaceId, createSession, createWorkspace, updateWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
 
   const handleToggleEditor = useCallback(async () => {
     if (showWorkspace) {
@@ -3627,12 +3650,7 @@ function App() {
             >
           {/* Left: Logo — always visible */}
           <div className="flex items-center shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 1024 1024" className="shrink-0">
-              <path d="M318 372 L430 486 L318 600"
-                    fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715"
-                    fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round"/>
-            </svg>
+            <JaitIcon size={20} className="shrink-0" />
           </div>
 
           {/* Center: Nav — scrollable on mobile */}
@@ -4171,9 +4189,11 @@ function App() {
                   onSelectWorkspace={switchWorkspace}
                   onCreateWorkspace={handleCreateWorkspace}
                   onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
+                  onChangeDirectory={handleChangeDirectory}
                   onShowMore={showMoreWorkspaces}
                   onShowFewer={showFewerWorkspaces}
                   sessionInfo={sessionInfo}
+                  nodes={fsNodes}
                 />
               </aside>
             )}
@@ -5085,7 +5105,7 @@ function App() {
 
         <FolderPickerDialog
           open={folderPickerOpen}
-          onOpenChange={setFolderPickerOpen}
+          onOpenChange={(open) => { setFolderPickerOpen(open); if (!open) setChangeDirectoryWorkspaceId(null) }}
           initialPath={settings.workspace_picker_path}
           initialNodeId={settings.workspace_picker_node_id}
           onSelect={(path, nodeId) => {

@@ -424,7 +424,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const searchAbort = useRef<AbortController | null>(null)
   const composerDisabled = Boolean(disabled)
   const controlsLocked = Boolean(controlsDisabled ?? disabled ?? false)
-  const selectorsDisabled = controlsLocked || Boolean(isLoading)
+  const selectorsDisabled = controlsLocked
   const showProviderSelector = Boolean(provider && onProviderChange)
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
   const showCliModelSelector = Boolean(provider && provider !== 'jait' && onCliModelChange)

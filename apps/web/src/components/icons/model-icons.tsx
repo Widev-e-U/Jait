@@ -3,6 +3,36 @@
  * Maps LLM providers and models to their icons
  * Uses deep imports to avoid pulling in @lobehub/ui features
  */
+
+function JaitIcon({ size = 20, className }: { size?: number; className?: string }) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width={size}
+      height={size}
+      viewBox="0 0 1024 1024"
+      className={className}
+    >
+      <path
+        d="M318 372 L430 486 L318 600"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="88"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+      <path
+        d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="88"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      />
+    </svg>
+  )
+}
+
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Anthropic from '@lobehub/icons/es/Anthropic'
 import Ollama from '@lobehub/icons/es/Ollama'
@@ -80,11 +110,12 @@ const MODEL_ICONS: Record<string, React.ComponentType<{ size?: number; className
 }
 
 // Provider icons as fallback
-const PROVIDER_ICONS: Record<ProviderType, React.ComponentType<{ size?: number; className?: string }>> = {
+const PROVIDER_ICONS: Record<string, React.ComponentType<{ size?: number; className?: string }>> = {
   openai: OpenAI,
   anthropic: Claude,
   ollama: Ollama,
   local: Llama, // Default for local models
+  jait: JaitIcon,
 }
 
 /**
@@ -109,7 +140,7 @@ export function getModelIcon(provider: string, model?: string): React.ComponentT
   }
   
   // Fall back to provider icon
-  return PROVIDER_ICONS[provider as ProviderType] || PROVIDER_ICONS.ollama
+  return PROVIDER_ICONS[provider] ?? PROVIDER_ICONS.ollama
 }
 
 /**
@@ -157,4 +188,4 @@ export function getModelDisplayName(model: string): string {
   return formatted
 }
 
-export { OpenAI, Anthropic, Ollama, Claude, Qwen, Meta as Llama, Mistral, DeepSeek, Gemini, Grok }
+export { OpenAI, Anthropic, Ollama, Claude, Qwen, Meta as Llama, Mistral, DeepSeek, Gemini, Grok, JaitIcon }

@@ -235,6 +235,32 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     }
   }, [onLoginRequired, token])
 
+  const updateWorkspace = useCallback(async (workspaceId: string, data: { rootPath?: string; nodeId?: string; title?: string }) => {
+    if (!token) {
+      onLoginRequired?.()
+      return null
+    }
+    try {
+      const res = await fetch(`${API_URL}/api/workspaces/${workspaceId}`, {
+        method: 'PATCH',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify(data),
+      })
+      if (res.status === 401) {
+        onLoginRequired?.()
+        return null
+      }
+      if (!res.ok) return null
+      const workspace = await res.json() as Omit<WorkspaceRecord, 'sessions'> & { sessions?: WorkspaceSession[] }
+      const updated: WorkspaceRecord = { ...workspace, sessions: workspace.sessions ?? [] }
+      setWorkspaces((prev) => prev.map((w) => w.id === workspaceId ? { ...w, ...updated } : w))
+      return updated
+    } catch (err) {
+      console.error('Failed to update workspace:', err)
+      return null
+    }
+  }, [onLoginRequired, token])
+
   const removeWorkspace = useCallback(async (workspaceId: string) => {
     if (!token) {
       onLoginRequired?.()
@@ -325,6 +351,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     hasMoreWorkspaces,
     fetchWorkspaces,
     createWorkspace,
+    updateWorkspace,
     createSession,
     switchWorkspace,
     switchSession,

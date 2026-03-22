@@ -1271,6 +1271,32 @@ export function registerChatRoutes(
               emitToSubscribers(sessionId, { type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data } as StreamEvent);
               accumulateToolResult(sessionId, resultCallId, event.ok, event.message || "", event.data);
 
+              // Emit todo_list event for TodoWrite (normalized to "todo") tool calls
+              if (event.ok && (tc?.tool === "todo" || event.tool === "todo")) {
+                const rawTodos = (tc?.args as Record<string, unknown> | undefined)?.["todos"];
+                if (Array.isArray(rawTodos)) {
+                  const items = rawTodos.map((t: Record<string, unknown>, i: number) => ({
+                    id: typeof t["id"] === "number" ? t["id"] : i,
+                    title: String(t["content"] ?? t["title"] ?? ""),
+                    status: t["status"] === "in_progress" ? "in-progress" : t["status"] === "completed" ? "completed" : "not-started",
+                  }));
+                  const todoListEvent = { type: "todo_list", items };
+                  safeWrite(`data: ${JSON.stringify(todoListEvent)}\n\n`);
+                  emitToSubscribers(sessionId, todoListEvent as StreamEvent);
+                  if (sessionStateService) {
+                    try { sessionStateService.set(sessionId, { "todo_list": items }); } catch { /* ignore */ }
+                  }
+                  if (ws) {
+                    ws.broadcast(sessionId, {
+                      type: "ui.state-sync",
+                      sessionId,
+                      timestamp: new Date().toISOString(),
+                      payload: { key: "todo_list", value: items },
+                    });
+                  }
+                }
+              }
+
               // Emit file_changed for successful external file mutations.
               const mutationPath = getExternalFileMutationPath(tc?.tool ?? event.tool, tc?.args ?? {});
               if (event.ok && mutationPath) {

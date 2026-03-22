@@ -1,9 +1,10 @@
-import { Folder, FolderOpen, Monitor, Plus, Trash2 } from 'lucide-react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Trash2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WorkspaceRecord } from '@/hooks/useWorkspaces'
 import type { SessionInfo } from '@/hooks/useChat'
+import type { FsNode } from '@jait/shared'
 
 interface SessionSelectorProps {
   workspaces: WorkspaceRecord[]
@@ -13,9 +14,11 @@ interface SessionSelectorProps {
   onSelectWorkspace: (workspaceId: string) => void
   onCreateWorkspace: () => void
   onRemoveWorkspace: (workspaceId: string) => void
+  onChangeDirectory: (workspaceId: string) => void
   onShowMore?: () => void
   onShowFewer?: () => void
   sessionInfo?: SessionInfo | null
+  nodes?: FsNode[]
 }
 
 function formatTime(iso: string) {
@@ -28,6 +31,20 @@ function formatTime(iso: string) {
   return d.toLocaleDateString()
 }
 
+function NodeIcon({ platform }: { platform: string }) {
+  switch (platform) {
+    case 'windows':
+    case 'macos':
+    case 'linux':
+      return <Monitor className="h-2.5 w-2.5" />
+    case 'android':
+    case 'ios':
+      return <Smartphone className="h-2.5 w-2.5" />
+    default:
+      return <Globe className="h-2.5 w-2.5" />
+  }
+}
+
 export function SessionSelector({
   workspaces,
   activeWorkspaceId,
@@ -36,9 +53,11 @@ export function SessionSelector({
   onSelectWorkspace,
   onCreateWorkspace,
   onRemoveWorkspace,
+  onChangeDirectory,
   onShowMore,
   onShowFewer,
   sessionInfo,
+  nodes = [],
 }: SessionSelectorProps) {
   return (
     <div className="flex flex-col h-full">
@@ -70,6 +89,9 @@ export function SessionSelector({
             <>
               {workspaces.map((workspace) => {
                 const isActiveWorkspace = workspace.id === activeWorkspaceId
+                const remoteNode = workspace.nodeId && workspace.nodeId !== 'gateway'
+                  ? nodes.find((n) => n.id === workspace.nodeId)
+                  : null
                 return (
                   <div key={workspace.id} className="rounded-md border border-border/60 bg-background/40">
                     <div
@@ -93,6 +115,14 @@ export function SessionSelector({
                         <div className="text-[10px] text-muted-foreground">
                           {formatTime(workspace.lastActiveAt)}
                         </div>
+                        {remoteNode && (
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px]">
+                            <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
+                              <NodeIcon platform={remoteNode.platform} />
+                              <span className="truncate max-w-[80px]">{remoteNode.name}</span>
+                            </span>
+                          </div>
+                        )}
                         {isActiveWorkspace && sessionInfo && (
                           <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-blue-500">
                             <span className="truncate">{sessionInfo.provider}</span>
@@ -106,24 +136,42 @@ export function SessionSelector({
                           </div>
                         )}
                       </div>
-                      {workspace.sessions.length === 0 && (
+                      <div className="flex shrink-0 self-start gap-0.5">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
-                              className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0 self-start text-muted-foreground hover:text-destructive"
+                              className="h-5 w-5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
                               onClick={(e) => {
                                 e.stopPropagation()
-                                onRemoveWorkspace(workspace.id)
+                                onChangeDirectory(workspace.id)
                               }}
                             >
-                              <Trash2 className="h-3 w-3" />
+                              <FolderInput className="h-3 w-3" />
                             </Button>
                           </TooltipTrigger>
-                          <TooltipContent side="right">Remove empty workspace</TooltipContent>
+                          <TooltipContent side="right">Change directory</TooltipContent>
                         </Tooltip>
-                      )}
+                        {workspace.sessions.length === 0 && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 opacity-0 group-hover:opacity-100 [@media(hover:none)]:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onRemoveWorkspace(workspace.id)
+                                }}
+                              >
+                                <Trash2 className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">Remove empty workspace</TooltipContent>
+                          </Tooltip>
+                        )}
+                      </div>
                     </div>
                   </div>
                 )
