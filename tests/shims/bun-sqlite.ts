@@ -1,35 +1,40 @@
-import BetterSqlite3 from "better-sqlite3";
+/**
+ * bun:sqlite shim for Vitest (runs under Node.js).
+ *
+ * Uses Node 22's built-in `node:sqlite` (DatabaseSync) instead of the
+ * `better-sqlite3` native addon, avoiding the deprecated `prebuild-install`.
+ */
+// @ts-ignore — node:sqlite types may not be available in all @types/node versions
+import { DatabaseSync } from "node:sqlite";
 
 type QueryParams = unknown[] | Record<string, unknown> | undefined;
 
+function spreadParams(params?: QueryParams): unknown[] {
+  if (typeof params === "undefined") return [];
+  if (Array.isArray(params)) return params;
+  return [params];
+}
+
 class WrappedQuery {
-  constructor(private readonly statement: BetterSqlite3.Statement) {}
+  constructor(private readonly statement: ReturnType<DatabaseSync["prepare"]>) {}
 
   all(params?: QueryParams) {
-    if (typeof params === "undefined") return this.statement.all();
-    if (Array.isArray(params)) return this.statement.all(...params);
-    return this.statement.all(params);
+    return this.statement.all(...spreadParams(params));
   }
 
   get(params?: QueryParams) {
-    if (typeof params === "undefined") return this.statement.get();
-    if (Array.isArray(params)) return this.statement.get(...params);
-    return this.statement.get(params);
+    return this.statement.get(...spreadParams(params));
   }
 
   run(params?: QueryParams) {
-    if (typeof params === "undefined") return this.statement.run();
-    if (Array.isArray(params)) return this.statement.run(...params);
-    return this.statement.run(params);
+    return this.statement.run(...spreadParams(params));
   }
 }
 
-export class Database extends BetterSqlite3 {
+export class Database extends DatabaseSync {
   run(sql: string, params?: QueryParams) {
     const statement = this.prepare(sql);
-    if (typeof params === "undefined") return statement.run();
-    if (Array.isArray(params)) return statement.run(...params);
-    return statement.run(params);
+    return statement.run(...spreadParams(params));
   }
 
   query(sql: string) {

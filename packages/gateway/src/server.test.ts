@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { signAuthToken } from "./security/http-auth.js";
-import { resolve, dirname } from "node:path";
+import { resolve, dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer as createHttpServer } from "node:http";
+import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -104,10 +105,26 @@ describe("@jait/gateway health", () => {
     await app.close();
   });
 
+  // Create temp fixtures inside cwd so they pass the isPathWithin(cwd) check
+  let devFileFixtureDir: string;
+  let devFileHtml: string;
+  let devFileSvg: string;
+
+  beforeAll(() => {
+    devFileFixtureDir = mkdtempSync(join(process.cwd(), ".tmp-dev-file-test-"));
+    devFileHtml = join(devFileFixtureDir, "preview.html");
+    devFileSvg = join(devFileFixtureDir, "icon.svg");
+    writeFileSync(devFileHtml, '<!DOCTYPE html>\n<html><head><title>Test</title></head>\n<body><img src="/icon.svg" /></body>\n</html>\n');
+    writeFileSync(devFileSvg, '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1"><rect width="1" height="1"/></svg>\n');
+  });
+
+  afterAll(() => {
+    rmSync(devFileFixtureDir, { recursive: true, force: true });
+  });
+
   it("GET /api/dev-file serves workspace html previews with rewritten asset paths", async () => {
     const app = await createServer(testConfig);
-    const fixturePath = resolve(__dirname, "__fixtures__/preview.html");
-    const encodedPath = Buffer.from(fixturePath, "utf8")
+    const encodedPath = Buffer.from(devFileHtml, "utf8")
       .toString("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
@@ -135,8 +152,7 @@ describe("@jait/gateway health", () => {
 
   it("GET /api/dev-file accepts relative workspace html paths", async () => {
     const app = await createServer(testConfig);
-    const fixturePath = resolve(__dirname, "__fixtures__/preview.html");
-    const encodedPath = Buffer.from(fixturePath, "utf8")
+    const encodedPath = Buffer.from(devFileHtml, "utf8")
       .toString("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
