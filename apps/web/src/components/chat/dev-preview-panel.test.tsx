@@ -54,15 +54,15 @@ describe('resolvePreviewTarget', () => {
 
     ;(globalThis as typeof globalThis & { window?: unknown }).window = {
       location: {
-        origin: 'https://jait.basenetwork.net',
+        origin: 'https://remote.example.com',
         port: '',
         protocol: 'https:',
-        hostname: 'jait.basenetwork.net',
+        hostname: 'remote.example.com',
       },
       dispatchEvent: () => true,
     }
     ;(globalThis as typeof globalThis & { localStorage?: Storage }).localStorage = {
-      getItem: (key: string) => key === 'jait-gateway-url' ? 'https://jait.basenetwork.net' : null,
+      getItem: (key: string) => key === 'jait-gateway-url' ? 'https://remote.example.com' : null,
       setItem: () => undefined,
       removeItem: () => undefined,
       clear: () => undefined,

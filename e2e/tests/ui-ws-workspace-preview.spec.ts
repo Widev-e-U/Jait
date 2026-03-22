@@ -1,8 +1,8 @@
 import { test, expect } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
-const WORKSPACE_ROOT = '/home/jakob/jait'
-const DOCS_SITE_ROOT = '/home/jakob/jait/docs/site'
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || '/workspace/jait'
+const DOCS_SITE_ROOT = process.env.DOCS_SITE_ROOT || `${WORKSPACE_ROOT}/docs/site`
 
 async function registerUser(request: Parameters<typeof test>[0]['request']) {
   const username = `e2e-ui-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`

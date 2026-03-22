@@ -31,6 +31,7 @@ apps/*/src/**/*.d.ts.map
 # IDE
 .idea/
 .vscode/
+.gemini/
 *.swp
 *.swo
 
