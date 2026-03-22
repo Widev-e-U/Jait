@@ -1,6 +1,9 @@
+<p align="center">
+  <img src="docs/site/icon.svg" width="96" alt="Jait logo" />
+</p>
 # Jait
 
-**Local-first AI coding agent** with terminal, filesystem, browser control, screen sharing, and task automation — no cloud backend required.
+**Local-first AI coding agent workspace** with terminal, filesystem, browser control, screen sharing, and task automation — no cloud backend required.
 
 Jait runs as a lightweight gateway on your machine (or a server) and serves a web UI to any browser. Think of it as your own self-hosted AI dev environment: connect your API key, open the UI, and start building.
 
@@ -9,10 +12,6 @@ Jait runs as a lightweight gateway on your machine (or a server) and serves a we
   <a href="https://github.com/JakobWl/Jait/releases"><img src="https://img.shields.io/github/v/release/JakobWl/Jait?include_prereleases&style=for-the-badge" alt="GitHub release"></a>
   <a href="https://discord.gg/XaHA8fnB"><img src="https://img.shields.io/discord/1485203573183742074?label=Discord&logo=discord&logoColor=white&color=5865F2&style=for-the-badge" alt="Discord"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
-</p>
-
-<p align="center">
-  <img src="docs/site/icon.svg" width="96" alt="Jait logo" />
 </p>
 
 ---
