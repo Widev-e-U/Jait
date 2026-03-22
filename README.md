@@ -162,6 +162,7 @@ jait                       Start the gateway (default port 8000)
 jait start                 Start the gateway in the background
 jait stop                  Stop the background gateway
 jait status                Check if the gateway is running
+jait reset                 Wipe all data (~/.jait) — double confirmation
 jait --port 9000           Custom port
 jait --host 127.0.0.1      Bind to localhost only
 jait --env /path/to/.env   Explicit env file

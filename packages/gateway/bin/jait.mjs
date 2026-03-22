@@ -8,6 +8,7 @@
  *   jait start               Start the gateway in the background
  *   jait stop                Stop the background gateway
  *   jait status              Check if the gateway is running
+ *   jait reset               Wipe all data
  *   jait --port 9000         Use a custom port
  *   jait --host 127.0.0.1   Bind to specific host
  *   jait --help              Show help
@@ -21,12 +22,13 @@
  *   jait daemon logs         Tail service logs
  */
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, openSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, openSync, rmSync, readdirSync, statSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { homedir, platform } from "node:os";
 import { fileURLToPath } from "node:url";
 import { execSync, spawn } from "node:child_process";
 import { createConnection } from "node:net";
+import { createInterface } from "node:readline";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -73,6 +75,7 @@ Commands:
   start              Start the gateway in the background
   stop               Stop the background gateway
   status             Check if the gateway is running
+  reset              Wipe all data (~/.jait)
   daemon <cmd>       Manage systemd service (Linux only)
 
 Options:
@@ -255,6 +258,87 @@ function cmdStop() {
   }
 
   try { unlinkSync(PID_PATH); } catch {}
+  console.log("");
+}
+
+function prompt(question) {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((res) => rl.question(question, (answer) => { rl.close(); res(answer.trim()); }));
+}
+
+function formatBytes(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function dirSize(dir) {
+  let total = 0;
+  try {
+    for (const entry of readdirSync(dir, { withFileTypes: true })) {
+      const p = join(dir, entry.name);
+      if (entry.isDirectory()) total += dirSize(p);
+      else try { total += statSync(p).size; } catch {}
+    }
+  } catch {}
+  return total;
+}
+
+async function cmdReset() {
+  printBanner();
+
+  if (!existsSync(JAIT_DIR)) {
+    console.log(`  Nothing to reset — ${JAIT_DIR} does not exist.`);
+    console.log("");
+    process.exit(0);
+  }
+
+  // Show what will be deleted
+  const size = dirSize(JAIT_DIR);
+  console.log(`  This will permanently delete ALL Jait data:`);
+  console.log(``);
+  console.log(`    ${JAIT_DIR}  (${formatBytes(size)})`);
+  console.log(``);
+  console.log(`  This includes:`);
+  console.log(`    • Database (accounts, sessions, threads, messages)`);
+  console.log(`    • Configuration (.env, settings)`);
+  console.log(`    • Logs`);
+  console.log(`    • PID files`);
+  console.log(``);
+
+  const answer1 = await prompt("  Are you sure? Type 'yes' to continue: ");
+  if (answer1.toLowerCase() !== "yes") {
+    console.log("  Aborted.");
+    console.log("");
+    process.exit(0);
+  }
+
+  const answer2 = await prompt("  This cannot be undone. Type 'delete everything' to confirm: ");
+  if (answer2.toLowerCase() !== "delete everything") {
+    console.log("  Aborted.");
+    console.log("");
+    process.exit(0);
+  }
+
+  // Stop running instance first
+  if (existsSync(PID_PATH)) {
+    const pid = readFileSync(PID_PATH, "utf8").trim();
+    if (isProcessRunning(pid)) {
+      console.log(`  Stopping running instance (PID ${pid})...`);
+      try {
+        if (platform() === "win32") {
+          execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
+        } else {
+          process.kill(Number(pid), "SIGTERM");
+        }
+      } catch {}
+    }
+  }
+
+  rmSync(JAIT_DIR, { recursive: true, force: true });
+  console.log(``);
+  console.log(`  Done. All data in ${JAIT_DIR} has been deleted.`);
+  console.log(`  Run 'jait' to start fresh.`);
   console.log("");
 }
 
@@ -467,6 +551,11 @@ if (args[0] === "start") {
 
 if (args[0] === "stop") {
   cmdStop();
+  process.exit(0);
+}
+
+if (args[0] === "reset") {
+  await cmdReset();
   process.exit(0);
 }
 
