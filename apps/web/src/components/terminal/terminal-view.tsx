@@ -39,22 +39,29 @@ export function useTerminals(token?: string | null) {
     }
   }, [token])
 
+  const creatingRef = useRef(false)
   const createTerminal = useCallback(
     async (sessionId: string, workspaceRoot?: string) => {
-      const res = await fetch(`${GATEWAY}/api/terminals`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...authHeaders(token),
-        },
-        body: JSON.stringify({ sessionId, workspaceRoot }),
-      })
-      const info = (await res.json()) as TerminalInfo
-      setTerminals((prev) => [...prev, info])
-      setActiveTerminalId(info.id)
-      return info
+      if (creatingRef.current) return terminals[0] ?? ({ id: '', type: 'terminal', state: 'idle', sessionId, metadata: {} } as TerminalInfo)
+      creatingRef.current = true
+      try {
+        const res = await fetch(`${GATEWAY}/api/terminals`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...authHeaders(token),
+          },
+          body: JSON.stringify({ sessionId, workspaceRoot }),
+        })
+        const info = (await res.json()) as TerminalInfo
+        setTerminals((prev) => [...prev, info])
+        setActiveTerminalId(info.id)
+        return info
+      } finally {
+        creatingRef.current = false
+      }
     },
-    [token],
+    [token, terminals],
   )
 
   const killTerminal = useCallback(async (id: string) => {
@@ -117,10 +124,12 @@ export function TerminalView({ terminalId, className, token }: TerminalViewProps
     termRef.current = term
     fitRef.current = fitAddon
 
-    // --- WebSocket with auto-reconnect ---
+    // --- WebSocket with auto-reconnect (exponential backoff) ---
     let ws: WebSocket | null = null
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let disposed = false
+    let reconnectDelay = 1000
+    const MAX_RECONNECT_DELAY = 30000
     const lastSeqByStream = new Map<string, number>()
 
     function connect() {
@@ -130,6 +139,7 @@ export function TerminalView({ terminalId, className, token }: TerminalViewProps
       wsRef.current = ws
 
       ws.onopen = () => {
+        reconnectDelay = 1000 // reset on successful connect
         ws!.send(JSON.stringify({ type: 'terminal.subscribe', terminalId }))
       }
 
@@ -146,7 +156,8 @@ export function TerminalView({ terminalId, className, token }: TerminalViewProps
 
       ws.onclose = () => {
         if (!disposed) {
-          reconnectTimer = setTimeout(connect, 1000)
+          reconnectTimer = setTimeout(connect, reconnectDelay)
+          reconnectDelay = Math.min(reconnectDelay * 1.5, MAX_RECONNECT_DELAY)
         }
       }
 

@@ -501,6 +501,7 @@ async function main() {
     try {
       const surface = surfaceRegistry.getSurface(terminalId);
       if (surface && surface.type === "terminal" && "getRecentOutput" in surface) {
+        (surface as import("./surfaces/terminal.js").TerminalSurface).touch();
         return (surface as import("./surfaces/terminal.js").TerminalSurface).getRecentOutput();
       }
     } catch {
@@ -622,6 +623,23 @@ async function main() {
   await server.listen({ port: config.port, host: config.host });
   ws.start(server.server); // shares port with Fastify
   console.log(`Jait Gateway listening on http://${config.host}:${config.port} (HTTP + WS)`);
+
+  // ── Terminal idle reaper — stop PTY terminals idle for 30+ minutes ──
+  const TERMINAL_IDLE_MS = 30 * 60 * 1000; // 30 minutes
+  const terminalReaperInterval = setInterval(() => {
+    const terminals = surfaceRegistry
+      .listSurfaces()
+      .filter((s) => s.type === "terminal" && s.state === "running") as import("./surfaces/terminal.js").TerminalSurface[];
+    for (const term of terminals) {
+      if (term.idleMs >= TERMINAL_IDLE_MS) {
+        console.log(`[terminal] Stopping idle terminal ${term.id} (idle ${Math.round(term.idleMs / 1000)}s)`);
+        surfaceRegistry.stopSurface(term.id, "idle timeout").catch((err) =>
+          console.error(`Failed to stop idle terminal ${term.id}:`, err),
+        );
+      }
+    }
+  }, 60_000); // check every minute
+  if (terminalReaperInterval.unref) terminalReaperInterval.unref();
 
   let shuttingDown = false;
   const shutdown = async () => {

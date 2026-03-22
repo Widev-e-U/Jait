@@ -149,6 +149,9 @@ export class TerminalSurface implements Surface {
   private _shellIntegrationReadyResolve?: () => void;
   private _shellIntegrationReadyPromise: Promise<void>;
 
+  /** Timestamp of last user input, command execution, or output — used for idle detection */
+  private _lastActivityAt: number = Date.now();
+
   /** External callbacks (wired by index.ts / routes) */
   onOutput?: (data: string) => void;
   onStateChange?: (state: SurfaceState) => void;
@@ -292,6 +295,7 @@ export class TerminalSurface implements Surface {
   /** Write raw data to the PTY (user keyboard input from frontend) */
   write(data: string): void {
     if (this._state !== "running" || !this._pty) return;
+    this._lastActivityAt = Date.now();
     try {
       this._pty.write(data);
     } catch (err) {
@@ -341,6 +345,16 @@ export class TerminalSurface implements Surface {
 
   getRecentOutput(lines = 100): string {
     return this._outputBuffer.slice(-lines).join("");
+  }
+
+  /** Mark activity (called on subscribe, command execution, etc.) */
+  touch(): void {
+    this._lastActivityAt = Date.now();
+  }
+
+  /** Milliseconds since last activity */
+  get idleMs(): number {
+    return Date.now() - this._lastActivityAt;
   }
 
   private _setState(s: SurfaceState) {

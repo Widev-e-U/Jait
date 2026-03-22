@@ -95,6 +95,7 @@ async function ensureSessionTerminal(
     try {
       const s = registry.getSurface(preferredId);
       if (s && s.type === "terminal" && s.state === "running") {
+        (s as TerminalSurface).touch();
         return { surface: s as TerminalSurface, terminalId: preferredId, isNew: false };
       }
     } catch { /* gone — fall through */ }
@@ -106,6 +107,7 @@ async function ensureSessionTerminal(
     try {
       const s = registry.getSurface(existingId);
       if (s && s.type === "terminal" && s.state === "running") {
+        (s as TerminalSurface).touch();
         return { surface: s as TerminalSurface, terminalId: existingId, isNew: false };
       }
     } catch { /* gone */ }

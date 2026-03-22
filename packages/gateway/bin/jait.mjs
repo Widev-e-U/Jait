@@ -217,6 +217,7 @@ function cmdStart(cliFlags) {
     detached: true,
     stdio: ["ignore", logFd, errFd],
     env: { ...process.env, __JAIT_BACKGROUND: "1" },
+    windowsHide: true,
   });
 
   writeFileSync(PID_PATH, String(child.pid), "utf8");
