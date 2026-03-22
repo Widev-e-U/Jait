@@ -4247,10 +4247,16 @@ function App() {
               <div className="flex items-center gap-2 px-2 py-2 border-b bg-background/95 shrink-0">
                 <button
                   onClick={() => {
-                    setMobileTreeTab('files')
-                    const next = showMobileWorkspacePane('tree')
-                    setShowWorkspaceTree(next.tree)
-                    setShowWorkspaceEditor(next.editor)
+                    if (showWorkspaceTree && mobileTreeTab === 'files') {
+                      const next = collapseMobileWorkspace()
+                      setShowWorkspaceTree(next.tree)
+                      setShowWorkspaceEditor(next.editor)
+                    } else {
+                      setMobileTreeTab('files')
+                      const next = showMobileWorkspacePane('tree')
+                      setShowWorkspaceTree(next.tree)
+                      setShowWorkspaceEditor(next.editor)
+                    }
                   }}
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                     showWorkspaceTree && mobileTreeTab === 'files'
@@ -4263,10 +4269,16 @@ function App() {
                 </button>
                 <button
                   onClick={() => {
-                    setMobileTreeTab('git')
-                    const next = showMobileWorkspacePane('tree')
-                    setShowWorkspaceTree(next.tree)
-                    setShowWorkspaceEditor(next.editor)
+                    if (showWorkspaceTree && mobileTreeTab === 'git') {
+                      const next = collapseMobileWorkspace()
+                      setShowWorkspaceTree(next.tree)
+                      setShowWorkspaceEditor(next.editor)
+                    } else {
+                      setMobileTreeTab('git')
+                      const next = showMobileWorkspacePane('tree')
+                      setShowWorkspaceTree(next.tree)
+                      setShowWorkspaceEditor(next.editor)
+                    }
                   }}
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                     showWorkspaceTree && mobileTreeTab === 'git'
@@ -4279,9 +4291,15 @@ function App() {
                 </button>
                 <button
                   onClick={() => {
-                    const next = showMobileWorkspacePane('editor')
-                    setShowWorkspaceTree(next.tree)
-                    setShowWorkspaceEditor(next.editor)
+                    if (showWorkspaceEditor) {
+                      const next = collapseMobileWorkspace()
+                      setShowWorkspaceTree(next.tree)
+                      setShowWorkspaceEditor(next.editor)
+                    } else {
+                      const next = showMobileWorkspacePane('editor')
+                      setShowWorkspaceTree(next.tree)
+                      setShowWorkspaceEditor(next.editor)
+                    }
                   }}
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                     showWorkspaceEditor
