@@ -5,9 +5,10 @@
  * inside an Electron BrowserWindow. Shares the exact same UI as @jait/web.
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 const { autoUpdater } = electronUpdater;
 
@@ -30,13 +31,11 @@ const settingsPath = path.join(app.getPath("userData"), "desktop-settings.json")
 
 function loadSettings(): Record<string, unknown> {
   try {
-    const { readFileSync } = require("node:fs") as typeof import("node:fs");
     return JSON.parse(readFileSync(settingsPath, "utf-8"));
   } catch { return {}; }
 }
 
 function saveSettings(settings: Record<string, unknown>): void {
-  const { writeFileSync, mkdirSync } = require("node:fs") as typeof import("node:fs");
   mkdirSync(path.dirname(settingsPath), { recursive: true });
   writeFileSync(settingsPath, JSON.stringify(settings, null, 2), "utf-8");
 }
@@ -278,7 +277,6 @@ ipcMain.handle("desktop:get-sources", async () => {
 
 // Notification passthrough
 ipcMain.handle("desktop:notify", (_event, opts: { title: string; body: string }) => {
-  const { Notification } = require("electron") as typeof import("electron");
   new Notification({ title: opts.title, body: opts.body }).show();
   return { ok: true };
 });
@@ -430,7 +428,6 @@ function buildDesktopClaudeMcpConfig(sessionId: string, servers?: DesktopMcpServ
   }
 
   const configDir = path.join(app.getPath("temp"), "jait-desktop-mcp", sessionId);
-  const { mkdirSync, writeFileSync } = require("node:fs") as typeof import("node:fs");
   mkdirSync(configDir, { recursive: true });
   const configPath = path.join(configDir, "mcp-config.json");
   writeFileSync(configPath, JSON.stringify(config, null, 2), "utf-8");
