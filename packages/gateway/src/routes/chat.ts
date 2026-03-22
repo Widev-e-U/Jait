@@ -680,7 +680,7 @@ export function registerChatRoutes(
       .split("\n")
       .map((line) => line.trim())
       .find(Boolean) ?? "";
-    if (!singleLine) return "New Chat";
+    if (!singleLine) return "";
     const cleaned = singleLine.replace(/\s+/g, " ").trim();
     return cleaned.length > 80 ? cleaned.slice(0, 77).trimEnd() + "..." : cleaned;
   };

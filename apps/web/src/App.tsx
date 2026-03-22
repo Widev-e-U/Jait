@@ -30,6 +30,7 @@ import {
   X,
   Loader2 as SpinnerIcon,
   Minus,
+  EllipsisVertical,
   Pause,
   CheckCircle2,
   XCircle,
@@ -132,7 +133,7 @@ function deriveSessionTitle(raw: string) {
     .split('\n')
     .map((line) => line.trim())
     .find(Boolean) ?? ''
-  if (!singleLine) return 'New Chat'
+  if (!singleLine) return ''
   const cleaned = singleLine.replace(/\s+/g, ' ').trim()
   return cleaned.length > 80 ? `${cleaned.slice(0, 77).trimEnd()}...` : cleaned
 }
@@ -3678,7 +3679,7 @@ function App() {
         {!requiresAuthGate && (
           <>
             <header
-              className={`flex items-center gap-1 border-b bg-background px-2 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
+              className={`relative flex items-center gap-1 border-b bg-background px-2 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
@@ -3690,8 +3691,8 @@ function App() {
             <JaitIcon size={20} className="shrink-0" />
           </div>
 
-          {/* Center: Nav — scrollable on mobile */}
-          <nav className="flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          {/* Nav — hidden on mobile, visible on md+ */}
+          <nav className="hidden md:flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <Button
               variant={currentView === 'chat' ? 'secondary' : 'ghost'}
               size="sm"
@@ -3737,11 +3738,9 @@ function App() {
             )}
           </nav>
 
-          {/* Spacer */}
-          <div className="flex-1 min-w-0" />
-
+          {/* ViewModeSelector — absolutely centered in header */}
           {currentView === 'chat' && (
-            <div className="shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
             </div>
           )}
@@ -3749,8 +3748,10 @@ function App() {
           {/* Spacer */}
           <div className="flex-1 min-w-0" />
 
-          {/* Right: Context + Model + Account — always visible */}
+          {/* Right: Context + Model + Account */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            {/* Desktop status items — hidden on mobile */}
+            <div className="hidden md:flex items-center gap-1 sm:gap-1.5">
             {currentView === 'chat' && activeManagerThreads.length > 0 && (
               <ManagerActiveThreadsMenu
                 threads={activeManagerThreads}
@@ -3823,6 +3824,44 @@ function App() {
                 <TooltipContent side="bottom">Update available — v{updateInfo.latestVersion}</TooltipContent>
               </Tooltip>
             )}
+            </div>
+
+            {/* Mobile overflow menu */}
+            <div className="md:hidden shrink-0">
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0">
+                    <EllipsisVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuLabel>Navigate</DropdownMenuLabel>
+                  <DropdownMenuItem onSelect={() => setCurrentView('chat')}>
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Chat
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCurrentView('jobs')}>
+                    <Calendar className="h-4 w-4 mr-2" />
+                    Jobs
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCurrentView('network')}>
+                    <Wifi className="h-4 w-4 mr-2" />
+                    Network
+                  </DropdownMenuItem>
+                  {viewMode === 'developer' && (
+                    <DropdownMenuItem onSelect={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}>
+                      <Cast className="h-4 w-4 mr-2" />
+                      {showScreenShare ? 'Hide Share' : 'Screen Share'}
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem onSelect={() => setCurrentView('settings')}>
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
 
             {isAuthenticated ? (
               <DropdownMenu>
@@ -4220,7 +4259,7 @@ function App() {
         ) : (
           <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
             {viewMode === 'developer' && showSidebar && (
-              <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-56 border-r shrink-0'}`}>
+              <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-64 border-r shrink-0'}`}>
                 <SessionSelector
                   workspaces={workspaces}
                   activeWorkspaceId={activeWorkspaceId}

@@ -48,7 +48,7 @@ export function SessionSwitcher({
     <div className="flex min-w-0 flex-1 items-center justify-between gap-1.5">
       {/* Title */}
       <span className="min-w-0 truncate text-sm font-semibold leading-tight">
-        {activeSession?.name || 'New chat'}
+        {activeSession?.name && activeSession.name !== 'New Chat' ? activeSession.name : ''}
       </span>
 
       {/* Sessions button */}

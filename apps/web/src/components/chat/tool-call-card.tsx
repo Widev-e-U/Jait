@@ -628,19 +628,23 @@ function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>;
   }))
 
   return (
-    <div className="space-y-2 rounded-md border bg-muted/20 p-3 text-xs">
-      {/* Stats bar */}
-      <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-        {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
-        {toolCalls.length > 0 && <span>{toolCalls.length} tool call{toolCalls.length !== 1 ? 's' : ''}</span>}
-        {durationMs != null && (
-          <span>{durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}</span>
-        )}
+    <div className="rounded-lg border border-purple-500/20 bg-purple-500/[0.03] text-xs">
+      {/* Header bar */}
+      <div className="flex items-center gap-2 border-b border-purple-500/15 px-3 py-2">
+        <Bot className="h-3.5 w-3.5 text-purple-500 shrink-0" />
+        <span className="text-[11px] font-medium text-purple-500">Sub-agent</span>
+        <div className="flex items-center gap-2 ml-auto text-[11px] text-muted-foreground">
+          {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
+          {toolCalls.length > 0 && <span>{toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}</span>}
+          {durationMs != null && (
+            <span>{durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}</span>
+          )}
+        </div>
       </div>
 
       {/* Nested tool calls rendered as full ToolCallCards */}
       {nestedCalls.length > 0 && (
-        <div className="space-y-1">
+        <div className="divide-y divide-border/30">
           {nestedCalls.map((call) => (
             <ToolCallCard key={call.callId} call={call} />
           ))}
@@ -649,9 +653,9 @@ function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>;
 
       {/* Final output */}
       {content && (
-        <div>
-          <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Result</div>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono text-[11px] leading-5">
+        <div className="border-t border-purple-500/15 px-3 py-2">
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">Result</div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-[11px] leading-5">
             {content}
           </pre>
         </div>
@@ -659,9 +663,9 @@ function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>;
 
       {/* Fallback to message if no content */}
       {!content && message && (
-        <div>
-          <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Result</div>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono text-[11px] leading-5">
+        <div className="border-t border-purple-500/15 px-3 py-2">
+          <div className="mb-1 text-[11px] font-medium text-muted-foreground">Result</div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-[11px] leading-5">
             {message}
           </pre>
         </div>
