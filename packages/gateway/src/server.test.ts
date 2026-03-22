@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll, afterAll } from "vitest";
 import { createServer } from "./server.js";
 import { loadConfig } from "./config.js";
 import { signAuthToken } from "./security/http-auth.js";
-import { resolve, dirname, join } from "node:path";
+import { resolve, dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { createServer as createHttpServer } from "node:http";
 import { mkdtempSync, writeFileSync, rmSync } from "node:fs";
@@ -124,7 +124,9 @@ describe("@jait/gateway health", () => {
 
   it("GET /api/dev-file serves workspace html previews with rewritten asset paths", async () => {
     const app = await createServer(testConfig);
-    const encodedPath = Buffer.from(devFileHtml, "utf8")
+    // Encode relative path from cwd — avoids platform-specific absolute path issues
+    const relPath = relative(process.cwd(), devFileHtml);
+    const encodedPath = Buffer.from(relPath, "utf8")
       .toString("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
@@ -135,7 +137,7 @@ describe("@jait/gateway health", () => {
       url: `/api/dev-file/${encodedPath}`,
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, `dev-file response: ${response.body}`).toBe(200);
     expect(String(response.headers["content-type"])).toContain("text/html");
     expect(response.body).toContain(`<base href="/api/dev-file/${encodedPath}/">`);
     expect(response.body).toContain(`/api/dev-file/${encodedPath}/icon.svg`);
@@ -152,7 +154,8 @@ describe("@jait/gateway health", () => {
 
   it("GET /api/dev-file accepts relative workspace html paths", async () => {
     const app = await createServer(testConfig);
-    const encodedPath = Buffer.from(devFileHtml, "utf8")
+    const relPath = relative(process.cwd(), devFileHtml);
+    const encodedPath = Buffer.from(relPath, "utf8")
       .toString("base64")
       .replace(/\+/g, "-")
       .replace(/\//g, "_")
@@ -163,7 +166,7 @@ describe("@jait/gateway health", () => {
       url: `/api/dev-file/${encodedPath}`,
     });
 
-    expect(response.statusCode).toBe(200);
+    expect(response.statusCode, `dev-file response: ${response.body}`).toBe(200);
     expect(String(response.headers["content-type"])).toContain("text/html");
     await app.close();
   });
