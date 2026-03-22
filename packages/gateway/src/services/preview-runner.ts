@@ -211,6 +211,7 @@ export class LocalPreviewRunner implements PreviewRunner {
       },
       shell: true,
       stdio: "pipe",
+      windowsHide: true,
     });
 
     child.stdout.setEncoding("utf8");

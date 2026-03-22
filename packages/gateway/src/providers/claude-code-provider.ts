@@ -246,6 +246,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       cwd: state.workingDirectory,
       env: state.env,
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
 
     state.process = child;
@@ -642,7 +643,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
         "--max-budget-usd", "0.001",
         "--model", alias,
         ".",
-      ], { stdio: ["pipe", "pipe", "pipe"] });
+      ], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
       child.stdin?.end();
 
       let resolved = false;
@@ -684,7 +685,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
   private parseAliasesFromHelp(): Promise<string[]> {
     return new Promise((resolve) => {
       const cmd = this.claudePath ?? "claude";
-      const child = spawn(cmd, ["--help"], { stdio: "pipe" });
+      const child = spawn(cmd, ["--help"], { stdio: "pipe", windowsHide: true });
       let output = "";
       const timer = setTimeout(() => { child.kill(); resolve([]); }, 5000);
 
@@ -710,6 +711,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     return new Promise((resolve) => {
       const child = spawn(cmd, ["--version"], {
         stdio: "pipe",
+        windowsHide: true,
       });
       const timer = setTimeout(() => { child.kill(); resolve(false); }, 5000);
       child.on("exit", (code: number | null) => { clearTimeout(timer); resolve(code === 0); });

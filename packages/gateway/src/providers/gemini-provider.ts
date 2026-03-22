@@ -166,6 +166,7 @@ export class GeminiProvider implements CliProviderAdapter {
       env: state.env,
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
+      windowsHide: true,
     });
 
     state.process = child;
@@ -622,7 +623,7 @@ export class GeminiProvider implements CliProviderAdapter {
 
   private testCommand(cmd: string): Promise<boolean> {
     return new Promise((resolve) => {
-      const child = spawn(cmd, ["--version"], { stdio: "pipe", shell: true });
+      const child = spawn(cmd, ["--version"], { stdio: "pipe", shell: true, windowsHide: true });
       const timer = setTimeout(() => { child.kill(); resolve(false); }, 5000);
       child.on("exit", (code) => { clearTimeout(timer); resolve(code === 0); });
       child.on("error", () => { clearTimeout(timer); resolve(false); });

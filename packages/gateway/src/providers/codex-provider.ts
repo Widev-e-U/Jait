@@ -156,6 +156,7 @@ export class CodexProvider implements CliProviderAdapter {
       cwd: process.cwd(),
       env: process.env as Record<string, string>,
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
 
     const rl = readline.createInterface({ input: child.stdout! });
@@ -256,6 +257,7 @@ export class CodexProvider implements CliProviderAdapter {
           ...options.env,
         },
         stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
       },
     );
 
@@ -585,6 +587,7 @@ export class CodexProvider implements CliProviderAdapter {
       }
       const child = spawn(spawnSpec.command, [...spawnSpec.args, "--version"], {
         stdio: "pipe",
+        windowsHide: true,
       });
       const timer = setTimeout(() => {
         child.kill();

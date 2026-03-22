@@ -133,7 +133,7 @@ export class SandboxManager {
 
 async function runDockerProcess(cmd: string[], timeoutMs: number): Promise<ProcessResult> {
   return new Promise<ProcessResult>((resolveResult) => {
-    const child = spawn(cmd[0]!, cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"] });
+    const child = spawn(cmd[0]!, cmd.slice(1), { stdio: ["ignore", "pipe", "pipe"], windowsHide: true });
     let output = "";
     let timedOut = false;
 

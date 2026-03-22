@@ -50,6 +50,7 @@ export class PtyBrokerClient {
 
     this.proc = spawn("node", [brokerPath], {
       stdio: ["pipe", "pipe", "pipe"],
+      windowsHide: true,
     });
 
     // Read newline-delimited JSON responses from stdout

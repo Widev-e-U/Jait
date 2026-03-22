@@ -537,6 +537,7 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
     cwd: process.cwd(),
     env: process.env,
     stdio: ["pipe", "pipe", "pipe"],
+    windowsHide: true,
   });
 
   const stdout = child.stdout;

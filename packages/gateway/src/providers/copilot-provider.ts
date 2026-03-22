@@ -178,6 +178,7 @@ export class CopilotProvider implements CliProviderAdapter {
       env: state.env,
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
+      windowsHide: true,
     });
 
     state.process = child;
@@ -512,7 +513,7 @@ export class CopilotProvider implements CliProviderAdapter {
 
   private checkAuth(): Promise<boolean> {
     return new Promise((resolve) => {
-      const child = spawn("gh", ["auth", "status"], { stdio: "pipe", shell: true });
+      const child = spawn("gh", ["auth", "status"], { stdio: "pipe", shell: true, windowsHide: true });
       let stdout = "";
       child.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
       child.stderr?.on("data", (d: Buffer) => { stdout += d.toString(); });
@@ -537,7 +538,7 @@ export class CopilotProvider implements CliProviderAdapter {
   /** Parse model choices from `copilot --help` output */
   private parseModelsFromHelp(): Promise<ProviderModelInfo[]> {
     return new Promise((resolve) => {
-      const child = spawn("copilot", ["--help"], { stdio: "pipe", shell: true });
+      const child = spawn("copilot", ["--help"], { stdio: "pipe", shell: true, windowsHide: true });
       let output = "";
       const timer = setTimeout(() => { child.kill(); resolve([]); }, 5000);
 
@@ -558,7 +559,7 @@ export class CopilotProvider implements CliProviderAdapter {
 
   private testCommand(cmd: string): Promise<boolean> {
     return new Promise((resolve) => {
-      const child = spawn(cmd, ["--version"], { stdio: "pipe", shell: true });
+      const child = spawn(cmd, ["--version"], { stdio: "pipe", shell: true, windowsHide: true });
       const timer = setTimeout(() => { child.kill(); resolve(false); }, 5000);
       child.on("exit", (code) => { clearTimeout(timer); resolve(code === 0); });
       child.on("error", () => { clearTimeout(timer); resolve(false); });

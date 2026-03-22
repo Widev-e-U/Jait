@@ -119,7 +119,7 @@ export class GitHubForge implements GitForge {
       const { spawn } = await import("node:child_process");
       await new Promise<void>((resolve, reject) => {
         const child = spawn("gh", ["auth", "login", "--with-token"], {
-          cwd, stdio: "pipe", shell: true, env: cleanGhEnv(),
+          cwd, stdio: "pipe", shell: true, env: cleanGhEnv(), windowsHide: true,
         });
         child.stdin.write(token);
         child.stdin.end();
@@ -141,7 +141,7 @@ export class GitHubForge implements GitForge {
     try {
       const { spawn } = await import("node:child_process");
       return await new Promise<string | null>((resolve) => {
-        const proc = spawn("git", ["credential", "fill"], { timeout: 5_000 });
+        const proc = spawn("git", ["credential", "fill"], { timeout: 5_000, windowsHide: true });
         let out = "";
         proc.stdout.on("data", (d: Buffer) => { out += d.toString(); });
         proc.on("close", () => {

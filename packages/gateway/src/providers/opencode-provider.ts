@@ -166,6 +166,7 @@ export class OpenCodeProvider implements CliProviderAdapter {
       env: state.env,
       stdio: ["pipe", "pipe", "pipe"],
       shell: true,
+      windowsHide: true,
     });
 
     state.process = child;
@@ -402,7 +403,7 @@ export class OpenCodeProvider implements CliProviderAdapter {
   /** Dynamically fetch models by running `opencode models` */
   private fetchModels(): Promise<ProviderModelInfo[]> {
     return new Promise((resolve) => {
-      const child = spawn("opencode", ["models"], { stdio: "pipe", shell: true });
+      const child = spawn("opencode", ["models"], { stdio: "pipe", shell: true, windowsHide: true });
       let output = "";
       const timer = setTimeout(() => { child.kill(); resolve([]); }, 10000);
 
@@ -433,7 +434,7 @@ export class OpenCodeProvider implements CliProviderAdapter {
 
   private testCommand(cmd: string): Promise<boolean> {
     return new Promise((resolve) => {
-      const child = spawn(cmd, ["--version"], { stdio: "pipe", shell: true });
+      const child = spawn(cmd, ["--version"], { stdio: "pipe", shell: true, windowsHide: true });
       const timer = setTimeout(() => { child.kill(); resolve(false); }, 5000);
       child.on("exit", (code) => { clearTimeout(timer); resolve(code === 0); });
       child.on("error", () => { clearTimeout(timer); resolve(false); });

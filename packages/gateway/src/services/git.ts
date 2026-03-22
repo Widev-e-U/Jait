@@ -301,7 +301,7 @@ async function resolveGitCredentialToken(): Promise<string | null> {
   try {
     const { spawn } = await import("node:child_process");
     const token = await new Promise<string | null>((resolve) => {
-      const proc = spawn("git", ["credential", "fill"], { timeout: 5_000 });
+      const proc = spawn("git", ["credential", "fill"], { timeout: 5_000, windowsHide: true });
       let out = "";
       proc.stdout.on("data", (d: Buffer) => { out += d.toString(); });
       proc.on("close", () => {

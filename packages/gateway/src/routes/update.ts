@@ -83,6 +83,7 @@ export function registerUpdateRoutes(
             const child = spawn("systemctl", ["--user", "restart", unit], {
               stdio: "ignore",
               detached: true,
+              windowsHide: true,
             });
             child.unref();
           } catch { /* fall through */ }

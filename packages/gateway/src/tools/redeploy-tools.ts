@@ -139,6 +139,7 @@ async function npmRedeploy(
       stdio: "ignore",
       detached: true,
       env: { ...process.env, PORT: String(canaryPort), __JAIT_CLI: "1" },
+      windowsHide: true,
     });
     canary.unref();
 
@@ -197,6 +198,7 @@ async function systemdSwitchover(
       const child = spawn("systemctl", ["--user", "restart", unit], {
         stdio: "ignore",
         detached: true,
+        windowsHide: true,
       });
       child.unref();
     } catch {
@@ -235,6 +237,7 @@ async function bareProcessSwitchover(
     stdio: "ignore",
     detached: true,
     env: { ...process.env, PORT: String(deps.port), __JAIT_CLI: "1" },
+    windowsHide: true,
   });
   fresh.unref();
 
