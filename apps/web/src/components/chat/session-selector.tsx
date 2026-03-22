@@ -114,11 +114,11 @@ export function SessionSelector({
                   <div key={workspace.id} className={`rounded-md border border-border/60 bg-background/40 ${offline ? 'opacity-50' : ''}`}>
                     <div
                       className={`group flex items-start gap-2 rounded-md px-2 py-2 transition-colors text-sm ${
-                        offline ? 'cursor-not-allowed' : 'cursor-pointer'
+                        offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
                       } ${
                         isActiveWorkspace ? 'bg-secondary/70' : offline ? '' : 'hover:bg-muted/40'
                       }`}
-                      onClick={() => { if (!offline) onSelectWorkspace(workspace.id) }}
+                      onClick={() => { if (!offline && !isActiveWorkspace) onSelectWorkspace(workspace.id) }}
                     >
                       {isActiveWorkspace ? (
                         <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />

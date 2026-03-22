@@ -2252,7 +2252,7 @@ function App() {
 
   // Wrap switchWorkspace so clicking a workspace also opens its remote directory
   // and shows the correct files/session in the editor.
-  const handleSwitchWorkspace = useCallback((workspaceId: string) => {
+  const handleSwitchWorkspace = useCallback(async (workspaceId: string) => {
     const workspace = workspaces.find((w) => w.id === workspaceId)
     if (!workspace) return
 
@@ -2262,16 +2262,27 @@ function App() {
 
     switchWorkspace(workspaceId)
 
-    // Open the workspace directory on the gateway so the file tree refreshes
+    // Open the workspace directory on the gateway and directly hydrate from the
+    // response rather than relying on the WS `workspace.open` event, which is
+    // session-scoped and may arrive before the WS re-subscribes to the new session.
     if (workspace.rootPath) {
-      openRemoteWorkspaceOnGateway(workspace.rootPath, workspace.nodeId || undefined, nextSessionId)
-        .then(() => {
-          showWorkspaceRef.current = true
-          setShowWorkspace(true)
+      try {
+        const res = await fetch(`${API_URL}/api/workspace/open`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: workspace.rootPath, sessionId: nextSessionId, nodeId: workspace.nodeId || 'gateway' }),
         })
-        .catch(console.error)
+        if (!res.ok) return
+        const data = await res.json() as { surfaceId: string; workspaceRoot: string }
+        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: workspace.nodeId || undefined })
+        showWorkspaceRef.current = true
+        setShowWorkspace(true)
+        setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: workspace.nodeId || undefined })
+      } catch (e) {
+        console.error('Failed to open workspace:', e)
+      }
     }
-  }, [workspaces, activeSessionId, switchWorkspace, openRemoteWorkspaceOnGateway])
+  }, [workspaces, activeSessionId, switchWorkspace, setSavedWorkspace])
 
   const handleCreateWorkspace = useCallback(() => {
     setWorkspacePickerMode('workspace')
