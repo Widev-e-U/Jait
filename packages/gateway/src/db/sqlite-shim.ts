@@ -133,9 +133,10 @@ type SchemaType = typeof schema;
  * Wrap a raw SQLite handle with the matching Drizzle ORM adapter.
  * Returns a fully-typed Drizzle instance regardless of runtime.
  *
- * For both `node:sqlite` and `better-sqlite3`, we use the
- * `drizzle-orm/better-sqlite3` adapter since `DatabaseSync` from node:sqlite
- * is API-compatible (duck-typed — same .prepare/.exec/.close surface).
+ * For non-Bun runtimes (node:sqlite or better-sqlite3), we bypass
+ * `drizzle-orm/better-sqlite3` (whose driver.js top-level-imports
+ * the `better-sqlite3` package) and construct the Drizzle instance
+ * from safe sub-modules that have no native-addon dependency.
  */
 export async function createDrizzle(rawDb: SqliteDatabase) {
   if (isBun) {
@@ -143,11 +144,33 @@ export async function createDrizzle(rawDb: SqliteDatabase) {
     // BunSQLiteDatabase and BetterSQLite3Database differ in RunResult type
     // but are structurally compatible for all query-builder operations.
     return drizzle(rawDb as never, { schema }) as unknown as DrizzleDB;
-  } else {
-    // Works for both node:sqlite DatabaseSync and better-sqlite3 Database
-    const { drizzle } = await import("drizzle-orm/better-sqlite3");
-    return drizzle(rawDb as never, { schema }) as DrizzleDB;
   }
+
+  // Import the session + core pieces directly — this avoids
+  // drizzle-orm/better-sqlite3/driver.js which top-level-imports
+  // the `better-sqlite3` npm package and fails when it's not installed.
+  const { BetterSQLiteSession } = await import("drizzle-orm/better-sqlite3/session");
+  const { BaseSQLiteDatabase } = await import("drizzle-orm/sqlite-core/db");
+  const { SQLiteSyncDialect } = await import("drizzle-orm/sqlite-core/dialect");
+  const {
+    createTableRelationsHelpers,
+    extractTablesRelationalConfig,
+  } = await import("drizzle-orm/relations");
+
+  const dialect = new SQLiteSyncDialect();
+  const tablesConfig = extractTablesRelationalConfig(
+    schema,
+    createTableRelationsHelpers,
+  );
+  const schemaConfig = {
+    fullSchema: schema,
+    schema: tablesConfig.tables,
+    tableNamesMap: tablesConfig.tableNamesMap,
+  };
+  const session = new BetterSQLiteSession(rawDb as never, dialect, schemaConfig, {});
+  const db = new BaseSQLiteDatabase("sync" as never, dialect as never, session as never, schemaConfig as never);
+  (db as unknown as Record<string, unknown>).$client = rawDb;
+  return db as unknown as DrizzleDB;
 }
 
 // ── Re-export a unified Drizzle DB type ────────────────────────────────────
