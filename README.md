@@ -33,7 +33,7 @@ npm install -g @jait/gateway
 That's it. Now run it:
 
 ```bash
-jait
+jait start
 ```
 
 The gateway starts on **http://localhost:8000** — open it in your browser.
