@@ -1,6 +1,7 @@
 <p align="center">
   <img src="docs/site/icon.svg" width="96" alt="Jait logo" />
 </p>
+
 # Jait
 
 **Local-first AI coding agent workspace** with terminal, filesystem, browser control, screen sharing, and task automation — no cloud backend required.
