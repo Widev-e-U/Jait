@@ -837,6 +837,7 @@ function App() {
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
+  const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>('files')
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [showArchitecture, setShowArchitecture] = useState(false)
@@ -2305,6 +2306,7 @@ function App() {
         if (activeWorkspace?.workspaceRoot === threadWorkspace) {
           showWorkspaceRef.current = true
           setShowWorkspace(true)
+          setShowWorkspaceTree(true)
           const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId, nodeId: activeWorkspace.nodeId }
           setSavedWorkspace(state)
           return
@@ -2324,6 +2326,7 @@ function App() {
     if (activeWorkspace) {
       showWorkspaceRef.current = true
       setShowWorkspace(true)
+      setShowWorkspaceTree(true)
       const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId, nodeId: activeWorkspace.nodeId }
       setSavedWorkspace(state)
       return
@@ -4243,19 +4246,43 @@ function App() {
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && (
               <div className="flex items-center gap-2 px-2 py-2 border-b bg-background/95 shrink-0">
                 <button
-                  onClick={toggleWorkspaceTree}
+                  onClick={() => {
+                    setMobileTreeTab('files')
+                    const next = showMobileWorkspacePane('tree')
+                    setShowWorkspaceTree(next.tree)
+                    setShowWorkspaceEditor(next.editor)
+                  }}
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                    showWorkspaceTree
+                    showWorkspaceTree && mobileTreeTab === 'files'
                       ? 'border-border bg-background text-foreground shadow-sm'
                       : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
                   }`}
                 >
                   <FolderTree className="h-3.5 w-3.5" />
-                  <GitBranch className="h-3.5 w-3.5" />
-                  Files + Changes
+                  Files
                 </button>
                 <button
-                  onClick={toggleWorkspaceEditor}
+                  onClick={() => {
+                    setMobileTreeTab('git')
+                    const next = showMobileWorkspacePane('tree')
+                    setShowWorkspaceTree(next.tree)
+                    setShowWorkspaceEditor(next.editor)
+                  }}
+                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
+                    showWorkspaceTree && mobileTreeTab === 'git'
+                      ? 'border-border bg-background text-foreground shadow-sm'
+                      : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
+                  }`}
+                >
+                  <GitBranch className="h-3.5 w-3.5" />
+                  Changes
+                </button>
+                <button
+                  onClick={() => {
+                    const next = showMobileWorkspacePane('editor')
+                    setShowWorkspaceTree(next.tree)
+                    setShowWorkspaceEditor(next.editor)
+                  }}
                   className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
                     showWorkspaceEditor
                       ? 'border-border bg-background text-foreground shadow-sm'
@@ -4284,6 +4311,8 @@ function App() {
                   showEditor={showWorkspaceEditor}
                   onToggleTree={toggleWorkspaceTree}
                   onToggleEditor={toggleWorkspaceEditor}
+                  treeTab={mobileTreeTab}
+                  onTreeTabChange={setMobileTreeTab}
                   changedPaths={changedPaths}
                   isMobile
                   savedTabsState={workspaceTabsState}

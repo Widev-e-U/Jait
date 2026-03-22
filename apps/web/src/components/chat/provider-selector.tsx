@@ -9,6 +9,16 @@ import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import Gemini from '@lobehub/icons/es/Gemini'
 import Copilot from '@lobehub/icons/es/Copilot'
+
+/** Inline Jait logo icon — matches the header SVG. */
+const JaitIcon = ({ className }: { className?: string }) => (
+  <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
+    <path d="M318 372 L430 486 L318 600"
+          fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round"/>
+    <path d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715"
+          fill="none" stroke="currentColor" strokeWidth="88" strokeLinecap="round" strokeLinejoin="round"/>
+  </svg>
+)
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -51,7 +61,7 @@ const PROVIDER_DEFS: Array<{
   {
     value: 'jait',
     label: 'Jait',
-    icon: Bot,
+    icon: JaitIcon,
     description: 'Native Jait agent loop with full tool access',
   },
   {

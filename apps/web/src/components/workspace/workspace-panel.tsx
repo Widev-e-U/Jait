@@ -54,6 +54,10 @@ interface WorkspacePanelProps {
   onToggleTree?: () => void
   /** Called when user hides the editor pane from within the panel */
   onToggleEditor?: () => void
+  /** Controlled tree tab ('files' | 'git'). When provided, overrides internal state. */
+  treeTab?: 'files' | 'git'
+  /** Called when tree tab changes internally (for controlled mode). */
+  onTreeTabChange?: (tab: 'files' | 'git') => void
   /** Absolute paths of files recently changed by an agent (used to auto-refresh the editor) */
   changedPaths?: string[]
   /** Incremented by the server's native file watcher to signal external FS changes */
@@ -936,6 +940,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   showEditor: showEditorProp = true,
   onToggleTree,
   onToggleEditor,
+  treeTab: treeTabProp,
+  onTreeTabChange,
   changedPaths,
   fsWatcherVersion,
   savedTabsState,
@@ -1002,7 +1008,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /** Set of directory prefixes (relative) that contain changed files */
   const dirChangesSet = useMemo(() => buildDirChangesSet(gitStatusMap), [gitStatusMap])
   /** Tree pane active tab */
-  const [treeTab, setTreeTab] = useState<'files' | 'git'>('files')
+  const [treeTabInternal, setTreeTabInternal] = useState<'files' | 'git'>('files')
+  const treeTab = treeTabProp ?? treeTabInternal
+  const setTreeTab = useCallback((tab: 'files' | 'git') => {
+    setTreeTabInternal(tab)
+    onTreeTabChange?.(tab)
+  }, [onTreeTabChange])
+  useEffect(() => {
+    if (treeTabProp) setTreeTabInternal(treeTabProp)
+  }, [treeTabProp])
   const [sourceControlView, setSourceControlView] = useState<'list' | 'tree'>('list')
   const [collapsedSourceControlDirs, setCollapsedSourceControlDirs] = useState<Set<string>>(new Set())
   /** Currently viewing diff for a file in the source control tab */
@@ -3494,6 +3508,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Mobile: tab-based view (Files vs Git vs Editor)
   const [mobileTab, setMobileTab] = useState<'files' | 'git' | 'editor'>('files')
+  // Sync mobile tab when externally-controlled tree tab or pane visibility changes
+  useEffect(() => {
+    if (!isMobile) return
+    if (showTreeProp && treeTabProp === 'files') setMobileTab('files')
+    else if (showTreeProp && treeTabProp === 'git') setMobileTab('git')
+    else if (showEditorProp && !showTreeProp) setMobileTab('editor')
+  }, [isMobile, treeTabProp, showTreeProp, showEditorProp])
   const stagedFiles = gitStatus?.index.files ?? []
   const workingTreeFiles = gitStatus?.workingTree.files ?? []
   const stagedTree = useMemo(
@@ -3883,8 +3904,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     return (
       <div className="flex flex-col h-full min-h-0">
-        {/* Tab bar — keep Files/Changes available whenever the tree pane exists */}
-        {showTreeProp && (
+        {/* Tab bar — keep Files/Changes available whenever the tree pane exists (hide when externally controlled) */}
+        {showTreeProp && !treeTabProp && (
         <div className="flex items-center h-8 border-b bg-muted/30 shrink-0 px-1 gap-0.5">
           <button
             className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
@@ -3940,6 +3961,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         {effectiveMobileTab === 'files' && showTreeProp && (
           <>
           {/* Hide button header for files */}
+          {!treeTabProp && (
           <div className="flex items-center justify-end h-7 px-2 shrink-0 border-b bg-muted/10">
             {onToggleTree && (
               <button
@@ -3950,6 +3972,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </button>
             )}
           </div>
+          )}
           {/* Mobile search bar */}
           <div className="flex items-center gap-1 px-1.5 py-1 border-b shrink-0">
             <Search className="h-3 w-3 text-muted-foreground shrink-0" />
@@ -4303,7 +4326,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   </button>
                 </>
               )}
-              {onToggleEditor && (
+              {onToggleEditor && !treeTabProp && (
                 <button
                   onClick={onToggleEditor}
                   className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
@@ -4325,7 +4348,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </button>
               )}
               <span className="text-[11px] text-muted-foreground flex-1">Editor</span>
-              {onToggleEditor && (
+              {onToggleEditor && !treeTabProp && (
                 <button
                   onClick={onToggleEditor}
                   className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5"

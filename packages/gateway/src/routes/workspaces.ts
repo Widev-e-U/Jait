@@ -54,6 +54,26 @@ export function registerWorkspaceEntityRoutes(
     };
   });
 
+  app.post("/api/workspaces/select", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = (request.body as Record<string, unknown>) ?? {};
+    const workspaceId = typeof body["workspaceId"] === "string" ? body["workspaceId"] : null;
+    const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : null;
+    if (!workspaceId) {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "workspaceId is required" });
+    }
+    const workspace = workspaceService.getById(workspaceId, authUser.id);
+    if (!workspace) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
+    }
+    workspaceService.touch(workspaceId);
+    if (sessionId) {
+      sessionService.touch(sessionId);
+    }
+    return { ok: true };
+  });
+
   app.get("/api/workspaces/:id", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;

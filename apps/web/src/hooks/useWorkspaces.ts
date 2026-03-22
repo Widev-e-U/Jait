@@ -177,20 +177,32 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     }
   }, [activeWorkspaceId, createWorkspace, onLoginRequired, token])
 
+  const persistSelection = useCallback((workspaceId: string, sessionId?: string | null) => {
+    if (!token) return
+    fetch(`${API_URL}/api/workspaces/select`, {
+      method: 'POST',
+      headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+      body: JSON.stringify({ workspaceId, sessionId }),
+    }).catch(() => { /* best-effort */ })
+  }, [token])
+
   const switchWorkspace = useCallback((workspaceId: string) => {
     setActiveWorkspaceId(workspaceId)
     setActiveSessionId((prev) => {
       const workspace = workspaces.find((item) => item.id === workspaceId)
       if (!workspace) return null
       if (prev && workspace.sessions.some((session) => session.id === prev)) return prev
-      return workspace.sessions[0]?.id ?? null
+      const sessionId = workspace.sessions[0]?.id ?? null
+      persistSelection(workspaceId, sessionId ?? prev)
+      return sessionId
     })
-  }, [workspaces])
+  }, [persistSelection, workspaces])
 
   const switchSession = useCallback((workspaceId: string, sessionId: string) => {
     setActiveWorkspaceId(workspaceId)
     setActiveSessionId(sessionId)
-  }, [])
+    persistSelection(workspaceId, sessionId)
+  }, [persistSelection])
 
   const archiveSession = useCallback(async (sessionId: string) => {
     if (!token) {
