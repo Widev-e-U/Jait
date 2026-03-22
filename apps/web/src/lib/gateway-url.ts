@@ -98,7 +98,7 @@ export function getApiUrl(): string {
   if (stored) return stripTrailingSlash(stored)
 
   // Electron desktop bridge — synchronous property set by preload
-  const desktop = (window as any).jaitDesktop?.gatewayUrl as string | undefined
+  const desktop = typeof window !== 'undefined' ? (window as any).jaitDesktop?.gatewayUrl as string | undefined : undefined
   if (desktop) return stripTrailingSlash(desktop)
 
   if (env) return stripTrailingSlash(env)
@@ -130,7 +130,7 @@ export function getWsUrl(): string {
  */
 export function isGatewayConfigured(): boolean {
   if (supportsGatewayOverride() && getStoredGatewayUrl()) return true
-  if ((window as any).jaitDesktop?.gatewayUrl) return true
+  if (typeof window !== 'undefined' && (window as any).jaitDesktop?.gatewayUrl) return true
   if (import.meta.env.VITE_API_URL) return true
   if (!supportsGatewayOverride()) return true
   return false
