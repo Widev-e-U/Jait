@@ -111,10 +111,18 @@ export async function openRawSqlite(path: string): Promise<SqliteDatabase> {
     // node:sqlite not available (flag not set or Node < 22.5)
   }
 
-  const mod = await import("better-sqlite3");
-  const Database = mod.default;
-  sqliteBackend = "better-sqlite3";
-  return new Database(path) as unknown as SqliteDatabase;
+  // Last resort: try better-sqlite3 if manually installed
+  try {
+    const mod = await import("better-sqlite3");
+    const Database = mod.default;
+    sqliteBackend = "better-sqlite3";
+    return new Database(path) as unknown as SqliteDatabase;
+  } catch {
+    throw new Error(
+      "No SQLite backend available. Jait requires Node.js 22.5+ (which includes node:sqlite) or Bun. " +
+      "If you're on an older Node version, install better-sqlite3 manually: npm install better-sqlite3"
+    );
+  }
 }
 
 // ── Factory: wrap a raw handle with the Drizzle adapter ────────────────────

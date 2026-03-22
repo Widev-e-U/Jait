@@ -37,6 +37,9 @@
     "directory": "packages/gateway"
   },
   "homepage": "https://jait.dev",
+  "engines": {
+    "node": ">=22.5.0"
+  },
   "dependencies": {
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.0.0",
@@ -55,9 +58,7 @@
     "playwright": "^1.58.2",
     "ws": "^8.18.0"
   },
-  "optionalDependencies": {
-    "better-sqlite3": "^12.6.2"
-  },
+
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/ws": "^8.5.0",
