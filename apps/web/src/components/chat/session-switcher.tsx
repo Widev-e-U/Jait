@@ -45,18 +45,11 @@ export function SessionSwitcher({
   }
 
   return (
-    <div className="flex min-w-0 items-center gap-1.5">
+    <div className="flex min-w-0 flex-1 items-center justify-between gap-1.5">
       {/* Title */}
-      <div className="min-w-0">
-        <span className="block truncate text-sm font-semibold leading-tight">
-          {activeSession?.name || 'New chat'}
-        </span>
-        {workspaceTitle && (
-          <span className="block truncate text-[11px] text-muted-foreground leading-tight">
-            {workspaceTitle}
-          </span>
-        )}
-      </div>
+      <span className="min-w-0 truncate text-sm font-semibold leading-tight">
+        {activeSession?.name || 'New chat'}
+      </span>
 
       {/* Sessions button */}
       <DropdownMenu open={open} onOpenChange={handleOpenChange}>

@@ -9,7 +9,7 @@ function createSession(overrides: Partial<PreviewSessionLike> = {}): PreviewSess
     target: '3000',
     command: 'bun run dev',
     port: 3000,
-    url: '/api/preview/proxy/session-1/',
+    url: '/api/dev-proxy/3000/',
     browserId: 'browser-1',
     processId: 1234,
     containerId: null,

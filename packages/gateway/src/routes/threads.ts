@@ -341,12 +341,20 @@ export function registerThreadRoutes(
         broadcastThreadEvent(id, "activity", { activity });
       }
 
-      // When the PR is merged (or closed), the session is no longer needed.
+      // When the PR is merged (or closed), tear down the session,
+      // worktree, and branch so re-entering the thread starts fresh.
       if (prState === "merged" || prState === "closed") {
         threadService.clearSession(id);
         const unsub = threadUnsubs.get(id);
         if (unsub) { unsub(); threadUnsubs.delete(id); }
         remoteProviders.delete(id);
+
+        // Clean up worktree + branch (best effort, don't block the response)
+        if (existing.workingDirectory) {
+          cleanupWorktreeRemoteAware(existing.workingDirectory, ws, existing.branch).catch(() => {});
+        }
+        // Clear the working directory and branch so the next /start creates new ones
+        threadService.update(id, { workingDirectory: null, branch: null });
       }
     }
 
@@ -370,9 +378,9 @@ export function registerThreadRoutes(
       } catch { /* best effort */ }
     }
 
-    // Clean up the worktree on disk (best effort, don't block delete)
+    // Clean up the worktree and branch on disk (best effort, don't block delete)
     if (existing.workingDirectory) {
-      cleanupWorktreeRemoteAware(existing.workingDirectory, ws).catch(() => {});
+      cleanupWorktreeRemoteAware(existing.workingDirectory, ws, existing.branch).catch(() => {});
     }
 
     threadService.delete(id);

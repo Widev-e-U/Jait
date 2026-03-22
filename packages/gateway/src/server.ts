@@ -190,7 +190,6 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerBrowserAssetRoutes(app);
   registerWorkspacePreviewRoutes(app);
   registerDevProxyRoutes(app);
-  registerPreviewSessionProxyRoutes(app, deps);
   if (deps.previewService) {
     registerPreviewRoutes(app, config, { previewService: deps.previewService });
   }
@@ -426,37 +425,6 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
 
   app.all("/api/dev-proxy/:port", handler);
   app.all("/api/dev-proxy/:port/*", handler);
-}
-
-function registerPreviewSessionProxyRoutes(app: FastifyInstance, deps: ServerDeps): void {
-  const handler = async (request: any, reply: any) => {
-    const params = request.params as { sessionId?: string; "*"?: string };
-    const sessionId = params.sessionId?.trim();
-    if (!sessionId || !deps.previewService) {
-      return reply.status(404).send({ error: "PREVIEW_NOT_FOUND", message: "Preview session not found" });
-    }
-
-    const proxiedPath = params["*"] ? `/${params["*"]}` : "/";
-    const baseTarget = deps.previewService.getProxyTarget(sessionId);
-    if (!baseTarget) {
-      return reply.status(404).send({ error: "PREVIEW_NOT_FOUND", message: "Preview session not found" });
-    }
-
-    const targetUrl = new URL(proxiedPath, baseTarget);
-    const query = request.query as Record<string, string | string[] | undefined>;
-    for (const [key, value] of Object.entries(query)) {
-      if (Array.isArray(value)) {
-        for (const entry of value) targetUrl.searchParams.append(key, entry);
-      } else if (typeof value === "string") {
-        targetUrl.searchParams.set(key, value);
-      }
-    }
-
-    return proxyPreviewRequest(request, reply, targetUrl, `/api/preview/proxy/${sessionId}`, proxiedPath);
-  };
-
-  app.all("/api/preview/proxy/:sessionId", handler);
-  app.all("/api/preview/proxy/:sessionId/*", handler);
 }
 
 async function proxyPreviewRequest(

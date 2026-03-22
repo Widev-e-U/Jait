@@ -42,8 +42,8 @@ export interface UpdateThreadParams {
   model?: string;
   runtimeMode?: RuntimeMode;
   kind?: "delivery" | "delegation";
-  workingDirectory?: string;
-  branch?: string;
+  workingDirectory?: string | null;
+  branch?: string | null;
   prUrl?: string | null;
   prNumber?: number | null;
   prTitle?: string | null;

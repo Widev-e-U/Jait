@@ -3737,8 +3737,11 @@ function App() {
             )}
           </nav>
 
+          {/* Spacer */}
+          <div className="flex-1 min-w-0" />
+
           {currentView === 'chat' && (
-            <div className="px-2 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            <div className="shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
             </div>
           )}

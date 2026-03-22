@@ -739,20 +739,26 @@ export class GitService {
     if (porcelain.length > 0) {
       await gitExec(cwd, "add -A");
 
-      let msg = commitMessage?.trim();
-      if (!msg) {
-        // Auto-generate a commit message from the diff summary
-        try {
-          const diffSummary = await gitExec(cwd, "diff --cached --stat");
-          msg = `chore: auto-commit ${diffSummary.split("\n").length} file(s) changed`;
-        } catch {
-          msg = "chore: auto-commit changes";
+      try {
+        let msg = commitMessage?.trim();
+        if (!msg) {
+          // Auto-generate a commit message from the diff summary
+          try {
+            const diffSummary = await gitExec(cwd, "diff --cached --stat");
+            msg = `chore: auto-commit ${diffSummary.split("\n").length} file(s) changed`;
+          } catch {
+            msg = "chore: auto-commit changes";
+          }
         }
-      }
 
-      await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}"`);
-      const sha = await gitExec(cwd, "rev-parse HEAD");
-      result.commit = { status: "created", commitSha: sha, subject: msg };
+        await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}"`);
+        const sha = await gitExec(cwd, "rev-parse HEAD");
+        result.commit = { status: "created", commitSha: sha, subject: msg };
+      } catch (err) {
+        // Unstage so we don't leave stale staged files behind
+        await gitExec(cwd, "reset HEAD").catch(() => {});
+        throw err;
+      }
     }
 
     // Push step
@@ -978,6 +984,13 @@ export class GitService {
     await gitExec(cwd, `checkout -b "${branch}"`);
   }
 
+  /** Delete a local branch. No-ops if the branch doesn't exist. */
+  async deleteBranch(cwd: string, branch: string): Promise<void> {
+    try {
+      await gitExec(cwd, `branch -D "${branch}"`);
+    } catch { /* branch may already be gone */ }
+  }
+
   // ── Clone operations ──────────────────────────────────────────
 
   /**
@@ -1057,17 +1070,19 @@ export class GitService {
   /**
    * Clean up a worktree directory created for a thread.
    * Resolves the main repo root, runs `git worktree remove --force`,
-   * and falls back to deleting the directory if that fails.
+   * deletes the associated branch, and falls back to deleting the
+   * directory if the worktree remove fails.
    * No-ops silently when the path is not a worktree or doesn't exist.
    */
-  async cleanupWorktree(worktreePath: string): Promise<void> {
+  async cleanupWorktree(worktreePath: string, branch?: string | null): Promise<void> {
     if (!worktreePath || !existsSync(worktreePath)) return;
     // Only act on paths that live inside the managed worktrees directory
     const worktreeMarker = join(".jait", "worktrees");
     if (!worktreePath.includes(worktreeMarker)) return;
 
+    let mainRoot: string | undefined;
     try {
-      const mainRoot = await this.getMainRepoRoot(worktreePath);
+      mainRoot = await this.getMainRepoRoot(worktreePath);
       await this.removeWorktree(mainRoot, worktreePath, true);
     } catch {
       // git worktree remove may fail (dirty tree, missing refs, etc.).
@@ -1075,6 +1090,11 @@ export class GitService {
       try {
         await rm(worktreePath, { recursive: true, force: true });
       } catch { /* best effort */ }
+    }
+
+    // Delete the branch from the main repo after the worktree is gone
+    if (branch && mainRoot) {
+      await this.deleteBranch(mainRoot, branch);
     }
   }
 
@@ -1617,13 +1637,14 @@ export class GitService {
 export async function cleanupWorktreeRemoteAware(
   worktreePath: string,
   ws?: { proxyFsOp<T = unknown>(nodeId: string, op: string, params: Record<string, unknown>, timeout: number): Promise<T>; getFsNodes(): { id: string; isGateway?: boolean; platform?: string }[] },
+  branch?: string | null,
 ): Promise<void> {
   if (!worktreePath) return;
 
   // If path exists locally, use local cleanup
   if (existsSync(worktreePath)) {
     const svc = new GitService();
-    await svc.cleanupWorktree(worktreePath);
+    await svc.cleanupWorktree(worktreePath, branch);
     return;
   }
 

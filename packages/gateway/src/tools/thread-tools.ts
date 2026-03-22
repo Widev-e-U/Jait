@@ -450,9 +450,9 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               }
             }
 
-            // Clean up the worktree on disk (best effort, don't block delete)
+            // Clean up the worktree and branch on disk (best effort, don't block delete)
             if (thread.workingDirectory) {
-              cleanupWorktreeRemoteAware(thread.workingDirectory, deps.ws).catch(() => {});
+              cleanupWorktreeRemoteAware(thread.workingDirectory, deps.ws, thread.branch).catch(() => {});
             }
 
             deps.threadService.delete(thread.id);

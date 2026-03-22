@@ -258,7 +258,7 @@ describe("@jait/gateway health", () => {
     await new Promise<void>((resolveClose, rejectClose) => upstream.close((error) => error ? rejectClose(error) : resolveClose()));
   });
 
-  it("GET /api/preview/proxy/:sessionId proxies managed preview sessions", async () => {
+  it("GET /api/dev-proxy/:port proxies and rewrites HTML and JS", async () => {
     const upstream = createHttpServer((request, response) => {
       if (request.url === "/") {
         response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
@@ -282,29 +282,23 @@ describe("@jait/gateway health", () => {
       throw new Error("Expected TCP address for upstream test server");
     }
 
-    const app = await createServer(testConfig, {
-      previewService: {
-        getProxyTarget: (sessionId: string) => sessionId === "preview-session"
-          ? new URL(`http://127.0.0.1:${address.port}/`)
-          : null,
-      } as any,
-    });
+    const app = await createServer(testConfig);
 
     const htmlResponse = await app.inject({
       method: "GET",
-      url: "/api/preview/proxy/preview-session/",
+      url: `/api/dev-proxy/${address.port}/`,
     });
 
     expect(htmlResponse.statusCode).toBe(200);
-    expect(htmlResponse.body).toContain('/api/preview/proxy/preview-session/src/main.tsx');
+    expect(htmlResponse.body).toContain(`/api/dev-proxy/${address.port}/src/main.tsx`);
 
     const moduleResponse = await app.inject({
       method: "GET",
-      url: "/api/preview/proxy/preview-session/src/main.tsx",
+      url: `/api/dev-proxy/${address.port}/src/main.tsx`,
     });
 
     expect(moduleResponse.statusCode).toBe(200);
-    expect(moduleResponse.body).toContain('/api/preview/proxy/preview-session/@vite/client');
+    expect(moduleResponse.body).toContain(`/api/dev-proxy/${address.port}/@vite/client`);
 
     await app.close();
     await new Promise<void>((resolveClose, rejectClose) => upstream.close((error) => error ? rejectClose(error) : resolveClose()));

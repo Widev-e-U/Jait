@@ -1,0 +1,83 @@
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { execSync } from "node:child_process";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import { GitService } from "./git.js";
+
+function git(cwd: string, cmd: string) {
+  return execSync(`git ${cmd}`, { cwd, encoding: "utf-8" }).trim();
+}
+
+describe("runStackedAction – unstage on commit failure", () => {
+  let repoDir: string;
+  let svc: GitService;
+
+  beforeEach(async () => {
+    repoDir = await mkdtemp(join(tmpdir(), "git-stacked-test-"));
+    git(repoDir, "init");
+    git(repoDir, "config user.email test@test.com");
+    git(repoDir, "config user.name Test");
+    // Create an initial commit so HEAD exists
+    await writeFile(join(repoDir, "init.txt"), "init");
+    git(repoDir, "add -A");
+    git(repoDir, "commit -m initial");
+    svc = new GitService();
+  });
+
+  afterEach(async () => {
+    await rm(repoDir, { recursive: true, force: true });
+  });
+
+  it("unstages files when commit fails", async () => {
+    // Create a change
+    await writeFile(join(repoDir, "file.txt"), "hello");
+
+    // Make commit fail via a pre-commit hook that rejects
+    await writeFile(
+      join(repoDir, ".git", "hooks", "pre-commit"),
+      "#!/bin/sh\nexit 1\n",
+    );
+    execSync(`chmod +x "${join(repoDir, ".git", "hooks", "pre-commit")}"`);
+
+    await expect(
+      svc.runStackedAction(repoDir, "commit", "test commit"),
+    ).rejects.toThrow();
+
+    // Files should NOT be left staged
+    const staged = git(repoDir, "diff --cached --name-only");
+    expect(staged).toBe("");
+  });
+
+  it("does not leave staged files after commit message generation fails", async () => {
+    await writeFile(join(repoDir, "file.txt"), "hello");
+
+    // Pass undefined message so it auto-generates, but sabotage the commit
+    // by making the repo read-only objects dir
+    // Instead: use a commit-msg hook that rejects
+    await writeFile(
+      join(repoDir, ".git", "hooks", "commit-msg"),
+      "#!/bin/sh\nexit 1\n",
+    );
+    execSync(`chmod +x "${join(repoDir, ".git", "hooks", "commit-msg")}"`);
+
+    await expect(
+      svc.runStackedAction(repoDir, "commit", "test commit"),
+    ).rejects.toThrow();
+
+    // Verify nothing is left staged
+    const staged = git(repoDir, "diff --cached --name-only");
+    expect(staged).toBe("");
+  });
+
+  it("commits successfully when everything works", async () => {
+    await writeFile(join(repoDir, "file.txt"), "hello");
+
+    const result = await svc.runStackedAction(repoDir, "commit", "test: add file");
+
+    expect(result.commit.status).toBe("created");
+    // No staged or unstaged files should remain
+    const status = git(repoDir, "status --porcelain");
+    expect(status).toBe("");
+  });
+});

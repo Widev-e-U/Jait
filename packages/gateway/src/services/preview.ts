@@ -142,7 +142,7 @@ export class PreviewService {
         session.port = result.port;
         session.command = result.command;
         session.browserUrl = result.url;
-        session.url = `/api/preview/proxy/${input.sessionId}/`;
+        session.url = `/api/dev-proxy/${result.port}/`;
         session.processId = result.processId ?? null;
         session.containerId = result.containerId ?? null;
 
@@ -162,7 +162,8 @@ export class PreviewService {
         if (!session.browserUrl) {
           throw new Error("A loopback target URL or port is required");
         }
-        session.url = `/api/preview/proxy/${input.sessionId}/`;
+        const targetPort = new URL(session.browserUrl).port;
+        session.url = `/api/dev-proxy/${targetPort}/`;
       }
 
       await this.ensureBrowser(session);
@@ -216,16 +217,6 @@ export class PreviewService {
     if (!session) return null;
     session.browserEvents = this.readBrowserEvents(session);
     return this.toPublicSession(session);
-  }
-
-  getProxyTarget(sessionId: string): URL | null {
-    const session = this.sessions.get(sessionId);
-    if (!session?.browserUrl) return null;
-    try {
-      return new URL(session.browserUrl);
-    } catch {
-      return null;
-    }
   }
 
   getLogs(sessionId: string, sinceId = 0): PreviewLogEntry[] {

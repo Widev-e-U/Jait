@@ -39,9 +39,9 @@ describe('resolvePreviewTarget', () => {
   })
 
   it('accepts gateway-relative managed preview paths', () => {
-    expect(resolvePreviewTarget('/api/preview/proxy/test-session/')).toEqual({
-      iframeSrc: 'http://localhost:8000/api/preview/proxy/test-session/',
-      label: '/api/preview/proxy/test-session/',
+    expect(resolvePreviewTarget('/api/dev-proxy/3000/')).toEqual({
+      iframeSrc: 'http://localhost:8000/api/dev-proxy/3000/',
+      label: '/api/dev-proxy/3000/',
     })
   })
 
