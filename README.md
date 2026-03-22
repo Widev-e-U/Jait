@@ -6,7 +6,7 @@
 
 **Local-first AI coding agent workspace** with terminal, filesystem, browser control, screen sharing, and task automation — no cloud backend required.
 
-This is from now on a passion project of mine. I really like to build and make building easier. Feel free to critisize my approaches in any way possible I really want to make this usable because it really makes me have fun at building stuff again 😁
+This is from now on a passion project of mine. I really like to build and make building easier. Feel free to critisize my approaches (issues are very welcome and help me a lot) in any way possible I really want to make this usable because it really makes me have fun at building stuff again 😁
 
 Jait runs as a lightweight gateway on your machine (or a server) and serves a web UI to any browser. Think of it as your own self-hosted AI dev environment: connect your API key, open the UI, and start building.
 
