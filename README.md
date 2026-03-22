@@ -15,6 +15,7 @@ Jait runs as a lightweight gateway on your machine (or a server) and serves a we
   <a href="https://github.com/JakobWl/Jait/releases/latest"><img src="https://img.shields.io/github/v/release/JakobWl/Jait?style=for-the-badge" alt="Latest release"></a>
   <a href="https://discord.gg/XaHA8fnB"><img src="https://img.shields.io/discord/1485203573183742074?label=Discord&logo=discord&logoColor=white&color=5865F2&style=for-the-badge" alt="Discord"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
+  <a href="https://jait.dev"><img src="https://img.shields.io/badge/Website-jait.dev-00c4b4?style=for-the-badge" alt="Website"></a>
 </p>
 
 ---
