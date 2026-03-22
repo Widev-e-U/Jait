@@ -4,7 +4,7 @@
 
 If you find a security issue, do not open a public GitHub issue.
 
-Report it privately via [GitHub Security Advisories](https://github.com/JakobWl/Jait/security/advisories/new) with:
+Report it privately via [GitHub Security Advisories](https://github.com/Widev-e-U/Jait/security/advisories/new) with:
 
 - a short description of the issue
 - impact and affected components

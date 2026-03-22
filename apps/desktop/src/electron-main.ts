@@ -1360,7 +1360,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
               const diffStat = await gitExecLocal(`diff --stat ${resolvedBase}..${currentBranch}`, 15_000);
               if (diffStat) prBody += `\n## Changes\n\n\`\`\`\n${diffStat.slice(0, 12000)}\n\`\`\`\n`;
             } catch { /* */ }
-            prBody += `\n---\n*PR created by [Jait](https://github.com/JakobWl/Jait) automation.*`;
+            prBody += `\n---\n*PR created by [Jait](https://github.com/Widev-e-U/Jait) automation.*`;
 
             // Write body to temp file to avoid shell escaping issues
             const bodyFile = join(tmpdir(), `jait-pr-body-${Date.now()}.md`);

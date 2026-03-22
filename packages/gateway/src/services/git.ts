@@ -1414,7 +1414,7 @@ export class GitService {
       sections.push("```\n");
     }
 
-    sections.push(`---\n*PR created by [Jait](https://github.com/JakobWl/Jait) automation.*`);
+    sections.push(`---\n*PR created by [Jait](https://github.com/Widev-e-U/Jait) automation.*`);
 
     return sections.join("\n");
   }

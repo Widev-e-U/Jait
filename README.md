@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/site/icon.svg" width="96" alt="Jait logo" />
+  <img src="docs/icon.svg" width="96" alt="Jait logo" />
 </p>
 
 # Jait
@@ -13,8 +13,8 @@ Just a quick notice this is really new and breaks on many occasions. Lets fix it
 Jait runs as a lightweight gateway on your machine (or a server) and serves a web UI to any browser. Think of it as your own self-hosted AI dev environment: connect your API key, open the UI, and start building.
 
 <p align="center">
-  <a href="https://github.com/JakobWl/Jait/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/JakobWl/Jait/ci.yml?branch=main&label=typecheck&style=for-the-badge" alt="Typecheck"></a>
-  <a href="https://github.com/JakobWl/Jait/releases/latest"><img src="https://img.shields.io/github/v/release/JakobWl/Jait?style=for-the-badge" alt="Latest release"></a>
+  <a href="https://github.com/Widev-e-U/Jait/actions/workflows/ci.yml?branch=main"><img src="https://img.shields.io/github/actions/workflow/status/Widev-e-U/Jait/ci.yml?branch=main&label=typecheck&style=for-the-badge" alt="Typecheck"></a>
+  <a href="https://github.com/Widev-e-U/Jait/releases/latest"><img src="https://img.shields.io/github/v/release/Widev-e-U/Jait?style=for-the-badge" alt="Latest release"></a>
   <a href="https://discord.gg/aqVPr2Jb"><img src="https://img.shields.io/discord/1485222899873747104?label=Discord&logo=discord&logoColor=white&color=5865F2&style=for-the-badge" alt="Discord"></a>
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg?style=for-the-badge" alt="MIT License"></a>
   <a href="https://jait.dev"><img src="https://img.shields.io/badge/Website-jait.dev-00c4b4?style=for-the-badge" alt="Website"></a>
@@ -42,7 +42,7 @@ On first launch you'll create a local account (stored in SQLite, never leaves yo
 
 ### Option B — Desktop app
 
-Download the latest installer from [**GitHub Releases**](https://github.com/JakobWl/Jait/releases/latest):
+Download the latest installer from [**GitHub Releases**](https://github.com/Widev-e-U/Jait/releases/latest):
 
 | Platform | File |
 |----------|------|
@@ -55,7 +55,7 @@ The desktop app bundles the gateway + web UI in one window. No separate install 
 ### Option C — From source
 
 ```bash
-git clone https://github.com/JakobWl/Jait
+git clone https://github.com/Widev-e-U/Jait
 cd Jait
 bun install --frozen-lockfile
 cp .env.example .env        # edit with your API key

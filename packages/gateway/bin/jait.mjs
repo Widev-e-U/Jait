@@ -86,7 +86,7 @@ Environment files are loaded in order (first found wins):
   3. ~/.jait/.env
 
 All configuration can also be set via environment variables.
-See https://github.com/JakobWl/Jait for full documentation.
+See https://github.com/Widev-e-U/Jait for full documentation.
 `);
 }
 

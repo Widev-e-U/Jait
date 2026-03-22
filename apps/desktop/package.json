@@ -3,7 +3,7 @@
   "version": "0.1.39",
   "description": "Jait AI desktop app",
   "author": "JakobWl",
-  "homepage": "https://github.com/JakobWl/Jait",
+  "homepage": "https://github.com/Widev-e-U/Jait",
   "private": true,
   "type": "module",
   "main": "dist/electron-main.js",

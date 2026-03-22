@@ -3804,7 +3804,7 @@ function App() {
                         setCurrentView('settings')
                       } else {
                         window.open(
-                          'https://github.com/JakobWl/Jait/releases/latest',
+                          'https://github.com/Widev-e-U/Jait/releases/latest',
                           '_blank',
                         )
                       }

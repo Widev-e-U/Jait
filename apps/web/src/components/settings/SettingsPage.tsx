@@ -316,7 +316,7 @@ export function SettingsPage({
                     </Button>
                     {platform !== 'web' && (
                       <Button size="sm" variant="outline" asChild>
-                        <a href="https://github.com/JakobWl/Jait/releases/latest" target="_blank" rel="noopener noreferrer">
+                        <a href="https://github.com/Widev-e-U/Jait/releases/latest" target="_blank" rel="noopener noreferrer">
                           <Download className="mr-1.5 h-4 w-4" />
                           Download latest {platform === 'capacitor' ? 'APK' : 'desktop app'}
                         </a>
