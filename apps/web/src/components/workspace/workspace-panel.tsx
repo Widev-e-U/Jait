@@ -598,6 +598,11 @@ function useDragResize(
   const [isDragging, setIsDragging] = useState(false)
   const frameRef = useRef<number | null>(null)
   const pendingSizeRef = useRef<number | null>(null)
+
+  // Clamp size when constraints change (e.g., panel shrinks → tree max decreases)
+  useEffect(() => {
+    setSize((prev) => Math.min(max, Math.max(min, prev)))
+  }, [min, max])
   const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -971,10 +976,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const tabScrollRef = useRef<HTMLDivElement | null>(null)
 
   // Resizable: file tree width + total panel width
-  // Target a 4:2 (workspace:chat) ratio of the space after the sidebar (~224px)
-  const tree = useDragResize(260, 180, 500, 'horizontal', 'workspaceTreePaneWidth')
-  const initialPanel = Math.round((window.innerWidth - 224) * (4 / 6))
-  const panel = useDragResize(initialPanel, 400, 1800, 'horizontal', 'workspacePanelWidth')
+  // VS Code–style constraints: panel max is viewport-aware, tree max is panel-aware.
+  const sidebarWidth = 224 // approximate sidebar + session selector width
+  const minChatWidth = 320 // minimum chat column width to prevent squishing
+  const minEditorWidth = 200 // minimum editor pane width when tree is visible
+  const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
+
+  const panelMax = Math.max(400, viewportWidth - sidebarWidth - minChatWidth)
+  const initialPanel = Math.round((viewportWidth - sidebarWidth) * (4 / 6))
+  const panel = useDragResize(initialPanel, 400, panelMax, 'horizontal', 'workspacePanelWidth')
+
+  // Tree max is clamped so the editor pane never disappears
+  const treeMax = Math.max(180, panel.size - minEditorWidth)
+  const tree = useDragResize(260, 180, treeMax, 'horizontal', 'workspaceTreePaneWidth')
   const disablePreviewPointerEvents = tree.isDragging || panel.isDragging
 
   // Lazy tree state
