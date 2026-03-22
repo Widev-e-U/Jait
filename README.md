@@ -102,9 +102,23 @@ See [`.env.example`](.env.example) for the full list, including:
 
 ---
 
-## Run on a server (headless)
+## Run in the background
 
-Install globally, then set up as a systemd service:
+### Any platform (Windows, macOS, Linux)
+
+```bash
+npm install -g @jait/gateway
+
+jait start                  # start in background
+jait status                 # check health
+jait stop                   # stop
+```
+
+Logs are written to `~/.jait/gateway.log`.
+
+### Linux server (systemd)
+
+For auto-start on boot, use the systemd integration:
 
 ```bash
 npm install -g @jait/gateway
@@ -145,15 +159,21 @@ Or trigger the update from the web UI: **Settings → Check for updates → Appl
 
 ```
 jait                       Start the gateway (default port 8000)
+jait start                 Start the gateway in the background
+jait stop                  Stop the background gateway
+jait status                Check if the gateway is running
 jait --port 9000           Custom port
 jait --host 127.0.0.1      Bind to localhost only
 jait --env /path/to/.env   Explicit env file
 jait --version             Show version
 jait --help                Show help
 
-jait daemon install        Install systemd user service
+jait daemon install        Install systemd user service (Linux only)
 jait daemon start|stop|restart|status|logs|uninstall
 ```
+
+The `start`, `stop`, and `status` commands work on **all platforms** (Windows, macOS, Linux).
+The `daemon` commands use systemd and are Linux-only.
 
 ---
 

@@ -5,11 +5,14 @@
  *
  * Usage:
  *   jait                     Start the gateway with defaults
+ *   jait start               Start the gateway in the background
+ *   jait stop                Stop the background gateway
+ *   jait status              Check if the gateway is running
  *   jait --port 9000         Use a custom port
  *   jait --host 127.0.0.1   Bind to specific host
  *   jait --help              Show help
  *   jait --version           Show version
- *   jait daemon install      Install systemd user service
+ *   jait daemon install      Install systemd user service (Linux)
  *   jait daemon start        Start the service
  *   jait daemon stop         Stop the service
  *   jait daemon restart      Restart the service
@@ -18,11 +21,12 @@
  *   jait daemon logs         Tail service logs
  */
 
-import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync } from "node:fs";
+import { readFileSync, existsSync, writeFileSync, mkdirSync, unlinkSync, openSync } from "node:fs";
 import { resolve, dirname, join } from "node:path";
 import { homedir, platform } from "node:os";
 import { fileURLToPath } from "node:url";
-import { execSync } from "node:child_process";
+import { execSync, spawn } from "node:child_process";
+import { createConnection } from "node:net";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const pkg = JSON.parse(
@@ -36,6 +40,7 @@ const JAIT_DIR = join(homedir(), ".jait");
 const ENV_PATH = join(JAIT_DIR, ".env");
 const LOG_PATH = join(JAIT_DIR, "gateway.log");
 const ERR_LOG_PATH = join(JAIT_DIR, "gateway.err.log");
+const PID_PATH = join(JAIT_DIR, "jait.pid");
 
 function systemdUnitDir() {
   return join(homedir(), ".config", "systemd", "user");
@@ -62,7 +67,13 @@ function printBanner() {
 function printHelp() {
   printBanner();
   console.log(`Usage: jait [options]
-       jait daemon <command>
+       jait <command> [options]
+
+Commands:
+  start              Start the gateway in the background
+  stop               Stop the background gateway
+  status             Check if the gateway is running
+  daemon <cmd>       Manage systemd service (Linux only)
 
 Options:
   --port <number>    Port to listen on            (default: 8000, env: PORT)
@@ -104,6 +115,147 @@ function run(cmd, { silent = false } = {}) {
 
 function runSilent(cmd) {
   return run(cmd, { silent: true }).trim();
+}
+
+// ── Cross-platform commands ─────────────────────────────────────────
+
+function healthCheck(port) {
+  return new Promise((resolveP) => {
+    const socket = createConnection({ host: "127.0.0.1", port: Number(port) }, () => {
+      // Connected — send a minimal HTTP request
+      socket.write(`GET /health HTTP/1.1\r\nHost: 127.0.0.1:${port}\r\nConnection: close\r\n\r\n`);
+
+      let data = "";
+      socket.on("data", (chunk) => { data += chunk.toString(); });
+      socket.on("end", () => {
+        socket.destroy();
+        // Parse HTTP response body (after blank line)
+        const bodyStart = data.indexOf("\r\n\r\n");
+        if (bodyStart < 0) return resolveP(null);
+        const body = data.slice(bodyStart + 4);
+        try { resolveP(JSON.parse(body)); } catch { resolveP(null); }
+      });
+    });
+    socket.on("error", () => resolveP(null));
+    socket.setTimeout(3000, () => { socket.destroy(); resolveP(null); });
+  });
+}
+
+async function cmdStatus(port) {
+  printBanner();
+  port = port || process.env.PORT || "8000";
+
+  // Check PID file
+  let pid = null;
+  if (existsSync(PID_PATH)) {
+    pid = readFileSync(PID_PATH, "utf8").trim();
+    const alive = isProcessRunning(pid);
+    if (!alive) {
+      // Stale PID file
+      try { unlinkSync(PID_PATH); } catch {}
+      pid = null;
+    }
+  }
+
+  const health = await healthCheck(port);
+  if (health) {
+    console.log(`  Status:   running`);
+    if (pid) console.log(`  PID:      ${pid}`);
+    console.log(`  Port:     ${port}`);
+    console.log(`  Version:  ${health.version}`);
+    console.log(`  Healthy:  ${health.healthy ? "yes" : "no"}`);
+    console.log(`  Uptime:   ${health.uptime}s`);
+  } else {
+    console.log(`  Status:   not running`);
+    console.log(`  Port:     ${port} (checked)`);
+    if (pid) {
+      console.log(`  PID:      ${pid} (process exists but not responding)`);
+    }
+  }
+  console.log("");
+}
+
+function isProcessRunning(pid) {
+  try {
+    process.kill(Number(pid), 0);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function cmdStart(cliFlags) {
+  printBanner();
+  // Check if already running
+  if (existsSync(PID_PATH)) {
+    const pid = readFileSync(PID_PATH, "utf8").trim();
+    if (isProcessRunning(pid)) {
+      console.log(`  Jait is already running (PID ${pid}).`);
+      console.log(`  Run 'jait stop' first, or 'jait status' for details.`);
+      console.log("");
+      process.exit(1);
+    }
+    // Stale PID file
+    try { unlinkSync(PID_PATH); } catch {}
+  }
+
+  mkdirSync(JAIT_DIR, { recursive: true });
+
+  const jaitBin = resolve(__dirname, "jait.mjs");
+  const childArgs = [jaitBin];
+  if (cliFlags.port) childArgs.push("--port", String(cliFlags.port));
+  if (cliFlags.host) childArgs.push("--host", cliFlags.host);
+  if (cliFlags.envPath) childArgs.push("--env", cliFlags.envPath);
+
+  const logFd = openSync(LOG_PATH, "a");
+  const errFd = openSync(ERR_LOG_PATH, "a");
+
+  const child = spawn(process.execPath, childArgs, {
+    detached: true,
+    stdio: ["ignore", logFd, errFd],
+    env: { ...process.env, __JAIT_BACKGROUND: "1" },
+  });
+
+  writeFileSync(PID_PATH, String(child.pid), "utf8");
+  child.unref();
+
+  console.log(`  Jait started in background (PID ${child.pid}).`);
+  console.log(`  Logs: ${LOG_PATH}`);
+  console.log(`  Run 'jait status' to check health.`);
+  console.log(`  Run 'jait stop' to stop the gateway.`);
+  console.log("");
+}
+
+function cmdStop() {
+  printBanner();
+  if (!existsSync(PID_PATH)) {
+    console.log("  Jait is not running (no PID file found).");
+    console.log("");
+    process.exit(1);
+  }
+
+  const pid = readFileSync(PID_PATH, "utf8").trim();
+
+  if (!isProcessRunning(pid)) {
+    console.log(`  Process ${pid} is not running (stale PID file).`);
+    try { unlinkSync(PID_PATH); } catch {}
+    console.log("");
+    process.exit(0);
+  }
+
+  try {
+    if (platform() === "win32") {
+      execSync(`taskkill /PID ${pid} /T /F`, { stdio: "ignore" });
+    } else {
+      process.kill(Number(pid), "SIGTERM");
+    }
+    console.log(`  Sent stop signal to PID ${pid}.`);
+  } catch (err) {
+    console.error(`  Failed to stop process ${pid}: ${err.message}`);
+  }
+
+  try { unlinkSync(PID_PATH); } catch {}
+  console.log("");
 }
 
 // ── Daemon commands ─────────────────────────────────────────────────
@@ -291,15 +443,38 @@ function daemonLogs() {
 const args = process.argv.slice(2);
 const flags = {};
 
-// Check for daemon subcommand first
-if (args[0] === "daemon") {
-  const subCmd = args[1];
-  // Parse remaining flags for daemon install
-  for (let i = 2; i < args.length; i++) {
+// Parse flags shared by subcommands
+function parseSubcommandFlags(startIdx) {
+  for (let i = startIdx; i < args.length; i++) {
     if (args[i] === "--port" && args[i + 1]) flags.port = args[++i];
     else if (args[i] === "--host" && args[i + 1]) flags.host = args[++i];
     else if (args[i] === "--env" && args[i + 1]) flags.envPath = args[++i];
   }
+}
+
+// Cross-platform top-level commands
+if (args[0] === "status") {
+  parseSubcommandFlags(1);
+  await cmdStatus(flags.port);
+  process.exit(0);
+}
+
+if (args[0] === "start") {
+  parseSubcommandFlags(1);
+  cmdStart(flags);
+  process.exit(0);
+}
+
+if (args[0] === "stop") {
+  cmdStop();
+  process.exit(0);
+}
+
+// Check for daemon subcommand first
+if (args[0] === "daemon") {
+  const subCmd = args[1];
+  // Parse remaining flags for daemon install
+  parseSubcommandFlags(2);
 
   printBanner();
   switch (subCmd) {
@@ -348,6 +523,14 @@ for (let i = 0; i < args.length; i++) {
     flags.host = args[++i];
   } else if (arg === "--env" && args[i + 1]) {
     flags.envPath = args[++i];
+  } else if (arg.startsWith("-")) {
+    console.error(`Unknown option: ${arg}`);
+    console.error("Run 'jait --help' for usage information.");
+    process.exit(1);
+  } else {
+    console.error(`Unknown command: ${arg}`);
+    console.error("Run 'jait --help' for usage information.");
+    process.exit(1);
   }
 }
 

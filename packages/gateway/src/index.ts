@@ -623,15 +623,29 @@ async function main() {
   ws.start(server.server); // shares port with Fastify
   console.log(`Jait Gateway listening on http://${config.host}:${config.port} (HTTP + WS)`);
 
+  let shuttingDown = false;
   const shutdown = async () => {
+    if (shuttingDown) return;
+    shuttingDown = true;
     console.log("Shutting down...");
-    consentManager.cancelAll("shutdown");
-    await previewService.stopAll();
-    await surfaceRegistry.stopAll("shutdown");
-    scheduler.stop();
-    ws.stop();
-    await server.close();
-    sqlite.close();
+    // Force exit after 5 seconds if graceful shutdown hangs
+    const forceTimer = setTimeout(() => {
+      console.error("Graceful shutdown timed out, forcing exit.");
+      process.exit(1);
+    }, 5_000);
+    // Ensure the timer doesn't keep the process alive
+    if (forceTimer.unref) forceTimer.unref();
+    try {
+      consentManager.cancelAll("shutdown");
+      await previewService.stopAll();
+      await surfaceRegistry.stopAll("shutdown");
+      scheduler.stop();
+      ws.stop();
+      await server.close();
+      sqlite.close();
+    } catch (err) {
+      console.error("Error during shutdown:", err);
+    }
     process.exit(0);
   };
   // Wire shutdown into redeploy tool's late-bound reference
