@@ -150,7 +150,9 @@ function getVsFolderIconName(foldername: string): string {
 /** Extract plain text from the editable div, ignoring chip nodes. */
 function getTextFromEditable(el: HTMLElement): string {
   let text = ''
-  for (const node of el.childNodes) {
+  const children = el.childNodes
+  for (let i = 0; i < children.length; i++) {
+    const node = children[i]
     if (node.nodeType === Node.TEXT_NODE) {
       text += node.textContent ?? ''
     } else if (node instanceof HTMLElement) {
@@ -158,7 +160,9 @@ function getTextFromEditable(el: HTMLElement): string {
         // Skip chips — they're represented separately
         continue
       } else if (node.tagName === 'BR') {
-        text += '\n'
+        // Ignore trailing <br> that browsers insert in empty/end-of contentEditable
+        const isLast = i === children.length - 1
+        if (!isLast) text += '\n'
       } else {
         text += getTextFromEditable(node)
       }
