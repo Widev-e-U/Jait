@@ -166,6 +166,16 @@ function getTextFromEditable(el: HTMLElement): string {
   return text
 }
 
+/** Strip zero-width and invisible formatting characters, then trim. */
+function stripInvisible(s: string): string {
+  return s.replace(/[\u200B\u200C\u200D\uFEFF]/g, '').trim()
+}
+
+/** Check if a text string is visually empty. */
+function isTextEmpty(s: string): boolean {
+  return !stripInvisible(s)
+}
+
 /** Get file paths from all chip nodes in the editable div. */
 function getChipPaths(el: HTMLElement): string[] {
   const paths: string[] = []
@@ -401,13 +411,18 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
   const [dragging, setDragging] = useState(false)
   const dragCounter = useRef(0)
-  const [isEmpty, setIsEmpty] = useState(!value)
+  const [isEmpty, setIsEmpty] = useState(isTextEmpty(value))
   const [attachments, setAttachments] = useState<ChatAttachment[]>(
     () => (draftStateKey ? attachmentDraftStore.get(draftStateKey) ?? [] : []),
   )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftSegmentsRef = useRef<UserMessageSegment[]>(normalizeUserMessageSegments(segments))
   const lastAppliedDraftSignatureRef = useRef<string | null>(null)
+
+  // Undo/redo stack for the composer (prevents browser native undo corruption)
+  const undoStackRef = useRef<UserMessageSegment[][]>([])
+  const redoStackRef = useRef<UserMessageSegment[][]>([])
+  const undoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   // @ mention state
   const [mentionOpen, setMentionOpen] = useState(false)
@@ -425,6 +440,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   useEffect(() => { onSearchFilesRef.current = onSearchFiles }, [onSearchFiles])
   const workspaceOpenRef = useRef(workspaceOpen)
   useEffect(() => { workspaceOpenRef.current = workspaceOpen }, [workspaceOpen])
+  const pushUndoRef = useRef<(immediate?: boolean) => void>(() => {})
 
   // Async search results for @ mention
   const [searchResults, setSearchResults] = useState<ReferencedFile[]>([])
@@ -478,12 +494,13 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const handleRemoveChip = useCallback((path: string) => {
     const el = editableRef.current
     if (!el) return
+    pushUndoRef.current(true)
     el.querySelector(`[data-file-path="${CSS.escape(path)}"]`)?.remove()
     draftSegmentsRef.current = getComposerSegments(el)
     isSyncing.current = true
     onChangeRef.current(getTextFromEditable(el))
     isSyncing.current = false
-    setIsEmpty(!getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]'))
+    setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]'))
   }, [])
 
   const resetComposer = useCallback(() => {
@@ -496,6 +513,44 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     onChangeRef.current('')
     isSyncing.current = false
     setIsEmpty(true)
+    undoStackRef.current = []
+    redoStackRef.current = []
+  }, [handleRemoveChip])
+
+  /** Push a snapshot onto the undo stack (debounced for typing). */
+  const pushUndoSnapshot = useCallback((immediate?: boolean) => {
+    const push = () => {
+      const snap = [...draftSegmentsRef.current]
+      const stack = undoStackRef.current
+      // Avoid duplicate consecutive snapshots
+      if (stack.length > 0 && JSON.stringify(stack[stack.length - 1]) === JSON.stringify(snap)) return
+      stack.push(snap)
+      if (stack.length > 100) stack.shift()
+      redoStackRef.current = []
+    }
+    if (immediate) {
+      if (undoTimerRef.current) { clearTimeout(undoTimerRef.current); undoTimerRef.current = null }
+      push()
+    } else {
+      if (undoTimerRef.current) clearTimeout(undoTimerRef.current)
+      undoTimerRef.current = setTimeout(push, 300)
+    }
+  }, [])
+
+  useEffect(() => { pushUndoRef.current = pushUndoSnapshot }, [pushUndoSnapshot])
+
+  /** Restore a segments snapshot into the editable. */
+  const restoreSnapshot = useCallback((snap: UserMessageSegment[]) => {
+    const el = editableRef.current
+    if (!el) return
+    isSyncing.current = true
+    buildEditableContent(el, snap, '', handleRemoveChip)
+    draftSegmentsRef.current = getComposerSegments(el)
+    const text = getTextFromEditable(el)
+    onChangeRef.current(text)
+    setIsEmpty(isTextEmpty(text) && !el.querySelector('[data-file-path]'))
+    isSyncing.current = false
+    moveCursorToEnd(el)
   }, [handleRemoveChip])
 
   /** Expose imperative methods for parent components. */
@@ -505,6 +560,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       if (!el) return
       // Don't add duplicate
       if (el.querySelector(`[data-file-path="${CSS.escape(file.path)}"]`)) return
+      pushUndoRef.current(true)
       const chip = createChipNode(file, handleRemoveChip)
       el.appendChild(chip)
       el.appendChild(document.createTextNode(' '))
@@ -626,7 +682,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = true
     buildEditableContent(el, segments, value, handleRemoveChip)
     draftSegmentsRef.current = getComposerSegments(el)
-    setIsEmpty(!value && !editableRef.current?.querySelector('[data-file-path]'))
+    setIsEmpty(isTextEmpty(value) && !editableRef.current?.querySelector('[data-file-path]'))
     isSyncing.current = false
     lastAppliedDraftSignatureRef.current = getPromptDraftSignature(value, segments)
   }, [value, segments, handleRemoveChip])
@@ -651,6 +707,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const insertMention = useCallback((file: ReferencedFile) => {
     const el = editableRef.current
     if (!el) return
+    pushUndoSnapshot(true)
 
     // Remove the @query text
     const sel = window.getSelection()
@@ -699,7 +756,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = true
     onChange(getTextFromEditable(el))
     isSyncing.current = false
-  }, [onChange])
+  }, [onChange, pushUndoSnapshot])
 
   /** Handle input events on the contentEditable — uses a native listener
    *  because React's synthetic onInput doesn't fire reliably for contentEditable. */
@@ -712,8 +769,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const text = getTextFromEditable(el)
       draftSegmentsRef.current = getComposerSegments(el)
       onChangeRef.current(text)
-      setIsEmpty(!text.trim() && !el.querySelector('[data-file-path]'))
+      setIsEmpty(isTextEmpty(text) && !el.querySelector('[data-file-path]'))
       isSyncing.current = false
+      pushUndoRef.current()
 
       // Detect @ trigger — resolve cursor into a text node
       const sel = window.getSelection()
@@ -777,6 +835,28 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   }, []) // stable — reads everything from refs
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent<HTMLDivElement>) => {
+    // Intercept undo/redo to prevent browser native undo corruption
+    if ((e.ctrlKey || e.metaKey) && !e.altKey) {
+      if (e.key === 'z' && !e.shiftKey) {
+        e.preventDefault()
+        const stack = undoStackRef.current
+        if (stack.length === 0) return
+        redoStackRef.current.push([...draftSegmentsRef.current])
+        const snap = stack.pop()!
+        restoreSnapshot(snap)
+        return
+      }
+      if ((e.key === 'z' && e.shiftKey) || e.key === 'y') {
+        e.preventDefault()
+        const stack = redoStackRef.current
+        if (stack.length === 0) return
+        undoStackRef.current.push([...draftSegmentsRef.current])
+        const snap = stack.pop()!
+        restoreSnapshot(snap)
+        return
+      }
+    }
+
     if (mentionOpen) {
       if (e.key === 'ArrowDown') {
         e.preventDefault()
@@ -821,7 +901,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             isSyncing.current = true
             onChangeRef.current(getTextFromEditable(el))
             isSyncing.current = false
-            setIsEmpty(!getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]'))
+            setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]'))
             return
           }
         }
@@ -837,7 +917,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           isSyncing.current = true
           onChangeRef.current(getTextFromEditable(el))
           isSyncing.current = false
-          setIsEmpty(!getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]'))
+          setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]'))
           return
         }
       }
@@ -861,7 +941,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         resetComposer()
       }
     }
-  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit, attachments, segments, resetComposer])
+  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit, attachments, segments, resetComposer, restoreSnapshot])
 
   const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
     return new Promise((resolve, reject) => {
@@ -895,7 +975,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     setAttachments((prev) => {
       const next = prev.filter((a) => a.name !== name)
       const el = editableRef.current
-      if (next.length === 0 && el && !getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]')) {
+      if (next.length === 0 && el && isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]')) {
         setIsEmpty(true)
       }
       return next
@@ -970,7 +1050,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       isSyncing.current = true
       onChange(getTextFromEditable(el))
       isSyncing.current = false
-      setIsEmpty(!getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]'))
+      setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]'))
       return
     }
     e.preventDefault()
@@ -1037,12 +1117,17 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const hasElectronPaths = nativeFiles.some((f) => (f as File & { path?: string }).path)
       if (hasElectronPaths) {
         // In Electron, add dropped files/folders as path reference chips
-        for (const f of nativeFiles) {
+        // Use dataTransfer.items to detect folder vs file when available
+        const items = e.dataTransfer.items
+        for (let i = 0; i < nativeFiles.length; i++) {
+          const f = nativeFiles[i]
           const filePath = (f as File & { path?: string }).path
           if (!filePath) continue
           const name = filePath.split(/[\\/]/).pop() ?? filePath
+          const entry = items?.[i]?.webkitGetAsEntry?.()
+          const kind: 'file' | 'dir' = entry?.isDirectory ? 'dir' : (f.type === '' && f.size === 0) ? 'dir' : 'file'
           if (!el.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`)) {
-            const chip = createChipNode({ path: filePath, name }, handleRemoveChip)
+            const chip = createChipNode({ path: filePath, name, kind }, handleRemoveChip)
             el.appendChild(chip)
             el.appendChild(document.createTextNode(' '))
           }
@@ -1057,8 +1142,31 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         // Web browser: read files as binary attachments
         void addFilesAsAttachments(e.dataTransfer.files)
       }
+    } else if (window.jaitDesktop && e.dataTransfer.items?.length) {
+      // Fallback for Electron when files list is empty (can happen with folder drops)
+      // Check items for filesystem entries with paths
+      for (let i = 0; i < e.dataTransfer.items.length; i++) {
+        const item = e.dataTransfer.items[i]
+        const entry = item?.webkitGetAsEntry?.()
+        const file = item?.getAsFile() as (File & { path?: string }) | null
+        const filePath = file?.path
+        if (!filePath) continue
+        const name = filePath.split(/[\\/]/).pop() ?? filePath
+        const kind: 'file' | 'dir' = entry?.isDirectory ? 'dir' : 'file'
+        if (!el.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`)) {
+          const chip = createChipNode({ path: filePath, name, kind }, handleRemoveChip)
+          el.appendChild(chip)
+          el.appendChild(document.createTextNode(' '))
+        }
+      }
+      draftSegmentsRef.current = getComposerSegments(el)
+      moveCursorToEnd(el)
+      isSyncing.current = true
+      onChange(getTextFromEditable(el))
+      isSyncing.current = false
+      setIsEmpty(false)
     }
-  }, [onChange, handleRemoveChip])
+  }, [onChange, handleRemoveChip, addFilesAsAttachments])
 
   return (
     <div
@@ -1125,6 +1233,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
           onCopy={handleCopy}
+          onDrop={(e) => { e.preventDefault() }}
           className={cn(
             'min-h-[40px] max-h-[200px] overflow-y-auto text-base leading-relaxed outline-none py-2 px-2 text-foreground',
             'whitespace-pre-wrap break-words',
