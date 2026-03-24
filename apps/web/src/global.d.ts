@@ -20,6 +20,7 @@ interface JaitDesktop {
   onScreenShareStop: (callback: () => void) => void
   onGatewayEvent: (callback: (event: unknown, data: unknown) => void) => void
   removeGatewayEventListener: () => void
+  getPathForFile: (file: File) => string
   platform: 'electron'
   windowMinimize: () => Promise<void>
   windowMaximize: () => Promise<void>

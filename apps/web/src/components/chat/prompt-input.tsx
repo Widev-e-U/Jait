@@ -1116,27 +1116,29 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
 
     // Handle native file/folder drops (e.g. from OS file explorer)
-    // In Electron, File objects have a .path property with the full filesystem path
-    if (e.dataTransfer.files?.length) {
+    // In Electron 32+, File.path is no longer available with contextIsolation.
+    // Use webUtils.getPathForFile() exposed via preload instead.
+    const getPath = window.jaitDesktop?.getPathForFile
+    if (e.dataTransfer.files?.length && getPath) {
       const nativeFiles = Array.from(e.dataTransfer.files)
-      const hasElectronPaths = nativeFiles.some((f) => (f as File & { path?: string }).path)
-      if (hasElectronPaths) {
-        // In Electron, add dropped files/folders as path reference chips
-        // Use dataTransfer.items to detect folder vs file when available
-        const items = e.dataTransfer.items
-        for (let i = 0; i < nativeFiles.length; i++) {
-          const f = nativeFiles[i]
-          const filePath = (f as File & { path?: string }).path
-          if (!filePath) continue
-          const name = filePath.split(/[\\/]/).pop() ?? filePath
-          const entry = items?.[i]?.webkitGetAsEntry?.()
-          const kind: 'file' | 'dir' = entry?.isDirectory ? 'dir' : (f.type === '' && f.size === 0) ? 'dir' : 'file'
-          if (!el.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`)) {
-            const chip = createChipNode({ path: filePath, name, kind }, handleRemoveChip)
-            el.appendChild(chip)
-            el.appendChild(document.createTextNode(' '))
-          }
+      const items = e.dataTransfer.items
+      let added = false
+      for (let i = 0; i < nativeFiles.length; i++) {
+        const f = nativeFiles[i]
+        if (!f) continue
+        const filePath = getPath(f)
+        if (!filePath) continue
+        const name = filePath.split(/[\\/]/).pop() ?? filePath
+        const entry = items?.[i]?.webkitGetAsEntry?.()
+        const kind: 'file' | 'dir' = entry?.isDirectory ? 'dir' : (f.type === '' && f.size === 0) ? 'dir' : 'file'
+        if (!el.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`)) {
+          const chip = createChipNode({ path: filePath, name, kind }, handleRemoveChip)
+          el.appendChild(chip)
+          el.appendChild(document.createTextNode(' '))
+          added = true
         }
+      }
+      if (added) {
         draftSegmentsRef.current = getComposerSegments(el)
         moveCursorToEnd(el)
         isSyncing.current = true
@@ -1144,34 +1146,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         isSyncing.current = false
         setIsEmpty(false)
         pushUndoRef.current(true)
-      } else {
-        // Web browser: read files as binary attachments
-        void addFilesAsAttachments(e.dataTransfer.files)
       }
-    } else if (window.jaitDesktop && e.dataTransfer.items?.length) {
-      // Fallback for Electron when files list is empty (can happen with folder drops)
-      // Check items for filesystem entries with paths
-      for (let i = 0; i < e.dataTransfer.items.length; i++) {
-        const item = e.dataTransfer.items[i]
-        const entry = item?.webkitGetAsEntry?.()
-        const file = item?.getAsFile() as (File & { path?: string }) | null
-        const filePath = file?.path
-        if (!filePath) continue
-        const name = filePath.split(/[\\/]/).pop() ?? filePath
-        const kind: 'file' | 'dir' = entry?.isDirectory ? 'dir' : 'file'
-        if (!el.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`)) {
-          const chip = createChipNode({ path: filePath, name, kind }, handleRemoveChip)
-          el.appendChild(chip)
-          el.appendChild(document.createTextNode(' '))
-        }
-      }
-      draftSegmentsRef.current = getComposerSegments(el)
-      moveCursorToEnd(el)
-      isSyncing.current = true
-      onChange(getTextFromEditable(el))
-      isSyncing.current = false
-      setIsEmpty(false)
-      pushUndoRef.current(true)
+    } else if (e.dataTransfer.files?.length) {
+      // Web browser: read files as binary attachments
+      void addFilesAsAttachments(e.dataTransfer.files)
     }
   }, [onChange, handleRemoveChip, addFilesAsAttachments])
 

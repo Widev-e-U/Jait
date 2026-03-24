@@ -10,7 +10,7 @@ const allowedIpcChannels = require("./preload-allow-list.cjs");
  */
 
 import electron = require("electron");
-const { contextBridge, ipcRenderer } = electron;
+const { contextBridge, ipcRenderer, webUtils } = electron;
 
 // Read gateway URL and opened folder synchronously from the main process command-line args.
 // electron-main.ts passes them as --gateway-url=<url> and --open-folder=<path> for synchronous access.
@@ -106,6 +106,9 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
       _gatewayEventCb = null;
     }
   },
+
+  /** Get the absolute filesystem path for a File object from a native drop/input */
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
 
   /** Platform identifier */
   platform: "electron" as const,
