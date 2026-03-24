@@ -100,6 +100,7 @@ function createChipNode(file: ReferencedFile, onRemove?: (path: string) => void)
   chip.contentEditable = 'false'
   chip.setAttribute('data-file-path', file.path)
   chip.setAttribute('data-file-name', file.name)
+  if (file.kind) chip.setAttribute('data-kind', file.kind)
   chip.className =
     'inline-flex items-center gap-1.5 align-middle text-[12px] font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground cursor-default whitespace-nowrap transition-colors'
 
@@ -189,9 +190,11 @@ function getChipPaths(el: HTMLElement): string[] {
 function getChipFiles(el: HTMLElement): ReferencedFile[] {
   const files: ReferencedFile[] = []
   el.querySelectorAll('[data-file-path]').forEach((chip) => {
+    const kind = chip.getAttribute('data-kind')
     files.push({
       path: chip.getAttribute('data-file-path')!,
-      name: chip.getAttribute('data-file-name') || chip.getAttribute('data-file-path')!.split('/').pop()!,
+      name: chip.getAttribute('data-file-name') || chip.getAttribute('data-file-path')!.split(/[\\/]/).pop()!,
+      ...(kind === 'file' || kind === 'dir' ? { kind } : {}),
     })
   })
   return files
@@ -212,10 +215,12 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
     if (node.hasAttribute('data-file-path')) {
       const path = node.getAttribute('data-file-path')
       if (!path) return
+      const kind = node.getAttribute('data-kind')
       segments.push({
         type: 'file',
         path,
-        name: node.getAttribute('data-file-name') || path.split('/').pop() || path,
+        name: node.getAttribute('data-file-name') || path.split(/[\\/]/).pop() || path,
+        ...(kind === 'file' || kind === 'dir' ? { kind } : {}),
       })
       return
     }
@@ -1138,6 +1143,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         onChange(getTextFromEditable(el))
         isSyncing.current = false
         setIsEmpty(false)
+        pushUndoRef.current(true)
       } else {
         // Web browser: read files as binary attachments
         void addFilesAsAttachments(e.dataTransfer.files)
@@ -1165,6 +1171,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       onChange(getTextFromEditable(el))
       isSyncing.current = false
       setIsEmpty(false)
+      pushUndoRef.current(true)
     }
   }, [onChange, handleRemoveChip, addFilesAsAttachments])
 

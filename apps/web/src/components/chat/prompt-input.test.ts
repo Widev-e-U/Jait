@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
-import type { UserMessageSegment } from '@/lib/user-message-segments'
+import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 
 function signature(value: string, segments: UserMessageSegment[] | undefined): string {
   return JSON.stringify({
@@ -59,5 +59,56 @@ describe('shouldSyncComposerDraft', () => {
       undefined,
       localSegments,
     )).toBe(false)
+  })
+})
+
+describe('shouldSyncComposerDraft with folder drops', () => {
+  it('does not wipe local folder chip refs when value changes from drop', () => {
+    const localSegments: UserMessageSegment[] = [
+      { type: 'file', path: 'C:\\Users\\jake\\project', name: 'project', kind: 'dir' },
+      { type: 'text', text: ' ' },
+    ]
+
+    // After a drop, onChange fires with just the text ' '
+    // segments prop stays undefined — should NOT trigger a rebuild
+    expect(shouldSyncComposerDraft(
+      signature('', undefined),
+      ' ',
+      undefined,
+      localSegments,
+    )).toBe(false)
+  })
+
+  it('does not wipe local folder chip refs when typing after drop', () => {
+    const localSegments: UserMessageSegment[] = [
+      { type: 'file', path: 'C:\\Users\\jake\\project', name: 'project', kind: 'dir' },
+      { type: 'text', text: ' explain this folder' },
+    ]
+
+    expect(shouldSyncComposerDraft(
+      signature(' ', undefined),
+      ' explain this folder',
+      undefined,
+      localSegments,
+    )).toBe(false)
+  })
+})
+
+describe('normalizeUserMessageSegments with kind', () => {
+  it('preserves kind: dir on file segments', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'file', path: 'C:\\folder', name: 'folder', kind: 'dir' },
+    ]
+    const result = normalizeUserMessageSegments(segments)
+    expect(result[0]).toEqual({ type: 'file', path: 'C:\\folder', name: 'folder', kind: 'dir' })
+  })
+
+  it('does not add kind when not present', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'file', path: 'src/index.ts', name: 'index.ts' },
+    ]
+    const result = normalizeUserMessageSegments(segments)
+    expect(result[0]).toEqual({ type: 'file', path: 'src/index.ts', name: 'index.ts' })
+    expect('kind' in result[0]).toBe(false)
   })
 })

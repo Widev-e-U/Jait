@@ -1,6 +1,7 @@
 export interface UserReferencedFile {
   path: string
   name: string
+  kind?: 'file' | 'dir'
 }
 
 export interface UserImageAttachment {
@@ -37,7 +38,8 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
       normalized.push({
         type: 'file',
         path: segment.path,
-        name: segment.name || segment.path.split('/').pop() || segment.path,
+        name: segment.name || segment.path.split(/[\\/]/).pop() || segment.path,
+        ...(segment.kind ? { kind: segment.kind } : {}),
       })
       continue
     }
@@ -68,7 +70,7 @@ export function userReferencedFilesFromSegments(segments: UserMessageSegment[] |
   for (const segment of normalizeUserMessageSegments(segments)) {
     if (segment.type !== 'file' || seen.has(segment.path)) continue
     seen.add(segment.path)
-    files.push({ path: segment.path, name: segment.name })
+    files.push({ path: segment.path, name: segment.name, ...(segment.kind ? { kind: segment.kind } : {}) })
   }
 
   return files
@@ -81,7 +83,7 @@ export function buildFallbackUserMessageSegments(
   const segments: UserMessageSegment[] = []
   if (text) segments.push({ type: 'text', text })
   for (const file of files ?? []) {
-    segments.push({ type: 'file', path: file.path, name: file.name })
+    segments.push({ type: 'file', path: file.path, name: file.name, ...(file.kind ? { kind: file.kind } : {}) })
   }
   return segments
 }
@@ -120,7 +122,7 @@ export function parseLegacyReferencedFilesBlock(content: string): {
     const match = line.match(/^- (.+)$/)
     if (!match) continue
     const path = match[1].trim()
-    files.push({ path, name: path.split('/').pop() ?? path })
+    files.push({ path, name: path.split(/[\\/]/).pop() ?? path })
   }
 
   return {
@@ -205,7 +207,8 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
       parsed.push({
         type: 'file',
         path: record.path,
-        name: typeof record.name === 'string' ? record.name : record.path.split('/').pop() ?? record.path,
+        name: typeof record.name === 'string' ? record.name : record.path.split(/[\\/]/).pop() ?? record.path,
+        ...(record.kind === 'file' || record.kind === 'dir' ? { kind: record.kind } : {}),
       })
       continue
     }
