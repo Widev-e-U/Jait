@@ -721,17 +721,25 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
 }
 
 function normalizeClaudeToolName(tool: string): string {
+  // MCP tools arrive as mcp__servername__toolname
+  if (tool.startsWith("mcp__")) return "mcp-tool";
   const normalized = tool.trim().toLowerCase();
   if (normalized === "edit") return "edit";
   if (normalized === "multiedit") return "edit";
   if (normalized === "write") return "file.write";
   if (normalized === "read") return "read";
+  if (normalized === "notebookedit" || normalized === "notebookread") return "edit";
   if (normalized === "websearch") return "web";
+  if (normalized === "webfetch") return "web";
   if (normalized === "bash") return "execute";
   if (normalized === "glob") return "search";
   if (normalized === "grep") return "search";
+  if (normalized === "lsp" || normalized === "toolsearch") return "search";
   if (normalized === "todowrite") return "todo";
   if (normalized === "agent") return "agent";
+  if (normalized === "task" || normalized === "taskcreate" || normalized === "taskget"
+    || normalized === "tasklist" || normalized === "taskoutput" || normalized === "taskstop"
+    || normalized === "taskupdate") return "agent";
   return tool;
 }
 
@@ -780,7 +788,17 @@ function normalizeClaudeToolArgs(
 
   if (normalized === "search") {
     return {
-      pattern: String(input["pattern"] ?? input["query"] ?? ""),
+      pattern: String(input["pattern"] ?? input["query"] ?? input["command"] ?? ""),
+      ...input,
+    };
+  }
+
+  if (normalized === "mcp-tool") {
+    // Preserve the original mcp__server__tool name for the frontend to parse
+    const parts = tool.split("__");
+    return {
+      recipient_name: tool,
+      ...(parts.length >= 3 ? { server: parts[1], tool: parts.slice(2).join("__") } : {}),
       ...input,
     };
   }

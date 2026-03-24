@@ -714,11 +714,19 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
 }
 
 function normalizeDesktopClaudeToolName(tool: string): string {
+  if (tool.startsWith("mcp__")) return "mcp-tool";
   const normalized = tool.trim().toLowerCase();
   if (normalized === "edit" || normalized === "multiedit") return "edit";
   if (normalized === "write") return "file.write";
   if (normalized === "read") return "read";
-  if (normalized === "websearch") return "web";
+  if (normalized === "notebookedit" || normalized === "notebookread") return "edit";
+  if (normalized === "websearch" || normalized === "webfetch") return "web";
+  if (normalized === "bash") return "execute";
+  if (normalized === "glob" || normalized === "grep" || normalized === "lsp" || normalized === "toolsearch") return "search";
+  if (normalized === "todowrite") return "todo";
+  if (normalized === "agent" || normalized === "task" || normalized === "taskcreate"
+    || normalized === "taskget" || normalized === "tasklist" || normalized === "taskoutput"
+    || normalized === "taskstop" || normalized === "taskupdate") return "agent";
   return tool;
 }
 
@@ -739,6 +747,29 @@ function normalizeDesktopClaudeToolArgs(tool: string, input: Record<string, unkn
     return {
       query: String(input.query ?? input.search_query ?? input.q ?? ""),
       ...(input.url != null ? { url: input.url } : {}),
+      ...input,
+    };
+  }
+
+  if (normalized === "execute") {
+    return {
+      command: String(input.command ?? ""),
+      ...input,
+    };
+  }
+
+  if (normalized === "search") {
+    return {
+      pattern: String(input.pattern ?? input.query ?? input.command ?? ""),
+      ...input,
+    };
+  }
+
+  if (normalized === "mcp-tool") {
+    const parts = tool.split("__");
+    return {
+      recipient_name: tool,
+      ...(parts.length >= 3 ? { server: parts[1], tool: parts.slice(2).join("__") } : {}),
       ...input,
     };
   }
