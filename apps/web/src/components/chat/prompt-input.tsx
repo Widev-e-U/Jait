@@ -324,6 +324,18 @@ function moveCursorToEnd(el: HTMLElement) {
   }
 }
 
+/** Remove empty text nodes and stale <br> tags so chips aren't offset. */
+function cleanEmptyNodes(el: HTMLElement) {
+  for (let i = el.childNodes.length - 1; i >= 0; i--) {
+    const child = el.childNodes[i]
+    if (child instanceof HTMLElement && child.tagName === 'BR') {
+      child.remove()
+    } else if (child.nodeType === Node.TEXT_NODE && !child.textContent) {
+      child.remove()
+    }
+  }
+}
+
 export interface PromptInputHandle {
   /** Insert a file chip into the input (used by workspace Send button). */
   insertChip: (file: ReferencedFile) => void
@@ -566,6 +578,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       // Don't add duplicate
       if (el.querySelector(`[data-file-path="${CSS.escape(file.path)}"]`)) return
       pushUndoRef.current(true)
+      cleanEmptyNodes(el)
       const chip = createChipNode(file, handleRemoveChip)
       el.appendChild(chip)
       el.appendChild(document.createTextNode(' '))
@@ -735,7 +748,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           const afterNode = document.createTextNode(after || ' ')
 
           const parent = textNode.parentNode!
-          if (textNode.nextSibling) {
+
+          // Remove the text node if it's now empty to avoid phantom whitespace
+          if (!before) {
+            const ref = textNode.nextSibling
+            parent.removeChild(textNode)
+            if (ref) {
+              parent.insertBefore(afterNode, ref)
+              parent.insertBefore(chip, afterNode)
+            } else {
+              parent.appendChild(chip)
+              parent.appendChild(afterNode)
+            }
+          } else if (textNode.nextSibling) {
             parent.insertBefore(afterNode, textNode.nextSibling)
             parent.insertBefore(chip, afterNode)
           } else {
@@ -1100,6 +1125,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         const file = JSON.parse(jaitFile) as ReferencedFile
         // Don't add if already present
         if (!el.querySelector(`[data-file-path="${CSS.escape(file.path)}"]`)) {
+          cleanEmptyNodes(el)
           const chip = createChipNode(file, handleRemoveChip)
           el.appendChild(chip)
           el.appendChild(document.createTextNode(' '))
@@ -1123,6 +1149,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const nativeFiles = Array.from(e.dataTransfer.files)
       const items = e.dataTransfer.items
       let added = false
+      cleanEmptyNodes(el)
       for (let i = 0; i < nativeFiles.length; i++) {
         const f = nativeFiles[i]
         if (!f) continue
