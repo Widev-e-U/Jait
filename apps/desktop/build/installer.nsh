@@ -14,6 +14,7 @@ Var DoAutoStart
   Page custom OptionsPageCreate OptionsPageLeave
 !macroend
 
+!ifndef BUILD_UNINSTALLER
 Function OptionsPageCreate
   !insertmacro MUI_HEADER_TEXT "Installation Options" "Choose additional tasks."
   nsDialogs::Create 1018
@@ -33,6 +34,7 @@ Function OptionsPageLeave
   ${NSD_GetState} $ContextMenuCheckbox $DoContextMenu
   ${NSD_GetState} $AutoStartCheckbox $DoAutoStart
 FunctionEnd
+!endif
 
 ; ── Install: context menu + auto-start ───────────────────────────
 
