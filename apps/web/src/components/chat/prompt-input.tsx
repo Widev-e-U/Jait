@@ -167,14 +167,14 @@ function getTextFromEditable(el: HTMLElement): string {
   return text
 }
 
-/** Strip zero-width and invisible formatting characters, then trim. */
+/** Strip zero-width and invisible formatting characters. */
 function stripInvisible(s: string): string {
-  return s.replace(/[\u200B\u200C\u200D\uFEFF]/g, '').trim()
+  return s.replace(/[\u200B\u200C\u200D\uFEFF]/g, '')
 }
 
-/** Check if a text string is visually empty. */
+/** Check if a text string is empty (ignoring only zero-width chars). */
 function isTextEmpty(s: string): boolean {
-  return !stripInvisible(s)
+  return stripInvisible(s).length === 0
 }
 
 /** Get file paths from all chip nodes in the editable div. */
