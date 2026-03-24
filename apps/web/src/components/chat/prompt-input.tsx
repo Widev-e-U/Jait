@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useImperativeHandle, forwardRef, type ReactNode } from 'react'
 import { ArrowUp, ListPlus, Mic, MicOff, Square, Loader2, Paperclip, X } from 'lucide-react'
-import { getIconForFile, DEFAULT_FILE } from 'vscode-icons-js'
+import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from 'vscode-icons-js'
 import { Button } from '@/components/ui/button'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
@@ -12,7 +12,7 @@ import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-sele
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import type { SessionInfo, ChatAttachment } from '@/hooks/useChat'
-import { FileIcon } from '@/components/icons/file-icons'
+import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
 import {
@@ -32,6 +32,7 @@ const EMPTY_FILES: ReferencedFile[] = []
 export interface ReferencedFile {
   path: string
   name: string
+  kind?: 'file' | 'dir'
 }
 
 interface PromptInputProps {
@@ -99,24 +100,25 @@ function createChipNode(file: ReferencedFile, onRemove?: (path: string) => void)
   chip.setAttribute('data-file-path', file.path)
   chip.setAttribute('data-file-name', file.name)
   chip.className =
-    'inline-flex items-center gap-0.5 align-baseline text-[12px] leading-tight pl-0.5 pr-0 py-[1px] mx-[2px] rounded bg-muted text-foreground select-none cursor-default whitespace-nowrap'
+    'inline-flex items-center gap-1.5 align-middle text-[12px] font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground select-none cursor-default whitespace-nowrap transition-colors'
 
-  // File icon (tiny img)
+  // Icon (file or folder)
   const icon = document.createElement('span')
   icon.className = 'inline-flex items-center shrink-0'
-  icon.innerHTML = `<img src="${ICON_CDN}${getVsIconName(file.name)}" alt="" class="h-3.5 w-3.5" draggable="false" />`
+  const iconName = file.kind === 'dir' ? getVsFolderIconName(file.name) : getVsIconName(file.name)
+  icon.innerHTML = `<img src="${ICON_CDN}${iconName}" alt="" class="h-3.5 w-3.5" draggable="false" />`
   chip.appendChild(icon)
 
   // Name label
   const label = document.createElement('span')
-  label.className = 'truncate max-w-[140px]'
+  label.className = 'truncate max-w-[180px]'
   label.textContent = file.name
   chip.appendChild(label)
 
   // Remove button
   const btn = document.createElement('button')
   btn.type = 'button'
-  btn.className = 'inline-flex items-center p-0.5 rounded hover:bg-foreground/10 transition-colors'
+  btn.className = 'inline-flex items-center p-0.5 rounded hover:bg-foreground/10 transition-colors text-muted-foreground hover:text-foreground'
   btn.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>'
   btn.addEventListener('mousedown', (e) => {
     e.preventDefault()
@@ -136,6 +138,11 @@ function createChipNode(file: ReferencedFile, onRemove?: (path: string) => void)
 /** Simple extension→icon filename (reuses the CDN approach from file-icons.tsx). */
 function getVsIconName(filename: string): string {
   return getIconForFile(filename) ?? DEFAULT_FILE
+}
+
+/** Folder name→icon filename. */
+function getVsFolderIconName(foldername: string): string {
+  return getIconForFolder(foldername) ?? DEFAULT_FOLDER
 }
 
 /** Extract plain text from the editable div, ignoring chip nodes. */
@@ -914,7 +921,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const el = editableRef.current
     if (!el) return
 
-    // Handle workspace tree file drop
+    // Handle workspace tree file/folder drop
     const jaitFile = e.dataTransfer.getData('text/jait-file')
     if (jaitFile) {
       try {
@@ -936,10 +943,35 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       return
     }
 
+    // Handle native file/folder drops (e.g. from OS file explorer)
+    // In Electron, File objects have a .path property with the full filesystem path
     if (e.dataTransfer.files?.length) {
-      void addFilesAsAttachments(e.dataTransfer.files)
+      const nativeFiles = Array.from(e.dataTransfer.files)
+      const hasElectronPaths = nativeFiles.some((f) => (f as File & { path?: string }).path)
+      if (hasElectronPaths) {
+        // In Electron, add dropped files/folders as path reference chips
+        for (const f of nativeFiles) {
+          const filePath = (f as File & { path?: string }).path
+          if (!filePath) continue
+          const name = filePath.split(/[\\/]/).pop() ?? filePath
+          if (!el.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`)) {
+            const chip = createChipNode({ path: filePath, name }, handleRemoveChip)
+            el.appendChild(chip)
+            el.appendChild(document.createTextNode(' '))
+          }
+        }
+        draftSegmentsRef.current = getComposerSegments(el)
+        moveCursorToEnd(el)
+        isSyncing.current = true
+        onChange(getTextFromEditable(el))
+        isSyncing.current = false
+        setIsEmpty(false)
+      } else {
+        // Web browser: read files as binary attachments
+        void addFilesAsAttachments(e.dataTransfer.files)
+      }
     }
-  }, [onChange])
+  }, [onChange, handleRemoveChip])
 
   return (
     <div
@@ -1034,7 +1066,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               }}
               onMouseEnter={() => setMentionIndex(i)}
             >
-              <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />
+              {file.kind === 'dir'
+                ? <FolderIcon name={file.name} className="h-3.5 w-3.5 shrink-0" />
+                : <FileIcon filename={file.name} className="h-3.5 w-3.5 shrink-0" />}
               <span className="truncate">{file.path}</span>
             </button>
           ))}
@@ -1045,7 +1079,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </div>
           )}
           {!searchLoading && searchResults.length === 0 && (
-            <div className="text-xs text-muted-foreground px-2 py-1.5">No matching files</div>
+            <div className="text-xs text-muted-foreground px-2 py-1.5">No matching files or folders</div>
           )}
         </div>
       )}

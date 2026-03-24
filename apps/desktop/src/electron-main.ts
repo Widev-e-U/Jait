@@ -181,6 +181,15 @@ function createMainWindow(): BrowserWindow {
     return { action: "allow" };
   });
 
+  // Prevent default drag-and-drop navigation.  Without this Electron
+  // navigates the window to the dropped file's path instead of letting
+  // the renderer's drop handler process it.
+  win.webContents.on("will-navigate", (event, url) => {
+    // Allow same-origin navigations (hot-reload, SPA routing)
+    if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return;
+    event.preventDefault();
+  });
+
   return win;
 }
 

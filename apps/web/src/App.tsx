@@ -906,7 +906,7 @@ function App() {
   const [gatewayError, setGatewayError] = useState<string | null>(null)
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
   const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
-  const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string }[]>([])
+  const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string; kind?: 'file' | 'dir' }[]>([])
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
   const [workspacePickerMode, setWorkspacePickerMode] = useState<'workspace' | 'editor'>('workspace')
   const [changeDirectoryWorkspaceId, setChangeDirectoryWorkspaceId] = useState<string | null>(null)

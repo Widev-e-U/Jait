@@ -864,7 +864,7 @@ function MessageInner({
                                 ) : segment.type === 'file' ? (
                                   <span
                                     key={`${segment.path}-${index}`}
-                                    className="mx-[2px] inline-flex items-center gap-1 rounded-full border border-primary/15 bg-background/65 px-2 py-0.5 text-[12px] leading-tight text-muted-foreground align-baseline select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground align-middle select-none"
                                     title={segment.path}
                                   >
                                     <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />

@@ -39,7 +39,7 @@ interface WorkspacePanelProps {
   onFileDrop: (files: FileList | File[]) => void
   onReferenceFile: (file: WorkspaceFile) => void
   /** Called whenever the set of browsable files changes (for @ mention) */
-  onAvailableFilesChange?: (files: { path: string; name: string }[]) => void
+  onAvailableFilesChange?: (files: { path: string; name: string; kind?: 'file' | 'dir' }[]) => void
   /** When set, automatically open a remote (server-backed) workspace at this path */
   autoOpenRemotePath?: string | null
   /** Surface ID for the active workspace (ensures REST calls target the right surface) */
@@ -803,8 +803,10 @@ function TreeNodeRow({
           }}
           draggable={!isMobile}
           onDragStart={(e) => {
-            e.dataTransfer.setData('text/jait-tree-node', JSON.stringify({ path: node.path, name: node.name, kind: 'dir' }))
-            e.dataTransfer.effectAllowed = 'move'
+            const payload = JSON.stringify({ path: node.path, name: node.name, kind: 'dir' })
+            e.dataTransfer.setData('text/jait-tree-node', payload)
+            e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: node.path, name: node.name }))
+            e.dataTransfer.effectAllowed = 'copyMove'
           }}
         >
           {loading ? (
@@ -1598,13 +1600,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // Report available files up whenever the tree changes
   useEffect(() => {
     if (!onAvailableFilesChange) return
-    const collected: { path: string; name: string }[] = []
+    const collected: { path: string; name: string; kind?: 'file' | 'dir' }[] = []
     const walk = (nodes: LazyNode[]) => {
       for (const n of nodes) {
         if (n.kind === 'file') {
-          collected.push({ path: n.path, name: n.name })
-        } else if (n.children) {
-          walk(n.children)
+          collected.push({ path: n.path, name: n.name, kind: 'file' })
+        } else if (n.kind === 'dir') {
+          collected.push({ path: n.path, name: n.name, kind: 'dir' })
+          if (n.children) walk(n.children)
         }
       }
     }
@@ -2142,21 +2145,22 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     query: string,
     limit: number,
     signal?: AbortSignal,
-  ): Promise<{ path: string; name: string }[]> => {
+  ): Promise<{ path: string; name: string; kind?: 'file' | 'dir' }[]> => {
     if (!query) return []
 
     // Remote mode: walk tree already loaded + expand lazily. For simplicity,
     // we filter the already-scanned tree in both modes.
-    const results: { path: string; name: string }[] = []
+    const results: { path: string; name: string; kind?: 'file' | 'dir' }[] = []
     const lowerQuery = query.toLowerCase()
 
     // Walk already-loaded lazy tree first (works for both local and remote)
     const walkTree = (nodes: LazyNode[]) => {
       for (const n of nodes) {
         if (signal?.aborted || results.length >= limit) return
-        if (n.kind === 'file' && n.name.toLowerCase().includes(lowerQuery)) {
-          results.push({ path: n.path, name: n.name })
-        } else if (n.kind === 'dir' && n.children) {
+        if (n.name.toLowerCase().includes(lowerQuery)) {
+          results.push({ path: n.path, name: n.name, kind: n.kind === 'dir' ? 'dir' : 'file' })
+        }
+        if (n.kind === 'dir' && n.children) {
           walkTree(n.children)
         }
       }
@@ -2177,11 +2181,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             const entryPath = prefix ? `${prefix}/${entryName}` : entryName
             if (entry.kind === 'directory') {
               if (SKIP_DIRS.has(entryName)) continue
+              if (entryName.toLowerCase().includes(lowerQuery) && !results.some(r => r.path === entryPath)) {
+                results.push({ path: entryPath, name: entryName, kind: 'dir' })
+                if (results.length >= limit) return true
+              }
               const done = await walkDir(entry as FileSystemDirectoryHandle, entryPath)
               if (done) return true
             } else {
               if (entryName.toLowerCase().includes(lowerQuery) && !results.some(r => r.path === entryPath)) {
-                results.push({ path: entryPath, name: entryName })
+                results.push({ path: entryPath, name: entryName, kind: 'file' })
                 if (results.length >= limit) return true
               }
             }
@@ -2825,7 +2833,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           type: 'diff',
           path: absolutePath,
           label: fileName,
-          diffMode: 'review',
+          diffMode: 'git',
           language: inferLanguage(filePath),
           originalContent: content,
           modifiedContent: content,
