@@ -16,6 +16,11 @@
       "from": "../web/dist",
       "to": "web",
       "filter": ["**/*"]
+    },
+    {
+      "from": "build/appx-dist",
+      "to": "appx",
+      "filter": ["**/*"]
     }
   ],
   "win": {
@@ -31,8 +36,10 @@
     ]
   },
   "nsis": {
-    "oneClick": true,
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": false,
     "perMachine": false,
+    "include": "build/installer.nsh",
     "artifactName": "Jait-${version}-${arch}-setup.${ext}"
   },
   "portable": {

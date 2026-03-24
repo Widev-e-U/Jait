@@ -1,0 +1,4 @@
+LIBRARY jait_explorer_command_x64
+EXPORTS
+    DllGetClassObject   PRIVATE
+    DllCanUnloadNow     PRIVATE

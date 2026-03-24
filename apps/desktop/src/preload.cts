@@ -12,10 +12,12 @@ const allowedIpcChannels = require("./preload-allow-list.cjs");
 import electron = require("electron");
 const { contextBridge, ipcRenderer } = electron;
 
-// Read gateway URL synchronously from the main process command-line args.
-// electron-main.ts passes it as --gateway-url=<url> for synchronous access.
+// Read gateway URL and opened folder synchronously from the main process command-line args.
+// electron-main.ts passes them as --gateway-url=<url> and --open-folder=<path> for synchronous access.
 const gatewayUrlArg = process.argv.find((a: string) => a.startsWith("--gateway-url="));
 const syncGatewayUrl = gatewayUrlArg ? gatewayUrlArg.split("=").slice(1).join("=") : undefined;
+const openFolderArg = process.argv.find((a: string) => a.startsWith("--open-folder="));
+const syncOpenFolder = openFolderArg ? openFolderArg.split("=").slice(1).join("=") : undefined;
 
 // Stored IPC listener ref — contextBridge wraps callbacks so we must track the
 // real reference ourselves to make removeListener work.
@@ -25,6 +27,15 @@ let _gatewayEventCb: ((...args: unknown[]) => void) | null = null;
 contextBridge.exposeInMainWorld("jaitDesktop", {
   /** Synchronous gateway URL — available immediately at page load */
   gatewayUrl: syncGatewayUrl,
+
+  /** Folder path passed via CLI / "Open with Jait" context menu — available immediately */
+  openFolder: syncOpenFolder,
+
+  /** Listen for folder open events from second instances */
+  onOpenFolder: (callback: (_event: unknown, folderPath: string) => void) => {
+    ipcRenderer.on("desktop:open-folder", callback);
+    return () => { ipcRenderer.removeListener("desktop:open-folder", callback); };
+  },
 
   /** Get desktop info (platform, arch, gateway URL) — async */
   getInfo: () => ipcRenderer.invoke(allowedIpcChannels.invoke[0]),

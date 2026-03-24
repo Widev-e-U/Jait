@@ -225,6 +225,19 @@ jobs:
           fi
 
           echo "7za found: $(command -v 7za)"
+      - name: Build AppX assets (Win11 context menu DLL)
+        run: |
+          # Install MinGW cross-compiler if not present
+          if ! command -v x86_64-w64-mingw32-g++ &>/dev/null; then
+            if command -v sudo &>/dev/null && sudo -n true 2>/dev/null; then
+              sudo apt-get update && sudo apt-get install -y g++-mingw-w64-x86-64
+            else
+              echo "::warning::MinGW cross-compiler not available. Win11 modern context menu DLL will be skipped."
+            fi
+          fi
+          DESKTOP_VERSION=$(node -p "require('./apps/desktop/package.json').version")
+          chmod +x apps/desktop/build/build-appx.sh
+          apps/desktop/build/build-appx.sh --version "$DESKTOP_VERSION"
       - name: Build Electron (Linux)
         working-directory: apps/desktop
         run: bun run build:linux

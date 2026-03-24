@@ -13,6 +13,7 @@ venv/
 # Build outputs
 dist/
 build/
+!apps/desktop/build/
 web-dist/
 *.egg-info/
 *.tsbuildinfo
@@ -60,4 +61,5 @@ playwright-report/
 
 # Desktop releases
 apps/desktop/release/
+apps/desktop/build/appx-dist/
 apps/mobile/.expo/

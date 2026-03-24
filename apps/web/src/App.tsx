@@ -1196,15 +1196,28 @@ function App() {
     if (!token) return
     setUpdateChecking(true)
     try {
-      const res = await fetch(`${API_URL}/api/update/check`, {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-      if (res.ok) {
-        setUpdateInfo(await res.json() as UpdateInfo)
+      if (isElectron) {
+        const desktop = (window as any).jaitDesktop
+        const [info, result] = await Promise.all([
+          desktop.getInfo?.() as Promise<{ appVersion: string }>,
+          desktop.checkForUpdate() as Promise<{ updateAvailable: boolean; version?: string }>,
+        ])
+        setUpdateInfo({
+          currentVersion: info?.appVersion ?? '',
+          latestVersion: result.version ?? info?.appVersion ?? '',
+          hasUpdate: result.updateAvailable,
+        })
+      } else {
+        const res = await fetch(`${API_URL}/api/update/check`, {
+          headers: { Authorization: `Bearer ${token}` },
+        })
+        if (res.ok) {
+          setUpdateInfo(await res.json() as UpdateInfo)
+        }
       }
     } catch { /* ignore */ }
     setUpdateChecking(false)
-  }, [token])
+  }, [token, isElectron])
 
   const handleApplyUpdate = useCallback(async () => {
     if (!token || !updateInfo?.hasUpdate) return
@@ -3824,9 +3837,19 @@ function App() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
-                    onClick={() => {
+                    onClick={async () => {
                       if (appPlatform === 'web') {
                         setCurrentView('settings')
+                      } else if (appPlatform === 'electron') {
+                        const desktop = (window as any).jaitDesktop
+                        toast.info('Downloading update...')
+                        const dl = await desktop.downloadUpdate()
+                        if (dl?.ok) {
+                          toast.success('Update downloaded. Restarting...')
+                          await desktop.installUpdate()
+                        } else {
+                          toast.error('Download failed')
+                        }
                       } else {
                         window.open(
                           'https://github.com/Widev-e-U/Jait/releases/latest',

@@ -8,7 +8,7 @@
 import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
 import electronUpdater, { type UpdateInfo } from "electron-updater";
 const { autoUpdater } = electronUpdater;
 
@@ -21,6 +21,27 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const GATEWAY_URL = process.env["JAIT_GATEWAY_URL"] ?? "http://localhost:8000";
 const DEV_SERVER_URL = process.env["JAIT_WEB_DEV_URL"] ?? "http://localhost:3000";
 const IS_DEV = !app.isPackaged;
+
+// ── "Open with Jait" — extract folder path from CLI args ──────────────
+// When launched via context menu or CLI: Jait.exe "C:\path\to\folder"
+function getOpenedFolderPath(): string | undefined {
+  // In packaged app, argv[0] is the exe, argv[1] may be the path.
+  // In dev, Electron adds its own args so we skip known flags.
+  const args = process.argv.slice(app.isPackaged ? 1 : 2);
+  for (const arg of args) {
+    if (arg.startsWith("--") || arg.startsWith("-")) continue;
+    try {
+      const resolved = path.resolve(arg);
+      if (existsSync(resolved) && statSync(resolved).isDirectory()) {
+        return resolved;
+      }
+    } catch { /* not a valid path */ }
+  }
+  return undefined;
+}
+
+let openedFolder = getOpenedFolderPath();
+const startHidden = process.argv.includes("--hidden");
 
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
@@ -58,6 +79,37 @@ function shouldQuitOnClose(): boolean {
 
 let isQuitting = false;
 
+// ── Single instance lock ──────────────────────────────────────────────
+// Ensures only one Jait window is open. Second launches pass their argv
+// to the already-running instance (for "Open with Jait" support).
+const gotLock = app.requestSingleInstanceLock();
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on("second-instance", (_event, argv) => {
+    // Extract folder path from the second instance's argv
+    const args = argv.slice(1);
+    for (const arg of args) {
+      if (arg.startsWith("--") || arg.startsWith("-")) continue;
+      try {
+        const resolved = path.resolve(arg);
+        if (existsSync(resolved) && statSync(resolved).isDirectory()) {
+          openedFolder = resolved;
+          // Tell the renderer to open this folder as a workspace
+          mainWindow?.webContents.send("desktop:open-folder", resolved);
+          break;
+        }
+      } catch { /* not a valid path */ }
+    }
+    // Focus the existing window
+    if (mainWindow) {
+      if (mainWindow.isMinimized()) mainWindow.restore();
+      mainWindow.show();
+      mainWindow.focus();
+    }
+  });
+}
+
 // ── Window creation ───────────────────────────────────────────────────
 function createMainWindow(): BrowserWindow {
   const isMac = process.platform === "darwin";
@@ -75,7 +127,10 @@ function createMainWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
-      additionalArguments: [`--gateway-url=${GATEWAY_URL}`],
+      additionalArguments: [
+        `--gateway-url=${GATEWAY_URL}`,
+        ...(openedFolder ? [`--open-folder=${openedFolder}`] : []),
+      ],
     },
     titleBarStyle: isMac ? "hiddenInset" : "hidden",
     ...(isMac ? {} : { frame: false }),
@@ -92,8 +147,10 @@ function createMainWindow(): BrowserWindow {
     show: false,
   });
 
-  // Graceful show once ready
+  // Graceful show once ready — start maximized (or hidden for auto-start)
   win.once("ready-to-show", () => {
+    if (startHidden) return; // launched via auto-start — stay in tray
+    win.maximize();
     win.show();
     win.focus();
     if (IS_DEV) win.webContents.openDevTools({ mode: "bottom" });

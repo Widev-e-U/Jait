@@ -314,11 +314,23 @@ export function SettingsPage({
                       {updateApplying ? <Loader2 className="mr-1.5 h-4 w-4 animate-spin" /> : <Download className="mr-1.5 h-4 w-4" />}
                       {updateApplying ? 'Updating...' : `Update gateway to v${updateInfo.latestVersion}`}
                     </Button>
-                    {platform !== 'web' && (
+                    {platform === 'electron' ? (
+                      <Button size="sm" variant="outline" onClick={async () => {
+                        const desktop = (window as any).jaitDesktop
+                        const result = await desktop.checkForUpdate()
+                        if (result.updateAvailable) {
+                          await desktop.downloadUpdate()
+                          await desktop.installUpdate()
+                        }
+                      }}>
+                        <Download className="mr-1.5 h-4 w-4" />
+                        Update desktop app
+                      </Button>
+                    ) : platform !== 'web' && (
                       <Button size="sm" variant="outline" asChild>
                         <a href="https://github.com/Widev-e-U/Jait/releases/latest" target="_blank" rel="noopener noreferrer">
                           <Download className="mr-1.5 h-4 w-4" />
-                          Download latest {platform === 'capacitor' ? 'APK' : 'desktop app'}
+                          Download latest APK
                         </a>
                       </Button>
                     )}
