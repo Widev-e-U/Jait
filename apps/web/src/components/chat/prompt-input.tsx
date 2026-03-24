@@ -20,6 +20,7 @@ import {
   normalizeUserMessageSegments,
   parseUserMessageClipboardPayload,
   parseUserMessageMarkdown,
+  serializeUserMessageSegmentsForClipboard,
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
@@ -100,7 +101,7 @@ function createChipNode(file: ReferencedFile, onRemove?: (path: string) => void)
   chip.setAttribute('data-file-path', file.path)
   chip.setAttribute('data-file-name', file.name)
   chip.className =
-    'inline-flex items-center gap-1.5 align-middle text-[12px] font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground select-none cursor-default whitespace-nowrap transition-colors'
+    'inline-flex items-center gap-1.5 align-middle text-[12px] font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground cursor-default whitespace-nowrap transition-colors'
 
   // Icon (file or folder)
   const icon = document.createElement('span')
@@ -798,6 +799,49 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         return
       }
     }
+    if (e.key === 'Backspace') {
+      const el = editableRef.current
+      if (!el) return
+      const sel = window.getSelection()
+      if (!sel || sel.rangeCount === 0) return
+      const range = sel.getRangeAt(0)
+      if (!range.collapsed) return
+
+      const { startContainer, startOffset } = range
+
+      // Case 1: cursor is inside the editable (element node) right after a chip
+      if (startContainer === el || startContainer.parentNode === el) {
+        const childIndex = startContainer === el ? startOffset : Array.from(el.childNodes).indexOf(startContainer as ChildNode)
+        if (childIndex > 0) {
+          const prev = el.childNodes[childIndex - 1]
+          if (prev instanceof HTMLElement && prev.hasAttribute('data-file-path')) {
+            e.preventDefault()
+            prev.remove()
+            draftSegmentsRef.current = getComposerSegments(el)
+            isSyncing.current = true
+            onChangeRef.current(getTextFromEditable(el))
+            isSyncing.current = false
+            setIsEmpty(!getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]'))
+            return
+          }
+        }
+      }
+
+      // Case 2: cursor is at offset 0 of a text node — check if previous sibling is a chip
+      if (startContainer.nodeType === Node.TEXT_NODE && startOffset === 0) {
+        const prev = startContainer.previousSibling
+        if (prev instanceof HTMLElement && prev.hasAttribute('data-file-path')) {
+          e.preventDefault()
+          prev.remove()
+          draftSegmentsRef.current = getComposerSegments(el)
+          isSyncing.current = true
+          onChangeRef.current(getTextFromEditable(el))
+          isSyncing.current = false
+          setIsEmpty(!getTextFromEditable(el).trim() && !el.querySelector('[data-file-path]'))
+          return
+        }
+      }
+    }
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault()
       const el = editableRef.current
@@ -856,6 +900,49 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       }
       return next
     })
+  }, [])
+
+  const handleCopy = useCallback((e: React.ClipboardEvent) => {
+    const el = editableRef.current
+    if (!el) return
+    const sel = window.getSelection()
+    if (!sel || sel.rangeCount === 0 || sel.isCollapsed) return
+
+    // Build segments from the selected content
+    const range = sel.getRangeAt(0)
+    const fragment = range.cloneContents()
+    const tempDiv = document.createElement('div')
+    tempDiv.appendChild(fragment)
+
+    // Serialize selected content: chips become @path, text stays as text
+    const segments: UserMessageSegment[] = []
+    const visit = (node: Node) => {
+      if (node.nodeType === Node.TEXT_NODE) {
+        const text = node.textContent ?? ''
+        if (text) segments.push({ type: 'text', text })
+        return
+      }
+      if (!(node instanceof HTMLElement)) return
+      if (node.hasAttribute('data-file-path')) {
+        const path = node.getAttribute('data-file-path')!
+        segments.push({ type: 'file', path, name: node.getAttribute('data-file-name') || path.split('/').pop() || path })
+        return
+      }
+      if (node.tagName === 'BR') {
+        segments.push({ type: 'text', text: '\n' })
+        return
+      }
+      for (const child of node.childNodes) visit(child)
+    }
+    for (const child of tempDiv.childNodes) visit(child)
+
+    if (segments.some(s => s.type === 'file')) {
+      e.preventDefault()
+      const plainText = segments.map(s => s.type === 'file' ? `@${s.path}` : s.type === 'text' ? s.text : '').join('')
+      e.clipboardData.setData('text/plain', plainText)
+      const structured = serializeUserMessageSegmentsForClipboard(segments)
+      if (structured) e.clipboardData.setData(JAIT_REF_MIME, structured)
+    }
   }, [])
 
   const handlePaste = useCallback((e: React.ClipboardEvent) => {
@@ -1037,6 +1124,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           suppressContentEditableWarning
           onKeyDown={handleKeyDown}
           onPaste={handlePaste}
+          onCopy={handleCopy}
           className={cn(
             'min-h-[40px] max-h-[200px] overflow-y-auto text-base leading-relaxed outline-none py-2 px-2 text-foreground',
             'whitespace-pre-wrap break-words',

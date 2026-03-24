@@ -22,7 +22,10 @@ function ThemeAwareToaster() {
     return () => observer.disconnect()
   }, [])
 
-  return <Toaster position="top-right" theme={theme} closeButton={false} />
+  // On Electron/Windows, offset toasts below the titlebar overlay controls
+  const isElectronWin32 = !!window.jaitDesktop && navigator.userAgent.includes('Windows')
+
+  return <Toaster position="top-right" theme={theme} closeButton={false} offset={isElectronWin32 ? 44 : undefined} />
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

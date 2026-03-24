@@ -1198,12 +1198,14 @@ function App() {
     try {
       if (isElectron) {
         const desktop = (window as any).jaitDesktop
-        const [info, result] = await Promise.all([
+        const [info, result, healthRes] = await Promise.all([
           desktop.getInfo?.() as Promise<{ appVersion: string }>,
           desktop.checkForUpdate() as Promise<{ updateAvailable: boolean; version?: string }>,
+          fetch(`${API_URL}/health`).then(r => r.ok ? r.json() as Promise<{ version?: string }> : null).catch(() => null),
         ])
+        const gatewayVersion = (healthRes as { version?: string } | null)?.version ?? ''
         setUpdateInfo({
-          currentVersion: info?.appVersion ?? '',
+          currentVersion: gatewayVersion,
           latestVersion: result.version ?? info?.appVersion ?? '',
           hasUpdate: result.updateAvailable,
         })

@@ -1893,7 +1893,10 @@ ipcMain.handle("update:check", async () => {
   if (IS_DEV) return { updateAvailable: false };
   try {
     const result = await autoUpdater.checkForUpdates();
-    return { updateAvailable: !!result?.updateInfo, version: result?.updateInfo?.version };
+    const latestVersion = result?.updateInfo?.version;
+    const currentVersion = app.getVersion();
+    const hasUpdate = !!latestVersion && latestVersion !== currentVersion;
+    return { updateAvailable: hasUpdate, version: latestVersion };
   } catch (err) {
     return { updateAvailable: false, error: err instanceof Error ? err.message : String(err) };
   }
