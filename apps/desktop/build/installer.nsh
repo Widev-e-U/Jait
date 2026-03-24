@@ -3,10 +3,12 @@
 !include "WinVer.nsh"
 !include "LogicLib.nsh"
 
+!ifndef BUILD_UNINSTALLER
 Var ContextMenuCheckbox
 Var AutoStartCheckbox
 Var DoContextMenu
 Var DoAutoStart
+!endif
 
 ; ── Custom options page ──────────────────────────────────────────
 
