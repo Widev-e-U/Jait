@@ -1,6 +1,6 @@
 {
   "name": "@jait/api-client",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "description": "Typed API client for Jait apps and integrations",
   "author": "JakobWl",
