@@ -1987,10 +1987,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       if (remoteRoot) setRemoteRoot(null)
       return
     }
-    // Skip if we're already showing this remote root
-    if (remoteRoot === autoOpenRemotePath) return
+    // Re-open if the root changed, or if we have the right root but the tree is empty (failed/stale load)
+    if (remoteRoot === autoOpenRemotePath && lazyTree.length > 0) return
     handleOpenRemoteWorkspace(autoOpenRemotePath)
-  }, [autoOpenRemotePath, handleOpenRemoteWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoOpenRemotePath, handleOpenRemoteWorkspace, lazyTree.length]) // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ---- Read file by path (for @ mention selection) ---- */
   const handleReadFileByPath = useCallback(async (path: string): Promise<WorkspaceFile | null> => {
@@ -4125,8 +4125,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )}
 
               {!hasNativeTree && !hasExtFiles && (
-                <div className="text-sm text-muted-foreground p-4 text-center">
-                  No files loaded yet. The workspace opens automatically when the agent works with files.
+                <div className="p-3 flex flex-col items-center gap-2">
+                  <p className="text-sm text-muted-foreground text-center">No files loaded yet. The workspace opens automatically when the agent works with files.</p>
                 </div>
               )}
             </div>
@@ -4650,7 +4650,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
 
             {!hasNativeTree && !hasExtFiles && (
-              <div className="text-xs text-muted-foreground p-2">No files loaded yet.</div>
+              <div className="p-3 flex flex-col items-center gap-2">
+                <p className="text-[11px] text-muted-foreground">No files loaded yet. The workspace opens automatically when the agent works with files.</p>
+              </div>
             )}
           </div>
         </ScrollArea>

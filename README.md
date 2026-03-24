@@ -22,7 +22,7 @@ Jait runs as a lightweight gateway on your machine (or a server) and serves a we
 
 ---
 
-## Install
+## Install 
 
 ### Option A — npm (recommended)
 

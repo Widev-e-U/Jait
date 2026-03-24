@@ -464,11 +464,6 @@ export class GitService {
           }
         }
 
-        for (const [filePath, status] of indexStatusMap) {
-          if (!indexFiles.some((f) => f.path === filePath)) {
-            indexFiles.push({ path: filePath, insertions: 0, deletions: 0, status });
-          }
-        }
         for (const [filePath, status] of workingTreeStatusMap) {
           if (!workingTreeFiles.some((f) => f.path === filePath)) {
             workingTreeFiles.push({ path: filePath, insertions: 0, deletions: 0, status });

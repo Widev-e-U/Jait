@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play, RefreshCw, Square, TerminalSquare, X } from 'lucide-react'
+import { Activity, AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play, RefreshCw, Square, TerminalSquare, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getApiUrl } from '@/lib/gateway-url'
@@ -177,11 +177,12 @@ export function DevPreviewPanel({
   const [isBusy, setIsBusy] = useState(false)
   const [panelError, setPanelError] = useState<string | null>(null)
   const [panelWarning, setPanelWarning] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues'>('preview')
+  const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues' | 'network'>('preview')
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
   const [isFrameLoading, setIsFrameLoading] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const consoleEndRef = useRef<HTMLDivElement>(null)
+  const networkEndRef = useRef<HTMLDivElement>(null)
   const loadedPreviewSrcRef = useRef<string | null>(null)
 
   const resolved = useMemo(() => resolvePreviewTarget(input), [input])
@@ -358,6 +359,11 @@ export function DevPreviewPanel({
     [managedSession?.browserEvents],
   )
 
+  const networkEvents = useMemo(
+    () => managedSession?.browserEvents.filter((event) => event.type === 'response' || event.type === 'requestfailed') ?? [],
+    [managedSession?.browserEvents],
+  )
+
   const handleScreenshot = useCallback(async () => {
     if (!sessionId || !token) return
     try {
@@ -382,6 +388,9 @@ export function DevPreviewPanel({
   useEffect(() => {
     if (activeTab === 'console') consoleEndRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [consoleEvents.length, activeTab])
+  useEffect(() => {
+    if (activeTab === 'network') networkEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }, [networkEvents.length, activeTab])
 
   const closePanel = useCallback(async () => {
     if (managedSession) {
@@ -508,6 +517,10 @@ export function DevPreviewPanel({
             <AlertCircle className="mr-1 h-3 w-3" />
             Issues{issueEvents.length > 0 ? ` (${issueEvents.length})` : ''}
           </Button>
+          <Button type="button" variant={activeTab === 'network' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('network')}>
+            <Activity className="mr-1 h-3 w-3" />
+            Network{networkEvents.length > 0 ? ` (${networkEvents.length})` : ''}
+          </Button>
         </div>
       </div>
 
@@ -576,6 +589,28 @@ export function DevPreviewPanel({
               <div className="text-zinc-400">No console messages yet.</div>
             )}
             <div ref={consoleEndRef} />
+          </div>
+        ) : activeTab === 'network' ? (
+          <div className="h-full overflow-auto bg-zinc-950 font-mono text-[11px] text-zinc-100">
+            {networkEvents.length > 0 ? networkEvents.map((event) => {
+              const isError = event.type === 'requestfailed' || (event.status ?? 0) >= 500
+              const isWarn = !isError && (event.status ?? 0) >= 400
+              const statusColor = isError ? 'text-red-400' : isWarn ? 'text-yellow-400' : 'text-green-400'
+              return (
+                <div key={event.id} className="flex items-baseline gap-2 border-b border-zinc-800 px-3 py-1 hover:bg-zinc-900">
+                  <span className="w-10 shrink-0 text-right">
+                    {event.type === 'requestfailed'
+                      ? <span className="text-red-400">ERR</span>
+                      : <span className={statusColor}>{event.status}</span>}
+                  </span>
+                  <span className="w-12 shrink-0 text-zinc-400">{event.method ?? ''}</span>
+                  <span className="min-w-0 break-all text-zinc-200">{event.url ?? event.text ?? ''}</span>
+                </div>
+              )
+            }) : (
+              <div className="flex h-full items-center justify-center text-zinc-400">No network requests captured yet.</div>
+            )}
+            <div ref={networkEndRef} />
           </div>
         ) : (
           <div className="h-full overflow-auto px-3 py-2 text-[12px]">

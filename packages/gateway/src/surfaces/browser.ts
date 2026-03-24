@@ -380,11 +380,11 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
   });
   activePage.on?.("response", (response: any) => {
     const status = typeof response?.status === "function" ? response.status() : undefined;
-    if (typeof status !== "number" || status < 400) return;
+    if (typeof status !== "number") return;
     const request = response.request?.();
     pushBrowserRuntimeEvent(events, {
       type: "response",
-      level: status >= 500 ? "error" : "warn",
+      level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
       text: `HTTP ${status}`,
       url: response.url?.(),
       method: request?.method?.(),

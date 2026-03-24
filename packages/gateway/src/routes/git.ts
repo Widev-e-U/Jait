@@ -197,11 +197,6 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
               const deletions = del === "-" ? 0 : parseInt(del ?? "0", 10);
               if (filePath) workingTreeFiles.push({ path: filePath, insertions, deletions, status: workingTreeStatusMap.get(filePath) ?? "M" });
             }
-            for (const [fp, st] of indexStatusMap) {
-              if (!stagedFiles.some((f) => f.path === fp)) {
-                stagedFiles.push({ path: fp, insertions: 0, deletions: 0, status: st });
-              }
-            }
             for (const [fp, st] of workingTreeStatusMap) {
               if (!workingTreeFiles.some((f) => f.path === fp)) {
                 workingTreeFiles.push({ path: fp, insertions: 0, deletions: 0, status: st });

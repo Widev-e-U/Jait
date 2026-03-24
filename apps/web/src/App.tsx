@@ -2663,7 +2663,12 @@ function App() {
     try {
       let targetWorkspaceRoot = activeWorkspace?.workspaceRoot ?? null
       if (!isPathWithinWorkspace(filePath, targetWorkspaceRoot)) {
-        targetWorkspaceRoot = getWorkspaceRootForPath(filePath)
+        // Prefer the workspace record's rootPath over deriving from the file's parent dir
+        if (activeWorkspaceRecord?.rootPath && isPathWithinWorkspace(filePath, activeWorkspaceRecord.rootPath)) {
+          targetWorkspaceRoot = activeWorkspaceRecord.rootPath
+        } else {
+          targetWorkspaceRoot = getWorkspaceRootForPath(filePath)
+        }
       }
 
       if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
@@ -2742,13 +2747,17 @@ function App() {
     } catch {
       // silently ignore
     }
-  }, [activeSessionId, activeWorkspace, openRemoteWorkspaceOnGateway, token, showWorkspace, showWorkspaceEditorPanel])
+  }, [activeSessionId, activeWorkspace, activeWorkspaceRecord, openRemoteWorkspaceOnGateway, token, showWorkspace, showWorkspaceEditorPanel])
 
   const handleOpenMessagePath = useCallback(async (filePath: string) => {
     try {
       let targetWorkspaceRoot = activeWorkspace?.workspaceRoot ?? null
       if (!isPathWithinWorkspace(filePath, targetWorkspaceRoot)) {
-        targetWorkspaceRoot = getWorkspaceRootForPath(filePath)
+        if (activeWorkspaceRecord?.rootPath && isPathWithinWorkspace(filePath, activeWorkspaceRecord.rootPath)) {
+          targetWorkspaceRoot = activeWorkspaceRecord.rootPath
+        } else {
+          targetWorkspaceRoot = getWorkspaceRootForPath(filePath)
+        }
       }
 
       if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
@@ -2804,6 +2813,7 @@ function App() {
   }, [
     activeSessionId,
     activeWorkspace,
+    activeWorkspaceRecord,
     mergeWorkspaceFiles,
     openRemoteWorkspaceOnGateway,
     showWorkspace,
