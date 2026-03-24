@@ -813,11 +813,12 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         timeout: 30_000,
         env: cleanEnv,
         stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
       });
 
       let username: string | null = null;
       try {
-        const out = execSync("gh api user --jq .login", { timeout: 10_000, env: cleanEnv });
+        const out = execSync("gh api user --jq .login", { timeout: 10_000, env: cleanEnv, windowsHide: true });
         username = out.toString().trim() || null;
       } catch { /* */ }
 

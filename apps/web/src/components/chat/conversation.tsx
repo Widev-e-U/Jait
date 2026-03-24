@@ -38,7 +38,7 @@ export function Conversation({ children, className, loading }: ConversationProps
       clearTimeout(userScrollTimerRef.current)
       userScrollTimerRef.current = setTimeout(() => {
         userScrollingRef.current = false
-      }, 150)
+      }, 300)
     }
 
     const handleWheel = (e: WheelEvent) => {
@@ -68,11 +68,13 @@ export function Conversation({ children, className, loading }: ConversationProps
 
     setIsAtBottom(nextIsAtBottom)
     setStickToBottom((prev) => {
-      const next = nextIsAtBottom
-        ? true
-        : scrollingUp && userScrollingRef.current && distanceFromBottom > 8
-          ? false
-          : prev
+      // If the user is actively scrolling up, never re-enable stick-to-bottom
+      // even if we're still near the bottom edge.
+      if (scrollingUp && userScrollingRef.current) {
+        stickToBottomRef.current = false
+        return false
+      }
+      const next = nextIsAtBottom ? true : prev
       stickToBottomRef.current = next
       return next
     })
@@ -112,6 +114,7 @@ export function Conversation({ children, className, loading }: ConversationProps
     if (!el) return
     let id: number
     const tick = () => {
+      if (!stickToBottomRef.current) return // user scrolled up — stop immediately
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight
       if (dist > 1) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
       id = requestAnimationFrame(tick)

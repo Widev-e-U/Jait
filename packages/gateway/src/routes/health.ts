@@ -10,7 +10,7 @@ const startedAt = Date.now();
 export function registerHealthRoutes(
   app: FastifyInstance,
   config?: AppConfig,
-  deps?: { getDeviceCount?: () => number; getSchemaVersion?: () => number },
+  deps?: { getDeviceCount?: () => number; getSchemaVersion?: () => number; getUserCount?: () => number },
 ) {
   app.get("/health", async () => ({
     version: PKG_VERSION,
@@ -19,6 +19,7 @@ export function registerHealthRoutes(
     sessions: 0,
     surfaces: 0,
     devices: deps?.getDeviceCount?.() ?? 0,
+    hasUsers: (deps?.getUserCount?.() ?? 0) > 0,
     healthy: true,
     provider: config?.llmProvider ?? "ollama",
     model: config?.llmProvider === "openai"

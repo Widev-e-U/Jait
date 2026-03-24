@@ -95,12 +95,16 @@ export function TerminalView({ terminalId, className, token }: TerminalViewProps
   useEffect(() => {
     if (!containerRef.current) return
 
+    // Resolve the app's background color so xterm blends with the page
+    const bgHsl = getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
+    const bgColor = bgHsl ? `hsl(${bgHsl})` : '#0a0a0a'
+
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 13,
       fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace",
       theme: {
-        background: '#0a0a0a',
+        background: bgColor,
         foreground: '#e4e4e7',
         cursor: '#e4e4e7',
         selectionBackground: '#27272a',
@@ -225,7 +229,7 @@ interface TerminalTabsProps {
 
 export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, onKill }: TerminalTabsProps) {
   return (
-    <div className="flex items-center gap-1 px-2 h-8 border-b bg-muted/50 shrink-0 overflow-x-auto">
+    <div className="flex items-center gap-1 px-2 h-[35px] border-b bg-background shrink-0 overflow-x-auto">
       {terminals.map((t) => (
         <div
           key={t.id}

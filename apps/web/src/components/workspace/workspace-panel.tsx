@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor from '@monaco-editor/react'
-import { AlertCircle, ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
@@ -3920,7 +3920,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       <div className="flex flex-col h-full min-h-0">
         {/* Tab bar — keep Files/Changes available whenever the tree pane exists (hide when externally controlled) */}
         {showTreeProp && !treeTabProp && (
-        <div className="flex items-center h-8 border-b bg-muted/30 shrink-0 px-1 gap-0.5">
+        <div className="flex items-center h-[35px] border-b bg-muted/30 shrink-0 px-1 gap-0.5">
           <button
             className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
               effectiveMobileTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
@@ -3964,7 +3964,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
         {/* Single-pane header when only the editor pane is visible */}
         {!showTreeProp && showEditorProp && (
-          <div className="flex items-center justify-between h-8 border-b bg-muted/30 shrink-0 px-2">
+          <div className="flex items-center justify-between h-[35px] border-b bg-muted/30 shrink-0 px-2">
             <span className="text-[11px] font-medium text-muted-foreground">
               Editor
             </span>
@@ -4177,6 +4177,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   </span>
                 </button>
               ) : null}
+              {gitStatus?.aheadCount ? (
+                <button
+                  className="relative p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+                  onClick={() => handleGitAction('commit_push')}
+                  disabled={gitActionBusy}
+                  title={`Push ${gitStatus.aheadCount} commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground">
+                    {gitStatus.aheadCount}
+                  </span>
+                </button>
+              ) : null}
             </div>
             {/* Commit message + actions (mobile) */}
             {remoteRoot && gitStatus && (
@@ -4218,17 +4231,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   <CloudUpload className="h-3.5 w-3.5" />
                   Commit & Push
                 </button>
-                {(gitStatus.aheadCount > 0) && (
-                  <button
-                    className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                    onClick={() => handleGitAction('commit_push')}
-                    disabled={gitActionBusy}
-                    title={`Push ${gitStatus.aheadCount} committed commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
-                  >
-                    <CloudUpload className="h-3.5 w-3.5" />
-                    Push ({gitStatus.aheadCount})
-                  </button>
-                )}
                 <select
                   className="ml-auto h-8 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm"
                   value={sourceControlView}
@@ -4701,6 +4703,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </span>
               </button>
             ) : null}
+            {gitStatus?.aheadCount ? (
+              <button
+                className="relative ui-inline-action p-1"
+                onClick={() => handleGitAction('commit_push')}
+                disabled={gitActionBusy}
+                title={`Push ${gitStatus.aheadCount} commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
+              >
+                <Upload className="h-3 w-3" />
+                <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground">
+                  {gitStatus.aheadCount}
+                </span>
+              </button>
+            ) : null}
           </div>
 
           {/* Commit message + actions */}
@@ -4754,19 +4769,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 <CloudUpload className="h-3 w-3" />
                 Commit & Push
               </Button>
-              {(gitStatus.aheadCount > 0) && (
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  className="h-8 rounded-md px-2 text-xs"
-                  onClick={() => handleGitAction('commit_push')}
-                  disabled={gitActionBusy}
-                  title={`Push ${gitStatus.aheadCount} committed commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
-                >
-                  <CloudUpload className="h-3 w-3" />
-                  Push ({gitStatus.aheadCount})
-                </Button>
-              )}
               <select
                 className="ml-auto h-8 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm"
                 value={sourceControlView}

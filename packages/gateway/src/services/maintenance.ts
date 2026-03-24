@@ -137,6 +137,7 @@ export class MaintenanceService {
           stdio: ["pipe", "pipe", "pipe"],
           maxBuffer: 1024 * 1024, // 1MB
           env: { ...process.env, CI: "true", FORCE_COLOR: "0" },
+          windowsHide: true,
         });
         passed = true;
       } catch (err: unknown) {

@@ -5,7 +5,9 @@
  *
  * Gemini CLI stream-json events:
  *   { type: "init", session_id, model }
- *   { type: "message", role: "user"|"assistant", content, delta? }
+ *   { type: "message", role: "user"|"assistant", content, delta?: boolean }
+ *   { type: "tool_use", tool_name, tool_id, parameters }
+ *   { type: "tool_result", tool_id, status, output?, error? }
  *   { type: "result", status: "success"|"error", stats? }
  */
 
@@ -40,8 +42,6 @@ interface GeminiSessionState {
   turnCount: number;
   /** Whether MCP config was injected into the project .gemini/settings.json */
   mcpConfigInjected: boolean;
-  /** Promise tracking in-flight drip-feed token emissions */
-  pendingDrip: Promise<void> | null;
 }
 
 // ── Provider implementation ──────────────────────────────────────────
@@ -122,7 +122,6 @@ export class GeminiProvider implements CliProviderAdapter {
       exitMode: "normal",
       turnCount: 0,
       mcpConfigInjected: false,
-      pendingDrip: null,
     };
 
     // Inject MCP servers into the project-level .gemini/settings.json
@@ -188,11 +187,6 @@ export class GeminiProvider implements CliProviderAdapter {
     });
 
     return new Promise<void>((resolve, reject) => {
-      const finalize = async (fn: () => void) => {
-        if (state.pendingDrip) await state.pendingDrip;
-        fn();
-      };
-
       child.on("exit", (code, signal) => {
         state.process = null;
         const exitMode = state.exitMode;
@@ -202,24 +196,22 @@ export class GeminiProvider implements CliProviderAdapter {
           state.session.status = "completed";
           state.session.completedAt = new Date().toISOString();
           this.emit({ type: "session.completed", sessionId });
-          finalize(resolve);
+          resolve();
           return;
         }
 
         if (exitMode === "interrupt") {
           state.session.status = "interrupted";
           this.emit({ type: "turn.completed", sessionId });
-          finalize(resolve);
+          resolve();
           return;
         }
 
         if (code === 0) {
           state.session.status = "idle";
           state.session.error = undefined;
-          finalize(() => {
-            this.emit({ type: "turn.completed", sessionId });
-            resolve();
-          });
+          this.emit({ type: "turn.completed", sessionId });
+          resolve();
           return;
         }
 
@@ -429,7 +421,7 @@ export class GeminiProvider implements CliProviderAdapter {
         const role = String(event["role"] ?? "");
         const content = String(event["content"] ?? "");
         if (role === "assistant" && content) {
-          this.dripFeed(state, content);
+          this.emit({ type: "token", sessionId, content });
         }
         break;
       }
@@ -491,47 +483,6 @@ export class GeminiProvider implements CliProviderAdapter {
         break;
       }
     }
-  }
-
-  /**
-   * Emit large content in small timed chunks so the frontend renders it
-   * progressively. Gemini CLI sends paragraph-sized deltas; without this
-   * the entire response appears at once.
-   */
-  private dripFeed(state: GeminiSessionState, content: string): void {
-    const sessionId = state.session.id;
-    const CHUNK = 12;
-    const DELAY = 8;
-
-    if (content.length <= CHUNK * 2) {
-      this.emit({ type: "token", sessionId, content });
-      return;
-    }
-
-    const chunks: string[] = [];
-    for (let i = 0; i < content.length; i += CHUNK) {
-      chunks.push(content.slice(i, i + CHUNK));
-    }
-
-    this.emit({ type: "token", sessionId, content: chunks[0]! });
-
-    state.pendingDrip = new Promise<void>((resolve) => {
-      let idx = 1;
-      const tick = () => {
-        if (idx >= chunks.length || state.exitMode !== "normal") {
-          if (idx < chunks.length) {
-            this.emit({ type: "token", sessionId, content: chunks.slice(idx).join("") });
-          }
-          state.pendingDrip = null;
-          resolve();
-          return;
-        }
-        this.emit({ type: "token", sessionId, content: chunks[idx]! });
-        idx++;
-        setTimeout(tick, DELAY);
-      };
-      setTimeout(tick, DELAY);
-    });
   }
 
   private emit(event: ProviderEvent): void {

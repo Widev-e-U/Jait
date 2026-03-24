@@ -98,7 +98,7 @@ async function npmRedeploy(
   try {
     oldVersion = execSync(
       "node -e \"process.stdout.write(require('@jait/gateway/package.json').version)\"",
-      { encoding: "utf8", timeout: 10_000 },
+      { encoding: "utf8", timeout: 10_000, windowsHide: true },
     );
   } catch {
     // non-critical
@@ -111,6 +111,7 @@ async function npmRedeploy(
       encoding: "utf8",
       timeout: 120_000,
       stdio: "pipe",
+      windowsHide: true,
     });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
@@ -122,7 +123,7 @@ async function npmRedeploy(
   try {
     newVersion = execSync(
       "node -e \"process.stdout.write(require('@jait/gateway/package.json').version)\"",
-      { encoding: "utf8", timeout: 10_000 },
+      { encoding: "utf8", timeout: 10_000, windowsHide: true },
     );
   } catch {
     // non-critical

@@ -121,6 +121,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerHealthRoutes(app, config, {
     getDeviceCount: () => deps.deviceRegistry?.count() ?? 0,
     getSchemaVersion: () => deps.sqlite ? getSchemaVersion(deps.sqlite) : 0,
+    getUserCount: () => deps.userService?.countUsers() ?? 0,
   });
   if (deps.userService) {
     registerAuthRoutes(app, config, deps.userService, deps.toolRegistry);

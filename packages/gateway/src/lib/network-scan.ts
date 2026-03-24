@@ -4,7 +4,10 @@ import { platform, networkInterfaces } from "node:os";
 import { createConnection } from "node:net";
 import type { NetworkHost, NetworkScanResult } from "@jait/shared";
 
-const execAsync = promisify(exec);
+const _execAsync = promisify(exec);
+function execAsync(cmd: string, opts?: Record<string, unknown>) {
+  return _execAsync(cmd, { encoding: "utf-8" as const, windowsHide: true, ...opts });
+}
 
 const QUICK_DISCOVERY_PORTS = [53, 80, 139, 443, 445, 554, 8000, 8080, 22];
 const DETAIL_PROBE_PORTS = [22, 53, 80, 139, 443, 445, 554, 8000, 8080];

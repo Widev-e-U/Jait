@@ -432,7 +432,7 @@ function ManagerRepositoryPanel({
 }: ManagerRepositoryPanelProps) {
   return (
     <div className="flex h-full flex-col">
-      <div className="flex items-center justify-between border-b px-3 py-2">
+      <div className="flex h-[35px] items-center justify-between border-b px-3">
         <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           Repositories
         </span>
@@ -549,7 +549,7 @@ interface ManagerThreadListItemProps {
   ghAvailable: boolean
   onOpen: () => void
   onStop: () => void
-  onDelete: () => void
+  onDelete: () => Promise<void>
 }
 
 function ManagerThreadListItem({
@@ -562,6 +562,7 @@ function ManagerThreadListItem({
   onStop,
   onDelete,
 }: ManagerThreadListItemProps) {
+  const [deleting, setDeleting] = useState(false)
   const showThreadActions = thread.kind === 'delivery' && repo != null && (thread.status === 'completed' || Boolean(thread.prUrl))
   const stopThreadVisible = canStopThread(thread)
 
@@ -668,12 +669,14 @@ function ManagerThreadListItem({
           variant="ghost"
           size="icon"
           className="h-6 w-6 rounded-lg opacity-100 transition-opacity sm:h-7 sm:w-7"
+          disabled={deleting}
           onClick={(event) => {
             event.stopPropagation()
-            onDelete()
+            setDeleting(true)
+            onDelete().finally(() => setDeleting(false))
           }}
         >
-          <Trash2 className="h-3.5 w-3.5" />
+          {deleting ? <SpinnerIcon className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
         </Button>
       </div>
     </div>
@@ -873,6 +876,7 @@ function App() {
   const [registerPassword, setRegisterPassword] = useState('')
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
+  const [serverHasUsers, setServerHasUsers] = useState<boolean | null>(null)
   const [gatewayUrlInput, setGatewayUrlInput] = useState(() => getStoredGatewayUrl() ?? '')
   const isStandaloneApp = !!(window as any).jaitDesktop || !!(window as any).Capacitor
   const isElectron = !!(window as any).jaitDesktop
@@ -1264,6 +1268,7 @@ function App() {
     archivedSessionsByWorkspace,
     activeWorkspaceId,
     activeSessionId,
+    loading: workspacesLoading,
     createSession,
     createWorkspace,
     updateWorkspace,
@@ -1391,12 +1396,15 @@ function App() {
     [automation.selectedThread, managerMessageQueues],
   )
   const canTargetThread = automation.selectedRepo != null
-  const threadComposerDisabled = automation.creating || !canTargetThread
+  const selectedRepoOffline = selectedRepoRuntime != null && !selectedRepoRuntime.online && !selectedRepoRuntime.loading
+  const threadComposerDisabled = automation.creating || !canTargetThread || selectedRepoOffline
   const threadPlaceholder = !automation.selectedRepo
     ? 'Select a repository to start a thread...'
-    : automation.selectedThread
-      ? 'Send a follow-up to the selected thread...'
-      : 'Describe what you want to do...'
+    : selectedRepoOffline
+      ? 'Repository is offline...'
+      : automation.selectedThread
+        ? 'Send a follow-up to the selected thread...'
+        : 'Describe what you want to do...'
   const developerPlaceholder = sendTarget === 'thread'
     ? threadPlaceholder
     : 'Ask anything...'
@@ -2274,11 +2282,12 @@ function App() {
           body: JSON.stringify({ path: workspace.rootPath, sessionId: nextSessionId, nodeId: workspace.nodeId || 'gateway' }),
         })
         if (!res.ok) return
-        const data = await res.json() as { surfaceId: string; workspaceRoot: string }
-        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: workspace.nodeId || undefined })
+        const data = await res.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
+        const resolvedNodeId = data.nodeId || workspace.nodeId || undefined
+        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: resolvedNodeId })
         showWorkspaceRef.current = true
         setShowWorkspace(true)
-        setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: workspace.nodeId || undefined })
+        setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: resolvedNodeId })
       } catch (e) {
         console.error('Failed to open workspace:', e)
       }
@@ -2405,10 +2414,10 @@ function App() {
           body: JSON.stringify({ path: activeWorkspace.workspaceRoot, sessionId: activeSessionId }),
         })
         if (!openRes.ok || cancelled) return
-        const data = (await openRes.json()) as { surfaceId: string; workspaceRoot: string }
+        const data = (await openRes.json()) as { surfaceId: string; workspaceRoot: string; nodeId?: string }
         if (cancelled) return
-        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot })
-        const state = { open: showWorkspaceRef.current, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: activeWorkspace.nodeId }
+        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
+        const state = { open: showWorkspaceRef.current, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
         setSavedWorkspace(state)
       } catch { /* network error — ignore, panel will show error naturally */ }
     })()
@@ -2478,18 +2487,25 @@ function App() {
       // cycle completes (avoids infinite setState loop in React 19 StrictMode).
       const id = requestAnimationFrame(() => setShowLoginDialog(true))
 
-      // If the gateway is supposedly configured but unreachable, send the user
-      // back to the URL step so they can correct it instead of being stuck
-      // on an auth form that can't reach the server.
-      if (isStandaloneApp && isGatewayConfigured()) {
-        fetch(`${getApiUrl()}/health`, { signal: AbortSignal.timeout(4000) })
-          .then((r) => { if (!r.ok) throw new Error('unhealthy') })
-          .catch(() => {
+      // Check if any users exist — if not, default to the Register tab
+      fetch(`${getApiUrl()}/health`, { signal: AbortSignal.timeout(4000) })
+        .then((r) => r.ok ? r.json() as Promise<{ hasUsers?: boolean }> : null)
+        .then((data) => {
+          if (data && typeof data.hasUsers === 'boolean') {
+            setServerHasUsers(data.hasUsers)
+            if (!data.hasUsers) setAuthTab('register')
+          }
+        })
+        .catch(() => {
+          // If the gateway is supposedly configured but unreachable, send the user
+          // back to the URL step so they can correct it instead of being stuck
+          // on an auth form that can't reach the server.
+          if (isStandaloneApp && isGatewayConfigured()) {
             setGatewayStep('url')
             setGatewayError('Gateway is unreachable. Check the URL or try a different one.')
             setGatewayUrlInput(getStoredGatewayUrl() ?? '')
-          })
-      }
+          }
+        })
 
       return () => cancelAnimationFrame(id)
     }
@@ -3277,6 +3293,11 @@ function App() {
       setRegisterPassword('')
       setRegisterPasswordConfirm('')
       setCurrentView('chat')
+      // First-time user: auto-open workspace picker so they set up immediately
+      requestAnimationFrame(() => {
+        setWorkspacePickerMode('workspace')
+        setFolderPickerOpen(true)
+      })
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Registration failed')
     }
@@ -3949,8 +3970,8 @@ function App() {
               <div
                 className={`flex border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${
                   compactManagerToolbar
-                    ? 'min-h-9 flex-wrap items-start gap-2 py-1.5'
-                    : 'h-9 items-center gap-1 overflow-x-auto scrollbar-none'
+                    ? 'min-h-[35px] flex-wrap items-start gap-2 py-1.5'
+                    : 'h-[35px] items-center gap-1 overflow-x-auto scrollbar-none'
                 }`}
               >
             {viewMode === 'developer' && (
@@ -4599,7 +4620,7 @@ function App() {
                           onChange={setInputValue}
                           onSubmit={handleSubmit}
                           disabled={threadComposerDisabled}
-                          controlsDisabled={automation.creating}
+                          controlsDisabled={automation.creating || selectedRepoOffline}
                           placeholder={threadPlaceholder}
                           onVoiceInput={handleVoiceInput}
                           voiceRecording={voiceRecording}
@@ -4634,7 +4655,7 @@ function App() {
                       <div className="flex-1 overflow-y-auto">
                         <div className="mx-auto w-full max-w-3xl">
 
-                          <div className="flex items-center justify-between border-b px-2.5 py-1.5 sm:px-3 sm:py-2">
+                          <div className="flex h-[35px] items-center justify-between border-b px-2.5 sm:px-3">
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-medium">Threads</span>
                               <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[10px]">
@@ -4669,7 +4690,7 @@ function App() {
                                     ghAvailable={automation.ghAvailable}
                                     onOpen={() => automation.setSelectedThreadId(thread.id)}
                                     onStop={() => { void automation.handleStop(thread.id) }}
-                                    onDelete={() => { void automation.handleDelete(thread.id) }}
+                                    onDelete={() => automation.handleDelete(thread.id)}
                                   />
                                 )
                               })}
@@ -4718,7 +4739,17 @@ function App() {
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
                     <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
                   </div>
-                  <Suggestions suggestions={showWorkspace && activeWorkspace ? workspaceSuggestions : suggestions} onSelect={handleSuggestion} />
+                  {!workspacesLoading && workspaces.length === 0 ? (
+                    <div className="text-center space-y-3">
+                      <p className="text-sm text-muted-foreground">Add a workspace folder to start chatting with your code.</p>
+                      <Button variant="default" size="lg" onClick={() => { setWorkspacePickerMode('workspace'); setFolderPickerOpen(true) }}>
+                        <FolderOpen className="h-4 w-4 mr-2" />
+                        Add Workspace
+                      </Button>
+                    </div>
+                  ) : (
+                    <Suggestions suggestions={showWorkspace && activeWorkspace ? workspaceSuggestions : suggestions} onSelect={handleSuggestion} />
+                  )}
                   <PromptInput
                     ref={promptInputRef}
                     draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
@@ -5037,7 +5068,7 @@ function App() {
         )}
 
             {showTerminal && currentView === 'chat' && viewMode === 'developer' && (
-              <div className="shrink-0 border-t overflow-hidden" style={{ height: terminalHeight }}>
+              <div className="shrink-0 border-t bg-background overflow-hidden" style={{ height: terminalHeight }}>
                 <div
                   onMouseDown={handleDragStart}
                   className="h-1 cursor-row-resize hover:bg-primary/30 transition-colors"
@@ -5132,7 +5163,7 @@ function App() {
             ) : (
               <>
                 <DialogHeader>
-                  <DialogTitle>Account</DialogTitle>
+                  <DialogTitle>{serverHasUsers === false ? 'Welcome to Jait' : 'Account'}</DialogTitle>
                   <DialogDescription asChild>
                     {isStandaloneApp ? (
                       <div className="flex items-center gap-1.5 flex-wrap">
@@ -5146,6 +5177,8 @@ function App() {
                           Change
                         </button>
                       </div>
+                    ) : serverHasUsers === false ? (
+                      <p>Create your account to get started.</p>
                     ) : (
                       <p>Sign in with a username and password.</p>
                     )}
@@ -5216,7 +5249,7 @@ function App() {
                           required
                         />
                       </div>
-                      <Button type="submit" className="w-full">Create account</Button>
+                      <Button type="submit" className="w-full">{serverHasUsers === false ? 'Get Started' : 'Create account'}</Button>
                     </form>
                   </TabsContent>
                 </Tabs>

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, chmod } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
+import { platform } from "node:os";
 import { GitService } from "./git.js";
 
 function git(cwd: string, cmd: string) {
@@ -34,11 +35,9 @@ describe("runStackedAction – unstage on commit failure", () => {
     await writeFile(join(repoDir, "file.txt"), "hello");
 
     // Make commit fail via a pre-commit hook that rejects
-    await writeFile(
-      join(repoDir, ".git", "hooks", "pre-commit"),
-      "#!/bin/sh\nexit 1\n",
-    );
-    execSync(`chmod +x "${join(repoDir, ".git", "hooks", "pre-commit")}"`);
+    const hookPath = join(repoDir, ".git", "hooks", "pre-commit");
+    await writeFile(hookPath, "#!/bin/sh\nexit 1\n");
+    if (platform() !== "win32") await chmod(hookPath, 0o755);
 
     await expect(
       svc.runStackedAction(repoDir, "commit", "test commit"),
@@ -55,11 +54,9 @@ describe("runStackedAction – unstage on commit failure", () => {
     // Pass undefined message so it auto-generates, but sabotage the commit
     // by making the repo read-only objects dir
     // Instead: use a commit-msg hook that rejects
-    await writeFile(
-      join(repoDir, ".git", "hooks", "commit-msg"),
-      "#!/bin/sh\nexit 1\n",
-    );
-    execSync(`chmod +x "${join(repoDir, ".git", "hooks", "commit-msg")}"`);
+    const hookPath = join(repoDir, ".git", "hooks", "commit-msg");
+    await writeFile(hookPath, "#!/bin/sh\nexit 1\n");
+    if (platform() !== "win32") await chmod(hookPath, 0o755);
 
     await expect(
       svc.runStackedAction(repoDir, "commit", "test commit"),

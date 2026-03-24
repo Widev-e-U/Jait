@@ -28,6 +28,7 @@ export function registerUpdateRoutes(
       const latest = execSync("npm view @jait/gateway version", {
         encoding: "utf8",
         timeout: 15_000,
+        windowsHide: true,
       }).trim();
 
       const hasUpdate = latest !== CURRENT_VERSION && compareVersions(latest, CURRENT_VERSION) > 0;
@@ -62,6 +63,7 @@ export function registerUpdateRoutes(
         encoding: "utf8",
         timeout: 120_000,
         stdio: "pipe",
+        windowsHide: true,
       });
 
       // 2. Read newly installed version
@@ -69,7 +71,7 @@ export function registerUpdateRoutes(
       try {
         newVersion = execSync(
           "node -e \"process.stdout.write(require('@jait/gateway/package.json').version)\"",
-          { encoding: "utf8", timeout: 10_000 },
+          { encoding: "utf8", timeout: 10_000, windowsHide: true },
         );
       } catch { /* best effort */ }
 

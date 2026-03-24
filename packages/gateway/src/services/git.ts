@@ -13,7 +13,10 @@ import { basename, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
 import { promisify } from "node:util";
 
-const exec = promisify(execCb);
+const _exec = promisify(execCb);
+function exec(cmd: string, opts?: Record<string, unknown>) {
+  return _exec(cmd, { encoding: "utf-8" as const, windowsHide: true, ...opts });
+}
 const DEFAULT_TIMEOUT = 30_000;
 
 // ── Types ──────────────────────────────────────────────────────────

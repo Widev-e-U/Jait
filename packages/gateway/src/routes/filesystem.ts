@@ -84,7 +84,7 @@ export function registerFilesystemRoutes(app: FastifyInstance, ws?: WsControlPla
     if (process.platform === "win32") {
       const { execSync } = await import("node:child_process");
       try {
-        const raw = execSync("wmic logicaldisk get name", { encoding: "utf-8" });
+        const raw = execSync("wmic logicaldisk get name", { encoding: "utf-8", windowsHide: true });
         const drives = raw
           .split("\n")
           .map((l) => l.trim())

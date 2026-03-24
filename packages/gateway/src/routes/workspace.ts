@@ -175,7 +175,7 @@ export function registerWorkspaceRoutes(
     const body = req.body as { path?: string; sessionId?: string; nodeId?: string } | null;
     const workspacePath = body?.path;
     const sessionId = body?.sessionId;
-    const nodeId = body?.nodeId || "gateway";
+    let nodeId = body?.nodeId || "gateway";
 
     if (!workspacePath) {
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
@@ -184,7 +184,25 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "sessionId is required" });
     }
 
-    const isRemote = ws?.isRemoteNode(nodeId) ?? false;
+    let isRemote = ws?.isRemoteNode(nodeId) ?? false;
+
+    // If the requested nodeId looks like a remote node but is no longer connected,
+    // try falling back to the gateway's local filesystem instead of failing.
+    if (!isRemote && nodeId !== "gateway") {
+      const { stat: fsStat } = await import("node:fs/promises");
+      try {
+        const info = await fsStat(workspacePath);
+        if (info.isDirectory()) {
+          // Path exists locally — use gateway node instead of the stale remote one
+          nodeId = "gateway";
+        }
+      } catch {
+        return reply.status(400).send({
+          error: "NODE_OFFLINE",
+          message: `Remote node "${nodeId}" is no longer connected and the path does not exist on the gateway`,
+        });
+      }
+    }
 
     if (isRemote) {
       // Remote node — verify path exists via WS proxy
@@ -251,7 +269,7 @@ export function registerWorkspaceRoutes(
       }
     } catch { /* best effort */ }
 
-    return { surfaceId, workspaceRoot: workspacePath };
+    return { surfaceId, workspaceRoot: workspacePath, nodeId };
   });
 
   // GET /api/workspace/list?path=&surfaceId= — list directory entries

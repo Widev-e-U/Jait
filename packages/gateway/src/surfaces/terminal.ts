@@ -87,7 +87,7 @@ function defaultShell(): string {
     // Prefer PowerShell 7 (pwsh) over Windows PowerShell 5.1 (powershell)
     // pwsh supports modern escape sequences and PSReadLine features
     try {
-      execSync("pwsh.exe -v", { stdio: "ignore", timeout: 3000 });
+      execSync("pwsh.exe -v", { stdio: "ignore", timeout: 3000, windowsHide: true });
       return "pwsh.exe";
     } catch {
       return "powershell.exe";
