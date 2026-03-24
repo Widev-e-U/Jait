@@ -731,6 +731,7 @@ function normalizeClaudeToolName(tool: string): string {
   if (normalized === "glob") return "search";
   if (normalized === "grep") return "search";
   if (normalized === "todowrite") return "todo";
+  if (normalized === "agent") return "agent";
   return tool;
 }
 

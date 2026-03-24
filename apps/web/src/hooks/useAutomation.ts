@@ -632,13 +632,16 @@ export function useAutomation(enabled = true) {
         : selectedThread
       const targetRepo = targetThread ? getRepositoryForThread(targetThread) : selectedRepo
 
-      if (targetThread && (targetThread.status === 'running' || targetThread.providerSessionId)) {
-        // Follow-up turn — session is still alive
+      if (targetThread && targetThread.providerSessionId && targetThread.status !== 'running') {
+        // Follow-up turn — session is alive and previous turn completed
         await agentsApi.sendTurn(targetThread.id, {
           message: text,
           ...metadata,
         })
         void refresh()
+      } else if (targetThread && targetThread.status === 'running') {
+        // Turn already in progress — ignore (UI should prevent this)
+        return
       } else if (
         targetThread &&
         (targetThread.status === 'idle' ||

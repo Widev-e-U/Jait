@@ -544,6 +544,7 @@ function getRunningHint(tool: string, args: Record<string, unknown>): string {
     const query = String(args.query ?? '').trim()
     return query ? `Searching for "${query}"...` : 'Searching...'
   }
+  if (normalized === 'agent') return 'Sub-agent is working...'
   if (tool.startsWith('terminal.') || tool === 'execute') return 'Command is still running...'
   return 'Tool is still running...'
 }
@@ -609,11 +610,12 @@ interface SubAgentToolCall {
   completedAt?: number
 }
 
-function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>; message?: string }) {
+function SubAgentHistoryView({ data, message, status }: { data: Record<string, unknown>; message?: string; status?: 'pending' | 'running' | 'success' | 'error' }) {
   const toolCalls = Array.isArray(data.toolCalls) ? data.toolCalls as SubAgentToolCall[] : []
   const content = typeof data.content === 'string' ? data.content.trim() : ''
   const rounds = typeof data.rounds === 'number' ? data.rounds : null
   const durationMs = typeof data.durationMs === 'number' ? data.durationMs : null
+  const isRunning = status === 'running'
 
   const nestedCalls: ToolCallInfo[] = toolCalls.map((tc, i) => ({
     callId: tc.callId ?? `sub-${i}`,
@@ -634,6 +636,7 @@ function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>;
         <Bot className="h-3.5 w-3.5 text-purple-500 shrink-0" />
         <span className="text-[11px] font-medium text-purple-500">Sub-agent</span>
         <div className="flex items-center gap-2 ml-auto text-[11px] text-muted-foreground">
+          {isRunning && <Loader2 className="h-3 w-3 animate-spin text-purple-500" />}
           {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
           {toolCalls.length > 0 && <span>{toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}</span>}
           {durationMs != null && (
@@ -641,6 +644,13 @@ function SubAgentHistoryView({ data, message }: { data: Record<string, unknown>;
           )}
         </div>
       </div>
+
+      {/* Running indicator when no nested calls yet */}
+      {isRunning && nestedCalls.length === 0 && !content && (
+        <div className="px-3 py-2 text-[11px] text-muted-foreground">
+          Sub-agent is working...
+        </div>
+      )}
 
       {/* Nested tool calls rendered as full ToolCallCards */}
       {nestedCalls.length > 0 && (
@@ -1241,6 +1251,7 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
     <SubAgentHistoryView
       data={resultData ?? {}}
       message={call.result?.message}
+      status={call.status}
     />
   ) : bodyKind === 'editDiff' ? (
      <EditDiffView

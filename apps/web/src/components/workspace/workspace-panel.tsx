@@ -5054,7 +5054,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             }}
           />
         ) : (
-          <div className="h-full flex items-center justify-center text-sm text-muted-foreground">
+          <div className="h-full flex items-center justify-center text-sm text-muted-foreground text-center">
             Open a file from the explorer to preview it here.
           </div>
         )}

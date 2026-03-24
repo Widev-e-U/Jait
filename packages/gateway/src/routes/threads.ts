@@ -752,6 +752,9 @@ export function registerThreadRoutes(
     if (!thread.providerSessionId) {
       return reply.status(409).send({ error: "Thread has no active session — use /start instead" });
     }
+    if (thread.status === "running") {
+      return reply.status(409).send({ error: "A turn is already in progress" });
+    }
 
     const provider = remoteProviders.get(id) ?? providerRegistry.get(thread.providerId as ProviderId);
     if (!provider) return reply.status(400).send({ error: `Provider '${thread.providerId}' not found` });

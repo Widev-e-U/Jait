@@ -392,7 +392,7 @@ export function getToolCallBodyKind(input: ToolCallBodyInput): ToolCallBodyKind 
   if (isTerminal) return 'terminal'
   if (normalizedTool === 'browser.snapshot' && input.snapshotText) return 'browserSnapshot'
   if (input.screenshotPath) return 'browserScreenshot'
-  if (normalizedTool === 'agent' && (input.status === 'success' || input.status === 'error') && input.displayOutput) return 'subagent'
+  if (normalizedTool === 'agent') return 'subagent'
   if (input.status === 'success' && canRenderEditDiff(normalizedTool, input.args)) return 'editDiff'
   if (input.displayOutput) return 'output'
   if (input.status === 'running') return 'runningHint'
