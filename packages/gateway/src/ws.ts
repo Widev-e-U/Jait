@@ -117,7 +117,9 @@ export class WsControlPlane {
 
       // Try to authenticate from query string token or Authorization header
       const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
-      const token = url.searchParams.get("token") ?? this.extractBearerToken(req.headers.authorization);
+      const token = url.searchParams.get("token")
+        ?? this.extractBearerToken(req.headers.authorization)
+        ?? this.extractCookieToken(req.headers.cookie);
 
       if (token) {
         await this.authenticateClient(client, token);
@@ -171,6 +173,12 @@ export class WsControlPlane {
   private extractBearerToken(header: string | undefined): string | null {
     if (!header?.startsWith("Bearer ")) return null;
     return header.slice(7);
+  }
+
+  private extractCookieToken(header: string | undefined): string | null {
+    if (!header) return null;
+    const match = header.split(";").map(c => c.trim()).find(c => c.startsWith("jait_token="));
+    return match ? match.slice("jait_token=".length) : null;
   }
 
   private async authenticateClient(client: ConnectedClient, token: string): Promise<boolean> {

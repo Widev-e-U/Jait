@@ -8,7 +8,7 @@ async function registerUser(request: Parameters<typeof test>[0]['request']) {
   const username = `e2e-ui-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`
   const password = 'supersecret123'
 
-  const response = await request.post(`${API_URL}/auth/register`, {
+  const response = await request.post(`${API_URL}/api/auth/register`, {
     data: { username, password },
   })
   expect(response.ok()).toBeTruthy()
@@ -46,7 +46,7 @@ test.describe('WS UI reactions for workspace and preview tools', () => {
 
     await page.goto('/')
     const browserLogin = await page.evaluate(async ([gatewayUrl, nextUsername, nextPassword]) => {
-      const response = await fetch(`${gatewayUrl}/auth/login`, {
+      const response = await fetch(`${gatewayUrl}/api/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ username: nextUsername, password: nextPassword }),

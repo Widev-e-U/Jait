@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react'
-import { clearAuthToken, getAuthToken, setAuthToken } from '@/lib/auth-token'
+import { clearAuthToken, getAuthToken, setAuthToken, initAuthToken, clearAuthCookie } from '@/lib/auth-token'
 import { getApiUrl } from '@/lib/gateway-url'
 
 const API_URL = getApiUrl()
@@ -47,7 +47,7 @@ const EMPTY_SETTINGS: UserSettings = {
 
 async function fetchSettings(token: string): Promise<UserSettings | null> {
   try {
-    const response = await fetch(`${API_URL}/auth/settings`, {
+    const response = await fetch(`${API_URL}/api/auth/settings`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
@@ -69,7 +69,7 @@ export function useAuth() {
 
   const loadFromToken = useCallback(async (token: string) => {
     try {
-      const response = await fetch(`${API_URL}/auth/me`, {
+      const response = await fetch(`${API_URL}/api/auth/me`, {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -96,12 +96,15 @@ export function useAuth() {
   }, [])
 
   useEffect(() => {
-    const token = getAuthToken()
-    if (token) {
-      void loadFromToken(token)
-      return
-    }
-    setState((prev) => ({ ...prev, isLoading: false }))
+    void (async () => {
+      await initAuthToken()
+      const token = getAuthToken()
+      if (token) {
+        void loadFromToken(token)
+        return
+      }
+      setState((prev) => ({ ...prev, isLoading: false }))
+    })()
   }, [loadFromToken])
 
   const persistAuth = useCallback(async (payload: AuthResponse) => {
@@ -116,9 +119,10 @@ export function useAuth() {
   }, [])
 
   const login = useCallback(async (username: string, password: string) => {
-    const response = await fetch(`${API_URL}/auth/login`, {
+    const response = await fetch(`${API_URL}/api/auth/login`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ username, password }),
     })
     if (!response.ok) {
@@ -131,9 +135,10 @@ export function useAuth() {
   }, [persistAuth])
 
   const register = useCallback(async (username: string, password: string) => {
-    const response = await fetch(`${API_URL}/auth/register`, {
+    const response = await fetch(`${API_URL}/api/auth/register`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
       body: JSON.stringify({ username, password }),
     })
     if (!response.ok) {
@@ -147,6 +152,7 @@ export function useAuth() {
 
   const logout = useCallback(() => {
     clearAuthToken()
+    void clearAuthCookie()
     setState({ user: null, token: null, settings: null, isLoading: false })
   }, [])
 
@@ -169,7 +175,7 @@ export function useAuth() {
     workspace_picker_node_id?: string | null
   }) => {
     if (!state.token) throw new Error('Not authenticated')
-    const response = await fetch(`${API_URL}/auth/settings`, {
+    const response = await fetch(`${API_URL}/api/auth/settings`, {
       method: 'PATCH',
       headers: {
         Authorization: `Bearer ${state.token}`,
@@ -188,7 +194,7 @@ export function useAuth() {
 
   const clearSessionArchive = useCallback(async () => {
     if (!state.token) throw new Error('Not authenticated')
-    const response = await fetch(`${API_URL}/auth/settings/archive`, {
+    const response = await fetch(`${API_URL}/api/auth/settings/archive`, {
       method: 'DELETE',
       headers: {
         Authorization: `Bearer ${state.token}`,
@@ -204,7 +210,7 @@ export function useAuth() {
   const bindSession = useCallback(async (sessionId: string) => {
     if (!state.token) return
     try {
-      await fetch(`${API_URL}/auth/session/bind`, {
+      await fetch(`${API_URL}/api/auth/session/bind`, {
         method: 'POST',
         headers: {
           Authorization: `Bearer ${state.token}`,

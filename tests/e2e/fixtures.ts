@@ -19,7 +19,7 @@ interface TestAuthIdentity {
 }
 
 export async function getTestToken(page: Page, identity: TestAuthIdentity): Promise<string> {
-  const registerResponse = await page.request.post(`${API_URL}/auth/register`, {
+  const registerResponse = await page.request.post(`${API_URL}/api/auth/register`, {
     data: {
       username: identity.username,
       password: identity.password,
@@ -35,7 +35,7 @@ export async function getTestToken(page: Page, identity: TestAuthIdentity): Prom
     throw new Error(`Failed to register test user: ${await registerResponse.text()}`)
   }
 
-  const loginResponse = await page.request.post(`${API_URL}/auth/login`, {
+  const loginResponse = await page.request.post(`${API_URL}/api/auth/login`, {
     data: {
       username: identity.username,
       password: identity.password,

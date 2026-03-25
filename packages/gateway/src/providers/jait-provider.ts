@@ -100,3 +100,20 @@ const JAIT_MODELS: ProviderModelInfo[] = [
   { id: "deepseek-chat", name: "DeepSeek V3", description: "DeepSeek's latest" },
   { id: "deepseek-reasoner", name: "DeepSeek R1", description: "DeepSeek reasoning model" },
 ];
+
+/** Models available when using OpenRouter as the base URL or API key. */
+export const OPENROUTER_MODELS: ProviderModelInfo[] = [
+  { id: "anthropic/claude-sonnet-4-20250514", name: "Claude Sonnet 4", description: "Anthropic's latest Sonnet" },
+  { id: "anthropic/claude-3.5-sonnet", name: "Claude 3.5 Sonnet", description: "Fast and capable" },
+  { id: "anthropic/claude-3-opus", name: "Claude 3 Opus", description: "Most powerful Claude" },
+  { id: "anthropic/claude-3.5-haiku", name: "Claude 3.5 Haiku", description: "Fast and affordable" },
+  { id: "google/gemini-2.5-pro-preview", name: "Gemini 2.5 Pro", description: "Google's latest" },
+  { id: "google/gemini-2.5-flash-preview", name: "Gemini 2.5 Flash", description: "Fast Google model" },
+  { id: "deepseek/deepseek-chat-v3-0324", name: "DeepSeek V3", description: "DeepSeek's latest via OpenRouter" },
+  { id: "deepseek/deepseek-r1", name: "DeepSeek R1", description: "DeepSeek reasoning via OpenRouter" },
+  { id: "meta-llama/llama-4-maverick", name: "Llama 4 Maverick", description: "Meta's latest open model" },
+  { id: "meta-llama/llama-4-scout", name: "Llama 4 Scout", description: "Meta's efficient open model" },
+  { id: "qwen/qwen3-235b-a22b", name: "Qwen3 235B", description: "Alibaba's largest model" },
+  { id: "mistralai/mistral-large-2411", name: "Mistral Large", description: "Mistral's flagship" },
+  { id: "x-ai/grok-3-mini-beta", name: "Grok 3 Mini", description: "xAI's reasoning model" },
+];

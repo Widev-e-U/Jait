@@ -43,9 +43,18 @@ declare const Bun: unknown;
 
 let warnedAboutBunPtyFallback = false;
 
+interface SpawnPtyOptions {
+  name: string;
+  cols: number;
+  rows: number;
+  cwd: string;
+  env: Record<string, string | undefined>;
+  useConpty?: boolean;
+}
+
 function loadNodePty() {
   return require("node-pty") as {
-    spawn: (shell: string, args: string[], options: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string | undefined> }) => {
+    spawn: (shell: string, args: string[], options: SpawnPtyOptions) => {
       pid: number;
       onData(cb: (data: string) => void): void;
       onExit(cb: (event: { exitCode: number; signal: number }) => void): void;
@@ -56,7 +65,7 @@ function loadNodePty() {
   };
 }
 
-function spawnPty(shell: string, shellArgs: string[], opts: { name: string; cols: number; rows: number; cwd: string; env: Record<string, string | undefined> }): PTYInstance {
+function spawnPty(shell: string, shellArgs: string[], opts: SpawnPtyOptions): PTYInstance {
   // Bun runtime path. Fall back to node-pty when bun-pty is not installed.
   if (typeof Bun !== "undefined") {
     try {
@@ -228,6 +237,7 @@ export class TerminalSurface implements Surface {
         rows: this._rows,
         cwd: input.workspaceRoot,
         env: { ...process.env, TERM: "xterm-256color", ...this.extraEnv },
+        ...(platform() === "win32" ? { useConpty: true } : {}),
       });
 
       this._pty = pty;

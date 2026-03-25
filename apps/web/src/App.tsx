@@ -171,7 +171,7 @@ function appendTranscript(prev: string, transcript: string): string {
 }
 
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
-type CliProviderId = Exclude<ProviderId, 'jait'>
+type CliProviderId = ProviderId
 
 type ManagerQueuedMessage = QueuedChatMessage & {
   fullContent: string
@@ -850,7 +850,7 @@ function App() {
   const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
   const architectureRenderRequestIdRef = useRef<string | null>(null)
   const loadedArchitectureWorkspaceRef = useRef<string | null>(null)
-  const [terminalHeight, setTerminalHeight] = useState(280)
+  const [terminalWidth, setTerminalWidth] = useState(480)
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
   const floatingDragRef = useRef<{ pointerId: number; startX: number; startY: number; posX: number; posY: number } | null>(null)
@@ -865,7 +865,7 @@ function App() {
   const [cliModelsByProvider, setCliModelsByProvider] = useState<Partial<Record<CliProviderId, string | null>>>(
     () => loadLegacyCliModelsByProvider('jait')
   )
-  const cliModel = chatProvider === 'jait' ? null : (cliModelsByProvider[chatProvider] ?? null)
+  const cliModel = cliModelsByProvider[chatProvider] ?? null
   const [viewMode, setViewMode] = useState<ViewMode>('developer')
   const [managerAnimPhase, setManagerAnimPhase] = useState<'idle' | 'center' | 'top'>('idle')
   const [developerAnimPhase, setDeveloperAnimPhase] = useState<'idle' | 'animating'>('idle')
@@ -1566,8 +1566,8 @@ function App() {
   const [savedDevPreview, setSavedDevPreview] = useWorkspaceState<{ open: boolean; target?: string | null; workspaceRoot?: string | null }>(
     activeWorkspaceId, 'dev-preview.panel', token,
   )
-  const [savedTerminal, setSavedTerminal] = useSessionState<{ open: boolean }>(
-    activeSessionId, 'terminal.panel', token,
+  const [savedTerminal, setSavedTerminal] = useWorkspaceState<{ open: boolean }>(
+    activeWorkspaceId, 'terminal.panel', token,
   )
   const [savedWorkspaceLayout, setSavedWorkspaceLayout, loadingWorkspaceLayout] = useWorkspaceState<{ tree: boolean; editor: boolean }>(
     activeWorkspaceId, 'workspace.layout', token,
@@ -2565,12 +2565,12 @@ function App() {
     }
   }, [themeMode, updateSettings])
 
-  const handleDragStart = useCallback((e: React.MouseEvent) => {
+  const handleTerminalDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     isDragging.current = true
-    const startY = e.clientY
-    const startH = terminalHeight
-    const maxH = window.innerHeight * 0.5
+    const startX = e.clientX
+    const startW = terminalWidth
+    const maxW = window.innerWidth * 0.5
     const cleanup = () => {
       isDragging.current = false
       document.removeEventListener('mousemove', onMove)
@@ -2581,8 +2581,8 @@ function App() {
     }
     const onMove = (ev: MouseEvent) => {
       if (!isDragging.current) return
-      const delta = startY - ev.clientY
-      setTerminalHeight(Math.min(maxH, Math.max(280, startH + delta)))
+      const delta = ev.clientX - startX
+      setTerminalWidth(Math.min(maxW, Math.max(320, startW + delta)))
     }
     const onUp = () => {
       cleanup()
@@ -2590,37 +2590,59 @@ function App() {
     const onWindowBlur = () => {
       cleanup()
     }
-    document.body.style.cursor = 'row-resize'
+    document.body.style.cursor = 'col-resize'
     document.body.style.userSelect = 'none'
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
     window.addEventListener('blur', onWindowBlur)
-  }, [terminalHeight])
+  }, [terminalWidth])
+
+  const activeWorkspaceRoot = activeWorkspace?.workspaceRoot ?? activeWorkspaceRecord?.rootPath ?? null
+
+  // Filter terminals to only show those belonging to the active workspace
+  const workspaceTerminals = useMemo(() => {
+    if (!activeWorkspaceRoot) return terminals
+    return terminals.filter((t) => {
+      if (!t.workspaceRoot) return false
+      // Normalize path separators for comparison
+      const tRoot = t.workspaceRoot.replace(/\\/g, '/').toLowerCase()
+      const wRoot = activeWorkspaceRoot.replace(/\\/g, '/').toLowerCase()
+      return tRoot === wRoot
+    })
+  }, [terminals, activeWorkspaceRoot])
 
   const ensureActiveTerminal = useCallback(async (preferredTerminalId: string | null = null) => {
     const refreshed = await refresh()
+    // Filter refreshed terminals to current workspace
+    const wsRoot = activeWorkspaceRoot
+    const wsTerminals = wsRoot
+      ? refreshed.filter((t) => {
+          const tRoot = (t.workspaceRoot ?? '').replace(/\\/g, '/').toLowerCase()
+          return tRoot === wsRoot.replace(/\\/g, '/').toLowerCase()
+        })
+      : refreshed
 
     if (preferredTerminalId) {
-      const preferredExists = refreshed.some((t) => t.id === preferredTerminalId)
+      const preferredExists = wsTerminals.some((t) => t.id === preferredTerminalId)
       if (preferredExists) {
         setActiveTerminalId(preferredTerminalId)
         return preferredTerminalId
       }
     }
 
-    if (activeTerminalId && refreshed.some((t) => t.id === activeTerminalId)) {
+    if (activeTerminalId && wsTerminals.some((t) => t.id === activeTerminalId)) {
       return activeTerminalId
     }
 
-    if (refreshed.length > 0) {
-      const fallbackId = refreshed[refreshed.length - 1]!.id
+    if (wsTerminals.length > 0) {
+      const fallbackId = wsTerminals[wsTerminals.length - 1]!.id
       setActiveTerminalId(fallbackId)
       return fallbackId
     }
 
-    const created = await createTerminal(activeSessionId ?? 'default')
+    const created = await createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)
     return created.id
-  }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId])
+  }, [refresh, setActiveTerminalId, activeTerminalId, createTerminal, activeSessionId, activeWorkspaceRoot])
 
   const handleOpenTerminalFromToolCall = useCallback(async (terminalId: string | null) => {
     setCurrentView('chat')
@@ -2639,12 +2661,12 @@ function App() {
   }, [showTerminal, ensureActiveTerminal, openTerminalPanel, closeTerminalPanel])
 
   const handleKillTerminal = useCallback(async (id: string) => {
-    const isLastTerminal = terminals.length === 1 && terminals[0]?.id === id
+    const isLastWorkspaceTerminal = workspaceTerminals.length === 1 && workspaceTerminals[0]?.id === id
     await killTerminal(id)
-    if (isLastTerminal) {
+    if (isLastWorkspaceTerminal) {
       closeTerminalPanel()
     }
-  }, [terminals, killTerminal, closeTerminalPanel])
+  }, [workspaceTerminals, killTerminal, closeTerminalPanel])
 
   const mergeWorkspaceFiles = useCallback((incoming: WorkspaceFile[]) => {
     if (incoming.length === 0) return
@@ -2934,7 +2956,7 @@ function App() {
       mode: chatMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      model: chatProvider !== 'jait' ? cliModel : undefined,
+      model: cliModel ?? undefined,
       referencedFiles: prepared.referencedFiles,
       displaySegments: nextDisplaySegments,
       attachments: fileAttachments,
@@ -2989,7 +3011,7 @@ function App() {
         mode: chatMode,
         provider: chatProvider,
         runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-        model: chatProvider !== 'jait' ? cliModel : undefined,
+        model: cliModel ?? undefined,
         referencedFiles: prepared?.referencedFiles,
         displaySegments: nextDisplaySegments,
         attachments: fileAttachments,
@@ -3005,7 +3027,7 @@ function App() {
       mode: chatMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      model: chatProvider !== 'jait' ? cliModel : undefined,
+      model: cliModel ?? undefined,
       onLoginRequired: () => setShowLoginDialog(true),
       attachments: fileAttachments,
       ...(prepared?.displayContent ? { displayContent: prepared.displayContent || promptText } : {}),
@@ -3026,7 +3048,7 @@ function App() {
       prepared.promptWithReferences,
       chatProvider,
       chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      chatProvider !== 'jait' ? cliModel : undefined,
+      cliModel ?? undefined,
       {
         displayContent: prepared.displayContent || prepared.promptWithReferences,
         referencedFiles: prepared.referencedFiles,
@@ -3157,7 +3179,7 @@ function App() {
       attachments: prepared.attachments,
       providerId: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      model: chatProvider !== 'jait' ? cliModel : undefined,
+      model: cliModel ?? undefined,
       queuedAt: Date.now(),
     })
     setInputValue('')
@@ -3254,11 +3276,11 @@ function App() {
       setShowArchitecture(true)
       sendMessage(
         'Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.',
-        { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) },
+        { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) },
       )
       return
     }
-    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: chatProvider !== 'jait' ? cliModel : undefined, onLoginRequired: () => setShowLoginDialog(true) })
+    sendMessage(suggestion, { token, sessionId: sid, mode: chatMode, provider: chatProvider, runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined, model: cliModel ?? undefined, onLoginRequired: () => setShowLoginDialog(true) })
   }
 
   const handleEditPreviousMessage = useCallback(async (
@@ -3280,7 +3302,7 @@ function App() {
       mode: chatMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      model: chatProvider !== 'jait' ? cliModel : undefined,
+      model: cliModel ?? undefined,
       displayContent: prepared.displayContent,
       referencedFiles: prepared.referencedFiles,
       displaySegments: prepared.displaySegments,
@@ -3409,7 +3431,7 @@ function App() {
           attachments: undefined,
           providerId: chatProvider,
           runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-          model: chatProvider !== 'jait' ? cliModel : undefined,
+          model: cliModel ?? undefined,
           queuedAt: Date.now(),
         })
         return
@@ -3418,7 +3440,7 @@ function App() {
         normalizedTranscript,
         chatProvider,
         chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-        chatProvider !== 'jait' ? cliModel : undefined,
+        cliModel ?? undefined,
       )
       return
     }
@@ -3444,7 +3466,7 @@ function App() {
         mode: chatMode,
         provider: chatProvider,
         runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-        model: chatProvider !== 'jait' ? cliModel : undefined,
+        model: cliModel ?? undefined,
       })
       return
     }
@@ -3455,7 +3477,7 @@ function App() {
       mode: chatMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
-      model: chatProvider !== 'jait' ? cliModel : undefined,
+      model: cliModel ?? undefined,
       onLoginRequired: () => setShowLoginDialog(true),
     })
   }, [activeSessionId, activeWorkspaceId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, messageQueue.length, promptForWorkspaceSelection, sendMessage, sendTarget, token, viewMode])
@@ -4333,6 +4355,45 @@ function App() {
               </aside>
             )}
 
+            {viewMode === 'developer' && showTerminal && !isMobile && currentView === 'chat' && (
+              <div className="flex shrink-0 overflow-hidden border-r" style={{ width: terminalWidth }}>
+                <div className="flex flex-col flex-1 min-w-0">
+                  <div className="relative">
+                    <TerminalTabs
+                      terminals={workspaceTerminals}
+                      activeTerminalId={activeTerminalId}
+                      onSelect={setActiveTerminalId}
+                      onCreate={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                      onKill={handleKillTerminal}
+                    />
+                    <button
+                      onClick={closeTerminalPanel}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                      aria-label="Close terminal"
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  {activeTerminalId ? (
+                    <TerminalView terminalId={activeTerminalId} className="flex-1 min-h-0" token={token} />
+                  ) : (
+                    <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
+                      <button
+                        onClick={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                        className="hover:text-foreground transition-colors"
+                      >
+                        + New Terminal
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div
+                  onMouseDown={handleTerminalDragStart}
+                  className="w-1 cursor-col-resize hover:bg-primary/30 transition-colors shrink-0"
+                />
+              </div>
+            )}
+
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
               <WorkspacePanel
                 ref={workspaceRef}
@@ -4550,6 +4611,7 @@ function App() {
                           isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
                           compact
                           preferLlmUi={false}
+                          provider={automation.selectedThread?.providerId as ProviderId | undefined}
                           onOpenPath={handleOpenMessagePath}
                           onOpenDiff={handleChangedFileClick}
                         />
@@ -4911,6 +4973,7 @@ function App() {
                       isStreaming={isLoading && msg === messages[messages.length - 1]}
                       compact={showWorkspace || showScreenShare || previewOpen}
                       preferLlmUi
+                      provider={chatProvider}
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
                       editComposer={{
@@ -5102,42 +5165,7 @@ function App() {
           </div>
         )}
 
-            {showTerminal && currentView === 'chat' && viewMode === 'developer' && (
-              <div className="shrink-0 border-t bg-background overflow-hidden" style={{ height: terminalHeight }}>
-                <div
-                  onMouseDown={handleDragStart}
-                  className="h-1 cursor-row-resize hover:bg-primary/30 transition-colors"
-                />
-                <div className="relative">
-                  <TerminalTabs
-                    terminals={terminals}
-                    activeTerminalId={activeTerminalId}
-                    onSelect={setActiveTerminalId}
-                    onCreate={() => createTerminal(activeSessionId ?? 'default')}
-                    onKill={handleKillTerminal}
-                  />
-                  <button
-                    onClick={closeTerminalPanel}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                    aria-label="Close terminal"
-                  >
-                    <X className="h-3.5 w-3.5" />
-                  </button>
-                </div>
-                {activeTerminalId ? (
-                  <TerminalView terminalId={activeTerminalId} className="h-[calc(100%-2rem)]" token={token} />
-                ) : (
-                  <div className="flex items-center justify-center h-[calc(100%-2rem)] text-sm text-muted-foreground">
-                    <button
-                      onClick={() => createTerminal(activeSessionId ?? 'default')}
-                      className="hover:text-foreground transition-colors"
-                    >
-                      + New Terminal
-                    </button>
-                  </div>
-                )}
-              </div>
-            )}
+            {/* Terminal panel rendered as sidebar-adjacent column above */}
 
             {viewMode === 'developer' && showDebugPanel && (
               <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
@@ -5147,14 +5175,172 @@ function App() {
           </>
         )}
 
+        {/* Electron drag region when auth gate is active (no header visible) */}
+        {requiresAuthGate && isElectron && (
+          <div
+            className="fixed top-0 left-0 right-0 h-10 z-[60]"
+            style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+          />
+        )}
+
+        {/* Auth gate — rendered as a plain full-screen layout (no Radix Dialog)
+            to avoid focus-trap / pointer-event overhead that causes lag during
+            Electron window drag on Windows. */}
+        {requiresAuthGate && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-[hsl(220,17%,10%)]">
+            <div className="w-full max-w-md border bg-background p-6 shadow-sm rounded-lg">
+              {gatewayStep === 'url' ? (
+                <>
+                  <div className="flex flex-col space-y-1.5 text-center sm:text-left">
+                    <h2 className="text-lg font-semibold leading-none tracking-tight flex items-center gap-2">
+                      <Server className="h-5 w-5" />
+                      Connect to Gateway
+                    </h2>
+                    <p className="text-sm text-muted-foreground">
+                      Enter your Jait gateway URL to get started.
+                    </p>
+                  </div>
+                  <form onSubmit={checkGatewayHealth} className="space-y-4 pt-2">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="gateway-url">Gateway URL</Label>
+                      <Input
+                        id="gateway-url"
+                        placeholder="https://jait.example.com"
+                        value={gatewayUrlInput}
+                        onChange={(e) => { setGatewayUrlInput(e.target.value); setGatewayError(null) }}
+                        autoFocus
+                      />
+                    </div>
+                    {gatewayError && (
+                      <div className="flex items-center gap-2 text-sm text-destructive">
+                        <XCircle className="h-4 w-4 shrink-0" />
+                        {gatewayError}
+                      </div>
+                    )}
+                    <Button type="submit" className="w-full" disabled={gatewayChecking}>
+                      {gatewayChecking ? (
+                        <>
+                          <SpinnerIcon className="h-4 w-4 mr-2 animate-spin" />
+                          Connecting…
+                        </>
+                      ) : (
+                        'Connect'
+                      )}
+                    </Button>
+                  </form>
+                </>
+              ) : (
+                <>
+                  <div className="flex flex-col space-y-1.5 text-center sm:text-left">
+                    <h2 className="text-lg font-semibold leading-none tracking-tight">
+                      {serverHasUsers === false ? 'Welcome to Jait' : 'Account'}
+                    </h2>
+                    <div className="text-sm text-muted-foreground">
+                      {isStandaloneApp ? (
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <Server className="h-3 w-3 text-green-500" />
+                          <code className="text-xs bg-muted px-1.5 py-0.5 rounded">{API_URL}</code>
+                          <button
+                            type="button"
+                            className="text-xs text-primary underline underline-offset-2 hover:opacity-80"
+                            onClick={() => setGatewayStep('url')}
+                          >
+                            Change
+                          </button>
+                        </div>
+                      ) : serverHasUsers === false ? (
+                        <p>Create your account to get started.</p>
+                      ) : (
+                        <p>Sign in with a username and password.</p>
+                      )}
+                    </div>
+                  </div>
+                  <Tabs value={authTab} onValueChange={(value) => setAuthTab(value as 'login' | 'register')}>
+                    <TabsList className="grid grid-cols-2 w-full">
+                      <TabsTrigger value="login">Login</TabsTrigger>
+                      <TabsTrigger value="register">Register</TabsTrigger>
+                    </TabsList>
+                    <TabsContent value="login" className="pt-4">
+                      <form className="space-y-4" onSubmit={handleLogin}>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="login-username">Username</Label>
+                          <Input
+                            id="login-username"
+                            value={loginUsername}
+                            onChange={(event) => setLoginUsername(event.target.value)}
+                            autoComplete="username"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="login-password">Password</Label>
+                          <Input
+                            id="login-password"
+                            type="password"
+                            value={loginPassword}
+                            onChange={(event) => setLoginPassword(event.target.value)}
+                            autoComplete="current-password"
+                            required
+                          />
+                        </div>
+                        <Button type="submit" className="w-full">Login</Button>
+                      </form>
+                    </TabsContent>
+                    <TabsContent value="register" className="pt-4">
+                      <form className="space-y-4" onSubmit={handleRegister}>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="register-username">Username</Label>
+                          <Input
+                            id="register-username"
+                            value={registerUsername}
+                            onChange={(event) => setRegisterUsername(event.target.value)}
+                            autoComplete="username"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="register-password">Password</Label>
+                          <Input
+                            id="register-password"
+                            type="password"
+                            value={registerPassword}
+                            onChange={(event) => setRegisterPassword(event.target.value)}
+                            autoComplete="new-password"
+                            required
+                          />
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label htmlFor="register-password-confirm">Confirm password</Label>
+                          <Input
+                            id="register-password-confirm"
+                            type="password"
+                            value={registerPasswordConfirm}
+                            onChange={(event) => setRegisterPasswordConfirm(event.target.value)}
+                            autoComplete="new-password"
+                            required
+                          />
+                        </div>
+                        <Button type="submit" className="w-full">{serverHasUsers === false ? 'Get Started' : 'Create account'}</Button>
+                      </form>
+                    </TabsContent>
+                  </Tabs>
+                  {authError && <p className="text-sm text-destructive">{authError}</p>}
+                </>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Non-gate login dialog (user already authenticated, re-login) */}
         <Dialog
-          open={showLoginDialog || requiresAuthGate}
+          open={showLoginDialog && !requiresAuthGate}
           onOpenChange={(open) => {
-            if (!open && requiresAuthGate) return
             setShowLoginDialog(open)
           }}
         >
-          <DialogContent className="sm:max-w-md" showCloseButton={!requiresAuthGate}>
+          <DialogContent
+            className="sm:max-w-md"
+          >
             {gatewayStep === 'url' ? (
               <>
                 <DialogHeader>
@@ -5341,7 +5527,7 @@ function App() {
             defaultBranch={planRepo.defaultBranch}
             repoLocalPath={planRepo.localPath}
             provider={chatProvider}
-            model={chatProvider === 'jait' ? null : cliModel}
+            model={cliModel}
             onStartThread={(task, plan, _repo) => {
               void (async () => {
                 const repo = planRepo!

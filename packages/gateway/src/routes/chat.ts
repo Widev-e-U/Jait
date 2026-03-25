@@ -899,7 +899,7 @@ export function registerChatRoutes(
           ? (body["session_id"] as string)
           : randomUUID();
     const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
-    const requestProvider = typeof body["provider"] === "string"
+    let requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)
       : undefined;
     const requestRuntimeMode = parseRuntimeMode(body["runtimeMode"]);
@@ -931,12 +931,22 @@ export function registerChatRoutes(
       }
     }
     const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
-    const effectiveModel = userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
+    const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
+    const effectiveModel = requestBodyModel || userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
+
+    // When the selected model looks like an OpenRouter model (contains "/"),
+    // route through OpenRouter using the user's OpenRouter API key.
+    const isOpenRouterModel = effectiveModel.includes("/");
+    const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
     const llmRuntime = {
-      openaiApiKey: userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey,
-      openaiBaseUrl: userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl,
+      openaiApiKey: isOpenRouterModel && openRouterKey
+        ? openRouterKey
+        : (userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey),
+      openaiBaseUrl: isOpenRouterModel && openRouterKey
+        ? "https://openrouter.ai/api/v1"
+        : (userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl),
       openaiModel: effectiveModel,
-      contextWindow: userApiKeys["OPENAI_MODEL"]?.trim()
+      contextWindow: (requestBodyModel || userApiKeys["OPENAI_MODEL"]?.trim())
         ? inferContextWindow(effectiveModel)
         : config.contextWindow,
     };
@@ -1046,6 +1056,7 @@ export function registerChatRoutes(
     sessionSteeringControllers.set(sessionId, steering);
 
     try {
+      let usedCliProvider = false;
       // ══ CLI Provider path (codex / claude-code via MCP) ══════════
       if (requestProvider && requestProvider !== "jait" && providerRegistry) {
         const cliWsRoot = surfaceRegistry
@@ -1090,10 +1101,11 @@ export function registerChatRoutes(
 
         const available = await cliProvider.checkAvailability();
         if (!available) {
-          safeWrite(`data: ${JSON.stringify({ type: "error", message: `Provider ${requestProvider} is not available${isRemote ? " on the remote node" : ""}: ${cliProvider.info.unavailableReason ?? "CLI not found"}` })}\n\n`);
-          reply.raw.end();
-          return;
-        }
+          // Provider is offline or not installed — fall back to Jait
+          const reason = cliProvider.info.unavailableReason ?? "CLI not found";
+          console.log(`[chat/cli] Provider ${requestProvider} unavailable (${reason}), falling back to jait`);
+          safeWrite(`data: ${JSON.stringify({ type: "provider_fallback", from: requestProvider, to: "jait", reason })}\n\n`);
+        } else {
 
         console.log(`[chat/cli] session=${sessionId} wsRoot="${cliWsRoot}" session.workspacePath="${sessionRecord?.workspacePath}" surfaces=${surfaceRegistry?.getBySession(sessionId)?.length ?? 0}`);
 
@@ -1371,7 +1383,7 @@ export function registerChatRoutes(
 
         // Wait for turn completion or error
         await new Promise<void>((resolve) => {
-          const checkDone = cliProvider.onEvent((event: ProviderEvent) => {
+          const checkDone = cliProvider!.onEvent((event: ProviderEvent) => {
             if (event.sessionId !== providerSessionId) {
               return;
             }
@@ -1387,7 +1399,7 @@ export function registerChatRoutes(
 
           // Also abort if client disconnects
           streamAbort.signal.addEventListener("abort", () => {
-            cliProvider.interruptTurn(providerSessionId).catch(() => {});
+            cliProvider!.interruptTurn(providerSessionId).catch(() => {});
             resolve();
           });
         });
@@ -1414,7 +1426,12 @@ export function registerChatRoutes(
         // Session stays alive for the next turn — do NOT stop it.
         // It will be cleaned up on session error, provider switch, or server shutdown.
 
-      } else if (config.llmProvider === "openai") {
+        usedCliProvider = true;
+        } // end availability else
+
+      }
+
+      if (!usedCliProvider && config.llmProvider === "openai") {
         // ══ OpenAI agentic loop (using extracted runAgentLoop) ═════
 
         // Build tiered schemas per request — respects user-disabled tools

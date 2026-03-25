@@ -1,8 +1,29 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { UserService, ThemeMode, SttProvider, ChatProvider } from "../services/users.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
+
+const AUTH_COOKIE_NAME = "jait_token";
+const COOKIE_MAX_AGE = 7 * 24 * 60 * 60; // 7 days in seconds
+
+function setAuthCookie(reply: FastifyReply, token: string): void {
+  reply.setCookie(AUTH_COOKIE_NAME, token, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: COOKIE_MAX_AGE,
+    secure: false, // Jait typically runs behind a reverse proxy; set to true if enforcing HTTPS directly
+  });
+}
+
+function clearAuthCookie(reply: FastifyReply): void {
+  reply.clearCookie(AUTH_COOKIE_NAME, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+  });
+}
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
 const STT_PROVIDER_VALUES = new Set<SttProvider>(["wyoming", "whisper"]);
@@ -28,7 +49,7 @@ export function registerAuthRoutes(
   users: UserService,
   toolRegistry?: ToolRegistry,
 ) {
-  app.post("/auth/register", async (request, reply) => {
+  app.post("/api/auth/register", async (request, reply) => {
     const body = (request.body as Record<string, unknown>) ?? {};
     const username = typeof body.username === "string" ? body.username.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -45,6 +66,7 @@ export function registerAuthRoutes(
 
     const created = users.createUser(username, password);
     const token = await signAuthToken({ id: created.id, username: created.username }, config.jwtSecret);
+    setAuthCookie(reply, token);
     return reply.send({
       access_token: token,
       user: {
@@ -54,7 +76,7 @@ export function registerAuthRoutes(
     });
   });
 
-  app.post("/auth/login", async (request, reply) => {
+  app.post("/api/auth/login", async (request, reply) => {
     const body = (request.body as Record<string, unknown>) ?? {};
     const username = typeof body.username === "string" ? body.username.trim() : "";
     const password = typeof body.password === "string" ? body.password : "";
@@ -68,6 +90,7 @@ export function registerAuthRoutes(
     }
 
     const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    setAuthCookie(reply, token);
     return reply.send({
       access_token: token,
       user: {
@@ -77,7 +100,12 @@ export function registerAuthRoutes(
     });
   });
 
-  app.get("/auth/me", async (request, reply) => {
+  app.post("/api/auth/logout", async (_request, reply) => {
+    clearAuthCookie(reply);
+    return reply.send({ ok: true });
+  });
+
+  app.get("/api/auth/me", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const user = users.findById(authUser.id);
@@ -90,7 +118,23 @@ export function registerAuthRoutes(
     };
   });
 
-  app.get("/auth/settings", async (request, reply) => {
+  // Refresh: validate current auth (cookie or Bearer), issue a fresh token + cookie
+  app.post("/api/auth/refresh", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const user = users.findById(authUser.id);
+    if (!user) {
+      return reply.status(401).send({ detail: "login_required" });
+    }
+    const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+    setAuthCookie(reply, token);
+    return reply.send({
+      access_token: token,
+      user: { id: user.id, username: user.username },
+    });
+  });
+
+  app.get("/api/auth/settings", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const settings = users.getSettings(authUser.id);
@@ -106,7 +150,7 @@ export function registerAuthRoutes(
     };
   });
 
-  app.patch("/auth/settings", async (request, reply) => {
+  app.patch("/api/auth/settings", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
@@ -166,7 +210,7 @@ export function registerAuthRoutes(
     };
   });
 
-  app.delete("/auth/settings/archive", async (request, reply) => {
+  app.delete("/api/auth/settings/archive", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const removed = users.clearArchivedSessions(authUser.id);
@@ -175,7 +219,7 @@ export function registerAuthRoutes(
 
   // Returns which API key fields have values set via environment variables
   // (without exposing the actual values)
-  app.get("/auth/settings/env-status", async (request, reply) => {
+  app.get("/api/auth/settings/env-status", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
 
@@ -206,7 +250,7 @@ export function registerAuthRoutes(
     return { env_set };
   });
 
-  app.post("/auth/session/bind", async (request, reply) => {
+  app.post("/api/auth/session/bind", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = (request.body as Record<string, unknown>) ?? {};
@@ -223,8 +267,8 @@ export function registerAuthRoutes(
 
   // ── Tool settings endpoints ──────────────────────────────────────
 
-  /** GET /auth/settings/tools — list all tools with enabled/disabled status */
-  app.get("/auth/settings/tools", async (request, reply) => {
+  /** GET /api/auth/settings/tools — list all tools with enabled/disabled status */
+  app.get("/api/auth/settings/tools", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
 
@@ -254,8 +298,8 @@ export function registerAuthRoutes(
     };
   });
 
-  /** PATCH /auth/settings/tools — update which tools are disabled */
-  app.patch("/auth/settings/tools", async (request, reply) => {
+  /** PATCH /api/auth/settings/tools — update which tools are disabled */
+  app.patch("/api/auth/settings/tools", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
 

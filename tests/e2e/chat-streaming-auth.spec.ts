@@ -6,7 +6,7 @@ async function registerAndLogin(request: any) {
   const username = `e2e-user-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
   const password = "supersecret123";
 
-  const register = await request.post(`${API_URL}/auth/register`, {
+  const register = await request.post(`${API_URL}/api/auth/register`, {
     data: { username, password },
   });
   expect(register.ok()).toBeTruthy();

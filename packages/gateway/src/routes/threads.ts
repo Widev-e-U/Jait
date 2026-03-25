@@ -1187,7 +1187,21 @@ export function registerThreadRoutes(
     }
 
     try {
-      const models = await provider.listModels();
+      let models = await provider.listModels();
+
+      // For jait provider, append OpenRouter models when the user has an
+      // OpenRouter API key or their base URL points to OpenRouter
+      if (id === "jait" && deps.userService) {
+        const userApiKeys = deps.userService.getSettings(authUser.id).apiKeys ?? {};
+        const baseUrl = userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl;
+        const hasOpenRouterKey = Boolean(userApiKeys["OPENROUTER_API_KEY"]?.trim());
+        const isOpenRouterBaseUrl = baseUrl?.toLowerCase().includes("openrouter.ai");
+        if (hasOpenRouterKey || isOpenRouterBaseUrl) {
+          const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
+          models = [...models, ...OPENROUTER_MODELS];
+        }
+      }
+
       return { models };
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Failed to list models" });

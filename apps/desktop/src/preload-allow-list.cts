@@ -19,6 +19,9 @@ const allowedIpcChannels = {
     "window:set-title-bar-overlay",
     "desktop:get-setting",
     "desktop:set-setting",
+    "credential:store",
+    "credential:get",
+    "credential:clear",
   ],
   on: ["screen-share:start", "screen-share:stop", "gateway:event", "window:maximized-change"],
 };

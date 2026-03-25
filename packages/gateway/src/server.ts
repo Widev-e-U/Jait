@@ -1,5 +1,6 @@
 import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
+import fastifyCookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
 import { existsSync } from "node:fs";
 import { join, dirname, extname, relative, resolve, sep } from "node:path";
@@ -113,8 +114,11 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     },
   });
 
+  await app.register(fastifyCookie);
+
   await app.register(cors, {
     origin: true, // allow any origin — auth is JWT-based, not origin-based
+    credentials: true,
     methods: ["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
   });
 

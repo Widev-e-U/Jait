@@ -26,7 +26,7 @@ describe("auth settings routes", () => {
     const headers = await authHeader(config.jwtSecret, user.id);
     const patchResponse = await app.inject({
       method: "PATCH",
-      url: "/auth/settings",
+      url: "/api/auth/settings",
       headers,
       payload: {
         workspace_picker_path: "/tmp/project",
@@ -42,7 +42,7 @@ describe("auth settings routes", () => {
 
     const getResponse = await app.inject({
       method: "GET",
-      url: "/auth/settings",
+      url: "/api/auth/settings",
       headers,
     });
 

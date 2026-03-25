@@ -5,7 +5,7 @@
  * inside an Electron BrowserWindow. Shares the exact same UI as @jait/web.
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
@@ -304,6 +304,57 @@ ipcMain.handle("desktop:get-setting", (_event, key: string, defaultValue?: unkno
 ipcMain.handle("desktop:set-setting", (_event, key: string, value: unknown) => {
   setSetting(key, value);
   return { ok: true };
+});
+
+// ── Credential store IPC (OS keychain via safeStorage) ────────────────
+const credentialPath = path.join(app.getPath("userData"), "credentials.enc");
+
+ipcMain.handle("credential:store", (_event, key: string, value: string) => {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) {
+      return { ok: false, error: "encryption-unavailable" };
+    }
+    let creds: Record<string, string> = {};
+    try {
+      const raw = readFileSync(credentialPath);
+      creds = JSON.parse(safeStorage.decryptString(raw));
+    } catch { /* no existing file or corrupted — start fresh */ }
+    creds[key] = value;
+    const encrypted = safeStorage.encryptString(JSON.stringify(creds));
+    mkdirSync(path.dirname(credentialPath), { recursive: true });
+    writeFileSync(credentialPath, encrypted);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("credential:get", (_event, key: string) => {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return { value: null };
+    const raw = readFileSync(credentialPath);
+    const creds = JSON.parse(safeStorage.decryptString(raw)) as Record<string, string>;
+    return { value: creds[key] ?? null };
+  } catch {
+    return { value: null };
+  }
+});
+
+ipcMain.handle("credential:clear", (_event, key: string) => {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return { ok: true };
+    let creds: Record<string, string> = {};
+    try {
+      const raw = readFileSync(credentialPath);
+      creds = JSON.parse(safeStorage.decryptString(raw));
+    } catch { return { ok: true }; }
+    delete creds[key];
+    const encrypted = safeStorage.encryptString(JSON.stringify(creds));
+    writeFileSync(credentialPath, encrypted);
+    return { ok: true };
+  } catch {
+    return { ok: true };
+  }
 });
 ipcMain.handle("window:is-maximized", () => mainWindow?.isMaximized() ?? false);
 ipcMain.handle("window:set-title-bar-overlay", (_event, opts: { color?: string; symbolColor?: string; height?: number }) => {

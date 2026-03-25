@@ -10,6 +10,8 @@ function getJwtSecret(secret: string): Uint8Array {
   return new TextEncoder().encode(secret || "jait-dev-secret-change-in-production");
 }
 
+export const AUTH_COOKIE_NAME = "jait_token";
+
 export function extractBearerToken(headerValue: unknown): string | null {
   if (typeof headerValue !== "string") return null;
   const trimmed = headerValue.trim();
@@ -50,7 +52,8 @@ export async function requireAuth(
   reply: FastifyReply,
   jwtSecret: string,
 ): Promise<AuthUser | null> {
-  const token = extractBearerToken(request.headers.authorization);
+  const token = extractBearerToken(request.headers.authorization)
+    ?? (request.cookies?.[AUTH_COOKIE_NAME] || null);
   if (!token) {
     await reply.status(401).send({ detail: "login_required" });
     return null;

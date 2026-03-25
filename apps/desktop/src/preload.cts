@@ -133,6 +133,18 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   setSetting: (key: string, value: unknown) =>
     ipcRenderer.invoke("desktop:set-setting", key, value) as Promise<{ ok: boolean }>,
 
+  /** Store a credential in the OS keychain (encrypted via safeStorage) */
+  credentialStore: (key: string, value: string) =>
+    ipcRenderer.invoke("credential:store", key, value) as Promise<{ ok: boolean; error?: string }>,
+
+  /** Retrieve a credential from the OS keychain */
+  credentialGet: (key: string) =>
+    ipcRenderer.invoke("credential:get", key) as Promise<{ value: string | null }>,
+
+  /** Clear a credential from the OS keychain */
+  credentialClear: (key: string) =>
+    ipcRenderer.invoke("credential:clear", key) as Promise<{ ok: boolean }>,
+
   // ── Auto-update API ────────────────────────────────────────────────
   /** Check for application updates */
   checkForUpdate: () =>
