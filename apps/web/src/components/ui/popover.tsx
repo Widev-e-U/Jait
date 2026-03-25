@@ -15,6 +15,10 @@ const PopoverTrigger = PopoverPrimitive.Trigger as React.ForwardRefExoticCompone
 
 const PopoverAnchor = PopoverPrimitive.Anchor
 
+// React 19 compat: Radix Content types break across different @types/react resolutions.
+// Cast to ComponentType<any> to avoid children/ReactNode mismatches.
+const RadixContent = PopoverPrimitive.Content as React.ComponentType<any>
+
 function PopoverContent({
   className,
   align = 'center',
@@ -23,7 +27,8 @@ function PopoverContent({
   ref,
   children,
   ...props
-}: React.HTMLAttributes<HTMLDivElement> & {
+}: Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> & {
+  children?: React.ReactNode
   align?: 'start' | 'center' | 'end'
   side?: 'top' | 'right' | 'bottom' | 'left'
   sideOffset?: number
@@ -34,9 +39,8 @@ function PopoverContent({
 }) {
   return (
     <PopoverPrimitive.Portal>
-      {/* @ts-expect-error React 19 children compat with Radix UI */}
-      <PopoverPrimitive.Content
-        ref={ref as React.Ref<HTMLDivElement>}
+      <RadixContent
+        ref={ref}
         align={align}
         side={side}
         sideOffset={sideOffset}
@@ -49,10 +53,10 @@ function PopoverContent({
           'data-[side=right]:slide-in-from-left-2 data-[side=top]:slide-in-from-bottom-2',
           className,
         )}
-        {...props as Record<string, unknown>}
+        {...props}
       >
         {children}
-      </PopoverPrimitive.Content>
+      </RadixContent>
     </PopoverPrimitive.Portal>
   )
 }
