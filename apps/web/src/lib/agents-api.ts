@@ -238,13 +238,13 @@ export class AgentsApi {
     return { providers: data.providers, remoteProviders: data.remoteProviders ?? [] }
   }
 
-  async listProviderModels(providerId: ProviderId): Promise<{ id: string; name: string; description?: string; isDefault?: boolean }[]> {
+  async listProviderModels(providerId: ProviderId): Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }> {
     const res = await fetch(`${API_URL}/api/providers/${providerId}/models`, {
       headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to list models: ${res.statusText}`)
-    const data = await res.json() as { models: { id: string; name: string; description?: string; isDefault?: boolean }[] }
-    return data.models
+    const data = await res.json() as { models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }
+    return data
   }
 
   // ── Threads CRUD ───────────────────────────────────────────────

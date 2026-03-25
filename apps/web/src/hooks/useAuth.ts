@@ -7,6 +7,7 @@ const API_URL = getApiUrl()
 export type ThemeMode = 'light' | 'dark' | 'system'
 export type SttProvider = 'wyoming' | 'whisper'
 export type ChatProvider = 'jait' | 'codex' | 'claude-code'
+export type JaitBackend = 'openai' | 'openrouter'
 
 interface User {
   id: string
@@ -18,6 +19,8 @@ interface UserSettings {
   api_keys: Record<string, string>
   stt_provider: SttProvider
   chat_provider: ChatProvider
+  jait_backend: JaitBackend
+  recent_models: string[]
   workspace_picker_path: string | null
   workspace_picker_node_id: string | null
   updated_at: string
@@ -40,6 +43,8 @@ const EMPTY_SETTINGS: UserSettings = {
   api_keys: {},
   stt_provider: 'whisper',
   chat_provider: 'jait',
+  jait_backend: 'openai',
+  recent_models: [],
   workspace_picker_path: null,
   workspace_picker_node_id: null,
   updated_at: new Date(0).toISOString(),
@@ -171,6 +176,8 @@ export function useAuth() {
     api_keys?: Record<string, string>
     stt_provider?: SttProvider
     chat_provider?: ChatProvider
+    jait_backend?: JaitBackend
+    recent_models?: string[]
     workspace_picker_path?: string | null
     workspace_picker_node_id?: string | null
   }) => {

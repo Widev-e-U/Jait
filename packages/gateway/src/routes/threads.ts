@@ -39,6 +39,39 @@ import {
 } from "../services/thread-title.js";
 import type { WsEventType } from "@jait/shared";
 import type { ThreadInfo, ThreadRegistrySnapshot } from "@jait/shared";
+import type { ProviderModelInfo } from "../providers/contracts.js";
+
+/** Fetch models from OpenRouter API with a 5-second timeout and in-memory cache. */
+let orCache: { models: ProviderModelInfo[]; fetchedAt: number } | null = null;
+const OR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+async function fetchOpenRouterModels(apiKey: string): Promise<ProviderModelInfo[]> {
+  if (orCache && Date.now() - orCache.fetchedAt < OR_CACHE_TTL) {
+    return orCache.models;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch("https://openrouter.ai/api/v1/models", {
+      headers: { Authorization: `Bearer ${apiKey}` },
+      signal: controller.signal,
+    });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { data?: Array<{ id: string; name?: string; description?: string }> };
+    const models: ProviderModelInfo[] = (data.data ?? [])
+      .filter((m) => m.id && !m.id.includes(":free"))
+      .slice(0, 100)
+      .map((m) => ({
+        id: m.id,
+        name: m.name || m.id.split("/").pop() || m.id,
+        description: m.description?.slice(0, 80),
+      }));
+    orCache = { models, fetchedAt: Date.now() };
+    return models;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 export interface ThreadRouteDeps {
   threadService: ThreadService;
@@ -1189,16 +1222,54 @@ export function registerThreadRoutes(
     try {
       let models = await provider.listModels();
 
-      // For jait provider, append OpenRouter models when the user has an
-      // OpenRouter API key or their base URL points to OpenRouter
+      // For jait provider, check the user's configured backend
       if (id === "jait" && deps.userService) {
-        const userApiKeys = deps.userService.getSettings(authUser.id).apiKeys ?? {};
-        const baseUrl = userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl;
-        const hasOpenRouterKey = Boolean(userApiKeys["OPENROUTER_API_KEY"]?.trim());
-        const isOpenRouterBaseUrl = baseUrl?.toLowerCase().includes("openrouter.ai");
-        if (hasOpenRouterKey || isOpenRouterBaseUrl) {
-          const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-          models = [...models, ...OPENROUTER_MODELS];
+        const settings = deps.userService.getSettings(authUser.id);
+        const userApiKeys = settings.apiKeys ?? {};
+        const jaitBackend = settings.jaitBackend || "openai";
+
+        if (jaitBackend === "openrouter") {
+          const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
+          if (openRouterKey) {
+            // Try fetching live models from OpenRouter
+            try {
+              const orModels = await fetchOpenRouterModels(openRouterKey);
+              if (orModels.length > 0) {
+                models = orModels;
+              } else {
+                // Fallback to static list
+                const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
+                models = OPENROUTER_MODELS;
+              }
+            } catch {
+              const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
+              models = OPENROUTER_MODELS;
+            }
+          } else {
+            // No key but openrouter backend selected — show static list
+            const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
+            models = OPENROUTER_MODELS;
+          }
+        } else {
+          // openai backend — still append OpenRouter models if key present (backwards compat)
+          const hasOpenRouterKey = Boolean(userApiKeys["OPENROUTER_API_KEY"]?.trim());
+          const baseUrl = userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl;
+          const isOpenRouterBaseUrl = baseUrl?.toLowerCase().includes("openrouter.ai");
+          if (hasOpenRouterKey || isOpenRouterBaseUrl) {
+            const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
+            models = [...models, ...OPENROUTER_MODELS];
+          }
+        }
+
+        // Prepend recent models (if they exist in the full list)
+        const recentIds = settings.recentModels ?? [];
+        if (recentIds.length > 0) {
+          const modelMap = new Map(models.map((m) => [m.id, m]));
+          const recents = recentIds
+            .filter((rid) => modelMap.has(rid))
+            .map((rid) => ({ ...modelMap.get(rid)!, isRecent: true }));
+          // Return recents info in response
+          return { models, recentModels: recents.slice(0, 5).map((r) => r.id) };
         }
       }
 

@@ -62,6 +62,8 @@ export const userSettings = sqliteTable("user_settings", {
   disabledTools: text("disabled_tools"), // JSON string[] of disabled tool names
   sttProvider: text("stt_provider").notNull().default("whisper"), // 'whisper' | 'wyoming'
   chatProvider: text("chat_provider").notNull().default("jait"), // 'jait' | 'codex' | 'claude-code'
+  jaitBackend: text("jait_backend").notNull().default("openai"), // 'openai' | 'openrouter'
+  recentModels: text("recent_models"), // JSON string[] of recently used model ids
   workspacePickerPath: text("workspace_picker_path"),
   workspacePickerNodeId: text("workspace_picker_node_id"),
   updatedAt: text("updated_at").notNull(),

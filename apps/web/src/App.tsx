@@ -213,7 +213,7 @@ function loadLegacyCliModelsByProvider(currentProvider: ProviderId): Partial<Rec
     const raw = localStorage.getItem('cliModelsByProvider')
     if (raw) {
       const parsed = JSON.parse(raw) as Record<string, unknown>
-      for (const providerId of ['codex', 'claude-code'] as const) {
+      for (const providerId of ['jait', 'codex', 'claude-code'] as const) {
         const value = parsed[providerId]
         if (typeof value === 'string' && value.trim()) {
           models[providerId] = value
@@ -225,7 +225,7 @@ function loadLegacyCliModelsByProvider(currentProvider: ProviderId): Partial<Rec
   }
 
   const legacyModel = localStorage.getItem('cliModel')
-  if (legacyModel && currentProvider !== 'jait' && !models[currentProvider]) {
+  if (legacyModel && !models[currentProvider]) {
     models[currentProvider] = legacyModel
   }
 
@@ -2068,7 +2068,6 @@ function App() {
   }, [])
 
   const handleCliModelChange = useCallback((model: string | null) => {
-    if (chatProvider === 'jait') return
     setCliModelsByProvider((current) => ({
       ...current,
       [chatProvider]: model,
@@ -2079,7 +2078,7 @@ function App() {
   useEffect(() => {
     if (activeSessionId && token && loadingCliModels) return
     const nextModels: Partial<Record<CliProviderId, string | null>> = {}
-    for (const providerId of ['codex', 'claude-code'] as const) {
+    for (const providerId of ['jait', 'codex', 'claude-code'] as const) {
       const value = cliModelsByProvider[providerId]
       if (typeof value === 'string' && value.trim()) {
         nextModels[providerId] = value
@@ -4323,6 +4322,10 @@ function App() {
               sttProvider={settings.stt_provider}
               onSttProviderChange={async (next: SttProvider) => {
                 await updateSettings({ stt_provider: next })
+              }}
+              jaitBackend={settings.jait_backend ?? 'openai'}
+              onJaitBackendChange={async (next) => {
+                await updateSettings({ jait_backend: next })
               }}
               onClearArchive={handleClearArchive}
               activityEvents={activityEvents}

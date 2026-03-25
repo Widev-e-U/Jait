@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.229",
+  "version": "0.1.230",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "author": "JakobWl",
   "type": "module",
@@ -58,7 +58,6 @@
     "playwright": "^1.58.2",
     "ws": "^8.18.0"
   },
-
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",
     "@types/ws": "^8.5.0",

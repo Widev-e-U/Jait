@@ -7,6 +7,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 export type ThemeMode = "light" | "dark" | "system";
 export type SttProvider = "wyoming" | "whisper";
 export type ChatProvider = "jait" | "codex" | "claude-code";
+export type JaitBackend = "openai" | "openrouter";
 
 function normalizeSttProvider(value: string | null | undefined): SttProvider {
   return value === "wyoming" ? "wyoming" : "whisper";
@@ -26,6 +27,8 @@ export interface UserSettingsRecord {
   disabledTools: string[];
   sttProvider: SttProvider;
   chatProvider: ChatProvider;
+  jaitBackend: JaitBackend;
+  recentModels: string[];
   workspacePickerPath: string | null;
   workspacePickerNodeId: string | null;
   updatedAt: string;
@@ -156,6 +159,8 @@ export class UserService {
         disabledTools: JSON.stringify([]),
         sttProvider: "whisper",
         chatProvider: "jait",
+        jaitBackend: "openai",
+        recentModels: JSON.stringify([]),
         workspacePickerPath: null,
         workspacePickerNodeId: null,
         updatedAt: now,
@@ -167,6 +172,8 @@ export class UserService {
         disabledTools: [],
         sttProvider: "whisper",
         chatProvider: "jait",
+        jaitBackend: "openai",
+        recentModels: [],
         workspacePickerPath: null,
         workspacePickerNodeId: null,
         updatedAt: now,
@@ -179,6 +186,8 @@ export class UserService {
       disabledTools: parseStringArray((row as any).disabledTools ?? null),
       sttProvider: normalizeSttProvider(typeof (row as any).sttProvider === "string" ? (row as any).sttProvider : null),
       chatProvider: ((row as any).chatProvider as ChatProvider) || "jait",
+      jaitBackend: ((row as any).jaitBackend as JaitBackend) || "openai",
+      recentModels: parseStringArray((row as any).recentModels ?? null),
       workspacePickerPath: typeof (row as any).workspacePickerPath === "string" ? (row as any).workspacePickerPath : null,
       workspacePickerNodeId: typeof (row as any).workspacePickerNodeId === "string" ? (row as any).workspacePickerNodeId : null,
       updatedAt: row.updatedAt,
@@ -193,6 +202,8 @@ export class UserService {
       disabledTools?: string[];
       sttProvider?: SttProvider;
       chatProvider?: ChatProvider;
+      jaitBackend?: JaitBackend;
+      recentModels?: string[];
       workspacePickerPath?: string | null;
       workspacePickerNodeId?: string | null;
     },
@@ -203,6 +214,8 @@ export class UserService {
     const disabledTools = patch.disabledTools ?? existing.disabledTools;
     const sttProvider = patch.sttProvider ?? existing.sttProvider;
     const chatProvider = patch.chatProvider ?? existing.chatProvider;
+    const jaitBackend = patch.jaitBackend ?? existing.jaitBackend;
+    const recentModels = patch.recentModels ?? existing.recentModels;
     const workspacePickerPath = patch.workspacePickerPath !== undefined
       ? patch.workspacePickerPath
       : existing.workspacePickerPath;
@@ -218,6 +231,8 @@ export class UserService {
         disabledTools: JSON.stringify(disabledTools),
         sttProvider,
         chatProvider,
+        jaitBackend,
+        recentModels: JSON.stringify(recentModels),
         workspacePickerPath,
         workspacePickerNodeId,
         updatedAt: now,

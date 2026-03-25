@@ -1,6 +1,6 @@
 {
   "name": "@jait/ui-shared",
-  "version": "0.1.10",
+  "version": "0.1.11",
   "private": true,
   "description": "Shared UI utilities and components for Jait clients",
   "author": "JakobWl",

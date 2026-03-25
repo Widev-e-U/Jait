@@ -569,4 +569,14 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 022: Jait backend preference & recent models ────────────────
+  {
+    id: 22,
+    name: "user_settings_jait_backend",
+    run(db) {
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN jait_backend TEXT NOT NULL DEFAULT 'openai'`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE user_settings ADD COLUMN recent_models TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];

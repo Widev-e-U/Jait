@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyReply } from "fastify";
 import type { AppConfig } from "../config.js";
-import type { UserService, ThemeMode, SttProvider, ChatProvider } from "../services/users.js";
+import type { UserService, ThemeMode, SttProvider, ChatProvider, JaitBackend } from "../services/users.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import { requireAuth, signAuthToken } from "../security/http-auth.js";
 
@@ -28,6 +28,7 @@ function clearAuthCookie(reply: FastifyReply): void {
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
 const STT_PROVIDER_VALUES = new Set<SttProvider>(["wyoming", "whisper"]);
 const CHAT_PROVIDER_VALUES = new Set<ChatProvider>(["jait", "codex", "claude-code"]);
+const JAIT_BACKEND_VALUES = new Set<JaitBackend>(["openai", "openrouter"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;
@@ -144,6 +145,8 @@ export function registerAuthRoutes(
       disabled_tools: settings.disabledTools,
       stt_provider: settings.sttProvider,
       chat_provider: settings.chatProvider,
+      jait_backend: settings.jaitBackend,
+      recent_models: settings.recentModels,
       workspace_picker_path: settings.workspacePickerPath,
       workspace_picker_node_id: settings.workspacePickerNodeId,
       updated_at: settings.updatedAt,
@@ -160,6 +163,8 @@ export function registerAuthRoutes(
       disabledTools?: string[];
       sttProvider?: SttProvider;
       chatProvider?: ChatProvider;
+      jaitBackend?: JaitBackend;
+      recentModels?: string[];
       workspacePickerPath?: string | null;
       workspacePickerNodeId?: string | null;
     } = {};
@@ -185,6 +190,14 @@ export function registerAuthRoutes(
       patch.chatProvider = body.chat_provider as ChatProvider;
     }
 
+    if (typeof body.jait_backend === "string" && JAIT_BACKEND_VALUES.has(body.jait_backend as JaitBackend)) {
+      patch.jaitBackend = body.jait_backend as JaitBackend;
+    }
+
+    if (Array.isArray(body.recent_models)) {
+      patch.recentModels = body.recent_models.filter((v: unknown) => typeof v === "string").slice(0, 20) as string[];
+    }
+
     if (typeof body.workspace_picker_path === "string" || body.workspace_picker_path === null) {
       patch.workspacePickerPath = typeof body.workspace_picker_path === "string"
         ? body.workspace_picker_path.trim() || null
@@ -204,6 +217,8 @@ export function registerAuthRoutes(
       disabled_tools: updated.disabledTools,
       stt_provider: updated.sttProvider,
       chat_provider: updated.chatProvider,
+      jait_backend: updated.jaitBackend,
+      recent_models: updated.recentModels,
       workspace_picker_path: updated.workspacePickerPath,
       workspace_picker_node_id: updated.workspacePickerNodeId,
       updated_at: updated.updatedAt,

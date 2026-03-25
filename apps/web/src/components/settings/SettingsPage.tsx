@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ActivityFeed } from '@/components/activity'
 import type { ActivityEvent } from '@jait/ui-shared'
 import type { SttProvider } from '@/hooks/useAuth'
+import type { JaitBackend } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 
@@ -84,6 +85,8 @@ interface SettingsPageProps {
   onSaveApiKeys: (next: Record<string, string>) => Promise<void>
   sttProvider: SttProvider
   onSttProviderChange: (next: SttProvider) => Promise<void>
+  jaitBackend: JaitBackend
+  onJaitBackendChange: (next: JaitBackend) => Promise<void>
   onClearArchive: () => Promise<number>
   activityEvents?: ActivityEvent[]
   updateInfo: UpdateInfo | null
@@ -101,6 +104,8 @@ export function SettingsPage({
   onSaveApiKeys,
   sttProvider,
   onSttProviderChange,
+  jaitBackend,
+  onJaitBackendChange,
   onClearArchive,
   activityEvents,
   updateInfo,
@@ -229,6 +234,10 @@ export function SettingsPage({
   )
   const showArchiveSection = matchesSearch(
     'session archive archived clear delete messages history',
+  )
+  const showJaitBackendSection = matchesSearch(
+    'jait backend provider openai openrouter model api llm',
+    jaitBackend,
   )
   const showSpeechSection = matchesSearch(
     'speech stt input microphone whisper wyoming home assistant transcription',
@@ -409,6 +418,37 @@ export function SettingsPage({
             </Card>
           )}
 
+          {showJaitBackendSection && (
+            <Card className="space-y-4 p-5">
+              <div>
+                <h2 className="text-base font-medium">{highlight('Jait LLM Backend')}</h2>
+                <p className="text-sm text-muted-foreground">
+                  Choose which API backend the Jait provider uses for model inference.
+                </p>
+              </div>
+              <div className="max-w-sm">
+                <Label htmlFor="jait-backend" className="mb-1.5 block">Backend provider</Label>
+                <Select
+                  value={jaitBackend}
+                  onValueChange={(value) => { void onJaitBackendChange(value as JaitBackend) }}
+                >
+                  <SelectTrigger id="jait-backend">
+                    <SelectValue placeholder="Select backend" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="openai">OpenAI (direct)</SelectItem>
+                    <SelectItem value="openrouter">OpenRouter</SelectItem>
+                  </SelectContent>
+                </Select>
+                <p className="mt-1.5 text-xs text-muted-foreground">
+                  {jaitBackend === 'openrouter'
+                    ? 'Models will be fetched from OpenRouter. Set your OPENROUTER_API_KEY in the API tab.'
+                    : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
+                </p>
+              </div>
+            </Card>
+          )}
+
           {showSpeechSection && (
             <Card className="space-y-4 p-5">
               <div>
@@ -452,7 +492,7 @@ export function SettingsPage({
             </Card>
           )}
 
-          {!showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showSpeechSection && emptyState}
+          {!showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6">
