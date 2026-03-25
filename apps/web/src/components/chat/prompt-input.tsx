@@ -472,7 +472,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const selectorsDisabled = controlsLocked
   const showProviderSelector = Boolean(provider && onProviderChange)
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
-  const showCliModelSelector = Boolean(provider && provider !== 'jait' && onCliModelChange)
+  const showCliModelSelector = Boolean(provider && onCliModelChange)
   const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
   const showSendTargetSelector = Boolean(sendTarget && onSendTargetChange)
   const hasFooterControls = showSendTargetSelector || showProviderSelector || showProviderRuntimeSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)

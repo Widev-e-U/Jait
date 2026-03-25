@@ -44,6 +44,11 @@ export function useSessionState<T>(
       return
     }
 
+    // Reset to null immediately so stale values from the previous session
+    // don't briefly leak into UI (e.g. terminal panel flash on workspace switch).
+    setValueLocal(null)
+    latestRef.current = null
+
     let cancelled = false
     const fetchVersion = localWriteVersionRef.current
     setLoading(true)

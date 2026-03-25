@@ -1362,9 +1362,16 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
 export const ToolCallCard = memo(ToolCallCardInner)
 ToolCallCard.displayName = 'ToolCallCard'
 
+/**
+ * Minimum number of completed calls before a collapsible group auto-collapses.
+ */
+const MIN_CALLS_TO_COLLAPSE = 3
+
 /** Group of tool call cards rendered between message content */
 interface ToolCallGroupProps {
   calls: ToolCallInfo[]
+  /** When true and all calls are completed with >= MIN_CALLS_TO_COLLAPSE, the entire group collapses into a summary row */
+  collapsible?: boolean
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
 }
@@ -1375,13 +1382,60 @@ interface ToolCallGroupProps {
  */
 const MAX_VISIBLE_COMPLETED = 6
 
-function ToolCallGroupInner({ calls, onOpenTerminal, onOpenDiff }: ToolCallGroupProps) {
+function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
-  if (calls.length === 0) return null
+  const [groupOpen, setGroupOpen] = useState(true)
+  const prevAllDoneRef = useRef(false)
 
   // Split into active (pending/running) and completed (success/error)
   const activeCalls = calls.filter(c => c.status === 'running' || c.status === 'pending')
   const completedCalls = calls.filter(c => c.status !== 'running' && c.status !== 'pending')
+  const allDone = activeCalls.length === 0 && completedCalls.length > 0
+
+  // Whether this group qualifies for whole-group collapsing
+  const shouldCollapseGroup = collapsible && allDone && completedCalls.length >= MIN_CALLS_TO_COLLAPSE
+
+  // Auto-collapse the entire group when all calls finish
+  useEffect(() => {
+    if (shouldCollapseGroup && !prevAllDoneRef.current) {
+      setGroupOpen(false)
+    }
+    prevAllDoneRef.current = allDone
+  }, [allDone, shouldCollapseGroup])
+
+  if (calls.length === 0) return null
+
+  const totalSuccessCount = completedCalls.filter(c => c.status === 'success').length
+  const totalErrorCount = completedCalls.filter(c => c.status === 'error').length
+
+  // If the entire group is collapsed, render just a summary row
+  if (shouldCollapseGroup && !groupOpen) {
+    return (
+      <div className="my-2 overflow-hidden rounded-xl border border-border/40 bg-muted/[0.18]">
+        <button
+          type="button"
+          onClick={() => setGroupOpen(true)}
+          className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+        >
+          <ChevronRight className="h-3.5 w-3.5 shrink-0" />
+          <Zap className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="font-medium">
+            {completedCalls.length} tool call{completedCalls.length !== 1 ? 's' : ''}
+          </span>
+          {totalSuccessCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-green-500">
+              <CheckCircle2 className="h-3 w-3" /> {totalSuccessCount}
+            </span>
+          )}
+          {totalErrorCount > 0 && (
+            <span className="inline-flex items-center gap-0.5 text-red-500">
+              <XCircle className="h-3 w-3" /> {totalErrorCount}
+            </span>
+          )}
+        </button>
+      </div>
+    )
+  }
 
   // When too many completed calls, collapse the oldest ones unless expanded
   const needsCollapse = !showAll && completedCalls.length > MAX_VISIBLE_COMPLETED
@@ -1393,6 +1447,16 @@ function ToolCallGroupInner({ calls, onOpenTerminal, onOpenDiff }: ToolCallGroup
 
   return (
     <div className="my-2 overflow-hidden rounded-xl border border-border/40 bg-muted/[0.18] divide-y divide-border/30">
+      {shouldCollapseGroup && (
+        <button
+          type="button"
+          onClick={() => setGroupOpen(false)}
+          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+        >
+          <ChevronRight className="h-3 w-3 rotate-90 transition-transform" />
+          <span>Collapse tool calls</span>
+        </button>
+      )}
       {needsCollapse && (
         <button
           type="button"
@@ -1434,6 +1498,139 @@ export const ToolCallGroup = memo(
   (prevProps, nextProps) =>
     prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
     prevProps.onOpenDiff === nextProps.onOpenDiff &&
+    prevProps.collapsible === nextProps.collapsible &&
     areToolCallListsEqual(prevProps.calls, nextProps.calls),
 )
 ToolCallGroup.displayName = 'ToolCallGroup'
+
+/* ─── Agent Tool Call Wrapper ──────────────────────────────────────────────── */
+
+const AGENT_PROVIDER_LABELS: Record<string, string> = {
+  'claude-code': 'Claude Code',
+  codex: 'Codex',
+  gemini: 'Gemini CLI',
+  opencode: 'OpenCode',
+  copilot: 'Copilot',
+}
+
+interface AgentToolCallWrapperProps {
+  provider: string
+  calls: ToolCallInfo[]
+  isStreaming?: boolean
+  onOpenTerminal?: (terminalId: string | null) => void
+  onOpenDiff?: (filePath: string) => void
+}
+
+function AgentToolCallWrapperInner({ provider, calls, isStreaming, onOpenTerminal, onOpenDiff }: AgentToolCallWrapperProps) {
+  const [open, setOpen] = useState(true)
+  const [showAll, setShowAll] = useState(false)
+  const [now, setNow] = useState(() => Date.now())
+  const prevActiveRef = useRef(true)
+
+  const isActive = !!isStreaming || calls.some(c => c.status === 'running' || c.status === 'pending')
+  const label = AGENT_PROVIDER_LABELS[provider] ?? provider
+  const successCount = calls.filter(c => c.status === 'success').length
+  const errorCount = calls.filter(c => c.status === 'error').length
+  const startedAt = calls.length > 0 ? Math.min(...calls.map(c => c.startedAt)) : Date.now()
+  const completedAt = !isActive && calls.length > 0
+    ? Math.max(...calls.map(c => c.completedAt ?? c.startedAt))
+    : undefined
+
+  // Split into active and completed for inner collapsing
+  const activeCalls = calls.filter(c => c.status === 'running' || c.status === 'pending')
+  const completedCalls = calls.filter(c => c.status !== 'running' && c.status !== 'pending')
+  const needsInnerCollapse = !showAll && completedCalls.length > MAX_VISIBLE_COMPLETED
+  const hiddenCount = needsInnerCollapse ? completedCalls.length - MAX_VISIBLE_COMPLETED : 0
+  const visibleCompleted = needsInnerCollapse ? completedCalls.slice(-MAX_VISIBLE_COMPLETED) : completedCalls
+  const hiddenSuccessCount = needsInnerCollapse ? completedCalls.slice(0, hiddenCount).filter(c => c.status === 'success').length : 0
+  const hiddenErrorCount = hiddenCount - hiddenSuccessCount
+
+  // Auto-collapse when the agent finishes
+  useEffect(() => {
+    if (prevActiveRef.current && !isActive && calls.length > 0) {
+      setOpen(false)
+    }
+    prevActiveRef.current = isActive
+  }, [isActive, calls.length])
+
+  // Tick the elapsed timer while active
+  useEffect(() => {
+    if (!isActive) return
+    const id = window.setInterval(() => setNow(Date.now()), 250)
+    return () => window.clearInterval(id)
+  }, [isActive])
+
+  if (calls.length === 0) return null
+
+  return (
+    <Collapsible open={open} onOpenChange={setOpen}>
+      <div className="my-2 overflow-hidden rounded-xl border border-border/40 bg-muted/[0.18]">
+        <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors">
+          <ChevronRight className={cn(
+            'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
+            open && 'rotate-90',
+          )} />
+          {isActive
+            ? <Loader2 className="h-4 w-4 shrink-0 text-muted-foreground animate-spin" />
+            : <Bot className="h-4 w-4 shrink-0 text-purple-500" />
+          }
+          <span className="text-sm font-medium text-foreground truncate">{label}</span>
+          <div className="flex items-center gap-2 ml-auto text-[11px] text-muted-foreground tabular-nums shrink-0">
+            {calls.length > 0 && (
+              <span>{calls.length} tool{calls.length !== 1 ? 's' : ''}</span>
+            )}
+            {!isActive && errorCount > 0 && (
+              <span className="text-red-500">{errorCount} failed</span>
+            )}
+            <ElapsedLabel startedAt={startedAt} completedAt={completedAt} now={now} />
+          </div>
+          {!isActive && errorCount === 0 && successCount > 0 && (
+            <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+          )}
+          {!isActive && errorCount > 0 && (
+            <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />
+          )}
+        </CollapsibleTrigger>
+
+        <CollapsibleContent>
+          <div className="divide-y divide-border/30 border-t border-border/30">
+            {needsInnerCollapse && (
+              <button
+                type="button"
+                onClick={() => setShowAll(true)}
+                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+              >
+                <ChevronRight className="h-3 w-3" />
+                <span>
+                  {hiddenCount} earlier tool call{hiddenCount !== 1 ? 's' : ''}
+                  {hiddenSuccessCount > 0 && <span className="text-green-500 ml-1">({hiddenSuccessCount} passed)</span>}
+                  {hiddenErrorCount > 0 && <span className="text-red-500 ml-1">({hiddenErrorCount} failed)</span>}
+                </span>
+              </button>
+            )}
+            {showAll && completedCalls.slice(0, hiddenCount).map((call) => (
+              <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+            ))}
+            {visibleCompleted.map((call) => (
+              <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+            ))}
+            {activeCalls.map((call) => (
+              <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+            ))}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  )
+}
+
+export const AgentToolCallWrapper = memo(
+  AgentToolCallWrapperInner,
+  (prevProps, nextProps) =>
+    prevProps.provider === nextProps.provider &&
+    prevProps.isStreaming === nextProps.isStreaming &&
+    prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
+    prevProps.onOpenDiff === nextProps.onOpenDiff &&
+    areToolCallListsEqual(prevProps.calls, nextProps.calls),
+)
+AgentToolCallWrapper.displayName = 'AgentToolCallWrapper'

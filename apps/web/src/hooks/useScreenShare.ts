@@ -414,6 +414,11 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
   // ── WebSocket signaling (with auto-reconnect) ──────────────────────
   useEffect(() => {
+    // Don't open a WebSocket until the user is authenticated.
+    // Without this guard the hook reconnects every 2 s during the auth gate,
+    // causing state churn and drag-lag on Windows/Electron.
+    if (!token) return
+
     let mounted = true
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -638,9 +643,10 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
   // Register on mount, fetch initial state once (no polling — WS pushes updates)
   useEffect(() => {
+    if (!token) return
     registerDevice()
     refreshState()
-  }, [registerDevice, refreshState])
+  }, [token, registerDevice, refreshState])
 
   // Listen for Electron tray commands
   useEffect(() => {

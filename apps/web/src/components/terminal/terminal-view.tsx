@@ -14,11 +14,16 @@ export interface TerminalInfo {
   type: string
   state: string
   sessionId: string
+  workspaceRoot: string | null
   metadata: Record<string, unknown>
 }
 
 function authHeaders(token?: string | null): Record<string, string> {
   return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+function enrichTerminal(raw: TerminalInfo): TerminalInfo {
+  return { ...raw, workspaceRoot: (raw.metadata?.cwd as string) ?? raw.workspaceRoot ?? null }
 }
 
 export function useTerminals(token?: string | null) {
@@ -31,8 +36,9 @@ export function useTerminals(token?: string | null) {
         headers: authHeaders(token),
       })
       const data = (await res.json()) as { terminals: TerminalInfo[] }
-      setTerminals(data.terminals)
-      return data.terminals
+      const enriched = data.terminals.map(enrichTerminal)
+      setTerminals(enriched)
+      return enriched
     } catch {
       // gateway down
       return []
@@ -42,7 +48,7 @@ export function useTerminals(token?: string | null) {
   const creatingRef = useRef(false)
   const createTerminal = useCallback(
     async (sessionId: string, workspaceRoot?: string) => {
-      if (creatingRef.current) return terminals[0] ?? ({ id: '', type: 'terminal', state: 'idle', sessionId, metadata: {} } as TerminalInfo)
+      if (creatingRef.current) return terminals[0] ?? ({ id: '', type: 'terminal', state: 'idle', sessionId, workspaceRoot: workspaceRoot ?? null, metadata: {} } as TerminalInfo)
       creatingRef.current = true
       try {
         const res = await fetch(`${GATEWAY}/api/terminals`, {
@@ -53,7 +59,7 @@ export function useTerminals(token?: string | null) {
           },
           body: JSON.stringify({ sessionId, workspaceRoot }),
         })
-        const info = (await res.json()) as TerminalInfo
+        const info = enrichTerminal((await res.json()) as TerminalInfo)
         setTerminals((prev) => [...prev, info])
         setActiveTerminalId(info.id)
         return info

@@ -39,10 +39,6 @@ export function CliModelSelector({ provider, model, onChange, disabled, classNam
 
   useEffect(() => {
     setModels([])
-    if (provider === 'jait') {
-      setLoading(false)
-      return
-    }
 
     let cancelled = false
     setLoading(true)
@@ -63,7 +59,7 @@ export function CliModelSelector({ provider, model, onChange, disabled, classNam
   }, [provider])
 
   useEffect(() => {
-    if (provider === 'jait' || loading || models.length === 0) return
+    if (loading || models.length === 0) return
     if (model && models.some((entry) => entry.id === model)) return
 
     const defaultModel = models.find((entry) => entry.isDefault) ?? models[0] ?? null

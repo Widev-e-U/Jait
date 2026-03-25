@@ -529,6 +529,13 @@ export function useChat(
                 setTodoList(items)
               } else if (data.type === 'context_usage') {
                 setContextUsage(data as unknown as ContextUsage)
+              } else if (data.type === 'provider_fallback') {
+                // Provider was unavailable, gateway fell back to jait
+                setSessionInfo({
+                  provider: 'jait',
+                  workspacePath: '',
+                  isRemote: false,
+                })
               } else if (data.type === 'session_info') {
                 // Execution context info from the gateway
                 setSessionInfo({
@@ -882,6 +889,13 @@ export function useChat(
               setTodoList(items)
             } else if (data.type === 'context_usage') {
               setContextUsage(data as unknown as ContextUsage)
+            } else if (data.type === 'provider_fallback') {
+              // Provider was unavailable, gateway fell back to jait
+              setSessionInfo({
+                provider: 'jait',
+                workspacePath: '',
+                isRemote: false,
+              })
             } else if (data.type === 'session_info') {
               setSessionInfo({
                 provider: data.provider as string,

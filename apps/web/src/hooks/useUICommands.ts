@@ -489,6 +489,11 @@ export function useUICommands(opts: UseUICommandsOptions) {
   // ── Single, stable WS connection — only depends on token ──────────
   // Session changes are handled by re-subscribing, NOT by reconnecting.
   useEffect(() => {
+    // Don't open a WebSocket until the user is authenticated.
+    // Without this guard the hook reconnects every 1 s during the auth gate,
+    // causing state churn and drag-lag on Windows/Electron.
+    if (!token) return
+
     mountedRef.current = true
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 

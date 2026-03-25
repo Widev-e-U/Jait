@@ -25,7 +25,7 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
+import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
@@ -68,6 +68,8 @@ interface MessageProps {
   isStreaming?: boolean
   compact?: boolean
   preferLlmUi?: boolean
+  /** Active chat provider — used to wrap CLI agent tool calls in a collapsible group */
+  provider?: ProviderId
   onOpenTerminal?: (terminalId: string | null) => void
   onEditMessage?: (
     messageId: string,
@@ -416,6 +418,7 @@ function MessageInner({
   isStreaming,
   compact,
   preferLlmUi,
+  provider,
   onOpenTerminal,
   onEditMessage,
   editComposer,
@@ -730,35 +733,65 @@ function MessageInner({
 
         {!isUser && segments && segments.length > 0 ? (
           <>
-            {segments.map((seg, i) => {
-              if (seg.type === 'toolGroup') {
-                const calls = (toolCalls ?? []).filter((tc) => seg.callIds.includes(tc.callId))
-                return calls.length > 0 ? (
-                  <ToolCallGroup
-                    key={`tg-${i}`}
-                    calls={calls}
-                    onOpenTerminal={onOpenTerminal}
-                    onOpenDiff={onOpenDiff}
-                  />
-                ) : null
-              }
+            {(() => {
+              const useAgentWrapper = provider && provider !== 'jait'
+              // Collect all tool call IDs across all segments for the agent wrapper
+              const allAgentCallIds = useAgentWrapper
+                ? segments.flatMap(seg => seg.type === 'toolGroup' ? seg.callIds : [])
+                : []
+              const allAgentCalls = useAgentWrapper
+                ? (toolCalls ?? []).filter(tc => allAgentCallIds.includes(tc.callId))
+                : []
+              let agentWrapperRendered = false
 
-              return seg.content.trim() ? (
-                <AIMessageContent
-                  key={`ts-${i}`}
-                  data-message-from="assistant"
-                  className="max-w-full bg-card/78"
-                >
-                  <AssistantMarkdown
-                    content={seg.content}
-                    compact={compact}
-                    isStreaming={!!isStreaming && i === segments.length - 1}
-                    preferLlmUi={preferLlmUi}
-                    onOpenPath={onOpenPath}
-                  />
-                </AIMessageContent>
-              ) : null
-            })}
+              return segments.map((seg, i) => {
+                if (seg.type === 'toolGroup') {
+                  if (useAgentWrapper) {
+                    // Render the agent wrapper at the position of the first tool group
+                    if (agentWrapperRendered) return null
+                    agentWrapperRendered = true
+                    return allAgentCalls.length > 0 ? (
+                      <AgentToolCallWrapper
+                        key="agent-wrapper"
+                        provider={provider}
+                        calls={allAgentCalls}
+                        isStreaming={isStreaming}
+                        onOpenTerminal={onOpenTerminal}
+                        onOpenDiff={onOpenDiff}
+                      />
+                    ) : null
+                  }
+                  const calls = (toolCalls ?? []).filter((tc) => seg.callIds.includes(tc.callId))
+                  // Collapse completed tool groups that are followed by text
+                  const followedByText = segments!.slice(i + 1).some(s => s.type === 'text' && s.content.trim())
+                  return calls.length > 0 ? (
+                    <ToolCallGroup
+                      key={`tg-${i}`}
+                      calls={calls}
+                      collapsible={followedByText}
+                      onOpenTerminal={onOpenTerminal}
+                      onOpenDiff={onOpenDiff}
+                    />
+                  ) : null
+                }
+
+                return seg.content.trim() ? (
+                  <AIMessageContent
+                    key={`ts-${i}`}
+                    data-message-from="assistant"
+                    className="max-w-full bg-card/78"
+                  >
+                    <AssistantMarkdown
+                      content={seg.content}
+                      compact={compact}
+                      isStreaming={!!isStreaming && i === segments.length - 1}
+                      preferLlmUi={preferLlmUi}
+                      onOpenPath={onOpenPath}
+                    />
+                  </AIMessageContent>
+                ) : null
+              })
+            })()}
 
             {isStreaming && !content && !segments.some((s) => s.type === 'text' && s.content.trim()) && (
               <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
@@ -771,7 +804,17 @@ function MessageInner({
         ) : (
           <>
             {toolCalls && toolCalls.length > 0 && (
-              <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+              provider && provider !== 'jait' ? (
+                <AgentToolCallWrapper
+                  provider={provider}
+                  calls={toolCalls}
+                  isStreaming={isStreaming}
+                  onOpenTerminal={onOpenTerminal}
+                  onOpenDiff={onOpenDiff}
+                />
+              ) : (
+                <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+              )
             )}
 
             {content ? (
