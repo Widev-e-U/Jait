@@ -1525,7 +1525,7 @@ export function registerChatRoutes(
         if (result.plan) {
           sessionPlans.set(sessionId, result.plan);
         }
-      } else {
+      } else if (!usedCliProvider) {
         // ══ Ollama (text only — no tool support) ═══════════════════
         fullContent = await runOllamaStream(
           config, history, sessionId, streamAbort, safeWrite, app,
