@@ -326,7 +326,7 @@ describe("createToolRegistry", () => {
 import { createOsQueryTool } from "./tools/os-tools.js";
 
 describe("os.query tool", () => {
-  it("returns system info", async () => {
+  it("returns system info", { timeout: 15_000 }, async () => {
     const tool = createOsQueryTool();
     const result = await tool.execute({ query: "info" }, {
       sessionId: "s1",

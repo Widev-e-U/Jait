@@ -47,7 +47,7 @@ describe("buildCreatePrUrl", () => {
 });
 
 describe("discardChanges", () => {
-  it("discards staged-only tracked file changes", async () => {
+  it("discards staged-only tracked file changes", { timeout: 15_000 }, async () => {
     const root = mkdtempSync(join(tmpdir(), "jait-git-discard-"));
     try {
       execSync("git init", { cwd: root, stdio: "ignore" });

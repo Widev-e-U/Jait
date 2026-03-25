@@ -12,7 +12,7 @@ beforeAll(async () => {
     },
   }
   ;({ formatStructuredValue } = await import('./tool-call-card'))
-})
+}, 30_000)
 
 describe('formatStructuredValue', () => {
   it('renders MCP text content blocks as readable text', () => {

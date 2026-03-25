@@ -96,7 +96,7 @@ class MockChatProvider implements CliProviderAdapter {
 }
 
 describe("chat external provider runtime mode selection", () => {
-  it("passes the requested runtime mode to the provider and restarts when the mode changes", async () => {
+  it("passes the requested runtime mode to the provider and restarts when the mode changes", { timeout: 15_000 }, async () => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(provider);

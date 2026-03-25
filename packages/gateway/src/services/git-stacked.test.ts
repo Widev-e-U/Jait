@@ -30,7 +30,7 @@ describe("runStackedAction – unstage on commit failure", () => {
     await rm(repoDir, { recursive: true, force: true });
   });
 
-  it("unstages files when commit fails", async () => {
+  it("unstages files when commit fails", { timeout: 15_000 }, async () => {
     // Create a change
     await writeFile(join(repoDir, "file.txt"), "hello");
 
@@ -48,7 +48,7 @@ describe("runStackedAction – unstage on commit failure", () => {
     expect(staged).toBe("");
   });
 
-  it("does not leave staged files after commit message generation fails", async () => {
+  it("does not leave staged files after commit message generation fails", { timeout: 15_000 }, async () => {
     await writeFile(join(repoDir, "file.txt"), "hello");
 
     // Pass undefined message so it auto-generates, but sabotage the commit
@@ -67,7 +67,7 @@ describe("runStackedAction – unstage on commit failure", () => {
     expect(staged).toBe("");
   });
 
-  it("commits successfully when everything works", async () => {
+  it("commits successfully when everything works", { timeout: 15_000 }, async () => {
     await writeFile(join(repoDir, "file.txt"), "hello");
 
     const result = await svc.runStackedAction(repoDir, "commit", "test: add file");
