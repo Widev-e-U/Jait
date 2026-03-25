@@ -1,6 +1,6 @@
 {
   "name": "@jait/screen-share",
-  "version": "0.1.22",
+  "version": "0.1.23",
   "description": "Screen-share service for Jait gateway",
   "author": "JakobWl",
   "type": "module",
