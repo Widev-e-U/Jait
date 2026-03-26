@@ -204,12 +204,14 @@ export function useChat(
   const abortControllerRef = useRef<AbortController | null>(null)
   const prevSessionIdRef = useRef<string | null>(null)
   const streamAbortRef = useRef<AbortController | null>(null)
+  const directStreamSessionRef = useRef<string | null>(null)
   const requestVersionRef = useRef(0)
   const restartInFlightRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   const resumeSessionStream = useCallback(() => {
     if (!sessionId) return
+    if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
     prevSessionIdRef.current = null
     setRefreshTrigger(n => n + 1)
   }, [sessionId])
@@ -219,9 +221,6 @@ export function useChat(
     if (sessionId === prevSessionIdRef.current) return
     requestVersionRef.current += 1
     prevSessionIdRef.current = sessionId
-
-    // Don't abort the in-flight chat request — let the gateway finish processing.
-    abortControllerRef.current = null
 
     // Abort any previous stream-resume connection
     if (streamAbortRef.current) {
@@ -662,6 +661,11 @@ export function useChat(
 
     const controller = new AbortController()
     abortControllerRef.current = controller
+    directStreamSessionRef.current = requestSessionId
+    if (streamAbortRef.current) {
+      streamAbortRef.current.abort()
+      streamAbortRef.current = null
+    }
     const requestVersion = ++requestVersionRef.current
 
     // Guard: only update state if we're still on the same session
@@ -956,6 +960,8 @@ export function useChat(
                       ),
                         }))
               }
+              if (abortControllerRef.current === controller) abortControllerRef.current = null
+              if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
               setCompletionCount((prev) => prev + 1)
               return 'sent'
             } else if (data.type === 'error') {
@@ -975,6 +981,8 @@ export function useChat(
       }
       pendingMessageUpdates = null
       if (error instanceof Error && error.name === 'AbortError') {
+        if (abortControllerRef.current === controller) abortControllerRef.current = null
+        if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
         if (!isStale()) {
           setState(prev => ({
             ...prev,
@@ -1000,6 +1008,8 @@ export function useChat(
         }
         return 'aborted'
       }
+      if (abortControllerRef.current === controller) abortControllerRef.current = null
+      if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
       if (!isStale()) {
         const transientConnectionError = isTransientConnectionError(error)
         setState(prev => ({
@@ -1022,6 +1032,8 @@ export function useChat(
       }
       return 'retry'
     }
+    if (abortControllerRef.current === controller) abortControllerRef.current = null
+    if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
     return 'sent'
   }, [authToken, onLoginRequired, sessionId])
 
@@ -1082,6 +1094,7 @@ export function useChat(
   useEffect(() => {
     const resumeActiveStreamIfNeeded = () => {
       if (!sessionId || state.isLoadingHistory || !state.isLoading) return
+      if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
       resumeSessionStream()
     }
 
@@ -1100,6 +1113,7 @@ export function useChat(
 
     const resumeActiveStreamIfNeeded = () => {
       if (!sessionId || state.isLoadingHistory || !state.isLoading) return
+      if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
       resumeSessionStream()
     }
 
@@ -1234,6 +1248,8 @@ export function useChat(
     }
     // 2. Abort the direct chat POST (if we're the originating tab)
     abortControllerRef.current?.abort()
+    abortControllerRef.current = null
+    directStreamSessionRef.current = null
     // 3. Abort the stream-resume SSE connection
     streamAbortRef.current?.abort()
     streamAbortRef.current = null
