@@ -1010,6 +1010,28 @@ interface ToolCallCardProps {
   onOpenDiff?: (filePath: string) => void
 }
 
+function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
+  return bodyKind === 'browserScreenshot'
+}
+
+export function isInlineToolCall(call: ToolCallInfo): boolean {
+  const normalizedTool = normalizeTool(call.tool)
+  const resultData = call.result?.data && typeof call.result.data === 'object'
+    ? call.result.data as Record<string, unknown>
+    : undefined
+  const normalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
+  const screenshotPath = getToolImagePath(normalizedTool, normalizedArgs, resultData, call.result?.message)
+
+  return isInlineToolBodyKind(getToolCallBodyKind({
+    tool: normalizedTool,
+    args: normalizedArgs,
+    status: call.status,
+    displayOutput: formatOutput(call.result, normalizedTool) || call.streamingOutput || '',
+    snapshotText: typeof resultData?.snapshot === 'string' ? resultData.snapshot : null,
+    screenshotPath,
+  }))
+}
+
 function FileSummaryButton({
   path,
   onOpenDiff,
@@ -1056,7 +1078,8 @@ function FileSummaryButton({
 }
 
 function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardProps) {
-  const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending')
+  const initialInline = isInlineToolCall(call)
+  const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
   const [now, setNow] = useState(() => Date.now())
   const prevStatusRef = useRef(call.status)
   const normalizedTool = normalizeTool(call.tool)
@@ -1091,9 +1114,10 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
     snapshotText,
     screenshotPath,
   })
+  const inlineBody = isInlineToolBodyKind(bodyKind)
   const hasExpandableContent = bodyKind === 'terminal'
     ? true
-    : bodyKind !== 'none'
+    : bodyKind !== 'none' && !inlineBody
 
   const StatusIcon = call.status === 'pending'
     ? Loader2
@@ -1113,14 +1137,19 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
 
   useEffect(() => {
     const prevStatus = prevStatusRef.current
-    if ((prevStatus === 'running' || prevStatus === 'pending') && call.status !== 'running' && call.status !== 'pending') {
+    if (
+      !inlineBody
+      && (prevStatus === 'running' || prevStatus === 'pending')
+      && call.status !== 'running'
+      && call.status !== 'pending'
+    ) {
       setOpen(false)
     }
-    if (call.status === 'pending' || call.status === 'running') {
+    if (call.status === 'pending' || call.status === 'running' || inlineBody) {
       setOpen(true)
     }
     prevStatusRef.current = call.status
-  }, [call.status])
+  }, [call.status, inlineBody])
 
   useEffect(() => {
     if (
@@ -1352,6 +1381,11 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
           </div>
         </CollapsibleContent>
       )}
+      {inlineBody && (
+        <div className="ml-[3.25rem] mr-3 mb-2">
+          {bodyContent}
+        </div>
+      )}
     </Collapsible>
   )
 }
@@ -1381,6 +1415,7 @@ const MAX_VISIBLE_COMPLETED = 6
 
 export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], collapsible?: boolean): boolean {
   if (!collapsible) return false
+  if (calls.some(isInlineToolCall)) return false
   const completedCalls = calls.filter(c => c.status !== 'running' && c.status !== 'pending')
   return completedCalls.length >= MIN_CALLS_TO_COLLAPSE && completedCalls.length === calls.length
 }

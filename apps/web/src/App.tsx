@@ -3785,7 +3785,7 @@ function App() {
         {!requiresAuthGate && (
           <>
             <header
-              className={`relative flex items-center gap-1 border-b bg-background px-2 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
+              className={`relative flex h-[35px] items-center gap-1 border-b bg-background px-2 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? '!pl-[0.8rem]' : ''}`}
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
@@ -3856,8 +3856,6 @@ function App() {
 
           {/* Right: Context + Model + Account */}
           <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            {/* Desktop status items — hidden on mobile */}
-            <div className="hidden md:flex items-center gap-1 sm:gap-1.5">
             {currentView === 'chat' && activeManagerThreads.length > 0 && (
               <ManagerActiveThreadsMenu
                 threads={activeManagerThreads}
@@ -3872,6 +3870,8 @@ function App() {
                 onStopThread={(threadId) => automation.handleStop(threadId)}
               />
             )}
+            {/* Desktop status items — hidden on mobile */}
+            <div className="hidden md:flex items-center gap-1 sm:gap-1.5">
             {screenShare.isActive && (
               <span className="ui-pill shrink-0">
                 <Cast className="h-3 w-3 text-green-500 animate-pulse" />
@@ -4037,13 +4037,13 @@ function App() {
               <div className="flex items-center ml-2 -mr-2">
                 <button
                   onClick={() => (window as any).jaitDesktop.windowMinimize()}
-                  className="flex items-center justify-center h-9 w-11 hover:bg-muted/80 transition-colors"
+                  className="flex h-[35px] w-11 items-center justify-center hover:bg-muted/80 transition-colors"
                 >
                   <Minus className="h-4 w-4" />
                 </button>
                 <button
                   onClick={() => (window as any).jaitDesktop.windowMaximize()}
-                  className="flex items-center justify-center h-9 w-11 hover:bg-muted/80 transition-colors"
+                  className="flex h-[35px] w-11 items-center justify-center hover:bg-muted/80 transition-colors"
                 >
                   {isMaximized
                     ? <svg width="10" height="10" viewBox="0 0 10 10" className="fill-current"><path d="M2 0v2H0v8h8V8h2V0zm5 7H1V3h6zM9 1v6H8V2H3V1z"/></svg>
@@ -4052,7 +4052,7 @@ function App() {
                 </button>
                 <button
                   onClick={() => (window as any).jaitDesktop.windowClose()}
-                  className="flex items-center justify-center h-9 w-11 hover:bg-red-600 hover:text-white transition-colors"
+                  className="flex h-[35px] w-11 items-center justify-center hover:bg-red-600 hover:text-white transition-colors"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -4830,18 +4830,6 @@ function App() {
                 onAnimationEnd={() => setDeveloperAnimPhase('idle')}
               >
                 <div className="w-full max-w-3xl space-y-8">
-                  {viewMode === 'developer' && (
-                    <div className="flex items-center justify-center">
-                      <SessionSwitcher
-                        sessions={activeWorkspaceSessions}
-                        activeSessionId={activeSessionId}
-                        workspaceTitle={activeWorkspaceRecord?.title ?? null}
-                        onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
-                        onNewSession={() => { void createSession() }}
-                        onOpenChange={handleSessionSwitcherOpen}
-                      />
-                    </div>
-                  )}
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
                     <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
@@ -4901,6 +4889,20 @@ function App() {
                     sessionInfo={sessionInfo}
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
+                  {viewMode === 'developer' && (
+                    <div className="flex items-center justify-start px-1">
+                      <SessionSwitcher
+                        sessions={activeWorkspaceSessions}
+                        activeSessionId={activeSessionId}
+                        workspaceTitle={activeWorkspaceRecord?.title ?? null}
+                        onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                        onNewSession={() => { void createSession() }}
+                        onOpenChange={handleSessionSwitcherOpen}
+                        showTitle={false}
+                        triggerLabel="History"
+                      />
+                    </div>
+                  )}
                 </div>
               </div>
             ) : (
@@ -4939,23 +4941,6 @@ function App() {
                         <TooltipContent side="bottom">Show editor</TooltipContent>
                       </Tooltip>
                     )}
-                  </div>
-                )}
-                {viewMode === 'developer' && (
-                  <div className="shrink-0 border-b bg-background/70 px-4 py-2">
-                    <div className="mx-auto flex w-full max-w-3xl items-center justify-between gap-2">
-                      <SessionSwitcher
-                        sessions={activeWorkspaceSessions}
-                        activeSessionId={activeSessionId}
-                        workspaceTitle={activeWorkspaceRecord?.title ?? null}
-                        onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
-                        onNewSession={() => { void createSession() }}
-                        onOpenChange={handleSessionSwitcherOpen}
-                      />
-                      {activeSessionRecord?.status === 'archived' && (
-                        <span className="truncate text-[11px] text-muted-foreground">archived session</span>
-                      )}
-                    </div>
                   </div>
                 )}
                 <Conversation
@@ -5132,6 +5117,18 @@ function App() {
                     />
                     <div className="flex items-center justify-between gap-2 px-1">
                       <div className="flex items-center gap-2 min-w-0">
+                        {viewMode === 'developer' && (
+                          <SessionSwitcher
+                            sessions={activeWorkspaceSessions}
+                            activeSessionId={activeSessionId}
+                            workspaceTitle={activeWorkspaceRecord?.title ?? null}
+                            onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                            onNewSession={() => { void createSession() }}
+                            onOpenChange={handleSessionSwitcherOpen}
+                            showTitle={false}
+                            triggerLabel="History"
+                          />
+                        )}
                         <button onClick={() => {
                           clearMessages()
                           if (!activeWorkspaceId) {

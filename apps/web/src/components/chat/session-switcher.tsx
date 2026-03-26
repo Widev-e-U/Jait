@@ -16,6 +16,8 @@ interface SessionSwitcherProps {
   onSelectSession: (sessionId: string) => void
   onNewSession: () => void
   onOpenChange?: (open: boolean) => void
+  showTitle?: boolean
+  triggerLabel?: string | null
 }
 
 function formatTime(iso: string) {
@@ -35,6 +37,8 @@ export function SessionSwitcher({
   onSelectSession,
   onNewSession,
   onOpenChange,
+  showTitle = true,
+  triggerLabel = null,
 }: SessionSwitcherProps) {
   const [open, setOpen] = useState(false)
   const activeSession = sessions.find((s) => s.id === activeSessionId) ?? sessions[0] ?? null
@@ -45,11 +49,16 @@ export function SessionSwitcher({
   }
 
   return (
-    <div className="flex min-w-0 flex-1 items-center justify-between gap-1.5">
-      {/* Title */}
-      <span className="min-w-0 truncate text-sm font-semibold leading-tight">
-        {activeSession?.name && activeSession.name !== 'New Chat' ? activeSession.name : ''}
-      </span>
+    <div className={showTitle
+      ? 'flex min-w-0 flex-1 items-center justify-between gap-1.5'
+      : 'flex items-center gap-1.5'}>
+      {showTitle ? (
+        <span className="min-w-0 truncate text-sm font-semibold leading-tight">
+          {activeSession?.name && activeSession.name !== 'New Chat' ? activeSession.name : ''}
+        </span>
+      ) : (
+        null
+      )}
 
       {/* Sessions button */}
       <DropdownMenu open={open} onOpenChange={handleOpenChange}>
@@ -58,14 +67,17 @@ export function SessionSwitcher({
             <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon"
-                className="h-6 w-6 shrink-0 rounded-md text-muted-foreground hover:text-foreground"
+                size={triggerLabel ? 'sm' : 'icon'}
+                className={triggerLabel
+                  ? 'h-7 shrink-0 rounded-md px-2 text-xs text-muted-foreground hover:text-foreground'
+                  : 'h-6 w-6 shrink-0 rounded-md text-muted-foreground hover:text-foreground'}
               >
                 <History className="h-3.5 w-3.5" />
+                {triggerLabel ? <span>{triggerLabel}</span> : null}
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent side="bottom">Sessions</TooltipContent>
+          <TooltipContent side="bottom">{triggerLabel ?? 'Sessions'}</TooltipContent>
         </Tooltip>
 
         <DropdownMenuContent align="start" className="w-[min(28rem,calc(100vw-1rem))] p-0">

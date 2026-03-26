@@ -116,7 +116,6 @@ interface MessageProps {
   onOpenDiff?: (filePath: string) => void
 }
 
-const USER_MESSAGE_MIN_WIDTH_CLASS = 'min-w-[min(20rem,calc(100vw-5rem))]'
 const CODE_HTML_MATCHER = /<pre[^>]*><code>([\s\S]*)<\/code><\/pre>/
 
 function ThinkingDots() {
@@ -886,7 +885,7 @@ function MessageInner({
                     </div>
                   </div>
                 ) : (
-                  <div className={cn('relative w-fit max-w-full', USER_MESSAGE_MIN_WIDTH_CLASS)}>
+                  <div className="relative w-fit max-w-full">
                     <AIMessageContent
                       ref={userBubbleRef}
                       data-message-from="user"

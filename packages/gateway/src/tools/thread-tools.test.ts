@@ -150,6 +150,86 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("ignores model-supplied provider choices and uses the user's selected provider", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const users = new UserService(db);
+      const user = users.createUser("thread-user", "secret");
+      users.updateSettings(user.id, { chatProvider: "codex" });
+
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("claude-code"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService: users,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Ignore model provider",
+          providerId: "claude-code",
+          start: true,
+          message: "inspect ui",
+        },
+        makeContext(user.id),
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { providerId: string } };
+      expect(data.thread.providerId).toBe("codex");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("re-resolves the provider from user settings when starting an existing thread", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const users = new UserService(db);
+      const user = users.createUser("thread-user", "secret");
+      users.updateSettings(user.id, { chatProvider: "codex" });
+
+      const threadService = new ThreadService(db);
+      const thread = threadService.create({
+        userId: user.id,
+        title: "Restart with selected provider",
+        providerId: "jait",
+      });
+
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("jait"));
+
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService: users,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "start",
+          threadId: thread.id,
+          message: "inspect ui",
+        },
+        makeContext(user.id),
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
+      expect(data.thread.providerId).toBe("codex");
+      expect(data.thread.providerSessionId).toBe("mock-session-1");
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("creates multiple threads in one call", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -183,6 +263,44 @@ describe("thread.control tool", () => {
       expect(data.threads).toHaveLength(2);
       expect(data.threads.map((t) => t.title)).toContain("Thread A");
       expect(data.threads.map((t) => t.title)).toContain("Thread B");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("uses the user's selected provider for create_many threads", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const users = new UserService(db);
+      const user = users.createUser("thread-user", "secret");
+      users.updateSettings(user.id, { chatProvider: "codex" });
+
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("claude-code"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService: users,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create_many",
+          threads: [
+            { title: "Thread A", providerId: "claude-code" },
+            { title: "Thread B", providerId: "jait" },
+          ],
+        },
+        makeContext(user.id),
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { threads: Array<{ providerId: string }> };
+      expect(data.threads).toHaveLength(2);
+      expect(data.threads.every((thread) => thread.providerId === "codex")).toBe(true);
     } finally {
       sqlite.close();
     }

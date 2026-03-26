@@ -108,14 +108,19 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     return userId || "system";
   };
 
-  const resolveProviderId = (requestedProviderId: ProviderId | undefined, userId: string): ProviderId => {
-    if (requestedProviderId) return requestedProviderId;
+  const resolveProviderId = (
+    requestedProviderId: ProviderId | undefined,
+    userId: string,
+    fallbackProviderId?: ProviderId,
+  ): ProviderId => {
     if (userId !== "system" && deps.userService) {
       const selectedProvider = deps.userService.getSettings(userId).chatProvider;
       if (deps.providerRegistry.get(selectedProvider)) {
         return selectedProvider;
       }
     }
+    if (requestedProviderId && deps.providerRegistry.get(requestedProviderId)) return requestedProviderId;
+    if (fallbackProviderId && deps.providerRegistry.get(fallbackProviderId)) return fallbackProviderId;
     return "jait";
   };
 
@@ -128,6 +133,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
   const startThread = async (
     thread: ThreadRow,
+    userId: string,
     message?: string,
     attachments?: string[],
   ): Promise<StartThreadResult> => {
@@ -135,14 +141,23 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       return { ok: false, message: "Thread is already running" };
     }
 
-    const provider = deps.providerRegistry.get(thread.providerId as ProviderId);
+    const effectiveProviderId = resolveProviderId(
+      undefined,
+      userId,
+      thread.providerId as ProviderId | undefined,
+    );
+    const effectiveThread = effectiveProviderId !== thread.providerId
+      ? (deps.threadService.update(thread.id, { providerId: effectiveProviderId }) ?? thread)
+      : thread;
+
+    const provider = deps.providerRegistry.get(effectiveProviderId);
     if (!provider) {
-      return { ok: false, message: `Provider '${thread.providerId}' not found` };
+      return { ok: false, message: `Provider '${effectiveProviderId}' not found` };
     }
 
     const available = await provider.checkAvailability();
     if (!available) {
-      return { ok: false, message: `Provider '${thread.providerId}' is not available: ${provider.info.unavailableReason ?? "unknown reason"}` };
+      return { ok: false, message: `Provider '${effectiveProviderId}' is not available: ${provider.info.unavailableReason ?? "unknown reason"}` };
     }
 
     const mcpServers = deps.mcpConfig
@@ -151,10 +166,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
     try {
       const session = await provider.startSession({
-        threadId: thread.id,
-        workingDirectory: thread.workingDirectory ?? process.cwd(),
-        mode: (thread.runtimeMode as "full-access" | "supervised") ?? "full-access",
-        model: thread.model ?? undefined,
+        threadId: effectiveThread.id,
+        workingDirectory: effectiveThread.workingDirectory ?? process.cwd(),
+        mode: (effectiveThread.runtimeMode as "full-access" | "supervised") ?? "full-access",
+        model: effectiveThread.model ?? undefined,
         mcpServers,
       });
 
@@ -163,44 +178,44 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           return;
         }
 
-        const activity = deps.threadService.logProviderEvent(thread.id, event);
+        const activity = deps.threadService.logProviderEvent(effectiveThread.id, event);
         if (activity) {
-          broadcastThreadEvent(thread.id, "activity", { event, activity });
+          broadcastThreadEvent(effectiveThread.id, "activity", { event, activity });
         }
 
         if (event.type === "session.completed") {
-          deps.threadService.markCompleted(thread.id);
-          broadcastThreadEvent(thread.id, "status", { status: "completed" });
+          deps.threadService.markCompleted(effectiveThread.id);
+          broadcastThreadEvent(effectiveThread.id, "status", { status: "completed" });
           unsubscribe();
         } else if (event.type === "session.error") {
-          deps.threadService.markError(thread.id, event.error);
-          broadcastThreadEvent(thread.id, "status", { status: "error", error: event.error });
+          deps.threadService.markError(effectiveThread.id, event.error);
+          broadcastThreadEvent(effectiveThread.id, "status", { status: "error", error: event.error });
           unsubscribe();
         } else if (event.type === "turn.started") {
           // Re-assert running when a new turn begins
-          const cur = deps.threadService.getById(thread.id);
+          const cur = deps.threadService.getById(effectiveThread.id);
           if (cur && cur.status !== "running") {
-            deps.threadService.update(thread.id, { status: "running", error: null });
-            broadcastThreadEvent(thread.id, "status", { status: "running" });
+            deps.threadService.update(effectiveThread.id, { status: "running", error: null });
+            broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
           }
         }
       });
 
-      deps.threadService.markRunning(thread.id, session.id);
-      broadcastThreadEvent(thread.id, "status", { status: "running" });
+      deps.threadService.markRunning(effectiveThread.id, session.id);
+      broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
 
       if (message) {
-        const userActivity = deps.threadService.addActivity(thread.id, "message", message.slice(0, 500), { role: "user" });
-        broadcastThreadEvent(thread.id, "activity", { activity: userActivity });
+        const userActivity = deps.threadService.addActivity(effectiveThread.id, "message", message.slice(0, 500), { role: "user" });
+        broadcastThreadEvent(effectiveThread.id, "activity", { activity: userActivity });
         await provider.sendTurn(session.id, message, attachments);
       }
 
-      const updated = deps.threadService.getById(thread.id) ?? thread;
+      const updated = deps.threadService.getById(effectiveThread.id) ?? effectiveThread;
       return { ok: true, message: "Thread started", thread: updated };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
-      deps.threadService.markError(thread.id, errorMessage);
-      broadcastThreadEvent(thread.id, "status", { status: "error", error: errorMessage });
+      deps.threadService.markError(effectiveThread.id, errorMessage);
+      broadcastThreadEvent(effectiveThread.id, "status", { status: "error", error: errorMessage });
       return { ok: false, message: errorMessage };
     }
   };
@@ -332,7 +347,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: true, message: "Thread created", data: { thread } };
             }
 
-            const started = await startThread(thread, input.message, input.attachments);
+            const started = await startThread(thread, userId, input.message, input.attachments);
             if (!started.ok) {
               return {
                 ok: false,
@@ -359,7 +374,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 userId,
                 sessionId: spec.sessionId ?? input.sessionId,
                 title: spec.title?.trim() || "New Thread",
-                providerId: spec.providerId ?? defaultProviderId,
+                  providerId: resolveProviderId(spec.providerId, userId, defaultProviderId),
                 model: spec.model ?? input.model,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? "full-access",
                 kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
@@ -375,6 +390,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               startTargets.map(async ({ thread, spec }) => {
                 const started = await startThread(
                   thread,
+                  userId,
                   spec.message ?? input.message,
                   spec.attachments ?? input.attachments,
                 );
@@ -464,7 +480,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!input.threadId) return { ok: false, message: "start requires `threadId`." };
             const thread = getAccessibleThread(input.threadId, userId);
             if (!thread) return { ok: false, message: "Thread not found." };
-            const started = await startThread(thread, input.message, input.attachments);
+            const started = await startThread(thread, userId, input.message, input.attachments);
             return {
               ok: started.ok,
               message: started.message,

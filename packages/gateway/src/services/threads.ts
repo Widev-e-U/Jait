@@ -39,6 +39,7 @@ export interface CreateThreadParams {
 
 export interface UpdateThreadParams {
   title?: string;
+  providerId?: ProviderId;
   model?: string;
   runtimeMode?: RuntimeMode;
   kind?: "delivery" | "delegation";
