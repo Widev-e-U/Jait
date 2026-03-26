@@ -190,7 +190,7 @@ describe("mcp-server", () => {
 
   it("passes session and workspace overrides into MCP tool context", async () => {
     const registry = new ToolRegistry();
-    let capturedContext: { sessionId: string; workspaceRoot: string } | null = null;
+    let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
 
     registry.register({
       name: "surfaces.list",
@@ -203,6 +203,7 @@ describe("mcp-server", () => {
         capturedContext = {
           sessionId: context.sessionId,
           workspaceRoot: context.workspaceRoot,
+          userId: context.userId,
         };
         return { ok: true, message: "ok" };
       },
@@ -237,6 +238,7 @@ describe("mcp-server", () => {
     expect(capturedContext).toEqual({
       sessionId: "web-session-123",
       workspaceRoot: "/tmp/project",
+      userId: undefined,
     });
   });
 
@@ -294,7 +296,7 @@ describe("mcp-server", () => {
       workspacePath: "/tmp/current-workspace",
     });
     const token = await signAuthToken({ id: userId, username: "jakob" }, "test-secret");
-    let capturedContext: { sessionId: string; workspaceRoot: string } | null = null;
+    let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
 
     registry.register({
       name: "surfaces.start",
@@ -313,6 +315,7 @@ describe("mcp-server", () => {
         capturedContext = {
           sessionId: context.sessionId,
           workspaceRoot: context.workspaceRoot,
+          userId: context.userId,
         };
         return { ok: true, message: "ok" };
       },
@@ -352,12 +355,14 @@ describe("mcp-server", () => {
     expect(capturedContext).toEqual({
       sessionId: session.id,
       workspaceRoot: "/tmp/current-workspace",
+      userId,
     });
   });
 
-  it("uses MCP URL query params as tool context overrides", async () => {
+  it("passes the authenticated user into MCP tool context when a session override is provided", async () => {
     const registry = new ToolRegistry();
-    let capturedContext: { sessionId: string; workspaceRoot: string } | null = null;
+    const token = await signAuthToken({ id: "user-456", username: "jakob" }, "test-secret");
+    let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
 
     registry.register({
       name: "surfaces.list",
@@ -370,6 +375,65 @@ describe("mcp-server", () => {
         capturedContext = {
           sessionId: context.sessionId,
           workspaceRoot: context.workspaceRoot,
+          userId: context.userId,
+        };
+        return { ok: true, message: "ok" };
+      },
+    });
+
+    const app = Fastify();
+    appsToClose.push(app);
+    registerMcpRoutes(app, {
+      toolRegistry: registry,
+      config: {
+        host: "127.0.0.1",
+        port: 3000,
+        jwtSecret: "test-secret",
+      } as any,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/mcp?sessionId=query-session&workspaceRoot=%2Ftmp%2Fquery-workspace",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${token}`,
+      },
+      payload: {
+        jsonrpc: "2.0",
+        id: 1,
+        method: "tools/call",
+        params: {
+          name: "surfaces.list",
+          arguments: {},
+        },
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(capturedContext).toEqual({
+      sessionId: "query-session",
+      workspaceRoot: "/tmp/query-workspace",
+      userId: "user-456",
+    });
+  });
+
+  it("uses MCP URL query params as tool context overrides", async () => {
+    const registry = new ToolRegistry();
+    let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
+
+    registry.register({
+      name: "surfaces.list",
+      description: "List surfaces",
+      tier: "standard",
+      category: "surfaces",
+      source: "builtin",
+      parameters: { type: "object", properties: {} },
+      async execute(_input, context) {
+        capturedContext = {
+          sessionId: context.sessionId,
+          workspaceRoot: context.workspaceRoot,
+          userId: context.userId,
         };
         return { ok: true, message: "ok" };
       },
@@ -407,6 +471,7 @@ describe("mcp-server", () => {
     expect(capturedContext).toEqual({
       sessionId: "query-session",
       workspaceRoot: "/tmp/query-workspace",
+      userId: undefined,
     });
   });
 });

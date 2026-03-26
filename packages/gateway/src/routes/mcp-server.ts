@@ -39,6 +39,7 @@ interface McpResponse {
 interface McpToolContextOverrides {
   sessionId?: string;
   workspaceRoot?: string;
+  userId?: string;
 }
 
 const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
@@ -98,19 +99,27 @@ async function resolveMcpToolContext(
   params?: Record<string, unknown>,
 ): Promise<McpToolContextOverrides> {
   const overrides = resolveMcpToolContextOverrides(request, params);
-  if (overrides.sessionId) return overrides;
-  if (!request || !sessionService) return overrides;
+  if (!request) return overrides;
 
   const token = extractBearerToken(request.headers.authorization);
   if (!token) return overrides;
   const user = await verifyAuthToken(token, config.jwtSecret);
   if (!user) return overrides;
 
+  if (overrides.sessionId) {
+    return {
+      ...overrides,
+      userId: user.id,
+    };
+  }
+  if (!sessionService) return { ...overrides, userId: user.id };
+
   const session = sessionService.lastActive(user.id);
-  if (!session?.id) return overrides;
+  if (!session?.id) return { ...overrides, userId: user.id };
   return {
     sessionId: session.id,
     workspaceRoot: overrides.workspaceRoot ?? session.workspacePath ?? undefined,
+    userId: user.id,
   };
 }
 
@@ -395,6 +404,7 @@ export async function handleMcpRequest(
         actionId: uuidv7(),
         workspaceRoot: contextOverrides.workspaceRoot ?? process.cwd(),
         requestedBy: "mcp-client",
+        userId: contextOverrides.userId,
       };
 
       try {

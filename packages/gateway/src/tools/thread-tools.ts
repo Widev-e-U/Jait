@@ -3,7 +3,6 @@ import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { ThreadRow, ThreadService } from "../services/threads.js";
-import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import { ToolName } from "./tool-names.js";
@@ -78,7 +77,6 @@ interface ThreadControlGit {
 export interface ThreadControlToolDeps {
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
-  userService?: UserService;
   ws?: WsControlPlane;
   mcpConfig?: { host: string; port: number };
   gitService?: ThreadControlGit;
@@ -139,26 +137,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
   const resolveProviderId = (
     context: ToolContext,
     requestedProviderId: unknown,
-    userId: string,
-    fallbackProviderId?: unknown,
   ): ProviderResolution => {
     const contextProvider = normalizeThreadProviderId(context.providerId);
-    const selectedProvider = userId !== "system" && deps.userService
-      ? normalizeThreadProviderId(deps.userService.getSettings(userId).chatProvider)
-      : null;
-
     const resolveRegisteredProvider = (providerId: ProviderId, label: string): ProviderResolution =>
       deps.providerRegistry.get(providerId)
         ? { providerId }
         : { error: `${label} '${providerId}' is not registered on this gateway.` };
-
-    if (contextProvider) {
-      return resolveRegisteredProvider(contextProvider, "The calling agent provider");
-    }
-
-    if (selectedProvider) {
-      return resolveRegisteredProvider(selectedProvider, "The current selected provider");
-    }
 
     if (typeof requestedProviderId === "string") {
       const requested = normalizeThreadProviderId(requestedProviderId);
@@ -167,17 +151,50 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           error: `Provider '${requestedProviderId}' is not supported for agent threads.`,
         };
       }
-      return resolveRegisteredProvider(requested, "Provider");
+      if (contextProvider && requested !== contextProvider) {
+        return {
+          error: `Requested provider '${requested}' does not match the calling agent provider '${contextProvider}'.`,
+        };
+      }
+      if (!contextProvider) {
+        return resolveRegisteredProvider(requested, "Provider");
+      }
     }
 
-    const fallback = normalizeThreadProviderId(fallbackProviderId);
-    if (fallback) {
-      return resolveRegisteredProvider(fallback, "Provider");
+    if (context.providerId && !contextProvider) {
+      return {
+        error: `Calling agent provider '${context.providerId}' is not supported for agent threads.`,
+      };
     }
 
-    return {
-      error: "No provider could be resolved for this thread.",
-    };
+    if (!contextProvider) {
+      return {
+        error: "No provider could be resolved for this thread. The calling agent must provide a supported provider, or the caller must pass an explicit providerId.",
+      };
+    }
+
+    return resolveRegisteredProvider(contextProvider, "The calling agent provider");
+  };
+
+  const resolveStoredThreadProvider = (
+    threadProviderId: unknown,
+    context: ToolContext,
+  ): ProviderResolution => {
+    const storedProvider = normalizeThreadProviderId(threadProviderId);
+    if (!storedProvider) {
+      return {
+        error: `Thread provider '${String(threadProviderId)}' is not supported for agent threads.`,
+      };
+    }
+    const contextProvider = normalizeThreadProviderId(context.providerId);
+    if (contextProvider && contextProvider !== storedProvider) {
+      return {
+        error: `Thread provider '${storedProvider}' does not match the calling agent provider '${contextProvider}'.`,
+      };
+    }
+    return deps.providerRegistry.get(storedProvider)
+      ? { providerId: storedProvider }
+      : { error: `Provider '${storedProvider}' is not registered on this gateway.` };
   };
 
   const getAccessibleThread = (threadId: string, userId: string): ThreadRow | undefined => {
@@ -198,19 +215,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       return { ok: false, message: "Thread is already running" };
     }
 
-    const resolvedProvider = resolveProviderId(
-      context,
-      undefined,
-      userId,
-      thread.providerId as ProviderId | undefined,
-    );
+    const resolvedProvider = resolveStoredThreadProvider(thread.providerId, context);
     if (!resolvedProvider.providerId) {
       return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
     }
     const effectiveProviderId = resolvedProvider.providerId;
-    const effectiveThread = effectiveProviderId !== thread.providerId
-      ? (deps.threadService.update(thread.id, { providerId: effectiveProviderId }) ?? thread)
-      : thread;
+    const effectiveThread = thread;
 
     const provider = deps.providerRegistry.get(effectiveProviderId);
     if (!provider) {
@@ -391,7 +401,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           }
 
           case "create": {
-            const resolvedProvider = resolveProviderId(context, input.providerId, userId);
+            const resolvedProvider = resolveProviderId(context, input.providerId);
             if (!resolvedProvider.providerId) {
               return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
             }
@@ -432,17 +442,9 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: false, message: "create_many requires non-empty `threads`." };
             }
 
-            const needsDefaultProvider = input.threads.some((spec) => !spec.providerId);
-            const defaultProvider = needsDefaultProvider
-              ? resolveProviderId(context, input.providerId, userId)
-              : { providerId: undefined, error: undefined };
-            if (needsDefaultProvider && !defaultProvider.providerId) {
-              return { ok: false, message: defaultProvider.error ?? "Unable to resolve a provider for these threads." };
-            }
-
             const validatedSpecs = input.threads.map((spec) => ({
               spec,
-              resolvedProvider: resolveProviderId(context, spec.providerId, userId, defaultProvider.providerId),
+              resolvedProvider: resolveProviderId(context, spec.providerId ?? input.providerId),
             }));
             const firstResolutionError = validatedSpecs.find(({ resolvedProvider }) => !resolvedProvider.providerId);
             if (firstResolutionError) {

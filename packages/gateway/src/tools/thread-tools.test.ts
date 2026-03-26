@@ -11,7 +11,6 @@ import type {
 import type { GitStepResult } from "../services/git.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { ThreadService } from "../services/threads.js";
-import { UserService } from "../services/users.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { createToolRegistry } from "./index.js";
 import { createThreadControlTool } from "./thread-tools.js";
@@ -181,32 +180,29 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("inherits the selected jait provider literally", async () => {
+  it("uses the calling jait agent provider literally", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const users = new UserService(db);
-      const user = users.createUser("thread-user", "secret");
-      users.updateSettings(user.id, { chatProvider: "jait" });
-
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
-        userService: users,
       });
 
       const result = await tool.execute(
         {
           action: "create",
           title: "Broken provider",
-          providerId: "jait",
           start: true,
           message: "inspect ui",
         },
-        makeContext(user.id),
+        {
+          ...makeContext(),
+          providerId: "jait",
+        },
       );
 
       expect(result.ok).toBe(true);
@@ -254,50 +250,10 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("defaults new threads to the user's selected provider", async () => {
+  it("rejects create when the requested provider does not match the calling agent provider", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const users = new UserService(db);
-      const user = users.createUser("thread-user", "secret");
-      users.updateSettings(user.id, { chatProvider: "codex" });
-
-      const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
-
-      const tool = createThreadControlTool({
-        threadService: new ThreadService(db),
-        providerRegistry,
-        userService: users,
-      });
-
-      const result = await tool.execute(
-        {
-          action: "create",
-          title: "Use selected provider",
-          start: true,
-          message: "inspect ui",
-        },
-        makeContext(user.id),
-      );
-
-      expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string; providerSessionId: string | null } };
-      expect(data.thread.providerId).toBe("codex");
-      expect(data.thread.providerSessionId).toBe("mock-session-1");
-    } finally {
-      sqlite.close();
-    }
-  });
-
-  it("ignores model-supplied provider choices and uses the user's selected provider", async () => {
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    try {
-      const users = new UserService(db);
-      const user = users.createUser("thread-user", "secret");
-      users.updateSettings(user.id, { chatProvider: "codex" });
-
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
       providerRegistry.register(new MockThreadProvider("claude-code"));
@@ -305,41 +261,67 @@ describe("thread.control tool", () => {
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
-        userService: users,
       });
 
       const result = await tool.execute(
         {
           action: "create",
-          title: "Ignore model provider",
+          title: "Mismatch provider",
           providerId: "claude-code",
-          start: true,
-          message: "inspect ui",
         },
-        makeContext(user.id),
+        {
+          ...makeContext(),
+          providerId: "codex",
+        },
       );
 
-      expect(result.ok).toBe(true);
-      const data = result.data as { thread: { providerId: string } };
-      expect(data.thread.providerId).toBe("codex");
+      expect(result.ok).toBe(false);
+      expect(result.message).toBe(
+        "Requested provider 'claude-code' does not match the calling agent provider 'codex'.",
+      );
     } finally {
       sqlite.close();
     }
   });
 
-  it("re-resolves the provider from user settings when starting an existing thread", async () => {
+  it("requires either the calling agent provider or an explicit provider", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const users = new UserService(db);
-      const user = users.createUser("thread-user", "secret");
-      users.updateSettings(user.id, { chatProvider: "codex" });
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
 
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Missing provider",
+        },
+        makeContext(),
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toBe(
+        "No provider could be resolved for this thread. The calling agent must provide a supported provider, or the caller must pass an explicit providerId.",
+      );
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("keeps the stored thread provider when starting an existing thread", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
       const threadService = new ThreadService(db);
       const thread = threadService.create({
-        userId: user.id,
+        userId: "user-1",
         title: "Restart with selected provider",
-        providerId: "jait",
+        providerId: "codex",
       });
 
       const providerRegistry = new ProviderRegistry();
@@ -349,7 +331,6 @@ describe("thread.control tool", () => {
       const tool = createThreadControlTool({
         threadService,
         providerRegistry,
-        userService: users,
       });
 
       const result = await tool.execute(
@@ -358,7 +339,7 @@ describe("thread.control tool", () => {
           threadId: thread.id,
           message: "inspect ui",
         },
-        makeContext(user.id),
+        makeContext("user-1"),
       );
 
       expect(result.ok).toBe(true);
@@ -412,14 +393,10 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("uses the user's selected provider for create_many threads", async () => {
+  it("defaults create_many threads to the calling agent provider", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
-      const users = new UserService(db);
-      const user = users.createUser("thread-user", "secret");
-      users.updateSettings(user.id, { chatProvider: "codex" });
-
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
       providerRegistry.register(new MockThreadProvider("claude-code"));
@@ -427,18 +404,20 @@ describe("thread.control tool", () => {
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
-        userService: users,
       });
 
       const result = await tool.execute(
         {
           action: "create_many",
           threads: [
-            { title: "Thread A", providerId: "claude-code" },
-            { title: "Thread B", providerId: "jait" },
+            { title: "Thread A" },
+            { title: "Thread B" },
           ],
         },
-        makeContext(user.id),
+        {
+          ...makeContext(),
+          providerId: "codex",
+        },
       );
 
       expect(result.ok).toBe(true);
@@ -575,3 +554,38 @@ describe("thread.control tool", () => {
     }
   });
 });
+  it("rejects create_many when any thread provider mismatches the calling agent provider", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("claude-code"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create_many",
+          threads: [
+            { title: "Thread A" },
+            { title: "Thread B", providerId: "claude-code" },
+          ],
+        },
+        {
+          ...makeContext(),
+          providerId: "codex",
+        },
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toBe(
+        "Requested provider 'claude-code' does not match the calling agent provider 'codex'.",
+      );
+    } finally {
+      sqlite.close();
+    }
+  });
