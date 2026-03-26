@@ -69,7 +69,7 @@ export interface GitForge {
 // ── Helpers ──────────────────────────────────────────────────────────
 
 function cleanGhEnv(): NodeJS.ProcessEnv {
-  const { GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
+  const { GH_REPO, GH_HOST, GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
   return rest;
 }
 
@@ -93,6 +93,10 @@ function apiHeaders(token: string, extra?: Record<string, string>): Record<strin
     "User-Agent": "jait-gateway",
     ...extra,
   };
+}
+
+function buildGhRepoFlag(remote: ParsedRemote): string {
+  return remote.owner ? ` --repo "${remote.owner}/${remote.repo}"` : "";
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -162,7 +166,7 @@ export class GitHubForge implements GitForge {
 
   async getDefaultBranch(cwd: string, _remote: ParsedRemote): Promise<string | null> {
     try {
-      const json = await cliExec("gh repo view --json defaultBranchRef", cwd, 15_000, cleanGhEnv());
+      const json = await cliExec(`gh repo view${buildGhRepoFlag(_remote)} --json defaultBranchRef`, cwd, 15_000, cleanGhEnv());
       const parsed = JSON.parse(json) as Record<string, unknown>;
       const ref = parsed.defaultBranchRef as Record<string, unknown> | undefined;
       if (ref?.name) return String(ref.name);
@@ -175,7 +179,7 @@ export class GitHubForge implements GitForge {
     if (await this.checkCliAvailable(cwd)) {
       try {
         const raw = await cliExec(
-          `gh pr view --head "${headBranch}" --json number,url,title,state,baseRefName,headRefName`,
+          `gh pr view --head "${headBranch}"${buildGhRepoFlag(remote)} --json number,url,title,state,baseRefName,headRefName`,
           cwd, 15_000, cleanGhEnv(),
         );
         const parsed = JSON.parse(raw) as Record<string, unknown>;
@@ -204,7 +208,7 @@ export class GitHubForge implements GitForge {
   async createPr(cwd: string, remote: ParsedRemote, input: ForgePrInput, token?: string): Promise<ForgePrResult> {
     // Try gh CLI first
     if (await this.checkCliAvailable(cwd)) {
-      return this.createPrViaCli(cwd, input);
+      return this.createPrViaCli(cwd, remote, input);
     }
 
     // Fall back to API
@@ -230,13 +234,13 @@ export class GitHubForge implements GitForge {
     return `${remote.normalizedUrl}/compare/${encodeURIComponent(headBranch)}?expand=1`;
   }
 
-  private async createPrViaCli(cwd: string, input: ForgePrInput): Promise<ForgePrResult> {
+  private async createPrViaCli(cwd: string, remote: ParsedRemote, input: ForgePrInput): Promise<ForgePrResult> {
     const bodyFile = join(tmpdir(), `jait-pr-body-${Date.now()}.md`);
     await writeFile(bodyFile, input.body, "utf-8");
     try {
       const baseFlag = input.baseBranch ? ` --base "${input.baseBranch}"` : "";
       const prUrl = await cliExec(
-        `gh pr create --title "${input.title.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}`,
+        `gh pr create --head "${input.headBranch}"${buildGhRepoFlag(remote)} --title "${input.title.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}`,
         cwd, 60_000, cleanGhEnv(),
       );
 

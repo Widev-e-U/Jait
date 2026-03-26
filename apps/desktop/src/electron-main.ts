@@ -1406,6 +1406,26 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         });
         return stdout.trim();
       };
+      const parseGithubRemote = (raw: string | null): { owner: string; repo: string } | null => {
+        if (!raw) return null;
+        const normalized = raw
+          .trim()
+          .replace(/\.git$/, "")
+          .replace(/^git@([^:]+):(.+)$/, "https://$1/$2")
+          .replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
+        try {
+          const url = new URL(normalized);
+          if (!url.hostname.toLowerCase().includes("github")) return null;
+          const parts = url.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+          if (parts.length < 2) return null;
+          return { owner: parts[0]!, repo: parts[1]! };
+        } catch {
+          return null;
+        }
+      };
+      const buildGhRepoFlag = (remote: { owner: string; repo: string } | null) => remote
+        ? ` --repo "${remote.owner}/${remote.repo}"`
+        : "";
 
       const ghIsAvailable = async () => {
         try { await execP("gh --version", { cwd, timeout: 5_000, env: ghCleanEnv() }); return true; } catch { return false; }
@@ -1479,9 +1499,13 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         try {
           const hasGh = await ghIsAvailable();
           if (hasGh) {
+            const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
+            const remoteName = remotes.includes("origin") ? "origin" : remotes[0];
+            const remoteUrl = remoteName ? await gitExecLocal(`remote get-url "${remoteName}"`).catch(() => "") : "";
+            const githubRemote = parseGithubRemote(remoteUrl || null);
             // Check if PR already exists
             try {
-              const existing = await ghExecLocal(`pr view "${currentBranch}" --json number,url,title,state,baseRefName,headRefName`);
+              const existing = await ghExecLocal(`pr view --head "${currentBranch}"${buildGhRepoFlag(githubRemote)} --json number,url,title,state,baseRefName,headRefName`);
               const parsed = JSON.parse(existing);
               if (parsed.number && String(parsed.state ?? "OPEN").toUpperCase() === "OPEN") {
                 result.pr = {
@@ -1518,16 +1542,14 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
               // If the branch wasn't pushed yet, push it now before creating the PR
               if ((result.push as Record<string, unknown>).status !== "pushed") {
                 try {
-                  const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
-                  const remote = remotes.includes("origin") ? "origin" : remotes[0];
-                  if (remote) {
-                    await gitExecLocal(`push --no-verify --set-upstream "${remote}" "${currentBranch}"`, 60_000);
-                    result.push = { status: "pushed", branch: currentBranch, upstreamBranch: `${remote}/${currentBranch}`, setUpstream: true };
+                  if (remoteName) {
+                    await gitExecLocal(`push --no-verify --set-upstream "${remoteName}" "${currentBranch}"`, 60_000);
+                    result.push = { status: "pushed", branch: currentBranch, upstreamBranch: `${remoteName}/${currentBranch}`, setUpstream: true };
                   }
                 } catch { /* push failed — gh pr create may still work */ }
               }
               const prUrl = await ghExecLocal(
-                `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}`,
+                `pr create --head "${currentBranch}"${buildGhRepoFlag(githubRemote)} --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}`,
                 60_000,
               );
 
@@ -1675,10 +1697,34 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const { promisify: promisifyGhPr } = await import("node:util");
       const execGhP = promisifyGhPr(execGhPr);
       const prCwd = (params.cwd as string) || process.cwd();
+      const parseGithubRemote = (raw: string | null): { owner: string; repo: string } | null => {
+        if (!raw) return null;
+        const normalized = raw
+          .trim()
+          .replace(/\.git$/, "")
+          .replace(/^git@([^:]+):(.+)$/, "https://$1/$2")
+          .replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
+        try {
+          const url = new URL(normalized);
+          if (!url.hostname.toLowerCase().includes("github")) return null;
+          const parts = url.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+          if (parts.length < 2) return null;
+          return { owner: parts[0]!, repo: parts[1]! };
+        } catch {
+          return null;
+        }
+      };
+      const remotes: string[] = await execGhP("git remote", { cwd: prCwd, timeout: 5_000 }).then(({ stdout }) => stdout.split("\n").map(line => line.trim()).filter(Boolean)).catch(() => []);
+      const remoteName = remotes.includes("origin") ? "origin" : remotes[0];
+      const remoteUrl = remoteName
+        ? await execGhP(`git remote get-url "${remoteName}"`, { cwd: prCwd, timeout: 5_000 }).then(({ stdout }) => stdout.trim()).catch(() => "")
+        : "";
+      const githubRemote = parseGithubRemote(remoteUrl || null);
+      const repoFlag = githubRemote ? ` --repo "${githubRemote.owner}/${githubRemote.repo}"` : "";
 
       try {
         const { stdout } = await execGhP(
-          `gh pr view "${prBranch}" --json number,title,url,state,baseRefName,headRefName`,
+          `gh pr view --head "${prBranch}"${repoFlag} --json number,title,url,state,baseRefName,headRefName`,
           { cwd: prCwd, timeout: 15_000 },
         );
         const parsed = JSON.parse(stdout.trim()) as Record<string, unknown>;
@@ -1729,10 +1775,34 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const { promisify: promisifyGhChk } = await import("node:util");
       const execChk = promisifyGhChk(execGhChk);
       const checkCwd = (params.cwd as string) || process.cwd();
+      const parseGithubRemote = (raw: string | null): { owner: string; repo: string } | null => {
+        if (!raw) return null;
+        const normalized = raw
+          .trim()
+          .replace(/\.git$/, "")
+          .replace(/^git@([^:]+):(.+)$/, "https://$1/$2")
+          .replace(/^ssh:\/\/git@([^/]+)\/(.+)$/, "https://$1/$2");
+        try {
+          const url = new URL(normalized);
+          if (!url.hostname.toLowerCase().includes("github")) return null;
+          const parts = url.pathname.replace(/^\/+|\/+$/g, "").split("/").filter(Boolean);
+          if (parts.length < 2) return null;
+          return { owner: parts[0]!, repo: parts[1]! };
+        } catch {
+          return null;
+        }
+      };
+      const remotes: string[] = await execChk("git remote", { cwd: checkCwd, timeout: 5_000 }).then(({ stdout }) => stdout.split("\n").map(line => line.trim()).filter(Boolean)).catch(() => []);
+      const remoteName = remotes.includes("origin") ? "origin" : remotes[0];
+      const remoteUrl = remoteName
+        ? await execChk(`git remote get-url "${remoteName}"`, { cwd: checkCwd, timeout: 5_000 }).then(({ stdout }) => stdout.trim()).catch(() => "")
+        : "";
+      const githubRemote = parseGithubRemote(remoteUrl || null);
+      const repoFlag = githubRemote ? ` --repo "${githubRemote.owner}/${githubRemote.repo}"` : "";
 
       try {
         const { stdout } = await execChk(
-          `gh pr checks "${checkBranch}" --json name,state,conclusion,startedAt,completedAt,detailsUrl`,
+          `gh pr checks "${checkBranch}"${repoFlag} --json name,state,conclusion,startedAt,completedAt,detailsUrl`,
           { cwd: checkCwd, timeout: 15_000 },
         );
         return JSON.parse(stdout.trim());

@@ -185,7 +185,6 @@ export function useChat(
   const [completionCount, setCompletionCount] = useState(0)
   const [contextUsage, setContextUsage] = useState<ContextUsage | null>(null)
   const [sessionInfo, setSessionInfo] = useState<SessionInfo | null>(null)
-  const processingQueueRef = useRef(false)
 
   const abortControllerRef = useRef<AbortController | null>(null)
   const prevSessionIdRef = useRef<string | null>(null)
@@ -1056,64 +1055,7 @@ export function useChat(
     setMessageQueue(items)
   }, [])
 
-  // Process the next queued message when the model finishes
-  const processQueue = useCallback(async (options: SendMessageOptions = {}) => {
-    if (processingQueueRef.current || state.isLoading || state.isLoadingHistory || messageQueue.length === 0) return
-
-    const next = messageQueue[0]
-    if (!next) return
-
-    processingQueueRef.current = true
-    setMessageQueue(prev => {
-      if (prev.length === 0) return prev
-      if (prev[0]?.id === next.id) return prev.slice(1)
-      return prev.filter(item => item.id !== next.id)
-    })
-    try {
-      const result = await sendMessage(next.content, {
-        ...options,
-        queued: true,
-        ...(next.mode ? { mode: next.mode } : {}),
-        ...(next.provider ? { provider: next.provider } : {}),
-        ...(next.runtimeMode ? { runtimeMode: next.runtimeMode } : {}),
-        ...(next.model !== undefined ? { model: next.model } : {}),
-        ...(next.displayContent ? { displayContent: next.displayContent } : {}),
-        ...(next.referencedFiles?.length ? { referencedFiles: next.referencedFiles } : {}),
-        ...(next.displaySegments?.length ? { displaySegments: next.displaySegments } : {}),
-        ...(next.attachments?.length ? { attachments: next.attachments } : {}),
-      })
-      if (result === 'retry') {
-        setMessageQueue(prev => (prev.some(item => item.id === next.id) ? prev : [next, ...prev]))
-      }
-    } finally {
-      processingQueueRef.current = false
-    }
-  }, [messageQueue, sendMessage, state.isLoading, state.isLoadingHistory])
-
-  // Auto-process queue when idle, even if the tab is backgrounded.
   useEffect(() => {
-    if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
-      const sid = prevSessionIdRef.current
-      void processQueue({
-        token: authToken,
-        sessionId: sid,
-        onLoginRequired,
-      })
-    }
-  }, [state.isLoading, state.isLoadingHistory, messageQueue, processQueue, authToken, onLoginRequired])
-
-  useEffect(() => {
-    const resumeQueueIfNeeded = () => {
-      if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
-        const sid = prevSessionIdRef.current
-        void processQueue({
-          token: authToken,
-          sessionId: sid,
-          onLoginRequired,
-        })
-      }
-    }
-
     const resumeActiveStreamIfNeeded = () => {
       if (!sessionId || state.isLoadingHistory || !state.isLoading) return
       resumeSessionStream()
@@ -1122,27 +1064,15 @@ export function useChat(
     const handleVisibilityChange = () => {
       if (!document.hidden) {
         resumeActiveStreamIfNeeded()
-        resumeQueueIfNeeded()
       }
     }
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [state.isLoading, state.isLoadingHistory, messageQueue, processQueue, authToken, onLoginRequired, resumeSessionStream])
+  }, [state.isLoading, state.isLoadingHistory, resumeSessionStream, sessionId])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
-
-    const resumeQueueIfNeeded = () => {
-      if (!state.isLoading && !state.isLoadingHistory && messageQueue.length > 0 && !processingQueueRef.current) {
-        const sid = prevSessionIdRef.current
-        void processQueue({
-          token: authToken,
-          sessionId: sid,
-          onLoginRequired,
-        })
-      }
-    }
 
     const resumeActiveStreamIfNeeded = () => {
       if (!sessionId || state.isLoadingHistory || !state.isLoading) return
@@ -1151,7 +1081,6 @@ export function useChat(
 
     const handleResume = () => {
       resumeActiveStreamIfNeeded()
-      resumeQueueIfNeeded()
     }
 
     window.addEventListener('focus', handleResume)
@@ -1162,7 +1091,7 @@ export function useChat(
       window.removeEventListener('pageshow', handleResume)
       window.removeEventListener('online', handleResume)
     }
-  }, [state.isLoading, state.isLoadingHistory, messageQueue, processQueue, authToken, onLoginRequired, resumeSessionStream])
+  }, [state.isLoading, state.isLoadingHistory, resumeSessionStream, sessionId])
 
   // --- File change callbacks ---
   // Ref for broadcasting changed files to other clients

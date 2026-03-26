@@ -167,7 +167,7 @@ async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Pr
 }
 
 function ghCleanEnv(): NodeJS.ProcessEnv {
-  const { GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
+  const { GH_REPO, GH_HOST, GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
   return rest;
 }
 
@@ -189,6 +189,10 @@ function parseGithubRemote(raw: string | null): { host: string; owner: string; r
   const parsed = parseGitRemote(raw);
   if (!parsed || parsed.provider !== "github" || !parsed.owner) return null;
   return { host: parsed.host, owner: parsed.owner, repo: parsed.repo };
+}
+
+function buildGhRepoFlag(remote: { owner: string; repo: string } | null): string {
+  return remote ? ` --repo "${remote.owner}/${remote.repo}"` : "";
 }
 
 export function parseGitRemote(raw: string | null): ParsedRemote | null {
@@ -491,6 +495,15 @@ export class GitService {
     let pr: GitStatusPr | null = null;
     let ghIsAvailable = false;
     const prBranch = requestedBranch ?? branch;
+    let remoteUrl: string | null = null;
+    let prProvider: GitRemoteProvider = "none";
+    let githubRemote: ReturnType<typeof parseGithubRemote> = null;
+    try {
+      const preferredRemote = await this.getPreferredRemote(cwd, branch ?? undefined);
+      remoteUrl = await this.getRemoteUrl(cwd, preferredRemote ?? "origin");
+      prProvider = detectGitRemoteProvider(remoteUrl);
+      githubRemote = parseGithubRemote(remoteUrl);
+    } catch { /* no remote */ }
     if (prBranch) {
       try {
         const hasGh = await ghAvailable(cwd);
@@ -498,7 +511,7 @@ export class GitService {
         if (hasGh) {
           const json = await ghExec(
             cwd,
-            `pr view "${prBranch}" --json number,title,url,state,baseRefName,headRefName`,
+            `pr view --head "${prBranch}"${buildGhRepoFlag(githubRemote)} --json number,title,url,state,baseRefName,headRefName`,
           );
           if (json) {
             const parsed = JSON.parse(json) as Record<string, unknown>;
@@ -516,9 +529,6 @@ export class GitService {
           }
         } else {
           if (effectiveToken) {
-            const remoteName = await this.getPreferredRemote(cwd, prBranch);
-            const remoteUrl = await this.getRemoteUrl(cwd, remoteName ?? "");
-            const githubRemote = parseGithubRemote(remoteUrl);
             if (githubRemote) {
               const apiPr = await this.fetchGithubPrByHead(githubRemote, effectiveToken, prBranch);
               if (apiPr) pr = apiPr;
@@ -527,15 +537,6 @@ export class GitService {
         }
       } catch { /* gh not available or no PR */ }
     }
-
-    // Resolve remote URL
-    let remoteUrl: string | null = null;
-    let prProvider: GitRemoteProvider = "none";
-    try {
-      const preferredRemote = await this.getPreferredRemote(cwd, branch ?? undefined);
-      remoteUrl = await this.getRemoteUrl(cwd, preferredRemote ?? "origin");
-      prProvider = detectGitRemoteProvider(remoteUrl);
-    } catch { /* no remote */ }
 
     return {
       branch,
@@ -557,7 +558,10 @@ export class GitService {
     try {
       const hasGh = await ghAvailable(cwd);
       if (!hasGh) return [];
-      const json = await ghExec(cwd, `pr checks "${branch}" --json name,state,conclusion,startedAt,completedAt,detailsUrl`);
+      const remoteName = await this.getPreferredRemote(cwd, branch);
+      const remoteUrl = await this.getRemoteUrl(cwd, remoteName ?? "");
+      const githubRemote = parseGithubRemote(remoteUrl);
+      const json = await ghExec(cwd, `pr checks "${branch}"${buildGhRepoFlag(githubRemote)} --json name,state,conclusion,startedAt,completedAt,detailsUrl`);
       if (!json) return [];
       return JSON.parse(json) as PrCheck[];
     } catch {
@@ -824,7 +828,7 @@ export class GitService {
           try {
             const existing = await ghExec(
               cwd,
-              `pr view --head "${currentBranch}" --json number,url,title,state,baseRefName,headRefName`,
+              `pr view --head "${currentBranch}"${buildGhRepoFlag(githubRemote)} --json number,url,title,state,baseRefName,headRefName`,
             );
             const parsed = JSON.parse(existing) as Record<string, unknown>;
             if (parsed.number) {
@@ -859,7 +863,7 @@ export class GitService {
           }
 
           // Generate PR body from diff context
-          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
+          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd, remoteUrl);
           const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
 
           // Write body to temp file (avoids shell escaping issues with markdown)
@@ -870,7 +874,7 @@ export class GitService {
             // gh pr create outputs the PR URL on stdout (--json is not supported)
             const prUrl = await ghExec(
               cwd,
-              `pr create --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}`,
+              `pr create --head "${currentBranch}"${buildGhRepoFlag(githubRemote)} --title "${prTitle.replace(/"/g, '\\"')}" --body-file "${bodyFile}"${baseFlag}`,
               60_000,
             );
 
@@ -908,7 +912,7 @@ export class GitService {
             await unlink(bodyFile).catch(() => {});
           }
         } else if (parsedRemote?.provider === "github" && githubRemote && effectiveToken) {
-          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
+          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd, remoteUrl);
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
           const apiResult = await this.createGithubPrViaApi(githubRemote, effectiveToken, {
@@ -928,7 +932,7 @@ export class GitService {
           };
         } else if (parsedRemote?.provider === "azure-devops") {
           const azureRemote = parsedRemote as ParsedRemote & { provider: "azure-devops" };
-          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd);
+          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd, remoteUrl);
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
           let apiResult: GitStepResult["pr"] | null = null;
@@ -1178,13 +1182,16 @@ export class GitService {
    * Resolve the repository's default branch (e.g. "main" or "master").
    * Tries gh CLI first, then falls back to common defaults.
    */
-  async resolveDefaultBranch(cwd: string): Promise<string> {
-    try {
-      const json = await ghExec(cwd, "repo view --json defaultBranchRef", 15_000);
-      const parsed = JSON.parse(json) as Record<string, unknown>;
-      const ref = parsed.defaultBranchRef as Record<string, unknown> | undefined;
-      if (ref?.name) return String(ref.name);
-    } catch { /* gh not available or not a github repo */ }
+  async resolveDefaultBranch(cwd: string, remoteUrl?: string | null): Promise<string> {
+    const githubRemote = parseGithubRemote(remoteUrl ?? null);
+    if (githubRemote) {
+      try {
+        const json = await ghExec(cwd, `repo view${buildGhRepoFlag(githubRemote)} --json defaultBranchRef`, 15_000);
+        const parsed = JSON.parse(json) as Record<string, unknown>;
+        const ref = parsed.defaultBranchRef as Record<string, unknown> | undefined;
+        if (ref?.name) return String(ref.name);
+      } catch { /* gh not available or github repo lookup failed */ }
+    }
 
     // Fallback: check if "main" or "master" branches exist
     try {

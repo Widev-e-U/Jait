@@ -631,11 +631,8 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
 
   return (
     <div className="rounded-lg border border-purple-500/20 bg-purple-500/[0.03] text-xs">
-      {/* Header bar */}
-      <div className="flex items-center gap-2 border-b border-purple-500/15 px-3 py-2">
-        <Bot className="h-3.5 w-3.5 text-purple-500 shrink-0" />
-        <span className="text-[11px] font-medium text-purple-500">Sub-agent</span>
-        <div className="flex items-center gap-2 ml-auto text-[11px] text-muted-foreground">
+      {(isRunning || rounds != null || toolCalls.length > 0 || durationMs != null) && (
+        <div className="flex items-center justify-end gap-2 border-b border-purple-500/15 px-3 py-2 text-[11px] text-muted-foreground">
           {isRunning && <Loader2 className="h-3 w-3 animate-spin text-purple-500" />}
           {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
           {toolCalls.length > 0 && <span>{toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}</span>}
@@ -643,12 +640,12 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
             <span>{durationMs < 1000 ? `${durationMs}ms` : `${(durationMs / 1000).toFixed(1)}s`}</span>
           )}
         </div>
-      </div>
+      )}
 
       {/* Running indicator when no nested calls yet */}
       {isRunning && nestedCalls.length === 0 && !content && (
         <div className="px-3 py-2 text-[11px] text-muted-foreground">
-          Sub-agent is working...
+          Agent is working...
         </div>
       )}
 
@@ -1387,15 +1384,11 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
   const [groupOpen, setGroupOpen] = useState(true)
   const prevAllDoneRef = useRef(false)
 
-  // Split into active (pending/running) and completed (success/error)
   const activeCalls = calls.filter(c => c.status === 'running' || c.status === 'pending')
   const completedCalls = calls.filter(c => c.status !== 'running' && c.status !== 'pending')
   const allDone = activeCalls.length === 0 && completedCalls.length > 0
-
-  // Whether this group qualifies for whole-group collapsing
   const shouldCollapseGroup = collapsible && allDone && completedCalls.length >= MIN_CALLS_TO_COLLAPSE
 
-  // Auto-collapse the entire group when all calls finish
   useEffect(() => {
     if (shouldCollapseGroup && !prevAllDoneRef.current) {
       setGroupOpen(false)
@@ -1408,7 +1401,6 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
   const totalSuccessCount = completedCalls.filter(c => c.status === 'success').length
   const totalErrorCount = completedCalls.filter(c => c.status === 'error').length
 
-  // If the entire group is collapsed, render just a summary row
   if (shouldCollapseGroup && !groupOpen) {
     return (
       <div className="my-2 overflow-hidden rounded-xl border border-border/40 bg-muted/[0.18]">
@@ -1437,11 +1429,9 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
     )
   }
 
-  // When too many completed calls, collapse the oldest ones unless expanded
   const needsCollapse = !showAll && completedCalls.length > MAX_VISIBLE_COMPLETED
   const hiddenCount = needsCollapse ? completedCalls.length - MAX_VISIBLE_COMPLETED : 0
   const visibleCompleted = needsCollapse ? completedCalls.slice(-MAX_VISIBLE_COMPLETED) : completedCalls
-
   const successCount = needsCollapse ? completedCalls.slice(0, hiddenCount).filter(c => c.status === 'success').length : 0
   const errorCount = hiddenCount - successCount
 

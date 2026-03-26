@@ -172,6 +172,7 @@ interface StreamingAccumulator {
   segments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] }>;
 }
 const sessionStreamingState = new Map<string, StreamingAccumulator>();
+const sessionStreamSeq = new Map<string, number>();
 
 function firstObject(...values: unknown[]): Record<string, unknown> | undefined {
   for (const value of values) {
@@ -342,7 +343,8 @@ type StreamEvent =
   | { type: "context_usage"; system: number; history: number; toolResults: number; tools: number; total: number; limit: number; ratio: number; pruned?: boolean }
   | { type: "done"; session_id: string; prompt_count: number; remaining_prompts: null }
   | { type: "error"; message: string };
-type StreamSubscriber = (event: StreamEvent) => void;
+type SequencedStreamEvent = StreamEvent & { seq: number };
+type StreamSubscriber = (event: SequencedStreamEvent) => void;
 const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
 
 const DEFAULT_UI_MESSAGE_LIMIT = 120;
@@ -428,18 +430,30 @@ function buildToolResultStateMap(history: ChatMessage[]): Map<string, ToolCallRe
   return out;
 }
 
-function emitToSubscribers(sessionId: string, event: StreamEvent) {
-  const subs = sessionSubscribers.get(sessionId);
-  if (subs) for (const fn of subs) fn(event);
+function nextStreamSeq(sessionId: string): number {
+  const next = (sessionStreamSeq.get(sessionId) ?? 0) + 1;
+  sessionStreamSeq.set(sessionId, next);
+  return next;
 }
 
-function subscribe(sessionId: string, fn: StreamSubscriber) {
+function emitToSubscribers(sessionId: string, event: StreamEvent) {
+  const subs = sessionSubscribers.get(sessionId);
+  if (!subs || subs.size === 0) return;
+  const sequenced = { ...event, seq: nextStreamSeq(sessionId) } as SequencedStreamEvent;
+  for (const fn of subs) fn(sequenced);
+}
+
+function subscribe(sessionId: string, minSeqExclusive: number, fn: StreamSubscriber) {
   if (!sessionSubscribers.has(sessionId)) sessionSubscribers.set(sessionId, new Set());
-  sessionSubscribers.get(sessionId)!.add(fn);
+  const wrapped: StreamSubscriber = (event) => {
+    if (event.seq <= minSeqExclusive) return;
+    fn(event);
+  };
+  sessionSubscribers.get(sessionId)!.add(wrapped);
   return () => {
     const subs = sessionSubscribers.get(sessionId);
     if (subs) {
-      subs.delete(fn);
+      subs.delete(wrapped);
       if (subs.size === 0) sessionSubscribers.delete(sessionId);
     }
   };
@@ -1035,6 +1049,7 @@ export function registerChatRoutes(
     activeStreams.add(sessionId);
     // Reset streaming accumulator for this turn so reload snapshots start fresh
     sessionStreamingState.delete(sessionId);
+    sessionStreamSeq.set(sessionId, 0);
 
     let clientDisconnected = false;
     reply.raw.on("close", () => { clientDisconnected = true; });
@@ -1566,6 +1581,7 @@ export function registerChatRoutes(
     sessionAbortControllers.delete(sessionId);
     sessionSteeringControllers.delete(sessionId);
     sessionStreamingState.delete(sessionId);
+    sessionStreamSeq.delete(sessionId);
 
     // Clean up in-memory history: remove any dangling assistant tool_calls
     // messages that never got a text response (e.g. cancelled mid-tool-call).
@@ -1854,6 +1870,7 @@ export function registerChatRoutes(
     }
 
     // Subscribe to live events
+    const snapshotSeq = sessionStreamSeq.get(sessionId) ?? 0;
     let closed = false;
     let unsubscribe = () => {};
     const closeStream = () => {
@@ -1867,7 +1884,7 @@ export function registerChatRoutes(
       closeStream();
     });
 
-    unsubscribe = subscribe(sessionId, (event) => {
+    unsubscribe = subscribe(sessionId, snapshotSeq, (event) => {
       if (closed) return;
       try {
         reply.raw.write(`data: ${JSON.stringify(event)}\n\n`);
