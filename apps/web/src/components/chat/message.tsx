@@ -588,6 +588,7 @@ function MessageInner({
   const canEdit = isUser && !!messageId && !!onEditMessage
   const canRetry = canEdit
   const showStreamingIndicator = isStreaming && !thinking && !content.trim()
+  const canCopyMessage = isUser || !isStreaming
 
   const startEditing = useCallback(() => {
     if (!canEdit || isSavingEdit) return
@@ -671,7 +672,7 @@ function MessageInner({
   }
 
   const renderActions = (outsideBubble?: boolean) => {
-    if (!content || isEditing) return null
+    if (isEditing || !canCopyMessage || !content) return null
     return (
       <div
         className={cn(
@@ -720,6 +721,8 @@ function MessageInner({
     )
   }
 
+  const assistantActions = !isUser ? renderActions() : null
+
   return (
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn('min-w-0 max-w-[85%] space-y-2', isUser && 'order-1')}>
@@ -732,7 +735,7 @@ function MessageInner({
         )}
 
         {!isUser && segments && segments.length > 0 ? (
-          <>
+          <div className="relative min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
             {(() => {
               return segments.map((seg, i) => {
                 if (seg.type === 'toolGroup') {
@@ -785,8 +788,8 @@ function MessageInner({
               </div>
             )}
 
-            {renderActions()}
-          </>
+            {assistantActions}
+          </div>
         ) : (
           <>
             {toolCalls && toolCalls.length > 0 && (
@@ -936,19 +939,21 @@ function MessageInner({
                   </div>
                 )
               ) : (
-                <AIMessageContent
-                  data-message-from="assistant"
-                  className="relative min-w-0 max-w-full break-words [overflow-wrap:anywhere]"
-                >
-                  <AssistantMarkdown
-                    content={content}
-                    compact={compact}
-                    isStreaming={isStreaming}
-                    preferLlmUi={preferLlmUi}
-                    onOpenPath={onOpenPath}
-                  />
-                  {renderActions()}
-                </AIMessageContent>
+                <div className="relative min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
+                  <AIMessageContent
+                    data-message-from="assistant"
+                    className="min-w-0 max-w-full break-words [overflow-wrap:anywhere]"
+                  >
+                    <AssistantMarkdown
+                      content={content}
+                      compact={compact}
+                      isStreaming={isStreaming}
+                      preferLlmUi={preferLlmUi}
+                      onOpenPath={onOpenPath}
+                    />
+                  </AIMessageContent>
+                  {assistantActions}
+                </div>
               )
             ) : showStreamingIndicator ? (
               <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">

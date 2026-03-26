@@ -1569,8 +1569,9 @@ function App() {
   const [savedTerminal, setSavedTerminal] = useWorkspaceState<{ open: boolean }>(
     activeWorkspaceId, 'terminal.panel', token,
   )
+  const workspaceLayoutStateKey = isMobile ? 'workspace.layout.mobile' : 'workspace.layout'
   const [savedWorkspaceLayout, setSavedWorkspaceLayout, loadingWorkspaceLayout] = useWorkspaceState<{ tree: boolean; editor: boolean }>(
-    activeWorkspaceId, 'workspace.layout', token,
+    activeWorkspaceId, workspaceLayoutStateKey, token,
   )
   const [savedChatMode, setSavedChatMode, loadingChatMode] = useSessionState<ChatMode>(
     activeSessionId, 'chat.mode', token,
@@ -1999,16 +2000,12 @@ function App() {
   const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeWorkspaceId && token && loadingWorkspaceLayout) return
-    if (isMobile) {
-      prevWorkspaceLayoutPayloadRef.current = null
-      return
-    }
     const layout = { tree: showWorkspaceTree, editor: showWorkspaceEditor }
     const serialized = JSON.stringify(layout)
     if (serialized === prevWorkspaceLayoutPayloadRef.current) return
     prevWorkspaceLayoutPayloadRef.current = serialized
     setSavedWorkspaceLayout(layout)
-  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token, isMobile])
+  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token])
 
   const prevChatModePayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -3877,6 +3874,8 @@ function App() {
               <span className="text-xs text-muted-foreground mr-1 sm:mr-2 hidden sm:inline">{remainingPrompts} remaining</span>
             )}
 
+            </div>
+
             {updateInfo?.hasUpdate && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -3912,7 +3911,6 @@ function App() {
                 <TooltipContent side="bottom">Update available — v{updateInfo.latestVersion}</TooltipContent>
               </Tooltip>
             )}
-            </div>
 
             {/* Mobile overflow menu */}
             <div className="md:hidden shrink-0">

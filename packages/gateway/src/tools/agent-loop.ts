@@ -229,6 +229,7 @@ export class SteeringController {
  */
 export class ToolCallQueue {
   private items: QueuedToolCall[] = [];
+  private static readonly MIN_PARALLEL_BATCH_SIZE = 3;
 
   /** Enqueue a tool call with optional priority and parallelism hint */
   enqueue(
@@ -254,7 +255,8 @@ export class ToolCallQueue {
 
   /**
    * Dequeue the next batch. If parallel execution is enabled, returns
-   * all contiguous parallel-safe items at the same priority level.
+   * all contiguous parallel-safe items at the same priority level, but
+   * only when there are more than 2 consecutive calls to batch.
    * Otherwise returns one at a time.
    */
   dequeueBatch(allowParallel: boolean): QueuedToolCall[] {
@@ -269,13 +271,21 @@ export class ToolCallQueue {
       return [this.items.shift()!];
     }
 
-    // Grab all contiguous items at the same priority that are parallel-safe
-    const batch: QueuedToolCall[] = [];
+    let contiguousParallelSafeCount = 0;
     while (
-      this.items.length > 0 &&
-      this.items[0]!.priority === first.priority &&
-      this.items[0]!.parallelSafe
+      contiguousParallelSafeCount < this.items.length &&
+      this.items[contiguousParallelSafeCount]!.priority === first.priority &&
+      this.items[contiguousParallelSafeCount]!.parallelSafe
     ) {
+      contiguousParallelSafeCount++;
+    }
+
+    if (contiguousParallelSafeCount < ToolCallQueue.MIN_PARALLEL_BATCH_SIZE) {
+      return [this.items.shift()!];
+    }
+
+    const batch: QueuedToolCall[] = [];
+    for (let i = 0; i < contiguousParallelSafeCount; i++) {
       batch.push(this.items.shift()!);
     }
     return batch;

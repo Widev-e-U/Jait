@@ -33,7 +33,7 @@ export const TOOL_USE_INSTRUCTIONS = `If the user is requesting a code sample, y
 When using a tool, follow the JSON schema very carefully and make sure to include ALL required properties.
 No need to ask permission before using a tool.
 NEVER say the name of a tool to a user. For example, instead of saying that you'll use the execute tool, say "I'll run the command in a terminal".
-If you think running multiple tools can answer the user's question, prefer calling them in parallel whenever possible.
+If you think running multiple tools can answer the user's question, prefer calling them in parallel when there are more than 2 independent calls to make. If there are only 2 independent calls, prefer calling them directly without the parallel wrapper.
 When using the read tool, prefer reading a large section over calling the read tool many times in sequence. You can also think of all the pieces you may be interested in and read them in parallel. Read large enough context to ensure you get what you need.
 Don't call the execute tool multiple times in parallel. Instead, run one command and wait for the output before running the next command.
 When creating files, be intentional and avoid unnecessary file creation. Only create files that are essential to completing the user's request.
