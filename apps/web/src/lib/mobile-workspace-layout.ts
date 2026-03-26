@@ -3,6 +3,17 @@ export interface WorkspaceLayoutState {
   editor: boolean
 }
 
+export function restoreWorkspaceLayout(
+  layout: WorkspaceLayoutState,
+  isMobile: boolean,
+): WorkspaceLayoutState {
+  if (isMobile) return collapseMobileWorkspace()
+  return {
+    tree: layout.tree !== false,
+    editor: layout.editor !== false,
+  }
+}
+
 export function collapseMobileWorkspace(): WorkspaceLayoutState {
   return { tree: false, editor: false }
 }

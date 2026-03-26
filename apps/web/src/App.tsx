@@ -109,6 +109,7 @@ import { canStopThread } from '@/lib/thread-status'
 import { getWorkspaceRootForPath, isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
   collapseMobileWorkspace,
+  restoreWorkspaceLayout,
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
 } from '@/lib/mobile-workspace-layout'
@@ -1654,10 +1655,11 @@ function App() {
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
     if (savedWorkspaceLayout) {
-      setShowWorkspaceTree(savedWorkspaceLayout.tree !== false)
-      setShowWorkspaceEditor(savedWorkspaceLayout.editor !== false)
+      const nextLayout = restoreWorkspaceLayout(savedWorkspaceLayout, isMobile)
+      setShowWorkspaceTree(nextLayout.tree)
+      setShowWorkspaceEditor(nextLayout.editor)
     }
-  }, [savedWorkspaceLayout])
+  }, [savedWorkspaceLayout, isMobile])
 
   const mobileWorkspaceInitKeyRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1668,7 +1670,7 @@ function App() {
     const workspaceKey = `${activeWorkspaceId ?? 'no-workspace'}:${activeWorkspace?.surfaceId ?? activeWorkspace?.workspaceRoot ?? 'no-workspace'}`
     if (mobileWorkspaceInitKeyRef.current === workspaceKey) return
     mobileWorkspaceInitKeyRef.current = workspaceKey
-    if (!showWorkspaceTree || !showWorkspaceEditor) return
+    if (!showWorkspaceTree && !showWorkspaceEditor) return
     const nextLayout = collapseMobileWorkspace()
     setShowWorkspaceTree(nextLayout.tree)
     setShowWorkspaceEditor(nextLayout.editor)

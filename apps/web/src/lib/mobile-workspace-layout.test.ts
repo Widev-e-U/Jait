@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   collapseMobileWorkspace,
+  restoreWorkspaceLayout,
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
 } from './mobile-workspace-layout'
@@ -8,6 +9,15 @@ import {
 describe('mobile workspace layout', () => {
   it('collapses both mobile panes by default', () => {
     expect(collapseMobileWorkspace()).toEqual({ tree: false, editor: false })
+  })
+
+  it('restores saved layout collapsed on mobile', () => {
+    expect(restoreWorkspaceLayout({ tree: false, editor: true }, true)).toEqual({ tree: false, editor: false })
+    expect(restoreWorkspaceLayout({ tree: true, editor: true }, true)).toEqual({ tree: false, editor: false })
+  })
+
+  it('restores saved layout as-is on desktop', () => {
+    expect(restoreWorkspaceLayout({ tree: false, editor: true }, false)).toEqual({ tree: false, editor: true })
   })
 
   it('shows one pane at a time', () => {
