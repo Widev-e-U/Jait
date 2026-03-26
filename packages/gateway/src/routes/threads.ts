@@ -28,6 +28,8 @@ import { requireAuth } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
+import type { SessionStateService } from "../services/session-state.js";
+import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import type { UserService } from "../services/users.js";
 import type { RepositoryService } from "../services/repositories.js";
 import { assertOwnership } from "../security/ownership.js";
@@ -131,6 +133,7 @@ export interface ThreadRouteDeps {
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
   userService?: UserService;
+  sessionState?: SessionStateService;
   repoService?: RepositoryService;
   ws?: WsControlPlane;
   gitService?: {
@@ -350,8 +353,14 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = request.body as Record<string, unknown>;
-    const requestedProviderId = (body["providerId"] as ProviderId) ?? "jait";
-    const userSelectedProvider = deps.userService?.getSettings(authUser.id).chatProvider ?? null;
+    const defaults = resolveThreadSelectionDefaults({
+      userId: authUser.id,
+      sessionId: typeof body["sessionId"] === "string" ? body["sessionId"] : undefined,
+      userService: deps.userService,
+      sessionState: deps.sessionState,
+    });
+    const requestedProviderId = (body["providerId"] as ProviderId | undefined) ?? defaults.providerId ?? null;
+    const userSelectedProvider = defaults.providerId ?? null;
     const resolvedProvider = resolveThreadProviderId(userSelectedProvider, requestedProviderId);
     if (!resolvedProvider.providerId) {
       return reply.status(400).send({ error: resolvedProvider.error });
@@ -361,8 +370,13 @@ export function registerThreadRoutes(
       sessionId: typeof body["sessionId"] === "string" ? body["sessionId"] : undefined,
       title: typeof body["title"] === "string" ? body["title"] : "New Thread",
       providerId: resolvedProvider.providerId,
-      model: typeof body["model"] === "string" ? body["model"] : undefined,
-      runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : "full-access",
+      model: typeof body["model"] === "string" ? body["model"] : defaults.model,
+      runtimeMode:
+        body["runtimeMode"] === "supervised"
+          ? "supervised"
+          : body["runtimeMode"] === "full-access"
+            ? "full-access"
+            : defaults.runtimeMode ?? "full-access",
       kind: body["kind"] === "delegation" ? "delegation" : "delivery",
       workingDirectory: typeof body["workingDirectory"] === "string" ? body["workingDirectory"] : undefined,
       branch: typeof body["branch"] === "string" ? body["branch"] : undefined,

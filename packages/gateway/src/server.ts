@@ -219,6 +219,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       threadService: deps.threadService,
       providerRegistry: deps.providerRegistry,
       userService: deps.userService,
+      sessionState: deps.sessionState,
       repoService: deps.repoService,
       ws: deps.ws,
       gitService: deps.gitService,

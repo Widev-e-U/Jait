@@ -11,7 +11,9 @@ import type {
 } from "../providers/contracts.js";
 import type { GitStepResult } from "../services/git.js";
 import { ProviderRegistry } from "../providers/registry.js";
+import { SessionStateService } from "../services/session-state.js";
 import { ThreadService } from "../services/threads.js";
+import { UserService } from "../services/users.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { createToolRegistry } from "./index.js";
 import { createThreadControlTool } from "./thread-tools.js";
@@ -80,17 +82,48 @@ function makeContext(userId = "user-1") {
   };
 }
 
+function createSelectedProviderContext(
+  db: Awaited<ReturnType<typeof openDatabase>>["db"],
+  providerId: "jait" | "codex" | "claude-code",
+  options: { model?: string; runtimeMode?: "full-access" | "supervised" } = {},
+) {
+  const userService = new UserService(db);
+  const user = userService.createUser(`user-${providerId}-${Math.random()}`, "password");
+  userService.updateSettings(user.id, { chatProvider: providerId });
+
+  const sessionState = new SessionStateService(db);
+  const state: Record<string, unknown> = {};
+  if (options.runtimeMode) {
+    state["chat.providerRuntimeMode"] = options.runtimeMode;
+  }
+  if (options.model) {
+    state["chat.cliModels"] = { [providerId]: options.model };
+  }
+  if (Object.keys(state).length > 0) {
+    sessionState.set("s-thread-tools", state);
+  }
+
+  return {
+    userService,
+    sessionState,
+    context: makeContext(user.id),
+  };
+}
+
 describe("thread.control tool", () => {
   it("creates and starts a thread in one call", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
+        userService,
+        sessionState,
       });
 
       const result = await tool.execute(
@@ -100,10 +133,7 @@ describe("thread.control tool", () => {
           start: true,
           message: "bun run test",
         },
-        {
-          ...makeContext(),
-          providerId: "codex",
-        },
+        context,
       );
 
       expect(result.ok).toBe(true);
@@ -116,29 +146,29 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("maps provider aliases like openai from the calling agent context", async () => {
+  it("uses the selected provider from user settings", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
+        userService,
+        sessionState,
       });
 
       const result = await tool.execute(
         {
           action: "create",
-          title: "Use alias",
+          title: "Use selected provider",
           start: true,
           message: "inspect ui",
         },
-        {
-          ...makeContext(),
-          providerId: "openai" as ProviderId,
-        },
+        context,
       );
 
       expect(result.ok).toBe(true);
@@ -150,30 +180,31 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("inherits provider and model from the calling agent context", async () => {
+  it("inherits the selected provider model from session state", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex", {
+        model: "gpt-5-codex",
+      });
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
+        userService,
+        sessionState,
       });
 
       const result = await tool.execute(
         {
           action: "create",
-          title: "Use caller runtime",
+          title: "Use selected model",
           start: true,
           message: "inspect ui",
         },
-        {
-          ...makeContext(),
-          providerId: "codex",
-          model: "gpt-5-codex",
-        },
+        context,
       );
 
       expect(result.ok).toBe(true);
@@ -185,29 +216,29 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("uses the calling jait agent provider literally", async () => {
+  it("uses the selected jait provider literally", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait");
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
+        userService,
+        sessionState,
       });
 
       const result = await tool.execute(
         {
           action: "create",
-          title: "Broken provider",
+          title: "Use selected jait provider",
           start: true,
           message: "inspect ui",
         },
-        {
-          ...makeContext(),
-          providerId: "jait",
-        },
+        context,
       );
 
       expect(result.ok).toBe(true);
@@ -219,30 +250,31 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("uses the calling jait agent provider and model for thread creation", async () => {
+  it("uses the selected jait provider and model for thread creation", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait", {
+        model: "gpt-4.1",
+      });
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("jait"));
 
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
+        userService,
+        sessionState,
       });
 
       const result = await tool.execute(
         {
           action: "create",
-          title: "Broken provider",
+          title: "Use selected jait model",
           start: true,
           message: "inspect ui",
         },
-        {
-          ...makeContext(),
-          providerId: "jait",
-          model: "gpt-4.1",
-        },
+        context,
       );
 
       expect(result.ok).toBe(true);
@@ -276,8 +308,50 @@ describe("thread.control tool", () => {
 
       expect(result.ok).toBe(false);
       expect(result.message).toBe(
-        "No provider could be resolved for this thread. The calling agent must provide a supported provider.",
+        "No provider could be resolved for this thread. A selected user provider must be configured and supported.",
       );
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("inherits the selected provider, model, and runtime mode from user/session state", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const userService = new UserService(db);
+      const user = userService.createUser("thread-owner", "password");
+      userService.updateSettings(user.id, { chatProvider: "codex" });
+
+      const sessionState = new SessionStateService(db);
+      sessionState.set("s-thread-tools", {
+        "chat.providerRuntimeMode": "supervised",
+        "chat.cliModels": { codex: "gpt-5-codex" },
+      });
+
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Use selected chat defaults",
+        },
+        makeContext(user.id),
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { providerId: string; model: string | null; runtimeMode: string } };
+      expect(data.thread.providerId).toBe("codex");
+      expect(data.thread.model).toBe("gpt-5-codex");
+      expect(data.thread.runtimeMode).toBe("supervised");
     } finally {
       sqlite.close();
     }
@@ -325,6 +399,7 @@ describe("thread.control tool", () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
       providerRegistry.register(new MockThreadProvider("claude-code"));
@@ -332,6 +407,8 @@ describe("thread.control tool", () => {
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
+        userService,
+        sessionState,
         gitService: {
           runStackedAction: async (): Promise<GitStepResult> => ({
             commit: { status: "skipped_no_changes" },
@@ -350,10 +427,7 @@ describe("thread.control tool", () => {
             { title: "Thread B" },
           ],
         },
-        {
-          ...makeContext(),
-          providerId: "codex",
-        },
+        context,
       );
 
       expect(result.ok).toBe(true);
@@ -367,10 +441,11 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("defaults create_many threads to the calling agent provider", async () => {
+  it("defaults create_many threads to the selected provider", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
       const providerRegistry = new ProviderRegistry();
       providerRegistry.register(new MockThreadProvider("codex"));
       providerRegistry.register(new MockThreadProvider("claude-code"));
@@ -378,6 +453,8 @@ describe("thread.control tool", () => {
       const tool = createThreadControlTool({
         threadService: new ThreadService(db),
         providerRegistry,
+        userService,
+        sessionState,
       });
 
       const result = await tool.execute(
@@ -388,10 +465,7 @@ describe("thread.control tool", () => {
             { title: "Thread B" },
           ],
         },
-        {
-          ...makeContext(),
-          providerId: "codex",
-        },
+        context,
       );
 
       expect(result.ok).toBe(true);

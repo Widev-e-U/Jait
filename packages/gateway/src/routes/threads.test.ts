@@ -13,6 +13,7 @@ import type {
 import { ProviderRegistry } from "../providers/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
 import type { GitStepResult } from "../services/git.js";
+import { SessionStateService } from "../services/session-state.js";
 import { ThreadService } from "../services/threads.js";
 import { UserService } from "../services/users.js";
 import { registerThreadRoutes } from "./threads.js";
@@ -158,6 +159,53 @@ describe("thread routes", () => {
     expect(response.json()).toMatchObject({
       title: "Helper",
       providerId: "jait",
+      status: "idle",
+      providerSessionId: null,
+    });
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("creates threads from the selected chat provider, model, and runtime mode by default", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const users = new UserService(db);
+    const sessionState = new SessionStateService(db);
+    const user = users.createUser("selected-defaults-user", "secret");
+    users.updateSettings(user.id, { chatProvider: "codex" });
+    sessionState.set("session-selected-defaults", {
+      "chat.providerRuntimeMode": "supervised",
+      "chat.cliModels": { codex: "gpt-5-codex" },
+    });
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider("codex"));
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      userService: users,
+      sessionState,
+    });
+
+    const headers = await authHeader(config.jwtSecret, user.id);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Helper", sessionId: "session-selected-defaults", kind: "delegation" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      title: "Helper",
+      providerId: "codex",
+      model: "gpt-5-codex",
+      runtimeMode: "supervised",
       status: "idle",
       providerSessionId: null,
     });

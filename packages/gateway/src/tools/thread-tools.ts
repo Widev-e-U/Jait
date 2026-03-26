@@ -2,7 +2,10 @@ import type { WsEventType } from "@jait/shared";
 import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
+import type { SessionStateService } from "../services/session-state.js";
+import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import type { ThreadRow, ThreadService } from "../services/threads.js";
+import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import { ToolName } from "./tool-names.js";
@@ -75,6 +78,8 @@ interface ThreadControlGit {
 export interface ThreadControlToolDeps {
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
+  userService?: UserService;
+  sessionState?: SessionStateService;
   ws?: WsControlPlane;
   mcpConfig?: { host: string; port: number };
   gitService?: ThreadControlGit;
@@ -132,28 +137,37 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     return userId || "system";
   };
 
+  const resolveSelectedThreadDefaults = (context: ToolContext) => {
+    const defaults = resolveThreadSelectionDefaults({
+      userId: context.userId,
+      sessionId: context.sessionId,
+      userService: deps.userService,
+      sessionState: deps.sessionState,
+    });
+    return {
+      providerId: defaults.providerId ? normalizeThreadProviderId(defaults.providerId) : null,
+      model: defaults.model ?? (typeof context.model === "string" && context.model.trim() ? context.model.trim() : undefined),
+      runtimeMode: defaults.runtimeMode
+        ?? (context.runtimeMode === "full-access" || context.runtimeMode === "supervised" ? context.runtimeMode : undefined),
+    };
+  };
+
   const resolveProviderId = (
     context: ToolContext,
   ): ProviderResolution => {
-    const contextProvider = normalizeThreadProviderId(context.providerId);
+    const selectedProvider = resolveSelectedThreadDefaults(context).providerId;
     const resolveRegisteredProvider = (providerId: ProviderId, label: string): ProviderResolution =>
       deps.providerRegistry.get(providerId)
         ? { providerId }
         : { error: `${label} '${providerId}' is not registered on this gateway.` };
 
-    if (context.providerId && !contextProvider) {
+    if (!selectedProvider) {
       return {
-        error: `Calling agent provider '${context.providerId}' is not supported for agent threads.`,
+        error: "No provider could be resolved for this thread. A selected user provider must be configured and supported.",
       };
     }
 
-    if (!contextProvider) {
-      return {
-        error: "No provider could be resolved for this thread. The calling agent must provide a supported provider.",
-      };
-    }
-
-    return resolveRegisteredProvider(contextProvider, "The calling agent provider");
+    return resolveRegisteredProvider(selectedProvider, "The selected user provider");
   };
 
   const resolveStoredThreadProvider = (
@@ -382,13 +396,15 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!resolvedProvider.providerId) {
               return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
             }
+            const selectedProviderId = resolvedProvider.providerId;
+            const selectedDefaults = resolveSelectedThreadDefaults(context);
             const thread = deps.threadService.create({
               userId,
               sessionId: input.sessionId,
               title: input.title?.trim() || "New Thread",
-              providerId: resolvedProvider.providerId,
-              model: input.model ?? context.model,
-              runtimeMode: input.runtimeMode ?? "full-access",
+              providerId: selectedProviderId,
+              model: input.model ?? selectedDefaults.model,
+              runtimeMode: input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
               kind: input.kind === "delivery" ? "delivery" : "delegation",
               workingDirectory: input.workingDirectory,
               branch: input.branch,
@@ -432,13 +448,15 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             }
 
             const created = validatedSpecs.map(({ spec, resolvedProvider }) => {
+              const selectedProviderId = resolvedProvider.providerId!;
+              const selectedDefaults = resolveSelectedThreadDefaults(context);
               const thread = deps.threadService.create({
                 userId,
                 sessionId: spec.sessionId ?? input.sessionId,
                 title: spec.title?.trim() || "New Thread",
-                providerId: resolvedProvider.providerId!,
-                model: spec.model ?? input.model ?? context.model,
-                runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? "full-access",
+                providerId: selectedProviderId,
+                model: spec.model ?? input.model ?? selectedDefaults.model,
+                runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
                 kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
                 workingDirectory: spec.workingDirectory ?? input.workingDirectory,
                 branch: spec.branch ?? input.branch,
