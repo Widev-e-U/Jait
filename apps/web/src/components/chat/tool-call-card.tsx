@@ -1379,9 +1379,15 @@ interface ToolCallGroupProps {
  */
 const MAX_VISIBLE_COMPLETED = 6
 
+export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], collapsible?: boolean): boolean {
+  if (!collapsible) return false
+  const completedCalls = calls.filter(c => c.status !== 'running' && c.status !== 'pending')
+  return completedCalls.length >= MIN_CALLS_TO_COLLAPSE && completedCalls.length === calls.length
+}
+
 function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
-  const [groupOpen, setGroupOpen] = useState(true)
+  const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
   const prevAllDoneRef = useRef(false)
 
   const activeCalls = calls.filter(c => c.status === 'running' || c.status === 'pending')

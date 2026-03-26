@@ -754,6 +754,12 @@ function TreeNodeRow({
 }) {
   const paddingLeft = isMobile ? 6 + depth * 12 : 8 + depth * 14
   const [dragOver, setDragOver] = useState(false)
+  const openMobileMenu = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    const rect = event.currentTarget.getBoundingClientRect()
+    onTreeContextMenu(node, rect.right - 8, rect.bottom + 4)
+  }, [node, onTreeContextMenu])
 
   if (node.kind === 'dir') {
     const expanded = expandedDirs.has(node.path)
@@ -824,13 +830,9 @@ function TreeNodeRow({
           {isMobile && (
             <button
               type="button"
-              className="rounded p-1.5 hover:bg-background"
+              className="rounded p-2 hover:bg-background touch-manipulation"
               onPointerDown={(e) => e.stopPropagation()}
-              onClick={(e) => {
-                e.stopPropagation()
-                const rect = e.currentTarget.getBoundingClientRect()
-                onTreeContextMenu(node, rect.right - 8, rect.bottom + 4)
-              }}
+              onPointerUp={openMobileMenu}
               title="More actions"
             >
               <MoreVertical className="h-3.5 w-3.5" />
@@ -904,13 +906,9 @@ function TreeNodeRow({
       {isMobile ? (
         <button
           type="button"
-          className="rounded p-1.5 hover:bg-background"
+          className="rounded p-2 hover:bg-background touch-manipulation"
           onPointerDown={(e) => e.stopPropagation()}
-          onClick={(e) => {
-            e.stopPropagation()
-            const rect = e.currentTarget.getBoundingClientRect()
-            onTreeContextMenu(node, rect.right - 8, rect.bottom + 4)
-          }}
+          onPointerUp={openMobileMenu}
           title="More actions"
         >
           <MoreVertical className="h-3.5 w-3.5" />
@@ -1070,11 +1068,22 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [mobileTreeDrag, setMobileTreeDrag] = useState<MobileTreeDragState | null>(null)
   const mobileTreeDragRef = useRef<MobileTreeDragState | null>(null)
   const mobileTreeDragTimerRef = useRef<number | null>(null)
+  const mobileTreeMenuTimerRef = useRef<number | null>(null)
   const suppressTreeClickRef = useRef(false)
   const consumeSuppressedTreeClick = useCallback(() => {
     if (!suppressTreeClickRef.current) return false
     suppressTreeClickRef.current = false
     return true
+  }, [])
+  const clearMobileTreeGestureTimers = useCallback(() => {
+    if (mobileTreeDragTimerRef.current !== null) {
+      window.clearTimeout(mobileTreeDragTimerRef.current)
+      mobileTreeDragTimerRef.current = null
+    }
+    if (mobileTreeMenuTimerRef.current !== null) {
+      window.clearTimeout(mobileTreeMenuTimerRef.current)
+      mobileTreeMenuTimerRef.current = null
+    }
   }, [])
 
   // ── File search state ──
@@ -2476,10 +2485,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (!isMobile || !remoteRoot || event.pointerType === 'mouse') return
     const target = event.target as HTMLElement | null
     if (target?.closest('button')) return
-    if (mobileTreeDragTimerRef.current !== null) {
-      window.clearTimeout(mobileTreeDragTimerRef.current)
-      mobileTreeDragTimerRef.current = null
-    }
+    clearMobileTreeGestureTimers()
+    const rowRect = event.currentTarget.getBoundingClientRect()
     const nextDragState: MobileTreeDragState = {
       node,
       pointerId: event.pointerId,
@@ -2502,7 +2509,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       })
       mobileTreeDragTimerRef.current = null
     }, 180)
-  }, [isMobile, remoteRoot])
+    mobileTreeMenuTimerRef.current = window.setTimeout(() => {
+      const current = mobileTreeDragRef.current
+      if (!current || current.pointerId !== event.pointerId || current.active) return
+      suppressTreeClickRef.current = true
+      clearMobileTreeGestureTimers()
+      mobileTreeDragRef.current = null
+      setMobileTreeDrag(null)
+      handleTreeContextMenu(node, rowRect.right - 8, rowRect.top + 12)
+    }, 420)
+  }, [clearMobileTreeGestureTimers, handleTreeContextMenu, isMobile, remoteRoot])
 
   useEffect(() => {
     if (!mobileTreeDrag || !remoteRoot) return
@@ -2530,16 +2546,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       const distance = Math.hypot(deltaX, deltaY)
       if (!current.ready) {
         if (distance > 6) {
-          if (mobileTreeDragTimerRef.current !== null) {
-            window.clearTimeout(mobileTreeDragTimerRef.current)
-            mobileTreeDragTimerRef.current = null
-          }
+          clearMobileTreeGestureTimers()
           mobileTreeDragRef.current = null
           setMobileTreeDrag(null)
         }
         return
       }
       const active = current.active || distance >= 4
+      if (active && mobileTreeMenuTimerRef.current !== null) {
+        window.clearTimeout(mobileTreeMenuTimerRef.current)
+        mobileTreeMenuTimerRef.current = null
+      }
       const dropDir = active ? updateDropTarget(event.clientX, event.clientY) : null
       if (active && event.cancelable) event.preventDefault()
       const nextDragState = {
@@ -2556,10 +2573,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     const finishDrag = (pointerId: number) => {
       const current = mobileTreeDragRef.current
       if (!current || current.pointerId !== pointerId) return
-      if (mobileTreeDragTimerRef.current !== null) {
-        window.clearTimeout(mobileTreeDragTimerRef.current)
-        mobileTreeDragTimerRef.current = null
-      }
+      clearMobileTreeGestureTimers()
       if (current.active) {
         suppressTreeClickRef.current = true
         if (current.dropDir) void handleMoveTreeNode(current.node.path, current.dropDir)
@@ -2575,15 +2589,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     window.addEventListener('pointerup', onPointerUp)
     window.addEventListener('pointercancel', onPointerCancel)
     return () => {
-      if (mobileTreeDragTimerRef.current !== null) {
-        window.clearTimeout(mobileTreeDragTimerRef.current)
-        mobileTreeDragTimerRef.current = null
-      }
+      clearMobileTreeGestureTimers()
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerCancel)
     }
-  }, [mobileTreeDrag, remoteRoot, handleMoveTreeNode])
+  }, [clearMobileTreeGestureTimers, mobileTreeDrag, remoteRoot, handleMoveTreeNode])
 
   /* ---- File management actions ---- */
   const handleDeleteNode = useCallback(async (node: LazyNode) => {
@@ -3970,6 +3981,50 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         </div>
         )}
 
+        {showEditorProp && openTabs.length > 0 && (
+          <div className="flex items-center h-8 border-b bg-background/80 shrink-0 min-w-0">
+            <div className="flex items-center flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-none">
+              {openTabs.map((tab) => {
+                const isActive = tab.id === activeTabId
+                return (
+                  <div
+                    key={tab.id}
+                    data-tab-id={tab.id}
+                    className={`group relative flex h-8 items-center gap-1 px-2.5 border-r border-border/40 cursor-pointer shrink-0 text-xs ${
+                      isActive ? 'bg-background text-foreground' : 'text-muted-foreground'
+                    }`}
+                    onClick={() => {
+                      handleSwitchTab(tab.id)
+                      setMobileTab('editor')
+                    }}
+                  >
+                    {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
+                    {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
+                      <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
+                    ) : tab.type === 'architecture' ? (
+                      <Boxes className="h-3.5 w-3.5 shrink-0" />
+                    ) : tab.type === 'preview' ? (
+                      <Globe className="h-3.5 w-3.5 shrink-0" />
+                    ) : (
+                      <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
+                    )}
+                    <span className="truncate max-w-[120px]">{getEditorTabTitle(tab)}</span>
+                    <button
+                      className="p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 opacity-60"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleCloseTab(tab.id)
+                      }}
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
         {/* Single-pane header when only the editor pane is visible */}
         {!showTreeProp && showEditorProp && (
           <div className="flex items-center justify-between h-[35px] border-b bg-muted/30 shrink-0 px-2">
@@ -4290,8 +4345,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         {/* Editor tab */}
         {effectiveMobileTab === 'editor' && showEditorProp && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Mobile tab bar */}
-            {openTabs.length > 0 && (
+            {/* Mobile editor header */}
             <div className="flex items-center h-8 bg-muted/30 border-b shrink-0 overflow-x-auto overflow-y-hidden">
               {showTreeProp && (
                 <button
@@ -4301,36 +4355,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   <ArrowLeft className="h-3.5 w-3.5" />
                 </button>
               )}
-              {openTabs.map((tab) => {
-                const isActive = tab.id === activeTabId
-                return (
-                  <div
-                    key={tab.id}
-                    className={`group relative flex items-center gap-1 h-8 px-2.5 border-r border-border/40 cursor-pointer shrink-0 text-xs ${
-                      isActive ? 'bg-background text-foreground' : 'text-muted-foreground'
-                    }`}
-                    onClick={() => handleSwitchTab(tab.id)}
-                  >
-                    {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
-                    {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
-                      <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
-                    ) : tab.type === 'architecture' ? (
-                      <Boxes className="h-3.5 w-3.5 shrink-0" />
-                    ) : tab.type === 'preview' ? (
-                      <Globe className="h-3.5 w-3.5 shrink-0" />
-                    ) : (
-                      <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
-                    )}
-                    <span className="truncate max-w-[140px]">{getEditorTabTitle(tab)}</span>
-                    <button
-                      className="p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 opacity-60"
-                      onClick={(e) => { e.stopPropagation(); handleCloseTab(tab.id) }}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )
-              })}
+              <span className="min-w-0 flex-1 truncate px-1 text-[11px] text-muted-foreground">
+                {activeTab ? getEditorTabTitle(activeTab) : 'Editor'}
+              </span>
               <div className="flex-1" />
               {activeTab?.type === 'preview' && (
                 <>
@@ -4359,7 +4386,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </button>
               )}
             </div>
-            )}
             {/* Fallback header when no tabs */}
             {openTabs.length === 0 && (
             <div className="flex items-center gap-1.5 h-7 px-2 border-b bg-muted/20 shrink-0">

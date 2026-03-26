@@ -1609,7 +1609,7 @@ function App() {
   // ── Persistent session state for todos & changed files ────────────
   type SavedTodo = { id: number; title: string; status: 'not-started' | 'in-progress' | 'completed' }
   const [savedTodos] = useSessionState<SavedTodo[]>(activeSessionId, 'todo_list', token)
-  type SavedChangedFile = { path: string; name: string }
+  type SavedChangedFile = ChangedFile | { path: string; name: string; state?: 'undecided' | 'accepted' | 'rejected' | null }
   const [savedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
 
   // Restore panel state from REST fallback (only if WS full-state hasn't arrived yet)
@@ -1731,9 +1731,13 @@ function App() {
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
     if (savedChangedFiles && savedChangedFiles.length > 0) {
-      for (const f of savedChangedFiles) addChangedFile(f.path, f.name)
+      setChangedFiles(savedChangedFiles.map((f) => ({
+        path: f.path,
+        name: f.name,
+        state: f.state === 'accepted' || f.state === 'rejected' || f.state === 'undecided' ? f.state : 'undecided',
+      })))
     }
-  }, [savedChangedFiles, addChangedFile])
+  }, [savedChangedFiles, setChangedFiles])
 
   // ── Cross-client state sync handler ───────────────────────────────
   const handleStateSync = useCallback((key: string, value: unknown) => {

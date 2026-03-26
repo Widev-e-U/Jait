@@ -17,10 +17,25 @@ import {
 
 const API_URL = getApiUrl()
 const STREAM_SNAPSHOT_LIMIT = 120
+const TRANSIENT_CONNECTION_MESSAGE = 'Connection interrupted. Attempting to reconnect...'
 
 function authHeaders(token?: string | null): Record<string, string> {
   if (!token) return {}
   return { Authorization: `Bearer ${token}` }
+}
+
+function isTransientConnectionError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false
+  if (error.name === 'AbortError') return false
+  const message = error.message.toLowerCase()
+  return (
+    message.includes('network error') ||
+    message.includes('failed to fetch') ||
+    message.includes('fetch failed') ||
+    message.includes('load failed') ||
+    message.includes('network connection was lost') ||
+    message.includes('the internet connection appears to be offline')
+  )
 }
 
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
@@ -373,6 +388,7 @@ export function useChat(
                   messages: msgs,
                   isLoadingHistory: false,
                   isLoading: snapshotStreaming,
+                  error: null,
                 }))
               } else if (data.type === 'token' && assistantId) {
                 // Append token to the tracked assistant message
@@ -985,16 +1001,24 @@ export function useChat(
         return 'aborted'
       }
       if (!isStale()) {
+        const transientConnectionError = isTransientConnectionError(error)
         setState(prev => ({
           ...prev,
           isLoading: false,
-          error: error instanceof Error ? error.message : 'An error occurred',
+          error: transientConnectionError
+            ? TRANSIENT_CONNECTION_MESSAGE
+            : error instanceof Error ? error.message : 'An error occurred',
           messages: prev.messages.filter(m =>
             options.queued
               ? m.id !== assistantId && m.id !== userMessage.id
               : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
           ),
         }))
+        if (transientConnectionError && requestSessionId) {
+          window.setTimeout(() => {
+            if (prevSessionIdRef.current === requestSessionId) resumeSessionStream()
+          }, 250)
+        }
       }
       return 'retry'
     }
@@ -1194,9 +1218,9 @@ export function useChat(
     if (changedFiles.length === 0) return
     const allDecided = changedFiles.every(f => f.state !== 'undecided')
     if (!allDecided) return
-    const timer = setTimeout(() => setChangedFiles([]), 1200)
+    const timer = setTimeout(() => updateAndBroadcastFiles(() => []), 1200)
     return () => clearTimeout(timer)
-  }, [changedFiles])
+  }, [changedFiles, updateAndBroadcastFiles])
 
   const cancelRequest = useCallback(() => {
     requestVersionRef.current += 1
@@ -1234,9 +1258,9 @@ export function useChat(
   const clearMessages = useCallback(() => {
     setState({ messages: [], isLoading: false, isLoadingHistory: false, promptCount: 0, remainingPrompts: null, error: null, hitMaxRounds: false })
     setTodoList([])
-    setChangedFiles([])
+    updateAndBroadcastFiles(() => [])
     setMessageQueue([])
-  }, [])
+  }, [updateAndBroadcastFiles])
 
   /** Send "Continue" to resume the agent after hitting max tool rounds */
   const continueChat = useCallback((options: SendMessageOptions = {}) => {

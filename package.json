@@ -30,7 +30,7 @@
     "dev": "bun run --filter '*' dev",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint": "oxlint .",
+    "lint": "bunx oxlint .",
     "typecheck": "bun run --filter '*' typecheck",
     "clean": "rm -rf packages/*/dist apps/*/dist node_modules/.cache"
   },
