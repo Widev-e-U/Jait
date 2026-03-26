@@ -1501,14 +1501,6 @@ ToolCallGroup.displayName = 'ToolCallGroup'
 
 /* ─── Agent Tool Call Wrapper ──────────────────────────────────────────────── */
 
-const AGENT_PROVIDER_LABELS: Record<string, string> = {
-  'claude-code': 'Claude Code',
-  codex: 'Codex',
-  gemini: 'Gemini CLI',
-  opencode: 'OpenCode',
-  copilot: 'Copilot',
-}
-
 interface AgentToolCallWrapperProps {
   provider: string
   calls: ToolCallInfo[]
@@ -1522,14 +1514,13 @@ export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[
   return calls.length > 0 && calls.every(c => c.status !== 'running' && c.status !== 'pending')
 }
 
-function AgentToolCallWrapperInner({ provider, calls, isStreaming, onOpenTerminal, onOpenDiff }: AgentToolCallWrapperProps) {
+function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, onOpenTerminal, onOpenDiff }: AgentToolCallWrapperProps) {
   const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
   const [now, setNow] = useState(() => Date.now())
   const prevActiveRef = useRef(!shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
 
   const isActive = !!isStreaming || calls.some(c => c.status === 'running' || c.status === 'pending')
-  const label = AGENT_PROVIDER_LABELS[provider] ?? provider
   const successCount = calls.filter(c => c.status === 'success').length
   const errorCount = calls.filter(c => c.status === 'error').length
   const startedAt = calls.length > 0 ? Math.min(...calls.map(c => c.startedAt)) : Date.now()
@@ -1573,13 +1564,12 @@ function AgentToolCallWrapperInner({ provider, calls, isStreaming, onOpenTermina
           )} />
           {isActive
             ? <Loader2 className="h-4 w-4 shrink-0 text-muted-foreground animate-spin" />
-            : <Bot className="h-4 w-4 shrink-0 text-purple-500" />
+            : <Zap className="h-4 w-4 shrink-0 text-muted-foreground" />
           }
-          <span className="text-sm font-medium text-foreground truncate">{label}</span>
+          <span className="text-sm font-medium text-foreground truncate">
+            {calls.length} tool call{calls.length !== 1 ? 's' : ''}
+          </span>
           <div className="flex items-center gap-2 ml-auto text-[11px] text-muted-foreground tabular-nums shrink-0">
-            {calls.length > 0 && (
-              <span>{calls.length} tool{calls.length !== 1 ? 's' : ''}</span>
-            )}
             {!isActive && errorCount > 0 && (
               <span className="text-red-500">{errorCount} failed</span>
             )}
