@@ -97,6 +97,10 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   copilot: 'Copilot',
 }
 
+function getThreadCapableProviders(providers: ProviderInfo[]) {
+  return providers.filter((provider) => provider.id !== 'jait')
+}
+
 // ── Main component ───────────────────────────────────────────────────
 
 export function AutomationPage() {
@@ -115,7 +119,7 @@ export function AutomationPage() {
 
   // Chat input
   const [inputMessage, setInputMessage] = useState('')
-  const [selectedProvider, setSelectedProvider] = useState<ProviderId>('jait')
+  const [selectedProvider, setSelectedProvider] = useState<ProviderId>('codex')
   const [creating, setCreating] = useState(false)
   const activityEndRef = useRef<HTMLDivElement>(null)
   const inputRef = useRef<HTMLTextAreaElement>(null)
@@ -172,6 +176,16 @@ export function AutomationPage() {
     const id = setInterval(() => void refresh(), 5_000)
     return () => clearInterval(id)
   }, [refresh])
+
+  useEffect(() => {
+    const threadProviders = getThreadCapableProviders(providers)
+    if (threadProviders.length === 0) return
+    if (!threadProviders.some((provider) => provider.id === selectedProvider)) {
+      setSelectedProvider(threadProviders[0]!.id)
+    }
+  }, [providers, selectedProvider])
+
+  const threadProviders = getThreadCapableProviders(providers)
 
   // Fetch activities for selected thread
   useEffect(() => {
@@ -609,15 +623,15 @@ export function AutomationPage() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          {providers
+                          {threadProviders
                             .filter((p) => p.available)
                             .map((p) => (
                               <SelectItem key={p.id} value={p.id}>
                                 {PROVIDER_LABELS[p.id] ?? p.id}
                               </SelectItem>
                             ))}
-                          {providers.filter((p) => p.available).length === 0 && (
-                            <SelectItem value="jait">Jait</SelectItem>
+                          {threadProviders.filter((p) => p.available).length === 0 && (
+                            <SelectItem value="codex">Codex</SelectItem>
                           )}
                         </SelectContent>
                       </Select>

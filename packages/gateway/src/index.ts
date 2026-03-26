@@ -86,13 +86,11 @@ async function main() {
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
-  providerRegistry.register(new JaitProvider());
   providerRegistry.register(new CodexProvider());
   providerRegistry.register(new ClaudeCodeProvider());
   providerRegistry.register(new GeminiProvider());
   providerRegistry.register(new OpenCodeProvider());
   providerRegistry.register(new CopilotProvider());
-  console.log(`Providers registered: ${providerRegistry.list().map(p => p.id).join(", ")}`);
 
   // Surface registry — register all surface factories
   const surfaceRegistry = new SurfaceRegistry();
@@ -273,6 +271,14 @@ async function main() {
     previewService,
     architectureDiagramService,
   });
+  providerRegistry.register(new JaitProvider({
+    config,
+    threadService,
+    userService,
+    toolRegistry,
+    toolExecutor: (toolName, input, context) => toolRegistry.execute(toolName, input, context, audit),
+  }));
+  console.log(`Providers registered: ${providerRegistry.list().map(p => p.id).join(", ")}`);
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   // Consent & Trust — Sprint 4

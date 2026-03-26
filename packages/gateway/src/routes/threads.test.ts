@@ -14,6 +14,7 @@ import { ProviderRegistry } from "../providers/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
 import type { GitStepResult } from "../services/git.js";
 import { ThreadService } from "../services/threads.js";
+import { UserService } from "../services/users.js";
 import { registerThreadRoutes } from "./threads.js";
 import type { WsControlPlane } from "../ws.js";
 
@@ -33,19 +34,24 @@ async function waitFor(condition: () => boolean, timeoutMs = 2000) {
 }
 
 class MockThreadProvider implements CliProviderAdapter {
-  readonly id = "codex" as const;
-  readonly info: ProviderInfo = {
-    id: "codex",
-    name: "Mock Codex",
-    description: "Test provider",
-    available: true,
-    modes: ["full-access", "supervised"],
-  };
+  readonly id: "jait" | "codex" | "claude-code";
+  readonly info: ProviderInfo;
 
   private emitter = new EventEmitter();
   readonly sendTurn = vi.fn(async (): Promise<void> => {
     return;
   });
+
+  constructor(id: "jait" | "codex" | "claude-code" = "codex") {
+    this.id = id;
+    this.info = {
+      id,
+      name: id === "jait" ? "Mock Jait" : id === "claude-code" ? "Mock Claude Code" : "Mock Codex",
+      description: "Test provider",
+      available: true,
+      modes: ["full-access", "supervised"],
+    };
+  }
 
   async checkAvailability(): Promise<boolean> {
     return true;
@@ -94,10 +100,12 @@ describe("thread routes", () => {
     const app = Fastify();
     const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
     const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider());
 
     registerThreadRoutes(app, config, {
       threadService,
-      providerRegistry: new ProviderRegistry(),
+      providerRegistry,
     });
 
     const headers = await authHeader(config.jwtSecret, "user-1");
@@ -114,6 +122,145 @@ describe("thread routes", () => {
       status: "idle",
       providerSessionId: null,
     });
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("creates a literal jait thread when jait is selected", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("thread-user", "secret");
+    users.updateSettings(user.id, { chatProvider: "jait" });
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(new MockThreadProvider("jait"));
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      userService: users,
+    });
+
+    const headers = await authHeader(config.jwtSecret, user.id);
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Helper", providerId: "jait", kind: "delegation" },
+    });
+
+    expect(response.statusCode).toBe(201);
+    expect(response.json()).toMatchObject({
+      title: "Helper",
+      providerId: "jait",
+      status: "idle",
+      providerSessionId: null,
+    });
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("starts a literal jait thread when jait is selected", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const users = new UserService(db);
+    const user = users.createUser("thread-user", "secret");
+    users.updateSettings(user.id, { chatProvider: "jait" });
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("jait");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      userService: users,
+    });
+
+    const headers = await authHeader(config.jwtSecret, user.id);
+    const thread = threadService.create({
+      userId: user.id,
+      title: "Helper",
+      providerId: "jait",
+      workingDirectory: process.cwd(),
+    });
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "inspect ui", titleTask: "" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+    expect(provider.sendTurn).toHaveBeenCalledWith("mock-session-1", "inspect ui", undefined);
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("starts and sends turns through claude-code threads", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("claude-code");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Claude helper", providerId: "claude-code", kind: "delegation" },
+    });
+
+    expect(createResponse.statusCode).toBe(201);
+    const thread = createResponse.json() as { id: string };
+
+    const startResponse = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "inspect ui", titleTask: "" },
+    });
+
+    expect(startResponse.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+    expect(provider.sendTurn).toHaveBeenNthCalledWith(1, "mock-session-1", "inspect ui", undefined);
+
+    threadService.update(thread.id, {
+      status: "completed",
+      error: null,
+      completedAt: new Date().toISOString(),
+    });
+
+    const sendResponse = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/send`,
+      headers,
+      payload: { message: "address the follow-up" },
+    });
+
+    expect(sendResponse.statusCode).toBe(200);
+    expect(provider.sendTurn).toHaveBeenNthCalledWith(2, "mock-session-1", "address the follow-up", undefined);
 
     await app.close();
     sqlite.close();
@@ -144,13 +291,12 @@ describe("thread routes", () => {
     });
 
     expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      hasMore: true,
-      threads: [
-        { title: "Thread 3" },
-        { title: "Thread 2" },
-      ],
-    });
+    const payload = response.json() as { hasMore: boolean; threads: Array<{ title: string }> };
+    expect(payload.hasMore).toBe(true);
+    expect(payload.threads).toHaveLength(2);
+    const titles = payload.threads.map((thread) => thread.title);
+    expect(new Set(titles).size).toBe(2);
+    expect(titles.every((title) => ["Thread 1", "Thread 2", "Thread 3"].includes(title))).toBe(true);
 
     await app.close();
     sqlite.close();

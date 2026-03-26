@@ -68,6 +68,10 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   copilot: 'Copilot',
 }
 
+function getThreadCapableProviders(providers: ProviderInfo[]) {
+  return providers.filter((provider) => provider.id !== 'jait')
+}
+
 // ── Main component ───────────────────────────────────────────────────
 
 export function AgentsPage() {
@@ -82,7 +86,7 @@ export function AgentsPage() {
   // New thread form
   const [showNew, setShowNew] = useState(false)
   const [newTitle, setNewTitle] = useState('')
-  const [newProvider, setNewProvider] = useState<ProviderId>('jait')
+  const [newProvider, setNewProvider] = useState<ProviderId>('codex')
   const [newPrompt, setNewPrompt] = useState('')
 
   // Send message
@@ -114,6 +118,16 @@ export function AgentsPage() {
     const interval = setInterval(refresh, 3000) // Poll for status changes
     return () => clearInterval(interval)
   }, [refresh])
+
+  useEffect(() => {
+    const threadProviders = getThreadCapableProviders(providers)
+    if (threadProviders.length === 0) return
+    if (!threadProviders.some((provider) => provider.id === newProvider)) {
+      setNewProvider(threadProviders[0]!.id)
+    }
+  }, [newProvider, providers])
+
+  const threadProviders = getThreadCapableProviders(providers)
 
   // Fetch activities when selection changes
   useEffect(() => {
@@ -254,16 +268,18 @@ export function AgentsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {providers.map((p) => (
+                {threadProviders.map((p) => (
                   <SelectItem key={p.id} value={p.id} disabled={!p.available}>
                     {p.name} {!p.available && '(unavailable)'}
                   </SelectItem>
                 ))}
-                {providers.length === 0 && (
+                {threadProviders.length === 0 && (
                   <>
-                    <SelectItem value="jait">Jait</SelectItem>
                     <SelectItem value="codex">Codex</SelectItem>
                     <SelectItem value="claude-code">Claude Code</SelectItem>
+                    <SelectItem value="gemini">Gemini CLI</SelectItem>
+                    <SelectItem value="opencode">OpenCode</SelectItem>
+                    <SelectItem value="copilot">Copilot</SelectItem>
                   </>
                 )}
               </SelectContent>

@@ -90,6 +90,34 @@ interface StartThreadResult {
   thread?: ThreadRow;
 }
 
+interface ProviderResolution {
+  providerId?: ProviderId;
+  error?: string;
+}
+
+function normalizeThreadProviderId(value: unknown): ProviderId | null {
+  if (typeof value !== "string") return null;
+  switch (value.trim().toLowerCase()) {
+    case "openai":
+      return "codex";
+    case "anthropic":
+      return "claude-code";
+    case "google":
+      return "gemini";
+    case "github":
+      return "copilot";
+    case "jait":
+    case "codex":
+    case "claude-code":
+    case "gemini":
+    case "opencode":
+    case "copilot":
+      return value.trim().toLowerCase() as ProviderId;
+    default:
+      return null;
+  }
+}
+
 export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefinition<ThreadControlInput> {
   const gitService = deps.gitService ?? new GitService();
 
@@ -109,19 +137,47 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
   };
 
   const resolveProviderId = (
-    requestedProviderId: ProviderId | undefined,
+    context: ToolContext,
+    requestedProviderId: unknown,
     userId: string,
-    fallbackProviderId?: ProviderId,
-  ): ProviderId => {
-    if (userId !== "system" && deps.userService) {
-      const selectedProvider = deps.userService.getSettings(userId).chatProvider;
-      if (deps.providerRegistry.get(selectedProvider)) {
-        return selectedProvider;
-      }
+    fallbackProviderId?: unknown,
+  ): ProviderResolution => {
+    const contextProvider = normalizeThreadProviderId(context.providerId);
+    const selectedProvider = userId !== "system" && deps.userService
+      ? normalizeThreadProviderId(deps.userService.getSettings(userId).chatProvider)
+      : null;
+
+    const resolveRegisteredProvider = (providerId: ProviderId, label: string): ProviderResolution =>
+      deps.providerRegistry.get(providerId)
+        ? { providerId }
+        : { error: `${label} '${providerId}' is not registered on this gateway.` };
+
+    if (contextProvider) {
+      return resolveRegisteredProvider(contextProvider, "The calling agent provider");
     }
-    if (requestedProviderId && deps.providerRegistry.get(requestedProviderId)) return requestedProviderId;
-    if (fallbackProviderId && deps.providerRegistry.get(fallbackProviderId)) return fallbackProviderId;
-    return "jait";
+
+    if (selectedProvider) {
+      return resolveRegisteredProvider(selectedProvider, "The current selected provider");
+    }
+
+    if (typeof requestedProviderId === "string") {
+      const requested = normalizeThreadProviderId(requestedProviderId);
+      if (!requested) {
+        return {
+          error: `Provider '${requestedProviderId}' is not supported for agent threads.`,
+        };
+      }
+      return resolveRegisteredProvider(requested, "Provider");
+    }
+
+    const fallback = normalizeThreadProviderId(fallbackProviderId);
+    if (fallback) {
+      return resolveRegisteredProvider(fallback, "Provider");
+    }
+
+    return {
+      error: "No provider could be resolved for this thread.",
+    };
   };
 
   const getAccessibleThread = (threadId: string, userId: string): ThreadRow | undefined => {
@@ -132,6 +188,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
   };
 
   const startThread = async (
+    context: ToolContext,
     thread: ThreadRow,
     userId: string,
     message?: string,
@@ -141,11 +198,16 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       return { ok: false, message: "Thread is already running" };
     }
 
-    const effectiveProviderId = resolveProviderId(
+    const resolvedProvider = resolveProviderId(
+      context,
       undefined,
       userId,
       thread.providerId as ProviderId | undefined,
     );
+    if (!resolvedProvider.providerId) {
+      return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
+    }
+    const effectiveProviderId = resolvedProvider.providerId;
     const effectiveThread = effectiveProviderId !== thread.providerId
       ? (deps.threadService.update(thread.id, { providerId: effectiveProviderId }) ?? thread)
       : thread;
@@ -169,7 +231,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         threadId: effectiveThread.id,
         workingDirectory: effectiveThread.workingDirectory ?? process.cwd(),
         mode: (effectiveThread.runtimeMode as "full-access" | "supervised") ?? "full-access",
-        model: effectiveThread.model ?? undefined,
+        model: effectiveThread.model ?? context.model ?? undefined,
         mcpServers,
       });
 
@@ -254,7 +316,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         threadId: { type: "string", description: "Thread ID for thread-specific actions." },
         sessionId: { type: "string", description: "Optional session filter or session assignment on create." },
         title: { type: "string", description: "Thread title (create/update)." },
-        providerId: { type: "string", enum: ["jait", "codex", "claude-code"], description: "Thread provider." },
+        providerId: { type: "string", enum: ["jait", "codex", "claude-code", "gemini", "opencode", "copilot"], description: "Thread provider. 'jait' means use the current/default thread-capable provider." },
         model: { type: "string", description: "Optional provider model." },
         runtimeMode: { type: "string", enum: ["full-access", "supervised"], description: "Execution mode for thread runs." },
         kind: { type: "string", enum: ["delivery", "delegation"], description: "Thread kind. Delegation threads are helper workers and do not create PRs." },
@@ -274,7 +336,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             type: "object",
             properties: {
               title: { type: "string" },
-              providerId: { type: "string", enum: ["jait", "codex", "claude-code"] },
+              providerId: { type: "string", enum: ["jait", "codex", "claude-code", "gemini", "opencode", "copilot"] },
               model: { type: "string" },
               runtimeMode: { type: "string", enum: ["full-access", "supervised"] },
               kind: { type: "string", enum: ["delivery", "delegation"] },
@@ -329,13 +391,16 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           }
 
           case "create": {
-            const providerId = resolveProviderId(input.providerId, userId);
+            const resolvedProvider = resolveProviderId(context, input.providerId, userId);
+            if (!resolvedProvider.providerId) {
+              return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
+            }
             const thread = deps.threadService.create({
               userId,
               sessionId: input.sessionId,
               title: input.title?.trim() || "New Thread",
-              providerId,
-              model: input.model,
+              providerId: resolvedProvider.providerId,
+              model: input.model ?? context.model,
               runtimeMode: input.runtimeMode ?? "full-access",
               kind: input.kind === "delivery" ? "delivery" : "delegation",
               workingDirectory: input.workingDirectory,
@@ -347,7 +412,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: true, message: "Thread created", data: { thread } };
             }
 
-            const started = await startThread(thread, userId, input.message, input.attachments);
+            const started = await startThread(context, thread, userId, input.message, input.attachments);
             if (!started.ok) {
               return {
                 ok: false,
@@ -367,15 +432,33 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: false, message: "create_many requires non-empty `threads`." };
             }
 
-            const defaultProviderId = resolveProviderId(input.providerId, userId);
+            const needsDefaultProvider = input.threads.some((spec) => !spec.providerId);
+            const defaultProvider = needsDefaultProvider
+              ? resolveProviderId(context, input.providerId, userId)
+              : { providerId: undefined, error: undefined };
+            if (needsDefaultProvider && !defaultProvider.providerId) {
+              return { ok: false, message: defaultProvider.error ?? "Unable to resolve a provider for these threads." };
+            }
 
-            const created = input.threads.map((spec) => {
+            const validatedSpecs = input.threads.map((spec) => ({
+              spec,
+              resolvedProvider: resolveProviderId(context, spec.providerId, userId, defaultProvider.providerId),
+            }));
+            const firstResolutionError = validatedSpecs.find(({ resolvedProvider }) => !resolvedProvider.providerId);
+            if (firstResolutionError) {
+              return {
+                ok: false,
+                message: firstResolutionError.resolvedProvider.error ?? `Unable to resolve a provider for thread '${firstResolutionError.spec.title}'.`,
+              };
+            }
+
+            const created = validatedSpecs.map(({ spec, resolvedProvider }) => {
               const thread = deps.threadService.create({
                 userId,
                 sessionId: spec.sessionId ?? input.sessionId,
                 title: spec.title?.trim() || "New Thread",
-                  providerId: resolveProviderId(spec.providerId, userId, defaultProviderId),
-                model: spec.model ?? input.model,
+                providerId: resolvedProvider.providerId!,
+                model: spec.model ?? input.model ?? context.model,
                 runtimeMode: spec.runtimeMode ?? input.runtimeMode ?? "full-access",
                 kind: spec.kind === "delivery" ? "delivery" : input.kind === "delivery" ? "delivery" : "delegation",
                 workingDirectory: spec.workingDirectory ?? input.workingDirectory,
@@ -389,6 +472,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             const startResults = await Promise.all(
               startTargets.map(async ({ thread, spec }) => {
                 const started = await startThread(
+                  context,
                   thread,
                   userId,
                   spec.message ?? input.message,
@@ -480,7 +564,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!input.threadId) return { ok: false, message: "start requires `threadId`." };
             const thread = getAccessibleThread(input.threadId, userId);
             if (!thread) return { ok: false, message: "Thread not found." };
-            const started = await startThread(thread, userId, input.message, input.attachments);
+            const started = await startThread(context, thread, userId, input.message, input.attachments);
             return {
               ok: started.ok,
               message: started.message,

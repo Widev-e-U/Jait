@@ -145,7 +145,7 @@ export interface AgentLoopOptions {
   /** Session identifier (for logging / events) */
   sessionId: string;
   /** Auth context for tool execution */
-  auth?: { userId?: string; apiKeys?: Record<string, string> };
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string };
   /** Abort controller — abort to cancel the loop */
   abort: AbortController;
   /** Max tool-calling rounds before stopping */
@@ -502,7 +502,7 @@ export async function parseOpenAIStream(
 interface ExecuteOneOptions {
   tc: OpenAIToolCall;
   sessionId: string;
-  auth?: { userId?: string; apiKeys?: Record<string, string> };
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string };
   signal?: AbortSignal;
   toolRegistry?: ToolRegistry;
   maxRetries: number;
@@ -667,7 +667,7 @@ export type ToolExecutor = (
   name: string,
   args: unknown,
   sessionId: string,
-  auth?: { userId?: string; apiKeys?: Record<string, string> },
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string },
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
 ) => Promise<ToolResult>;
@@ -1190,7 +1190,7 @@ export async function retryToolCall(
   executedToolCalls: ExecutedToolCall[],
   executeTool: ToolExecutor,
   sessionId: string,
-  auth?: { userId?: string; apiKeys?: Record<string, string> },
+  auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string },
   onEvent?: (event: AgentLoopEvent) => void,
   signal?: AbortSignal,
 ): Promise<ToolResult> {

@@ -193,6 +193,9 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
           requestedBy: `sub-agent:${subAgentId}`,
           userId: context.userId,
           apiKeys: context.apiKeys,
+          providerId: context.providerId,
+          model: context.model,
+          runtimeMode: context.runtimeMode,
           onOutputChunk: onChunk,
           signal,
         };

@@ -7,7 +7,19 @@
  */
 
 import { EventEmitter } from "node:events";
+import { inferContextWindow, type AppConfig } from "../config.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import type { ThreadService } from "../services/threads.js";
+import type { UserService } from "../services/users.js";
+import {
+  buildSystemPrompt,
+  buildTieredToolSchemas,
+  runAgentLoop,
+  type AgentLoopEvent,
+  type LLMConfig,
+} from "../tools/index.js";
+import type { ToolContext, ToolResult } from "../tools/contracts.js";
+import type { ToolRegistry } from "../tools/registry.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
@@ -16,6 +28,36 @@ import type {
   ProviderEvent,
   StartSessionOptions,
 } from "./contracts.js";
+
+interface JaitSessionState {
+  session: ProviderSession;
+  threadId: string;
+  workingDirectory: string;
+  model?: string;
+  userId?: string;
+  history: Array<{
+    role: "user" | "assistant" | "system" | "tool";
+    content: string;
+    tool_calls?: import("../tools/agent-loop.js").OpenAIToolCall[];
+    tool_call_id?: string;
+    name?: string;
+  }>;
+  currentTurnAbort?: AbortController;
+  currentTurn?: Promise<void>;
+}
+
+export interface JaitProviderDeps {
+  config: AppConfig;
+  threadService: ThreadService;
+  userService?: UserService;
+  toolRegistry?: ToolRegistry;
+  toolExecutor?: (
+    toolName: string,
+    input: unknown,
+    context: ToolContext,
+    options?: { dryRun?: boolean; consentTimeoutMs?: number },
+  ) => Promise<ToolResult>;
+}
 
 export class JaitProvider implements CliProviderAdapter {
   readonly id = "jait" as const;
@@ -28,7 +70,9 @@ export class JaitProvider implements CliProviderAdapter {
   };
 
   private emitter = new EventEmitter();
-  private sessions = new Map<string, ProviderSession>();
+  private sessions = new Map<string, JaitSessionState>();
+
+  constructor(private readonly deps: JaitProviderDeps) {}
 
   async checkAvailability(): Promise<boolean> {
     this.info.available = true;
@@ -40,6 +84,14 @@ export class JaitProvider implements CliProviderAdapter {
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    const thread = this.deps.threadService.getById(options.threadId);
+    const userId = thread?.userId ?? undefined;
+    const llm = this.buildLlmConfig(userId, options.model);
+    const prompt = buildSystemPrompt(
+      "agent",
+      { model: llm.openaiModel, baseUrl: llm.openaiBaseUrl },
+      { workspaceRoot: options.workingDirectory },
+    );
     const session: ProviderSession = {
       id: uuidv7(),
       providerId: "jait",
@@ -48,20 +100,103 @@ export class JaitProvider implements CliProviderAdapter {
       runtimeMode: options.mode,
       startedAt: new Date().toISOString(),
     };
-    this.sessions.set(session.id, session);
+    this.sessions.set(session.id, {
+      session,
+      threadId: options.threadId,
+      workingDirectory: options.workingDirectory,
+      model: options.model,
+      userId,
+      history: [{ role: "system", content: prompt }],
+    });
     this.emit({ type: "session.started", sessionId: session.id });
     return session;
   }
 
-  async sendTurn(_sessionId: string, _message: string): Promise<void> {
-    // Jait provider delegates to the existing chat route / runAgentLoop.
-    // The actual tool execution is handled by the chat.ts route.
-    // This adapter is primarily for tracking session state in threads.
+  async sendTurn(sessionId: string, message: string): Promise<void> {
+    const state = this.sessions.get(sessionId);
+    if (!state) {
+      throw new Error(`Unknown Jait session: ${sessionId}`);
+    }
+    if (state.currentTurn) {
+      throw new Error("A turn is already in progress for this Jait session.");
+    }
+
+    const abort = new AbortController();
+    state.currentTurnAbort = abort;
+    state.history.push({ role: "user", content: message });
+    this.emit({ type: "turn.started", sessionId });
+
+    const turnPromise = (async () => {
+      try {
+        const userSettings = state.userId ? this.deps.userService?.getSettings(state.userId) : undefined;
+        const disabledTools = userSettings?.disabledTools?.length
+          ? new Set(userSettings.disabledTools)
+          : undefined;
+        const toolSchemas = this.deps.toolRegistry
+          ? buildTieredToolSchemas(this.deps.toolRegistry, disabledTools)
+          : [];
+        const llm = this.buildLlmConfig(state.userId, state.model);
+        const result = await runAgentLoop(
+          {
+            llm,
+            history: state.history,
+            toolSchemas,
+            hasTools: toolSchemas.length > 0,
+            sessionId,
+            auth: {
+              userId: state.userId,
+              apiKeys: userSettings?.apiKeys ?? {},
+              providerId: "jait",
+              model: llm.openaiModel,
+              runtimeMode: state.session.runtimeMode,
+            },
+            abort,
+            maxRounds: 15,
+            parallel: true,
+            toolRegistry: this.deps.toolRegistry,
+            disabledTools,
+            mode: "agent",
+            onEvent: (event) => this.forwardAgentLoopEvent(sessionId, event),
+          },
+          (toolName, input, sid, auth, onOutputChunk, signal) =>
+            this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
+        );
+
+        if (result.content) {
+          this.emit({ type: "message", sessionId, role: "assistant", content: result.content });
+        }
+
+        const session = this.sessions.get(sessionId)?.session;
+        if (session) {
+          session.status = abort.signal.aborted ? "interrupted" : "running";
+        }
+        this.emit({ type: "turn.completed", sessionId });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        const session = this.sessions.get(sessionId)?.session;
+        if (session) {
+          session.status = "error";
+          session.error = message;
+        }
+        this.emit({ type: "session.error", sessionId, error: message });
+      } finally {
+        const current = this.sessions.get(sessionId);
+        if (current) {
+          current.currentTurn = undefined;
+          current.currentTurnAbort = undefined;
+        }
+      }
+    })();
+
+    state.currentTurn = turnPromise;
+    await turnPromise;
   }
 
   async interruptTurn(sessionId: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (session) session.status = "interrupted";
+    const state = this.sessions.get(sessionId);
+    if (!state) return;
+    state.currentTurnAbort?.abort();
+    state.session.status = "interrupted";
   }
 
   async respondToApproval(_sessionId: string, _requestId: string, _approved: boolean): Promise<void> {
@@ -69,10 +204,15 @@ export class JaitProvider implements CliProviderAdapter {
   }
 
   async stopSession(sessionId: string): Promise<void> {
-    const session = this.sessions.get(sessionId);
-    if (session) {
-      session.status = "completed";
-      session.completedAt = new Date().toISOString();
+    const state = this.sessions.get(sessionId);
+    if (state) {
+      state.currentTurnAbort?.abort();
+      state.session.status = "completed";
+      state.session.completedAt = new Date().toISOString();
+      if (state.currentTurn) {
+        await state.currentTurn.catch(() => {});
+      }
+      this.emit({ type: "session.completed", sessionId });
     }
     this.sessions.delete(sessionId);
   }
@@ -84,6 +224,94 @@ export class JaitProvider implements CliProviderAdapter {
 
   private emit(event: ProviderEvent): void {
     this.emitter.emit("event", event);
+  }
+
+  private buildLlmConfig(userId?: string, requestedModel?: string): LLMConfig {
+    const userSettings = userId ? this.deps.userService?.getSettings(userId) : undefined;
+    const apiKeys = userSettings?.apiKeys ?? {};
+    const configuredBaseUrl = apiKeys["OPENAI_BASE_URL"]?.trim() || this.deps.config.openaiBaseUrl;
+    const jaitBackend = userSettings?.jaitBackend ?? "openai";
+    const effectiveModel = requestedModel?.trim()
+      || apiKeys["OPENAI_MODEL"]?.trim()
+      || this.deps.config.openaiModel;
+    const isOpenRouterModel = effectiveModel.includes("/");
+    const isOpenRouterBaseUrl = configuredBaseUrl.toLowerCase().includes("openrouter.ai");
+    const openRouterKey = apiKeys["OPENROUTER_API_KEY"]?.trim();
+    const useOpenRouter = jaitBackend === "openrouter" || isOpenRouterModel || isOpenRouterBaseUrl;
+    return {
+      openaiApiKey: useOpenRouter && openRouterKey
+        ? openRouterKey
+        : (apiKeys["OPENAI_API_KEY"]?.trim() || this.deps.config.openaiApiKey),
+      openaiBaseUrl: useOpenRouter && openRouterKey
+        ? "https://openrouter.ai/api/v1"
+        : configuredBaseUrl,
+      openaiModel: effectiveModel,
+      contextWindow: inferContextWindow(effectiveModel),
+    };
+  }
+
+  private async executeTool(
+    toolName: string,
+    input: unknown,
+    sessionId: string,
+    auth: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string } | undefined,
+    onOutputChunk: ((chunk: string) => void) | undefined,
+    signal: AbortSignal | undefined,
+    workspaceRoot: string,
+  ): Promise<ToolResult> {
+    if (!this.deps.toolRegistry) {
+      return { ok: false, message: "Tool registry not available" };
+    }
+    const context: ToolContext = {
+      sessionId,
+      actionId: uuidv7(),
+      workspaceRoot,
+      requestedBy: "agent",
+      userId: auth?.userId,
+      apiKeys: auth?.apiKeys,
+      providerId: auth?.providerId,
+      model: auth?.model,
+      runtimeMode: auth?.runtimeMode,
+      onOutputChunk,
+      signal,
+    };
+    try {
+      return this.deps.toolExecutor
+        ? await this.deps.toolExecutor(toolName, input, context)
+        : await this.deps.toolRegistry.execute(toolName, input, context);
+    } catch (error) {
+      return { ok: false, message: error instanceof Error ? error.message : String(error) };
+    }
+  }
+
+  private forwardAgentLoopEvent(sessionId: string, event: AgentLoopEvent): void {
+    switch (event.type) {
+      case "token":
+        this.emit({ type: "token", sessionId, content: event.content });
+        break;
+      case "tool_start":
+        this.emit({ type: "tool.start", sessionId, tool: event.tool, args: event.args, callId: event.call_id });
+        break;
+      case "tool_output":
+        this.emit({ type: "tool.output", sessionId, callId: event.call_id, content: event.content });
+        break;
+      case "tool_result":
+        this.emit({
+          type: "tool.result",
+          sessionId,
+          tool: event.tool,
+          ok: event.ok,
+          message: event.message,
+          callId: event.call_id,
+          data: event.data,
+        });
+        break;
+      case "error":
+        this.emit({ type: "activity", sessionId, kind: "error", summary: event.message });
+        break;
+      default:
+        break;
+    }
   }
 }
 

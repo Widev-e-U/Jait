@@ -41,6 +41,60 @@ import type { WsEventType } from "@jait/shared";
 import type { ThreadInfo, ThreadRegistrySnapshot } from "@jait/shared";
 import type { ProviderModelInfo } from "../providers/contracts.js";
 
+const KNOWN_PROVIDER_IDS = new Set<ProviderId>(["jait", "codex", "claude-code", "gemini", "opencode", "copilot"]);
+
+function resolveThreadProviderId(
+  userSelectedProvider?: ProviderId | null,
+  requestedProvider?: ProviderId | null,
+  fallbackProvider?: ProviderId | null,
+): { providerId?: ProviderId; error?: string } {
+  const resolveSelectedProvider = (): { providerId?: ProviderId; error?: string } => {
+    if (!userSelectedProvider) {
+      return { error: "No selected provider is configured for this user." };
+    }
+    if (!KNOWN_PROVIDER_IDS.has(userSelectedProvider)) {
+      return {
+        error: `The current selected provider '${userSelectedProvider}' is not supported on this gateway.`,
+      };
+    }
+    return { providerId: userSelectedProvider };
+  };
+
+  if (requestedProvider === "jait") {
+    if (KNOWN_PROVIDER_IDS.has("jait")) return { providerId: "jait" };
+    return { error: "Provider 'jait' is not supported on this gateway." };
+  }
+
+  if (requestedProvider) {
+    if (KNOWN_PROVIDER_IDS.has(requestedProvider)) {
+      return { providerId: requestedProvider };
+    }
+    return { error: `Provider '${requestedProvider}' is not supported on this gateway.` };
+  }
+
+  if (userSelectedProvider && KNOWN_PROVIDER_IDS.has(userSelectedProvider)) {
+    return { providerId: userSelectedProvider };
+  }
+
+  const invalidFallback = fallbackProvider && !KNOWN_PROVIDER_IDS.has(fallbackProvider)
+    ? fallbackProvider
+    : null;
+  if (invalidFallback) {
+    return { error: `Provider '${invalidFallback}' is not supported on this gateway.` };
+  }
+
+  if (fallbackProvider === "jait") {
+    if (KNOWN_PROVIDER_IDS.has("jait")) return { providerId: "jait" };
+    return { error: "Provider 'jait' is not supported on this gateway." };
+  }
+
+  if (fallbackProvider && KNOWN_PROVIDER_IDS.has(fallbackProvider)) {
+    return { providerId: fallbackProvider };
+  }
+
+  return resolveSelectedProvider();
+}
+
 /** Fetch models from OpenRouter API with a 5-second timeout and in-memory cache. */
 let orCache: { models: ProviderModelInfo[]; fetchedAt: number } | null = null;
 const OR_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
@@ -296,11 +350,17 @@ export function registerThreadRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const body = request.body as Record<string, unknown>;
+    const requestedProviderId = (body["providerId"] as ProviderId) ?? "jait";
+    const userSelectedProvider = deps.userService?.getSettings(authUser.id).chatProvider ?? null;
+    const resolvedProvider = resolveThreadProviderId(userSelectedProvider, requestedProviderId);
+    if (!resolvedProvider.providerId) {
+      return reply.status(400).send({ error: resolvedProvider.error });
+    }
     const thread = threadService.create({
       userId: authUser.id,
       sessionId: typeof body["sessionId"] === "string" ? body["sessionId"] : undefined,
       title: typeof body["title"] === "string" ? body["title"] : "New Thread",
-      providerId: (body["providerId"] as ProviderId) ?? "jait",
+      providerId: resolvedProvider.providerId,
       model: typeof body["model"] === "string" ? body["model"] : undefined,
       runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : "full-access",
       kind: body["kind"] === "delegation" ? "delegation" : "delivery",
@@ -335,8 +395,23 @@ export function registerThreadRoutes(
         : body["prState"] === null
           ? null
           : undefined;
+    let providerId: ProviderId | undefined;
+    if (body["providerId"] !== undefined) {
+      const requestedProviderId = body["providerId"] as ProviderId;
+      const userSelectedProvider = deps.userService?.getSettings(authUser.id).chatProvider ?? null;
+      const resolvedProvider = resolveThreadProviderId(
+        userSelectedProvider,
+        requestedProviderId,
+        existing.providerId as ProviderId,
+      );
+      if (!resolvedProvider.providerId) {
+        return reply.status(400).send({ error: resolvedProvider.error });
+      }
+      providerId = resolvedProvider.providerId;
+    }
     const thread = threadService.update(id, {
       title: typeof body["title"] === "string" ? body["title"] : undefined,
+      providerId,
       model: typeof body["model"] === "string" ? body["model"] : undefined,
       runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : body["runtimeMode"] === "full-access" ? "full-access" : undefined,
       kind: body["kind"] === "delegation" ? "delegation" : body["kind"] === "delivery" ? "delivery" : undefined,
@@ -437,7 +512,6 @@ export function registerThreadRoutes(
     }
 
     const providerId = thread.providerId as ProviderId;
-
     // Resolve working directory — the stored path may come from a
     // different device/OS (e.g. Windows path on a Linux gateway).
     let workingDirectory = thread.workingDirectory ?? process.cwd();

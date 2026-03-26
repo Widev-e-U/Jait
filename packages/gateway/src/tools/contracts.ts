@@ -10,6 +10,9 @@ export interface ToolContext {
   requestedBy: string;
   userId?: string;
   apiKeys?: Record<string, string>;
+  providerId?: string;
+  model?: string;
+  runtimeMode?: string;
   /** Optional callback for streaming tool output chunks (e.g. terminal) */
   onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */

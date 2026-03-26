@@ -848,7 +848,7 @@ export function registerChatRoutes(
     toolName: string,
     args: unknown,
     sessionId: string,
-    auth?: { userId?: string; apiKeys?: Record<string, string> },
+    auth?: { userId?: string; apiKeys?: Record<string, string>; providerId?: string; model?: string; runtimeMode?: string },
     onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void,
     signal?: AbortSignal,
   ): Promise<ToolResult> {
@@ -867,6 +867,9 @@ export function registerChatRoutes(
       requestedBy: "agent",
       userId: auth?.userId,
       apiKeys: auth?.apiKeys,
+      providerId: auth?.providerId,
+      model: auth?.model,
+      runtimeMode: auth?.runtimeMode,
       onOutputChunk,
       signal,
     };
@@ -1527,7 +1530,13 @@ export function registerChatRoutes(
             toolSchemas,
             hasTools,
             sessionId,
-            auth: { userId: authUser.id, apiKeys: userApiKeys },
+            auth: {
+              userId: authUser.id,
+              apiKeys: userApiKeys,
+              providerId: requestProvider,
+              model: requestBodyModel || undefined,
+              runtimeMode: requestRuntimeMode ?? undefined,
+            },
             abort: streamAbort,
             maxRounds: MAX_TOOL_ROUNDS,
             parallel: true,
