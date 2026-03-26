@@ -1517,11 +1517,16 @@ interface AgentToolCallWrapperProps {
   onOpenDiff?: (filePath: string) => void
 }
 
+export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[], isStreaming?: boolean): boolean {
+  if (isStreaming) return false
+  return calls.length > 0 && calls.every(c => c.status !== 'running' && c.status !== 'pending')
+}
+
 function AgentToolCallWrapperInner({ provider, calls, isStreaming, onOpenTerminal, onOpenDiff }: AgentToolCallWrapperProps) {
-  const [open, setOpen] = useState(true)
+  const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
   const [now, setNow] = useState(() => Date.now())
-  const prevActiveRef = useRef(true)
+  const prevActiveRef = useRef(!shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
 
   const isActive = !!isStreaming || calls.some(c => c.status === 'running' || c.status === 'pending')
   const label = AGENT_PROVIDER_LABELS[provider] ?? provider

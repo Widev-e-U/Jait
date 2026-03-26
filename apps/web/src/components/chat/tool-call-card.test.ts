@@ -2,6 +2,7 @@ import { beforeAll, describe, expect, it } from 'vitest'
 
 let formatStructuredValue: typeof import('./tool-call-card')['formatStructuredValue']
 let shouldInitiallyCollapseToolCallGroup: typeof import('./tool-call-card')['shouldInitiallyCollapseToolCallGroup']
+let shouldInitiallyCollapseAgentToolCallWrapper: typeof import('./tool-call-card')['shouldInitiallyCollapseAgentToolCallWrapper']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -12,7 +13,7 @@ beforeAll(async () => {
       hostname: 'localhost',
     },
   }
-  ;({ formatStructuredValue, shouldInitiallyCollapseToolCallGroup } = await import('./tool-call-card'))
+  ;({ formatStructuredValue, shouldInitiallyCollapseToolCallGroup, shouldInitiallyCollapseAgentToolCallWrapper } = await import('./tool-call-card'))
 }, 30_000)
 
 describe('formatStructuredValue', () => {
@@ -48,6 +49,27 @@ describe('ToolCallGroup', () => {
         { callId: '1', tool: 'read', args: { path: 'a.ts' }, status: 'success', startedAt: 1, completedAt: 2 },
         { callId: '2', tool: 'read', args: { path: 'b.ts' }, status: 'running', startedAt: 3 },
         { callId: '3', tool: 'read', args: { path: 'c.ts' }, status: 'success', startedAt: 5, completedAt: 6 },
+      ],
+      true,
+    )).toBe(false)
+  })
+})
+
+describe('AgentToolCallWrapper', () => {
+  it('starts collapsed when the first render already contains only completed calls', () => {
+    expect(shouldInitiallyCollapseAgentToolCallWrapper(
+      [
+        { callId: '1', tool: 'read', args: { path: 'a.ts' }, status: 'success', startedAt: 1, completedAt: 2 },
+        { callId: '2', tool: 'read', args: { path: 'b.ts' }, status: 'success', startedAt: 3, completedAt: 4 },
+      ],
+      false,
+    )).toBe(true)
+  })
+
+  it('stays open while the wrapper is still streaming', () => {
+    expect(shouldInitiallyCollapseAgentToolCallWrapper(
+      [
+        { callId: '1', tool: 'read', args: { path: 'a.ts' }, status: 'success', startedAt: 1, completedAt: 2 },
       ],
       true,
     )).toBe(false)

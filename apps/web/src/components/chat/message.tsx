@@ -25,7 +25,7 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
+import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
@@ -740,13 +740,24 @@ function MessageInner({
                   // Collapse completed tool groups that are followed by text
                   const followedByText = segments!.slice(i + 1).some(s => s.type === 'text' && s.content.trim())
                   return calls.length > 0 ? (
-                    <ToolCallGroup
-                      key={`tg-${i}`}
-                      calls={calls}
-                      collapsible={followedByText}
-                      onOpenTerminal={onOpenTerminal}
-                      onOpenDiff={onOpenDiff}
-                    />
+                    provider && provider !== 'jait' ? (
+                      <AgentToolCallWrapper
+                        key={`tg-${i}`}
+                        provider={provider}
+                        calls={calls}
+                        isStreaming={!!isStreaming && i === segments.length - 1}
+                        onOpenTerminal={onOpenTerminal}
+                        onOpenDiff={onOpenDiff}
+                      />
+                    ) : (
+                      <ToolCallGroup
+                        key={`tg-${i}`}
+                        calls={calls}
+                        collapsible={followedByText}
+                        onOpenTerminal={onOpenTerminal}
+                        onOpenDiff={onOpenDiff}
+                      />
+                    )
                   ) : null
                 }
 
@@ -779,12 +790,22 @@ function MessageInner({
         ) : (
           <>
             {toolCalls && toolCalls.length > 0 && (
-              <ToolCallGroup
-                calls={toolCalls}
-                collapsible={provider !== 'jait'}
-                onOpenTerminal={onOpenTerminal}
-                onOpenDiff={onOpenDiff}
-              />
+              provider && provider !== 'jait' ? (
+                <AgentToolCallWrapper
+                  provider={provider}
+                  calls={toolCalls}
+                  isStreaming={isStreaming}
+                  onOpenTerminal={onOpenTerminal}
+                  onOpenDiff={onOpenDiff}
+                />
+              ) : (
+                <ToolCallGroup
+                  calls={toolCalls}
+                  collapsible={provider !== 'jait'}
+                  onOpenTerminal={onOpenTerminal}
+                  onOpenDiff={onOpenDiff}
+                />
+              )
             )}
 
             {content ? (

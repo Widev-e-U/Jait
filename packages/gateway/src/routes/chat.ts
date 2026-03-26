@@ -944,21 +944,32 @@ export function registerChatRoutes(
         sessionService.update(sessionId, { name: deriveSessionTitle(content) }, authUser.id);
       }
     }
-    const userApiKeys = userService?.getSettings(authUser.id).apiKeys ?? {};
+    const userSettings = userService?.getSettings(authUser.id);
+    const userApiKeys = userSettings?.apiKeys ?? {};
     const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
     const effectiveModel = requestBodyModel || userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
 
-    // When the selected model looks like an OpenRouter model (contains "/"),
-    // route through OpenRouter using the user's OpenRouter API key.
+    const configuredBaseUrl = userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl;
+    const jaitBackend = userSettings?.jaitBackend ?? "openai";
     const isOpenRouterModel = effectiveModel.includes("/");
+    const isOpenRouterBaseUrl = configuredBaseUrl.toLowerCase().includes("openrouter.ai");
     const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
+    const useOpenRouter = jaitBackend === "openrouter" || isOpenRouterModel || isOpenRouterBaseUrl;
+
+    if (jaitBackend === "openrouter" && !openRouterKey && !isOpenRouterBaseUrl) {
+      return reply.status(400).send({
+        error: "CONFIG_ERROR",
+        details: "OPENROUTER_API_KEY is required when the Jait backend provider is set to OpenRouter",
+      });
+    }
+
     const llmRuntime = {
-      openaiApiKey: isOpenRouterModel && openRouterKey
+      openaiApiKey: useOpenRouter && openRouterKey
         ? openRouterKey
         : (userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey),
-      openaiBaseUrl: isOpenRouterModel && openRouterKey
+      openaiBaseUrl: useOpenRouter && openRouterKey
         ? "https://openrouter.ai/api/v1"
-        : (userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl),
+        : configuredBaseUrl,
       openaiModel: effectiveModel,
       contextWindow: (requestBodyModel || userApiKeys["OPENAI_MODEL"]?.trim())
         ? inferContextWindow(effectiveModel)

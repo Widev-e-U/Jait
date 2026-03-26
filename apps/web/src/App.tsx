@@ -1610,7 +1610,7 @@ function App() {
   type SavedTodo = { id: number; title: string; status: 'not-started' | 'in-progress' | 'completed' }
   const [savedTodos] = useSessionState<SavedTodo[]>(activeSessionId, 'todo_list', token)
   type SavedChangedFile = ChangedFile | { path: string; name: string; state?: 'undecided' | 'accepted' | 'rejected' | null }
-  const [savedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
+  const [savedChangedFiles, setSavedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
 
   // Restore panel state from REST fallback (only if WS full-state hasn't arrived yet)
   useEffect(() => {
@@ -1728,15 +1728,18 @@ function App() {
     if (savedTodos && savedTodos.length > 0) setTodoList(savedTodos)
   }, [savedTodos, setTodoList])
 
+  const prevSavedChangedFilesRef = useRef<string | null>(null)
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
-    if (savedChangedFiles && savedChangedFiles.length > 0) {
-      setChangedFiles(savedChangedFiles.map((f) => ({
-        path: f.path,
-        name: f.name,
-        state: f.state === 'accepted' || f.state === 'rejected' || f.state === 'undecided' ? f.state : 'undecided',
-      })))
-    }
+    const normalized = (savedChangedFiles ?? []).map((f) => ({
+      path: f.path,
+      name: f.name,
+      state: f.state === 'accepted' || f.state === 'rejected' || f.state === 'undecided' ? f.state : 'undecided' as const,
+    }))
+    const serialized = JSON.stringify(normalized)
+    if (serialized === prevSavedChangedFilesRef.current) return
+    prevSavedChangedFilesRef.current = serialized
+    setChangedFiles(normalized)
   }, [savedChangedFiles, setChangedFiles])
 
   // ── Cross-client state sync handler ───────────────────────────────
@@ -1865,6 +1868,8 @@ function App() {
     const cf = state['changed_files']
     if (Array.isArray(cf)) {
       setChangedFiles(cf as ChangedFile[])
+    } else {
+      setChangedFiles([])
     }
 
     const qm = state['queued_messages']
@@ -2049,11 +2054,13 @@ function App() {
   // Register broadcast callback: when file decisions change, sync to other clients
   useEffect(() => {
     setOnChangedFilesSync((files: ChangedFile[]) => {
+      const payload = files.length > 0 ? files : null
+      setSavedChangedFiles(payload)
       if (consumeSuppressedUiSync('changed_files')) return
-      sendUIState('changed_files', files, activeSessionId)
+      sendUIState('changed_files', payload, activeSessionId)
     })
     return () => setOnChangedFilesSync(null)
-  }, [sendUIState, activeSessionId, setOnChangedFilesSync, consumeSuppressedUiSync])
+  }, [sendUIState, activeSessionId, setOnChangedFilesSync, consumeSuppressedUiSync, setSavedChangedFiles])
 
   useEffect(() => {
     localStorage.setItem('showSessionsSidebar', showSidebar ? 'true' : 'false')
