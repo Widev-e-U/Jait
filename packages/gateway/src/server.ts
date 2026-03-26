@@ -262,6 +262,8 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       toolRegistry: deps.toolRegistry,
       config,
       sessionService: deps.sessionService,
+      userService: deps.userService,
+      sessionState: deps.sessionState,
     });
   }
 

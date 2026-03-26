@@ -72,13 +72,23 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 }
 
-function makeContext(userId = "user-1") {
+function makeContext(
+  userId = "user-1",
+  overrides: Partial<{
+    providerId: ProviderId;
+    model: string;
+    runtimeMode: "full-access" | "supervised";
+  }> = {},
+) {
   return {
     sessionId: "s-thread-tools",
     actionId: "a-thread-tools",
     workspaceRoot: process.cwd(),
     requestedBy: "test",
     userId,
+    providerId: overrides.providerId,
+    model: overrides.model,
+    runtimeMode: overrides.runtimeMode,
   };
 }
 
@@ -315,6 +325,40 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("inherits provider, model, and runtime mode from the live tool context", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Use live codex context",
+        },
+        makeContext("user-1", {
+          providerId: "codex",
+          model: "gpt-5-codex",
+          runtimeMode: "supervised",
+        }),
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { providerId: string; model: string | null; runtimeMode: string } };
+      expect(data.thread.providerId).toBe("codex");
+      expect(data.thread.model).toBe("gpt-5-codex");
+      expect(data.thread.runtimeMode).toBe("supervised");
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("inherits the selected provider, model, and runtime mode from user/session state", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -472,6 +516,44 @@ describe("thread.control tool", () => {
       const data = result.data as { threads: Array<{ providerId: string }> };
       expect(data.threads).toHaveLength(2);
       expect(data.threads.every((thread) => thread.providerId === "codex")).toBe(true);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("defaults create_many threads to the live caller context provider and model", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create_many",
+          threads: [
+            { title: "Thread A" },
+            { title: "Thread B" },
+          ],
+        },
+        makeContext("user-1", {
+          providerId: "codex",
+          model: "gpt-5-codex",
+          runtimeMode: "supervised",
+        }),
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { threads: Array<{ providerId: string; model: string | null; runtimeMode: string }> };
+      expect(data.threads).toHaveLength(2);
+      expect(data.threads.every((thread) => thread.providerId === "codex")).toBe(true);
+      expect(data.threads.every((thread) => thread.model === "gpt-5-codex")).toBe(true);
+      expect(data.threads.every((thread) => thread.runtimeMode === "supervised")).toBe(true);
     } finally {
       sqlite.close();
     }

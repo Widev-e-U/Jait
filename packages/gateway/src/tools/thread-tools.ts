@@ -144,11 +144,13 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       userService: deps.userService,
       sessionState: deps.sessionState,
     });
+    const contextProviderId = normalizeThreadProviderId(context.providerId);
     return {
-      providerId: defaults.providerId ? normalizeThreadProviderId(defaults.providerId) : null,
-      model: defaults.model ?? (typeof context.model === "string" && context.model.trim() ? context.model.trim() : undefined),
-      runtimeMode: defaults.runtimeMode
-        ?? (context.runtimeMode === "full-access" || context.runtimeMode === "supervised" ? context.runtimeMode : undefined),
+      providerId: contextProviderId ?? (defaults.providerId ? normalizeThreadProviderId(defaults.providerId) : null),
+      model: (typeof context.model === "string" && context.model.trim() ? context.model.trim() : undefined) ?? defaults.model,
+      runtimeMode:
+        (context.runtimeMode === "full-access" || context.runtimeMode === "supervised" ? context.runtimeMode : undefined)
+        ?? defaults.runtimeMode,
     };
   };
 

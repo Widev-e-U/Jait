@@ -10,6 +10,9 @@ import type { FastifyInstance, FastifyRequest } from "fastify";
 import type { AppConfig } from "../config.js";
 import { verifyAuthToken, extractBearerToken } from "../security/http-auth.js";
 import type { SessionService } from "../services/sessions.js";
+import type { SessionStateService } from "../services/session-state.js";
+import type { UserService } from "../services/users.js";
+import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolDefinition } from "../tools/contracts.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -18,6 +21,8 @@ interface McpDeps {
   toolRegistry: ToolRegistry;
   config: AppConfig;
   sessionService?: SessionService;
+  userService?: UserService;
+  sessionState?: SessionStateService;
 }
 
 // ── MCP JSON-RPC types ───────────────────────────────────────────────
@@ -40,6 +45,9 @@ interface McpToolContextOverrides {
   sessionId?: string;
   workspaceRoot?: string;
   userId?: string;
+  providerId?: string;
+  model?: string;
+  runtimeMode?: string;
 }
 
 const SUPPORTED_MCP_PROTOCOL_VERSIONS = new Set([
@@ -89,6 +97,18 @@ function resolveMcpToolContextOverrides(
       readOptionalString(headers?.["x-jait-workspace-root"])
       ?? readOptionalString(query?.["workspaceRoot"])
       ?? readOptionalString(params?.["workspaceRoot"]),
+    providerId:
+      readOptionalString(headers?.["x-jait-provider-id"])
+      ?? readOptionalString(query?.["providerId"])
+      ?? readOptionalString(params?.["providerId"]),
+    model:
+      readOptionalString(headers?.["x-jait-model"])
+      ?? readOptionalString(query?.["model"])
+      ?? readOptionalString(params?.["model"]),
+    runtimeMode:
+      readOptionalString(headers?.["x-jait-runtime-mode"])
+      ?? readOptionalString(query?.["runtimeMode"])
+      ?? readOptionalString(params?.["runtimeMode"]),
   };
 }
 
@@ -96,30 +116,66 @@ async function resolveMcpToolContext(
   request: FastifyRequest | null,
   config: AppConfig,
   sessionService?: SessionService,
+  userService?: UserService,
+  sessionState?: SessionStateService,
   params?: Record<string, unknown>,
 ): Promise<McpToolContextOverrides> {
   const overrides = resolveMcpToolContextOverrides(request, params);
-  if (!request) return overrides;
+  if (!request) {
+    return inferSessionBackedToolContext(overrides, sessionService, userService, sessionState);
+  }
 
   const token = extractBearerToken(request.headers.authorization);
-  if (!token) return overrides;
-  const user = await verifyAuthToken(token, config.jwtSecret);
-  if (!user) return overrides;
+  const user = token ? await verifyAuthToken(token, config.jwtSecret) : null;
+  const authBackedOverrides = user
+    ? (overrides.sessionId
+      ? {
+          ...overrides,
+          userId: user.id,
+        }
+      : !sessionService
+        ? { ...overrides, userId: user.id }
+        : (() => {
+            const session = sessionService.lastActive(user.id);
+            if (!session?.id) return { ...overrides, userId: user.id };
+            return {
+              ...overrides,
+              sessionId: session.id,
+              workspaceRoot: overrides.workspaceRoot ?? session.workspacePath ?? undefined,
+              userId: user.id,
+            };
+          })())
+    : overrides;
 
-  if (overrides.sessionId) {
-    return {
-      ...overrides,
-      userId: user.id,
-    };
-  }
-  if (!sessionService) return { ...overrides, userId: user.id };
+  return inferSessionBackedToolContext(authBackedOverrides, sessionService, userService, sessionState);
+}
 
-  const session = sessionService.lastActive(user.id);
-  if (!session?.id) return { ...overrides, userId: user.id };
+function inferSessionBackedToolContext(
+  overrides: McpToolContextOverrides,
+  sessionService?: SessionService,
+  userService?: UserService,
+  sessionState?: SessionStateService,
+): McpToolContextOverrides {
+  const session = overrides.sessionId && sessionService
+    ? sessionService.getById(overrides.sessionId)
+    : null;
+  const userId = overrides.userId ?? session?.userId ?? undefined;
+  const workspaceRoot = overrides.workspaceRoot ?? session?.workspacePath ?? undefined;
+
+  const defaults = resolveThreadSelectionDefaults({
+    userId,
+    sessionId: overrides.sessionId,
+    userService,
+    sessionState,
+  });
+
   return {
-    sessionId: session.id,
-    workspaceRoot: overrides.workspaceRoot ?? session.workspacePath ?? undefined,
-    userId: user.id,
+    ...overrides,
+    userId,
+    workspaceRoot,
+    providerId: overrides.providerId ?? defaults.providerId,
+    model: overrides.model ?? defaults.model,
+    runtimeMode: overrides.runtimeMode ?? defaults.runtimeMode,
   };
 }
 
@@ -186,7 +242,7 @@ export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
 // ── Route registration ───────────────────────────────────────────────
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
-  const { toolRegistry, config, sessionService } = deps;
+  const { toolRegistry, config, sessionService, userService, sessionState } = deps;
 
   app.get("/mcp", async (_request, reply) => {
     reply.raw.writeHead(200, {
@@ -229,7 +285,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       body,
       toolRegistry,
       negotiatedVersion,
-      await resolveMcpToolContext(request, config, sessionService, body.params),
+      await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params),
     );
     if (body.id == null) {
       return reply.status(202).send();
@@ -312,7 +368,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       body,
       toolRegistry,
       DEFAULT_MCP_PROTOCOL_VERSION,
-      await resolveMcpToolContext(request, config, sessionService, body.params),
+      await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params),
     );
 
     // Also push the response via SSE to the connected client
@@ -405,6 +461,9 @@ export async function handleMcpRequest(
         workspaceRoot: contextOverrides.workspaceRoot ?? process.cwd(),
         requestedBy: "mcp-client",
         userId: contextOverrides.userId,
+        providerId: contextOverrides.providerId,
+        model: contextOverrides.model,
+        runtimeMode: contextOverrides.runtimeMode,
       };
 
       try {

@@ -2,7 +2,9 @@ import Fastify from "fastify";
 import { afterEach, describe, expect, it } from "vitest";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { SessionStateService } from "../services/session-state.js";
 import { SessionService } from "../services/sessions.js";
+import { UserService } from "../services/users.js";
 import { ToolRegistry } from "../tools/registry.js";
 import {
   handleMcpRequest,
@@ -188,9 +190,16 @@ describe("mcp-server", () => {
     expect(response.body).toBe("");
   });
 
-  it("passes session and workspace overrides into MCP tool context", async () => {
+  it("passes session, workspace, and provider overrides into MCP tool context", async () => {
     const registry = new ToolRegistry();
-    let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
+    let capturedContext: {
+      sessionId: string;
+      workspaceRoot: string;
+      userId?: string;
+      providerId?: string;
+      model?: string;
+      runtimeMode?: string;
+    } | null = null;
 
     registry.register({
       name: "surfaces.list",
@@ -204,6 +213,9 @@ describe("mcp-server", () => {
           sessionId: context.sessionId,
           workspaceRoot: context.workspaceRoot,
           userId: context.userId,
+          providerId: context.providerId,
+          model: context.model,
+          runtimeMode: context.runtimeMode,
         };
         return { ok: true, message: "ok" };
       },
@@ -224,6 +236,9 @@ describe("mcp-server", () => {
       {
         sessionId: "web-session-123",
         workspaceRoot: "/tmp/project",
+        providerId: "codex",
+        model: "gpt-5-codex",
+        runtimeMode: "supervised",
       },
     );
 
@@ -239,6 +254,9 @@ describe("mcp-server", () => {
       sessionId: "web-session-123",
       workspaceRoot: "/tmp/project",
       userId: undefined,
+      providerId: "codex",
+      model: "gpt-5-codex",
+      runtimeMode: "supervised",
     });
   });
 
@@ -420,7 +438,14 @@ describe("mcp-server", () => {
 
   it("uses MCP URL query params as tool context overrides", async () => {
     const registry = new ToolRegistry();
-    let capturedContext: { sessionId: string; workspaceRoot: string; userId?: string } | null = null;
+    let capturedContext: {
+      sessionId: string;
+      workspaceRoot: string;
+      userId?: string;
+      providerId?: string;
+      model?: string;
+      runtimeMode?: string;
+    } | null = null;
 
     registry.register({
       name: "surfaces.list",
@@ -434,6 +459,9 @@ describe("mcp-server", () => {
           sessionId: context.sessionId,
           workspaceRoot: context.workspaceRoot,
           userId: context.userId,
+          providerId: context.providerId,
+          model: context.model,
+          runtimeMode: context.runtimeMode,
         };
         return { ok: true, message: "ok" };
       },
@@ -452,7 +480,7 @@ describe("mcp-server", () => {
 
     const response = await app.inject({
       method: "POST",
-      url: "/mcp?sessionId=query-session&workspaceRoot=%2Ftmp%2Fquery-workspace",
+      url: "/mcp?sessionId=query-session&workspaceRoot=%2Ftmp%2Fquery-workspace&providerId=codex&model=gpt-5-codex&runtimeMode=supervised",
       headers: {
         "content-type": "application/json",
       },
@@ -472,6 +500,103 @@ describe("mcp-server", () => {
       sessionId: "query-session",
       workspaceRoot: "/tmp/query-workspace",
       userId: undefined,
+      providerId: "codex",
+      model: "gpt-5-codex",
+      runtimeMode: "supervised",
     });
+  });
+
+  it("infers provider, model, and runtime mode from the referenced session state", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const sessionService = new SessionService(db);
+      const userService = new UserService(db);
+      const sessionState = new SessionStateService(db);
+      const user = userService.createUser("codex-owner", "password123");
+      userService.updateSettings(user.id, { chatProvider: "codex" });
+      const session = sessionService.create({
+        userId: user.id,
+        name: "Codex Session",
+        workspacePath: "/tmp/current-workspace",
+      });
+      sessionState.set(session.id, {
+        "chat.providerRuntimeMode": "supervised",
+        "chat.cliModels": { codex: "gpt-5-codex" },
+      });
+
+      const registry = new ToolRegistry();
+      let capturedContext: {
+        sessionId: string;
+        workspaceRoot: string;
+        userId?: string;
+        providerId?: string;
+        model?: string;
+        runtimeMode?: string;
+      } | null = null;
+
+      registry.register({
+        name: "surfaces.list",
+        description: "List surfaces",
+        tier: "standard",
+        category: "surfaces",
+        source: "builtin",
+        parameters: { type: "object", properties: {} },
+        async execute(_input, context) {
+          capturedContext = {
+            sessionId: context.sessionId,
+            workspaceRoot: context.workspaceRoot,
+            userId: context.userId,
+            providerId: context.providerId,
+            model: context.model,
+            runtimeMode: context.runtimeMode,
+          };
+          return { ok: true, message: "ok" };
+        },
+      });
+
+      const app = Fastify();
+      appsToClose.push(app);
+      registerMcpRoutes(app, {
+        toolRegistry: registry,
+        sessionService,
+        userService,
+        sessionState,
+        config: {
+          host: "127.0.0.1",
+          port: 3000,
+          jwtSecret: "test-secret",
+        } as any,
+      });
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/mcp?sessionId=${encodeURIComponent(session.id)}`,
+        headers: {
+          "content-type": "application/json",
+        },
+        payload: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "surfaces.list",
+            arguments: {},
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(capturedContext).toEqual({
+        sessionId: session.id,
+        workspaceRoot: "/tmp/current-workspace",
+        userId: user.id,
+        providerId: "codex",
+        model: "gpt-5-codex",
+        runtimeMode: "supervised",
+      });
+    } finally {
+      sqlite.close();
+    }
   });
 });
