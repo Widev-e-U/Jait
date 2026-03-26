@@ -2247,6 +2247,19 @@ function App() {
     setShowWorkspaceEditor(prev => !prev)
   }, [isMobile, showWorkspaceTree, showWorkspaceEditor])
 
+  const showMobileWorkspaceTreeTab = useCallback((tab: 'files' | 'git') => {
+    setMobileTreeTab(tab)
+    const nextLayout = showMobileWorkspacePane('tree')
+    setShowWorkspaceTree(nextLayout.tree)
+    setShowWorkspaceEditor(nextLayout.editor)
+  }, [])
+
+  const showMobileWorkspaceEditorTab = useCallback(() => {
+    const nextLayout = showMobileWorkspacePane('editor')
+    setShowWorkspaceTree(nextLayout.tree)
+    setShowWorkspaceEditor(nextLayout.editor)
+  }, [])
+
   const openDevPreviewPanel = useCallback((target?: string | null) => {
     setCurrentView('chat')
     const nextTarget = target?.trim() || devPreviewTarget?.trim() || null
@@ -2420,6 +2433,24 @@ function App() {
     createSession,
     handleWorkspaceFolderSelected,
   ])
+
+  const handleMobileWorkspaceDropdownAction = useCallback(async (target: 'files' | 'git' | 'editor' | 'hide') => {
+    if (target === 'hide') {
+      closeWorkspacePanel()
+      return
+    }
+
+    if (!showWorkspace) {
+      await handleToggleEditor()
+    }
+
+    if (target === 'editor') {
+      showMobileWorkspaceEditorTab()
+      return
+    }
+
+    showMobileWorkspaceTreeTab(target)
+  }, [closeWorkspacePanel, handleToggleEditor, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, showWorkspace])
 
   // Verify workspace surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
@@ -4080,21 +4111,61 @@ function App() {
                 )}
 
                 <div className="relative flex items-center shrink-0">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={showWorkspace ? 'secondary' : 'ghost'}
-                        size="sm"
-                        className="h-7 rounded-md px-2 text-xs"
-                        onClick={() => { void handleToggleEditor() }}
-                      >
-                        <Code className="h-3 w-3 mr-1" />
-                        Editor
-                        {showWorkspace && <X className="h-3 w-3 ml-1" />}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">{showWorkspace ? 'Hide editor' : 'Show editor'}</TooltipContent>
-                  </Tooltip>
+                  {isMobile ? (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button
+                          variant={showWorkspace ? 'secondary' : 'ghost'}
+                          size="sm"
+                          className="h-7 rounded-md px-2 text-xs"
+                        >
+                          <Code className="h-3 w-3 mr-1" />
+                          Editor
+                          <ChevronDown className="h-3 w-3 ml-1" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="start">
+                        <DropdownMenuLabel>Workspace</DropdownMenuLabel>
+                        <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('files') }}>
+                          <FolderTree className="h-4 w-4 mr-2" />
+                          Files
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('git') }}>
+                          <GitBranch className="h-4 w-4 mr-2" />
+                          Changes
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('editor') }}>
+                          <Code className="h-4 w-4 mr-2" />
+                          Editor
+                        </DropdownMenuItem>
+                        {showWorkspace && (
+                          <>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('hide') }}>
+                              <X className="h-4 w-4 mr-2" />
+                              Hide workspace
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  ) : (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant={showWorkspace ? 'secondary' : 'ghost'}
+                          size="sm"
+                          className="h-7 rounded-md px-2 text-xs"
+                          onClick={() => { void handleToggleEditor() }}
+                        >
+                          <Code className="h-3 w-3 mr-1" />
+                          Editor
+                          {showWorkspace && <X className="h-3 w-3 ml-1" />}
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="bottom">{showWorkspace ? 'Hide editor' : 'Show editor'}</TooltipContent>
+                    </Tooltip>
+                  )}
                 </div>
 
                 {viewMode === 'developer' && showWorkspace && activeWorkspace && (
@@ -4445,79 +4516,6 @@ function App() {
                 cliModel={cliModel}
               />
             )}
-
-
-
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspace && (
-              <div className="flex items-center gap-2 px-2 py-2 border-b bg-background/95 shrink-0">
-                <button
-                  onClick={() => {
-                    if (showWorkspaceTree && mobileTreeTab === 'files') {
-                      const next = collapseMobileWorkspace()
-                      setShowWorkspaceTree(next.tree)
-                      setShowWorkspaceEditor(next.editor)
-                    } else {
-                      setMobileTreeTab('files')
-                      const next = showMobileWorkspacePane('tree')
-                      setShowWorkspaceTree(next.tree)
-                      setShowWorkspaceEditor(next.editor)
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                    showWorkspaceTree && mobileTreeTab === 'files'
-                      ? 'border-border bg-background text-foreground shadow-sm'
-                      : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  <FolderTree className="h-3.5 w-3.5" />
-                  Files
-                </button>
-                <button
-                  onClick={() => {
-                    if (showWorkspaceTree && mobileTreeTab === 'git') {
-                      const next = collapseMobileWorkspace()
-                      setShowWorkspaceTree(next.tree)
-                      setShowWorkspaceEditor(next.editor)
-                    } else {
-                      setMobileTreeTab('git')
-                      const next = showMobileWorkspacePane('tree')
-                      setShowWorkspaceTree(next.tree)
-                      setShowWorkspaceEditor(next.editor)
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                    showWorkspaceTree && mobileTreeTab === 'git'
-                      ? 'border-border bg-background text-foreground shadow-sm'
-                      : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  <GitBranch className="h-3.5 w-3.5" />
-                  Changes
-                </button>
-                <button
-                  onClick={() => {
-                    if (showWorkspaceEditor) {
-                      const next = collapseMobileWorkspace()
-                      setShowWorkspaceTree(next.tree)
-                      setShowWorkspaceEditor(next.editor)
-                    } else {
-                      const next = showMobileWorkspacePane('editor')
-                      setShowWorkspaceTree(next.tree)
-                      setShowWorkspaceEditor(next.editor)
-                    }
-                  }}
-                  className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-medium transition-colors ${
-                    showWorkspaceEditor
-                      ? 'border-border bg-background text-foreground shadow-sm'
-                      : 'border-border bg-background text-muted-foreground hover:text-foreground hover:bg-muted'
-                  }`}
-                >
-                  <Code className="h-3.5 w-3.5" />
-                  Editor
-                </button>
-              </div>
-            )}
-
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
               <section className="flex-1 min-h-0 border-b bg-background overflow-hidden">
                 <WorkspacePanel
