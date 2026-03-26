@@ -42,6 +42,12 @@ describe("Sprint 11 — Voice (STT/TTS)", () => {
       summary: "run",
       preview: { cmd: "npm test" },
       risk: "high",
+      policy: {
+        consentLevel: "always",
+        description: "Run a shell command.",
+        knownTool: true,
+        source: "profile",
+      },
       sessionId: "s-voice",
       timeoutMs: 10_000,
     });

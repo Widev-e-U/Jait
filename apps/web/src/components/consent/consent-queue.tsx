@@ -1,4 +1,4 @@
-import { ActionCard, useConsentQueue, type ConsentRequestInfo } from './action-card'
+import { ActionCard, useConsentPolicy, useConsentQueue, type ConsentRequestInfo } from './action-card'
 import { ShieldAlert, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react'
 import { useMemo, useState } from 'react'
 
@@ -59,6 +59,7 @@ export interface ConsentQueueProps {
 
 export function ConsentQueue({ className = '', compact = false, sessionId, onApproveAllEnabled }: ConsentQueueProps) {
   const { queue, approve, reject, approveAllForSession } = useConsentQueue(sessionId)
+  const { policy } = useConsentPolicy()
   const [approvingAll, setApprovingAll] = useState(false)
 
   const visibleQueue = useMemo(
@@ -84,9 +85,17 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
       <div className="flex items-center justify-between px-1">
         <div className="flex items-center gap-2">
           <StatusBadge status="awaiting-approval" />
-          <span className="text-xs text-muted-foreground">
-            {visibleQueue.length} pending {visibleQueue.length === 1 ? 'request' : 'requests'}
-          </span>
+          <div className="flex flex-col">
+            <span className="text-xs text-muted-foreground">
+              {visibleQueue.length} pending {visibleQueue.length === 1 ? 'request' : 'requests'}
+            </span>
+            {policy && (
+              <span className="text-[11px] text-muted-foreground">
+                Profile: <span className="font-medium text-foreground">{policy.activeProfileName ?? 'custom'}</span>
+                {' '}• {policy.toolCount} configured tools • unknown tools require dangerous consent
+              </span>
+            )}
+          </div>
         </div>
         {sessionId && visibleQueue.length > 0 && (
           <button

@@ -125,6 +125,7 @@ export function useAutomation(enabled = true) {
   // Send state
   const activityEndRef = useRef<HTMLDivElement | null>(null)
   const activityCacheRef = useRef(new Map<string, ThreadActivity[]>())
+  const hydratingThreadIdsRef = useRef(new Set<string>())
 
   const sharedRepositories = useMemo(
     () => inferSharedRepositories(threads, localRepositories),
@@ -421,6 +422,34 @@ export function useAutomation(enabled = true) {
     }
   }, [selectedThreadId, enabled])
 
+  const hydrateThreadRuntime = useCallback(async (threadId: string) => {
+    if (hydratingThreadIdsRef.current.has(threadId)) return
+    hydratingThreadIdsRef.current.add(threadId)
+    try {
+      const [thread, acts] = await Promise.all([
+        agentsApi.getThread(threadId).catch(() => null),
+        agentsApi.getActivities(threadId).catch(() => [] as ThreadActivity[]),
+      ])
+
+      if (thread) {
+        setThreads((prev) => {
+          const exists = prev.some((entry) => entry.id === thread.id)
+          return exists
+            ? prev.map((entry) => (entry.id === thread.id ? thread : entry))
+            : [thread, ...prev]
+        })
+      }
+
+      const sorted = sortActivities(acts)
+      activityCacheRef.current.set(threadId, sorted)
+      if (threadId === selectedThreadIdRef.current) {
+        setActivities(sorted)
+      }
+    } finally {
+      hydratingThreadIdsRef.current.delete(threadId)
+    }
+  }, [])
+
   // Auto-scroll activities
   useEffect(() => {
     if (!enabled) return
@@ -634,10 +663,16 @@ export function useAutomation(enabled = true) {
 
       if (targetThread && targetThread.providerSessionId && targetThread.status !== 'running') {
         // Follow-up turn — session is alive and previous turn completed
+        setThreads(prev => prev.map(t =>
+          t.id === targetThread.id
+            ? { ...t, status: 'running', error: null }
+            : t,
+        ))
         await agentsApi.sendTurn(targetThread.id, {
           message: text,
           ...metadata,
         })
+        void hydrateThreadRuntime(targetThread.id)
         void refresh()
       } else if (targetThread && targetThread.status === 'running') {
         // Turn already in progress — ignore (UI should prevent this)
@@ -651,11 +686,17 @@ export function useAutomation(enabled = true) {
       ) {
         // Re-start the existing thread (worktree is still available)
         try {
+          setThreads(prev => prev.map(t =>
+            t.id === targetThread.id
+              ? { ...t, status: 'running', error: null }
+              : t,
+          ))
           const updated = await agentsApi.startThread(targetThread.id, {
             message: text,
             ...metadata,
           })
           setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
+          void hydrateThreadRuntime(updated.id)
           void refresh()
         } catch (startErr) {
           const code = (startErr as Error & { code?: string }).code
@@ -666,17 +707,18 @@ export function useAutomation(enabled = true) {
               description: 'The desktop app is not connected. Clone the repo to the gateway and run the thread there?',
               confirmLabel: 'Clone and run',
             })) {
-              const updated = await agentsApi.startThread(targetThread.id, {
-                message: text,
-                cloneToGateway: true,
-                repoUrl: githubUrl,
-                ...metadata,
-              })
-              setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
-              void refresh()
-            } else if (!githubUrl) {
-              setError(buildRepositoryFallbackUnavailableMessage(targetRepo, getRuntimeInfoForRepository(targetRepo)))
-            }
+                const updated = await agentsApi.startThread(targetThread.id, {
+                  message: text,
+                  cloneToGateway: true,
+                  repoUrl: githubUrl,
+                  ...metadata,
+                })
+                setThreads(prev => prev.map(t => t.id === updated.id ? updated : t))
+                void hydrateThreadRuntime(updated.id)
+                void refresh()
+              } else if (!githubUrl) {
+                setError(buildRepositoryFallbackUnavailableMessage(targetRepo, getRuntimeInfoForRepository(targetRepo)))
+              }
           } else {
             throw startErr
           }
@@ -729,6 +771,7 @@ export function useAutomation(enabled = true) {
                 titlePrefix: `[${repo.name}] `,
                 ...metadata,
               })
+              void hydrateThreadRuntime(thread.id)
             } catch (startErr) {
               // If the desktop app is offline, offer to clone the repo to the gateway
               const code = (startErr as Error & { code?: string }).code
@@ -747,6 +790,7 @@ export function useAutomation(enabled = true) {
                     repoUrl: githubUrl,
                     ...metadata,
                   })
+                  void hydrateThreadRuntime(thread.id)
                 } else if (!githubUrl) {
                   setError(buildRepositoryFallbackUnavailableMessage(repo, getRuntimeInfoForRepository(repo)))
                 }
@@ -761,7 +805,7 @@ export function useAutomation(enabled = true) {
         })()
       }
     },
-    [confirm, getRuntimeInfoForRepository, getRepositoryForThread, refresh, selectedRepo, selectedThread, threads],
+    [confirm, getRuntimeInfoForRepository, getRepositoryForThread, hydrateThreadRuntime, refresh, selectedRepo, selectedThread, threads],
   )
 
   const handleSend = useCallback(

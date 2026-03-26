@@ -216,6 +216,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     }
     const effectiveProviderId = resolvedProvider.providerId;
     const effectiveThread = thread;
+    const autoFinishAfterFirstTurn = effectiveThread.kind === "delegation" && typeof message === "string" && message.trim().length > 0;
 
     const provider = deps.providerRegistry.get(effectiveProviderId);
     if (!provider) {
@@ -251,7 +252,11 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         }
 
         if (event.type === "session.completed") {
-          deps.threadService.markCompleted(effectiveThread.id);
+          if (autoFinishAfterFirstTurn) {
+            deps.threadService.markCompletedAndClearSession(effectiveThread.id);
+          } else {
+            deps.threadService.markCompleted(effectiveThread.id);
+          }
           broadcastThreadEvent(effectiveThread.id, "status", { status: "completed" });
           unsubscribe();
         } else if (event.type === "session.error") {
@@ -265,6 +270,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             deps.threadService.update(effectiveThread.id, { status: "running", error: null });
             broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
           }
+        } else if (event.type === "turn.completed" && autoFinishAfterFirstTurn) {
+          void provider.stopSession(session.id).catch(() => {
+            // Best effort: delegation threads should not linger if the provider
+            // leaves the session open after answering the first task.
+          });
+          deps.threadService.markCompletedAndClearSession(effectiveThread.id);
+          broadcastThreadEvent(effectiveThread.id, "status", { status: "completed" });
+          unsubscribe();
         }
       });
 

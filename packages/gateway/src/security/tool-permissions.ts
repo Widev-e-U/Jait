@@ -11,6 +11,7 @@
  */
 
 export type ConsentLevel = "none" | "once" | "always" | "dangerous";
+export type PolicySource = "profile" | "unknown-tool";
 
 export interface ToolPermission {
   /** Tool name (e.g. "terminal.run") */
@@ -28,13 +29,47 @@ export interface ToolPermission {
   /** Denied file paths (glob patterns). Takes precedence over allowed. */
   deniedPaths?: string[];
   /** Human-readable description of what this tool does */
-  description?: string;
+  description: string;
+}
+
+export interface ResolvedToolPermission extends ToolPermission {
+  /** Whether the tool has an explicit entry in the active profile */
+  knownTool: boolean;
+  /** Where this policy came from */
+  source: PolicySource;
 }
 
 export interface ToolPermissionConfig {
   permissions: Map<string, ToolPermission>;
   /** Session-scoped set of tool names that have been approved via "once" */
   sessionApprovals: Set<string>;
+}
+
+const UNKNOWN_TOOL_DESCRIPTION =
+  "Tool is not part of the active security profile and is treated as dangerous until explicitly configured.";
+
+export function getUnknownToolPermission(toolName: string): ResolvedToolPermission {
+  return {
+    toolName,
+    consentLevel: "dangerous",
+    risk: "high",
+    description: UNKNOWN_TOOL_DESCRIPTION,
+    knownTool: false,
+    source: "unknown-tool",
+  };
+}
+
+export function resolveToolPermission(
+  toolName: string,
+  permissions: Map<string, ToolPermission>,
+): ResolvedToolPermission {
+  const permission = permissions.get(toolName);
+  if (!permission) return getUnknownToolPermission(toolName);
+  return {
+    ...permission,
+    knownTool: true,
+    source: "profile",
+  };
 }
 
 /**

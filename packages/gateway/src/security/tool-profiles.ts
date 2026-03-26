@@ -16,76 +16,77 @@ function perm(
   toolName: string,
   consentLevel: ConsentLevel,
   risk: ToolPermission["risk"],
+  description: string,
   extra: Partial<ToolPermission> = {},
 ): ToolPermission {
-  return { toolName, consentLevel, risk, ...extra };
+  return { toolName, consentLevel, risk, description, ...extra };
 }
 
 // ── Minimal Profile ──────────────────────────────────────────────────
 // Read-only. No terminal, no installs, no writes.
 
 const MINIMAL: ToolPermission[] = [
-  perm("file.read", "none", "low"),
-  perm("file.list", "none", "low"),
-  perm("file.stat", "none", "low"),
-  perm("file.write", "dangerous", "high"),
-  perm("file.patch", "dangerous", "high"),
-  perm("terminal.run", "dangerous", "high"),
-  perm("terminal.stream", "dangerous", "high"),
-  perm("os.query", "once", "low"),
-  perm("os.install", "dangerous", "high"),
-  perm("surfaces.list", "none", "low"),
-  perm("surfaces.start", "always", "medium"),
-  perm("surfaces.stop", "always", "medium"),
-  perm("network.scan", "none", "low"),
-  perm("thread.control", "dangerous", "high"),
-  perm("gateway.redeploy", "always", "high"),
+  perm("file.read", "none", "low", "Read a file from the workspace."),
+  perm("file.list", "none", "low", "List files and directories in the workspace."),
+  perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
+  perm("file.write", "dangerous", "high", "Create or overwrite files in the workspace."),
+  perm("file.patch", "dangerous", "high", "Apply targeted edits to existing files."),
+  perm("terminal.run", "dangerous", "high", "Run a non-interactive shell command."),
+  perm("terminal.stream", "dangerous", "high", "Open an interactive terminal session."),
+  perm("os.query", "once", "low", "Inspect operating-system information."),
+  perm("os.install", "dangerous", "high", "Install system packages on the host."),
+  perm("surfaces.list", "none", "low", "List active surfaces such as terminals or browsers."),
+  perm("surfaces.start", "always", "medium", "Start a new surface instance."),
+  perm("surfaces.stop", "always", "medium", "Stop a running surface instance."),
+  perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
+  perm("thread.control", "dangerous", "high", "Create, run, or modify agent threads."),
+  perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
 ];
 
 // ── Coding Profile ───────────────────────────────────────────────────
 // File read/write/patch auto, terminal requires consent.
 
 const CODING: ToolPermission[] = [
-  perm("file.read", "none", "low"),
-  perm("file.list", "none", "low"),
-  perm("file.stat", "none", "low"),
-  perm("file.write", "once", "medium"),
-  perm("file.patch", "once", "medium"),
-  perm("terminal.run", "once", "medium", {
+  perm("file.read", "none", "low", "Read a file from the workspace."),
+  perm("file.list", "none", "low", "List files and directories in the workspace."),
+  perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
+  perm("file.write", "once", "medium", "Create or overwrite files in the workspace."),
+  perm("file.patch", "once", "medium", "Apply targeted edits to existing files."),
+  perm("terminal.run", "once", "medium", "Run a non-interactive shell command.", {
     deniedCommands: ["rm -rf *", "del /s /q *", "format *", "mkfs*", "dd if=*"],
   }),
-  perm("terminal.stream", "once", "medium"),
-  perm("os.query", "none", "low"),
-  perm("os.install", "always", "high"),
-  perm("surfaces.list", "none", "low"),
-  perm("surfaces.start", "once", "low"),
-  perm("surfaces.stop", "once", "low"),
-  perm("network.scan", "none", "low"),
-  perm("thread.control", "once", "high"),
-  perm("gateway.redeploy", "always", "high"),
+  perm("terminal.stream", "once", "medium", "Open an interactive terminal session."),
+  perm("os.query", "none", "low", "Inspect operating-system information."),
+  perm("os.install", "always", "high", "Install system packages on the host."),
+  perm("surfaces.list", "none", "low", "List active surfaces such as terminals or browsers."),
+  perm("surfaces.start", "once", "low", "Start a new surface instance."),
+  perm("surfaces.stop", "once", "low", "Stop a running surface instance."),
+  perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
+  perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
+  perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
 ];
 
 // ── Full Profile ─────────────────────────────────────────────────────
 // Maximum capability. Dangerous ops still require consent.
 
 const FULL: ToolPermission[] = [
-  perm("file.read", "none", "low"),
-  perm("file.list", "none", "low"),
-  perm("file.stat", "none", "low"),
-  perm("file.write", "none", "low"),
-  perm("file.patch", "none", "low"),
-  perm("terminal.run", "once", "medium", {
+  perm("file.read", "none", "low", "Read a file from the workspace."),
+  perm("file.list", "none", "low", "List files and directories in the workspace."),
+  perm("file.stat", "none", "low", "Inspect file metadata without changing contents."),
+  perm("file.write", "none", "low", "Create or overwrite files in the workspace."),
+  perm("file.patch", "none", "low", "Apply targeted edits to existing files."),
+  perm("terminal.run", "once", "medium", "Run a non-interactive shell command.", {
     deniedCommands: ["rm -rf /", "format C:", "mkfs*", "dd if=/dev/zero*"],
   }),
-  perm("terminal.stream", "once", "medium"),
-  perm("os.query", "none", "low"),
-  perm("os.install", "once", "high"),
-  perm("surfaces.list", "none", "low"),
-  perm("surfaces.start", "none", "low"),
-  perm("surfaces.stop", "none", "low"),
-  perm("network.scan", "none", "low"),
-  perm("thread.control", "once", "high"),
-  perm("gateway.redeploy", "always", "high"),
+  perm("terminal.stream", "once", "medium", "Open an interactive terminal session."),
+  perm("os.query", "none", "low", "Inspect operating-system information."),
+  perm("os.install", "once", "high", "Install system packages on the host."),
+  perm("surfaces.list", "none", "low", "List active surfaces such as terminals or browsers."),
+  perm("surfaces.start", "none", "low", "Start a new surface instance."),
+  perm("surfaces.stop", "none", "low", "Stop a running surface instance."),
+  perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
+  perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
+  perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
 ];
 
 // ── Profile Map ──────────────────────────────────────────────────────
@@ -126,4 +127,11 @@ export function extendProfile(
     base.set(override.toolName, override);
   }
   return base;
+}
+
+export function serializeProfile(name: ProfileName): { name: ProfileName; permissions: ToolPermission[] } {
+  return {
+    name,
+    permissions: [...getProfile(name).values()],
+  };
 }

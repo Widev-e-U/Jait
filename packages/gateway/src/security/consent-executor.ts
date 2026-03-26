@@ -14,8 +14,9 @@ import type { ToolRegistry } from "../tools/registry.js";
 import type { AuditWriter } from "../services/audit.js";
 import type { ConsentManager } from "./consent-manager.js";
 import type { TrustEngine } from "./trust-engine.js";
+import type { ProfileName } from "./tool-profiles.js";
 import type { ToolPermission } from "./tool-permissions.js";
-import { requiresConsent, isCommandAllowed } from "./tool-permissions.js";
+import { requiresConsent, isCommandAllowed, resolveToolPermission } from "./tool-permissions.js";
 
 export interface ConsentAwareExecutorOptions {
   toolRegistry: ToolRegistry;
@@ -26,6 +27,8 @@ export interface ConsentAwareExecutorOptions {
   permissions: Map<string, ToolPermission>;
   /** Session-scoped set of tools approved via "once" */
   sessionApprovals: Set<string>;
+  /** Human-readable active profile name */
+  profileName?: ProfileName;
 }
 
 export interface ExecuteOptions {
@@ -42,6 +45,7 @@ export class ConsentAwareExecutor {
   private readonly audit?: AuditWriter;
   private readonly permissions: Map<string, ToolPermission>;
   private readonly sessionApprovals: Set<string>;
+  private readonly profileName?: ProfileName;
 
   constructor(opts: ConsentAwareExecutorOptions) {
     this.toolRegistry = opts.toolRegistry;
@@ -50,6 +54,7 @@ export class ConsentAwareExecutor {
     this.audit = opts.audit;
     this.permissions = opts.permissions;
     this.sessionApprovals = opts.sessionApprovals;
+    this.profileName = opts.profileName;
   }
 
   /**
@@ -61,7 +66,7 @@ export class ConsentAwareExecutor {
     context: ToolContext,
     options: ExecuteOptions = {},
   ): Promise<ToolResult> {
-    const permission = this.permissions.get(toolName);
+    const permission = resolveToolPermission(toolName, this.permissions);
     const trustLevel = this.trustEngine.getLevel(toolName);
 
     // Build a summary for the consent card
@@ -82,8 +87,14 @@ export class ConsentAwareExecutor {
           preview,
           requiresConsent: needsConsent,
           trustLevel,
-          consentLevel: permission?.consentLevel ?? "unknown",
-          risk: permission?.risk ?? "high",
+          risk: permission.risk,
+          policy: {
+            profileName: this.profileName ?? null,
+            consentLevel: permission.consentLevel,
+            description: permission.description,
+            knownTool: permission.knownTool,
+            source: permission.source,
+          },
         },
       };
     }
@@ -124,7 +135,13 @@ export class ConsentAwareExecutor {
       toolName,
       summary,
       preview,
-      risk: permission?.risk ?? "high",
+      risk: permission.risk,
+      policy: {
+        consentLevel: permission.consentLevel,
+        description: permission.description,
+        knownTool: permission.knownTool,
+        source: permission.source,
+      },
       sessionId: context.sessionId,
       timeoutMs: options.consentTimeoutMs,
     });
@@ -146,7 +163,7 @@ export class ConsentAwareExecutor {
     if (result.ok) {
       this.trustEngine.recordApproval(toolName);
       // Mark as session-approved for "once" consent level
-      if (permission?.consentLevel === "once") {
+      if (permission.consentLevel === "once") {
         this.sessionApprovals.add(toolName);
       }
     }

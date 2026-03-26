@@ -3993,11 +3993,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   return (
                     <DropdownMenuItem
                       key={tab.id}
+                      disabled={isActive}
                       onSelect={() => {
+                        if (isActive) return
                         handleSwitchTab(tab.id)
                         setMobileTab('editor')
                       }}
-                      className="gap-2"
+                      className={cn(
+                        'gap-2',
+                        isActive && 'bg-muted/55 text-muted-foreground',
+                      )}
                     >
                       {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
                         <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
@@ -4010,7 +4015,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       )}
                       <span className="min-w-0 flex-1 truncate">{getEditorTabTitle(tab)}</span>
                       {isActive && (
-                        <span className="text-[10px] font-medium text-primary">Current</span>
+                        <span className="text-[10px] font-medium text-muted-foreground/90">Current</span>
                       )}
                     </DropdownMenuItem>
                   )

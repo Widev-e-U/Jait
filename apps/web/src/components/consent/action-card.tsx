@@ -14,10 +14,28 @@ export interface ConsentRequestInfo {
   summary: string
   preview: Record<string, unknown>
   risk: 'low' | 'medium' | 'high'
+  policy: {
+    consentLevel: 'none' | 'once' | 'always' | 'dangerous'
+    description: string
+    knownTool: boolean
+    source: 'profile' | 'unknown-tool'
+  }
   sessionId: string
   createdAt: string
   expiresAt: string
   status: 'pending' | 'approved' | 'rejected' | 'timeout'
+}
+
+export interface ConsentPolicyInfo {
+  activeProfileName: string | null
+  toolCount: number
+  permissions: Array<{
+    toolName: string
+    consentLevel: 'none' | 'once' | 'always' | 'dangerous'
+    risk: 'low' | 'medium' | 'high'
+    description: string
+  }>
+  unknownToolsRequireConsent: boolean
 }
 
 export interface ConsentDecisionInfo {
@@ -123,6 +141,26 @@ export function useConsentQueue(sessionId?: string | null) {
   return { queue, approve, reject, approveAllForSession, refresh }
 }
 
+export function useConsentPolicy() {
+  const [policy, setPolicy] = useState<ConsentPolicyInfo | null>(null)
+
+  const refresh = useCallback(async () => {
+    try {
+      const res = await fetch(`${GATEWAY}/api/consent/policy`)
+      const data = (await res.json()) as ConsentPolicyInfo
+      setPolicy(data)
+    } catch {
+      setPolicy(null)
+    }
+  }, [])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
+
+  return { policy, refresh }
+}
+
 // ── RiskBadge ────────────────────────────────────────────────────────
 
 function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
@@ -142,6 +180,21 @@ function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
     <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${colors[risk]}`}>
       <Icon className="h-3 w-3" />
       {risk}
+    </span>
+  )
+}
+
+function ConsentLevelBadge({ level }: { level: ConsentRequestInfo['policy']['consentLevel'] }) {
+  const config = {
+    none: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400',
+    once: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
+    always: 'bg-amber-500/10 text-amber-700 dark:text-amber-300',
+    dangerous: 'bg-red-500/10 text-red-600 dark:text-red-400',
+  }
+
+  return (
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${config[level]}`}>
+      {level}
     </span>
   )
 }
@@ -253,6 +306,7 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
           <div className="flex items-center gap-2">
             <span className="text-xs font-medium truncate">{request.toolName}</span>
             <RiskBadge risk={request.risk} />
+            <ConsentLevelBadge level={request.policy.consentLevel} />
             <TimeRemaining expiresAt={request.expiresAt} />
           </div>
           <p className="text-[11px] text-muted-foreground truncate">{request.summary}</p>
@@ -287,6 +341,7 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
           <ToolIcon toolName={request.toolName} />
           <span className="text-sm font-medium">{request.toolName}</span>
           <RiskBadge risk={request.risk} />
+          <ConsentLevelBadge level={request.policy.consentLevel} />
         </div>
         <TimeRemaining expiresAt={request.expiresAt} />
       </div>
@@ -294,6 +349,14 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
       {/* Body */}
       <div className="p-4 space-y-3">
         <p className="text-sm text-foreground">{request.summary}</p>
+        <div className="space-y-1">
+          <p className="text-xs text-muted-foreground">{request.policy.description}</p>
+          {!request.policy.knownTool && (
+            <p className="text-xs text-red-600 dark:text-red-400">
+              Unknown tool: blocked behind dangerous consent until added to the active profile.
+            </p>
+          )}
+        </div>
         <PreviewBlock preview={request.preview} toolName={request.toolName} />
       </div>
 

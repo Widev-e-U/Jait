@@ -12,9 +12,16 @@ export { TrustEngine } from "./security/trust-engine.js";
 export type { TrustState } from "./security/trust-engine.js";
 export { ConsentAwareExecutor } from "./security/consent-executor.js";
 export type { ConsentAwareExecutorOptions, ExecuteOptions } from "./security/consent-executor.js";
-export { requiresConsent, isCommandAllowed, isPathAllowedByPermission, matchGlob } from "./security/tool-permissions.js";
-export type { ToolPermission, ConsentLevel, ToolPermissionConfig } from "./security/tool-permissions.js";
-export { getProfile, listProfiles, extendProfile } from "./security/tool-profiles.js";
+export {
+  requiresConsent,
+  isCommandAllowed,
+  isPathAllowedByPermission,
+  matchGlob,
+  getUnknownToolPermission,
+  resolveToolPermission,
+} from "./security/tool-permissions.js";
+export type { ToolPermission, ConsentLevel, PolicySource, ResolvedToolPermission, ToolPermissionConfig } from "./security/tool-permissions.js";
+export { getProfile, listProfiles, extendProfile, serializeProfile } from "./security/tool-profiles.js";
 export type { ProfileName } from "./security/tool-profiles.js";
 
 export type {
@@ -35,6 +42,6 @@ export { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
 
 export type { ScheduledJob, SchedulerService } from "./scheduler/contracts.js";
 
-export type { PluginContext, PluginModule } from "./plugins/contracts.js";
+export type { PluginContext, PluginModule, PluginToolDeclaration, PluginDescriptor } from "./plugins/contracts.js";
 
 export type { SessionDescriptor, SessionRouter } from "./sessions/contracts.js";

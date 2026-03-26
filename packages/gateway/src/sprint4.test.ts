@@ -11,6 +11,13 @@ import { openDatabase, migrateDatabase } from "./db/index.js";
 
 import { ConsentManager } from "./security/consent-manager.js";
 
+const testPolicy = {
+  consentLevel: "always" as const,
+  description: "Test policy",
+  knownTool: true,
+  source: "profile" as const,
+};
+
 describe("ConsentManager", () => {
   it("creates a pending request and resolves on approve", async () => {
     const onReq = vi.fn();
@@ -24,6 +31,7 @@ describe("ConsentManager", () => {
       summary: "Run ls",
       preview: { command: "ls" },
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
 
@@ -54,6 +62,7 @@ describe("ConsentManager", () => {
       summary: "Install git",
       preview: { package: "git" },
       risk: "high",
+      policy: testPolicy,
       sessionId: "s1",
     });
 
@@ -74,6 +83,7 @@ describe("ConsentManager", () => {
       summary: "Run something",
       preview: { command: "echo hi" },
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
       timeoutMs: 50,
     });
@@ -91,6 +101,7 @@ describe("ConsentManager", () => {
       summary: "Write file",
       preview: { path: "/tmp/test.txt" },
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
 
@@ -112,6 +123,7 @@ describe("ConsentManager", () => {
       summary: "Run a",
       preview: {},
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
     const p2 = cm.requestConsent({
@@ -120,6 +132,7 @@ describe("ConsentManager", () => {
       summary: "Run b",
       preview: {},
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
 
@@ -182,6 +195,7 @@ describe("ToolPermissions", () => {
     toolName: "terminal.run",
     consentLevel: "always",
     risk: "medium",
+    description: "Run a shell command.",
     deniedCommands: ["rm -rf *", "format *"],
   };
 
@@ -189,12 +203,14 @@ describe("ToolPermissions", () => {
     toolName: "file.read",
     consentLevel: "none",
     risk: "low",
+    description: "Read a file.",
   };
 
   const oncePerm: ToolPermission = {
     toolName: "file.write",
     consentLevel: "once",
     risk: "medium",
+    description: "Write a file.",
     allowedPaths: ["src/**", "tests/**"],
     deniedPaths: ["*.env", "*.key"],
   };
@@ -203,6 +219,7 @@ describe("ToolPermissions", () => {
     toolName: "os.install",
     consentLevel: "dangerous",
     risk: "high",
+    description: "Install a package.",
   };
 
   describe("requiresConsent", () => {
@@ -322,7 +339,7 @@ describe("ToolProfiles", () => {
 
   it("extendProfile overrides specific tools", () => {
     const perms = extendProfile("minimal", [
-      { toolName: "terminal.run", consentLevel: "once", risk: "medium" },
+      { toolName: "terminal.run", consentLevel: "once", risk: "medium", description: "Run a shell command." },
     ]);
     expect(perms.get("terminal.run")?.consentLevel).toBe("once");
     expect(perms.get("file.read")?.consentLevel).toBe("none"); // unchanged
@@ -558,6 +575,47 @@ describe("ConsentAwareExecutor", () => {
     expect(cm.pendingCount).toBe(0); // no actual request created
   });
 
+  it("dry-run exposes unknown tools as dangerous policy entries", async () => {
+    const toolRegistry = makeMockToolRegistry();
+    const cm = new ConsentManager({ defaultTimeoutMs: 5000 });
+    const te = new TrustEngine();
+    const perms = getProfile("coding");
+
+    const executor = new ConsentAwareExecutor({
+      toolRegistry,
+      consentManager: cm,
+      trustEngine: te,
+      permissions: perms,
+      sessionApprovals: new Set(),
+      profileName: "coding",
+    });
+
+    const result = await executor.execute("custom.unknown", { value: 1 }, {
+      sessionId: "s1",
+      actionId: "a4b",
+      workspaceRoot: "/tmp",
+      requestedBy: "test",
+    }, { dryRun: true });
+
+    expect(result.ok).toBe(true);
+    const data = result.data as {
+      requiresConsent: boolean;
+      risk: string;
+      policy: {
+        profileName: string | null;
+        consentLevel: string;
+        knownTool: boolean;
+        source: string;
+      };
+    };
+    expect(data.requiresConsent).toBe(true);
+    expect(data.risk).toBe("high");
+    expect(data.policy.profileName).toBe("coding");
+    expect(data.policy.consentLevel).toBe("dangerous");
+    expect(data.policy.knownTool).toBe(false);
+    expect(data.policy.source).toBe("unknown-tool");
+  });
+
   it("blocks denied commands", async () => {
     const toolRegistry = makeMockToolRegistry();
     const cm = new ConsentManager({ defaultTimeoutMs: 5000 });
@@ -673,6 +731,21 @@ describe("Consent & Trust Routes", () => {
     expect(body.requests).toHaveLength(0);
   });
 
+  it("GET /api/consent/policy returns active policy metadata", async () => {
+    const res = await app.inject({ method: "GET", url: "/api/consent/policy" });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as {
+      activeProfileName: string | null;
+      toolCount: number;
+      unknownToolsRequireConsent: boolean;
+      permissions: Array<{ toolName: string; description: string }>;
+    };
+    expect(body.activeProfileName).toBe(null);
+    expect(body.unknownToolsRequireConsent).toBe(true);
+    expect(body.toolCount).toBe(0);
+    expect(body.permissions).toEqual([]);
+  });
+
   it("GET /api/consent/pending returns pending requests", async () => {
     // Create a pending request
     consentManager.requestConsent({
@@ -681,6 +754,7 @@ describe("Consent & Trust Routes", () => {
       summary: "Run ls",
       preview: { command: "ls" },
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
 
@@ -701,6 +775,7 @@ describe("Consent & Trust Routes", () => {
       summary: "Write file",
       preview: { path: "test.txt" },
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
 
@@ -724,6 +799,7 @@ describe("Consent & Trust Routes", () => {
       summary: "Install pkg",
       preview: {},
       risk: "high",
+      policy: testPolicy,
       sessionId: "s1",
     });
 
@@ -756,6 +832,7 @@ describe("Consent & Trust Routes", () => {
       summary: "Run x",
       preview: {},
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
 
@@ -773,6 +850,7 @@ describe("Consent & Trust Routes", () => {
       summary: "Run a1",
       preview: { command: "echo a1" },
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
     const p2 = consentManager.requestConsent({
@@ -781,6 +859,7 @@ describe("Consent & Trust Routes", () => {
       summary: "Run a2",
       preview: { command: "echo a2" },
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s1",
     });
     const p3 = consentManager.requestConsent({
@@ -789,6 +868,7 @@ describe("Consent & Trust Routes", () => {
       summary: "Run b1",
       preview: { command: "echo b1" },
       risk: "medium",
+      policy: testPolicy,
       sessionId: "s2",
     });
 

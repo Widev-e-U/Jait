@@ -45,6 +45,7 @@ import { PreviewService } from "./services/preview.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
 import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
 import { WorkspaceService } from "./services/workspaces.js";
+import { AssistantProfileService } from "./services/assistant-profiles.js";
 
 async function main() {
   const config = loadConfig();
@@ -59,6 +60,7 @@ async function main() {
   const sessionService = new SessionService(db);
   const sessionState = new SessionStateService(db);
   const workspaceService = new WorkspaceService(db);
+  const assistantProfileService = new AssistantProfileService(db);
   const workspaceState = new WorkspaceStateService(db);
   const userService = new UserService(db);
   const audit = new AuditWriter(db);
@@ -283,6 +285,7 @@ async function main() {
 
   // Consent & Trust — Sprint 4
   const trustEngine = new TrustEngine(db);
+  const activeToolProfileName = "coding" as const;
   const consentManager = new ConsentManager({
     defaultTimeoutMs: 120_000,
     db,
@@ -305,7 +308,7 @@ async function main() {
       console.log(`Consent ${decision.approved ? "approved" : "rejected"}: ${decision.requestId}`);
     },
   });
-  const permissions = getProfile("coding");
+  const permissions = getProfile(activeToolProfileName);
   const sessionApprovalsBySession = new Map<string, Set<string>>();
   const getSessionApprovals = (sessionId: string): Set<string> => {
     const existing = sessionApprovalsBySession.get(sessionId);
@@ -328,6 +331,7 @@ async function main() {
       audit,
       permissions,
       sessionApprovals: getSessionApprovals(context.sessionId),
+      profileName: activeToolProfileName,
     });
     return executor.execute(toolName, input, context, options);
   };
@@ -442,7 +446,7 @@ async function main() {
     }
   }
 
-  console.log(`Consent manager initialized (profile: coding, timeout: 120s, ${permissions.size} tool permissions)`);
+  console.log(`Consent manager initialized (profile: ${activeToolProfileName}, timeout: 120s, ${permissions.size} tool permissions)`);
 
   const server = await createServer(config, {
     db,
@@ -454,6 +458,8 @@ async function main() {
     toolRegistry,
     consentManager,
     trustEngine,
+    activeToolProfileName,
+    toolPermissions: permissions,
     ws,
     hooks,
     scheduler,
@@ -467,6 +473,7 @@ async function main() {
     deviceRegistry,
     sessionState,
     workspaceService,
+    assistantProfileService,
     workspaceState,
     voiceService,
     toolExecutor,

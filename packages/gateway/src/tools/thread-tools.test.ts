@@ -20,6 +20,12 @@ import { createThreadControlTool } from "./thread-tools.js";
 
 class MockThreadProvider implements CliProviderAdapter {
   readonly info: ProviderInfo;
+  readonly stopSession = vi.fn(async (): Promise<void> => {
+    return;
+  });
+  readonly sendTurn = vi.fn(async (): Promise<void> => {
+    return;
+  });
 
   constructor(readonly id: "jait" | "codex" | "claude-code" = "jait") {
     this.info = {
@@ -50,10 +56,6 @@ class MockThreadProvider implements CliProviderAdapter {
     };
   }
 
-  async sendTurn(): Promise<void> {
-    return;
-  }
-
   async interruptTurn(): Promise<void> {
     return;
   }
@@ -62,8 +64,8 @@ class MockThreadProvider implements CliProviderAdapter {
     return;
   }
 
-  async stopSession(): Promise<void> {
-    return;
+  emit(event: ProviderEvent): void {
+    this.emitter.emit("event", event);
   }
 
   onEvent(handler: (event: ProviderEvent) => void): () => void {
@@ -151,6 +153,97 @@ describe("thread.control tool", () => {
       const data = result.data as { thread: { providerSessionId: string | null; status: string } };
       expect(data.thread.providerSessionId).toBe("mock-session-1");
       expect(data.thread.status).toBe("running");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("auto-completes delegation threads after the first completed turn", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async () => {
+        provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+      });
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "One-shot helper",
+          kind: "delegation",
+          start: true,
+          message: "Summarize the current state",
+        },
+        context,
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { id: string; status: string; providerSessionId: string | null } };
+      expect(data.thread.status).toBe("completed");
+      expect(data.thread.providerSessionId).toBeNull();
+      expect(provider.stopSession).toHaveBeenCalledWith("mock-session-1");
+
+      const stored = threadService.getById(data.thread.id);
+      expect(stored?.status).toBe("completed");
+      expect(stored?.providerSessionId).toBeNull();
+      expect(stored?.completedAt).toBeTruthy();
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("keeps delivery threads resumable after the first completed turn", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async () => {
+        provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+      });
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Delivery thread",
+          kind: "delivery",
+          start: true,
+          message: "Implement the fix",
+        },
+        context,
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { id: string; status: string; providerSessionId: string | null } };
+      expect(data.thread.status).toBe("running");
+      expect(data.thread.providerSessionId).toBe("mock-session-1");
+      expect(provider.stopSession).not.toHaveBeenCalled();
+
+      const stored = threadService.getById(data.thread.id);
+      expect(stored?.status).toBe("running");
+      expect(stored?.providerSessionId).toBe("mock-session-1");
     } finally {
       sqlite.close();
     }

@@ -26,11 +26,13 @@ import { registerHookRoutes } from "./routes/hooks.js";
 import { registerJobRoutes } from "./routes/jobs.js";
 import { registerMobileRoutes } from "./routes/mobile.js";
 import { registerNetworkRoutes } from "./routes/network.js";
+import { registerEnvironmentRoutes } from "./routes/environment.js";
 import { registerVoiceRoutes } from "./routes/voice.js";
 import { registerWorkspaceRoutes } from "./routes/workspace.js";
 import { registerWorkspaceEntityRoutes } from "./routes/workspaces.js";
 import { registerScreenShareRoutes } from "./routes/screen-share.js";
 import { registerFilesystemRoutes } from "./routes/filesystem.js";
+import { registerAssistantProfileRoutes } from "./routes/assistant-profiles.js";
 import { registerThreadRoutes } from "./routes/threads.js";
 import { registerRepoRoutes } from "./routes/repositories.js";
 import { registerPlanRoutes } from "./routes/plans.js";
@@ -47,6 +49,8 @@ import type { ToolRegistry } from "./tools/registry.js";
 import type { ToolContext, ToolResult } from "./tools/contracts.js";
 import type { ConsentManager } from "./security/consent-manager.js";
 import type { TrustEngine } from "./security/trust-engine.js";
+import type { ToolPermission } from "./security/tool-permissions.js";
+import type { ProfileName } from "./security/tool-profiles.js";
 import type { JaitDB } from "./db/index.js";
 import type { WsControlPlane } from "./ws.js";
 import type { HookBus } from "./scheduler/hooks.js";
@@ -65,6 +69,7 @@ import type { ProviderRegistry } from "./providers/registry.js";
 import type { SqliteDatabase } from "./db/sqlite-shim.js";
 import { getSchemaVersion } from "./db/connection.js";
 import type { WorkspaceService } from "./services/workspaces.js";
+import type { AssistantProfileService } from "./services/assistant-profiles.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -76,6 +81,8 @@ export interface ServerDeps {
   toolRegistry?: ToolRegistry;
   consentManager?: ConsentManager;
   trustEngine?: TrustEngine;
+  activeToolProfileName?: ProfileName;
+  toolPermissions?: Map<string, ToolPermission>;
   ws?: WsControlPlane;
   hooks?: HookBus;
   scheduler?: SchedulerService;
@@ -86,6 +93,7 @@ export interface ServerDeps {
   deviceRegistry?: DeviceRegistry;
   sessionState?: SessionStateService;
   workspaceService?: WorkspaceService;
+  assistantProfileService?: AssistantProfileService;
   workspaceState?: WorkspaceStateService;
   toolExecutor?: (
     toolName: string,
@@ -151,13 +159,27 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.workspaceService && deps.sessionService) {
     registerWorkspaceEntityRoutes(app, config, deps.workspaceService, deps.sessionService, deps.workspaceState);
   }
+  if (deps.assistantProfileService) {
+    registerAssistantProfileRoutes(app, config, deps.assistantProfileService);
+  }
+  registerEnvironmentRoutes(app, config, {
+    assistantProfileService: deps.assistantProfileService,
+    workspaceService: deps.workspaceService,
+    repoService: deps.repoService,
+    providerRegistry: deps.providerRegistry,
+    ws: deps.ws,
+    sqlite: deps.sqlite,
+  });
 
   if (deps.surfaceRegistry && deps.toolRegistry && deps.audit) {
     registerTerminalRoutes(app, deps.surfaceRegistry, deps.toolRegistry, deps.audit, deps.toolExecutor);
   }
 
   if (deps.consentManager && deps.audit) {
-    registerConsentRoutes(app, deps.consentManager, deps.audit);
+    registerConsentRoutes(app, deps.consentManager, deps.audit, {
+      activeProfileName: deps.activeToolProfileName,
+      permissions: deps.toolPermissions,
+    });
   }
   if (deps.voiceService && deps.consentManager) {
     registerVoiceRoutes(app, deps.voiceService, deps.consentManager, config, deps.userService);

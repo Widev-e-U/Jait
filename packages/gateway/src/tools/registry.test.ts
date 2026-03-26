@@ -12,6 +12,65 @@ function context() {
 }
 
 describe("ToolRegistry audit and validation behavior", () => {
+  it("normalizes builtin tools with builtin source metadata", () => {
+    const registry = new ToolRegistry();
+    registry.register({
+      name: "builtin.echo",
+      description: "echo text",
+      parameters: { type: "object", properties: {} },
+      execute: async () => ({ ok: true, message: "ok" }),
+    });
+
+    expect(registry.get("builtin.echo")).toMatchObject({
+      source: "builtin",
+      sourceMetadata: { kind: "builtin" },
+    });
+    expect(registry.listInfo()).toContainEqual(expect.objectContaining({
+      name: "builtin.echo",
+      source: "builtin",
+      sourceMetadata: { kind: "builtin" },
+    }));
+  });
+
+  it("registers plugin tools with explicit plugin source metadata", () => {
+    const registry = new ToolRegistry();
+    registry.registerPluginTools(
+      { id: "demo-plugin", displayName: "Demo Plugin" },
+      [{
+        name: "demo.echo",
+        description: "echo from plugin",
+        parameters: { type: "object", properties: {} },
+        tier: "external",
+        category: "external",
+        risk: "high",
+        defaultConsentLevel: "dangerous",
+        execute: async () => ({ ok: true, message: "plugin" }),
+      }],
+    );
+
+    expect(registry.get("demo.echo")).toMatchObject({
+      source: "plugin:demo-plugin",
+      sourceMetadata: {
+        kind: "plugin",
+        pluginId: "demo-plugin",
+        pluginDisplayName: "Demo Plugin",
+      },
+      tier: "external",
+      category: "external",
+      risk: "high",
+      defaultConsentLevel: "dangerous",
+    });
+    expect(registry.listInfo()).toContainEqual(expect.objectContaining({
+      name: "demo.echo",
+      source: "plugin:demo-plugin",
+      sourceMetadata: {
+        kind: "plugin",
+        pluginId: "demo-plugin",
+        pluginDisplayName: "Demo Plugin",
+      },
+    }));
+  });
+
   it("returns validation errors and logs tool.validation_error", async () => {
     const registry = new ToolRegistry();
     registry.register({

@@ -149,4 +149,21 @@ export class WorkspaceService {
       .where(userId ? and(eq(workspaces.id, id), eq(workspaces.userId, userId)) : eq(workspaces.id, id))
       .run();
   }
+
+  getActiveSessionCounts(userId: string): Map<string, number> {
+    const rows = this.db
+      .select({
+        workspaceId: sessions.workspaceId,
+        count: sql<number>`count(*)`,
+      })
+      .from(sessions)
+      .where(and(eq(sessions.userId, userId), eq(sessions.status, "active")))
+      .groupBy(sessions.workspaceId)
+      .all();
+    const counts = new Map<string, number>();
+    for (const row of rows) {
+      if (row.workspaceId) counts.set(row.workspaceId, Number(row.count));
+    }
+    return counts;
+  }
 }

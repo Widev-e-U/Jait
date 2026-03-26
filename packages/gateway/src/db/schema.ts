@@ -69,6 +69,28 @@ export const userSettings = sqliteTable("user_settings", {
   updatedAt: text("updated_at").notNull(),
 });
 
+// ─── Assistant Profiles ─────────────────────────────────────────────
+export const assistantProfiles = sqliteTable(
+  "assistant_profiles",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    name: text("name").notNull(),
+    description: text("description"),
+    systemPrompt: text("system_prompt"),
+    runtimeMode: text("runtime_mode"),
+    toolProfile: text("tool_profile"),
+    enabledSkills: text("enabled_skills"),
+    enabledPlugins: text("enabled_plugins"),
+    isDefault: integer("is_default").notNull().default(0),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_assistant_profiles_user").on(table.userId, table.updatedAt),
+  ],
+);
+
 // ─── Audit Log ───────────────────────────────────────────────────────
 export const auditLog = sqliteTable(
   "audit_log",

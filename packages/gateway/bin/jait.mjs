@@ -8,6 +8,7 @@
  *   jait start               Start the gateway in the background
  *   jait stop                Stop the background gateway
  *   jait status              Check if the gateway is running
+ *   jait doctor              Run local diagnostics
  *   jait reset               Wipe all data
  *   jait --port 9000         Use a custom port
  *   jait --host 127.0.0.1   Bind to specific host
@@ -75,6 +76,7 @@ Commands:
   start              Start the gateway in the background
   stop               Stop the background gateway
   status             Check if the gateway is running
+  doctor             Run local diagnostics
   reset              Wipe all data (~/.jait)
   daemon <cmd>       Manage systemd service (Linux only)
 
@@ -176,6 +178,54 @@ async function cmdStatus(port) {
     }
   }
   console.log("");
+}
+
+async function cmdDoctor({ envPath, envLoaded }) {
+  printBanner();
+  if (envLoaded) {
+    console.log(`  Config loaded from ${envLoaded}`);
+  }
+  console.log("");
+
+  let doctorModule;
+  try {
+    doctorModule = await import("../dist/cli/doctor.js");
+  } catch (err) {
+    console.error("  Failed to load doctor diagnostics module from dist.");
+    console.error("  Build the gateway package first so the CLI can import compiled diagnostics.");
+    console.error(`  ${err.message}`);
+    console.log("");
+    process.exit(1);
+  }
+
+  const report = await doctorModule.runDoctorDiagnostics({
+    env: process.env,
+    envPath: envLoaded || envPath || null,
+    healthCheck: (port) => healthCheck(port),
+  });
+
+  for (const check of report.checks) {
+    const marker = check.status === "pass"
+      ? "PASS"
+      : check.status === "warn"
+        ? "WARN"
+        : "FAIL";
+    console.log(`  [${marker}] ${check.label}: ${check.summary}`);
+    for (const detail of check.details ?? []) {
+      console.log(`         ${detail}`);
+    }
+  }
+
+  console.log("");
+  console.log(
+    `  Summary: ${report.counts.pass} passed, ${report.counts.warn} warnings, ${report.counts.fail} failed`,
+  );
+  console.log(`  Result:  ${report.ok ? "ok" : "issues found"}`);
+  console.log("");
+
+  if (!report.ok) {
+    process.exitCode = 1;
+  }
 }
 
 function isProcessRunning(pid) {
@@ -560,6 +610,12 @@ if (args[0] === "reset") {
   process.exit(0);
 }
 
+let deferredDoctor = false;
+if (args[0] === "doctor") {
+  parseSubcommandFlags(1);
+  deferredDoctor = true;
+}
+
 // Check for daemon subcommand first
 if (args[0] === "daemon") {
   const subCmd = args[1];
@@ -617,6 +673,8 @@ for (let i = 0; i < args.length; i++) {
     console.error(`Unknown option: ${arg}`);
     console.error("Run 'jait --help' for usage information.");
     process.exit(1);
+  } else if (deferredDoctor && i === 0 && arg === "doctor") {
+    continue;
   } else {
     console.error(`Unknown command: ${arg}`);
     console.error("Run 'jait --help' for usage information.");
@@ -672,6 +730,11 @@ if (flags.host) process.env.HOST = flags.host;
 
 // Mark that env was loaded externally so config.ts doesn't try again
 process.env.__JAIT_CLI = "1";
+
+if (deferredDoctor) {
+  await cmdDoctor({ envPath: flags.envPath, envLoaded });
+  process.exit(process.exitCode ?? 0);
+}
 
 // ── Start ───────────────────────────────────────────────────────────
 

@@ -3,6 +3,7 @@ export type {
   ToolDefinition,
   ToolResult,
   ToolParametersSchema,
+  ToolSourceMetadata,
 } from "./contracts.js";
 export { ToolRegistry } from "./registry.js";
 

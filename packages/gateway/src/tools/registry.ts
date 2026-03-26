@@ -14,7 +14,10 @@ import type {
   ToolConsentLevel,
   ToolRisk,
   ToolSource,
+  ToolSourceMetadata,
 } from "./contracts.js";
+import { buildPluginToolSourceMetadata, toPluginToolDefinition } from "../plugins/contracts.js";
+import type { PluginDescriptor, PluginToolDeclaration } from "../plugins/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { validateToolInput } from "./validate.js";
@@ -26,9 +29,26 @@ export interface ToolInfo {
   tier: ToolTier;
   category: ToolCategory;
   source: ToolSource;
+  sourceMetadata: ToolSourceMetadata;
   risk: ToolRisk;
   defaultConsentLevel: ToolConsentLevel;
   parameterCount: number;
+}
+
+function inferSourceMetadata(tool: Pick<ToolDefinition, "source" | "sourceMetadata">): ToolSourceMetadata {
+  if (tool.sourceMetadata) return tool.sourceMetadata;
+  if (tool.source?.startsWith("plugin:")) {
+    const pluginId = tool.source.slice("plugin:".length);
+    return {
+      kind: "plugin",
+      pluginId,
+      pluginDisplayName: pluginId,
+    };
+  }
+  if (tool.source === "mcp") {
+    return { kind: "mcp" };
+  }
+  return { kind: "builtin" };
 }
 
 function inferDefaultConsentLevel(tool: Pick<ToolDefinition, "name" | "tier" | "category" | "source" | "risk">): ToolConsentLevel {
@@ -124,6 +144,7 @@ function normalizeToolDefinition(tool: ToolDefinition): ToolDefinition {
     tier: tool.tier ?? "standard",
     category: tool.category ?? "external",
     source: tool.source ?? "builtin",
+    sourceMetadata: inferSourceMetadata(tool),
   };
   normalized.risk = tool.risk ?? inferRisk(normalized);
   normalized.defaultConsentLevel = tool.defaultConsentLevel ?? inferDefaultConsentLevel(normalized);
@@ -135,6 +156,16 @@ export class ToolRegistry {
 
   register(tool: ToolDefinition): void {
     this.tools.set(tool.name, normalizeToolDefinition(tool));
+  }
+
+  registerPluginTools(plugin: PluginDescriptor, tools: PluginToolDeclaration[]): void {
+    const sourceMetadata = buildPluginToolSourceMetadata(plugin);
+    for (const tool of tools) {
+      this.register({
+        ...toPluginToolDefinition(plugin, tool),
+        sourceMetadata,
+      });
+    }
   }
 
   get(name: string): ToolDefinition | undefined {
@@ -181,6 +212,7 @@ export class ToolRegistry {
       tier: t.tier ?? "standard",
       category: t.category ?? "external",
       source: t.source ?? "builtin",
+      sourceMetadata: t.sourceMetadata ?? inferSourceMetadata(t),
       risk: t.risk ?? "medium",
       defaultConsentLevel: t.defaultConsentLevel ?? "once",
       parameterCount: Object.keys(t.parameters.properties ?? {}).length,

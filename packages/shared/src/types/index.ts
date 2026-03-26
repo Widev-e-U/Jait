@@ -76,3 +76,16 @@ export type {
   ThreadWsEventType,
   ThreadWsEvent,
 } from "./thread.js";
+
+export type {
+  AssistantProfile,
+  CreateAssistantProfileParams,
+  UpdateAssistantProfileParams,
+} from "./assistant.js";
+
+export type {
+  EnvironmentWorkspace,
+  EnvironmentRepository,
+  EnvironmentConnector,
+  EnvironmentSnapshot,
+} from "./environment.js";

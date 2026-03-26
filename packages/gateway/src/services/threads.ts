@@ -184,6 +184,15 @@ export class ThreadService {
     });
   }
 
+  markCompletedAndClearSession(id: string): ThreadRow | undefined {
+    return this.update(id, {
+      status: "completed",
+      providerSessionId: null,
+      error: null,
+      completedAt: new Date().toISOString(),
+    });
+  }
+
   /** Clear the provider session — called when a PR is merged or the thread is manually closed. */
   clearSession(id: string): ThreadRow | undefined {
     return this.update(id, {

@@ -579,4 +579,28 @@ export const migrations: Migration[] = [
     },
   },
 
+  {
+    id: 23,
+    name: "assistant_profiles_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS assistant_profiles (
+          id TEXT PRIMARY KEY,
+          user_id TEXT,
+          name TEXT NOT NULL,
+          description TEXT,
+          system_prompt TEXT,
+          runtime_mode TEXT,
+          tool_profile TEXT,
+          enabled_skills TEXT,
+          enabled_plugins TEXT,
+          is_default INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_assistant_profiles_user ON assistant_profiles(user_id, updated_at DESC)`);
+    },
+  },
+
 ];

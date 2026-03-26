@@ -6,6 +6,8 @@
 
 import type { FastifyInstance } from "fastify";
 import type { ConsentManager } from "../security/consent-manager.js";
+import type { ToolPermission } from "../security/tool-permissions.js";
+import type { ProfileName } from "../security/tool-profiles.js";
 import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../db/uuidv7.js";
 
@@ -13,7 +15,21 @@ export function registerConsentRoutes(
   app: FastifyInstance,
   consentManager: ConsentManager,
   audit: AuditWriter,
+  options: {
+    activeProfileName?: ProfileName;
+    permissions?: Map<string, ToolPermission>;
+  } = {},
 ) {
+  app.get("/api/consent/policy", async () => {
+    const permissions = options.permissions ? [...options.permissions.values()] : [];
+    return {
+      activeProfileName: options.activeProfileName ?? null,
+      toolCount: permissions.length,
+      permissions,
+      unknownToolsRequireConsent: true,
+    };
+  });
+
   // GET /api/consent/pending — list all pending consent requests
   app.get("/api/consent/pending", async (_request, _reply) => {
     const requests = consentManager.listPending();

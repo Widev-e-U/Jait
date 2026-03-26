@@ -11,9 +11,18 @@ import { consentLog, consentSessionApprovals } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { eq } from "drizzle-orm";
 
+import type { ConsentLevel, PolicySource } from "./tool-permissions.js";
+
 // ── Types ────────────────────────────────────────────────────────────
 
 export type ConsentStatus = "pending" | "approved" | "rejected" | "timeout";
+
+export interface ConsentRequestPolicy {
+  consentLevel: ConsentLevel;
+  description: string;
+  knownTool: boolean;
+  source: PolicySource;
+}
 
 export interface ConsentRequest {
   id: string;
@@ -23,6 +32,7 @@ export interface ConsentRequest {
   /** Preview of what will execute (command, file path, etc.) */
   preview: Record<string, unknown>;
   risk: "low" | "medium" | "high";
+  policy: ConsentRequestPolicy;
   sessionId: string;
   createdAt: string;
   expiresAt: string;
@@ -85,6 +95,7 @@ export class ConsentManager {
     summary: string;
     preview: Record<string, unknown>;
     risk: "low" | "medium" | "high";
+    policy: ConsentRequestPolicy;
     sessionId: string;
     timeoutMs?: number;
   }): Promise<ConsentDecision> {
@@ -99,6 +110,7 @@ export class ConsentManager {
       summary: params.summary,
       preview: params.preview,
       risk: params.risk,
+      policy: params.policy,
       sessionId: params.sessionId,
       createdAt: now.toISOString(),
       expiresAt: expiresAt.toISOString(),

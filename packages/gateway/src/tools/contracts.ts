@@ -88,6 +88,27 @@ export type ToolConsentLevel = "none" | "once" | "always" | "dangerous";
 
 export type ToolSource = "builtin" | "mcp" | `plugin:${string}`;
 
+export interface BuiltinToolSourceMetadata {
+  kind: "builtin";
+}
+
+export interface McpToolSourceMetadata {
+  kind: "mcp";
+  serverId?: string;
+  serverName?: string;
+}
+
+export interface PluginToolSourceMetadata {
+  kind: "plugin";
+  pluginId: string;
+  pluginDisplayName: string;
+}
+
+export type ToolSourceMetadata =
+  | BuiltinToolSourceMetadata
+  | McpToolSourceMetadata
+  | PluginToolSourceMetadata;
+
 export interface ToolDefinition<TInput = unknown> {
   name: string;
   description: string;
@@ -98,6 +119,8 @@ export interface ToolDefinition<TInput = unknown> {
   category?: ToolCategory;
   /** Source of the tool: builtin, MCP, or plugin:<id> */
   source?: ToolSource;
+  /** Structured source metadata for plugin/MCP/builtin provenance */
+  sourceMetadata?: ToolSourceMetadata;
   /** Baseline risk level for policy defaults and consent UI */
   risk?: ToolRisk;
   /** Suggested consent level when no explicit policy exists yet */
