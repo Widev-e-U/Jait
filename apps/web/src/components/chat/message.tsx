@@ -47,6 +47,12 @@ import {
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
 
+const MIN_AGENT_TOOL_CALLS_FOR_WRAPPER = 3
+
+export function shouldUseAgentToolCallWrapper(provider: ProviderId | undefined, calls: ToolCallInfo[]): provider is Exclude<ProviderId, 'jait'> {
+  return Boolean(provider && provider !== 'jait' && calls.length >= MIN_AGENT_TOOL_CALLS_FOR_WRAPPER)
+}
+
 interface MessageProps {
   messageId?: string
   messageIndex?: number
@@ -743,7 +749,7 @@ function MessageInner({
                   // Collapse completed tool groups that are followed by text
                   const followedByText = segments!.slice(i + 1).some(s => s.type === 'text' && s.content.trim())
                   return calls.length > 0 ? (
-                    provider && provider !== 'jait' ? (
+                    shouldUseAgentToolCallWrapper(provider, calls) ? (
                       <AgentToolCallWrapper
                         key={`tg-${i}`}
                         provider={provider}
@@ -793,7 +799,7 @@ function MessageInner({
         ) : (
           <>
             {toolCalls && toolCalls.length > 0 && (
-              provider && provider !== 'jait' ? (
+              shouldUseAgentToolCallWrapper(provider, toolCalls) ? (
                 <AgentToolCallWrapper
                   provider={provider}
                   calls={toolCalls}

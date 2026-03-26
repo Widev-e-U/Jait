@@ -6,6 +6,7 @@ import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
 import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuLabel, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
@@ -754,7 +755,7 @@ function TreeNodeRow({
 }) {
   const paddingLeft = isMobile ? 6 + depth * 12 : 8 + depth * 14
   const [dragOver, setDragOver] = useState(false)
-  const openMobileMenu = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+  const openMobileMenu = useCallback((event: React.SyntheticEvent<HTMLButtonElement>) => {
     event.preventDefault()
     event.stopPropagation()
     const rect = event.currentTarget.getBoundingClientRect()
@@ -832,7 +833,7 @@ function TreeNodeRow({
               type="button"
               className="rounded p-2 hover:bg-background touch-manipulation"
               onPointerDown={(e) => e.stopPropagation()}
-              onPointerUp={openMobileMenu}
+              onClick={openMobileMenu}
               title="More actions"
             >
               <MoreVertical className="h-3.5 w-3.5" />
@@ -908,7 +909,7 @@ function TreeNodeRow({
           type="button"
           className="rounded p-2 hover:bg-background touch-manipulation"
           onPointerDown={(e) => e.stopPropagation()}
-          onPointerUp={openMobileMenu}
+          onClick={openMobileMenu}
           title="More actions"
         >
           <MoreVertical className="h-3.5 w-3.5" />
@@ -3964,65 +3965,84 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
           </button>
           {showEditorProp && (
-          <button
-            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-              effectiveMobileTab === 'editor' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
-            }`}
-            onClick={() => setMobileTab('editor')}
-          >
-            Editor
-            {editorFile && (
-              <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
-                — {editorFile.path.split('/').pop()}
-              </span>
-            )}
-          </button>
+          openTabs.length > 0 ? (
+            <DropdownMenu onOpenChange={(open) => { if (open) setMobileTab('editor') }}>
+              <DropdownMenuTrigger asChild>
+                <button
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors min-w-0 ${
+                    effectiveMobileTab === 'editor' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+                  }`}
+                >
+                  <span className="shrink-0">Editor</span>
+                  {openTabs.length > 1 && (
+                    <span className="rounded-full bg-primary/15 px-1.5 text-[9px] font-bold leading-tight text-primary">
+                      {openTabs.length}
+                    </span>
+                  )}
+                  {(activeTab ?? editorFile) && (
+                    <span className="truncate text-[10px] text-muted-foreground max-w-[120px]">
+                      {'\u2014'} {activeTab ? getEditorTabTitle(activeTab) : editorFile?.path.split('/').pop()}
+                    </span>
+                  )}
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[min(20rem,calc(100vw-1rem))]">
+                <DropdownMenuLabel>Open tabs</DropdownMenuLabel>
+                {openTabs.map((tab) => {
+                  const isActive = tab.id === activeTabId
+                  return (
+                    <DropdownMenuItem
+                      key={tab.id}
+                      onSelect={() => {
+                        handleSwitchTab(tab.id)
+                        setMobileTab('editor')
+                      }}
+                      className="gap-2"
+                    >
+                      {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
+                        <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
+                      ) : tab.type === 'architecture' ? (
+                        <Boxes className="h-3.5 w-3.5 shrink-0" />
+                      ) : tab.type === 'preview' ? (
+                        <Globe className="h-3.5 w-3.5 shrink-0" />
+                      ) : (
+                        <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
+                      )}
+                      <span className="min-w-0 flex-1 truncate">{getEditorTabTitle(tab)}</span>
+                      {isActive && (
+                        <span className="text-[10px] font-medium text-primary">Current</span>
+                      )}
+                    </DropdownMenuItem>
+                  )
+                })}
+                {activeTab && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => handleCloseTab(activeTab.id)} className="gap-2 text-red-600 focus:text-red-600 dark:text-red-400 dark:focus:text-red-400">
+                      <X className="h-3.5 w-3.5 shrink-0" />
+                      <span className="truncate">Close current tab</span>
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : (
+            <button
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                effectiveMobileTab === 'editor' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+              }`}
+              onClick={() => setMobileTab('editor')}
+            >
+              Editor
+              {editorFile && (
+                <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                  {'\u2014'} {editorFile.path.split('/').pop()}
+                </span>
+              )}
+            </button>
+          )
           )}
         </div>
-        )}
-
-        {showEditorProp && openTabs.length > 0 && (
-          <div className="flex items-center h-8 border-b bg-background/80 shrink-0 min-w-0">
-            <div className="flex items-center flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-none">
-              {openTabs.map((tab) => {
-                const isActive = tab.id === activeTabId
-                return (
-                  <div
-                    key={tab.id}
-                    data-tab-id={tab.id}
-                    className={`group relative flex h-8 items-center gap-1 px-2.5 border-r border-border/40 cursor-pointer shrink-0 text-xs ${
-                      isActive ? 'bg-background text-foreground' : 'text-muted-foreground'
-                    }`}
-                    onClick={() => {
-                      handleSwitchTab(tab.id)
-                      setMobileTab('editor')
-                    }}
-                  >
-                    {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
-                    {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
-                      <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
-                    ) : tab.type === 'architecture' ? (
-                      <Boxes className="h-3.5 w-3.5 shrink-0" />
-                    ) : tab.type === 'preview' ? (
-                      <Globe className="h-3.5 w-3.5 shrink-0" />
-                    ) : (
-                      <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
-                    )}
-                    <span className="truncate max-w-[120px]">{getEditorTabTitle(tab)}</span>
-                    <button
-                      className="p-0.5 rounded-sm hover:bg-foreground/10 shrink-0 opacity-60"
-                      onClick={(e) => {
-                        e.stopPropagation()
-                        handleCloseTab(tab.id)
-                      }}
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </div>
-                )
-              })}
-            </div>
-          </div>
         )}
 
         {/* Single-pane header when only the editor pane is visible */}
@@ -5150,115 +5170,220 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
       {/* File tree context menu */}
       {fileContextMenu && (
-      <div
-        ref={fileContextMenuRef}
-        className="ui-panel-surface fixed z-50 min-w-[180px] py-1"
-        style={{
-          left: fileContextMenuPosition?.left ?? fileContextMenu.x,
-          top: fileContextMenuPosition?.top ?? fileContextMenu.y,
-          visibility: fileContextMenuPosition ? 'visible' : 'hidden',
-        }}
-        onPointerDown={(e) => e.stopPropagation()}
-      >
-        <button
-          className="ui-menu-item"
-          onClick={() => {
-            void handleContextNativeNode(fileContextMenu.node)
-            setFileContextMenu(null)
+      isMobile ? (
+        <div className="fixed inset-0 z-50" onPointerDown={() => setFileContextMenu(null)}>
+          <div className="absolute inset-0 bg-black/30" />
+          <div
+            ref={fileContextMenuRef}
+            className="ui-panel-surface absolute inset-x-3 bottom-3 max-h-[70vh] overflow-auto rounded-2xl p-2"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <div className="px-3 py-2 text-xs font-medium uppercase tracking-[0.08em] text-muted-foreground">
+              {fileContextMenu.node.name}
+            </div>
+            <button
+              className="ui-menu-item"
+              onClick={() => {
+                void handleContextNativeNode(fileContextMenu.node)
+                setFileContextMenu(null)
+              }}
+            >
+              <Plus className="h-3 w-3" />
+              Add to Chat
+            </button>
+            {fileContextMenu.node.kind === 'file' && (
+              <button
+                className="ui-menu-item"
+                onClick={() => {
+                  const node = fileContextMenu.node as LazyFile
+                  handleSelectNativeFile(node)
+                  setFileContextMenu(null)
+                }}
+              >
+                Open
+              </button>
+            )}
+            <div className="my-1 h-px bg-border" />
+            <button
+              className="ui-menu-item"
+              onClick={() => {
+                const parentDir = fileContextMenu.node.kind === 'dir'
+                  ? fileContextMenu.node.path
+                  : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
+                setNewItemTarget({ parentDir, kind: 'file' })
+                setNewItemValue('')
+                setFileContextMenu(null)
+              }}
+            >
+              <FilePlus className="h-3 w-3" />
+              New File
+            </button>
+            <button
+              className="ui-menu-item"
+              onClick={() => {
+                const parentDir = fileContextMenu.node.kind === 'dir'
+                  ? fileContextMenu.node.path
+                  : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
+                setNewItemTarget({ parentDir, kind: 'dir' })
+                setNewItemValue('')
+                setFileContextMenu(null)
+              }}
+            >
+              <FolderPlus className="h-3 w-3" />
+              New Folder
+            </button>
+            <div className="my-1 h-px bg-border" />
+            <button
+              className="ui-menu-item"
+              onClick={() => {
+                setRenameTarget({ path: fileContextMenu.node.path, name: fileContextMenu.node.name, kind: fileContextMenu.node.kind === 'dir' ? 'dir' : 'file' })
+                setRenameValue(fileContextMenu.node.name)
+                setFileContextMenu(null)
+              }}
+            >
+              <Edit3 className="h-3 w-3" />
+              Rename
+            </button>
+            <button
+              className="ui-menu-item text-red-500 hover:text-red-600"
+              onClick={() => {
+                void handleDeleteNode(fileContextMenu.node)
+                setFileContextMenu(null)
+              }}
+            >
+              <Trash2 className="h-3 w-3" />
+              Delete
+            </button>
+            <div className="my-1 h-px bg-border" />
+            <button
+              className="ui-menu-item"
+              onClick={() => {
+                handleCopyPath(fileContextMenu.node)
+                setFileContextMenu(null)
+              }}
+            >
+              <Copy className="h-3 w-3" />
+              Copy Path
+            </button>
+            <button
+              className="ui-menu-item"
+              onClick={() => {
+                handleCopyRelativePath(fileContextMenu.node)
+                setFileContextMenu(null)
+              }}
+            >
+              <Copy className="h-3 w-3" />
+              Copy Relative Path
+            </button>
+          </div>
+        </div>
+      ) : (
+        <div
+          ref={fileContextMenuRef}
+          className="ui-panel-surface fixed z-50 min-w-[180px] py-1"
+          style={{
+            left: fileContextMenuPosition?.left ?? fileContextMenu.x,
+            top: fileContextMenuPosition?.top ?? fileContextMenu.y,
+            visibility: fileContextMenuPosition ? 'visible' : 'hidden',
           }}
+          onPointerDown={(e) => e.stopPropagation()}
         >
-          <Plus className="h-3 w-3" />
-          Add to Chat
-        </button>
-        {fileContextMenu.node.kind === 'file' && (
           <button
             className="ui-menu-item"
             onClick={() => {
-              const node = fileContextMenu.node as LazyFile
-              handleSelectNativeFile(node)
+              void handleContextNativeNode(fileContextMenu.node)
               setFileContextMenu(null)
             }}
           >
-            Open
+            <Plus className="h-3 w-3" />
+            Add to Chat
           </button>
-        )}
-        <div className="my-1 h-px bg-border" />
-        {/* New File / New Folder */}
-        <button
-          className="ui-menu-item"
-          onClick={() => {
-            const parentDir = fileContextMenu.node.kind === 'dir'
-              ? fileContextMenu.node.path
-              : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
-            setNewItemTarget({ parentDir, kind: 'file' })
-            setNewItemValue('')
-            setFileContextMenu(null)
-          }}
-        >
-          <FilePlus className="h-3 w-3" />
-          New File
-        </button>
-        <button
-          className="ui-menu-item"
-          onClick={() => {
-            const parentDir = fileContextMenu.node.kind === 'dir'
-              ? fileContextMenu.node.path
-              : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
-            setNewItemTarget({ parentDir, kind: 'dir' })
-            setNewItemValue('')
-            setFileContextMenu(null)
-          }}
-        >
-          <FolderPlus className="h-3 w-3" />
-          New Folder
-        </button>
-        <div className="my-1 h-px bg-border" />
-        {/* Rename */}
-        <button
-          className="ui-menu-item"
-          onClick={() => {
-            setRenameTarget({ path: fileContextMenu.node.path, name: fileContextMenu.node.name, kind: fileContextMenu.node.kind === 'dir' ? 'dir' : 'file' })
-            setRenameValue(fileContextMenu.node.name)
-            setFileContextMenu(null)
-          }}
-        >
-          <Edit3 className="h-3 w-3" />
-          Rename
-        </button>
-        {/* Delete */}
-        <button
-          className="ui-menu-item text-red-500 hover:text-red-600"
-          onClick={() => {
-            void handleDeleteNode(fileContextMenu.node)
-            setFileContextMenu(null)
-          }}
-        >
-          <Trash2 className="h-3 w-3" />
-          Delete
-        </button>
-        <div className="my-1 h-px bg-border" />
-        {/* Copy Path */}
-        <button
-          className="ui-menu-item"
-          onClick={() => {
-            handleCopyPath(fileContextMenu.node)
-            setFileContextMenu(null)
-          }}
-        >
-          <Copy className="h-3 w-3" />
-          Copy Path
-        </button>
-        <button
-          className="ui-menu-item"
-          onClick={() => {
-            handleCopyRelativePath(fileContextMenu.node)
-            setFileContextMenu(null)
-          }}
-        >
-          <Copy className="h-3 w-3" />
-          Copy Relative Path
-        </button>
-      </div>
+          {fileContextMenu.node.kind === 'file' && (
+            <button
+              className="ui-menu-item"
+              onClick={() => {
+                const node = fileContextMenu.node as LazyFile
+                handleSelectNativeFile(node)
+                setFileContextMenu(null)
+              }}
+            >
+              Open
+            </button>
+          )}
+          <div className="my-1 h-px bg-border" />
+          <button
+            className="ui-menu-item"
+            onClick={() => {
+              const parentDir = fileContextMenu.node.kind === 'dir'
+                ? fileContextMenu.node.path
+                : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
+              setNewItemTarget({ parentDir, kind: 'file' })
+              setNewItemValue('')
+              setFileContextMenu(null)
+            }}
+          >
+            <FilePlus className="h-3 w-3" />
+            New File
+          </button>
+          <button
+            className="ui-menu-item"
+            onClick={() => {
+              const parentDir = fileContextMenu.node.kind === 'dir'
+                ? fileContextMenu.node.path
+                : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
+              setNewItemTarget({ parentDir, kind: 'dir' })
+              setNewItemValue('')
+              setFileContextMenu(null)
+            }}
+          >
+            <FolderPlus className="h-3 w-3" />
+            New Folder
+          </button>
+          <div className="my-1 h-px bg-border" />
+          <button
+            className="ui-menu-item"
+            onClick={() => {
+              setRenameTarget({ path: fileContextMenu.node.path, name: fileContextMenu.node.name, kind: fileContextMenu.node.kind === 'dir' ? 'dir' : 'file' })
+              setRenameValue(fileContextMenu.node.name)
+              setFileContextMenu(null)
+            }}
+          >
+            <Edit3 className="h-3 w-3" />
+            Rename
+          </button>
+          <button
+            className="ui-menu-item text-red-500 hover:text-red-600"
+            onClick={() => {
+              void handleDeleteNode(fileContextMenu.node)
+              setFileContextMenu(null)
+            }}
+          >
+            <Trash2 className="h-3 w-3" />
+            Delete
+          </button>
+          <div className="my-1 h-px bg-border" />
+          <button
+            className="ui-menu-item"
+            onClick={() => {
+              handleCopyPath(fileContextMenu.node)
+              setFileContextMenu(null)
+            }}
+          >
+            <Copy className="h-3 w-3" />
+            Copy Path
+          </button>
+          <button
+            className="ui-menu-item"
+            onClick={() => {
+              handleCopyRelativePath(fileContextMenu.node)
+              setFileContextMenu(null)
+            }}
+          >
+            <Copy className="h-3 w-3" />
+            Copy Relative Path
+          </button>
+        </div>
+      )
       )}
 
       {/* Inline rename input */}
