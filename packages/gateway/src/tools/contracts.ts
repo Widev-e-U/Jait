@@ -82,6 +82,12 @@ export type ToolCategory =
   | "meta"
   | "external";
 
+export type ToolRisk = "low" | "medium" | "high";
+
+export type ToolConsentLevel = "none" | "once" | "always" | "dangerous";
+
+export type ToolSource = "builtin" | "mcp" | `plugin:${string}`;
+
 export interface ToolDefinition<TInput = unknown> {
   name: string;
   description: string;
@@ -90,7 +96,11 @@ export interface ToolDefinition<TInput = unknown> {
   tier?: ToolTier;
   /** Tool category for grouping in settings UI */
   category?: ToolCategory;
-  /** Source of the tool: 'builtin' for gateway tools, 'mcp' for MCP servers */
-  source?: "builtin" | "mcp";
+  /** Source of the tool: builtin, MCP, or plugin:<id> */
+  source?: ToolSource;
+  /** Baseline risk level for policy defaults and consent UI */
+  risk?: ToolRisk;
+  /** Suggested consent level when no explicit policy exists yet */
+  defaultConsentLevel?: ToolConsentLevel;
   execute(input: TInput, context: ToolContext): Promise<ToolResult>;
 }

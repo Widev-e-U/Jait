@@ -4,6 +4,7 @@ import { openDatabase, migrateDatabase } from "../db/index.js";
 import type {
   CliProviderAdapter,
   ProviderEvent,
+  ProviderId,
   ProviderInfo,
   ProviderSession,
   StartSessionOptions,
@@ -96,11 +97,13 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Run tests",
-          providerId: "codex",
           start: true,
           message: "bun run test",
         },
-        makeContext(),
+        {
+          ...makeContext(),
+          providerId: "codex",
+        },
       );
 
       expect(result.ok).toBe(true);
@@ -113,7 +116,7 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("maps provider aliases like openai to a thread-capable provider", async () => {
+  it("maps provider aliases like openai from the calling agent context", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -129,11 +132,13 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Use alias",
-          providerId: "openai" as ProviderId,
           start: true,
           message: "inspect ui",
         },
-        makeContext(),
+        {
+          ...makeContext(),
+          providerId: "openai" as ProviderId,
+        },
       );
 
       expect(result.ok).toBe(true);
@@ -230,7 +235,6 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Broken provider",
-          providerId: "jait",
           start: true,
           message: "inspect ui",
         },
@@ -250,41 +254,7 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("rejects create when the requested provider does not match the calling agent provider", async () => {
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    try {
-      const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
-      providerRegistry.register(new MockThreadProvider("claude-code"));
-
-      const tool = createThreadControlTool({
-        threadService: new ThreadService(db),
-        providerRegistry,
-      });
-
-      const result = await tool.execute(
-        {
-          action: "create",
-          title: "Mismatch provider",
-          providerId: "claude-code",
-        },
-        {
-          ...makeContext(),
-          providerId: "codex",
-        },
-      );
-
-      expect(result.ok).toBe(false);
-      expect(result.message).toBe(
-        "Requested provider 'claude-code' does not match the calling agent provider 'codex'.",
-      );
-    } finally {
-      sqlite.close();
-    }
-  });
-
-  it("requires either the calling agent provider or an explicit provider", async () => {
+  it("requires the calling agent to provide a supported thread provider", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -306,7 +276,7 @@ describe("thread.control tool", () => {
 
       expect(result.ok).toBe(false);
       expect(result.message).toBe(
-        "No provider could be resolved for this thread. The calling agent must provide a supported provider, or the caller must pass an explicit providerId.",
+        "No provider could be resolved for this thread. The calling agent must provide a supported provider.",
       );
     } finally {
       sqlite.close();
@@ -376,18 +346,22 @@ describe("thread.control tool", () => {
         {
           action: "create_many",
           threads: [
-            { title: "Thread A", providerId: "codex" },
-            { title: "Thread B", providerId: "claude-code" },
+            { title: "Thread A" },
+            { title: "Thread B" },
           ],
         },
-        makeContext(),
+        {
+          ...makeContext(),
+          providerId: "codex",
+        },
       );
 
       expect(result.ok).toBe(true);
-      const data = result.data as { threads: Array<{ title: string }> };
+      const data = result.data as { threads: Array<{ title: string; providerId: string }> };
       expect(data.threads).toHaveLength(2);
       expect(data.threads.map((t) => t.title)).toContain("Thread A");
       expect(data.threads.map((t) => t.title)).toContain("Thread B");
+      expect(data.threads.every((thread) => thread.providerId === "codex")).toBe(true);
     } finally {
       sqlite.close();
     }
@@ -554,38 +528,3 @@ describe("thread.control tool", () => {
     }
   });
 });
-  it("rejects create_many when any thread provider mismatches the calling agent provider", async () => {
-    const { db, sqlite } = await openDatabase(":memory:");
-    migrateDatabase(sqlite);
-    try {
-      const providerRegistry = new ProviderRegistry();
-      providerRegistry.register(new MockThreadProvider("codex"));
-      providerRegistry.register(new MockThreadProvider("claude-code"));
-
-      const tool = createThreadControlTool({
-        threadService: new ThreadService(db),
-        providerRegistry,
-      });
-
-      const result = await tool.execute(
-        {
-          action: "create_many",
-          threads: [
-            { title: "Thread A" },
-            { title: "Thread B", providerId: "claude-code" },
-          ],
-        },
-        {
-          ...makeContext(),
-          providerId: "codex",
-        },
-      );
-
-      expect(result.ok).toBe(false);
-      expect(result.message).toBe(
-        "Requested provider 'claude-code' does not match the calling agent provider 'codex'.",
-      );
-    } finally {
-      sqlite.close();
-    }
-  });

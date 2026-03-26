@@ -5,7 +5,16 @@
  * by name and executed through a unified interface.
  */
 
-import type { ToolDefinition, ToolContext, ToolResult, ToolTier, ToolCategory } from "./contracts.js";
+import type {
+  ToolDefinition,
+  ToolContext,
+  ToolResult,
+  ToolTier,
+  ToolCategory,
+  ToolConsentLevel,
+  ToolRisk,
+  ToolSource,
+} from "./contracts.js";
 import type { AuditWriter } from "../services/audit.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { validateToolInput } from "./validate.js";
@@ -16,15 +25,116 @@ export interface ToolInfo {
   description: string;
   tier: ToolTier;
   category: ToolCategory;
-  source: "builtin" | "mcp";
+  source: ToolSource;
+  risk: ToolRisk;
+  defaultConsentLevel: ToolConsentLevel;
   parameterCount: number;
+}
+
+function inferDefaultConsentLevel(tool: Pick<ToolDefinition, "name" | "tier" | "category" | "source" | "risk">): ToolConsentLevel {
+  if (tool.source?.startsWith("plugin:") || tool.source === "mcp" || tool.tier === "external") {
+    return "dangerous";
+  }
+
+  switch (tool.name) {
+    case "file.read":
+    case "file.list":
+    case "file.stat":
+    case "surfaces.list":
+    case "network.scan":
+      return "none";
+    case "file.write":
+    case "file.patch":
+    case "terminal.run":
+    case "terminal.stream":
+    case "thread.control":
+      return "once";
+    case "os.install":
+    case "gateway.redeploy":
+      return "always";
+    default:
+      break;
+  }
+
+  switch (tool.category) {
+    case "filesystem":
+      return tool.risk === "high" ? "always" : "once";
+    case "terminal":
+    case "os":
+    case "agent":
+    case "gateway":
+    case "scheduler":
+    case "network":
+      return tool.risk === "low" ? "once" : "always";
+    case "browser":
+    case "web":
+    case "screen":
+    case "surfaces":
+      return "once";
+    default:
+      return tool.risk === "low" ? "none" : "once";
+  }
+}
+
+function inferRisk(tool: Pick<ToolDefinition, "name" | "category" | "source" | "tier">): ToolRisk {
+  if (tool.source?.startsWith("plugin:") || tool.source === "mcp" || tool.tier === "external") {
+    return "high";
+  }
+
+  switch (tool.name) {
+    case "file.read":
+    case "file.list":
+    case "file.stat":
+    case "surfaces.list":
+    case "network.scan":
+      return "low";
+    case "file.write":
+    case "file.patch":
+    case "terminal.run":
+    case "terminal.stream":
+    case "thread.control":
+      return "medium";
+    case "os.install":
+    case "gateway.redeploy":
+      return "high";
+    default:
+      break;
+  }
+
+  switch (tool.category) {
+    case "filesystem":
+    case "meta":
+    case "memory":
+      return "low";
+    case "terminal":
+    case "browser":
+    case "web":
+    case "screen":
+    case "surfaces":
+    case "agent":
+      return "medium";
+    default:
+      return "high";
+  }
+}
+
+function normalizeToolDefinition(tool: ToolDefinition): ToolDefinition {
+  const normalized: ToolDefinition = {
+    ...tool,
+    tier: tool.tier ?? "standard",
+    category: tool.category ?? "external",
+    source: tool.source ?? "builtin",
+  };
+  normalized.risk = tool.risk ?? inferRisk(normalized);
+  normalized.defaultConsentLevel = tool.defaultConsentLevel ?? inferDefaultConsentLevel(normalized);
+  return normalized;
 }
 
 export class ToolRegistry {
   private readonly tools = new Map<string, ToolDefinition>();
 
   register(tool: ToolDefinition): void {
-    this.tools.set(tool.name, tool);
+    this.tools.set(tool.name, normalizeToolDefinition(tool));
   }
 
   get(name: string): ToolDefinition | undefined {
@@ -71,6 +181,8 @@ export class ToolRegistry {
       tier: t.tier ?? "standard",
       category: t.category ?? "external",
       source: t.source ?? "builtin",
+      risk: t.risk ?? "medium",
+      defaultConsentLevel: t.defaultConsentLevel ?? "once",
       parameterCount: Object.keys(t.parameters.properties ?? {}).length,
     }));
   }
