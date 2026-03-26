@@ -3785,7 +3785,7 @@ function App() {
         {!requiresAuthGate && (
           <>
             <header
-              className={`relative flex h-[35px] items-center gap-1 border-b bg-background px-2 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? '!pl-[0.8rem]' : ''}`}
+              className={`relative flex items-center gap-1 border-b bg-background px-2 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
