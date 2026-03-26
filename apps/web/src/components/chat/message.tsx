@@ -25,7 +25,7 @@ import { FileIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
-import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from './tool-call-card'
+import { ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import type { MessageSegment } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
@@ -68,7 +68,7 @@ interface MessageProps {
   isStreaming?: boolean
   compact?: boolean
   preferLlmUi?: boolean
-  /** Active chat provider — used to wrap CLI agent tool calls in a collapsible group */
+  /** Active chat provider. Non-Jait providers still use inline tool groups. */
   provider?: ProviderId
   onOpenTerminal?: (terminalId: string | null) => void
   onEditMessage?: (
@@ -734,33 +734,8 @@ function MessageInner({
         {!isUser && segments && segments.length > 0 ? (
           <>
             {(() => {
-              const useAgentWrapper = provider && provider !== 'jait'
-              // Collect all tool call IDs across all segments for the agent wrapper
-              const allAgentCallIds = useAgentWrapper
-                ? segments.flatMap(seg => seg.type === 'toolGroup' ? seg.callIds : [])
-                : []
-              const allAgentCalls = useAgentWrapper
-                ? (toolCalls ?? []).filter(tc => allAgentCallIds.includes(tc.callId))
-                : []
-              let agentWrapperRendered = false
-
               return segments.map((seg, i) => {
                 if (seg.type === 'toolGroup') {
-                  if (useAgentWrapper) {
-                    // Render the agent wrapper at the position of the first tool group
-                    if (agentWrapperRendered) return null
-                    agentWrapperRendered = true
-                    return allAgentCalls.length > 0 ? (
-                      <AgentToolCallWrapper
-                        key="agent-wrapper"
-                        provider={provider}
-                        calls={allAgentCalls}
-                        isStreaming={isStreaming}
-                        onOpenTerminal={onOpenTerminal}
-                        onOpenDiff={onOpenDiff}
-                      />
-                    ) : null
-                  }
                   const calls = (toolCalls ?? []).filter((tc) => seg.callIds.includes(tc.callId))
                   // Collapse completed tool groups that are followed by text
                   const followedByText = segments!.slice(i + 1).some(s => s.type === 'text' && s.content.trim())
@@ -804,17 +779,12 @@ function MessageInner({
         ) : (
           <>
             {toolCalls && toolCalls.length > 0 && (
-              provider && provider !== 'jait' ? (
-                <AgentToolCallWrapper
-                  provider={provider}
-                  calls={toolCalls}
-                  isStreaming={isStreaming}
-                  onOpenTerminal={onOpenTerminal}
-                  onOpenDiff={onOpenDiff}
-                />
-              ) : (
-                <ToolCallGroup calls={toolCalls} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
-              )
+              <ToolCallGroup
+                calls={toolCalls}
+                collapsible={provider !== 'jait'}
+                onOpenTerminal={onOpenTerminal}
+                onOpenDiff={onOpenDiff}
+              />
             )}
 
             {content ? (
