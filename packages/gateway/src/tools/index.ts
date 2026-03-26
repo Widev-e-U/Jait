@@ -310,7 +310,6 @@ export function createToolRegistry(
       createThreadControlTool({
         threadService: deps.threadService,
         providerRegistry: deps.providerRegistry,
-        userService: deps.userService,
         ws: deps.ws,
         mcpConfig: deps.threadMcpConfig,
       }),

@@ -207,7 +207,6 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
   const startThread = async (
     context: ToolContext,
     thread: ThreadRow,
-    userId: string,
     message?: string,
     attachments?: string[],
   ): Promise<StartThreadResult> => {
@@ -422,7 +421,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               return { ok: true, message: "Thread created", data: { thread } };
             }
 
-            const started = await startThread(context, thread, userId, input.message, input.attachments);
+            const started = await startThread(context, thread, input.message, input.attachments);
             if (!started.ok) {
               return {
                 ok: false,
@@ -476,7 +475,6 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 const started = await startThread(
                   context,
                   thread,
-                  userId,
                   spec.message ?? input.message,
                   spec.attachments ?? input.attachments,
                 );
@@ -566,7 +564,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!input.threadId) return { ok: false, message: "start requires `threadId`." };
             const thread = getAccessibleThread(input.threadId, userId);
             if (!thread) return { ok: false, message: "Thread not found." };
-            const started = await startThread(context, thread, userId, input.message, input.attachments);
+            const started = await startThread(context, thread, input.message, input.attachments);
             return {
               ok: started.ok,
               message: started.message,
