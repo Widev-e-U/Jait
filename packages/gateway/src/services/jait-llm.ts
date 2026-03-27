@@ -28,11 +28,37 @@ const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
   "o3-mini": "openai/o3-mini",
   "deepseek-chat": "deepseek/deepseek-chat-v3-0324",
   "deepseek-reasoner": "deepseek/deepseek-r1",
+  "mimo v2 pro": "xiaomi/mimo-v2-pro",
+  "mimo-v2-pro": "xiaomi/mimo-v2-pro",
+  "xiaomi mimo v2 pro": "xiaomi/mimo-v2-pro",
+  "xiaomi: mimo-v2-pro": "xiaomi/mimo-v2-pro",
+  "xiaomi/mimo-v2-pro": "xiaomi/mimo-v2-pro",
+  // Compatibility shim for stale UI state / user-entered labels.
+  "mimo v3 pro": "xiaomi/mimo-v2-pro",
+  "mimo-v3-pro": "xiaomi/mimo-v2-pro",
+  "xiaomi mimo v3 pro": "xiaomi/mimo-v2-pro",
+  "xiaomi/mimo-v3-pro": "xiaomi/mimo-v2-pro",
+  "hunter-alpha": "xiaomi/mimo-v2-pro",
+  "mimo v2 flash": "xiaomi/mimo-v2-flash",
+  "mimo-v2-flash": "xiaomi/mimo-v2-flash",
+  "xiaomi mimo v2 flash": "xiaomi/mimo-v2-flash",
+  "xiaomi: mimo-v2-flash": "xiaomi/mimo-v2-flash",
+  "xiaomi/mimo-v2-flash": "xiaomi/mimo-v2-flash",
+  "mimo v2 omni": "xiaomi/mimo-v2-omni",
+  "mimo-v2-omni": "xiaomi/mimo-v2-omni",
+  "xiaomi mimo v2 omni": "xiaomi/mimo-v2-omni",
+  "xiaomi: mimo-v2-omni": "xiaomi/mimo-v2-omni",
+  "xiaomi/mimo-v2-omni": "xiaomi/mimo-v2-omni",
 };
 
 export function normalizeOpenRouterModelId(model: string): string {
   const trimmed = model.trim();
-  if (!trimmed || trimmed.includes("/")) return trimmed;
+  if (!trimmed) return trimmed;
+  const normalizedKey = trimmed.toLowerCase().replace(/\s+/g, " ");
+  if (OPENROUTER_MODEL_ALIASES[normalizedKey]) {
+    return OPENROUTER_MODEL_ALIASES[normalizedKey];
+  }
+  if (trimmed.includes("/")) return trimmed;
   return OPENROUTER_MODEL_ALIASES[trimmed] ?? trimmed;
 }
 

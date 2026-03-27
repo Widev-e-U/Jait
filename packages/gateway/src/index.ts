@@ -46,6 +46,7 @@ import { setNetworkScanDb } from "./tools/network-tools.js";
 import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
 import { WorkspaceService } from "./services/workspaces.js";
 import { AssistantProfileService } from "./services/assistant-profiles.js";
+import { BrowserCollaborationService } from "./services/browser-collaboration.js";
 
 async function main() {
   const config = loadConfig();
@@ -131,6 +132,28 @@ async function main() {
   surfaceRegistry.register(new RemoteFileSystemSurfaceFactory(ws));
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
   const previewService = new PreviewService(surfaceRegistry);
+  const browserCollaborationService = new BrowserCollaborationService(db);
+  browserCollaborationService.onSessionChanged((session) => {
+    ws.broadcastAll({
+      type: "browser.session" as any,
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: { session },
+    });
+  });
+  browserCollaborationService.onInterventionChanged((intervention) => {
+    ws.broadcastAll({
+      type: "browser.intervention" as any,
+      sessionId: "",
+      timestamp: new Date().toISOString(),
+      payload: { intervention },
+    });
+  });
+  ws.getBrowserSnapshot = (userId?: string | null) => ({
+    serverTime: new Date().toISOString(),
+    sessions: browserCollaborationService.listSessions(userId ?? undefined),
+    interventions: browserCollaborationService.listInterventions(userId ?? undefined),
+  });
   ws.getSurfaceSnapshot = (): SurfaceRegistrySnapshot => ({
     serverTime: new Date().toISOString(),
     surfaces: surfaceRegistry.listSnapshots(),
@@ -272,6 +295,7 @@ async function main() {
     notifications,
     previewService,
     architectureDiagramService,
+    browserCollaborationService,
   });
   providerRegistry.register(new JaitProvider({
     config,
@@ -385,6 +409,7 @@ async function main() {
     shutdown: shutdownRef,
     previewService,
     architectureDiagramService,
+    browserCollaborationService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -486,6 +511,7 @@ async function main() {
     providerRegistry,
     previewService,
     architectureDiagramService,
+    browserCollaborationService,
     shutdown: shutdownRef,
   });
 

@@ -14,6 +14,7 @@ import { createServer } from "../server.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
+import { WorkspaceService } from "../services/workspaces.js";
 import { SurfaceRegistry, FileSystemSurfaceFactory } from "../surfaces/index.js";
 import { WsControlPlane } from "../ws.js";
 import { UserService } from "../services/users.js";
@@ -31,6 +32,9 @@ describe("POST /api/workspace/open", () => {
   const sessionId = "test-session-" + Date.now();
   let sessionState: SessionStateService;
   let surfaceRegistry: SurfaceRegistry;
+  let sessions: SessionService;
+  let workspaces: WorkspaceService;
+  let users: UserService;
   let writableTestRoot: string;
   let writableTestFile: string;
 
@@ -39,9 +43,10 @@ describe("POST /api/workspace/open", () => {
     const { db, sqlite } = await openDatabase();
     migrateDatabase(sqlite);
 
-    const sessions = new SessionService(db);
+    sessions = new SessionService(db);
     sessionState = new SessionStateService(db);
-    const users = new UserService(db);
+    users = new UserService(db);
+    workspaces = new WorkspaceService(db);
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
@@ -74,6 +79,7 @@ describe("POST /api/workspace/open", () => {
       sqlite,
       sessionService: sessions,
       userService: users,
+      workspaceService: workspaces,
       surfaceRegistry,
       sessionState,
       ws,
@@ -291,5 +297,35 @@ describe("POST /api/workspace/open", () => {
       remotePath: TEST_DIR,
       surfaceId,
     });
+  });
+
+  it("should update the session workspacePath without rewriting the workspace rootPath", async () => {
+    const user = users.createUser(`workspace-open-${Date.now()}`, "password123");
+    const workspace = workspaces.create({
+      userId: user.id,
+      title: "jait",
+      rootPath: "/home/jakob/jait",
+      nodeId: "gateway",
+    });
+    const session = sessions.create({
+      userId: user.id,
+      workspaceId: workspace.id,
+      workspacePath: "/home/jakob/jait",
+      name: "Current chat",
+    });
+
+    const res = await fetch(`${address}/api/workspace/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId: session.id }),
+    });
+
+    expect(res.ok).toBe(true);
+
+    const updatedSession = sessions.getById(session.id, user.id);
+    expect(updatedSession?.workspacePath).toBe(writableTestRoot);
+
+    const updatedWorkspace = workspaces.getById(workspace.id, user.id);
+    expect(updatedWorkspace?.rootPath).toBe("/home/jakob/jait");
   });
 });

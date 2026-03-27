@@ -2,6 +2,7 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { BrowserSurface } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
+import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 
 interface BrowserNavigateInput {
@@ -103,7 +104,10 @@ async function ensureBrowserSurface(registry: SurfaceRegistry, context: ToolCont
   return started as BrowserSurface;
 }
 
-export function createBrowserNavigateTool(registry: SurfaceRegistry): ToolDefinition<BrowserNavigateInput> {
+export function createBrowserNavigateTool(
+  registry: SurfaceRegistry,
+  collaboration?: BrowserCollaborationService,
+): ToolDefinition<BrowserNavigateInput> {
   return {
     name: "browser.navigate",
     description: "Navigate the browser to a URL and return a page summary",
@@ -120,6 +124,7 @@ export function createBrowserNavigateTool(registry: SurfaceRegistry): ToolDefini
     },
     async execute(input, context): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      collaboration?.assertAgentControl(input.browserId);
       const surface = await ensureBrowserSurface(registry, context, input.browserId);
       const snapshot = await surface.navigate(input.url, context.signal);
       return {
@@ -137,7 +142,10 @@ export function createBrowserNavigateTool(registry: SurfaceRegistry): ToolDefini
   };
 }
 
-export function createBrowserSnapshotTool(registry: SurfaceRegistry): ToolDefinition<BrowserSnapshotInput> {
+export function createBrowserSnapshotTool(
+  registry: SurfaceRegistry,
+  collaboration?: BrowserCollaborationService,
+): ToolDefinition<BrowserSnapshotInput> {
   return {
     name: "browser.snapshot",
     description: "Return a structured textual browser snapshot for the current page",
@@ -152,6 +160,7 @@ export function createBrowserSnapshotTool(registry: SurfaceRegistry): ToolDefini
     },
     async execute(input, context): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      collaboration?.assertAgentControl(input.browserId);
       const surface = await ensureBrowserSurface(registry, context, input.browserId);
       const description = await surface.describe(context.signal);
       return {
@@ -165,6 +174,7 @@ export function createBrowserSnapshotTool(registry: SurfaceRegistry): ToolDefini
 
 function makeActionTool<TInput>(
   registry: SurfaceRegistry,
+  collaboration: BrowserCollaborationService | undefined,
   name: string,
   description: string,
   properties: Record<string, { type: string; description: string }>,
@@ -183,6 +193,7 @@ function makeActionTool<TInput>(
       const browserId = typeof input === "object" && input !== null && "browserId" in input
         ? String((input as { browserId?: string }).browserId ?? "") || undefined
         : undefined;
+      collaboration?.assertAgentControl(browserId);
       const surface = await ensureBrowserSurface(registry, context, browserId);
       const result = await action(surface, input, context.signal);
       return {
@@ -194,10 +205,14 @@ function makeActionTool<TInput>(
   };
 }
 
-export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDefinition[] {
+export function createBrowserInteractionTools(
+  registry: SurfaceRegistry,
+  collaboration?: BrowserCollaborationService,
+): ToolDefinition[] {
   return [
     makeActionTool<BrowserClickInput>(
       registry,
+      collaboration,
       "browser.click",
       "Click an element by CSS selector",
       {
@@ -212,6 +227,7 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
     ),
     makeActionTool<BrowserTypeInput>(
       registry,
+      collaboration,
       "browser.type",
       "Type text into an element selected by CSS selector",
       {
@@ -227,6 +243,7 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
     ),
     makeActionTool<BrowserScrollInput>(
       registry,
+      collaboration,
       "browser.scroll",
       "Scroll the browser viewport",
       {
@@ -242,6 +259,7 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
     ),
     makeActionTool<BrowserSelectInput>(
       registry,
+      collaboration,
       "browser.select",
       "Select a value from a select element",
       {
@@ -257,6 +275,7 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
     ),
     makeActionTool<BrowserWaitInput>(
       registry,
+      collaboration,
       "browser.wait",
       "Wait for an element to appear",
       {
@@ -272,6 +291,7 @@ export function createBrowserInteractionTools(registry: SurfaceRegistry): ToolDe
     ),
     makeActionTool<BrowserScreenshotInput>(
       registry,
+      collaboration,
       "browser.screenshot",
       "Capture a browser screenshot",
       {

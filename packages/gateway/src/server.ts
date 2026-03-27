@@ -42,6 +42,7 @@ import { registerGitRoutes } from "./routes/git.js";
 import { registerUpdateRoutes } from "./routes/update.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerArchitectureRoutes } from "./routes/architecture.js";
+import { registerBrowserCollaborationRoutes } from "./routes/browser-collaboration.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -70,6 +71,7 @@ import type { SqliteDatabase } from "./db/sqlite-shim.js";
 import { getSchemaVersion } from "./db/connection.js";
 import type { WorkspaceService } from "./services/workspaces.js";
 import type { AssistantProfileService } from "./services/assistant-profiles.js";
+import type { BrowserCollaborationService } from "./services/browser-collaboration.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -113,6 +115,7 @@ export interface ServerDeps {
   gitService?: import("./routes/threads.js").ThreadRouteDeps["gitService"];
   previewService?: import("./services/preview.js").PreviewService;
   architectureDiagramService?: import("./services/architecture-diagrams.js").ArchitectureDiagramService;
+  browserCollaborationService?: BrowserCollaborationService;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -218,7 +221,15 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerWorkspacePreviewRoutes(app);
   registerDevProxyRoutes(app);
   if (deps.previewService) {
-    registerPreviewRoutes(app, config, { previewService: deps.previewService });
+    registerPreviewRoutes(app, config, {
+      previewService: deps.previewService,
+      browserCollaborationService: deps.browserCollaborationService,
+    });
+  }
+  if (deps.browserCollaborationService) {
+    registerBrowserCollaborationRoutes(app, config, {
+      browserCollaborationService: deps.browserCollaborationService,
+    });
   }
   if (deps.architectureDiagramService) {
     registerArchitectureRoutes(app, config, deps.architectureDiagramService);

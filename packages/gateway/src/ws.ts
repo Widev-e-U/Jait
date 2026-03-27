@@ -81,6 +81,7 @@ export class WsControlPlane {
   }>();
   getThreadSnapshot?: (userId: string) => { serverTime: string; threads: unknown[] };
   getSurfaceSnapshot?: () => { serverTime: string; surfaces: unknown[] };
+  getBrowserSnapshot?: (userId?: string | null) => { serverTime: string; sessions: unknown[]; interventions: unknown[] };
 
   constructor(private config: AppConfig) {
     // Use the configured JWT secret, or a dev-mode fallback
@@ -299,6 +300,25 @@ export class WsControlPlane {
             sessionId: "",
             timestamp: new Date().toISOString(),
             payload: this.getSurfaceSnapshot(),
+          });
+          return;
+        }
+        if (resource === "root:/browser") {
+          const userId = client.userId ?? null;
+          if (!this.getBrowserSnapshot) {
+            this.send(client.ws, {
+              type: "error",
+              sessionId: client.sessionId ?? "",
+              timestamp: new Date().toISOString(),
+              payload: { message: "Browser collaboration registry unavailable" },
+            });
+            return;
+          }
+          this.send(client.ws, {
+            type: "browser.updated" as any,
+            sessionId: client.sessionId ?? "",
+            timestamp: new Date().toISOString(),
+            payload: this.getBrowserSnapshot(userId),
           });
           return;
         }

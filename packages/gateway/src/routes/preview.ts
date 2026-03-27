@@ -2,11 +2,12 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { PreviewService } from "../services/preview.js";
+import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
 
 export function registerPreviewRoutes(
   app: FastifyInstance,
   config: AppConfig,
-  deps: { previewService: PreviewService },
+  deps: { previewService: PreviewService; browserCollaborationService?: BrowserCollaborationService },
 ): void {
   app.get("/api/preview/session/:sessionId", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
@@ -55,6 +56,11 @@ export function registerPreviewRoutes(
       port: typeof body.port === "number" ? body.port : null,
       frameworkHint: body.frameworkHint ?? null,
     });
+    deps.browserCollaborationService?.syncPreviewSession(session, {
+      userId: authUser.id,
+      workspaceRoot: body.workspaceRoot ?? null,
+      mode: body.target ? "shared" : "isolated",
+    });
     return { session };
   });
 
@@ -80,6 +86,7 @@ export function registerPreviewRoutes(
       return reply.status(400).send({ error: "sessionId is required" });
     }
     const stopped = await deps.previewService.stop(body.sessionId);
+    if (stopped) deps.browserCollaborationService?.closePreviewSession(body.sessionId);
     return { ok: stopped };
   });
 }

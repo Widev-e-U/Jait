@@ -603,4 +603,57 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 024: Browser collaboration tables ───────────────────────────
+  {
+    id: 24,
+    name: "browser_collaboration_tables",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS browser_sessions (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          workspace_root TEXT,
+          target_url TEXT,
+          preview_url TEXT,
+          preview_session_id TEXT,
+          browser_id TEXT,
+          mode TEXT NOT NULL DEFAULT 'shared',
+          origin TEXT NOT NULL DEFAULT 'direct',
+          controller TEXT NOT NULL DEFAULT 'agent',
+          status TEXT NOT NULL DEFAULT 'ready',
+          secret_safe INTEGER NOT NULL DEFAULT 0,
+          storage_profile TEXT,
+          created_by TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_browser_sessions_browser ON browser_sessions(browser_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_browser_sessions_preview ON browser_sessions(preview_session_id)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_browser_sessions_user_updated ON browser_sessions(created_by, updated_at DESC)`);
+
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS browser_interventions (
+          id TEXT PRIMARY KEY,
+          browser_session_id TEXT NOT NULL,
+          thread_id TEXT,
+          chat_session_id TEXT,
+          kind TEXT NOT NULL DEFAULT 'custom',
+          reason TEXT NOT NULL,
+          instructions TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open',
+          secret_safe INTEGER NOT NULL DEFAULT 0,
+          allow_user_note INTEGER NOT NULL DEFAULT 1,
+          requested_by TEXT,
+          resolved_by TEXT,
+          user_note TEXT,
+          requested_at TEXT NOT NULL,
+          resolved_at TEXT
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_browser_interventions_session ON browser_interventions(browser_session_id, requested_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_browser_interventions_status ON browser_interventions(status, requested_at DESC)`);
+    },
+  },
+
 ];

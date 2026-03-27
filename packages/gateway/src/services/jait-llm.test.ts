@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveJaitLlmConfig } from "./jait-llm.js";
+import { normalizeOpenRouterModelId, resolveJaitLlmConfig } from "./jait-llm.js";
 
 const config = {
   port: 0,
@@ -44,5 +44,12 @@ describe("resolveJaitLlmConfig", () => {
     });
 
     expect(llm.openaiModel).toBe("anthropic/claude-sonnet-4-20250514");
+  });
+
+  it("normalizes Xiaomi MiMo aliases and stale labels", () => {
+    expect(normalizeOpenRouterModelId("mimo v2 pro")).toBe("xiaomi/mimo-v2-pro");
+    expect(normalizeOpenRouterModelId("MiMo V3 Pro")).toBe("xiaomi/mimo-v2-pro");
+    expect(normalizeOpenRouterModelId("hunter-alpha")).toBe("xiaomi/mimo-v2-pro");
+    expect(normalizeOpenRouterModelId("xiaomi/mimo-v2-flash")).toBe("xiaomi/mimo-v2-flash");
   });
 });

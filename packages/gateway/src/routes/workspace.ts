@@ -264,7 +264,6 @@ export function registerWorkspaceRoutes(
     try {
       sessionService?.update(sessionId, { workspacePath });
       if (session?.workspaceId) {
-        workspaceService?.update(session.workspaceId, { rootPath: workspacePath, nodeId }, session.userId ?? undefined);
         workspaceService?.touch(session.workspaceId);
       }
     } catch { /* best effort */ }

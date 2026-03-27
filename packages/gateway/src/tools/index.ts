@@ -39,6 +39,13 @@ export {
   createBrowserSandboxStartTool,
 } from "./browser-tools.js";
 export {
+  createBrowserSessionListTool,
+  createBrowserSessionTakeControlTool,
+  createBrowserSessionReturnControlTool,
+  createBrowserInterventionRequestTool,
+  createBrowserInterventionResolveTool,
+} from "./browser-collaboration-tools.js";
+export {
   createMemorySaveTool,
   createMemorySearchTool,
   createMemoryForgetTool,
@@ -145,6 +152,13 @@ import {
   createBrowserSandboxStartTool,
 } from "./browser-tools.js";
 import {
+  createBrowserSessionListTool,
+  createBrowserSessionTakeControlTool,
+  createBrowserSessionReturnControlTool,
+  createBrowserInterventionRequestTool,
+  createBrowserInterventionResolveTool,
+} from "./browser-collaboration-tools.js";
+import {
   createMemorySaveTool,
   createMemorySearchTool,
   createMemoryForgetTool,
@@ -174,6 +188,7 @@ import type { SessionStateService } from "../services/session-state.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { PreviewService } from "../services/preview.js";
 import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
+import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -208,6 +223,7 @@ export interface ToolRegistryDeps {
   shutdown?: () => Promise<void>;
   previewService?: PreviewService;
   architectureDiagramService?: ArchitectureDiagramService;
+  browserCollaborationService?: BrowserCollaborationService;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -332,14 +348,14 @@ export function createToolRegistry(
   tools.register(createToolsSearchTool(tools));
 
   // Browser + web tools
-  tools.register(createBrowserNavigateTool(surfaceRegistry));
-  tools.register(createBrowserSnapshotTool(surfaceRegistry));
-  for (const tool of createBrowserInteractionTools(surfaceRegistry)) {
+  tools.register(createBrowserNavigateTool(surfaceRegistry, deps.browserCollaborationService));
+  tools.register(createBrowserSnapshotTool(surfaceRegistry, deps.browserCollaborationService));
+  for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.browserCollaborationService)) {
     tools.register(tool);
   }
-  tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
-  tools.register(createPreviewStartTool(deps.ws, deps.sessionState, deps.previewService));
-  tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService));
+  tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService, deps.browserCollaborationService));
+  tools.register(createPreviewStartTool(deps.ws, deps.sessionState, deps.previewService, deps.browserCollaborationService));
+  tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService, deps.browserCollaborationService));
   tools.register(createPreviewRestartTool(deps.previewService));
   tools.register(createPreviewStatusTool(deps.previewService));
   tools.register(createPreviewLogsTool(deps.previewService));
@@ -347,6 +363,11 @@ export function createToolRegistry(
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());
+  tools.register(createBrowserSessionListTool(deps.browserCollaborationService));
+  tools.register(createBrowserSessionTakeControlTool(deps.browserCollaborationService));
+  tools.register(createBrowserSessionReturnControlTool(deps.browserCollaborationService));
+  tools.register(createBrowserInterventionRequestTool(deps.browserCollaborationService));
+  tools.register(createBrowserInterventionResolveTool(deps.browserCollaborationService));
 
   // Network tools
   tools.register(createNetworkScanTool());

@@ -43,6 +43,10 @@ export type WsEventType =
   | "thread.deleted"
   | "thread.status"
   | "thread.activity"
+  // Browser collaboration live updates
+  | "browser.updated"        // snapshot of sessions + interventions
+  | "browser.session"        // single session upsert/update
+  | "browser.intervention"   // single intervention upsert/update
   | "repo.created"
   | "repo.updated"
   | "repo.deleted"

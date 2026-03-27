@@ -87,6 +87,7 @@ import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useWorkspaceState } from '@/hooks/useWorkspaceState'
 import { useAutomation } from '@/hooks/useAutomation'
+import { useBrowserCollaboration } from '@/hooks/useBrowserCollaboration'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
@@ -95,6 +96,7 @@ import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
 import { Badge } from '@/components/ui/badge'
+import { BrowserCollaborationPanel } from '@/components/browser/browser-collaboration-panel'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import {
   clampFloatingScreenSharePosition,
@@ -106,7 +108,7 @@ import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type Th
 import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
-import { getWorkspaceRootForPath, isPathWithinWorkspace } from '@/lib/workspace-links'
+import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
   collapseMobileWorkspace,
   showMobileWorkspacePane,
@@ -1189,6 +1191,7 @@ function App() {
     updateSettings,
     clearSessionArchive,
   } = useAuth()
+  const browserCollaboration = useBrowserCollaboration(token, isAuthenticated)
 
   // ── Update check/apply handlers ────────────────────────────────
   const handleCheckUpdate = useCallback(async () => {
@@ -1242,6 +1245,7 @@ function App() {
   }, [token, updateInfo])
 
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
+    browserCollaboration.setWsConnected(connected)
     if (!connected) {
       if (pendingGatewayRestartVersionRef.current) {
         gatewayRestartSawDisconnectRef.current = true
@@ -1259,7 +1263,7 @@ function App() {
       toast.success(`Gateway restarted on v${version}.`)
       void handleCheckUpdate()
     }
-  }, [handleCheckUpdate])
+  }, [handleCheckUpdate, browserCollaboration])
 
   // Auto-check for updates on mount (once authenticated)
   useEffect(() => {
@@ -1643,16 +1647,20 @@ function App() {
     if (wsFullStateReceivedRef.current) return // WS already delivered authoritative state
     if (!savedWorkspace) return
     if (activeWorkspace) return
-    if (savedWorkspace.remotePath) {
+    const savedPath = savedWorkspace.remotePath?.trim() || null
+    const recordedPath = activeWorkspaceRecord?.rootPath?.trim() || null
+    const restoredPath = recordedPath || savedPath
+    if (restoredPath) {
+      const pathMatchesRecord = Boolean(savedPath && recordedPath && savedPath === recordedPath)
       setActiveWorkspace({
-        surfaceId: savedWorkspace.surfaceId ?? '',
-        workspaceRoot: savedWorkspace.remotePath,
-        nodeId: savedWorkspace.nodeId,
+        surfaceId: pathMatchesRecord ? (savedWorkspace.surfaceId ?? '') : '',
+        workspaceRoot: restoredPath,
+        nodeId: activeWorkspaceRecord?.nodeId ?? savedWorkspace.nodeId,
       })
       showWorkspaceRef.current = savedWorkspace.open === true
       setShowWorkspace(savedWorkspace.open === true)
     }
-  }, [savedWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeWorkspace, activeWorkspaceRecord?.nodeId, activeWorkspaceRecord?.rootPath, savedWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
@@ -1972,6 +1980,7 @@ function App() {
         }
       }, [openArchitectureInWorkspace]),
     },
+    onBrowserCollaborationEvent: browserCollaboration.handleWsEvent,
   })
 
   const handleArchitectureRenderResult = useCallback((result: { ok: true } | { ok: false; error: string }) => {
@@ -2467,17 +2476,23 @@ function App() {
 
   // Verify workspace surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
-    if (!activeWorkspace?.surfaceId || !activeWorkspace.workspaceRoot || !activeSessionId) return
+    if (!activeWorkspace?.workspaceRoot || !activeSessionId) return
     let cancelled = false
     ;(async () => {
       try {
-        const res = await fetch(`${API_URL}/api/workspace/list?path=${encodeURIComponent(activeWorkspace.workspaceRoot)}&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`)
-        if (res.ok || cancelled) return // surface is alive
-        // Surface is stale — re-create it
+        if (activeWorkspace.surfaceId) {
+          const res = await fetch(`${API_URL}/api/workspace/list?path=${encodeURIComponent(activeWorkspace.workspaceRoot)}&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`)
+          if (res.ok || cancelled) return // surface is alive
+        }
+        // Surface is missing or stale — re-create it
         const openRes = await fetch(`${API_URL}/api/workspace/open`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: activeWorkspace.workspaceRoot, sessionId: activeSessionId }),
+          body: JSON.stringify({
+            path: activeWorkspace.workspaceRoot,
+            sessionId: activeSessionId,
+            nodeId: activeWorkspace.nodeId || 'gateway',
+          }),
         })
         if (!openRes.ok || cancelled) return
         const data = (await openRes.json()) as { surfaceId: string; workspaceRoot: string; nodeId?: string }
@@ -2488,7 +2503,7 @@ function App() {
       } catch { /* network error — ignore, panel will show error naturally */ }
     })()
     return () => { cancelled = true }
-  }, [activeWorkspace?.nodeId, activeWorkspace?.surfaceId, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeWorkspace?.nodeId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, activeSessionId]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Auto-open workspace panel when the agent modifies files
   useEffect(() => {
@@ -2734,17 +2749,24 @@ function App() {
     setActiveWorkspaceFileId((prev) => prev ?? incoming[0]?.id ?? null)
   }, [])
 
+  const resolveKnownWorkspaceRootForFile = useCallback((filePath: string) => {
+    if (isPathWithinWorkspace(filePath, activeWorkspace?.workspaceRoot)) {
+      return activeWorkspace?.workspaceRoot ?? null
+    }
+    if (activeWorkspaceRecord?.rootPath && isPathWithinWorkspace(filePath, activeWorkspaceRecord.rootPath)) {
+      return activeWorkspaceRecord.rootPath
+    }
+    return null
+  }, [activeWorkspace?.workspaceRoot, activeWorkspaceRecord?.rootPath])
+
   /** Open a changed file in the diff view (fetches backup + current content) */
   const handleChangedFileClick = useCallback(async (filePath: string) => {
     try {
-      let targetWorkspaceRoot = activeWorkspace?.workspaceRoot ?? null
-      if (!isPathWithinWorkspace(filePath, targetWorkspaceRoot)) {
-        // Prefer the workspace record's rootPath over deriving from the file's parent dir
-        if (activeWorkspaceRecord?.rootPath && isPathWithinWorkspace(filePath, activeWorkspaceRecord.rootPath)) {
-          targetWorkspaceRoot = activeWorkspaceRecord.rootPath
-        } else {
-          targetWorkspaceRoot = getWorkspaceRootForPath(filePath)
-        }
+      const targetWorkspaceRoot = resolveKnownWorkspaceRootForFile(filePath)
+
+      if (!targetWorkspaceRoot) {
+        toast('File is outside the active workspace. Open its directory explicitly to browse it.')
+        return
       }
 
       if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
@@ -2823,17 +2845,26 @@ function App() {
     } catch {
       // silently ignore
     }
-  }, [activeSessionId, activeWorkspace, activeWorkspaceRecord, openRemoteWorkspaceOnGateway, token, showWorkspace, showWorkspaceEditorPanel])
+  }, [activeSessionId, activeWorkspace, openRemoteWorkspaceOnGateway, resolveKnownWorkspaceRootForFile, token, showWorkspace, showWorkspaceEditorPanel])
 
   const handleOpenMessagePath = useCallback(async (filePath: string) => {
     try {
-      let targetWorkspaceRoot = activeWorkspace?.workspaceRoot ?? null
-      if (!isPathWithinWorkspace(filePath, targetWorkspaceRoot)) {
-        if (activeWorkspaceRecord?.rootPath && isPathWithinWorkspace(filePath, activeWorkspaceRecord.rootPath)) {
-          targetWorkspaceRoot = activeWorkspaceRecord.rootPath
-        } else {
-          targetWorkspaceRoot = getWorkspaceRootForPath(filePath)
+      const targetWorkspaceRoot = resolveKnownWorkspaceRootForFile(filePath)
+
+      if (!targetWorkspaceRoot) {
+        const existing = workspaceFiles.find((file) => file.path === filePath)
+        if (existing) {
+          mergeWorkspaceFiles([existing])
+          setActiveWorkspaceFileId(existing.id)
+          if (!showWorkspace) {
+            showWorkspaceRef.current = true
+            setShowWorkspace(true)
+          }
+          showWorkspaceEditorPanel()
+          return
         }
+        toast('File is outside the active workspace. Open its directory explicitly to browse it.')
+        return
       }
 
       if (targetWorkspaceRoot && (!activeWorkspace || activeWorkspace.workspaceRoot !== targetWorkspaceRoot)) {
@@ -2889,9 +2920,9 @@ function App() {
   }, [
     activeSessionId,
     activeWorkspace,
-    activeWorkspaceRecord,
     mergeWorkspaceFiles,
     openRemoteWorkspaceOnGateway,
+    resolveKnownWorkspaceRootForFile,
     showWorkspace,
     showWorkspaceEditorPanel,
     token,
@@ -5621,6 +5652,17 @@ function App() {
             </div>
           </div>
         )}
+
+        <BrowserCollaborationPanel
+          sessions={browserCollaboration.sessions}
+          interventions={browserCollaboration.interventions}
+          loading={browserCollaboration.loading}
+          onRefresh={browserCollaboration.refresh}
+          onTakeControl={browserCollaboration.takeControl}
+          onReturnControl={browserCollaboration.returnControl}
+          onResume={browserCollaboration.resume}
+          onResolveIntervention={browserCollaboration.resolveIntervention}
+        />
       </div>
     </TooltipProvider>
   )

@@ -391,3 +391,56 @@ export const scheduledJobRuns = sqliteTable(
     index("idx_job_runs_started").on(table.startedAt),
   ],
 );
+
+// ─── Browser Collaboration ──────────────────────────────────────────
+export const browserSessions = sqliteTable(
+  "browser_sessions",
+  {
+    id: text("id").primaryKey(),
+    name: text("name").notNull(),
+    workspaceRoot: text("workspace_root"),
+    targetUrl: text("target_url"),
+    previewUrl: text("preview_url"),
+    previewSessionId: text("preview_session_id"),
+    browserId: text("browser_id"),
+    mode: text("mode").notNull().default("shared"), // 'shared' | 'isolated'
+    origin: text("origin").notNull().default("direct"), // 'attached' | 'managed' | 'direct'
+    controller: text("controller").notNull().default("agent"), // 'agent' | 'user' | 'observer'
+    status: text("status").notNull().default("ready"), // 'ready' | 'running' | 'paused' | 'intervention-required' | 'closed'
+    secretSafe: integer("secret_safe").notNull().default(0),
+    storageProfile: text("storage_profile"), // JSON
+    createdBy: text("created_by"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_browser_sessions_browser").on(table.browserId),
+    index("idx_browser_sessions_preview").on(table.previewSessionId),
+    index("idx_browser_sessions_user_updated").on(table.createdBy, table.updatedAt),
+  ],
+);
+
+export const browserInterventions = sqliteTable(
+  "browser_interventions",
+  {
+    id: text("id").primaryKey(),
+    browserSessionId: text("browser_session_id").notNull(),
+    threadId: text("thread_id"),
+    chatSessionId: text("chat_session_id"),
+    kind: text("kind").notNull().default("custom"),
+    reason: text("reason").notNull(),
+    instructions: text("instructions").notNull(),
+    status: text("status").notNull().default("open"), // 'open' | 'resolved' | 'cancelled'
+    secretSafe: integer("secret_safe").notNull().default(0),
+    allowUserNote: integer("allow_user_note").notNull().default(1),
+    requestedBy: text("requested_by"),
+    resolvedBy: text("resolved_by"),
+    userNote: text("user_note"),
+    requestedAt: text("requested_at").notNull(),
+    resolvedAt: text("resolved_at"),
+  },
+  (table) => [
+    index("idx_browser_interventions_session").on(table.browserSessionId, table.requestedAt),
+    index("idx_browser_interventions_status").on(table.status, table.requestedAt),
+  ],
+);

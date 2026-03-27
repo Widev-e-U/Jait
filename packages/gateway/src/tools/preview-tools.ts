@@ -2,6 +2,7 @@ import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ToolDefinition } from "./contracts.js";
 import type { PreviewService } from "../services/preview.js";
+import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
 
 // ── preview.start (was preview.open) ─────────────────────────────────
 
@@ -21,6 +22,7 @@ export function createPreviewStartTool(
   ws?: WsControlPlane,
   sessionState?: SessionStateService,
   previewService?: PreviewService,
+  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewStartInput> {
   return {
     name: "preview.start",
@@ -69,6 +71,11 @@ export function createPreviewStartTool(
         port: typeof input.port === "number" ? input.port : undefined,
         frameworkHint: input.frameworkHint?.trim() || undefined,
       });
+      browserCollaborationService?.syncPreviewSession(preview, {
+        userId: context.userId,
+        workspaceRoot: workspaceRoot || undefined,
+        mode: target ? "shared" : "isolated",
+      });
 
       const panelState = {
         open: true,
@@ -109,8 +116,9 @@ export function createPreviewOpenTool(
   ws?: WsControlPlane,
   sessionState?: SessionStateService,
   previewService?: PreviewService,
+  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewStartInput> {
-  const tool = createPreviewStartTool(ws, sessionState, previewService);
+  const tool = createPreviewStartTool(ws, sessionState, previewService, browserCollaborationService);
   return { ...tool, name: "preview.open" };
 }
 
@@ -124,6 +132,7 @@ export function createPreviewStopTool(
   ws?: WsControlPlane,
   sessionState?: SessionStateService,
   previewService?: PreviewService,
+  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewStopInput> {
   return {
     name: "preview.stop",
@@ -139,6 +148,7 @@ export function createPreviewStopTool(
 
       const stopped = await previewService.stop(sessionId);
       if (!stopped) return { ok: false, message: "No active preview session found" };
+      browserCollaborationService?.closePreviewSession(sessionId);
 
       const panelState = { open: false, target: null, workspaceRoot: null };
       if (ws) {
