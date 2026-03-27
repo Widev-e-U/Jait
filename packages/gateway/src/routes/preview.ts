@@ -9,17 +9,36 @@ export function registerPreviewRoutes(
   config: AppConfig,
   deps: { previewService: PreviewService; browserCollaborationService?: BrowserCollaborationService },
 ): void {
+  const getBrowserSession = (sessionId: string) =>
+    deps.browserCollaborationService?.getSessionByPreviewSessionId(sessionId) ?? null;
+
   app.get("/api/preview/session/:sessionId", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
-    return { session: deps.previewService.get(sessionId) };
+    const browserSession = getBrowserSession(sessionId);
+    const session = deps.previewService.get(sessionId);
+    if (browserSession?.secretSafe && session) {
+      return {
+        session: { ...session, browserEvents: [], logs: [] },
+        browserSession,
+      };
+    }
+    return { session, browserSession };
   });
 
   app.get("/api/preview/screenshot/:sessionId", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    const browserSession = getBrowserSession(sessionId);
+    if (browserSession?.secretSafe) {
+      return {
+        screenshot: null,
+        suppressed: true,
+        reason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
+      };
+    }
     const screenshot = await deps.previewService.screenshot(sessionId);
     return { screenshot };
   });
@@ -28,10 +47,35 @@ export function registerPreviewRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
+    const browserSession = getBrowserSession(sessionId);
+    if (browserSession?.secretSafe) {
+      return {
+        logs: [],
+        suppressed: true,
+        reason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
+      };
+    }
     const query = request.query as { sinceId?: string };
     const sinceId = query.sinceId ? Number.parseInt(query.sinceId, 10) : 0;
     const logs = deps.previewService.getLogs(sessionId, sinceId);
     return { logs };
+  });
+
+  app.get("/api/preview/inspect/:sessionId", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { sessionId } = request.params as { sessionId: string };
+    const browserSession = getBrowserSession(sessionId);
+    if (browserSession?.secretSafe) {
+      return {
+        inspect: null,
+        suppressed: true,
+        reason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
+      };
+    }
+    const query = request.query as { selector?: string };
+    const inspect = await deps.previewService.inspect(sessionId, typeof query.selector === "string" ? query.selector : undefined);
+    return { inspect };
   });
 
   app.post("/api/preview/start", async (request, reply) => {

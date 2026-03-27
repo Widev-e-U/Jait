@@ -241,6 +241,19 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
   return normalizeUserMessageSegments(segments)
 }
 
+export function shouldRemovePreviousChipOnBackspace(params: {
+  startContainerIsRoot: boolean
+  startContainerIsText: boolean
+  startOffset: number
+  childIndex: number
+}): boolean {
+  const { startContainerIsRoot, startContainerIsText, startOffset, childIndex } = params
+  if (childIndex <= 0) return false
+  if (startContainerIsRoot) return true
+  if (startContainerIsText) return startOffset === 0
+  return startOffset === 0
+}
+
 function buildEditableContent(
   el: HTMLElement,
   segments: UserMessageSegment[] | undefined,
@@ -923,10 +936,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
       const { startContainer, startOffset } = range
 
-      // Case 1: cursor is inside the editable (element node) right after a chip
+      // Case 1: cursor is at the root, or at the start of a direct child after a chip
       if (startContainer === el || startContainer.parentNode === el) {
         const childIndex = startContainer === el ? startOffset : Array.from(el.childNodes).indexOf(startContainer as ChildNode)
-        if (childIndex > 0) {
+        const shouldRemove = shouldRemovePreviousChipOnBackspace({
+          startContainerIsRoot: startContainer === el,
+          startContainerIsText: startContainer.nodeType === Node.TEXT_NODE,
+          startOffset,
+          childIndex,
+        })
+        if (shouldRemove) {
           const prev = el.childNodes[childIndex - 1]
           if (prev instanceof HTMLElement && prev.hasAttribute('data-file-path')) {
             e.preventDefault()

@@ -18,6 +18,32 @@ function resolvePreviewSessionId(context: { sessionId?: string }): string {
   return context.sessionId?.trim() || "";
 }
 
+function resolvePreviewBrowserSession(
+  browserCollaborationService: BrowserCollaborationService | undefined,
+  sessionId: string,
+) {
+  return browserCollaborationService?.getSessionByPreviewSessionId(sessionId) ?? null;
+}
+
+function redactPreviewCapture<T extends {
+  browserEvents: unknown[];
+  logs: unknown[];
+  screenshot: string | null;
+  page?: unknown;
+  snapshot?: string | null;
+}>(result: T): T & { captureSuppressed: true; suppressionReason: string } {
+  return {
+    ...result,
+    browserEvents: [],
+    logs: [],
+    screenshot: null,
+    page: null,
+    snapshot: null,
+    captureSuppressed: true,
+    suppressionReason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
+  };
+}
+
 export function createPreviewStartTool(
   ws?: WsControlPlane,
   sessionState?: SessionStateService,
@@ -259,6 +285,7 @@ interface PreviewLogsInput {
 
 export function createPreviewLogsTool(
   previewService?: PreviewService,
+  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewLogsInput> {
   return {
     name: "preview.logs",
@@ -287,6 +314,21 @@ export function createPreviewLogsTool(
 
       const session = previewService.get(sessionId);
       if (!session) return { ok: false, message: "No active preview session" };
+      const browserSession = resolvePreviewBrowserSession(browserCollaborationService, sessionId);
+      if (browserSession?.secretSafe) {
+        return {
+          ok: true,
+          message: "Preview logs are suppressed because the linked browser session is marked secret-safe",
+          data: {
+            logs: [],
+            console: [],
+            errors: [],
+            lastLogId: 0,
+            captureSuppressed: true,
+            suppressionReason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
+          },
+        };
+      }
 
       let logs = previewService.getLogs(sessionId, input.sinceId ?? 0);
       if (input.stream && input.stream !== "all") {
@@ -321,6 +363,7 @@ interface PreviewInspectInput {
 
 export function createPreviewInspectTool(
   previewService?: PreviewService,
+  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewInspectInput> {
   return {
     name: "preview.inspect",
@@ -344,20 +387,24 @@ export function createPreviewInspectTool(
 
       const result = await previewService.inspect(sessionId);
       if (!result) return { ok: false, message: "No active preview session" };
+      const browserSession = resolvePreviewBrowserSession(browserCollaborationService, sessionId);
 
       // Strip screenshot if not requested
       if (!input.screenshot) {
         result.screenshot = null;
       }
+      const data = browserSession?.secretSafe ? redactPreviewCapture(result) : result;
 
-      const errorCount = result.browserEvents.filter((e) =>
+      const errorCount = data.browserEvents.filter((e) =>
         e.type === "pageerror" || e.type === "requestfailed" || (e.type === "response" && (e.status ?? 0) >= 400),
       ).length;
 
       return {
         ok: true,
-        message: `Preview ${result.status} at ${result.url ?? "unknown"} — ${result.browserEvents.length} events, ${errorCount} errors${result.screenshot ? ", screenshot included" : ""}`,
-        data: result,
+        message: browserSession?.secretSafe
+          ? `Preview ${data.status} at ${data.url ?? "unknown"} — capture suppressed because the linked browser session is marked secret-safe`
+          : `Preview ${data.status} at ${data.url ?? "unknown"} — ${data.browserEvents.length} events, ${errorCount} errors${data.screenshot ? ", screenshot included" : ""}`,
+        data,
       };
     },
   };

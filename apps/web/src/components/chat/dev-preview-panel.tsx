@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { getApiUrl } from '@/lib/gateway-url'
 import { isSamePreviewSession } from '@/lib/preview-session'
+import type { BrowserSession } from '@/lib/browser-collaboration-api'
 
 interface DevPreviewPanelProps {
   onClose: () => void
@@ -64,6 +65,11 @@ interface PreviewSessionState {
   lastError: string | null
   createdAt: string
   updatedAt: string
+}
+
+interface PreviewSessionResponse {
+  session: PreviewSessionState | null
+  browserSession?: BrowserSession | null
 }
 
 function authHeaders(token?: string | null): HeadersInit {
@@ -171,6 +177,7 @@ export function DevPreviewPanel({
   const [command, setCommand] = useState('')
   const [port, setPort] = useState('')
   const [managedSession, setManagedSession] = useState<PreviewSessionState | null>(null)
+  const [managedBrowserSession, setManagedBrowserSession] = useState<BrowserSession | null>(null)
   const [rawSrc, setRawSrc] = useState<string | null>(null)
   const [rawLabel, setRawLabel] = useState<string | null>(null)
   const [frameKey, setFrameKey] = useState(0)
@@ -200,8 +207,9 @@ export function DevPreviewPanel({
       headers: authHeaders(token),
     })
     if (!response.ok) return null
-    const data = await response.json() as { session: PreviewSessionState | null }
+    const data = await response.json() as PreviewSessionResponse
     setManagedSession((current) => isSamePreviewSession(current, data.session) ? current : data.session)
+    setManagedBrowserSession(data.browserSession ?? null)
     return data.session
   }, [sessionId, token])
 
@@ -300,6 +308,7 @@ export function DevPreviewPanel({
         throw new Error(data.error || 'Failed to restart preview')
       }
       setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
+      setManagedBrowserSession(null)
       setFrameKey((prev) => prev + 1)
     } catch (error) {
       setPanelError(error instanceof Error ? error.message : 'Failed to restart preview')
@@ -322,6 +331,7 @@ export function DevPreviewPanel({
         body: JSON.stringify({ sessionId }),
       })
       setManagedSession(null)
+      setManagedBrowserSession(null)
       setRawSrc(null)
       setRawLabel(null)
     } catch (error) {
@@ -371,7 +381,11 @@ export function DevPreviewPanel({
         headers: authHeaders(token),
       })
       if (!response.ok) return
-      const data = await response.json() as { screenshot: string | null }
+      const data = await response.json() as { screenshot: string | null; suppressed?: boolean; reason?: string }
+      if (data.suppressed) {
+        setPanelWarning(data.reason || 'Preview capture is currently suppressed for this session.')
+        return
+      }
       if (data.screenshot) {
         setScreenshotUrl(`data:image/png;base64,${data.screenshot}`)
         setActiveTab('preview')
@@ -380,6 +394,10 @@ export function DevPreviewPanel({
       // ignore
     }
   }, [sessionId, token])
+
+  const secretSafeWarning = managedBrowserSession?.secretSafe
+    ? 'Secret-safe mode is active. Preview screenshots and browser inspection capture are suppressed until the session is returned to normal agent flow.'
+    : null
 
   // Auto-scroll logs and console
   useEffect(() => {
@@ -413,6 +431,16 @@ export function DevPreviewPanel({
               <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                 {managedSession.mode}
               </span>
+              {managedBrowserSession?.origin ? (
+                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {managedBrowserSession.origin}
+                </span>
+              ) : null}
+              {managedBrowserSession?.secretSafe ? (
+                <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-destructive">
+                  secret-safe
+                </span>
+              ) : null}
             </>
           ) : null}
           {previewLabel ? (
@@ -424,7 +452,14 @@ export function DevPreviewPanel({
         <div className="ml-auto flex items-center gap-1">
           {managedSession ? (
             <>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => { void handleScreenshot() }} disabled={isBusy}>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => { void handleScreenshot() }}
+                disabled={isBusy || managedBrowserSession?.secretSafe}
+              >
                 <Camera className="mr-1 h-3 w-3" />
                 Screenshot
               </Button>
@@ -487,6 +522,17 @@ export function DevPreviewPanel({
           <p className="text-[11px] text-muted-foreground">
             Workspace: <code>{workspaceRoot}</code>
           </p>
+        ) : null}
+        {managedBrowserSession ? (
+          <p className="text-[11px] text-muted-foreground">
+            Browser session: <code>{managedBrowserSession.id}</code> · controller <code>{managedBrowserSession.controller}</code>
+          </p>
+        ) : null}
+        {secretSafeWarning ? (
+          <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-700">
+            <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{secretSafeWarning}</span>
+          </div>
         ) : null}
         {panelError ? (
           <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-[11px] text-destructive">

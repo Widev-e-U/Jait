@@ -230,6 +230,47 @@ describe("Sprint 5 — Browser surface and tools", () => {
       /Click may be intercepted|Another element is receiving pointer hits|inside dialog/i,
     );
   });
+
+  it("redacts browser captures and suppresses screenshots for secret-safe sessions", async () => {
+    const collaboration = {
+      assertAgentControl: vi.fn(),
+      getSessionByBrowserId: vi.fn().mockReturnValue({
+        id: "bs_secret",
+        secretSafe: true,
+        controller: "agent",
+      }),
+    };
+
+    await createBrowserNavigateTool(registry, collaboration as any).execute({ url: "https://example.com" }, toolContext);
+
+    const snapshot = await createBrowserSnapshotTool(registry, collaboration as any).execute({}, toolContext);
+    expect(snapshot.ok).toBe(true);
+    expect(snapshot.message).toContain("secret-safe");
+    expect(snapshot.data).toMatchObject({
+      captureSuppressed: true,
+      textPreview: "",
+      interactiveElements: [],
+      activeElement: null,
+      dialogs: [],
+      obstruction: null,
+    });
+
+    const inspect = await createBrowserInspectTool(registry, collaboration as any).execute({ selector: "#submit" }, toolContext);
+    expect(inspect.ok).toBe(true);
+    expect(inspect.message).toContain("secret-safe");
+    expect(inspect.data).toMatchObject({
+      captureSuppressed: true,
+      target: null,
+      dialogs: [],
+    });
+
+    const screenshotTool = createBrowserInteractionTools(registry, collaboration as any)
+      .find((tool) => tool.name === "browser.screenshot");
+    const screenshot = await screenshotTool!.execute({ path: "artifacts/page-secret.png" }, toolContext);
+    expect(screenshot.ok).toBe(false);
+    expect(screenshot.message).toContain("secret-safe");
+    expect(driver.calls).not.toContain("screenshot:artifacts/page-secret.png");
+  });
 });
 
 describe("Sprint 5 — SSRF guard + web tools", () => {

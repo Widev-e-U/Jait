@@ -839,8 +839,9 @@ function App() {
   const showWorkspaceRef = useRef(false)
   const suppressWorkspaceAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
-  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
-  const [workspacePreviewState, setWorkspacePreviewState] = useState<{ open: boolean; target: string | null }>({ open: false, target: null })
+  const [devPreviewBrowserSessionId, setDevPreviewBrowserSessionId] = useState<string | null>(null)
+  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; browserSessionId?: string | null; key: number } | null>(null)
+  const [workspacePreviewState, setWorkspacePreviewState] = useState<{ open: boolean; target: string | null; browserSessionId: string | null }>({ open: false, target: null, browserSessionId: null })
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
@@ -965,9 +966,12 @@ function App() {
   const closeWorkspacePreview = useCallback(() => {
     workspaceRef.current?.closePreviewTarget()
   }, [])
-  const routePreviewToWorkspace = useCallback((target?: string | null, workspaceRoot?: string | null) => {
+  const routePreviewToWorkspace = useCallback((target?: string | null, workspaceRoot?: string | null, browserSessionId?: string | null) => {
     const trimmed = target?.trim() || null
+    const nextBrowserSessionId = browserSessionId?.trim() || null
     setViewMode('developer')
+    setDevPreviewTarget(trimmed)
+    setDevPreviewBrowserSessionId(nextBrowserSessionId)
     if (workspaceRoot?.trim()) {
       setActiveWorkspace((prev) => {
         if (prev?.workspaceRoot === workspaceRoot.trim()) return prev
@@ -979,7 +983,7 @@ function App() {
       setShowWorkspace(true)
     }
     showWorkspaceEditorPanel()
-    setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
+    setWorkspacePreviewRequest({ target: trimmed, browserSessionId: nextBrowserSessionId, key: Date.now() })
     return true
   }, [showWorkspace, showWorkspaceEditorPanel])
 
@@ -1592,7 +1596,7 @@ function App() {
   const [savedScreenShare, setSavedScreenShare] = useSessionState<{ open: boolean }>(
     activeSessionId, 'screen-share.panel', token,
   )
-  const [savedDevPreview, setSavedDevPreview] = useWorkspaceState<{ open: boolean; target?: string | null; workspaceRoot?: string | null }>(
+  const [savedDevPreview, setSavedDevPreview] = useWorkspaceState<{ open: boolean; target?: string | null; workspaceRoot?: string | null; browserSessionId?: string | null }>(
     activeWorkspaceId, 'dev-preview.panel', token,
   )
   const [savedTerminal, setSavedTerminal] = useWorkspaceState<{ open: boolean }>(
@@ -1671,12 +1675,13 @@ function App() {
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
     const nextTarget = savedDevPreview?.target?.trim() || null
-    const key = `${savedDevPreview?.open ?? false}:${nextTarget ?? ''}:${savedDevPreview?.workspaceRoot ?? ''}`
+    const key = `${savedDevPreview?.open ?? false}:${nextTarget ?? ''}:${savedDevPreview?.workspaceRoot ?? ''}:${savedDevPreview?.browserSessionId ?? ''}`
     if (key === restoredDevPreviewKeyRef.current) return
     restoredDevPreviewKeyRef.current = key
     if (nextTarget) setDevPreviewTarget(nextTarget)
+    setDevPreviewBrowserSessionId(savedDevPreview?.browserSessionId?.trim() || null)
     if (savedDevPreview?.open) {
-      routePreviewToWorkspace(nextTarget, savedDevPreview?.workspaceRoot ?? null)
+      routePreviewToWorkspace(nextTarget, savedDevPreview?.workspaceRoot ?? null, savedDevPreview?.browserSessionId ?? null)
     }
   }, [savedDevPreview, routePreviewToWorkspace])
 
@@ -2190,22 +2195,25 @@ function App() {
       }).catch(() => {})
     }
     closeWorkspacePreview()
+    setDevPreviewBrowserSessionId(null)
     setSavedDevPreview(null)
   }, [token, activeSessionId, closeWorkspacePreview, setSavedDevPreview])
 
   const prevPreviewSyncRef = useRef<string>('')
-  const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null }) => {
+  const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null; browserSessionId?: string | null }) => {
     setWorkspacePreviewState((prev) => {
-      if (prev.open === state.open && prev.target === state.target) return prev
-      return state
+      const nextBrowserSessionId = state.browserSessionId?.trim() || null
+      if (prev.open === state.open && prev.target === state.target && prev.browserSessionId === nextBrowserSessionId) return prev
+      return { open: state.open, target: state.target, browserSessionId: nextBrowserSessionId }
     })
     if (state.open) {
       const nextState = {
         open: true,
         target: state.target ?? devPreviewTarget ?? null,
         workspaceRoot: activeWorkspace?.workspaceRoot ?? null,
+        browserSessionId: state.browserSessionId?.trim() || devPreviewBrowserSessionId,
       }
-      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}`
+      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}:${nextState.browserSessionId ?? ''}`
       if (key === prevPreviewSyncRef.current) return
       prevPreviewSyncRef.current = key
       setSavedDevPreview(nextState)
@@ -2213,8 +2221,9 @@ function App() {
     }
     if (prevPreviewSyncRef.current === '') return
     prevPreviewSyncRef.current = ''
+    setDevPreviewBrowserSessionId(null)
     setSavedDevPreview(null)
-  }, [activeWorkspace?.workspaceRoot, devPreviewTarget, setSavedDevPreview])
+  }, [activeWorkspace?.workspaceRoot, devPreviewBrowserSessionId, devPreviewTarget, setSavedDevPreview])
 
   const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
@@ -2284,9 +2293,10 @@ function App() {
     setCurrentView('chat')
     const nextTarget = target?.trim() || devPreviewTarget?.trim() || null
     setDevPreviewTarget(nextTarget)
-    const state = { open: true, target: nextTarget, workspaceRoot: activeWorkspace?.workspaceRoot ?? null }
+    setDevPreviewBrowserSessionId(null)
+    const state = { open: true, target: nextTarget, workspaceRoot: activeWorkspace?.workspaceRoot ?? null, browserSessionId: null }
     setSavedDevPreview(state)
-    routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)
+    routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null, null)
   }, [setSavedDevPreview, devPreviewTarget, routePreviewToWorkspace, activeWorkspace?.workspaceRoot])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
@@ -4547,6 +4557,13 @@ function App() {
                 previewToken={token}
                 previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
                 previewInitialTarget={devPreviewTarget}
+                previewBrowserSessionId={devPreviewBrowserSessionId}
+                browserSessions={browserCollaboration.sessions}
+                browserInterventions={browserCollaboration.interventions}
+                onTakeBrowserControl={browserCollaboration.takeControl}
+                onReturnBrowserControl={browserCollaboration.returnControl}
+                onResumeBrowserSession={browserCollaboration.resume}
+                onResolveBrowserIntervention={browserCollaboration.resolveIntervention}
                 architectureDiagram={architectureDiagram}
                 architectureGenerating={architectureGenerating}
                 architectureRequest={architectureRequest}
@@ -4589,6 +4606,13 @@ function App() {
                   previewToken={token}
                   previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
                   previewInitialTarget={devPreviewTarget}
+                  previewBrowserSessionId={devPreviewBrowserSessionId}
+                  browserSessions={browserCollaboration.sessions}
+                  browserInterventions={browserCollaboration.interventions}
+                  onTakeBrowserControl={browserCollaboration.takeControl}
+                  onReturnBrowserControl={browserCollaboration.returnControl}
+                  onResumeBrowserSession={browserCollaboration.resume}
+                  onResolveBrowserIntervention={browserCollaboration.resolveIntervention}
                   architectureDiagram={architectureDiagram}
                   architectureGenerating={architectureGenerating}
                   architectureRequest={architectureRequest}
@@ -5659,9 +5683,6 @@ function App() {
           loading={browserCollaboration.loading}
           onRefresh={browserCollaboration.refresh}
           onOpenLiveSession={routePreviewToWorkspace}
-          onTakeControl={browserCollaboration.takeControl}
-          onReturnControl={browserCollaboration.returnControl}
-          onResume={browserCollaboration.resume}
           onResolveIntervention={browserCollaboration.resolveIntervention}
         />
       </div>

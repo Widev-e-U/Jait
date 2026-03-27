@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
+import { shouldRemovePreviousChipOnBackspace } from './prompt-input'
 
 function signature(value: string, segments: UserMessageSegment[] | undefined): string {
   return JSON.stringify({
@@ -110,5 +111,34 @@ describe('normalizeUserMessageSegments with kind', () => {
     const result = normalizeUserMessageSegments(segments)
     expect(result[0]).toEqual({ type: 'file', path: 'src/index.ts', name: 'index.ts' })
     expect('kind' in result[0]).toBe(false)
+  })
+})
+
+describe('shouldRemovePreviousChipOnBackspace', () => {
+  it('does not remove a chip when the caret is mid-text after that chip', () => {
+    expect(shouldRemovePreviousChipOnBackspace({
+      startContainerIsRoot: false,
+      startContainerIsText: true,
+      startOffset: 4,
+      childIndex: 1,
+    })).toBe(false)
+  })
+
+  it('removes a chip when the caret is at the start of the text node right after it', () => {
+    expect(shouldRemovePreviousChipOnBackspace({
+      startContainerIsRoot: false,
+      startContainerIsText: true,
+      startOffset: 0,
+      childIndex: 1,
+    })).toBe(true)
+  })
+
+  it('removes a chip when the caret is at the root position immediately after it', () => {
+    expect(shouldRemovePreviousChipOnBackspace({
+      startContainerIsRoot: true,
+      startContainerIsText: false,
+      startOffset: 1,
+      childIndex: 1,
+    })).toBe(true)
   })
 })

@@ -117,13 +117,35 @@ function resolveBrowserSessionMetadata(
   return collaboration.getSessionByBrowserId(browserId);
 }
 
+function isSecretSafeSession(session: BrowserSessionRecord | null): boolean {
+  return Boolean(session?.secretSafe);
+}
+
+function redactBrowserCapturePayload(
+  payload: Record<string, unknown>,
+  session: BrowserSessionRecord | null,
+): Record<string, unknown> {
+  if (!isSecretSafeSession(session)) return payload;
+  return {
+    ...payload,
+    textPreview: "",
+    interactiveElements: [],
+    activeElement: null,
+    dialogs: [],
+    obstruction: null,
+    target: null,
+    captureSuppressed: true,
+    suppressionReason: "Browser capture is suppressed while the session is marked secret-safe.",
+  };
+}
+
 function buildSnapshotPayload(
   browserId: string,
   snapshot: BrowserPageSnapshot,
   session: BrowserSessionRecord | null,
   target?: BrowserTargetDiagnostics,
 ): Record<string, unknown> {
-  return {
+  return redactBrowserCapturePayload({
     browserId,
     url: snapshot.url,
     title: snapshot.title,
@@ -136,7 +158,7 @@ function buildSnapshotPayload(
     controller: session?.controller ?? null,
     secretSafe: session?.secretSafe ?? null,
     browserSession: session,
-  };
+  }, session);
 }
 
 export function createBrowserNavigateTool(
@@ -197,9 +219,13 @@ export function createBrowserSnapshotTool(
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
         ok: true,
-        message: "Browser snapshot captured",
+        message: isSecretSafeSession(session)
+          ? "Browser snapshot suppressed because the session is marked secret-safe"
+          : "Browser snapshot captured",
         data: {
-          snapshot: description,
+          snapshot: isSecretSafeSession(session)
+            ? "Browser capture is suppressed while the session is marked secret-safe."
+            : description,
           ...buildSnapshotPayload(surface.id, inspection.snapshot, session),
         },
       };
@@ -232,7 +258,11 @@ export function createBrowserInspectTool(
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
         ok: true,
-        message: input.selector ? `Browser inspection captured for ${input.selector}` : "Browser inspection captured",
+        message: isSecretSafeSession(session)
+          ? "Browser inspection suppressed because the session is marked secret-safe"
+          : input.selector
+            ? `Browser inspection captured for ${input.selector}`
+            : "Browser inspection captured",
         data: buildSnapshotPayload(surface.id, inspection.snapshot, session, inspection.target),
       };
     },
@@ -356,21 +386,44 @@ export function createBrowserInteractionTools(
         return { selector: input.selector, timeoutMs: input.timeoutMs ?? 10000 };
       },
     ),
-    makeActionTool<BrowserScreenshotInput>(
-      registry,
-      collaboration,
-      "browser.screenshot",
-      "Capture a browser screenshot",
-      {
-        path: { type: "string", description: "Optional output file path" },
-        browserId: { type: "string", description: "Optional browser surface ID" },
+    {
+      name: "browser.screenshot",
+      description: "Capture a browser screenshot",
+      tier: "standard",
+      category: "browser",
+      source: "builtin",
+      parameters: {
+        type: "object",
+        properties: {
+          path: { type: "string", description: "Optional output file path" },
+          browserId: { type: "string", description: "Optional browser surface ID" },
+        },
       },
-      [],
-      async (surface, input, signal) => {
-        const screenshotPath = await surface.screenshot(input.path, signal);
-        return { path: screenshotPath };
+      async execute(input: BrowserScreenshotInput, context: ToolContext): Promise<ToolResult> {
+        if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+        const browserId = input.browserId?.trim() || undefined;
+        collaboration?.assertAgentControl(browserId);
+        const surface = await ensureBrowserSurface(registry, context, browserId);
+        const session = resolveBrowserSessionMetadata(collaboration, surface.id);
+        if (isSecretSafeSession(session)) {
+          return {
+            ok: false,
+            message: "Browser screenshot suppressed because the session is marked secret-safe",
+            data: {
+              browserId: surface.id,
+              captureSuppressed: true,
+              suppressionReason: "Browser capture is suppressed while the session is marked secret-safe.",
+            },
+          };
+        }
+        const screenshotPath = await surface.screenshot(input.path, context.signal);
+        return {
+          ok: true,
+          message: "browser.screenshot executed",
+          data: { browserId: surface.id, result: { path: screenshotPath } },
+        };
       },
-    ),
+    },
   ];
 }
 

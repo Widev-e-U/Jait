@@ -361,8 +361,8 @@ export function createToolRegistry(
   tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService, deps.browserCollaborationService));
   tools.register(createPreviewRestartTool(deps.previewService));
   tools.register(createPreviewStatusTool(deps.previewService));
-  tools.register(createPreviewLogsTool(deps.previewService));
-  tools.register(createPreviewInspectTool(deps.previewService));
+  tools.register(createPreviewLogsTool(deps.previewService, deps.browserCollaborationService));
+  tools.register(createPreviewInspectTool(deps.previewService, deps.browserCollaborationService));
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());

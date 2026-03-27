@@ -41,8 +41,32 @@ describe('browser collaboration panel helpers', () => {
 
   it('routes managed sessions with a workspace root into the preview surface', () => {
     expect(canOpenLiveSessionInPreview(makeSession())).toBe(true)
-    expect(canOpenLiveSessionInPreview(makeSession({ origin: 'attached' }))).toBe(false)
-    expect(canOpenLiveSessionInPreview(makeSession({ workspaceRoot: null }))).toBe(false)
+    expect(canOpenLiveSessionInPreview(makeSession({
+      origin: 'attached',
+      workspaceRoot: null,
+      previewUrl: 'https://example.com/live',
+      targetUrl: 'https://example.com/live',
+    }))).toBe(false)
+    expect(canOpenLiveSessionInPreview(makeSession({
+      workspaceRoot: null,
+      previewUrl: 'https://example.com/managed',
+      targetUrl: 'https://example.com/managed',
+    }))).toBe(false)
+  })
+
+  it('routes attached loopback and gateway preview urls into the preview surface', () => {
+    expect(canOpenLiveSessionInPreview(makeSession({
+      origin: 'attached',
+      workspaceRoot: null,
+      previewUrl: '/api/dev-proxy/3000/login',
+    }))).toBe(true)
+
+    expect(canOpenLiveSessionInPreview(makeSession({
+      origin: 'direct',
+      workspaceRoot: null,
+      previewUrl: null,
+      targetUrl: 'http://127.0.0.1:8000/',
+    }))).toBe(true)
   })
 
   it('builds explicit session metadata rows including storage profile details', () => {

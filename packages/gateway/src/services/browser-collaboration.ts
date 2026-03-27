@@ -131,6 +131,15 @@ export class BrowserCollaborationService {
     return row ? this.rowToSession(row) : null;
   }
 
+  getSessionByPreviewSessionId(previewSessionId: string): BrowserSessionRecord | null {
+    const row = this.db
+      .select()
+      .from(browserSessions)
+      .where(eq(browserSessions.previewSessionId, previewSessionId))
+      .get();
+    return row ? this.rowToSession(row) : null;
+  }
+
   createSession(input: CreateBrowserSessionInput): BrowserSessionRecord {
     const createdAt = nowIso();
     const id = `bs_${nanoid(10)}`;

@@ -4,38 +4,41 @@ import { defineConfig, devices } from '@playwright/test'
  * Playwright configuration for Jait E2E tests
  * @see https://playwright.dev/docs/test-configuration
  */
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
+const shouldStartLocalStack = !process.env.FRONTEND_URL
+
 export default defineConfig({
   testDir: '.',
-  
+
   /* Run tests in files in parallel */
   fullyParallel: true,
-  
+
   /* Fail the build on CI if you accidentally left test.only in the source code */
   forbidOnly: !!process.env.CI,
-  
+
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
-  
+
   /* Opt out of parallel tests on CI */
   workers: process.env.CI ? 1 : undefined,
-  
+
   /* Reporter to use */
   reporter: [
     ['html', { outputFolder: 'playwright-report' }],
     ['list']
   ],
-  
+
   /* Shared settings for all the projects below */
   use: {
     /* Base URL to use in actions like `await page.goto('/')` */
-    baseURL: process.env.FRONTEND_URL || 'http://localhost:3000',
+    baseURL: FRONTEND_URL,
 
     /* Collect trace when retrying the failed test */
     trace: 'on-first-retry',
-    
+
     /* Take screenshot on failure */
     screenshot: 'only-on-failure',
-    
+
     /* Video on failure for debugging */
     video: 'retain-on-failure',
   },
@@ -47,7 +50,7 @@ export default defineConfig({
       name: 'setup',
       testMatch: /.*\.setup\.ts/,
     },
-    
+
     {
       name: 'chromium',
       use: { ...devices['Desktop Chrome'] },
@@ -74,19 +77,13 @@ export default defineConfig({
     },
   ],
 
-  /* Run your local dev server before starting the tests */
-  webServer: [
-    {
-      command: 'cd ../../apps/web && bun run dev',
-      url: 'http://localhost:3000',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120000,
-    },
-    {
-      command: 'cd ../../packages/gateway && bun run dev',
-      url: 'http://localhost:8000',
-      reuseExistingServer: !process.env.CI,
-      timeout: 120000,
-    },
-  ],
+  /* Run the gateway-owned dev stack before starting tests */
+  webServer: shouldStartLocalStack
+    ? {
+        command: 'node ./scripts/start-dev-stack.mjs',
+        url: FRONTEND_URL,
+        reuseExistingServer: !process.env.CI,
+        timeout: 120000,
+      }
+    : undefined,
 })

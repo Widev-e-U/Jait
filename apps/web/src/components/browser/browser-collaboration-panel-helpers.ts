@@ -38,8 +38,21 @@ export function getBrowserSessionOpenTarget(session: BrowserSession): string | n
   return session.previewUrl ?? session.targetUrl ?? null
 }
 
+function isLoopbackPreviewUrl(target: string): boolean {
+  if (target.startsWith('/api/dev-proxy/')) return true
+  try {
+    const parsed = new URL(target)
+    return ['127.0.0.1', 'localhost', '0.0.0.0', '::1', '[::1]'].includes(parsed.hostname.toLowerCase())
+  } catch {
+    return false
+  }
+}
+
 export function canOpenLiveSessionInPreview(session: BrowserSession): boolean {
-  return session.origin === 'managed' && Boolean(session.workspaceRoot?.trim()) && Boolean(getBrowserSessionOpenTarget(session))
+  const target = getBrowserSessionOpenTarget(session)
+  if (!target) return false
+  if (session.origin === 'managed' && Boolean(session.workspaceRoot?.trim())) return true
+  return isLoopbackPreviewUrl(target)
 }
 
 export function getBrowserSessionDetails(session: BrowserSession): SessionDetailItem[] {
