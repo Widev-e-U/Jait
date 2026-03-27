@@ -1472,6 +1472,7 @@ function App() {
   const chatQueueSeenRef = useRef(false)
   const lastChatNotificationSignalRef = useRef(0)
   const chatNotificationSessionRef = useRef<string | null>(activeSessionId)
+  const suppressNextChatNotificationRef = useRef(false)
   const threadQueueSeenRef = useRef<Record<string, boolean>>({})
   const pendingThreadCompletionRef = useRef<Record<string, AgentThread>>({})
   const previousThreadStatusesRef = useRef<Record<string, ThreadStatus>>({})
@@ -1489,8 +1490,15 @@ function App() {
     chatNotificationSessionRef.current = activeSessionId
     setRemoteMessageCompleteCount(0)
     chatQueueSeenRef.current = false
+    suppressNextChatNotificationRef.current = false
     lastChatNotificationSignalRef.current = chatCompletionSignal
   }, [activeSessionId, chatCompletionSignal])
+
+  useEffect(() => {
+    if (isLoading) {
+      suppressNextChatNotificationRef.current = false
+    }
+  }, [isLoading])
 
   useEffect(() => {
     if (chatCompletionSignal <= lastChatNotificationSignalRef.current) return
@@ -1499,6 +1507,10 @@ function App() {
     const queueFinished = chatQueueSeenRef.current
     lastChatNotificationSignalRef.current = chatCompletionSignal
     chatQueueSeenRef.current = false
+    if (suppressNextChatNotificationRef.current) {
+      suppressNextChatNotificationRef.current = false
+      return
+    }
 
     void triggerSystemNotification({
       id: `chat-complete:${activeSessionId ?? 'global'}:${chatCompletionSignal}`,
@@ -1533,13 +1545,18 @@ function App() {
       if (pendingThreadCompletionRef.current[thread.id] && queueLength === 0) {
         const completedThread = pendingThreadCompletionRef.current[thread.id]
         const queueFinished = threadQueueSeenRef.current[thread.id] === true
+
+        delete pendingThreadCompletionRef.current[thread.id]
+        delete threadQueueSeenRef.current[thread.id]
+
+        if (completedThread.status === 'interrupted') {
+          continue
+        }
+
         const title = queueFinished ? 'Queued thread finished' : 'Thread finished'
         const body = completedThread.status === 'completed'
           ? `"${completedThread.title}" completed.`
           : `"${completedThread.title}" ended with status ${completedThread.status}.`
-
-        delete pendingThreadCompletionRef.current[thread.id]
-        delete threadQueueSeenRef.current[thread.id]
 
         void triggerSystemNotification({
           id: `thread-complete:${thread.id}:${completedThread.updatedAt}`,
@@ -1559,6 +1576,11 @@ function App() {
 
     previousThreadStatusesRef.current = nextStatuses
   }, [automation.threads, managerMessageQueues])
+
+  const handleCancelRequest = useCallback(() => {
+    suppressNextChatNotificationRef.current = true
+    cancelRequest()
+  }, [cancelRequest])
 
   // ── Persistent session state for panels ───────────────────────────
   interface WorkspacePanelState { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string }
@@ -4861,7 +4883,7 @@ function App() {
                     segments={inputSegments}
                     onChange={setInputValue}
                     onSubmit={handleSubmit}
-                    onStop={cancelRequest}
+                    onStop={handleCancelRequest}
                     onQueue={handleQueue}
                     isLoading={isLoading}
                     placeholder={developerPlaceholder}
@@ -5086,7 +5108,7 @@ function App() {
                       segments={inputSegments}
                       onChange={setInputValue}
                       onSubmit={handleSubmit}
-                      onStop={cancelRequest}
+                      onStop={handleCancelRequest}
                       onQueue={handleQueue}
                       isLoading={isLoading}
                       disabled={limitReached}
