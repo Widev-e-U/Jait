@@ -35,6 +35,7 @@ import {
   type ExecutedToolCall,
   type OpenAIToolCall,
 } from "../tools/agent-loop.js";
+import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 import {
   type ChatMode,
   type PlannedAction,
@@ -764,6 +765,7 @@ export function registerChatRoutes(
 
   const appWithQueueDrain = app as FastifyInstance & {
     drainQueuedChatMessages?: (sessionId: string) => Promise<void>;
+    steerActiveSession?: (sessionId: string, message: string) => Promise<{ ok: boolean; reason?: string }>;
   };
   if (!appWithQueueDrain.drainQueuedChatMessages) {
     app.decorate("drainQueuedChatMessages", drainQueuedChatMessages);
@@ -776,6 +778,21 @@ export function registerChatRoutes(
   const sessionExecutedToolCalls = new Map<string, ExecutedToolCall[]>();
   /** Plans produced by plan mode — keyed by session ID */
   const sessionPlans = new Map<string, { id: string; summary: string; actions: PlannedAction[] }>();
+
+  const steerActiveSession = async (sessionId: string, message: string): Promise<{ ok: boolean; reason?: string }> => {
+    if (!message.trim()) return { ok: false, reason: "empty-message" };
+    if (!activeStreams.has(sessionId)) return { ok: false, reason: "not-streaming" };
+    const controller = sessionSteeringControllers.get(sessionId);
+    if (!controller) return { ok: false, reason: "no-controller" };
+    controller.steer(message);
+    return { ok: true };
+  };
+
+  if (!appWithQueueDrain.steerActiveSession) {
+    app.decorate("steerActiveSession", steerActiveSession);
+  } else {
+    appWithQueueDrain.steerActiveSession = steerActiveSession;
+  }
 
   app.log.info(`Chat route: ${hasTools ? toolRegistry!.list().length + " tools available for agent (tiered)" : "no tools (text-only mode)"}`);
 
@@ -1077,6 +1094,13 @@ export function registerChatRoutes(
     // Create steering controller for this session
     const steering = new SteeringController();
     sessionSteeringControllers.set(sessionId, steering);
+    const unregisterInterventionResume = interventionRunResumeRegistry.registerChatSession(sessionId, (message) => {
+      if (!activeStreams.has(sessionId)) return { status: "not-running" as const };
+      const controller = sessionSteeringControllers.get(sessionId);
+      if (!controller) return { status: "not-running" as const };
+      controller.steer(message);
+      return { status: "steered" as const };
+    });
 
     try {
       let usedCliProvider = false;
@@ -1594,6 +1618,7 @@ export function registerChatRoutes(
     activeStreams.delete(sessionId);
     sessionAbortControllers.delete(sessionId);
     sessionSteeringControllers.delete(sessionId);
+    unregisterInterventionResume();
     sessionStreamingState.delete(sessionId);
     sessionStreamSeq.delete(sessionId);
 

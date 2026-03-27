@@ -9,9 +9,30 @@ import type {
   BrowserSessionOrigin,
   BrowserSessionStatus,
 } from "../services/browser-collaboration.js";
+import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 
 interface BrowserCollaborationRouteDeps {
   browserCollaborationService: BrowserCollaborationService;
+}
+
+function buildInterventionResumeMessage(
+  intervention: {
+    browserSessionId: string;
+    reason: string;
+    instructions: string;
+  },
+  userNote?: string | null,
+): string {
+  const parts = [
+    `User completed intervention on browser session ${intervention.browserSessionId}.`,
+    `Reason: ${intervention.reason}.`,
+    `Instructions: ${intervention.instructions}.`,
+  ];
+  if (userNote?.trim()) {
+    parts.push(`Note: ${userNote.trim()}.`);
+  }
+  parts.push("Continue from the current browser state where possible.");
+  return parts.join(" ");
 }
 
 export function registerBrowserCollaborationRoutes(
@@ -146,13 +167,23 @@ export function registerBrowserCollaborationRoutes(
     if (!authUser) return;
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as Record<string, unknown>;
+    const userNote = typeof body.userNote === "string" ? body.userNote : null;
     const intervention = deps.browserCollaborationService.resolveIntervention(
       id,
       authUser.id,
-      typeof body.userNote === "string" ? body.userNote : null,
+      userNote,
     );
     if (!intervention) return reply.status(404).send({ error: "Browser intervention not found" });
-    return { intervention };
+    const resumeMessage = buildInterventionResumeMessage(intervention, userNote);
+    const resume = {
+      chat: intervention.chatSessionId
+        ? await interventionRunResumeRegistry.resumeChatSession(intervention.chatSessionId, resumeMessage)
+        : undefined,
+      thread: intervention.threadId
+        ? await interventionRunResumeRegistry.resumeThread(intervention.threadId, resumeMessage)
+        : undefined,
+    };
+    return { intervention, resume };
   });
 
   app.post("/api/browser/interventions/:id/cancel", async (request, reply) => {
