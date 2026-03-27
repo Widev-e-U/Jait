@@ -180,44 +180,234 @@ async function main() {
         if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
         return String(raw || "").replace(/[^a-zA-Z0-9_-]/g, "_");
       };
+      const isVisible = (el) => {
+        if (!el || !(el instanceof Element)) return false;
+        const style = window.getComputedStyle(el);
+        if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+        const rect = el.getBoundingClientRect();
+        return rect.width > 0 && rect.height > 0;
+      };
+      const guessRole = (el, tag) =>
+        el.getAttribute("role")
+        ?? (tag === "a" ? "link" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
+      const getName = (el) => normalize(
+        el.getAttribute("aria-label")
+          ?? el.getAttribute("aria-labelledby")
+          ?? el.getAttribute("name")
+          ?? el.getAttribute("title")
+          ?? el.getAttribute("placeholder")
+          ?? el.innerText
+          ?? el.textContent
+          ?? "",
+      ).slice(0, 200);
+      const buildSelectors = (el, tag, role, name) => {
+        const suggestions = [];
+        const push = (kind, value, selector) => {
+          if (!value || !selector || suggestions.some((item) => item.selector === selector)) return;
+          suggestions.push({ kind, value: normalize(value).slice(0, 200), selector });
+        };
+        const id = el.getAttribute("id");
+        const testId = el.getAttribute("data-testid");
+        const placeholder = el.getAttribute("placeholder");
+        const fieldName = el.getAttribute("name");
+        if (role && name) push("role", `${role}:${name}`, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`);
+        if (fieldName) push("name", fieldName, `${tag}[name="${fieldName.replace(/"/g, '\\"')}"]`);
+        if (placeholder) push("placeholder", placeholder, `placeholder=${placeholder.replace(/"/g, '\\"')}`);
+        if (testId) push("testId", testId, `[data-testid="${testId.replace(/"/g, '\\"')}"]`);
+        if (id) push("id", id, `#${esc(id)}`);
+        const css = id
+          ? `#${esc(id)}`
+          : testId
+            ? `${tag}[data-testid="${testId.replace(/"/g, '\\"')}"]`
+            : `${tag}${fieldName ? `[name="${fieldName.replace(/"/g, '\\"')}"]` : ""}`;
+        push("css", css, css);
+        return suggestions;
+      };
+      const serializeElement = (el) => {
+        const tag = el.tagName.toLowerCase();
+        const role = guessRole(el, tag);
+        const name = getName(el);
+        const text = normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
+        const id = el.getAttribute("id") ?? undefined;
+        const testId = el.getAttribute("data-testid") ?? undefined;
+        const placeholder = el.getAttribute("placeholder") ?? undefined;
+        const selectors = buildSelectors(el, tag, role, name);
+        const selectedValue = tag === "select"
+          ? normalize(Array.from(el.selectedOptions ?? []).map((option) => option.textContent ?? option.value ?? "").join(", ")).slice(0, 200)
+          : role === "tab" || role === "radio" || role === "checkbox"
+            ? String(el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-checked") === "true" || el.checked === true)
+            : undefined;
+        return {
+          role,
+          name,
+          text,
+          selector: selectors[0]?.selector ?? undefined,
+          selectors,
+          tagName: tag,
+          placeholder,
+          testId,
+          id,
+          disabled: el.disabled === true || el.getAttribute("aria-disabled") === "true",
+          selected: el.selected === true || el.checked === true || el.getAttribute("aria-selected") === "true",
+          active: document.activeElement === el,
+          value: selectedValue,
+        };
+      };
 
       const rawElements = Array.from(
         document.querySelectorAll("a, button, input, textarea, select, [role], [onclick], [tabindex]"),
       );
-      const limited = rawElements.slice(0, 60);
-      const elements = limited.map((el) => {
-        const tag = el.tagName.toLowerCase();
-        const role = el.getAttribute("role") ?? tag;
-        const name =
-          el.getAttribute("aria-label") ??
-          el.getAttribute("name") ??
-          el.getAttribute("title") ??
-          el.getAttribute("placeholder") ??
-          el.innerText?.trim() ??
-          "";
-        const text = el.innerText?.trim() ?? "";
-        const id = el.getAttribute("id");
-        const testId = el.getAttribute("data-testid");
-        const selector = id
-          ? `#${esc(id)}`
-          : testId
-            ? `${tag}[data-testid="${testId}"]`
-            : `${tag}${el.getAttribute("name") ? `[name="${el.getAttribute("name")}"]` : ""}`;
-        return {
-          role,
-          name: normalize(name).slice(0, 200),
-          text: normalize(text).slice(0, 200),
-          selector,
-        };
-      });
+      const elements = rawElements.filter((el) => isVisible(el)).slice(0, 60).map((el) => serializeElement(el));
+      const activeElement = document.activeElement && document.activeElement !== document.body
+        ? {
+          ...serializeElement(document.activeElement),
+          type: document.activeElement.getAttribute("type") ?? undefined,
+          readOnly: document.activeElement.readOnly === true,
+          isContentEditable: document.activeElement.isContentEditable === true,
+        }
+        : null;
+      const dialogs = Array.from(document.querySelectorAll("dialog[open], [role='dialog'], [role='alertdialog'], [aria-modal='true']"))
+        .filter((el) => isVisible(el))
+        .slice(0, 10)
+        .map((el) => ({
+          ...serializeElement(el),
+          title: normalize(
+            el.getAttribute("aria-label")
+              ?? document.getElementById(el.getAttribute("aria-labelledby") ?? "")?.textContent
+              ?? el.querySelector("h1, h2, h3, [data-dialog-title]")?.textContent
+              ?? el.innerText
+              ?? "",
+          ).slice(0, 200),
+          ariaModal: el.getAttribute("aria-modal") === "true",
+          open: el.hasAttribute("open") || el.getAttribute("aria-hidden") !== "true",
+        }));
+      const topLayer = Array.from(document.querySelectorAll("body *"))
+        .filter((el) => {
+          if (!isVisible(el)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.pointerEvents === "none") return false;
+          if (!(style.position === "fixed" || style.position === "sticky")) return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width >= window.innerWidth * 0.35 && rect.height >= window.innerHeight * 0.2;
+        })
+        .slice(0, 6)
+        .map((el) => {
+          const style = window.getComputedStyle(el);
+          return {
+            ...serializeElement(el),
+            reason: "fixed or sticky overlay",
+            zIndex: Number.parseInt(style.zIndex || "0", 10) || 0,
+          };
+        });
 
       return {
         url: window.location.href,
         title,
         text: bodyText,
         elements,
+        activeElement,
+        dialogs,
+        obstruction: {
+          hasModal: dialogs.some((dialog) => dialog.ariaModal),
+          dialogCount: dialogs.length,
+          activeDialogTitle: dialogs[0]?.title ?? null,
+          topLayer,
+          notes: [
+            dialogs.length > 0 ? `${dialogs.length} dialog(s) visible.` : "No visible dialogs detected.",
+            topLayer.length > 0
+              ? "Top-layer obstruction diagnostics are heuristic and should be confirmed with a hit test when an action fails."
+              : "No likely top-layer blockers detected from static DOM inspection.",
+          ],
+        },
       };
     }),
+    diagnose: async (params) => page.evaluate((targetSelector) => {
+      const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
+      const esc = (raw) => {
+        if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
+        return String(raw || "").replace(/[^a-zA-Z0-9_-]/g, "_");
+      };
+      const buildSelectors = (el) => {
+        const tag = el.tagName.toLowerCase();
+        const role = el.getAttribute("role") ?? tag;
+        const name = normalize(
+          el.getAttribute("aria-label")
+            ?? el.getAttribute("name")
+            ?? el.getAttribute("title")
+            ?? el.getAttribute("placeholder")
+            ?? el.innerText
+            ?? el.textContent
+            ?? "",
+        ).slice(0, 200);
+        const suggestions = [];
+        const push = (kind, value, selector) => {
+          if (!value || !selector || suggestions.some((item) => item.selector === selector)) return;
+          suggestions.push({ kind, value, selector });
+        };
+        const id = el.getAttribute("id");
+        const testId = el.getAttribute("data-testid");
+        const placeholder = el.getAttribute("placeholder");
+        const fieldName = el.getAttribute("name");
+        if (role && name) push("role", `${role}:${name}`, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`);
+        if (fieldName) push("name", fieldName, `${tag}[name="${fieldName.replace(/"/g, '\\"')}"]`);
+        if (placeholder) push("placeholder", placeholder, `placeholder=${placeholder.replace(/"/g, '\\"')}`);
+        if (testId) push("testId", testId, `[data-testid="${testId.replace(/"/g, '\\"')}"]`);
+        if (id) push("id", id, `#${esc(id)}`);
+        push("css", id ? `#${esc(id)}` : tag, id ? `#${esc(id)}` : tag);
+        return suggestions;
+      };
+      const describeElement = (el, reason) => ({
+        role: el?.getAttribute?.("role") ?? el?.tagName?.toLowerCase?.(),
+        tagName: el?.tagName?.toLowerCase?.(),
+        text: normalize(el?.innerText ?? el?.textContent ?? "").slice(0, 120),
+        selector: buildSelectors(el)[0]?.selector,
+        selectors: buildSelectors(el),
+        reason,
+        zIndex: Number.parseInt(window.getComputedStyle(el).zIndex || "0", 10) || 0,
+      });
+      const target = document.querySelector(targetSelector);
+      if (!target) {
+        return { selector: targetSelector, found: false };
+      }
+      const rect = target.getBoundingClientRect();
+      const centerX = Math.min(Math.max(rect.left + rect.width / 2, 0), window.innerWidth - 1);
+      const centerY = Math.min(Math.max(rect.top + rect.height / 2, 0), window.innerHeight - 1);
+      const topElement = document.elementFromPoint(centerX, centerY);
+      const intercepted = topElement && topElement !== target && !target.contains(topElement) ? topElement : null;
+      const dialog = target.closest("dialog,[role='dialog'],[role='alertdialog'],[aria-modal='true']");
+      return {
+        selector: buildSelectors(target)[0]?.selector ?? targetSelector,
+        found: true,
+        role: target.getAttribute("role") ?? target.tagName.toLowerCase(),
+        name: normalize(
+          target.getAttribute("aria-label")
+            ?? target.getAttribute("name")
+            ?? target.getAttribute("title")
+            ?? target.getAttribute("placeholder")
+            ?? target.innerText
+            ?? target.textContent
+            ?? "",
+        ).slice(0, 200),
+        text: normalize(target.innerText ?? target.textContent ?? "").slice(0, 200),
+        selectors: buildSelectors(target),
+        tagName: target.tagName.toLowerCase(),
+        disabled: target.disabled === true || target.getAttribute("aria-disabled") === "true",
+        offscreen: rect.bottom < 0 || rect.right < 0 || rect.top > window.innerHeight || rect.left > window.innerWidth,
+        obscured: Boolean(intercepted),
+        obstructionReason: intercepted ? "Another element is receiving pointer hits at the target center point." : undefined,
+        interceptedBy: intercepted ? describeElement(intercepted, "hit-test interceptor") : null,
+        inDialog: Boolean(dialog),
+        dialogTitle: dialog
+          ? normalize(
+            dialog.getAttribute("aria-label")
+              ?? document.getElementById(dialog.getAttribute("aria-labelledby") ?? "")?.textContent
+              ?? dialog.querySelector("h1, h2, h3, [data-dialog-title]")?.textContent
+              ?? dialog.innerText
+              ?? "",
+          ).slice(0, 200)
+          : null,
+      };
+    }, String(params.selector || "")),
     close: async () => {
       await context.close();
       await browser.close();

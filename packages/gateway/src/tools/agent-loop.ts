@@ -329,6 +329,7 @@ const PARALLEL_SAFE_TOOLS = new Set([
   "web.search",
   "gateway.status",
   "browser.snapshot",
+  "browser.inspect",
 ]);
 
 function isParallelSafe(toolName: string): boolean {

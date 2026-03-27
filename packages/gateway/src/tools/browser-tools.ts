@@ -1,8 +1,8 @@
 import type { SurfaceRegistry } from "../surfaces/registry.js";
-import { BrowserSurface } from "../surfaces/browser.js";
+import { BrowserSurface, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
-import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
+import type { BrowserCollaborationService, BrowserSessionRecord } from "../services/browser-collaboration.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 
 interface BrowserNavigateInput {
@@ -11,6 +11,11 @@ interface BrowserNavigateInput {
 }
 
 interface BrowserSnapshotInput {
+  browserId?: string;
+}
+
+interface BrowserInspectInput {
+  selector?: string;
   browserId?: string;
 }
 
@@ -104,6 +109,36 @@ async function ensureBrowserSurface(registry: SurfaceRegistry, context: ToolCont
   return started as BrowserSurface;
 }
 
+function resolveBrowserSessionMetadata(
+  collaboration: BrowserCollaborationService | undefined,
+  browserId: string,
+): BrowserSessionRecord | null {
+  if (!collaboration) return null;
+  return collaboration.getSessionByBrowserId(browserId);
+}
+
+function buildSnapshotPayload(
+  browserId: string,
+  snapshot: BrowserPageSnapshot,
+  session: BrowserSessionRecord | null,
+  target?: BrowserTargetDiagnostics,
+): Record<string, unknown> {
+  return {
+    browserId,
+    url: snapshot.url,
+    title: snapshot.title,
+    textPreview: snapshot.text.slice(0, 500),
+    interactiveElements: snapshot.elements.slice(0, 10),
+    activeElement: snapshot.activeElement ?? null,
+    dialogs: snapshot.dialogs ?? [],
+    obstruction: snapshot.obstruction ?? null,
+    target: target ?? null,
+    controller: session?.controller ?? null,
+    secretSafe: session?.secretSafe ?? null,
+    browserSession: session,
+  };
+}
+
 export function createBrowserNavigateTool(
   registry: SurfaceRegistry,
   collaboration?: BrowserCollaborationService,
@@ -127,16 +162,11 @@ export function createBrowserNavigateTool(
       collaboration?.assertAgentControl(input.browserId);
       const surface = await ensureBrowserSurface(registry, context, input.browserId);
       const snapshot = await surface.navigate(input.url, context.signal);
+      const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
         ok: true,
         message: `Navigated to ${snapshot.url}`,
-        data: {
-          browserId: surface.id,
-          url: snapshot.url,
-          title: snapshot.title,
-          textPreview: snapshot.text.slice(0, 500),
-          interactiveElements: snapshot.elements.slice(0, 10),
-        },
+        data: buildSnapshotPayload(surface.id, snapshot, session),
       };
     },
   };
@@ -163,10 +193,47 @@ export function createBrowserSnapshotTool(
       collaboration?.assertAgentControl(input.browserId);
       const surface = await ensureBrowserSurface(registry, context, input.browserId);
       const description = await surface.describe(context.signal);
+      const inspection = await surface.inspect(undefined, context.signal);
+      const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
         ok: true,
         message: "Browser snapshot captured",
-        data: { browserId: surface.id, snapshot: description },
+        data: {
+          snapshot: description,
+          ...buildSnapshotPayload(surface.id, inspection.snapshot, session),
+        },
+      };
+    },
+  };
+}
+
+export function createBrowserInspectTool(
+  registry: SurfaceRegistry,
+  collaboration?: BrowserCollaborationService,
+): ToolDefinition<BrowserInspectInput> {
+  return {
+    name: "browser.inspect",
+    description: "Inspect the current browser page and optionally diagnose a target selector",
+    tier: "standard",
+    category: "browser",
+    source: "builtin",
+    parameters: {
+      type: "object",
+      properties: {
+        selector: { type: "string", description: "Optional CSS selector to diagnose" },
+        browserId: { type: "string", description: "Optional browser surface ID" },
+      },
+    },
+    async execute(input, context): Promise<ToolResult> {
+      if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
+      collaboration?.assertAgentControl(input.browserId);
+      const surface = await ensureBrowserSurface(registry, context, input.browserId);
+      const inspection = await surface.inspect(input.selector, context.signal);
+      const session = resolveBrowserSessionMetadata(collaboration, surface.id);
+      return {
+        ok: true,
+        message: input.selector ? `Browser inspection captured for ${input.selector}` : "Browser inspection captured",
+        data: buildSnapshotPayload(surface.id, inspection.snapshot, session, inspection.target),
       };
     },
   };

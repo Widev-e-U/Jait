@@ -48,6 +48,7 @@ export const ToolName = {
   // ── Browser & web ──
   BrowserNavigate: "browser.navigate",
   BrowserSnapshot: "browser.snapshot",
+  BrowserInspect: "browser.inspect",
   BrowserClick: "browser.click",
   BrowserType: "browser.type",
   BrowserSelect: "browser.select",
