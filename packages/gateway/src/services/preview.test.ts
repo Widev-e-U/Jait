@@ -12,6 +12,11 @@ describe("PreviewService", () => {
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
       getEvents: vi.fn().mockReturnValue([]),
+      getMetrics: vi.fn().mockResolvedValue({
+        sampledAt: "2026-03-27T00:00:00.000Z",
+        url: "http://127.0.0.1:4173/",
+        title: "Preview App",
+      }),
     };
     const surfaceRegistry = {
       stopSurface: vi.fn().mockResolvedValue(undefined),
@@ -50,6 +55,12 @@ describe("PreviewService", () => {
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
       getEvents: vi.fn().mockReturnValue([{ id: 1, timestamp: "2026-03-27T00:00:00.000Z", type: "console", text: "ready" }]),
+      getMetrics: vi.fn().mockResolvedValue({
+        sampledAt: "2026-03-27T00:00:01.000Z",
+        url: "http://127.0.0.1:4173/",
+        title: "Preview App",
+        webVitals: { lcpMs: 180, cls: 0.01, inpMs: 40 },
+      }),
       screenshot: vi.fn().mockResolvedValue(screenshotPath),
       inspect: vi.fn().mockResolvedValue({
         snapshot: {
@@ -66,6 +77,12 @@ describe("PreviewService", () => {
             topLayer: [],
             notes: ["1 dialog visible."],
           },
+        },
+        metrics: {
+          sampledAt: "2026-03-27T00:00:01.000Z",
+          url: "http://127.0.0.1:4173/",
+          title: "Preview App",
+          webVitals: { lcpMs: 180, cls: 0.01, inpMs: 40 },
         },
       }),
     };
@@ -99,6 +116,10 @@ describe("PreviewService", () => {
         dialogs: [{ title: "Settings" }],
         obstruction: { hasModal: true },
       },
+      metrics: {
+        title: "Preview App",
+        webVitals: { lcpMs: 180, cls: 0.01, inpMs: 40 },
+      },
     });
     expect(inspection?.snapshot).toContain("Title: Preview App");
     expect(inspection?.snapshot).toContain("Active element: textbox - Search - input[name=\"q\"]");
@@ -112,6 +133,11 @@ describe("PreviewService", () => {
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
       getEvents: vi.fn().mockReturnValue([]),
+      getMetrics: vi.fn().mockResolvedValue({
+        sampledAt: "2026-03-27T00:00:00.000Z",
+        url: "http://127.0.0.1:4173/",
+        title: "Preview App",
+      }),
       screenshot: vi.fn().mockResolvedValue(screenshotPath),
       inspect: vi.fn().mockResolvedValue({
         snapshot: {
@@ -128,6 +154,11 @@ describe("PreviewService", () => {
           found: true,
           obscured: true,
           obstructionReason: "Another element is receiving pointer hits at the target center point.",
+        },
+        metrics: {
+          sampledAt: "2026-03-27T00:00:00.000Z",
+          url: "http://127.0.0.1:4173/",
+          title: "Preview App",
         },
       }),
     };
@@ -163,6 +194,11 @@ describe("PreviewService", () => {
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
       getEvents: vi.fn().mockReturnValue([]),
+      getMetrics: vi.fn().mockResolvedValue({
+        sampledAt: "2026-03-27T00:00:00.000Z",
+        url: "http://127.0.0.1:4173/",
+        title: "Preview App",
+      }),
     };
     const surfaceRegistry = {
       stopSurface: vi.fn().mockResolvedValue(undefined),

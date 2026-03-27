@@ -102,6 +102,42 @@ export interface BrowserRuntimeEvent {
   status?: number;
 }
 
+export interface BrowserPerformanceMetrics {
+  sampledAt: string;
+  url: string;
+  title: string;
+  navigation?: {
+    type?: string;
+    domContentLoadedMs?: number | null;
+    loadMs?: number | null;
+    transferSize?: number | null;
+    encodedBodySize?: number | null;
+    decodedBodySize?: number | null;
+  } | null;
+  paint?: {
+    firstPaintMs?: number | null;
+    firstContentfulPaintMs?: number | null;
+  } | null;
+  webVitals?: {
+    lcpMs?: number | null;
+    cls?: number | null;
+    inpMs?: number | null;
+  } | null;
+  resources?: {
+    total?: number;
+    scripts?: number;
+    stylesheets?: number;
+    images?: number;
+    fonts?: number;
+    largestTransferSize?: number | null;
+  } | null;
+  memory?: {
+    usedJsHeapSize?: number | null;
+    totalJsHeapSize?: number | null;
+    jsHeapSizeLimit?: number | null;
+  } | null;
+}
+
 export interface BrowserDriver {
   navigate(url: string, signal?: AbortSignal): Promise<void>;
   click(selector: string, signal?: AbortSignal): Promise<void>;
@@ -112,6 +148,7 @@ export interface BrowserDriver {
   screenshot(path?: string, signal?: AbortSignal): Promise<string>;
   snapshot(signal?: AbortSignal): Promise<BrowserPageSnapshot>;
   diagnose(selector: string, signal?: AbortSignal): Promise<BrowserTargetDiagnostics>;
+  getMetrics(signal?: AbortSignal): Promise<BrowserPerformanceMetrics>;
   getEvents(): BrowserRuntimeEvent[];
   close(): Promise<void>;
   liveView?: {
@@ -123,10 +160,23 @@ export interface BrowserDriver {
 }
 
 export interface BrowserSurfaceOptions {
-  driverFactory?: () => Promise<BrowserDriver>;
+  driverFactory?: (input: SurfaceStartInput) => Promise<BrowserDriver>;
 }
 
 type PlaywrightBrowser = {
+  contexts?: () => Array<{
+    newPage: () => Promise<{
+      goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
+      click: (selector: string) => Promise<void>;
+      fill: (selector: string, text: string) => Promise<void>;
+      evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
+      waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
+      screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
+      on?: (event: string, handler: (...args: any[]) => void) => void;
+      url?: () => string;
+    }>;
+    close: () => Promise<void>;
+  }>;
   newContext: (opts: Record<string, unknown>) => Promise<{
     newPage: () => Promise<{
       goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
@@ -136,6 +186,7 @@ type PlaywrightBrowser = {
       waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
       screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
       on?: (event: string, handler: (...args: any[]) => void) => void;
+      url?: () => string;
     }>;
     close: () => Promise<void>;
   }>;
@@ -144,6 +195,7 @@ type PlaywrightBrowser = {
 
 type PlaywrightChromium = {
   launch: (opts: Record<string, unknown>) => Promise<PlaywrightBrowser>;
+  connectOverCDP?: (endpointURL: string) => Promise<PlaywrightBrowser>;
 };
 
 interface BrowserLaunchStrategy {
@@ -220,7 +272,7 @@ export class BrowserSurface implements Surface {
 
     try {
       const factory = this.options.driverFactory ?? createPlaywrightDriver;
-      this.driver = await factory();
+      this.driver = await factory(input);
       this._setState("running");
     } catch (err) {
       this._setState("error");
@@ -296,12 +348,14 @@ export class BrowserSurface implements Surface {
   async inspect(selector?: string, signal?: AbortSignal): Promise<{
     snapshot: BrowserPageSnapshot;
     target?: BrowserTargetDiagnostics;
+    metrics: BrowserPerformanceMetrics;
   }> {
     const driver = this.requireDriver();
     const snapshot = await driver.snapshot(signal);
     this.captureSnapshotMeta(snapshot);
     const target = selector ? await driver.diagnose(selector, signal) : undefined;
-    return { snapshot, target };
+    const metrics = await driver.getMetrics(signal);
+    return { snapshot, target, metrics };
   }
 
   async click(selector: string, signal?: AbortSignal): Promise<void> {
@@ -337,6 +391,10 @@ export class BrowserSurface implements Surface {
   async screenshot(path?: string, signal?: AbortSignal): Promise<string> {
     this._actionCount++;
     return this.requireDriver().screenshot(path, signal);
+  }
+
+  async getMetrics(signal?: AbortSignal): Promise<BrowserPerformanceMetrics> {
+    return this.requireDriver().getMetrics(signal);
   }
 
   getEvents(): BrowserRuntimeEvent[] {
@@ -382,14 +440,14 @@ export class BrowserSurfaceFactory {
   }
 }
 
-async function createPlaywrightDriver(): Promise<BrowserDriver> {
+async function createPlaywrightDriver(input: SurfaceStartInput): Promise<BrowserDriver> {
   const runtime = resolveBrowserRuntimeMode();
   if (runtime === "node-bridge") {
     return createNodeBridgePlaywrightDriver();
   }
 
   try {
-    return await createInProcessPlaywrightDriver();
+    return await createInProcessPlaywrightDriver(input);
   } catch (err) {
     if (runtime === "auto" && isBunWindowsRuntime() && shouldFallbackToNodeBridge(err)) {
       return createNodeBridgePlaywrightDriver();
@@ -419,7 +477,58 @@ function shouldFallbackToNodeBridge(err: unknown): boolean {
     || message.includes("failed to create playwright browser context");
 }
 
-async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
+async function connectOrLaunchBrowser(
+  chromium: PlaywrightChromium,
+  liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null,
+  headless: boolean,
+): Promise<PlaywrightBrowser> {
+  if (liveViewSession?.kind === "container" && liveViewSession.cdpUrl) {
+    if (!chromium.connectOverCDP) {
+      throw new Error("Current Playwright runtime does not support connectOverCDP.");
+    }
+    return await chromium.connectOverCDP(liveViewSession.cdpUrl);
+  }
+
+  const launchTimeoutMs = parsePositiveIntegerEnv(
+    process.env["BROWSER_LAUNCH_TIMEOUT_MS"],
+    DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS,
+  );
+  const launchStrategies = buildBrowserLaunchStrategies(headless, launchTimeoutMs);
+  return await launchBrowserWithFallback(chromium, launchStrategies);
+}
+
+function rewritePublicUrlForContainerBrowser(
+  url: string,
+  liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null,
+): string {
+  if (liveViewSession?.kind !== "container") return url;
+  try {
+    const parsed = new URL(url);
+    if (!["http:", "https:"].includes(parsed.protocol)) return url;
+    if (!["127.0.0.1", "localhost", "0.0.0.0", "::1", "[::1]"].includes(parsed.hostname)) return url;
+    parsed.hostname = "host.docker.internal";
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+function rewriteContainerBrowserUrlToPublic(
+  url: string | undefined,
+  liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null,
+): string | undefined {
+  if (!url || liveViewSession?.kind !== "container") return url;
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== "host.docker.internal") return url;
+    parsed.hostname = "127.0.0.1";
+    return parsed.toString();
+  } catch {
+    return url;
+  }
+}
+
+async function createInProcessPlaywrightDriver(input: SurfaceStartInput): Promise<BrowserDriver> {
   // Optional runtime dependency: keep static imports out so gateway can still
   // boot in environments that do not need browser automation.
   const loadPlaywright = new Function("return import('playwright')") as () => Promise<unknown>;
@@ -446,28 +555,34 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
   if (enableLiveView) {
     try {
       const { startLiveView } = await import("../services/live-view-manager.js");
-      liveViewSession = await startLiveView();
-      process.env["DISPLAY"] = liveViewSession.display;
+      liveViewSession = await startLiveView({ workspaceRoot: input.workspaceRoot });
+      if (liveViewSession.kind === "host") {
+        process.env["DISPLAY"] = liveViewSession.display;
+      }
     } catch {
-      // Xvfb/x11vnc/websockify not available — fall back to headless
+      // Docker or host live-view dependencies unavailable — fall back to headless
       liveViewSession = null;
     }
   }
 
   const headless = liveViewSession ? false : process.env["BROWSER_HEADLESS"] !== "false";
-  const launchTimeoutMs = parsePositiveIntegerEnv(
-    process.env["BROWSER_LAUNCH_TIMEOUT_MS"],
-    DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS,
-  );
-  const launchStrategies = buildBrowserLaunchStrategies(headless, launchTimeoutMs);
-  const browser = await launchBrowserWithFallback(chromium, launchStrategies);
+  if (liveViewSession?.kind === "container") {
+    return createNodeBridgePlaywrightDriver(liveViewSession);
+  }
+
+  const browser = await connectOrLaunchBrowser(chromium, liveViewSession, headless);
 
   let context: Awaited<ReturnType<PlaywrightBrowser["newContext"]>> | null = null;
   let page: Awaited<ReturnType<Awaited<ReturnType<PlaywrightBrowser["newContext"]>>["newPage"]>> | null = null;
   try {
-    context = await browser.newContext({
-      ignoreHTTPSErrors: process.env["BROWSER_IGNORE_HTTPS_ERRORS"] === "true",
-    });
+    const connectedContexts = browser.contexts?.() ?? [];
+    if (connectedContexts.length > 0) {
+      context = connectedContexts[0] as Awaited<ReturnType<PlaywrightBrowser["newContext"]>>;
+    } else {
+      context = await browser.newContext({
+        ignoreHTTPSErrors: process.env["BROWSER_IGNORE_HTTPS_ERRORS"] === "true",
+      });
+    }
     page = await context.newPage();
   } catch (err) {
     await browser.close().catch(() => {});
@@ -498,7 +613,7 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
       type: "requestfailed",
       level: "error",
       text: request?.failure?.()?.errorText ?? "Request failed",
-      url: request?.url?.(),
+      url: rewriteContainerBrowserUrlToPublic(request?.url?.(), liveViewSession),
       method: request?.method?.(),
     });
   });
@@ -510,7 +625,7 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
       type: "response",
       level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
       text: `HTTP ${status}`,
-      url: response.url?.(),
+      url: rewriteContainerBrowserUrlToPublic(response.url?.(), liveViewSession),
       method: request?.method?.(),
       status,
     });
@@ -543,7 +658,10 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
 
   const driver: BrowserDriver = {
     async navigate(url: string, signal?: AbortSignal) {
-      await withSignal(activePage.goto(url, { waitUntil: "domcontentloaded", timeout: 30_000 }), signal);
+      await withSignal(
+        activePage.goto(rewritePublicUrlForContainerBrowser(url, liveViewSession), { waitUntil: "domcontentloaded", timeout: 30_000 }),
+        signal,
+      );
     },
     async click(selector: string, signal?: AbortSignal) {
       await withSignal(activePage.click(selector), signal);
@@ -581,7 +699,7 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
       return outPath;
     },
     async snapshot(signal?: AbortSignal) {
-      return withSignal(activePage.evaluate(() => {
+      const snapshot = await withSignal(activePage.evaluate(() => {
         const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
         const bodyText = normalize(document.body?.innerText ?? "").slice(0, 12_000);
         const title = document.title || "(untitled)";
@@ -732,6 +850,10 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
           },
         };
       }) as Promise<BrowserPageSnapshot>, signal);
+      return {
+        ...snapshot,
+        url: rewriteContainerBrowserUrlToPublic(snapshot.url, liveViewSession) ?? snapshot.url,
+      };
     },
     async diagnose(selector: string, signal?: AbortSignal) {
       return withSignal(activePage.evaluate((targetSelector: string) => {
@@ -823,6 +945,110 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
         };
       }, selector) as Promise<BrowserTargetDiagnostics>, signal);
     },
+    async getMetrics(signal?: AbortSignal) {
+      const metrics = await withSignal(activePage.evaluate(() => {
+        const perf = performance as any;
+        const navEntries = perf.getEntriesByType("navigation") as any[];
+        const nav = navEntries.length > 0 ? navEntries[0] : null;
+        const paintEntries = perf.getEntriesByType("paint") as any[];
+        const firstPaint = paintEntries.find((entry) => entry.name === "first-paint");
+        const firstContentfulPaint = paintEntries.find((entry) => entry.name === "first-contentful-paint");
+        const resourceEntries = perf.getEntriesByType("resource") as any[];
+        const resources = {
+          total: resourceEntries.length,
+          scripts: resourceEntries.filter((entry) => entry.initiatorType === "script").length,
+          stylesheets: resourceEntries.filter((entry) => entry.initiatorType === "link" || entry.initiatorType === "css").length,
+          images: resourceEntries.filter((entry) => entry.initiatorType === "img").length,
+          fonts: resourceEntries.filter((entry) => entry.initiatorType === "font").length,
+          largestTransferSize: resourceEntries.reduce((max, entry) => Math.max(max, entry.transferSize || 0), 0),
+        };
+
+        let lcpMs: number | null = null;
+        let cls = 0;
+        let inpMs: number | null = null;
+        const w = window as Window & {
+          __jaitLcpMs?: number;
+          __jaitCls?: number;
+          __jaitInpMs?: number;
+          __jaitMetricsObserversInstalled?: boolean;
+        };
+        const Observer = (globalThis as { PerformanceObserver?: new (cb: (list: any) => void) => { observe: (options: any) => void } }).PerformanceObserver;
+        if (!w.__jaitMetricsObserversInstalled && typeof Observer === "function") {
+          try {
+            const lcpObserver = new Observer((list: any) => {
+              const entries = list.getEntries();
+              const last = entries[entries.length - 1];
+              if (last) w.__jaitLcpMs = last.startTime;
+            });
+            lcpObserver.observe({ type: "largest-contentful-paint", buffered: true });
+          } catch {}
+          try {
+            const clsObserver = new Observer((list: any) => {
+              for (const entry of list.getEntries() as Array<{ value?: number; hadRecentInput?: boolean }>) {
+                if (!entry.hadRecentInput) {
+                  w.__jaitCls = (w.__jaitCls ?? 0) + (entry.value ?? 0);
+                }
+              }
+            });
+            clsObserver.observe({ type: "layout-shift", buffered: true });
+          } catch {}
+          try {
+            const inpObserver = new Observer((list: any) => {
+              for (const entry of list.getEntries() as Array<{ duration?: number }>) {
+                const duration = entry.duration ?? 0;
+                w.__jaitInpMs = Math.max(w.__jaitInpMs ?? 0, duration);
+              }
+            });
+            inpObserver.observe({ type: "event", buffered: true, durationThreshold: 16 });
+          } catch {}
+          w.__jaitMetricsObserversInstalled = true;
+        }
+        lcpMs = w.__jaitLcpMs ?? null;
+        cls = w.__jaitCls ?? 0;
+        inpMs = w.__jaitInpMs ?? null;
+
+        const memory = (perf as {
+          memory?: { usedJSHeapSize?: number; totalJSHeapSize?: number; jsHeapSizeLimit?: number };
+        }).memory;
+
+        return {
+          sampledAt: new Date().toISOString(),
+          url: window.location.href,
+          title: document.title || "(untitled)",
+          navigation: nav
+            ? {
+                type: nav.type,
+                domContentLoadedMs: Number.isFinite(nav.domContentLoadedEventEnd) ? nav.domContentLoadedEventEnd : null,
+                loadMs: Number.isFinite(nav.loadEventEnd) ? nav.loadEventEnd : null,
+                transferSize: nav.transferSize ?? null,
+                encodedBodySize: nav.encodedBodySize ?? null,
+                decodedBodySize: nav.decodedBodySize ?? null,
+              }
+            : null,
+          paint: {
+            firstPaintMs: firstPaint?.startTime ?? null,
+            firstContentfulPaintMs: firstContentfulPaint?.startTime ?? null,
+          },
+          webVitals: {
+            lcpMs,
+            cls,
+            inpMs,
+          },
+          resources,
+          memory: memory
+            ? {
+                usedJsHeapSize: memory.usedJSHeapSize ?? null,
+                totalJsHeapSize: memory.totalJSHeapSize ?? null,
+                jsHeapSizeLimit: memory.jsHeapSizeLimit ?? null,
+              }
+            : null,
+        };
+      }) as Promise<BrowserPerformanceMetrics>, signal);
+      return {
+        ...metrics,
+        url: rewriteContainerBrowserUrlToPublic(metrics.url, liveViewSession) ?? metrics.url,
+      };
+    },
     getEvents() {
       return [...events];
     },
@@ -831,7 +1057,7 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
       await browser.close();
       if (liveViewSession) {
         const { stopLiveView } = await import("../services/live-view-manager.js");
-        stopLiveView(liveViewSession);
+        await stopLiveView(liveViewSession);
       }
     },
     liveView: liveViewSession
@@ -847,7 +1073,9 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
   return driver;
 }
 
-async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
+async function createNodeBridgePlaywrightDriver(
+  liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null = null,
+): Promise<BrowserDriver> {
   const nodeBinary = process.env["BROWSER_NODE_BINARY"]?.trim() || "node";
   const scriptPath = resolveNodeBridgeScriptPath();
   const launchTimeoutMs = parsePositiveIntegerEnv(
@@ -865,7 +1093,12 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
 
   const child = spawn(nodeBinary, [scriptPath], {
     cwd: process.cwd(),
-    env: process.env,
+    env: {
+      ...process.env,
+      ...(liveViewSession?.kind === "container" && liveViewSession.cdpUrl
+        ? { BROWSER_CDP_URL: liveViewSession.cdpUrl }
+        : {}),
+    },
     stdio: ["pipe", "pipe", "pipe"],
     windowsHide: true,
   });
@@ -1047,7 +1280,7 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
 
   const driver: BrowserDriver = {
     async navigate(url: string, signal?: AbortSignal) {
-      await sendCommand("navigate", { url }, signal);
+      await sendCommand("navigate", { url: rewritePublicUrlForContainerBrowser(url, liveViewSession) }, signal);
     },
     async click(selector: string, signal?: AbortSignal) {
       await sendCommand("click", { selector }, signal);
@@ -1076,7 +1309,11 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
       if (!result || typeof result !== "object") {
         throw new Error("Node bridge returned an invalid browser snapshot.");
       }
-      return result as BrowserPageSnapshot;
+      const snapshot = result as BrowserPageSnapshot;
+      return {
+        ...snapshot,
+        url: rewriteContainerBrowserUrlToPublic(snapshot.url, liveViewSession) ?? snapshot.url,
+      };
     },
     async diagnose(selector: string, signal?: AbortSignal) {
       const result = await sendCommand("diagnose", { selector }, signal);
@@ -1085,12 +1322,35 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
       }
       return result as BrowserTargetDiagnostics;
     },
+    async getMetrics(signal?: AbortSignal) {
+      const result = await sendCommand("getMetrics", {}, signal);
+      if (!result || typeof result !== "object") {
+        throw new Error("Node bridge returned invalid browser metrics.");
+      }
+      const metrics = result as BrowserPerformanceMetrics;
+      return {
+        ...metrics,
+        url: rewriteContainerBrowserUrlToPublic(metrics.url, liveViewSession) ?? metrics.url,
+      };
+    },
     getEvents() {
       return [...events];
     },
     async close() {
       await closeBridge();
+      if (liveViewSession) {
+        const { stopLiveView } = await import("../services/live-view-manager.js");
+        await stopLiveView(liveViewSession);
+      }
     },
+    liveView: liveViewSession
+      ? {
+          display: liveViewSession.display,
+          vncPort: liveViewSession.vncPort,
+          websockifyPort: liveViewSession.websockifyPort,
+          novncUrl: liveViewSession.novncUrl,
+        }
+      : undefined,
   };
 
   return driver;

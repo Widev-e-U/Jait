@@ -3,6 +3,7 @@ import { Activity, AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
+import { PreviewMetricsPanel, type PreviewPerformanceMetrics } from '@/components/workspace/workspace-preview-inspect-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { isSamePreviewSession } from '@/lib/preview-session'
 import type { BrowserSession } from '@/lib/browser-collaboration-api'
@@ -63,6 +64,7 @@ interface PreviewSessionState {
   containerId: string | null
   logs: PreviewLogEntry[]
   browserEvents: PreviewBrowserEvent[]
+  metrics: PreviewPerformanceMetrics | null
   remoteBrowser: {
     containerName: string
     novncUrl: string
@@ -189,7 +191,7 @@ export function DevPreviewPanel({
   const [isBusy, setIsBusy] = useState(false)
   const [panelError, setPanelError] = useState<string | null>(null)
   const [panelWarning, setPanelWarning] = useState<string | null>(null)
-  const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues' | 'network'>('preview')
+  const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues' | 'network' | 'metrics'>('preview')
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
   const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null)
   const [livePreviewLoading, setLivePreviewLoading] = useState(false)
@@ -657,6 +659,9 @@ export function DevPreviewPanel({
             <Activity className="mr-1 h-3 w-3" />
             Network{networkEvents.length > 0 ? ` (${networkEvents.length})` : ''}
           </Button>
+          <Button type="button" variant={activeTab === 'metrics' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('metrics')}>
+            Metrics
+          </Button>
         </div>
       </div>
 
@@ -757,6 +762,10 @@ export function DevPreviewPanel({
               <div className="flex h-full items-center justify-center text-zinc-400">No network requests captured yet.</div>
             )}
             <div ref={networkEndRef} />
+          </div>
+        ) : activeTab === 'metrics' ? (
+          <div className="h-full overflow-auto px-3 py-2 text-[12px]">
+            <PreviewMetricsPanel metrics={managedSession?.metrics} />
           </div>
         ) : (
           <div className="h-full overflow-auto px-3 py-2 text-[12px]">

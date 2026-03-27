@@ -1,13 +1,17 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createServer } from "node:net";
+import { SandboxManager, reserveLocalPort } from "../security/sandbox-manager.js";
 
 export interface LiveViewSession {
+  kind: "host" | "container";
   display: string;
   vncPort: number;
   websockifyPort: number;
   novncUrl: string;
   processes: ChildProcess[];
+  containerName?: string;
+  cdpUrl?: string;
 }
 
 /**
@@ -16,6 +20,56 @@ export interface LiveViewSession {
  * and the websocket URL the frontend can connect to.
  */
 export async function startLiveView(options?: {
+  workspaceRoot?: string;
+  preferContainer?: boolean;
+  displayNumber?: number;
+  width?: number;
+  height?: number;
+}): Promise<LiveViewSession> {
+  const preferContainer = options?.preferContainer !== false;
+  if (preferContainer) {
+    try {
+      return await startContainerLiveView(options);
+    } catch {
+      // Fall back to host-installed X11 tools if Docker or the sandbox image is unavailable.
+    }
+  }
+
+  return startHostLiveView(options);
+}
+
+async function startContainerLiveView(options?: {
+  workspaceRoot?: string;
+}): Promise<LiveViewSession> {
+  const workspaceRoot = options?.workspaceRoot ?? process.cwd();
+  const [novncPort, vncPort, cdpPort] = await Promise.all([
+    reserveLocalPort(),
+    reserveLocalPort(),
+    reserveLocalPort(),
+  ]);
+  const sandboxManager = new SandboxManager();
+  const session = await sandboxManager.startBrowserSandbox({
+    workspaceRoot,
+    mountMode: "none",
+    networkEnabled: true,
+    hostGateway: true,
+    novncPort,
+    vncPort,
+    cdpPort,
+  });
+  return {
+    kind: "container",
+    display: `container:${session.containerName}`,
+    vncPort: session.vncPort,
+    websockifyPort: session.novncPort,
+    novncUrl: session.novncUrl,
+    processes: [],
+    containerName: session.containerName,
+    cdpUrl: session.cdpUrl,
+  };
+}
+
+async function startHostLiveView(options?: {
   displayNumber?: number;
   width?: number;
   height?: number;
@@ -34,17 +88,15 @@ export async function startLiveView(options?: {
 
   try {
     // 1. Start Xvfb
-    const xvfb = spawn(
+    const xvfb = await spawnChecked(
       "Xvfb",
       [display, "-screen", "0", `${width}x${height}x24`],
-      { stdio: "ignore", detached: false },
     );
-    xvfb.unref();
     processes.push(xvfb);
     await waitForDisplay(displayNum);
 
     // 2. Start x11vnc
-    const x11vnc = spawn(
+    const x11vnc = await spawnChecked(
       "x11vnc",
       [
         "-display", display,
@@ -55,27 +107,24 @@ export async function startLiveView(options?: {
         "-shared",
         "-rfbport", String(vncPort),
       ],
-      { stdio: "ignore", detached: false },
     );
-    x11vnc.unref();
     processes.push(x11vnc);
 
     // Brief wait for x11vnc to bind
     await sleep(300);
 
     // 3. Start websockify
-    const websockify = spawn(
+    const websockify = await spawnChecked(
       "websockify",
       [String(websockifyPort), `127.0.0.1:${vncPort}`],
-      { stdio: "ignore", detached: false },
     );
-    websockify.unref();
     processes.push(websockify);
 
     // Brief wait for websockify to bind
     await sleep(200);
 
     return {
+      kind: "host",
       display,
       vncPort,
       websockifyPort,
@@ -91,7 +140,33 @@ export async function startLiveView(options?: {
   }
 }
 
-export function stopLiveView(session: LiveViewSession): void {
+async function spawnChecked(command: string, args: string[]): Promise<ChildProcess> {
+  const proc = spawn(command, args, { stdio: "ignore", detached: false });
+  proc.unref();
+  await new Promise<void>((resolve, reject) => {
+    const onSpawn = () => {
+      cleanup();
+      resolve();
+    };
+    const onError = (error: Error) => {
+      cleanup();
+      reject(error);
+    };
+    const cleanup = () => {
+      proc.off("spawn", onSpawn);
+      proc.off("error", onError);
+    };
+    proc.once("spawn", onSpawn);
+    proc.once("error", onError);
+  });
+  return proc;
+}
+
+export async function stopLiveView(session: LiveViewSession): Promise<void> {
+  if (session.kind === "container" && session.containerName) {
+    await new SandboxManager().stopContainer(session.containerName).catch(() => {});
+    return;
+  }
   for (const proc of [...session.processes].reverse()) {
     try { proc.kill(); } catch { /* ignore */ }
   }

@@ -39,6 +39,7 @@ function redactPreviewCapture<T extends {
   browserEvents: unknown[];
   logs: unknown[];
   screenshot: string | null;
+  metrics?: unknown;
   page?: unknown;
   snapshot?: string | null;
 }>(result: T): T & { captureSuppressed: true; suppressionReason: string } {
@@ -47,6 +48,7 @@ function redactPreviewCapture<T extends {
     browserEvents: [],
     logs: [],
     screenshot: null,
+    metrics: null,
     page: null,
     snapshot: null,
     captureSuppressed: true,
@@ -272,7 +274,7 @@ export function createPreviewStatusTool(
       const sessionId = resolvePreviewSessionId(context);
       if (!sessionId) return { ok: false, message: "No active session" };
 
-      const session = previewService.get(sessionId);
+      const session = await previewService.refreshSessionCapture(sessionId);
       if (!session) return { ok: true, message: "No active preview session", data: { active: false } };
 
       return {
@@ -290,6 +292,7 @@ export function createPreviewStatusTool(
           lastError: session.lastError,
           eventCount: session.browserEvents.length,
           logCount: session.logs.length,
+          metrics: session.metrics,
         },
       };
     },
@@ -332,7 +335,7 @@ export function createPreviewLogsTool(
       const sessionId = resolvePreviewSessionId(context);
       if (!sessionId) return { ok: false, message: "No active session" };
 
-      const session = previewService.get(sessionId);
+      const session = await previewService.refreshSessionCapture(sessionId);
       if (!session) return { ok: false, message: "No active preview session" };
       const browserSession = resolvePreviewBrowserSession(browserCollaborationService, sessionId);
       if (browserSession?.secretSafe) {
@@ -369,6 +372,7 @@ export function createPreviewLogsTool(
           console: consoleEntries.slice(-50),
           errors: errors.slice(-30),
           lastLogId: logs[logs.length - 1]?.id ?? 0,
+          metrics: session.metrics,
         },
       };
     },
@@ -423,7 +427,7 @@ export function createPreviewInspectTool(
         ok: true,
         message: browserSession?.secretSafe
           ? `Preview ${data.status} at ${data.url ?? "unknown"} — capture suppressed because the linked browser session is marked secret-safe`
-          : `Preview ${data.status} at ${data.url ?? "unknown"} — ${data.browserEvents.length} events, ${errorCount} errors${data.screenshot ? ", screenshot included" : ""}`,
+          : `Preview ${data.status} at ${data.url ?? "unknown"} — ${data.browserEvents.length} events, ${errorCount} errors${data.metrics ? ", metrics included" : ""}${data.screenshot ? ", screenshot included" : ""}`,
         data,
       };
     },

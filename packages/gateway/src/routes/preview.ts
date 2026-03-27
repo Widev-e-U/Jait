@@ -17,10 +17,10 @@ export function registerPreviewRoutes(
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
     const browserSession = getBrowserSession(sessionId);
-    const session = deps.previewService.get(sessionId);
+    const session = await deps.previewService.refreshSessionCapture(sessionId);
     if (browserSession?.secretSafe && session) {
       return {
-        session: { ...session, browserEvents: [], logs: [] },
+        session: { ...session, browserEvents: [], logs: [], metrics: null },
         browserSession,
       };
     }

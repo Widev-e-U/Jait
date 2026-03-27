@@ -54,14 +54,117 @@ export interface PreviewInspectPageSnapshot {
   obstruction?: PreviewInspectObstructionDiagnostics | null
 }
 
+export interface PreviewPerformanceMetrics {
+  sampledAt: string
+  url: string
+  title: string
+  navigation?: {
+    type?: string
+    domContentLoadedMs?: number | null
+    loadMs?: number | null
+    transferSize?: number | null
+    encodedBodySize?: number | null
+    decodedBodySize?: number | null
+  } | null
+  paint?: {
+    firstPaintMs?: number | null
+    firstContentfulPaintMs?: number | null
+  } | null
+  webVitals?: {
+    lcpMs?: number | null
+    cls?: number | null
+    inpMs?: number | null
+  } | null
+  resources?: {
+    total?: number
+    scripts?: number
+    stylesheets?: number
+    images?: number
+    fonts?: number
+    largestTransferSize?: number | null
+  } | null
+  memory?: {
+    usedJsHeapSize?: number | null
+    totalJsHeapSize?: number | null
+    jsHeapSizeLimit?: number | null
+  } | null
+}
+
 export interface PreviewInspectRenderState {
   status: 'starting' | 'ready' | 'error' | 'stopped'
   url: string | null
   page: PreviewInspectPageSnapshot | null
   snapshot: string | null
   target?: PreviewInspectTargetDiagnostics | null
+  metrics?: PreviewPerformanceMetrics | null
   captureSuppressed?: boolean
   suppressionReason?: string
+}
+
+function formatMetricValue(value: number | null | undefined, unit = 'ms'): string {
+  if (value == null || !Number.isFinite(value)) return 'n/a'
+  if (unit === 'ms') return `${Math.round(value)} ms`
+  if (unit === 'bytes') {
+    if (value >= 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(1)} MB`
+    if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`
+  }
+  if (unit === 'count') return `${Math.round(value)}`
+  return String(value)
+}
+
+export function PreviewMetricsPanel({ metrics }: { metrics?: PreviewPerformanceMetrics | null }) {
+  if (!metrics) {
+    return <div className="text-muted-foreground">No preview metrics available yet.</div>
+  }
+
+  return (
+    <div className="space-y-2">
+      <div className="rounded border bg-muted/30 p-2">
+        <div className="font-medium text-foreground">{metrics.title || '(untitled)'}</div>
+        <div className="mt-1 break-all text-muted-foreground">
+          <code>{metrics.url}</code>
+        </div>
+        <div className="mt-1 text-[11px] text-muted-foreground">Sampled {new Date(metrics.sampledAt).toLocaleTimeString()}</div>
+      </div>
+      <div className="grid gap-2 md:grid-cols-3">
+        <div className="rounded border p-2">
+          <div className="font-medium text-foreground">Web Vitals</div>
+          <div className="mt-1 space-y-1 text-muted-foreground">
+            <div>LCP: {formatMetricValue(metrics.webVitals?.lcpMs, 'ms')}</div>
+            <div>CLS: {metrics.webVitals?.cls != null ? metrics.webVitals.cls.toFixed(3) : 'n/a'}</div>
+            <div>INP: {formatMetricValue(metrics.webVitals?.inpMs, 'ms')}</div>
+          </div>
+        </div>
+        <div className="rounded border p-2">
+          <div className="font-medium text-foreground">Load</div>
+          <div className="mt-1 space-y-1 text-muted-foreground">
+            <div>DOMContentLoaded: {formatMetricValue(metrics.navigation?.domContentLoadedMs, 'ms')}</div>
+            <div>Load: {formatMetricValue(metrics.navigation?.loadMs, 'ms')}</div>
+            <div>FCP: {formatMetricValue(metrics.paint?.firstContentfulPaintMs, 'ms')}</div>
+          </div>
+        </div>
+        <div className="rounded border p-2">
+          <div className="font-medium text-foreground">Memory</div>
+          <div className="mt-1 space-y-1 text-muted-foreground">
+            <div>Used JS heap: {formatMetricValue(metrics.memory?.usedJsHeapSize, 'bytes')}</div>
+            <div>Total JS heap: {formatMetricValue(metrics.memory?.totalJsHeapSize, 'bytes')}</div>
+            <div>Heap limit: {formatMetricValue(metrics.memory?.jsHeapSizeLimit, 'bytes')}</div>
+          </div>
+        </div>
+      </div>
+      <div className="rounded border p-2">
+        <div className="font-medium text-foreground">Resources</div>
+        <div className="mt-1 grid gap-1 text-muted-foreground md:grid-cols-3">
+          <div>Total: {formatMetricValue(metrics.resources?.total, 'count')}</div>
+          <div>Scripts: {formatMetricValue(metrics.resources?.scripts, 'count')}</div>
+          <div>Stylesheets: {formatMetricValue(metrics.resources?.stylesheets, 'count')}</div>
+          <div>Images: {formatMetricValue(metrics.resources?.images, 'count')}</div>
+          <div>Fonts: {formatMetricValue(metrics.resources?.fonts, 'count')}</div>
+          <div>Largest transfer: {formatMetricValue(metrics.resources?.largestTransferSize, 'bytes')}</div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 interface WorkspacePreviewInspectPanelProps {
@@ -170,6 +273,12 @@ export function WorkspacePreviewInspectPanel({
           </div>
         </div>
       ) : null}
+      <div className="rounded border p-2">
+        <div className="font-medium text-foreground">Metrics</div>
+        <div className="mt-2">
+          <PreviewMetricsPanel metrics={inspectState.metrics} />
+        </div>
+      </div>
     </>
   )
 }

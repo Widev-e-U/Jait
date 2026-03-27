@@ -1,6 +1,11 @@
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { SurfaceRegistry } from "./surfaces/registry.js";
-import { BrowserSurfaceFactory, type BrowserDriver, type BrowserPageSnapshot } from "./surfaces/browser.js";
+import {
+  BrowserSurfaceFactory,
+  type BrowserDriver,
+  type BrowserPageSnapshot,
+  type BrowserPerformanceMetrics,
+} from "./surfaces/browser.js";
 import {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
@@ -133,6 +138,18 @@ class MockBrowserDriver implements BrowserDriver {
         : null,
       inDialog: true,
       dialogTitle: "Sign in",
+    };
+  }
+  async getMetrics(): Promise<BrowserPerformanceMetrics> {
+    return {
+      sampledAt: new Date().toISOString(),
+      url: this.currentUrl,
+      title: "Mock Title",
+      navigation: { domContentLoadedMs: 120, loadMs: 240, type: "navigate" },
+      paint: { firstPaintMs: 80, firstContentfulPaintMs: 95 },
+      webVitals: { lcpMs: 140, cls: 0.02, inpMs: 45 },
+      resources: { total: 8, scripts: 2, stylesheets: 1, images: 3, fonts: 1, largestTransferSize: 32_000 },
+      memory: { usedJsHeapSize: 1_000_000, totalJsHeapSize: 2_000_000, jsHeapSizeLimit: 4_000_000 },
     };
   }
   async close(): Promise<void> {

@@ -82,4 +82,38 @@ describe("Sprint 13 — Docker Sandboxing", () => {
       vncPort: 6000,
     });
   });
+
+  it("starts sandbox browser with CDP and host gateway when requested", async () => {
+    const commands: string[][] = [];
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      return {
+        output: "container-id",
+        exitCode: 0,
+        timedOut: false,
+      };
+    });
+
+    const result = await manager.startBrowserSandbox({
+      workspaceRoot: testWorkspace,
+      mountMode: "none",
+      networkEnabled: true,
+      hostGateway: true,
+      novncPort: 6601,
+      vncPort: 6001,
+      cdpPort: 9223,
+      waitForCdp: false,
+    });
+
+    expect(result).toMatchObject({
+      novncUrl: "http://127.0.0.1:6601/vnc.html",
+      novncPort: 6601,
+      vncPort: 6001,
+      cdpUrl: "http://127.0.0.1:9223",
+    });
+    expect(commands[0]?.join(" ")).toContain("docker image inspect jait/sandbox-browser:latest");
+    expect(commands[1]?.join(" ")).toContain("--add-host host.docker.internal:host-gateway");
+    expect(commands[1]?.join(" ")).toContain("-p 9223:9222");
+    expect(commands[1]?.join(" ")).not.toContain("--network none");
+  });
 });

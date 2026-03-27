@@ -89,11 +89,14 @@ async function launchWithFallback(strategies) {
 }
 
 async function main() {
+  const cdpUrl = process.env.BROWSER_CDP_URL?.trim();
   const headless = process.env.BROWSER_HEADLESS !== "false";
   const timeoutMs = parsePositiveIntegerEnv(process.env.BROWSER_LAUNCH_TIMEOUT_MS, 45000);
   const launchStrategies = buildLaunchStrategies(headless, timeoutMs);
-  const { browser, strategy } = await launchWithFallback(launchStrategies);
-  const context = await browser.newContext({
+  const browser = cdpUrl
+    ? await chromium.connectOverCDP(cdpUrl)
+    : (await launchWithFallback(launchStrategies)).browser;
+  const context = browser.contexts()[0] || await browser.newContext({
     ignoreHTTPSErrors: process.env.BROWSER_IGNORE_HTTPS_ERRORS === "true",
   });
   const page = await context.newPage();
@@ -321,6 +324,87 @@ async function main() {
         },
       };
     }),
+    getMetrics: async () => page.evaluate(() => {
+      const navEntries = performance.getEntriesByType("navigation");
+      const nav = navEntries.length > 0 ? navEntries[0] : null;
+      const paintEntries = performance.getEntriesByType("paint");
+      const firstPaint = paintEntries.find((entry) => entry.name === "first-paint");
+      const firstContentfulPaint = paintEntries.find((entry) => entry.name === "first-contentful-paint");
+      const resourceEntries = performance.getEntriesByType("resource");
+      const resources = {
+        total: resourceEntries.length,
+        scripts: resourceEntries.filter((entry) => entry.initiatorType === "script").length,
+        stylesheets: resourceEntries.filter((entry) => entry.initiatorType === "link" || entry.initiatorType === "css").length,
+        images: resourceEntries.filter((entry) => entry.initiatorType === "img").length,
+        fonts: resourceEntries.filter((entry) => entry.initiatorType === "font").length,
+        largestTransferSize: resourceEntries.reduce((max, entry) => Math.max(max, entry.transferSize || 0), 0),
+      };
+
+      const w = window;
+      if (!w.__jaitMetricsObserversInstalled && typeof PerformanceObserver !== "undefined") {
+        try {
+          const lcpObserver = new PerformanceObserver((list) => {
+            const entries = list.getEntries();
+            const last = entries[entries.length - 1];
+            if (last) w.__jaitLcpMs = last.startTime;
+          });
+          lcpObserver.observe({ type: "largest-contentful-paint", buffered: true });
+        } catch {}
+        try {
+          const clsObserver = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+              if (!entry.hadRecentInput) {
+                w.__jaitCls = (w.__jaitCls || 0) + (entry.value || 0);
+              }
+            }
+          });
+          clsObserver.observe({ type: "layout-shift", buffered: true });
+        } catch {}
+        try {
+          const inpObserver = new PerformanceObserver((list) => {
+            for (const entry of list.getEntries()) {
+              w.__jaitInpMs = Math.max(w.__jaitInpMs || 0, entry.duration || 0);
+            }
+          });
+          inpObserver.observe({ type: "event", buffered: true, durationThreshold: 16 });
+        } catch {}
+        w.__jaitMetricsObserversInstalled = true;
+      }
+
+      const memory = performance.memory;
+      return {
+        sampledAt: new Date().toISOString(),
+        url: window.location.href,
+        title: document.title || "(untitled)",
+        navigation: nav
+          ? {
+              type: nav.type,
+              domContentLoadedMs: Number.isFinite(nav.domContentLoadedEventEnd) ? nav.domContentLoadedEventEnd : null,
+              loadMs: Number.isFinite(nav.loadEventEnd) ? nav.loadEventEnd : null,
+              transferSize: nav.transferSize ?? null,
+              encodedBodySize: nav.encodedBodySize ?? null,
+              decodedBodySize: nav.decodedBodySize ?? null,
+            }
+          : null,
+        paint: {
+          firstPaintMs: firstPaint?.startTime ?? null,
+          firstContentfulPaintMs: firstContentfulPaint?.startTime ?? null,
+        },
+        webVitals: {
+          lcpMs: w.__jaitLcpMs ?? null,
+          cls: w.__jaitCls ?? 0,
+          inpMs: w.__jaitInpMs ?? null,
+        },
+        resources,
+        memory: memory
+          ? {
+              usedJsHeapSize: memory.usedJSHeapSize ?? null,
+              totalJsHeapSize: memory.totalJSHeapSize ?? null,
+              jsHeapSizeLimit: memory.jsHeapSizeLimit ?? null,
+            }
+          : null,
+      };
+    }),
     diagnose: async (params) => page.evaluate((targetSelector) => {
       const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
       const esc = (raw) => {
@@ -415,7 +499,7 @@ async function main() {
     },
   };
 
-  send({ event: "ready", strategy: strategy.label });
+  send({ event: "ready", strategy: cdpUrl ? "cdp" : "launch" });
 
   rl.on("line", async (line) => {
     let parsed;

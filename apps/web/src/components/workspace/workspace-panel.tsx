@@ -23,6 +23,8 @@ import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getOpenInterventionsForSession, resolvePreviewBrowserSession } from './workspace-preview-collaboration'
 import {
+  PreviewMetricsPanel,
+  type PreviewPerformanceMetrics,
   WorkspacePreviewInspectPanel,
   type PreviewInspectRenderState,
 } from './workspace-preview-inspect-panel'
@@ -565,6 +567,7 @@ interface PreviewSessionState {
   containerId: string | null
   logs: PreviewLogEntry[]
   browserEvents: PreviewBrowserEvent[]
+  metrics: PreviewPerformanceMetrics | null
   remoteBrowser: {
     containerName: string
     novncUrl: string
@@ -1148,7 +1151,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [previewBusy, setPreviewBusy] = useState(false)
   const [previewFrameLoading, setPreviewFrameLoading] = useState(false)
   const [previewSidePanelOpen, setPreviewSidePanelOpen] = useState(false)
-  const [previewSideTab, setPreviewSideTab] = useState<'controls' | 'inspect' | 'logs' | 'console' | 'issues'>('controls')
+  const [previewSideTab, setPreviewSideTab] = useState<'controls' | 'inspect' | 'logs' | 'console' | 'issues' | 'metrics'>('controls')
   const [previewInspectState, setPreviewInspectState] = useState<PreviewInspectRenderState | null>(null)
   const [previewInspectSelector, setPreviewInspectSelector] = useState('')
   const [previewInspectLoading, setPreviewInspectLoading] = useState(false)
@@ -1952,7 +1955,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       </div>
 
       <div className="flex items-center gap-1 border-b px-2 py-1.5 text-[11px]">
-        {(['controls', 'inspect', 'logs', 'console', 'issues'] as const).map((tab) => (
+        {(['controls', 'inspect', 'logs', 'console', 'issues', 'metrics'] as const).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -1969,7 +1972,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   ? 'Logs'
                   : tab === 'console'
                     ? `Console${previewConsoleEvents.length ? ` (${previewConsoleEvents.length})` : ''}`
-                    : `Issues${previewIssueEvents.length ? ` (${previewIssueEvents.length})` : ''}`}
+                    : tab === 'issues'
+                      ? `Issues${previewIssueEvents.length ? ` (${previewIssueEvents.length})` : ''}`
+                      : 'Metrics'}
           </button>
         ))}
       </div>
@@ -2222,6 +2227,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <div className="text-zinc-400">No console messages yet.</div>
           )}
           <div ref={previewConsoleEndRef} />
+        </div>
+      ) : previewSideTab === 'metrics' ? (
+        <div className="flex-1 overflow-auto p-3 text-[11px]">
+          <PreviewMetricsPanel metrics={managedPreviewSession?.metrics} />
         </div>
       ) : (
         <div className="flex-1 overflow-auto p-3 text-[12px]">

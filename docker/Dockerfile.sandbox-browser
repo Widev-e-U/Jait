@@ -6,10 +6,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
   xvfb \
   websockify \
   novnc \
+  socat \
   fluxbox \
   ca-certificates \
   && rm -rf /var/lib/apt/lists/*
 
-EXPOSE 5900 6080
+EXPOSE 5900 6080 9223
 
-CMD ["bash", "-lc", "Xvfb :99 -screen 0 1280x720x24 & export DISPLAY=:99 && fluxbox & chromium --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank & x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -forever -shared -rfbport 5900 & websockify --web /usr/share/novnc/ 6080 localhost:5900"]
+CMD ["bash", "-lc", "export DISPLAY=:99; Xvfb :99 -screen 0 1280x720x24 & sleep 1; fluxbox & chromium --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank & socat TCP-LISTEN:9223,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:9222 & x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -forever -shared -rfbport 5900 & websockify --web /usr/share/novnc/ 6080 localhost:5900"]

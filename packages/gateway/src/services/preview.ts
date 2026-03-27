@@ -4,6 +4,7 @@ import { createServer } from "node:net";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import {
   BrowserSurface,
+  type BrowserPerformanceMetrics,
   type BrowserPageSnapshot,
   type BrowserRuntimeEvent,
 } from "../surfaces/browser.js";
@@ -39,6 +40,7 @@ export interface PreviewSession {
   containerId: string | null;
   logs: PreviewLogEntry[];
   browserEvents: BrowserRuntimeEvent[];
+  metrics: BrowserPerformanceMetrics | null;
   remoteBrowser: PreviewRemoteBrowserSession | null;
   lastError: string | null;
   createdAt: string;
@@ -129,6 +131,7 @@ export class PreviewService {
       containerId: null,
       logs: [],
       browserEvents: [],
+      metrics: null,
       remoteBrowser: null,
       lastError: null,
       createdAt,
@@ -239,6 +242,22 @@ export class PreviewService {
     return this.toPublicSession(session);
   }
 
+  async refreshSessionCapture(sessionId: string): Promise<PreviewSession | null> {
+    const session = this.sessions.get(sessionId);
+    if (!session) return null;
+    const nextEvents = this.readBrowserEvents(session);
+    const nextMetrics = await this.readBrowserMetrics(session).catch(() => session.metrics);
+    const eventsChanged = nextEvents.length !== session.browserEvents.length
+      || nextEvents[nextEvents.length - 1]?.id !== session.browserEvents[session.browserEvents.length - 1]?.id;
+    const metricsChanged = nextMetrics?.sampledAt !== session.metrics?.sampledAt;
+    session.browserEvents = nextEvents;
+    session.metrics = nextMetrics;
+    if (eventsChanged || metricsChanged) {
+      session.updatedAt = nowIso();
+    }
+    return this.toPublicSession(session);
+  }
+
   getLogs(sessionId: string, sinceId = 0): PreviewLogEntry[] {
     const session = this.sessions.get(sessionId);
     if (!session) return [];
@@ -343,6 +362,7 @@ export class PreviewService {
     status: PreviewStatus;
     url: string | null;
     browserEvents: BrowserRuntimeEvent[];
+    metrics: BrowserPerformanceMetrics | null;
     logs: PreviewLogEntry[];
     screenshot: string | null;
     page: BrowserPageSnapshot | null;
@@ -360,6 +380,7 @@ export class PreviewService {
       status: session.status,
       url: session.url,
       browserEvents: events,
+      metrics: await this.readBrowserMetrics(session).catch(() => session.metrics),
       logs: [...session.logs],
       screenshot: screenshotBase64,
       page: inspection?.snapshot ?? null,
@@ -388,6 +409,7 @@ export class PreviewService {
     const browser = started as BrowserSurface;
     await browser.navigate(session.browserUrl!);
     session.browserEvents = browser.getEvents();
+    session.metrics = await browser.getMetrics().catch(() => null);
 
     // Auto-populate remoteBrowser when the agent's browser has a live view
     const liveView = typeof browser.getLiveViewInfo === "function" ? browser.getLiveViewInfo() : null;
@@ -417,6 +439,13 @@ export class PreviewService {
     const surface = this.surfaceRegistry.getSurface(session.browserId);
     if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
     return (surface as BrowserSurface).inspect(selector);
+  }
+
+  private async readBrowserMetrics(session: InternalPreviewSession): Promise<BrowserPerformanceMetrics | null> {
+    if (!session.browserId) return null;
+    const surface = this.surfaceRegistry.getSurface(session.browserId);
+    if (!surface || surface.type !== "browser" || surface.state !== "running") return session.metrics;
+    return (surface as BrowserSurface).getMetrics();
   }
 
   private formatInspectionSnapshot(snapshot: BrowserPageSnapshot): string {
@@ -474,6 +503,7 @@ export class PreviewService {
       containerId: session.containerId,
       logs: [...session.logs],
       browserEvents: [...session.browserEvents],
+      metrics: session.metrics ? { ...session.metrics } : null,
       remoteBrowser: session.remoteBrowser ? { ...session.remoteBrowser } : null,
       lastError: session.lastError,
       createdAt: session.createdAt,
