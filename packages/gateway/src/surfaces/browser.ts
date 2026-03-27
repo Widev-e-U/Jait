@@ -114,6 +114,12 @@ export interface BrowserDriver {
   diagnose(selector: string, signal?: AbortSignal): Promise<BrowserTargetDiagnostics>;
   getEvents(): BrowserRuntimeEvent[];
   close(): Promise<void>;
+  liveView?: {
+    display: string;
+    vncPort: number;
+    websockifyPort: number;
+    novncUrl: string;
+  };
 }
 
 export interface BrowserSurfaceOptions {
@@ -227,6 +233,10 @@ export class BrowserSurface implements Surface {
     await this.driver?.close();
     this.driver = null;
     this._setState("stopped");
+  }
+
+  getLiveViewInfo(): { display: string; vncPort: number; websockifyPort: number; novncUrl: string } | null {
+    return this.driver?.liveView ?? null;
   }
 
   snapshot(): SurfaceSnapshot {
@@ -428,7 +438,23 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
     throw new Error("Failed to load Playwright chromium driver.");
   }
 
-  const headless = process.env["BROWSER_HEADLESS"] !== "false";
+  // Start Xvfb + VNC so users can watch the agent's browser in real time via noVNC.
+  // Disabled only when BROWSER_LIVE_VIEW is explicitly set to "false".
+  const enableLiveView = process.env["BROWSER_LIVE_VIEW"] !== "false";
+  let liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null = null;
+
+  if (enableLiveView) {
+    try {
+      const { startLiveView } = await import("../services/live-view-manager.js");
+      liveViewSession = await startLiveView();
+      process.env["DISPLAY"] = liveViewSession.display;
+    } catch {
+      // Xvfb/x11vnc/websockify not available — fall back to headless
+      liveViewSession = null;
+    }
+  }
+
+  const headless = liveViewSession ? false : process.env["BROWSER_HEADLESS"] !== "false";
   const launchTimeoutMs = parsePositiveIntegerEnv(
     process.env["BROWSER_LAUNCH_TIMEOUT_MS"],
     DEFAULT_BROWSER_LAUNCH_TIMEOUT_MS,
@@ -803,7 +829,19 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
     async close() {
       await activeContext.close();
       await browser.close();
+      if (liveViewSession) {
+        const { stopLiveView } = await import("../services/live-view-manager.js");
+        stopLiveView(liveViewSession);
+      }
     },
+    liveView: liveViewSession
+      ? {
+          display: liveViewSession.display,
+          vncPort: liveViewSession.vncPort,
+          websockifyPort: liveViewSession.websockifyPort,
+          novncUrl: liveViewSession.novncUrl,
+        }
+      : undefined,
   };
 
   return driver;

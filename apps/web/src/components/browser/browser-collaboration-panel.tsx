@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { AlertTriangle, ExternalLink, Eye, Monitor, Play, Shield } from 'lucide-react'
+import { AlertTriangle, ExternalLink, Eye, Monitor, Play } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { BrowserIntervention, BrowserSession } from '@/lib/browser-collaboration-api'
@@ -9,7 +9,6 @@ import {
   getBrowserSessionOpenTarget,
   getPreviewSurfaceStatus,
   getPreviewSurfaceStorageScope,
-  isSessionVisibleInPreview,
 } from './browser-collaboration-panel-helpers'
 
 interface BrowserCollaborationPanelProps {
@@ -22,25 +21,11 @@ interface BrowserCollaborationPanelProps {
   onResolveIntervention: (interventionId: string, userNote?: string) => Promise<void>
 }
 
-function statusTone(status: BrowserSession['status']) {
-  switch (status) {
-    case 'intervention-required': return 'destructive'
-    case 'paused': return 'secondary'
-    case 'running': return 'default'
-    case 'closed': return 'outline'
-    default: return 'outline'
-  }
-}
-
 export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps) {
   const { sessions, interventions, loading, previewState, onRefresh, onOpenLiveSession, onResolveIntervention } = props
   const [noteByIntervention, setNoteByIntervention] = useState<Record<string, string>>({})
   const openInterventions = useMemo(() => interventions.filter((item) => item.status === 'open'), [interventions])
   const sessionsById = useMemo(() => new Map(sessions.map((session) => [session.id, session])), [sessions])
-  const actionableSessions = useMemo(
-    () => sessions.filter((session) => session.status !== 'closed'),
-    [sessions],
-  )
   const previewSurfaceStatus = getPreviewSurfaceStatus(previewState)
   const previewStorageScope = getPreviewSurfaceStorageScope(previewState)
 
@@ -73,7 +58,7 @@ export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps)
     )
   }
 
-  if (!loading && sessions.length === 0 && openInterventions.length === 0) return null
+  if (!loading && openInterventions.length === 0) return null
 
   return (
     <div className="fixed left-4 bottom-4 z-50 w-[380px] max-w-[calc(100vw-2rem)] rounded-2xl border bg-background/95 shadow-2xl backdrop-blur">
@@ -84,9 +69,7 @@ export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps)
             Browser Collaboration
           </div>
           <p className="mt-1 text-xs text-muted-foreground">
-            {openInterventions.length > 0
-              ? `${openInterventions.length} intervention${openInterventions.length === 1 ? '' : 's'} need attention.`
-              : `${actionableSessions.length} live session${actionableSessions.length === 1 ? '' : 's'} available.`}
+            {openInterventions.length} intervention{openInterventions.length === 1 ? '' : 's'} need attention.
           </p>
           <div className="mt-2 flex flex-wrap gap-1.5">
             <Badge variant={previewSurfaceStatus === 'connected' ? 'default' : 'outline'}>
@@ -148,44 +131,6 @@ export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps)
             </div>
           )
         })}
-
-        {actionableSessions.map((session) => (
-          <div key={session.id} className="rounded-xl border p-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="min-w-0">
-                <div className="truncate text-sm font-medium">{session.name}</div>
-                <div className="mt-1 flex flex-wrap gap-1.5">
-                  <Badge variant={statusTone(session.status)}>{session.status}</Badge>
-                  <Badge variant="outline">{session.mode}</Badge>
-                  <Badge variant="outline">{session.origin}</Badge>
-                  <Badge variant="outline">{session.controller}</Badge>
-                  {session.secretSafe ? (
-                    <Badge variant="destructive">
-                      <Shield className="mr-1 h-3 w-3" />
-                      secret-safe
-                    </Badge>
-                  ) : null}
-                  {isSessionVisibleInPreview(session, previewState) ? (
-                    <Badge variant="default">visible now</Badge>
-                  ) : null}
-                </div>
-                <p className="mt-2 text-xs text-muted-foreground">
-                  {isSessionVisibleInPreview(session, previewState)
-                    ? 'This session is currently displayed in the preview surface.'
-                    : previewSurfaceStatus === 'blank'
-                      ? 'The preview surface is open but blank. Open this live session to make it visible.'
-                      : 'Open in the preview surface for live viewing and controls.'}
-                </p>
-                {previewStorageScope === 'shared-browser' ? (
-                  <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
-                    The visible preview surface shares this browser&apos;s cookies and localStorage. It is not a fully isolated browser profile.
-                  </p>
-                ) : null}
-              </div>
-              {renderOpenAction(session)}
-            </div>
-          </div>
-        ))}
       </div>
     </div>
   )

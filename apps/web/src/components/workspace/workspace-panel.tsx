@@ -15,6 +15,7 @@ import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import type { BrowserIntervention, BrowserSession } from '@/lib/browser-collaboration-api'
 import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
+import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
 import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
@@ -564,6 +565,13 @@ interface PreviewSessionState {
   containerId: string | null
   logs: PreviewLogEntry[]
   browserEvents: PreviewBrowserEvent[]
+  remoteBrowser: {
+    containerName: string
+    novncUrl: string
+    novncPort: number
+    vncPort: number
+    startedAt: string
+  } | null
   lastError: string | null
   createdAt: string
   updatedAt: string
@@ -579,6 +587,15 @@ function getLivePreviewLabel(target?: string | null, browserSession?: BrowserSes
   const browserTarget = browserSession?.targetUrl?.trim()
   if (browserTarget) return browserTarget
   return 'Live Preview'
+}
+
+function resolveWorkspacePreviewSrc(target?: string | null): string | null {
+  const trimmed = target?.trim()
+  if (!trimmed) return null
+  if (trimmed.startsWith('/')) return `${API_URL}${trimmed}`
+  if (/^wss?:\/\//i.test(trimmed)) return trimmed
+  if (/^[a-z]+:\/\//i.test(trimmed)) return trimmed
+  return null
 }
 
 export interface WorkspaceTabsState {
@@ -1164,6 +1181,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   )
   const activePreviewSessionId = activeBrowserSession?.previewSessionId ?? previewSessionId ?? null
   const previewUsesBrowserSurface = Boolean(activePreviewTab?.browserSessionId && activeBrowserSession?.previewSessionId)
+  const activePreviewSrc = useMemo(
+    () => managedPreviewSession?.remoteBrowser?.novncUrl
+      ?? activePreviewTab?.previewSrc
+      ?? resolveWorkspacePreviewSrc(managedPreviewSession?.url)
+      ?? resolveWorkspacePreviewSrc(activePreviewTab?.previewTarget)
+      ?? null,
+    [activePreviewTab?.previewSrc, activePreviewTab?.previewTarget, managedPreviewSession?.remoteBrowser?.novncUrl, managedPreviewSession?.url],
+  )
 
   const restoredTabsRootRef = useRef<string | null>(null)
   const lastPersistedTabsRef = useRef<string>('')
@@ -1369,8 +1394,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [activePreviewSessionId, activePreviewTab, fetchManagedPreviewSession, managedPreviewSession, previewToken])
 
   useEffect(() => {
-    if (!previewUsesBrowserSurface) {
+    if (!previewUsesBrowserSurface || activePreviewSrc) {
       setPreviewBrowserScreenshotUrl(null)
+      setPreviewBrowserScreenshotLoading(false)
       return
     }
     void fetchPreviewBrowserScreenshot()
@@ -1378,7 +1404,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       void fetchPreviewBrowserScreenshot()
     }, 1200)
     return () => window.clearInterval(intervalId)
-  }, [fetchPreviewBrowserScreenshot, previewUsesBrowserSurface])
+  }, [activePreviewSrc, fetchPreviewBrowserScreenshot, previewUsesBrowserSurface])
 
   useEffect(() => {
     if (previewSideTab === 'logs') {
@@ -1408,7 +1434,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         label: getLivePreviewLabel(managedPreviewSession.target ?? managedPreviewSession.url ?? current.previewTarget, activeBrowserSession),
         previewTarget: managedPreviewSession.target ?? managedPreviewSession.url ?? current.previewTarget,
         browserSessionId: nextBrowserSessionId,
-        previewSrc: null,
+        previewSrc: managedPreviewSession.remoteBrowser?.novncUrl
+          ?? resolveWorkspacePreviewSrc(managedPreviewSession.url ?? managedPreviewSession.target ?? current.previewTarget),
         previewMode: 'managed',
       }
     })
@@ -2076,6 +2103,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             </Button>
             {managedPreviewSession && (
               <>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-8 px-2 text-[11px]"
+                  onClick={() => { void (managedPreviewSession.remoteBrowser ? handleStopRemotePreviewSession() : handleStartRemotePreviewSession()) }}
+                  disabled={previewBusy || !previewWorkspaceRoot}
+                >
+                  <Globe className="mr-1 h-3 w-3" />
+                  {managedPreviewSession.remoteBrowser ? 'Stop Remote' : 'Start Remote'}
+                </Button>
                 <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => { void handleRestartManagedPreview() }} disabled={previewBusy}>
                   <RefreshCw className="mr-1 h-3 w-3" />
                   Restart
@@ -2099,6 +2137,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           {previewWorkspaceRoot ? (
             <div className="rounded border bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
               Workspace: <code>{previewWorkspaceRoot}</code>
+            </div>
+          ) : null}
+          {managedPreviewSession?.remoteBrowser ? (
+            <div className="rounded border bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
+              Remote session: <code>{managedPreviewSession.remoteBrowser.novncUrl}</code>
             </div>
           ) : null}
           {managedPreviewSession?.lastError ? (
@@ -2209,28 +2252,31 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           <div className="h-full w-full animate-pulse bg-primary/80" />
         </div>
       )}
-      {previewUsesBrowserSurface ? (
-        previewBrowserScreenshotUrl ? (
-          <div className="relative h-full">
-            <img
-              src={previewBrowserScreenshotUrl}
-              alt={activeBrowserSession?.name ?? 'Browser session preview'}
-              className="h-full w-full object-contain bg-white"
-            />
-            <div className="absolute left-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
-              {activeBrowserSession?.name ?? 'Browser session'}
+      {activePreviewSrc ? (
+        <NoVncSessionView
+          key={`${activePreviewSrc}:${activeTab?.version ?? 0}`}
+          source={activePreviewSrc}
+          title={activeBrowserSession?.name ?? activeTab?.label ?? 'Live preview'}
+          className="h-full w-full bg-white"
+          overlay={activeBrowserSession?.name ?? null}
+          onLoad={() => setPreviewFrameLoading(false)}
+        />
+      ) : previewUsesBrowserSurface && previewBrowserScreenshotUrl ? (
+        <div className="relative h-full">
+          <img
+            src={previewBrowserScreenshotUrl}
+            alt={activeBrowserSession?.name ?? 'Browser session preview'}
+            className="h-full w-full object-contain bg-white"
+          />
+          <div className="absolute left-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
+            {activeBrowserSession?.name ?? 'Browser session'}
+          </div>
+          {previewBrowserScreenshotLoading ? (
+            <div className="absolute right-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
+              Updating…
             </div>
-            {previewBrowserScreenshotLoading ? (
-              <div className="absolute right-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
-                Updating…
-              </div>
-            ) : null}
-          </div>
-        ) : (
-          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-            Waiting for the linked browser session to produce a preview frame.
-          </div>
-        )
+          ) : null}
+        </div>
       ) : activeTab?.browserSessionId ? (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
           Waiting for the linked browser session to attach to the preview surface.
@@ -3217,7 +3263,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       label: getLivePreviewLabel(trimmed, activeBrowserSession),
       previewTarget: trimmed || undefined,
       browserSessionId: linkedBrowserSessionId,
-      previewSrc: null,
+      previewSrc: resolveWorkspacePreviewSrc(trimmed),
       previewMode: linkedBrowserSessionId ? 'managed' : null,
     }), true)
     return true
@@ -3341,13 +3387,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setPreviewFrameLoading(true)
     setPreviewBrowserScreenshotUrl(null)
     void fetchManagedPreviewSession()
-    void fetchPreviewBrowserScreenshot()
     setOpenTabs((prev) => prev.map((tab) => (
       tab.type === 'preview'
         ? { ...tab, version: (tab.version ?? 0) + 1 }
         : tab
     )))
-  }, [fetchManagedPreviewSession, fetchPreviewBrowserScreenshot])
+  }, [fetchManagedPreviewSession])
 
   const handleOpenPreviewFromControls = useCallback(() => {
     const trimmed = previewInput.trim()
@@ -3413,12 +3458,67 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
   }, [previewSessionId, previewToken])
 
+  const handleStartRemotePreviewSession = useCallback(async () => {
+    if (!previewSessionId || !previewToken) return
+    setPreviewBusy(true)
+    setPreviewPanelError(null)
+    try {
+      const response = await fetch(`${API_URL}/api/preview/remote/start`, {
+        method: 'POST',
+        headers: authHeaders(previewToken),
+        body: JSON.stringify({
+          sessionId: previewSessionId,
+          workspaceRoot: previewWorkspaceRoot,
+        }),
+      })
+      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
+      if (!response.ok || !data.session) {
+        throw new Error(data.error || 'Failed to start remote browser session')
+      }
+      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
+      setPreviewFrameLoading(true)
+    } catch (error) {
+      setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start remote browser session')
+      setPreviewFrameLoading(false)
+    } finally {
+      setPreviewBusy(false)
+    }
+  }, [previewSessionId, previewToken, previewWorkspaceRoot])
+
+  const handleStopRemotePreviewSession = useCallback(async () => {
+    if (!previewSessionId || !previewToken) return
+    setPreviewBusy(true)
+    setPreviewPanelError(null)
+    try {
+      const response = await fetch(`${API_URL}/api/preview/remote/stop`, {
+        method: 'POST',
+        headers: authHeaders(previewToken),
+        body: JSON.stringify({ sessionId: previewSessionId }),
+      })
+      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState | null; error?: string }
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to stop remote browser session')
+      }
+      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
+      setPreviewFrameLoading(false)
+    } catch (error) {
+      setPreviewPanelError(error instanceof Error ? error.message : 'Failed to stop remote browser session')
+    } finally {
+      setPreviewBusy(false)
+    }
+  }, [previewSessionId, previewToken])
+
   const handleStopManagedPreview = useCallback(async () => {
     setPreviewBusy(true)
     await stopManagedPreviewSession(true)
   }, [stopManagedPreviewSession])
 
-  const previewExternalUrl = activeBrowserSession?.previewUrl ?? activeBrowserSession?.targetUrl ?? managedPreviewSession?.url ?? activePreviewTab?.previewTarget ?? null
+  const previewExternalUrl = managedPreviewSession?.remoteBrowser?.novncUrl
+    ?? activeBrowserSession?.previewUrl
+    ?? activeBrowserSession?.targetUrl
+    ?? managedPreviewSession?.url
+    ?? activePreviewTab?.previewTarget
+    ?? null
 
   useImperativeHandle(ref, () => ({
     openDirectory: handleOpenDirectory,

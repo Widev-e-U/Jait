@@ -6,6 +6,14 @@ interface PreviewBrowserEventLike {
   id: number
 }
 
+interface PreviewRemoteBrowserLike {
+  containerName: string
+  novncUrl: string
+  novncPort: number
+  vncPort: number
+  startedAt: string
+}
+
 export interface PreviewSessionLike {
   id: string
   status: string
@@ -17,6 +25,7 @@ export interface PreviewSessionLike {
   browserId: string | null
   processId: number | null
   containerId: string | null
+  remoteBrowser?: PreviewRemoteBrowserLike | null
   lastError: string | null
   updatedAt: string
   logs: PreviewLogLike[]
@@ -44,6 +53,8 @@ export function isSamePreviewSession(
     && previous.browserId === next.browserId
     && previous.processId === next.processId
     && previous.containerId === next.containerId
+    && (previous.remoteBrowser?.containerName ?? null) === (next.remoteBrowser?.containerName ?? null)
+    && (previous.remoteBrowser?.novncUrl ?? null) === (next.remoteBrowser?.novncUrl ?? null)
     && previous.lastError === next.lastError
     && previous.updatedAt === next.updatedAt
     && previous.logs.length === next.logs.length

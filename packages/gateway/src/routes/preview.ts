@@ -122,6 +122,48 @@ export function registerPreviewRoutes(
     return { session };
   });
 
+  app.post("/api/preview/remote/start", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = (request.body ?? {}) as {
+      sessionId?: string;
+      workspaceRoot?: string | null;
+      mountMode?: "none" | "read-only" | "read-write" | null;
+    };
+    if (!body.sessionId) {
+      return reply.status(400).send({ error: "sessionId is required" });
+    }
+    try {
+      const session = await deps.previewService.startRemoteBrowser(body.sessionId, {
+        workspaceRoot: body.workspaceRoot ?? null,
+        mountMode: body.mountMode ?? "read-only",
+      });
+      if (!session) {
+        return reply.status(404).send({ error: "Preview session not found" });
+      }
+      return { session };
+    } catch (error) {
+      return reply.status(400).send({
+        error: error instanceof Error ? error.message : "Failed to start remote browser session",
+      });
+    }
+  });
+
+  app.post("/api/preview/remote/stop", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = (request.body ?? {}) as { sessionId?: string };
+    if (!body.sessionId) {
+      return reply.status(400).send({ error: "sessionId is required" });
+    }
+    const stopped = await deps.previewService.stopRemoteBrowser(body.sessionId);
+    if (!stopped) {
+      return reply.status(404).send({ error: "Remote browser session not found" });
+    }
+    const session = deps.previewService.get(body.sessionId);
+    return { ok: true, session };
+  });
+
   app.post("/api/preview/stop", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;

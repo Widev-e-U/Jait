@@ -123,6 +123,17 @@ export class SandboxManager {
     };
   }
 
+  async stopContainer(containerName: string): Promise<void> {
+    const trimmed = containerName.trim();
+    if (!trimmed) return;
+    await this.runProcess([
+      "docker",
+      "rm",
+      "-f",
+      trimmed,
+    ], 15_000);
+  }
+
   private buildMountArgs(workspaceRoot: string, mode: SandboxMountMode): string[] {
     mkdirSync(workspaceRoot, { recursive: true });
     if (mode === "none") return [];

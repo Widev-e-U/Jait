@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Activity, AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play, RefreshCw, Square, TerminalSquare, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { getApiUrl } from '@/lib/gateway-url'
 import { isSamePreviewSession } from '@/lib/preview-session'
 import type { BrowserSession } from '@/lib/browser-collaboration-api'
@@ -62,6 +63,13 @@ interface PreviewSessionState {
   containerId: string | null
   logs: PreviewLogEntry[]
   browserEvents: PreviewBrowserEvent[]
+  remoteBrowser: {
+    containerName: string
+    novncUrl: string
+    novncPort: number
+    vncPort: number
+    startedAt: string
+  } | null
   lastError: string | null
   createdAt: string
   updatedAt: string
@@ -191,8 +199,14 @@ export function DevPreviewPanel({
   const networkEndRef = useRef<HTMLDivElement>(null)
 
   const previewSessionId = managedBrowserSession?.previewSessionId ?? managedSession?.id ?? null
-  const previewLabel = managedBrowserSession?.previewUrl ?? managedBrowserSession?.targetUrl ?? managedSession?.url ?? null
-  const previewOpenTarget = managedBrowserSession?.previewUrl ?? managedBrowserSession?.targetUrl ?? managedSession?.url ?? null
+  const remotePreviewUrl = managedSession?.remoteBrowser?.novncUrl ?? null
+  const previewLabel = remotePreviewUrl ?? managedBrowserSession?.previewUrl ?? managedBrowserSession?.targetUrl ?? managedSession?.url ?? null
+  const previewOpenTarget = remotePreviewUrl ?? managedBrowserSession?.previewUrl ?? managedBrowserSession?.targetUrl ?? managedSession?.url ?? null
+  const livePreviewFrameSrc = useMemo(() => {
+    const trimmed = (remotePreviewUrl ?? previewOpenTarget)?.trim()
+    if (!trimmed) return null
+    return trimmed.startsWith('/') ? `${getApiUrl()}${trimmed}` : trimmed
+  }, [previewOpenTarget, remotePreviewUrl])
   const showLoadingBar = isFrameLoading && activeTab === 'preview' && !screenshotUrl && !livePreviewUrl
 
   const fetchManagedSession = useCallback(async () => {
@@ -315,6 +329,53 @@ export function DevPreviewPanel({
     }
   }, [sessionId, token])
 
+  const handleStartRemoteSession = useCallback(async () => {
+    if (!sessionId || !token) return
+    setIsBusy(true)
+    setPanelError(null)
+    try {
+      const response = await fetch(`${getApiUrl()}/api/preview/remote/start`, {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ sessionId, workspaceRoot }),
+      })
+      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
+      if (!response.ok || !data.session) {
+        throw new Error(data.error || 'Failed to start remote browser session')
+      }
+      setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
+      setActiveTab('preview')
+      setIsFrameLoading(true)
+    } catch (error) {
+      setPanelError(error instanceof Error ? error.message : 'Failed to start remote browser session')
+    } finally {
+      setIsBusy(false)
+    }
+  }, [sessionId, token, workspaceRoot])
+
+  const handleStopRemoteSession = useCallback(async () => {
+    if (!sessionId || !token) return
+    setIsBusy(true)
+    setPanelError(null)
+    try {
+      const response = await fetch(`${getApiUrl()}/api/preview/remote/stop`, {
+        method: 'POST',
+        headers: authHeaders(token),
+        body: JSON.stringify({ sessionId }),
+      })
+      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState | null; error?: string }
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to stop remote browser session')
+      }
+      setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
+      setIsFrameLoading(false)
+    } catch (error) {
+      setPanelError(error instanceof Error ? error.message : 'Failed to stop remote browser session')
+    } finally {
+      setIsBusy(false)
+    }
+  }, [sessionId, token])
+
   useEffect(() => {
     if (!initialTarget?.trim()) return
     void startManagedPreview()
@@ -353,16 +414,22 @@ export function DevPreviewPanel({
   }, [previewSessionId, token])
 
   useEffect(() => {
+    if (livePreviewFrameSrc) {
+      setLivePreviewUrl(null)
+      setLivePreviewLoading(false)
+      return
+    }
     void fetchLivePreview()
-  }, [fetchLivePreview])
+  }, [fetchLivePreview, livePreviewFrameSrc])
 
   useEffect(() => {
+    if (livePreviewFrameSrc) return
     if (!previewSessionId || !token || !managedSession) return
     const id = window.setInterval(() => {
       void fetchLivePreview()
     }, 1200)
     return () => window.clearInterval(id)
-  }, [fetchLivePreview, managedSession, previewSessionId, token])
+  }, [fetchLivePreview, livePreviewFrameSrc, managedSession, previewSessionId, token])
 
   const issueEvents = useMemo(
     () => managedSession?.browserEvents.filter((event) =>
@@ -474,6 +541,17 @@ export function DevPreviewPanel({
                 <RefreshCw className="mr-1 h-3 w-3" />
                 Restart
               </Button>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 px-2 text-[11px]"
+                onClick={() => { void (managedSession?.remoteBrowser ? handleStopRemoteSession() : handleStartRemoteSession()) }}
+                disabled={isBusy || !workspaceRoot}
+              >
+                <Globe className="mr-1 h-3 w-3" />
+                {managedSession?.remoteBrowser ? 'Stop Remote' : 'Start Remote'}
+              </Button>
               <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setActiveTab('console')}>
                 <MessageSquare className="mr-1 h-3 w-3" />
                 Console
@@ -535,6 +613,11 @@ export function DevPreviewPanel({
             Browser session: <code>{managedBrowserSession.id}</code> · controller <code>{managedBrowserSession.controller}</code>
           </p>
         ) : null}
+        {managedSession?.remoteBrowser ? (
+          <p className="text-[11px] text-muted-foreground">
+            Remote session: <code>{managedSession.remoteBrowser.novncUrl}</code>
+          </p>
+        ) : null}
         {secretSafeWarning ? (
           <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-700">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
@@ -585,6 +668,21 @@ export function DevPreviewPanel({
               <Button type="button" variant="secondary" size="sm" className="absolute top-2 right-2 h-7 px-2 text-[11px]" onClick={() => setScreenshotUrl(null)}>
                 Back to live
               </Button>
+            </div>
+          ) : livePreviewFrameSrc ? (
+            <div className="relative h-full">
+              {showLoadingBar ? (
+                <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
+                  <div className="h-full w-full animate-pulse bg-primary/80" />
+                </div>
+              ) : null}
+              <NoVncSessionView
+                source={livePreviewFrameSrc}
+                title={previewLabel ?? 'Live preview'}
+                className="h-full w-full bg-white"
+                overlay={managedBrowserSession?.name ?? managedBrowserSession?.id ?? null}
+                onLoad={() => setIsFrameLoading(false)}
+              />
             </div>
           ) : livePreviewUrl ? (
             <div className="relative h-full">

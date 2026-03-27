@@ -837,6 +837,7 @@ function App() {
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const showWorkspaceRef = useRef(false)
+  const browserCollaborationSessionsRef = useRef<ReturnType<typeof useBrowserCollaboration>['sessions']>([])
   const suppressWorkspaceAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [devPreviewBrowserSessionId, setDevPreviewBrowserSessionId] = useState<string | null>(null)
@@ -973,8 +974,14 @@ function App() {
   const closeWorkspacePreview = useCallback(() => {
     workspaceRef.current?.closePreviewTarget()
   }, [])
+  const resolveBrowserSessionPreviewTarget = useCallback((browserSessionId?: string | null) => {
+    const trimmedId = browserSessionId?.trim()
+    if (!trimmedId) return null
+    const session = browserCollaborationSessionsRef.current.find((item) => item.id === trimmedId)
+    return session?.previewUrl?.trim() || session?.targetUrl?.trim() || null
+  }, [])
   const routePreviewToWorkspace = useCallback((target?: string | null, workspaceRoot?: string | null, browserSessionId?: string | null) => {
-    const trimmed = target?.trim() || null
+    const trimmed = target?.trim() || resolveBrowserSessionPreviewTarget(browserSessionId) || null
     const nextBrowserSessionId = browserSessionId?.trim() || null
     setViewMode('developer')
     setDevPreviewTarget(trimmed)
@@ -992,7 +999,7 @@ function App() {
     showWorkspaceEditorPanel()
     setWorkspacePreviewRequest({ target: trimmed, browserSessionId: nextBrowserSessionId, key: Date.now() })
     return true
-  }, [showWorkspace, showWorkspaceEditorPanel])
+  }, [resolveBrowserSessionPreviewTarget, showWorkspace, showWorkspaceEditorPanel])
 
   const getFloatingViewport = useCallback(() => ({
     width: window.innerWidth,
@@ -1203,6 +1210,7 @@ function App() {
     clearSessionArchive,
   } = useAuth()
   const browserCollaboration = useBrowserCollaboration(token, isAuthenticated)
+  browserCollaborationSessionsRef.current = browserCollaboration.sessions
 
   // ── Update check/apply handlers ────────────────────────────────
   const handleCheckUpdate = useCallback(async () => {
@@ -2209,17 +2217,18 @@ function App() {
   const prevPreviewSyncRef = useRef<string>('')
   const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null; browserSessionId?: string | null }) => {
     const nextBrowserSessionId = state.browserSessionId?.trim() || null
+    const resolvedDisplayTarget = state.target?.trim() || resolveBrowserSessionPreviewTarget(nextBrowserSessionId) || null
     const displayState: DevPreviewPanelState['displayState'] = !state.open
       ? 'hidden'
-      : (state.target?.trim() || nextBrowserSessionId)
+      : (resolvedDisplayTarget || nextBrowserSessionId)
         ? 'connected'
         : 'blank'
     const nextPreviewState: DevPreviewPanelState = {
       open: state.open,
-      target: state.target ?? null,
+      target: resolvedDisplayTarget,
       browserSessionId: nextBrowserSessionId,
       displayState,
-      displayTarget: displayState === 'connected' ? (state.target ?? null) : null,
+      displayTarget: displayState === 'connected' ? resolvedDisplayTarget : null,
       storageScope: state.open ? 'isolated-browser-session' : 'unknown',
     }
     setWorkspacePreviewState((prev) => {
@@ -2235,11 +2244,11 @@ function App() {
     if (state.open) {
       const nextState: DevPreviewPanelState = {
         open: true,
-        target: state.target ?? devPreviewTarget ?? null,
+        target: resolvedDisplayTarget ?? devPreviewTarget ?? null,
         workspaceRoot: activeWorkspace?.workspaceRoot ?? null,
         browserSessionId: nextBrowserSessionId || devPreviewBrowserSessionId,
         displayState,
-        displayTarget: displayState === 'connected' ? (state.target ?? devPreviewTarget ?? null) : null,
+        displayTarget: displayState === 'connected' ? (resolvedDisplayTarget ?? devPreviewTarget ?? null) : null,
         storageScope: 'isolated-browser-session',
       }
       const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}:${nextState.browserSessionId ?? ''}:${nextState.displayState ?? ''}:${nextState.displayTarget ?? ''}:${nextState.storageScope ?? ''}`
@@ -2252,7 +2261,7 @@ function App() {
     prevPreviewSyncRef.current = ''
     setDevPreviewBrowserSessionId(null)
     setSavedDevPreview(null)
-  }, [activeWorkspace?.workspaceRoot, devPreviewBrowserSessionId, devPreviewTarget, setSavedDevPreview])
+  }, [activeWorkspace?.workspaceRoot, devPreviewBrowserSessionId, devPreviewTarget, resolveBrowserSessionPreviewTarget, setSavedDevPreview])
 
   const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
