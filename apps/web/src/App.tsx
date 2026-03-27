@@ -5658,6 +5658,7 @@ function App() {
           interventions={browserCollaboration.interventions}
           loading={browserCollaboration.loading}
           onRefresh={browserCollaboration.refresh}
+          onOpenLiveSession={routePreviewToWorkspace}
           onTakeControl={browserCollaboration.takeControl}
           onReturnControl={browserCollaboration.returnControl}
           onResume={browserCollaboration.resume}
