@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 
 import { shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
-import { shouldRemovePreviousChipOnBackspace } from './prompt-input'
+import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
 
 function signature(value: string, segments: UserMessageSegment[] | undefined): string {
   return JSON.stringify({
@@ -140,5 +140,16 @@ describe('shouldRemovePreviousChipOnBackspace', () => {
       startOffset: 1,
       childIndex: 1,
     })).toBe(true)
+  })
+})
+
+describe('getRootCaretOffsetAfterChipRemoval', () => {
+  it('moves the root caret to the removed chip position', () => {
+    expect(getRootCaretOffsetAfterChipRemoval(1, 1)).toBe(0)
+    expect(getRootCaretOffsetAfterChipRemoval(2, 2)).toBe(1)
+  })
+
+  it('clamps to the remaining child count when the removed chip was at the end', () => {
+    expect(getRootCaretOffsetAfterChipRemoval(3, 2)).toBe(2)
   })
 })

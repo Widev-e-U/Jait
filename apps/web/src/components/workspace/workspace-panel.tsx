@@ -13,7 +13,6 @@ import { Textarea } from '@/components/ui/textarea'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 import type { BrowserIntervention, BrowserSession } from '@/lib/browser-collaboration-api'
-import { getPreviewTargetWarning, resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
 import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
 import { ReviewableEditor } from './reviewable-editor'
@@ -573,8 +572,12 @@ function authHeaders(token?: string | null): HeadersInit {
   return token ? { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } : { 'Content-Type': 'application/json' }
 }
 
-function isHtmlFilePath(input: string): boolean {
-  return /\.(?:html?)$/i.test(input.trim())
+function getLivePreviewLabel(target?: string | null, browserSession?: BrowserSession | null): string {
+  const trimmedTarget = target?.trim()
+  if (trimmedTarget) return trimmedTarget
+  const browserTarget = browserSession?.targetUrl?.trim()
+  if (browserTarget) return browserTarget
+  return 'Live Preview'
 }
 
 export interface WorkspaceTabsState {
@@ -1015,7 +1018,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // Tree max is clamped so the editor pane never disappears
   const treeMax = Math.max(180, panel.size - minEditorWidth)
   const tree = useDragResize(260, 180, treeMax, 'horizontal', 'workspaceTreePaneWidth')
-  const disablePreviewPointerEvents = tree.isDragging || panel.isDragging
 
   // Lazy tree state
   const [lazyTree, setLazyTree] = useState<LazyNode[]>([])
@@ -1133,9 +1135,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [previewInspectSelector, setPreviewInspectSelector] = useState('')
   const [previewInspectLoading, setPreviewInspectLoading] = useState(false)
   const [previewInspectError, setPreviewInspectError] = useState<string | null>(null)
+  const [previewBrowserScreenshotUrl, setPreviewBrowserScreenshotUrl] = useState<string | null>(null)
+  const [previewBrowserScreenshotLoading, setPreviewBrowserScreenshotLoading] = useState(false)
   const previewLogsEndRef = useRef<HTMLDivElement | null>(null)
   const previewConsoleEndRef = useRef<HTMLDivElement | null>(null)
-  const loadedPreviewSrcRef = useRef<string | null>(null)
   const activePreviewTab = useMemo(() => openTabs.find((tab) => tab.type === 'preview') ?? null, [openTabs])
   const previewConsoleEvents = useMemo(
     () => managedPreviewSession?.browserEvents.filter((event) => event.type === 'console') ?? [],
@@ -1158,6 +1161,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     () => getOpenInterventionsForSession(activeBrowserSession?.id, browserInterventions),
     [activeBrowserSession?.id, browserInterventions],
   )
+  const activePreviewSessionId = activeBrowserSession?.previewSessionId ?? previewSessionId ?? null
+  const previewUsesBrowserSurface = Boolean(activePreviewTab?.browserSessionId && activeBrowserSession?.previewSessionId)
 
   const restoredTabsRootRef = useRef<string | null>(null)
   const lastPersistedTabsRef = useRef<string>('')
@@ -1181,8 +1186,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           existing.label === nextTab.label &&
           existing.previewTarget === nextTab.previewTarget &&
           existing.browserSessionId === nextTab.browserSessionId &&
-          existing.previewSrc === nextTab.previewSrc &&
-          existing.previewMode === nextTab.previewMode &&
           existing.path === nextTab.path
         ) {
           return prev
@@ -1241,9 +1244,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [previewSessionId, previewToken, syncPreviewTab])
 
   const fetchManagedPreviewSession = useCallback(async () => {
-    if (!previewSessionId || !previewToken) return null
+    if (!activePreviewSessionId || !previewToken) return null
     try {
-      const response = await fetch(`${API_URL}/api/preview/session/${previewSessionId}`, {
+      const response = await fetch(`${API_URL}/api/preview/session/${activePreviewSessionId}`, {
         headers: authHeaders(previewToken),
       })
       if (!response.ok) {
@@ -1256,16 +1259,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } catch {
       return null
     }
-  }, [previewSessionId, previewToken])
+  }, [activePreviewSessionId, previewToken])
 
   const fetchPreviewInspection = useCallback(async (selector?: string) => {
-    if (!previewSessionId || !previewToken) return null
+    if (!activePreviewSessionId || !previewToken) return null
     setPreviewInspectLoading(true)
     setPreviewInspectError(null)
     try {
       const search = new URLSearchParams()
       if (selector?.trim()) search.set('selector', selector.trim())
-      const response = await fetch(`${API_URL}/api/preview/inspect/${previewSessionId}${search.size ? `?${search.toString()}` : ''}`, {
+      const response = await fetch(`${API_URL}/api/preview/inspect/${activePreviewSessionId}${search.size ? `?${search.toString()}` : ''}`, {
         headers: authHeaders(previewToken),
       })
       const data = await response.json().catch(() => ({})) as {
@@ -1297,7 +1300,37 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } finally {
       setPreviewInspectLoading(false)
     }
-  }, [managedPreviewSession?.status, managedPreviewSession?.url, previewSessionId, previewToken])
+  }, [activePreviewSessionId, managedPreviewSession?.status, managedPreviewSession?.url, previewToken])
+
+  const fetchPreviewBrowserScreenshot = useCallback(async () => {
+    if (!activeBrowserSession?.previewSessionId || !previewToken) {
+      setPreviewBrowserScreenshotUrl(null)
+      return null
+    }
+    setPreviewBrowserScreenshotLoading(true)
+    try {
+      const response = await fetch(`${API_URL}/api/preview/screenshot/${activeBrowserSession.previewSessionId}`, {
+        headers: authHeaders(previewToken),
+      })
+      const data = await response.json().catch(() => ({})) as { screenshot?: string | null; suppressed?: boolean; reason?: string }
+      if (!response.ok) {
+        throw new Error((data as { error?: string }).error || 'Failed to load browser session preview')
+      }
+      if (data.suppressed) {
+        setPreviewPanelWarning(data.reason || 'Preview capture is currently suppressed for this browser session.')
+        setPreviewBrowserScreenshotUrl(null)
+        return null
+      }
+      const next = data.screenshot ? `data:image/png;base64,${data.screenshot}` : null
+      setPreviewBrowserScreenshotUrl(next)
+      return next
+    } catch (error) {
+      setPreviewPanelWarning(error instanceof Error ? error.message : 'Failed to load browser session preview')
+      return null
+    } finally {
+      setPreviewBrowserScreenshotLoading(false)
+    }
+  }, [activeBrowserSession?.previewSessionId, previewToken])
 
   // Auto-scroll active tab into view (VS Code behaviour)
   useEffect(() => {
@@ -1327,12 +1360,24 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [fetchManagedPreviewSession])
 
   useEffect(() => {
-    if (!previewSessionId || !previewToken || (!managedPreviewSession && !activePreviewTab)) return
+    if (!activePreviewSessionId || !previewToken || (!managedPreviewSession && !activePreviewTab)) return
     const intervalId = window.setInterval(() => {
       void fetchManagedPreviewSession()
     }, 2000)
     return () => window.clearInterval(intervalId)
-  }, [activePreviewTab, fetchManagedPreviewSession, managedPreviewSession, previewSessionId, previewToken])
+  }, [activePreviewSessionId, activePreviewTab, fetchManagedPreviewSession, managedPreviewSession, previewToken])
+
+  useEffect(() => {
+    if (!previewUsesBrowserSurface) {
+      setPreviewBrowserScreenshotUrl(null)
+      return
+    }
+    void fetchPreviewBrowserScreenshot()
+    const intervalId = window.setInterval(() => {
+      void fetchPreviewBrowserScreenshot()
+    }, 1200)
+    return () => window.clearInterval(intervalId)
+  }, [fetchPreviewBrowserScreenshot, previewUsesBrowserSurface])
 
   useEffect(() => {
     if (previewSideTab === 'logs') {
@@ -1354,18 +1399,19 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   useEffect(() => {
     if (!managedPreviewSession) return
-    const resolved = managedPreviewSession.url ? resolvePreviewTarget(managedPreviewSession.url) : null
     syncPreviewTab((current) => {
       if (!current) return current
+      const nextBrowserSessionId = current.browserSessionId ?? activeBrowserSession?.id ?? previewBrowserSessionId ?? undefined
       return {
         ...current,
-        label: resolved?.label ?? managedPreviewSession.url ?? current.label,
+        label: getLivePreviewLabel(managedPreviewSession.target ?? managedPreviewSession.url ?? current.previewTarget, activeBrowserSession),
         previewTarget: managedPreviewSession.target ?? managedPreviewSession.url ?? current.previewTarget,
-        previewSrc: resolved?.iframeSrc ?? null,
+        browserSessionId: nextBrowserSessionId,
+        previewSrc: null,
         previewMode: 'managed',
       }
     })
-  }, [managedPreviewSession, syncPreviewTab])
+  }, [activeBrowserSession, managedPreviewSession, previewBrowserSessionId, syncPreviewTab])
 
   // Restore saved file tabs for the current remote workspace once per root.
   useEffect(() => {
@@ -1999,7 +2045,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <Input
               value={previewInput}
               onChange={(event) => setPreviewInput(event.target.value)}
-              placeholder="3000, http://127.0.0.1:3000/, or index.html"
+              placeholder="Optional target override such as 3000 or http://127.0.0.1:3000/"
               className="h-8"
             />
             <Input
@@ -2018,7 +2064,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             />
             <Button type="button" size="sm" className="h-8 w-full" onClick={handleOpenPreviewFromControls} disabled={previewBusy}>
               <Play className="mr-1 h-3 w-3" />
-              {previewWorkspaceRoot && previewInput.trim() && !isHtmlFilePath(previewInput) ? 'Start Managed Preview' : 'Open Preview'}
+              Start Live Preview
             </Button>
           </div>
 
@@ -2157,24 +2203,37 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const renderPreviewPane = (emptyLabel: string) => (
     <div className="relative h-full bg-muted/5">
-      {previewFrameLoading && activeTab?.previewSrc !== loadedPreviewSrcRef.current && (
+      {(previewFrameLoading || previewBrowserScreenshotLoading) && (
         <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
           <div className="h-full w-full animate-pulse bg-primary/80" />
         </div>
       )}
-      {activeTab?.previewSrc ? (
-        <iframe
-          key={`${activeTab.id}:${activeTab.version ?? 0}`}
-          src={activeTab.previewSrc}
-          title={activeTab.label || 'Workspace preview'}
-          className="h-full w-full bg-white"
-          style={disablePreviewPointerEvents ? { pointerEvents: 'none' } : undefined}
-          sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-          onLoad={() => {
-            loadedPreviewSrcRef.current = activeTab.previewSrc ?? null
-            setPreviewFrameLoading(false)
-          }}
-        />
+      {previewUsesBrowserSurface ? (
+        previewBrowserScreenshotUrl ? (
+          <div className="relative h-full">
+            <img
+              src={previewBrowserScreenshotUrl}
+              alt={activeBrowserSession?.name ?? 'Browser session preview'}
+              className="h-full w-full object-contain bg-white"
+            />
+            <div className="absolute left-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
+              {activeBrowserSession?.name ?? 'Browser session'}
+            </div>
+            {previewBrowserScreenshotLoading ? (
+              <div className="absolute right-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
+                Updating…
+              </div>
+            ) : null}
+          </div>
+        ) : (
+          <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+            Waiting for the linked browser session to produce a preview frame.
+          </div>
+        )
+      ) : activeTab?.browserSessionId ? (
+        <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+          Waiting for the linked browser session to attach to the preview surface.
+        </div>
       ) : (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
           {emptyLabel}
@@ -3134,8 +3193,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const handleOpenPreviewTarget = useCallback((target?: string | null): boolean => {
     const trimmed = target?.trim() ?? ''
-    const resolved = trimmed ? resolvePreviewTarget(trimmed) : null
-    if (trimmed && !resolved) return false
+    const linkedBrowserSessionId = previewRequest?.browserSessionId?.trim()
+      || previewBrowserSessionId?.trim()
+      || activeBrowserSession?.id
+      || undefined
 
     if (managedPreviewSession) {
       void stopManagedPreviewSession(false)
@@ -3143,24 +3204,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     setPreviewInput(trimmed || previewInput)
     setPreviewPanelError(null)
-    setPreviewPanelWarning(trimmed ? getPreviewTargetWarning(trimmed) : null)
-    setPreviewFrameLoading(Boolean(resolved))
-    if (!resolved) {
-      setPreviewSidePanelOpen(true)
-      setPreviewSideTab('controls')
-    }
+    setPreviewPanelWarning(null)
+    setPreviewFrameLoading(Boolean(linkedBrowserSessionId))
+    setPreviewBrowserScreenshotUrl(null)
+    setPreviewSidePanelOpen(true)
+    setPreviewSideTab('controls')
     syncPreviewTab(() => ({
       id: 'preview',
       type: 'preview',
       path: trimmed || '__preview__',
-      label: resolved?.label ?? 'Preview',
+      label: getLivePreviewLabel(trimmed, activeBrowserSession),
       previewTarget: trimmed || undefined,
-      browserSessionId: previewRequest?.browserSessionId?.trim() || previewBrowserSessionId?.trim() || undefined,
-      previewSrc: resolved?.iframeSrc ?? null,
-      previewMode: resolved ? 'raw' : null,
+      browserSessionId: linkedBrowserSessionId,
+      previewSrc: null,
+      previewMode: linkedBrowserSessionId ? 'managed' : null,
     }), true)
     return true
-  }, [managedPreviewSession, previewBrowserSessionId, previewInput, previewRequest?.browserSessionId, stopManagedPreviewSession, syncPreviewTab])
+  }, [activeBrowserSession, managedPreviewSession, previewBrowserSessionId, previewInput, previewRequest?.browserSessionId, stopManagedPreviewSession, syncPreviewTab])
 
   const handleOpenArchitectureTab = useCallback(() => {
     const tabId = 'architecture'
@@ -3277,57 +3337,55 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [activeTabId, managedPreviewSession, onPreviewOpenChange, stopManagedPreviewSession])
 
   const handleRefreshPreviewTarget = useCallback(() => {
+    setPreviewFrameLoading(true)
+    setPreviewBrowserScreenshotUrl(null)
+    void fetchManagedPreviewSession()
+    void fetchPreviewBrowserScreenshot()
     setOpenTabs((prev) => prev.map((tab) => (
       tab.type === 'preview'
         ? { ...tab, version: (tab.version ?? 0) + 1 }
         : tab
     )))
-  }, [])
+  }, [fetchManagedPreviewSession, fetchPreviewBrowserScreenshot])
 
   const handleOpenPreviewFromControls = useCallback(() => {
     const trimmed = previewInput.trim()
-    if (!trimmed) {
+    if (!previewSessionId || !previewToken) {
+      setPreviewPanelError('Login is required to start a live preview session.')
+      return
+    }
+    void (async () => {
+      setPreviewBusy(true)
+      setPreviewPanelError(null)
+      setPreviewPanelWarning(null)
+      setPreviewFrameLoading(true)
+      setPreviewBrowserScreenshotUrl(null)
       handleOpenPreviewTarget(null)
-      return
-    }
-    if (previewWorkspaceRoot && !isHtmlFilePath(trimmed)) {
-      void (async () => {
-        if (!previewSessionId || !previewToken) {
-          setPreviewPanelError('Login is required to start a managed preview session.')
-          return
+      try {
+        const response = await fetch(`${API_URL}/api/preview/start`, {
+          method: 'POST',
+          headers: authHeaders(previewToken),
+          body: JSON.stringify({
+            sessionId: previewSessionId,
+            workspaceRoot: previewWorkspaceRoot,
+            target: trimmed || null,
+            command: previewCommand.trim() || null,
+            port: previewPort.trim() ? Number.parseInt(previewPort.trim(), 10) : null,
+          }),
+        })
+        const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
+        if (!response.ok || !data.session) {
+          throw new Error(data.error || 'Failed to start preview')
         }
-        setPreviewBusy(true)
-        setPreviewPanelError(null)
-        setPreviewFrameLoading(true)
-        handleOpenPreviewTarget(null)
-        try {
-          const response = await fetch(`${API_URL}/api/preview/start`, {
-            method: 'POST',
-            headers: authHeaders(previewToken),
-            body: JSON.stringify({
-              sessionId: previewSessionId,
-              workspaceRoot: previewWorkspaceRoot,
-              target: trimmed || null,
-              command: previewCommand.trim() || null,
-              port: previewPort.trim() ? Number.parseInt(previewPort.trim(), 10) : null,
-            }),
-          })
-          const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
-          if (!response.ok || !data.session) {
-            throw new Error(data.error || 'Failed to start preview')
-          }
-          setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
-          setPreviewSideTab('controls')
-        } catch (error) {
-          setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start preview')
-          setPreviewFrameLoading(false)
-        } finally {
-          setPreviewBusy(false)
-        }
-      })()
-      return
-    }
-    handleOpenPreviewTarget(trimmed)
+        setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
+        setPreviewSideTab('controls')
+      } catch (error) {
+        setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start preview')
+        setPreviewFrameLoading(false)
+      } finally {
+        setPreviewBusy(false)
+      }
+    })()
   }, [handleOpenPreviewTarget, previewCommand, previewInput, previewPort, previewSessionId, previewToken, previewWorkspaceRoot])
 
   const handleRestartManagedPreview = useCallback(async () => {
@@ -3359,7 +3417,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     await stopManagedPreviewSession(true)
   }, [stopManagedPreviewSession])
 
-  const previewExternalUrl = managedPreviewSession?.url ?? activePreviewTab?.previewTarget ?? null
+  const previewExternalUrl = activeBrowserSession?.previewUrl ?? activeBrowserSession?.targetUrl ?? managedPreviewSession?.url ?? activePreviewTab?.previewTarget ?? null
 
   useImperativeHandle(ref, () => ({
     openDirectory: handleOpenDirectory,
@@ -3633,6 +3691,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const handleDetachTab = useCallback(async (tabId: string) => {
     const tab = openTabs.find((entry) => entry.id === tabId) ?? null
     if (!tab) return false
+    if (tab.type === 'preview') return false
 
     const detachedId = `detached-${tab.id}-${Date.now()}`
     const payload: DetachedWorkspaceTabPayload = {
@@ -5174,6 +5233,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             {openTabs.map((tab) => {
               const isActive = tab.id === activeTabId
               const gitStatus4tab = tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? tab.diffEntry.status : undefined
+              const canDetachTab = tab.type !== 'preview'
               return (
                 <div
                   key={tab.id}
@@ -5189,8 +5249,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     setTabContextMenu({ tabId: tab.id, x: e.clientX, y: e.clientY })
                   }}
                   onMouseDown={(e) => { if (e.button === 1) { e.preventDefault(); handleCloseTab(tab.id) } }}
-                  draggable
+                  draggable={canDetachTab}
                   onDragStart={(e) => {
+                    if (!canDetachTab) {
+                      e.preventDefault()
+                      return
+                    }
                     setDraggingTabId(tab.id)
                     e.dataTransfer.effectAllowed = tab.type === 'file' ? 'copyMove' : 'move'
                     e.dataTransfer.setData('text/jait-tab', tab.id)
@@ -5198,7 +5262,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       e.dataTransfer.setData('text/jait-file', JSON.stringify({ path: tab.path, name: tab.label }))
                     }
                   }}
-                  onDragEnd={(e) => handleDetachedTabDragEnd(e, tab.id)}
+                  onDragEnd={(e) => {
+                    if (!canDetachTab) return
+                    handleDetachedTabDragEnd(e, tab.id)
+                  }}
                   onDragOver={(e) => {
                     if (!draggingTabId || draggingTabId === tab.id) return
                     e.preventDefault()
@@ -5406,6 +5473,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         </button>
         <button
           className="ui-menu-item"
+          disabled={openTabs.find((tab) => tab.id === tabContextMenu.tabId)?.type === 'preview'}
           onClick={() => { void handleDetachTab(tabContextMenu.tabId) }}
         >
           Move to New Window

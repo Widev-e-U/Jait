@@ -52,12 +52,26 @@ describe("createPreviewOpenTool", () => {
         sessionId: "session-123",
         payload: {
           key: "dev-preview.panel",
-          value: { open: true, target: "http://127.0.0.1:5173/", workspaceRoot: "/workspace/app" },
+          value: {
+            open: true,
+            target: "http://127.0.0.1:5173/",
+            workspaceRoot: "/workspace/app",
+            displayState: "connected",
+            displayTarget: "http://127.0.0.1:5173/",
+            storageScope: "isolated-browser-session",
+          },
         },
       }),
     );
     expect(set).toHaveBeenCalledWith("session-123", {
-      "dev-preview.panel": { open: true, target: "http://127.0.0.1:5173/", workspaceRoot: "/workspace/app" },
+      "dev-preview.panel": {
+        open: true,
+        target: "http://127.0.0.1:5173/",
+        workspaceRoot: "/workspace/app",
+        displayState: "connected",
+        displayTarget: "http://127.0.0.1:5173/",
+        storageScope: "isolated-browser-session",
+      },
     });
   });
 
@@ -106,7 +120,14 @@ describe("createPreviewOpenTool", () => {
       }),
     );
     expect(set).toHaveBeenCalledWith("mcp-session", {
-      "dev-preview.panel": { open: true, target: "http://127.0.0.1:8765/", workspaceRoot: "/workspace/mcp" },
+      "dev-preview.panel": {
+        open: true,
+        target: "http://127.0.0.1:8765/",
+        workspaceRoot: "/workspace/mcp",
+        displayState: "connected",
+        displayTarget: "http://127.0.0.1:8765/",
+        storageScope: "isolated-browser-session",
+      },
     });
   });
 

@@ -91,7 +91,7 @@ import { useBrowserCollaboration } from '@/hooks/useBrowserCollaboration'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
-import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData } from '@jait/shared'
+import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
@@ -841,7 +841,14 @@ function App() {
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [devPreviewBrowserSessionId, setDevPreviewBrowserSessionId] = useState<string | null>(null)
   const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; browserSessionId?: string | null; key: number } | null>(null)
-  const [workspacePreviewState, setWorkspacePreviewState] = useState<{ open: boolean; target: string | null; browserSessionId: string | null }>({ open: false, target: null, browserSessionId: null })
+  const [workspacePreviewState, setWorkspacePreviewState] = useState<DevPreviewPanelState>({
+    open: false,
+    target: null,
+    browserSessionId: null,
+    displayState: 'hidden',
+    displayTarget: null,
+    storageScope: 'unknown',
+  })
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
@@ -1596,7 +1603,7 @@ function App() {
   const [savedScreenShare, setSavedScreenShare] = useSessionState<{ open: boolean }>(
     activeSessionId, 'screen-share.panel', token,
   )
-  const [savedDevPreview, setSavedDevPreview] = useWorkspaceState<{ open: boolean; target?: string | null; workspaceRoot?: string | null; browserSessionId?: string | null }>(
+  const [savedDevPreview, setSavedDevPreview] = useWorkspaceState<DevPreviewPanelState>(
     activeWorkspaceId, 'dev-preview.panel', token,
   )
   const [savedTerminal, setSavedTerminal] = useWorkspaceState<{ open: boolean }>(
@@ -1675,7 +1682,7 @@ function App() {
   useEffect(() => {
     if (wsFullStateReceivedRef.current) return
     const nextTarget = savedDevPreview?.target?.trim() || null
-    const key = `${savedDevPreview?.open ?? false}:${nextTarget ?? ''}:${savedDevPreview?.workspaceRoot ?? ''}:${savedDevPreview?.browserSessionId ?? ''}`
+    const key = `${savedDevPreview?.open ?? false}:${nextTarget ?? ''}:${savedDevPreview?.workspaceRoot ?? ''}:${savedDevPreview?.browserSessionId ?? ''}:${savedDevPreview?.displayState ?? ''}:${savedDevPreview?.displayTarget ?? ''}:${savedDevPreview?.storageScope ?? ''}`
     if (key === restoredDevPreviewKeyRef.current) return
     restoredDevPreviewKeyRef.current = key
     if (nextTarget) setDevPreviewTarget(nextTarget)
@@ -2201,19 +2208,41 @@ function App() {
 
   const prevPreviewSyncRef = useRef<string>('')
   const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null; browserSessionId?: string | null }) => {
+    const nextBrowserSessionId = state.browserSessionId?.trim() || null
+    const displayState: DevPreviewPanelState['displayState'] = !state.open
+      ? 'hidden'
+      : (state.target?.trim() || nextBrowserSessionId)
+        ? 'connected'
+        : 'blank'
+    const nextPreviewState: DevPreviewPanelState = {
+      open: state.open,
+      target: state.target ?? null,
+      browserSessionId: nextBrowserSessionId,
+      displayState,
+      displayTarget: displayState === 'connected' ? (state.target ?? null) : null,
+      storageScope: state.open ? 'isolated-browser-session' : 'unknown',
+    }
     setWorkspacePreviewState((prev) => {
-      const nextBrowserSessionId = state.browserSessionId?.trim() || null
-      if (prev.open === state.open && prev.target === state.target && prev.browserSessionId === nextBrowserSessionId) return prev
-      return { open: state.open, target: state.target, browserSessionId: nextBrowserSessionId }
+      if (
+        prev.open === nextPreviewState.open
+        && prev.target === nextPreviewState.target
+        && prev.browserSessionId === nextPreviewState.browserSessionId
+        && prev.displayState === nextPreviewState.displayState
+        && prev.displayTarget === nextPreviewState.displayTarget
+      ) return prev
+      return nextPreviewState
     })
     if (state.open) {
-      const nextState = {
+      const nextState: DevPreviewPanelState = {
         open: true,
         target: state.target ?? devPreviewTarget ?? null,
         workspaceRoot: activeWorkspace?.workspaceRoot ?? null,
-        browserSessionId: state.browserSessionId?.trim() || devPreviewBrowserSessionId,
+        browserSessionId: nextBrowserSessionId || devPreviewBrowserSessionId,
+        displayState,
+        displayTarget: displayState === 'connected' ? (state.target ?? devPreviewTarget ?? null) : null,
+        storageScope: 'isolated-browser-session',
       }
-      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}:${nextState.browserSessionId ?? ''}`
+      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}:${nextState.browserSessionId ?? ''}:${nextState.displayState ?? ''}:${nextState.displayTarget ?? ''}:${nextState.storageScope ?? ''}`
       if (key === prevPreviewSyncRef.current) return
       prevPreviewSyncRef.current = key
       setSavedDevPreview(nextState)
@@ -5681,6 +5710,7 @@ function App() {
           sessions={browserCollaboration.sessions}
           interventions={browserCollaboration.interventions}
           loading={browserCollaboration.loading}
+          previewState={workspacePreviewState.open ? workspacePreviewState : savedDevPreview}
           onRefresh={browserCollaboration.refresh}
           onOpenLiveSession={routePreviewToWorkspace}
           onResolveIntervention={browserCollaboration.resolveIntervention}

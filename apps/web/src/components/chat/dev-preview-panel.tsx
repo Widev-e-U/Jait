@@ -178,28 +178,22 @@ export function DevPreviewPanel({
   const [port, setPort] = useState('')
   const [managedSession, setManagedSession] = useState<PreviewSessionState | null>(null)
   const [managedBrowserSession, setManagedBrowserSession] = useState<BrowserSession | null>(null)
-  const [rawSrc, setRawSrc] = useState<string | null>(null)
-  const [rawLabel, setRawLabel] = useState<string | null>(null)
-  const [frameKey, setFrameKey] = useState(0)
   const [isBusy, setIsBusy] = useState(false)
   const [panelError, setPanelError] = useState<string | null>(null)
   const [panelWarning, setPanelWarning] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues' | 'network'>('preview')
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
+  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null)
+  const [livePreviewLoading, setLivePreviewLoading] = useState(false)
   const [isFrameLoading, setIsFrameLoading] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const consoleEndRef = useRef<HTMLDivElement>(null)
   const networkEndRef = useRef<HTMLDivElement>(null)
-  const loadedPreviewSrcRef = useRef<string | null>(null)
 
-  const resolved = useMemo(() => resolvePreviewTarget(input), [input])
-  const managedResolved = useMemo(
-    () => (managedSession?.url ? resolvePreviewTarget(managedSession.url) : null),
-    [managedSession?.url],
-  )
-  const previewSrc = managedResolved?.iframeSrc ?? rawSrc
-  const previewLabel = managedResolved?.label ?? rawLabel ?? managedSession?.url ?? null
-  const showLoadingBar = isFrameLoading && activeTab === 'preview' && !screenshotUrl && previewSrc !== loadedPreviewSrcRef.current
+  const previewSessionId = managedBrowserSession?.previewSessionId ?? managedSession?.id ?? null
+  const previewLabel = managedBrowserSession?.previewUrl ?? managedBrowserSession?.targetUrl ?? managedSession?.url ?? null
+  const previewOpenTarget = managedBrowserSession?.previewUrl ?? managedBrowserSession?.targetUrl ?? managedSession?.url ?? null
+  const showLoadingBar = isFrameLoading && activeTab === 'preview' && !screenshotUrl && !livePreviewUrl
 
   const fetchManagedSession = useCallback(async () => {
     if (!sessionId || !token) return null
@@ -218,12 +212,12 @@ export function DevPreviewPanel({
   }, [fetchManagedSession])
 
   useEffect(() => {
-    if (!sessionId || !token || (!managedSession && !previewSrc)) return
+    if (!sessionId || !token || !managedSession) return
     const id = window.setInterval(() => {
       void fetchManagedSession()
     }, 2000)
     return () => window.clearInterval(id)
-  }, [sessionId, token, fetchManagedSession, managedSession, previewSrc])
+  }, [sessionId, token, fetchManagedSession, managedSession])
 
   useEffect(() => {
     const next = initialTarget?.trim()
@@ -231,21 +225,17 @@ export function DevPreviewPanel({
     setInput(next)
   }, [initialTarget])
 
-  useEffect(() => {
-    if (!previewSrc || screenshotUrl) {
-      setIsFrameLoading(false)
-    }
-  }, [frameKey, previewSrc, screenshotUrl])
-
   const startManagedPreview = useCallback(async () => {
     if (!sessionId || !token) {
-      setPanelError('Login is required to start a managed preview session.')
+      setPanelError('Login is required to start a live preview session.')
       return
     }
     setIsBusy(true)
     setPanelError(null)
-    setRawSrc(null)
-    setRawLabel(null)
+    setPanelWarning(null)
+    setLivePreviewUrl(null)
+    setScreenshotUrl(null)
+    setIsFrameLoading(true)
     try {
       const response = await fetch(`${getApiUrl()}/api/preview/start`, {
         method: 'POST',
@@ -263,34 +253,18 @@ export function DevPreviewPanel({
         throw new Error(data.error || 'Failed to start preview')
       }
       setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
-      setFrameKey((prev) => prev + 1)
       setActiveTab('preview')
     } catch (error) {
       setPanelError(error instanceof Error ? error.message : 'Failed to start preview')
+      setIsFrameLoading(false)
     } finally {
       setIsBusy(false)
     }
   }, [command, input, port, sessionId, token, workspaceRoot])
 
-  const openRawPreview = useCallback(() => {
-    if (!resolved) return
-    setPanelWarning(getPreviewTargetWarning(input))
-    setManagedSession(null)
-    setRawSrc(resolved.iframeSrc)
-    setRawLabel(resolved.label)
-    setFrameKey((prev) => prev + 1)
-    setActiveTab('preview')
-    setPanelError(null)
-  }, [resolved])
-
   const handleOpenPreview = useCallback(() => {
-    setIsFrameLoading(true)
-    if (workspaceRoot && !isHtmlFilePath(input)) {
-      void startManagedPreview()
-      return
-    }
-    openRawPreview()
-  }, [input, openRawPreview, startManagedPreview, workspaceRoot])
+    void startManagedPreview()
+  }, [startManagedPreview])
 
   const handleRestart = useCallback(async () => {
     if (!sessionId || !token) return
@@ -309,7 +283,7 @@ export function DevPreviewPanel({
       }
       setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
       setManagedBrowserSession(null)
-      setFrameKey((prev) => prev + 1)
+      setLivePreviewUrl(null)
     } catch (error) {
       setPanelError(error instanceof Error ? error.message : 'Failed to restart preview')
     } finally {
@@ -332,8 +306,8 @@ export function DevPreviewPanel({
       })
       setManagedSession(null)
       setManagedBrowserSession(null)
-      setRawSrc(null)
-      setRawLabel(null)
+      setLivePreviewUrl(null)
+      setScreenshotUrl(null)
     } catch (error) {
       setPanelError(error instanceof Error ? error.message : 'Failed to stop preview')
     } finally {
@@ -343,19 +317,52 @@ export function DevPreviewPanel({
 
   useEffect(() => {
     if (!initialTarget?.trim()) return
-    if (workspaceRoot && !isHtmlFilePath(initialTarget)) {
-      setIsFrameLoading(true)
-      void startManagedPreview()
-      return
+    void startManagedPreview()
+  }, [autoOpenKey, initialTarget, startManagedPreview])
+
+  const fetchLivePreview = useCallback(async () => {
+    if (!previewSessionId || !token) {
+      setLivePreviewUrl(null)
+      setIsFrameLoading(false)
+      return null
     }
-    const nextResolved = resolvePreviewTarget(initialTarget)
-    if (!nextResolved) return
-    setPanelWarning(getPreviewTargetWarning(initialTarget))
-    setRawSrc(nextResolved.iframeSrc)
-    setRawLabel(nextResolved.label)
-    setIsFrameLoading(true)
-    setFrameKey((prev) => prev + 1)
-  }, [autoOpenKey, initialTarget, startManagedPreview, workspaceRoot])
+    setLivePreviewLoading(true)
+    try {
+      const response = await fetch(`${getApiUrl()}/api/preview/screenshot/${previewSessionId}`, {
+        headers: authHeaders(token),
+      })
+      const data = await response.json().catch(() => ({})) as { screenshot?: string | null; suppressed?: boolean; reason?: string }
+      if (!response.ok) {
+        throw new Error((data as { error?: string }).error || 'Failed to load live preview')
+      }
+      if (data.suppressed) {
+        setPanelWarning(data.reason || 'Preview capture is currently suppressed for this browser session.')
+        setLivePreviewUrl(null)
+        return null
+      }
+      const nextUrl = data.screenshot ? `data:image/png;base64,${data.screenshot}` : null
+      setLivePreviewUrl(nextUrl)
+      return nextUrl
+    } catch (error) {
+      setPanelWarning(error instanceof Error ? error.message : 'Failed to load live preview')
+      return null
+    } finally {
+      setLivePreviewLoading(false)
+      setIsFrameLoading(false)
+    }
+  }, [previewSessionId, token])
+
+  useEffect(() => {
+    void fetchLivePreview()
+  }, [fetchLivePreview])
+
+  useEffect(() => {
+    if (!previewSessionId || !token || !managedSession) return
+    const id = window.setInterval(() => {
+      void fetchLivePreview()
+    }, 1200)
+    return () => window.clearInterval(id)
+  }, [fetchLivePreview, managedSession, previewSessionId, token])
 
   const issueEvents = useMemo(
     () => managedSession?.browserEvents.filter((event) =>
@@ -477,8 +484,8 @@ export function DevPreviewPanel({
               </Button>
             </>
           ) : null}
-          {previewSrc ? (
-            <a href={previewSrc} target="_blank" rel="noreferrer" className="inline-flex">
+          {previewOpenTarget ? (
+            <a href={previewOpenTarget} target="_blank" rel="noreferrer" className="inline-flex">
               <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]">
                 <ExternalLink className="mr-1 h-3 w-3" />
                 Open
@@ -496,7 +503,7 @@ export function DevPreviewPanel({
           <Input
             value={input}
             onChange={(event) => setInput(event.target.value)}
-            placeholder={workspaceRoot ? 'Optional target override such as 3000 or http://127.0.0.1:3000/' : '3000, http://localhost:3000, or docs/site/index.html'}
+            placeholder="Optional target override such as 3000 or http://127.0.0.1:3000/"
             className="h-8"
           />
           <Input
@@ -513,9 +520,9 @@ export function DevPreviewPanel({
             className="h-8"
             disabled={!workspaceRoot}
           />
-          <Button type="button" size="sm" className="h-8 shrink-0" onClick={handleOpenPreview} disabled={isBusy || (!workspaceRoot && !resolved)}>
+          <Button type="button" size="sm" className="h-8 shrink-0" onClick={handleOpenPreview} disabled={isBusy || !sessionId || !token}>
             <Play className="mr-1 h-3 w-3" />
-            {workspaceRoot && !isHtmlFilePath(input) ? 'Start Preview' : 'Open Preview'}
+            Start Live Preview
           </Button>
         </div>
         {workspaceRoot ? (
@@ -579,28 +586,23 @@ export function DevPreviewPanel({
                 Back to live
               </Button>
             </div>
-          ) : previewSrc ? (
+          ) : livePreviewUrl ? (
             <div className="relative h-full">
               {showLoadingBar ? (
                 <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
                   <div className="h-full w-full animate-pulse bg-primary/80" />
                 </div>
               ) : null}
-              <iframe
-                key={frameKey}
-                src={previewSrc}
-                title="Managed preview"
-                className="h-full w-full bg-white"
-                sandbox="allow-forms allow-modals allow-pointer-lock allow-popups allow-popups-to-escape-sandbox allow-same-origin allow-scripts allow-downloads"
-                onLoad={() => {
-                  loadedPreviewSrcRef.current = previewSrc
-                  setIsFrameLoading(false)
-                }}
-              />
+              <img src={livePreviewUrl} alt="Live preview" className="h-full w-full object-contain bg-white" />
+              {livePreviewLoading ? (
+                <div className="absolute right-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
+                  Updating…
+                </div>
+              ) : null}
             </div>
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              Start a managed preview from the active workspace or open a raw loopback/static preview target.
+              Start a live preview to attach a dedicated browser session.
             </div>
           )
         ) : activeTab === 'logs' ? (

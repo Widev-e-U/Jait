@@ -162,3 +162,13 @@ export interface UIStateUpdate {
   key: UIStateKey;
   value: unknown | null;  // null = delete / panel closed
 }
+
+export interface DevPreviewPanelState {
+  open: boolean;
+  target?: string | null;
+  workspaceRoot?: string | null;
+  browserSessionId?: string | null;
+  displayState?: "hidden" | "blank" | "connected";
+  displayTarget?: string | null;
+  storageScope?: "shared-browser" | "isolated-browser-session" | "unknown";
+}

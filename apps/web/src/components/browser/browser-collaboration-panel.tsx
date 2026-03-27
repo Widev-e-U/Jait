@@ -3,12 +3,20 @@ import { AlertTriangle, ExternalLink, Eye, Monitor, Play, Shield } from 'lucide-
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { BrowserIntervention, BrowserSession } from '@/lib/browser-collaboration-api'
-import { canOpenLiveSessionInPreview, getBrowserSessionOpenTarget } from './browser-collaboration-panel-helpers'
+import type { DevPreviewPanelState } from '@jait/shared'
+import {
+  canOpenLiveSessionInPreview,
+  getBrowserSessionOpenTarget,
+  getPreviewSurfaceStatus,
+  getPreviewSurfaceStorageScope,
+  isSessionVisibleInPreview,
+} from './browser-collaboration-panel-helpers'
 
 interface BrowserCollaborationPanelProps {
   sessions: BrowserSession[]
   interventions: BrowserIntervention[]
   loading?: boolean
+  previewState?: DevPreviewPanelState | null
   onRefresh: () => void
   onOpenLiveSession: (target: string | null, workspaceRoot?: string | null, browserSessionId?: string | null) => void
   onResolveIntervention: (interventionId: string, userNote?: string) => Promise<void>
@@ -25,7 +33,7 @@ function statusTone(status: BrowserSession['status']) {
 }
 
 export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps) {
-  const { sessions, interventions, loading, onRefresh, onOpenLiveSession, onResolveIntervention } = props
+  const { sessions, interventions, loading, previewState, onRefresh, onOpenLiveSession, onResolveIntervention } = props
   const [noteByIntervention, setNoteByIntervention] = useState<Record<string, string>>({})
   const openInterventions = useMemo(() => interventions.filter((item) => item.status === 'open'), [interventions])
   const sessionsById = useMemo(() => new Map(sessions.map((session) => [session.id, session])), [sessions])
@@ -33,6 +41,8 @@ export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps)
     () => sessions.filter((session) => session.status !== 'closed'),
     [sessions],
   )
+  const previewSurfaceStatus = getPreviewSurfaceStatus(previewState)
+  const previewStorageScope = getPreviewSurfaceStorageScope(previewState)
 
   const renderOpenAction = (session: BrowserSession) => {
     const liveTarget = getBrowserSessionOpenTarget(session)
@@ -78,6 +88,19 @@ export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps)
               ? `${openInterventions.length} intervention${openInterventions.length === 1 ? '' : 's'} need attention.`
               : `${actionableSessions.length} live session${actionableSessions.length === 1 ? '' : 's'} available.`}
           </p>
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            <Badge variant={previewSurfaceStatus === 'connected' ? 'default' : 'outline'}>
+              Preview {previewSurfaceStatus}
+            </Badge>
+            <Badge variant={previewStorageScope === 'shared-browser' ? 'secondary' : 'outline'}>
+              {previewStorageScope === 'shared-browser' ? 'Storage shared with app' : previewStorageScope}
+            </Badge>
+            {previewSurfaceStatus === 'connected' && previewState?.displayTarget ? (
+              <Badge variant="outline" className="max-w-[220px] truncate">
+                {previewState.displayTarget}
+              </Badge>
+            ) : null}
+          </div>
         </div>
         <Button variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={onRefresh} disabled={loading}>
           {loading ? 'Syncing' : 'Refresh'}
@@ -142,10 +165,22 @@ export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps)
                       secret-safe
                     </Badge>
                   ) : null}
+                  {isSessionVisibleInPreview(session, previewState) ? (
+                    <Badge variant="default">visible now</Badge>
+                  ) : null}
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Open in the preview surface for live viewing and controls.
+                  {isSessionVisibleInPreview(session, previewState)
+                    ? 'This session is currently displayed in the preview surface.'
+                    : previewSurfaceStatus === 'blank'
+                      ? 'The preview surface is open but blank. Open this live session to make it visible.'
+                      : 'Open in the preview surface for live viewing and controls.'}
                 </p>
+                {previewStorageScope === 'shared-browser' ? (
+                  <p className="mt-1 text-[11px] text-amber-700 dark:text-amber-400">
+                    The visible preview surface shares this browser&apos;s cookies and localStorage. It is not a fully isolated browser profile.
+                  </p>
+                ) : null}
               </div>
               {renderOpenAction(session)}
             </div>
