@@ -240,6 +240,37 @@ export function summarizeCollapsedToolCalls(calls: ToolCallInfo[]): string {
   return `${calls.length} tool calls: ${parts.join(', ')}`
 }
 
+export function getToolCallWrapperIconKind(calls: ToolCallInfo[]): 'terminal' | 'mcp' | 'web' | 'generic' {
+  let hasMcp = false
+  let hasWeb = false
+
+  for (const call of calls) {
+    const normalized = normalizeTool(call.tool)
+    if (normalized === 'execute' || normalized.startsWith('terminal.')) return 'terminal'
+    if (normalized === 'mcp-tool') hasMcp = true
+    if (
+      normalized === 'web'
+      || normalized.startsWith('web.')
+      || normalized.startsWith('browser.')
+      || normalized.startsWith('preview.')
+    ) {
+      hasWeb = true
+    }
+  }
+
+  if (hasMcp) return 'mcp'
+  if (hasWeb) return 'web'
+  return 'generic'
+}
+
+function getToolCallWrapperIcon(calls: ToolCallInfo[]) {
+  const kind = getToolCallWrapperIconKind(calls)
+  if (kind === 'terminal') return Terminal
+  if (kind === 'mcp') return Server
+  if (kind === 'web') return Globe
+  return Server
+}
+
 /** Format a tool call's primary display text (e.g. the command or file path) */
 function getCallSummary(
   tool: string,
@@ -1476,6 +1507,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
 
   const totalSuccessCount = completedCalls.filter(c => c.status === 'success').length
   const totalErrorCount = completedCalls.filter(c => c.status === 'error').length
+  const SummaryIcon = getToolCallWrapperIcon(completedCalls)
 
   if (shouldCollapseGroup && !groupOpen) {
     return (
@@ -1486,7 +1518,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
           className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
         >
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
-          <Zap className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <SummaryIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="font-medium">
             {summarizeCollapsedToolCalls(completedCalls)}
           </span>
@@ -1597,6 +1629,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
   const completedAt = !isActive && calls.length > 0
     ? Math.max(...calls.map(c => c.completedAt ?? c.startedAt))
     : undefined
+  const SummaryIcon = getToolCallWrapperIcon(calls)
 
   // Split into active and completed for inner collapsing
   const activeCalls = calls.filter(c => c.status === 'running' || c.status === 'pending')
@@ -1634,7 +1667,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
           )} />
           {isActive
             ? <Loader2 className="h-4 w-4 shrink-0 text-muted-foreground animate-spin" />
-            : <Zap className="h-4 w-4 shrink-0 text-muted-foreground" />
+            : <SummaryIcon className="h-4 w-4 shrink-0 text-muted-foreground" />
           }
           <span className="text-sm font-medium text-foreground truncate">
             {summarizeCollapsedToolCalls(calls)}

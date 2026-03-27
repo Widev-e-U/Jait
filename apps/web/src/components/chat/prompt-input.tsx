@@ -24,6 +24,7 @@ import {
   type UserMessageSegment,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
+import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
 
 const ICON_CDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@12.9.0/icons/'
 
@@ -241,17 +242,29 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
   return normalizeUserMessageSegments(segments)
 }
 
-export function shouldRemovePreviousChipOnBackspace(params: {
-  startContainerIsRoot: boolean
-  startContainerIsText: boolean
-  startOffset: number
-  childIndex: number
-}): boolean {
-  const { startContainerIsRoot, startContainerIsText, startOffset, childIndex } = params
-  if (childIndex <= 0) return false
-  if (startContainerIsRoot) return true
-  if (startContainerIsText) return startOffset === 0
-  return startOffset === 0
+function restoreCaretAfterChipRemoval(root: HTMLElement, nextSibling: Node | null, childIndex: number) {
+  const selection = window.getSelection()
+  if (!selection) return
+
+  const nextRange = document.createRange()
+  if (nextSibling?.nodeType === Node.TEXT_NODE) {
+    nextRange.setStart(nextSibling, 0)
+  } else if (nextSibling?.parentNode === root) {
+    nextRange.setStart(root, Array.from(root.childNodes).indexOf(nextSibling as ChildNode))
+  } else {
+    nextRange.setStart(root, getRootCaretOffsetAfterChipRemoval(childIndex, root.childNodes.length))
+  }
+  nextRange.collapse(true)
+  selection.removeAllRanges()
+  selection.addRange(nextRange)
+}
+
+function restoreCaretAfterChipRemovalStable(root: HTMLElement, nextSibling: Node | null, childIndex: number) {
+  restoreCaretAfterChipRemoval(root, nextSibling, childIndex)
+  requestAnimationFrame(() => {
+    if (!root.isConnected) return
+    restoreCaretAfterChipRemoval(root, nextSibling, childIndex)
+  })
 }
 
 function buildEditableContent(
@@ -949,7 +962,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           const prev = el.childNodes[childIndex - 1]
           if (prev instanceof HTMLElement && prev.hasAttribute('data-file-path')) {
             e.preventDefault()
+            const nextSibling = prev.nextSibling
             prev.remove()
+            restoreCaretAfterChipRemovalStable(el, nextSibling, childIndex)
             draftSegmentsRef.current = getComposerSegments(el)
             isSyncing.current = true
             onChangeRef.current(getTextFromEditable(el))
@@ -965,7 +980,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         const prev = startContainer.previousSibling
         if (prev instanceof HTMLElement && prev.hasAttribute('data-file-path')) {
           e.preventDefault()
+          const nextSibling = prev.nextSibling
           prev.remove()
+          restoreCaretAfterChipRemovalStable(el, nextSibling, Array.from(el.childNodes).indexOf(startContainer as ChildNode) + 1)
           draftSegmentsRef.current = getComposerSegments(el)
           isSyncing.current = true
           onChangeRef.current(getTextFromEditable(el))

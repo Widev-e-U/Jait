@@ -1,4 +1,5 @@
 import type { BrowserSession } from '@/lib/browser-collaboration-api'
+import type { DevPreviewPanelState } from '@jait/shared'
 
 export interface SessionDetailItem {
   label: string
@@ -73,4 +74,29 @@ export function getBrowserSessionDetails(session: BrowserSession): SessionDetail
   }
 
   return [...details, ...getStorageProfileDetails(session)]
+}
+
+function normalize(value?: string | null): string | null {
+  const trimmed = value?.trim()
+  return trimmed ? trimmed : null
+}
+
+export function getPreviewSurfaceStatus(state?: DevPreviewPanelState | null): 'hidden' | 'blank' | 'connected' {
+  if (!state?.open) return 'hidden'
+  if (state.displayState === 'connected') return 'connected'
+  if (normalize(state.displayTarget) || normalize(state.target) || normalize(state.browserSessionId)) return 'connected'
+  return 'blank'
+}
+
+export function getPreviewSurfaceStorageScope(state?: DevPreviewPanelState | null): 'shared-browser' | 'isolated-browser-session' | 'unknown' {
+  return state?.storageScope ?? 'unknown'
+}
+
+export function isSessionVisibleInPreview(session: BrowserSession, state?: DevPreviewPanelState | null): boolean {
+  if (getPreviewSurfaceStatus(state) !== 'connected') return false
+  const stateBrowserSessionId = normalize(state?.browserSessionId)
+  if (stateBrowserSessionId) return stateBrowserSessionId === session.id
+  const displayTarget = normalize(state?.displayTarget) ?? normalize(state?.target)
+  if (!displayTarget) return false
+  return displayTarget === normalize(session.previewUrl) || displayTarget === normalize(session.targetUrl)
 }

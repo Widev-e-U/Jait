@@ -6,6 +6,9 @@ import {
   formatSessionMetadataValue,
   getBrowserSessionDetails,
   getBrowserSessionOpenTarget,
+  getPreviewSurfaceStatus,
+  getPreviewSurfaceStorageScope,
+  isSessionVisibleInPreview,
 } from './browser-collaboration-panel-helpers'
 
 function makeSession(overrides: Partial<BrowserSession> = {}): BrowserSession {
@@ -88,5 +91,27 @@ describe('browser collaboration panel helpers', () => {
     expect(formatSessionMetadataValue({ tempDbPath: '/tmp/db.sqlite', ports: [3000, 3001] })).toBe(
       '{"tempDbPath":"/tmp/db.sqlite","ports":[3000,3001]}',
     )
+  })
+
+  it('reports whether the preview surface is hidden, blank, or connected', () => {
+    expect(getPreviewSurfaceStatus(null)).toBe('hidden')
+    expect(getPreviewSurfaceStatus({ open: true })).toBe('blank')
+    expect(getPreviewSurfaceStatus({ open: true, target: 'http://127.0.0.1:3000/' })).toBe('connected')
+  })
+
+  it('marks a session visible when the preview is bound to its browser session id', () => {
+    expect(isSessionVisibleInPreview(
+      makeSession(),
+      { open: true, browserSessionId: 'browser-session-1', displayState: 'connected' },
+    )).toBe(true)
+    expect(isSessionVisibleInPreview(
+      makeSession(),
+      { open: true, browserSessionId: 'browser-session-2', displayState: 'connected' },
+    )).toBe(false)
+  })
+
+  it('reports preview storage scope explicitly', () => {
+    expect(getPreviewSurfaceStorageScope(null)).toBe('unknown')
+    expect(getPreviewSurfaceStorageScope({ open: true, storageScope: 'shared-browser' })).toBe('shared-browser')
   })
 })

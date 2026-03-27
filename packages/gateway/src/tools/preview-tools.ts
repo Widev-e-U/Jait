@@ -3,6 +3,7 @@ import type { SessionStateService } from "../services/session-state.js";
 import type { ToolDefinition } from "./contracts.js";
 import type { PreviewService } from "../services/preview.js";
 import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
+import type { DevPreviewPanelState } from "@jait/shared";
 
 // ── preview.start (was preview.open) ─────────────────────────────────
 
@@ -103,10 +104,13 @@ export function createPreviewStartTool(
         mode: target ? "shared" : "isolated",
       });
 
-      const panelState = {
+      const panelState: DevPreviewPanelState = {
         open: true,
         target: (preview.url ?? target) || null,
         workspaceRoot: workspaceRoot || null,
+        displayState: ((preview.url ?? target) ? "connected" : "blank"),
+        displayTarget: (preview.url ?? target) || null,
+        storageScope: "isolated-browser-session",
       };
       if (ws) {
         ws.sendUICommand(
@@ -176,7 +180,14 @@ export function createPreviewStopTool(
       if (!stopped) return { ok: false, message: "No active preview session found" };
       browserCollaborationService?.closePreviewSession(sessionId);
 
-      const panelState = { open: false, target: null, workspaceRoot: null };
+      const panelState: DevPreviewPanelState = {
+        open: false,
+        target: null,
+        workspaceRoot: null,
+        displayState: "hidden",
+        displayTarget: null,
+        storageScope: "unknown",
+      };
       if (ws) {
         ws.sendUICommand(
           { command: "dev-preview.open", data: { target: null, workspaceRoot: null } },
