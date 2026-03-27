@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor from '@monaco-editor/react'
-import { AlertCircle, ArrowLeft, Boxes, Check, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, FilePlus, FolderOpen, FolderPlus, GitBranch, Globe, Loader2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Boxes, Check, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
+import type { BrowserIntervention, BrowserSession } from '@/lib/browser-collaboration-api'
 import { getPreviewTargetWarning, resolvePreviewTarget } from '@/components/chat/dev-preview-panel'
 import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
@@ -19,6 +20,11 @@ import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
 import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
 import { searchWorkspaceContent } from '@/lib/workspace-content-search'
+import { getOpenInterventionsForSession, resolvePreviewBrowserSession } from './workspace-preview-collaboration'
+import {
+  WorkspacePreviewInspectPanel,
+  type PreviewInspectRenderState,
+} from './workspace-preview-inspect-panel'
 
 /* ------------------------------------------------------------------ */
 /*  Public types                                                       */
@@ -74,9 +80,9 @@ interface WorkspacePanelProps {
   /** Active provider model override from the chat composer. */
   cliModel?: string | null
   /** Request to open a preview target in the editor. */
-  previewRequest?: { target?: string | null; key: number } | null
+  previewRequest?: { target?: string | null; browserSessionId?: string | null; key: number } | null
   /** Notifies the app shell when a workspace preview tab is opened or closed. */
-  onPreviewOpenChange?: (state: { open: boolean; target: string | null }) => void
+  onPreviewOpenChange?: (state: { open: boolean; target: string | null; browserSessionId?: string | null }) => void
   /** Session id for managed preview actions. */
   previewSessionId?: string | null
   /** Auth token for managed preview actions. */
@@ -85,6 +91,17 @@ interface WorkspacePanelProps {
   previewWorkspaceRoot?: string | null
   /** Initial preview target to prefill in the preview controls. */
   previewInitialTarget?: string | null
+  /** Browser collaboration session selected for the current preview surface. */
+  previewBrowserSessionId?: string | null
+  /** Browser collaboration sessions available in the app. */
+  browserSessions?: BrowserSession[]
+  /** Browser interventions available in the app. */
+  browserInterventions?: BrowserIntervention[]
+  /** Collaboration controls for the active browser session. */
+  onTakeBrowserControl?: (browserSessionId: string) => Promise<void>
+  onReturnBrowserControl?: (browserSessionId: string) => Promise<void>
+  onResumeBrowserSession?: (browserSessionId: string) => Promise<void>
+  onResolveBrowserIntervention?: (interventionId: string, userNote?: string) => Promise<void>
   /** Mermaid source for the architecture tab. */
   architectureDiagram?: string | null
   /** Whether architecture generation is currently running. */
@@ -505,6 +522,7 @@ interface EditorTab {
   isSaving?: boolean
   saveError?: string | null
   previewTarget?: string
+  browserSessionId?: string
   previewSrc?: string | null
   previewMode?: 'raw' | 'managed' | null
 }
@@ -961,6 +979,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   previewToken,
   previewWorkspaceRoot,
   previewInitialTarget,
+  previewBrowserSessionId,
+  browserSessions = [],
+  browserInterventions = [],
+  onTakeBrowserControl,
+  onReturnBrowserControl,
+  onResumeBrowserSession,
+  onResolveBrowserIntervention,
   architectureDiagram,
   architectureGenerating,
   architectureRequest,
@@ -1094,6 +1119,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [fileSearchLoading, setFileSearchLoading] = useState(false)
   const fileSearchAbortRef = useRef<AbortController | null>(null)
   const [managedPreviewSession, setManagedPreviewSession] = useState<PreviewSessionState | null>(null)
+  const [previewInterventionNotes, setPreviewInterventionNotes] = useState<Record<string, string>>({})
   const [previewInput, setPreviewInput] = useState(previewInitialTarget?.trim() || '')
   const [previewCommand, setPreviewCommand] = useState('')
   const [previewPort, setPreviewPort] = useState('')
@@ -1102,7 +1128,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [previewBusy, setPreviewBusy] = useState(false)
   const [previewFrameLoading, setPreviewFrameLoading] = useState(false)
   const [previewSidePanelOpen, setPreviewSidePanelOpen] = useState(false)
-  const [previewSideTab, setPreviewSideTab] = useState<'controls' | 'logs' | 'console' | 'issues'>('controls')
+  const [previewSideTab, setPreviewSideTab] = useState<'controls' | 'inspect' | 'logs' | 'console' | 'issues'>('controls')
+  const [previewInspectState, setPreviewInspectState] = useState<PreviewInspectRenderState | null>(null)
+  const [previewInspectSelector, setPreviewInspectSelector] = useState('')
+  const [previewInspectLoading, setPreviewInspectLoading] = useState(false)
+  const [previewInspectError, setPreviewInspectError] = useState<string | null>(null)
   const previewLogsEndRef = useRef<HTMLDivElement | null>(null)
   const previewConsoleEndRef = useRef<HTMLDivElement | null>(null)
   const loadedPreviewSrcRef = useRef<string | null>(null)
@@ -1116,6 +1146,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       event.type === 'pageerror' || event.type === 'requestfailed' || (event.type === 'response' && (event.status ?? 0) >= 400),
     ) ?? [],
     [managedPreviewSession],
+  )
+  const activeBrowserSession = useMemo(() => resolvePreviewBrowserSession({
+    sessions: browserSessions,
+    previewBrowserSessionId,
+    previewSessionId,
+    managedBrowserId: managedPreviewSession?.browserId ?? null,
+    previewTarget: managedPreviewSession?.url ?? activePreviewTab?.previewTarget ?? null,
+  }), [activePreviewTab?.previewTarget, browserSessions, managedPreviewSession?.browserId, managedPreviewSession?.url, previewBrowserSessionId, previewSessionId])
+  const activeBrowserInterventions = useMemo(
+    () => getOpenInterventionsForSession(activeBrowserSession?.id, browserInterventions),
+    [activeBrowserSession?.id, browserInterventions],
   )
 
   const restoredTabsRootRef = useRef<string | null>(null)
@@ -1139,6 +1180,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         if (
           existing.label === nextTab.label &&
           existing.previewTarget === nextTab.previewTarget &&
+          existing.browserSessionId === nextTab.browserSessionId &&
           existing.previewSrc === nextTab.previewSrc &&
           existing.previewMode === nextTab.previewMode &&
           existing.path === nextTab.path
@@ -1216,6 +1258,47 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
   }, [previewSessionId, previewToken])
 
+  const fetchPreviewInspection = useCallback(async (selector?: string) => {
+    if (!previewSessionId || !previewToken) return null
+    setPreviewInspectLoading(true)
+    setPreviewInspectError(null)
+    try {
+      const search = new URLSearchParams()
+      if (selector?.trim()) search.set('selector', selector.trim())
+      const response = await fetch(`${API_URL}/api/preview/inspect/${previewSessionId}${search.size ? `?${search.toString()}` : ''}`, {
+        headers: authHeaders(previewToken),
+      })
+      const data = await response.json().catch(() => ({})) as {
+        inspect?: PreviewInspectRenderState | null
+        suppressed?: boolean
+        reason?: string
+      }
+      if (!response.ok) {
+        throw new Error((data as { error?: string }).error || 'Failed to inspect preview')
+      }
+      if (data.suppressed) {
+        const suppressedState: PreviewInspectRenderState = {
+          status: managedPreviewSession?.status ?? 'ready',
+          url: managedPreviewSession?.url ?? null,
+          page: null,
+          snapshot: null,
+          target: null,
+          captureSuppressed: true,
+          suppressionReason: data.reason,
+        }
+        setPreviewInspectState(suppressedState)
+        return suppressedState
+      }
+      setPreviewInspectState(data.inspect ?? null)
+      return data.inspect ?? null
+    } catch (error) {
+      setPreviewInspectError(error instanceof Error ? error.message : 'Failed to inspect preview')
+      return null
+    } finally {
+      setPreviewInspectLoading(false)
+    }
+  }, [managedPreviewSession?.status, managedPreviewSession?.url, previewSessionId, previewToken])
+
   // Auto-scroll active tab into view (VS Code behaviour)
   useEffect(() => {
     if (!activeTabId) return
@@ -1262,6 +1345,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       previewConsoleEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [previewSideTab, previewConsoleEvents.length])
+
+  useEffect(() => {
+    if (previewSideTab !== 'inspect') return
+    if (!activePreviewTab && !managedPreviewSession) return
+    void fetchPreviewInspection(previewInspectSelector)
+  }, [activePreviewTab, fetchPreviewInspection, managedPreviewSession, previewInspectSelector, previewSideTab])
 
   useEffect(() => {
     if (!managedPreviewSession) return
@@ -1367,10 +1456,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     const previewTab = openTabs.find((tab) => tab.type === 'preview') ?? null
     const nextOpen = previewTab !== null
     const nextTarget = previewTab?.previewTarget ?? previewTab?.path ?? null
-    const key = `${nextOpen}:${nextTarget ?? ''}`
+    const nextBrowserSessionId = previewTab?.browserSessionId ?? null
+    const key = `${nextOpen}:${nextTarget ?? ''}:${nextBrowserSessionId ?? ''}`
     if (key === lastNotifiedPreviewRef.current) return
     lastNotifiedPreviewRef.current = key
-    onPreviewOpenChange({ open: nextOpen, target: nextTarget })
+    onPreviewOpenChange({ open: nextOpen, target: nextTarget, browserSessionId: nextBrowserSessionId })
   }, [openTabs, onPreviewOpenChange])
 
   useEffect(() => {
@@ -1755,6 +1845,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 {managedPreviewSession.status}
               </span>
             )}
+            {activeBrowserSession && (
+              <>
+                <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {activeBrowserSession.mode}
+                </span>
+                <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                  {activeBrowserSession.controller}
+                </span>
+                {activeBrowserSession.secretSafe ? (
+                  <span className="rounded bg-destructive/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-destructive">
+                    secret-safe
+                  </span>
+                ) : null}
+              </>
+            )}
           </div>
           {activePreviewTab?.label ? (
             <div className="truncate text-[11px] text-muted-foreground" title={activePreviewTab.label}>
@@ -1773,7 +1878,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       </div>
 
       <div className="flex items-center gap-1 border-b px-2 py-1.5 text-[11px]">
-        {(['controls', 'logs', 'console', 'issues'] as const).map((tab) => (
+        {(['controls', 'inspect', 'logs', 'console', 'issues'] as const).map((tab) => (
           <button
             key={tab}
             type="button"
@@ -1782,13 +1887,114 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             }`}
             onClick={() => setPreviewSideTab(tab)}
           >
-            {tab === 'controls' ? 'Controls' : tab === 'logs' ? 'Logs' : tab === 'console' ? `Console${previewConsoleEvents.length ? ` (${previewConsoleEvents.length})` : ''}` : `Issues${previewIssueEvents.length ? ` (${previewIssueEvents.length})` : ''}`}
+            {tab === 'controls'
+              ? 'Controls'
+              : tab === 'inspect'
+                ? 'Inspect'
+                : tab === 'logs'
+                  ? 'Logs'
+                  : tab === 'console'
+                    ? `Console${previewConsoleEvents.length ? ` (${previewConsoleEvents.length})` : ''}`
+                    : `Issues${previewIssueEvents.length ? ` (${previewIssueEvents.length})` : ''}`}
           </button>
         ))}
       </div>
 
       {previewSideTab === 'controls' ? (
         <div className="flex-1 space-y-3 overflow-auto p-3">
+          {activeBrowserSession ? (
+            <div className="rounded border bg-muted/30 p-2 text-[11px]">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-foreground">{activeBrowserSession.name}</div>
+                  <div className="truncate text-muted-foreground">
+                    {activeBrowserSession.origin} · {activeBrowserSession.mode} · {activeBrowserSession.status}
+                  </div>
+                </div>
+              </div>
+              <div className="mt-2 space-y-1 text-muted-foreground">
+                {activeBrowserSession.previewUrl ? <div className="break-all">Live URL: <code>{activeBrowserSession.previewUrl}</code></div> : null}
+                {activeBrowserSession.targetUrl ? <div className="break-all">Target: <code>{activeBrowserSession.targetUrl}</code></div> : null}
+                {activeBrowserSession.workspaceRoot ? <div className="break-all">Workspace: <code>{activeBrowserSession.workspaceRoot}</code></div> : null}
+              </div>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {activeBrowserSession.controller !== 'user' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-[11px]"
+                    onClick={() => { void onTakeBrowserControl?.(activeBrowserSession.id) }}
+                  >
+                    <Play className="mr-1 h-3 w-3" />
+                    Take control
+                  </Button>
+                ) : (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-[11px]"
+                    onClick={() => { void onReturnBrowserControl?.(activeBrowserSession.id) }}
+                  >
+                    <ArrowLeft className="mr-1 h-3 w-3" />
+                    Return control
+                  </Button>
+                )}
+                {activeBrowserSession.status !== 'ready' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-[11px]"
+                    onClick={() => { void onResumeBrowserSession?.(activeBrowserSession.id) }}
+                  >
+                    <Play className="mr-1 h-3 w-3" />
+                    Resume agent
+                  </Button>
+                ) : null}
+              </div>
+            </div>
+          ) : null}
+
+          {activeBrowserInterventions.map((item) => (
+            <div key={item.id} className="rounded border border-amber-500/30 bg-amber-500/5 p-2 text-[11px]">
+              <div className="font-medium text-foreground">{item.reason}</div>
+              <div className="mt-1 text-muted-foreground">{item.instructions}</div>
+              {item.allowUserNote ? (
+                <Textarea
+                  className="mt-2 min-h-[72px] text-[11px]"
+                  placeholder="Optional note before resuming the agent"
+                  value={previewInterventionNotes[item.id] ?? ''}
+                  onChange={(event) => setPreviewInterventionNotes((prev) => ({ ...prev, [item.id]: event.target.value }))}
+                />
+              ) : null}
+              <div className="mt-2 flex flex-wrap gap-2">
+                {activeBrowserSession?.controller !== 'user' ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    className="h-8 px-2 text-[11px]"
+                    onClick={() => activeBrowserSession ? void onTakeBrowserControl?.(activeBrowserSession.id) : undefined}
+                  >
+                    <Play className="mr-1 h-3 w-3" />
+                    Take control
+                  </Button>
+                ) : null}
+                <Button
+                  type="button"
+                  size="sm"
+                  className="h-8 px-2 text-[11px]"
+                  onClick={() => { void onResolveBrowserIntervention?.(item.id, previewInterventionNotes[item.id]) }}
+                >
+                  <Check className="mr-1 h-3 w-3" />
+                  Continue
+                </Button>
+              </div>
+            </div>
+          ))}
+
           <div className="space-y-2">
             <Input
               value={previewInput}
@@ -1866,6 +2072,33 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <span>{previewPanelWarning}</span>
             </div>
           ) : null}
+        </div>
+      ) : previewSideTab === 'inspect' ? (
+        <div className="flex-1 space-y-3 overflow-auto p-3 text-[11px]">
+          <div className="flex gap-2">
+            <Input
+              value={previewInspectSelector}
+              onChange={(event) => setPreviewInspectSelector(event.target.value)}
+              placeholder="Optional selector to diagnose"
+              className="h-8"
+            />
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-8 px-2 text-[11px]"
+              onClick={() => { void fetchPreviewInspection(previewInspectSelector) }}
+              disabled={previewInspectLoading}
+            >
+              <Search className="mr-1 h-3 w-3" />
+              Diagnose
+            </Button>
+          </div>
+          <WorkspacePreviewInspectPanel
+            inspectState={previewInspectState}
+            loading={previewInspectLoading}
+            error={previewInspectError}
+          />
         </div>
       ) : previewSideTab === 'logs' ? (
         <div className="flex-1 overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
@@ -2922,11 +3155,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       path: trimmed || '__preview__',
       label: resolved?.label ?? 'Preview',
       previewTarget: trimmed || undefined,
+      browserSessionId: previewRequest?.browserSessionId?.trim() || previewBrowserSessionId?.trim() || undefined,
       previewSrc: resolved?.iframeSrc ?? null,
       previewMode: resolved ? 'raw' : null,
     }), true)
     return true
-  }, [managedPreviewSession, previewInput, stopManagedPreviewSession, syncPreviewTab])
+  }, [managedPreviewSession, previewBrowserSessionId, previewInput, previewRequest?.browserSessionId, stopManagedPreviewSession, syncPreviewTab])
 
   const handleOpenArchitectureTab = useCallback(() => {
     const tabId = 'architecture'
@@ -3039,7 +3273,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       }
       return next
     })
-  }, [activeTabId, managedPreviewSession, stopManagedPreviewSession])
+    onPreviewOpenChange?.({ open: false, target: null, browserSessionId: null })
+  }, [activeTabId, managedPreviewSession, onPreviewOpenChange, stopManagedPreviewSession])
 
   const handleRefreshPreviewTarget = useCallback(() => {
     setOpenTabs((prev) => prev.map((tab) => (
@@ -3571,6 +3806,84 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   )
   const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
+  const canRunGitCommitAction = !gitActionBusy && changedFileCount > 0
+
+  const renderSourceControlViewToggle = (mobile = false) => (
+    <div className="ml-auto inline-flex items-center rounded-md border border-input bg-background/90 p-0.5 shadow-sm">
+      <button
+        type="button"
+        className={cn(
+          'inline-flex items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground',
+          mobile ? 'h-7 w-7' : 'h-6 w-6',
+          sourceControlView === 'list' && 'bg-accent text-accent-foreground shadow-sm',
+        )}
+        onClick={() => setSourceControlView('list')}
+        title="List view"
+        aria-label="List view"
+        aria-pressed={sourceControlView === 'list'}
+      >
+        <List className="h-3.5 w-3.5" />
+      </button>
+      <button
+        type="button"
+        className={cn(
+          'inline-flex items-center justify-center rounded-sm text-muted-foreground transition-colors hover:text-foreground',
+          mobile ? 'h-7 w-7' : 'h-6 w-6',
+          sourceControlView === 'tree' && 'bg-accent text-accent-foreground shadow-sm',
+        )}
+        onClick={() => setSourceControlView('tree')}
+        title="Tree view"
+        aria-label="Tree view"
+        aria-pressed={sourceControlView === 'tree'}
+      >
+        <FolderTree className="h-3.5 w-3.5" />
+      </button>
+    </div>
+  )
+
+  const renderCommitActions = (mobile = false) => (
+    <div className="flex items-center gap-1.5">
+      <Button
+        size="sm"
+        className={cn(mobile ? 'h-8 rounded-md px-2.5 text-xs' : 'h-8 rounded-r-none px-2 text-xs')}
+        onClick={() => handleGitAction('commit')}
+        disabled={!canRunGitCommitAction}
+        title="Commit all changes (Ctrl+Enter)"
+      >
+        {gitActionBusy
+          ? <Loader2 className="h-3 w-3 animate-spin" />
+          : <GitCommit className="h-3 w-3" />}
+        Commit
+      </Button>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button
+            variant={mobile ? 'secondary' : 'default'}
+            size="sm"
+            className={cn(
+              'px-2',
+              mobile ? 'h-8 rounded-md' : 'h-8 rounded-l-none border-l border-primary-foreground/20',
+            )}
+            disabled={!canRunGitCommitAction}
+            title="More commit actions"
+            aria-label="More commit actions"
+          >
+            <ChevronDown className="h-3.5 w-3.5" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="start" className="w-44">
+          <DropdownMenuItem onSelect={() => handleGitAction('commit')} className="gap-2">
+            <GitCommit className="h-3.5 w-3.5" />
+            Commit
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => handleGitAction('commit_push')} className="gap-2">
+            <CloudUpload className="h-3.5 w-3.5" />
+            Commit & Push
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  )
 
   const toggleSourceControlDir = useCallback((path: string) => {
     setCollapsedSourceControlDirs((prev) => {
@@ -4303,31 +4616,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </button>
               </div>
               <div className="flex items-center gap-1.5 flex-wrap">
-                <button
-                  className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => handleGitAction('commit')}
-                  disabled={gitActionBusy || changedFileCount === 0}
-                >
-                  {gitActionBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
-                  Commit
-                </button>
-                <button
-                  className="flex items-center gap-1 px-3 py-1.5 rounded text-xs font-medium bg-muted hover:bg-muted/80 disabled:opacity-50 disabled:cursor-not-allowed"
-                  onClick={() => handleGitAction('commit_push')}
-                  disabled={gitActionBusy || changedFileCount === 0}
-                >
-                  <CloudUpload className="h-3.5 w-3.5" />
-                  Commit & Push
-                </button>
-                <select
-                  className="ml-auto h-8 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm"
-                  value={sourceControlView}
-                  onChange={(e) => setSourceControlView(e.target.value as 'list' | 'tree')}
-                  title="Source control view"
-                >
-                  <option value="list">List</option>
-                  <option value="tree">Tree</option>
-                </select>
+                {renderCommitActions(true)}
+                {renderSourceControlViewToggle(true)}
               </div>
               {gitActionError && (
                 <div className="text-xs text-red-500">{gitActionError}</div>
@@ -4809,36 +5099,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               </button>
             </div>
             <div className="flex items-center gap-1 flex-wrap min-w-0">
-              <Button
-                size="sm"
-                className="h-8 rounded-md px-2 text-xs"
-                onClick={() => handleGitAction('commit')}
-                disabled={gitActionBusy || changedFileCount === 0}
-                title="Commit all changes (Ctrl+Enter)"
-              >
-                {gitActionBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <Check className="h-3 w-3" />}
-                Commit
-              </Button>
-              <Button
-                variant="secondary"
-                size="sm"
-                className="h-8 rounded-md px-2 text-xs"
-                onClick={() => handleGitAction('commit_push')}
-                disabled={gitActionBusy || changedFileCount === 0}
-                title="Commit and push"
-              >
-                <CloudUpload className="h-3 w-3" />
-                Commit & Push
-              </Button>
-              <select
-                className="ml-auto h-8 rounded-md border border-input bg-background px-2 text-xs text-muted-foreground shadow-sm"
-                value={sourceControlView}
-                onChange={(e) => setSourceControlView(e.target.value as 'list' | 'tree')}
-                title="Source control view"
-              >
-                <option value="list">List</option>
-                <option value="tree">Tree</option>
-              </select>
+              {renderCommitActions()}
+              {renderSourceControlViewToggle()}
             </div>
             {gitActionError && (
               <div className="ui-caption px-0.5 text-red-500">{gitActionError}</div>

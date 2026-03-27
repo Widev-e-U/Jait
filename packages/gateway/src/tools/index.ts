@@ -33,6 +33,7 @@ export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool,
 export {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
+  createBrowserInspectTool,
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
@@ -146,6 +147,7 @@ import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool,
 import {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
+  createBrowserInspectTool,
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
@@ -350,6 +352,7 @@ export function createToolRegistry(
   // Browser + web tools
   tools.register(createBrowserNavigateTool(surfaceRegistry, deps.browserCollaborationService));
   tools.register(createBrowserSnapshotTool(surfaceRegistry, deps.browserCollaborationService));
+  tools.register(createBrowserInspectTool(surfaceRegistry, deps.browserCollaborationService));
   for (const tool of createBrowserInteractionTools(surfaceRegistry, deps.browserCollaborationService)) {
     tools.register(tool);
   }
@@ -358,8 +361,8 @@ export function createToolRegistry(
   tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService, deps.browserCollaborationService));
   tools.register(createPreviewRestartTool(deps.previewService));
   tools.register(createPreviewStatusTool(deps.previewService));
-  tools.register(createPreviewLogsTool(deps.previewService));
-  tools.register(createPreviewInspectTool(deps.previewService));
+  tools.register(createPreviewLogsTool(deps.previewService, deps.browserCollaborationService));
+  tools.register(createPreviewInspectTool(deps.previewService, deps.browserCollaborationService));
   tools.register(createWebFetchTool());
   tools.register(createWebSearchTool());
   tools.register(createBrowserSandboxStartTool());

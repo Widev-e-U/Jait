@@ -47,6 +47,7 @@ export const ASK_MODE_TOOLS = new Set([
   "web.search",
   "browser.navigate",
   "browser.snapshot",
+  "browser.inspect",
   "browser.wait",
   "gateway.status",
   "surfaces.list",

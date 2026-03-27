@@ -9,9 +9,34 @@ import type {
   BrowserSessionOrigin,
   BrowserSessionStatus,
 } from "../services/browser-collaboration.js";
+import type { PreviewService } from "../services/preview.js";
+import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 
 interface BrowserCollaborationRouteDeps {
   browserCollaborationService: BrowserCollaborationService;
+  previewService?: PreviewService;
+}
+
+const SECRET_SAFE_REASON = "Preview capture is suppressed while the linked browser session is marked secret-safe.";
+
+function buildInterventionResumeMessage(
+  intervention: {
+    browserSessionId: string;
+    reason: string;
+    instructions: string;
+  },
+  userNote?: string | null,
+): string {
+  const parts = [
+    `User completed intervention on browser session ${intervention.browserSessionId}.`,
+    `Reason: ${intervention.reason}.`,
+    `Instructions: ${intervention.instructions}.`,
+  ];
+  if (userNote?.trim()) {
+    parts.push(`Note: ${userNote.trim()}.`);
+  }
+  parts.push("Continue from the current browser state where possible.");
+  return parts.join(" ");
 }
 
 export function registerBrowserCollaborationRoutes(
@@ -23,6 +48,45 @@ export function registerBrowserCollaborationRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     return { sessions: deps.browserCollaborationService.listSessions(authUser.id) };
+  });
+
+  app.get("/api/browser/sessions/:id", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const session = deps.browserCollaborationService.getSession(id, authUser.id);
+    if (!session) return reply.status(404).send({ error: "Browser session not found" });
+    const previewSession = session.previewSessionId && deps.previewService
+      ? deps.previewService.get(session.previewSessionId)
+      : null;
+    const interventions = deps.browserCollaborationService
+      .listInterventions(authUser.id, "open")
+      .filter((item) => item.browserSessionId === session.id);
+    return { session, previewSession, interventions };
+  });
+
+  app.get("/api/browser/sessions/:id/inspect", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const session = deps.browserCollaborationService.getSession(id, authUser.id);
+    if (!session) return reply.status(404).send({ error: "Browser session not found" });
+    if (!session.previewSessionId || !deps.previewService) {
+      return reply.status(404).send({ error: "Browser session inspection is not available" });
+    }
+    if (session.secretSafe) {
+      return {
+        inspect: null,
+        suppressed: true,
+        reason: SECRET_SAFE_REASON,
+      };
+    }
+    const query = request.query as { selector?: string };
+    const inspect = await deps.previewService.inspect(
+      session.previewSessionId,
+      typeof query.selector === "string" ? query.selector : undefined,
+    );
+    return { inspect };
   });
 
   app.post("/api/browser/sessions", async (request, reply) => {
@@ -127,17 +191,25 @@ export function registerBrowserCollaborationRoutes(
     if (!browserSessionId || !reason || !instructions) {
       return reply.status(400).send({ error: "browserSessionId, reason, and instructions are required" });
     }
-    const intervention = deps.browserCollaborationService.requestIntervention({
-      browserSessionId,
-      threadId: typeof body.threadId === "string" ? body.threadId : null,
-      chatSessionId: typeof body.chatSessionId === "string" ? body.chatSessionId : null,
-      kind: (typeof body.kind === "string" ? body.kind : "custom") as BrowserInterventionKind,
-      reason,
-      instructions,
-      secretSafe: Boolean(body.secretSafe),
-      allowUserNote: typeof body.allowUserNote === "boolean" ? body.allowUserNote : true,
-      requestedBy: authUser.id,
-    });
+    let intervention;
+    try {
+      intervention = deps.browserCollaborationService.requestIntervention({
+        browserSessionId,
+        threadId: typeof body.threadId === "string" ? body.threadId : null,
+        chatSessionId: typeof body.chatSessionId === "string" ? body.chatSessionId : null,
+        kind: (typeof body.kind === "string" ? body.kind : "custom") as BrowserInterventionKind,
+        reason,
+        instructions,
+        secretSafe: Boolean(body.secretSafe),
+        allowUserNote: typeof body.allowUserNote === "boolean" ? body.allowUserNote : true,
+        requestedBy: authUser.id,
+      });
+    } catch (error) {
+      if (error instanceof Error && error.message.startsWith("Unknown browser session:")) {
+        return reply.status(404).send({ error: "Browser session not found" });
+      }
+      throw error;
+    }
     return { intervention };
   });
 
@@ -146,13 +218,23 @@ export function registerBrowserCollaborationRoutes(
     if (!authUser) return;
     const { id } = request.params as { id: string };
     const body = (request.body ?? {}) as Record<string, unknown>;
+    const userNote = typeof body.userNote === "string" ? body.userNote : null;
     const intervention = deps.browserCollaborationService.resolveIntervention(
       id,
       authUser.id,
-      typeof body.userNote === "string" ? body.userNote : null,
+      userNote,
     );
     if (!intervention) return reply.status(404).send({ error: "Browser intervention not found" });
-    return { intervention };
+    const resumeMessage = buildInterventionResumeMessage(intervention, userNote);
+    const resume = {
+      chat: intervention.chatSessionId
+        ? await interventionRunResumeRegistry.resumeChatSession(intervention.chatSessionId, resumeMessage)
+        : undefined,
+      thread: intervention.threadId
+        ? await interventionRunResumeRegistry.resumeThread(intervention.threadId, resumeMessage)
+        : undefined,
+    };
+    return { intervention, resume };
   });
 
   app.post("/api/browser/interventions/:id/cancel", async (request, reply) => {

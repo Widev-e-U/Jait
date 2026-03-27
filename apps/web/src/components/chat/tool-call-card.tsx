@@ -205,6 +205,41 @@ function getEditDiffCountLabel(tool: string, args: Record<string, unknown>): str
   return null
 }
 
+function getCollapsedToolCategory(tool: string): string {
+  const normalized = normalizeTool(tool)
+
+  if (normalized === 'execute' || normalized.startsWith('terminal.')) return 'terminal'
+  if (normalized === 'edit' || normalized === 'file.write' || normalized === 'file.patch') return 'edit'
+  if (normalized === 'read' || normalized === 'file.read') return 'read'
+  if (normalized === 'search' || normalized === 'web.search' || normalized === 'browser.search') return 'search'
+  if (normalized === 'web' || normalized === 'web.fetch') return 'web'
+  if (normalized.startsWith('browser.')) return 'browser'
+  if (normalized.startsWith('memory.')) return 'memory'
+  if (normalized.startsWith('cron.')) return 'cron'
+  if (normalized.startsWith('surfaces.')) return 'surface'
+  if (normalized.startsWith('os.')) return 'system'
+  if (normalized === 'agent') return 'agent'
+  if (normalized === 'todo') return 'todo'
+  if (normalized === 'jait') return 'jait'
+  if (normalized === 'mcp-tool') return 'mcp tool'
+
+  return normalized.replace(/[._-]+/g, ' ').trim() || 'tool'
+}
+
+export function summarizeCollapsedToolCalls(calls: ToolCallInfo[]): string {
+  if (calls.length === 0) return '0 tool calls'
+
+  const counts = new Map<string, number>()
+  for (const call of calls) {
+    const category = getCollapsedToolCategory(call.tool)
+    counts.set(category, (counts.get(category) ?? 0) + 1)
+  }
+
+  const parts = Array.from(counts.entries()).map(([category, count]) => `${count} ${category}`)
+  if (parts.length === 1) return `${parts[0]} tool call${calls.length === 1 ? '' : 's'}`
+  return `${calls.length} tool calls: ${parts.join(', ')}`
+}
+
 /** Format a tool call's primary display text (e.g. the command or file path) */
 function getCallSummary(
   tool: string,
@@ -1453,7 +1488,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
           <Zap className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
           <span className="font-medium">
-            {completedCalls.length} tool call{completedCalls.length !== 1 ? 's' : ''}
+            {summarizeCollapsedToolCalls(completedCalls)}
           </span>
           {totalSuccessCount > 0 && (
             <span className="inline-flex items-center gap-0.5 text-green-500">
@@ -1485,7 +1520,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
           className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
         >
           <ChevronRight className="h-3 w-3 rotate-90 transition-transform" />
-          <span>Collapse tool calls</span>
+          <span>Collapse {summarizeCollapsedToolCalls(completedCalls)}</span>
         </button>
       )}
       {needsCollapse && (
@@ -1602,7 +1637,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
             : <Zap className="h-4 w-4 shrink-0 text-muted-foreground" />
           }
           <span className="text-sm font-medium text-foreground truncate">
-            {calls.length} tool call{calls.length !== 1 ? 's' : ''}
+            {summarizeCollapsedToolCalls(calls)}
           </span>
           <div className="flex items-center gap-2 ml-auto text-[11px] text-muted-foreground tabular-nums shrink-0">
             {!isActive && errorCount > 0 && (

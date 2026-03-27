@@ -16,12 +16,69 @@ import { fileURLToPath } from "node:url";
 declare const window: any;
 declare const document: any;
 declare const CSS: any;
+declare const Element: any;
 
 export interface BrowserInteractiveElement {
   role?: string;
   name?: string;
   text?: string;
   selector?: string;
+  selectors?: BrowserSelectorSuggestion[];
+  tagName?: string;
+  placeholder?: string;
+  testId?: string;
+  id?: string;
+  disabled?: boolean;
+  selected?: boolean;
+  active?: boolean;
+  value?: string;
+}
+
+export interface BrowserSelectorSuggestion {
+  kind: "role" | "name" | "placeholder" | "testId" | "id" | "css";
+  value: string;
+  selector: string;
+}
+
+export interface BrowserActiveElement extends BrowserInteractiveElement {
+  type?: string;
+  readOnly?: boolean;
+  isContentEditable?: boolean;
+}
+
+export interface BrowserDialogPresence extends BrowserInteractiveElement {
+  title?: string;
+  ariaModal?: boolean;
+  open?: boolean;
+}
+
+export interface BrowserObstructionElement {
+  role?: string;
+  tagName?: string;
+  text?: string;
+  selector?: string;
+  selectors?: BrowserSelectorSuggestion[];
+  reason: string;
+  zIndex?: number;
+}
+
+export interface BrowserObstructionDiagnostics {
+  hasModal: boolean;
+  dialogCount: number;
+  activeDialogTitle?: string | null;
+  topLayer: BrowserObstructionElement[];
+  notes: string[];
+}
+
+export interface BrowserTargetDiagnostics extends BrowserInteractiveElement {
+  selector: string;
+  found: boolean;
+  offscreen?: boolean;
+  obscured?: boolean;
+  obstructionReason?: string;
+  interceptedBy?: BrowserObstructionElement | null;
+  inDialog?: boolean;
+  dialogTitle?: string | null;
 }
 
 export interface BrowserPageSnapshot {
@@ -29,6 +86,9 @@ export interface BrowserPageSnapshot {
   title: string;
   text: string;
   elements: BrowserInteractiveElement[];
+  activeElement?: BrowserActiveElement | null;
+  dialogs?: BrowserDialogPresence[];
+  obstruction?: BrowserObstructionDiagnostics;
 }
 
 export interface BrowserRuntimeEvent {
@@ -51,6 +111,7 @@ export interface BrowserDriver {
   waitFor(selector: string, timeoutMs: number, signal?: AbortSignal): Promise<void>;
   screenshot(path?: string, signal?: AbortSignal): Promise<string>;
   snapshot(signal?: AbortSignal): Promise<BrowserPageSnapshot>;
+  diagnose(selector: string, signal?: AbortSignal): Promise<BrowserTargetDiagnostics>;
   getEvents(): BrowserRuntimeEvent[];
   close(): Promise<void>;
 }
@@ -199,6 +260,16 @@ export class BrowserSurface implements Surface {
     const lines = [
       `URL: ${snap.url}`,
       `Title: ${snap.title || "(untitled)"}`,
+      snap.activeElement
+        ? `Active element: ${[
+          snap.activeElement.role ?? snap.activeElement.tagName ?? "element",
+          snap.activeElement.name,
+          snap.activeElement.selector,
+        ].filter(Boolean).join(" — ")}`
+        : "Active element: (none)",
+      snap.dialogs?.length
+        ? `Dialogs: ${snap.dialogs.map((dialog) => dialog.title || dialog.name || dialog.selector || dialog.role || "dialog").join(", ")}`
+        : "Dialogs: (none)",
       "",
       "Text:",
       snap.text.trim() || "(no textual content)",
@@ -212,8 +283,24 @@ export class BrowserSurface implements Surface {
     return lines.join("\n").trim();
   }
 
+  async inspect(selector?: string, signal?: AbortSignal): Promise<{
+    snapshot: BrowserPageSnapshot;
+    target?: BrowserTargetDiagnostics;
+  }> {
+    const driver = this.requireDriver();
+    const snapshot = await driver.snapshot(signal);
+    this.captureSnapshotMeta(snapshot);
+    const target = selector ? await driver.diagnose(selector, signal) : undefined;
+    return { snapshot, target };
+  }
+
   async click(selector: string, signal?: AbortSignal): Promise<void> {
-    await this.requireDriver().click(selector, signal);
+    try {
+      await this.requireDriver().click(selector, signal);
+    } catch (err) {
+      const diagnostics = await this.tryDiagnose(selector, signal);
+      throw enrichBrowserActionError("click", selector, err, diagnostics);
+    }
     this._actionCount++;
   }
 
@@ -256,6 +343,17 @@ export class BrowserSurface implements Surface {
       throw new Error("Browser surface is not running");
     }
     return this.driver;
+  }
+
+  private async tryDiagnose(
+    selector: string,
+    signal?: AbortSignal,
+  ): Promise<BrowserTargetDiagnostics | null> {
+    try {
+      return await this.requireDriver().diagnose(selector, signal);
+    } catch {
+      return null;
+    }
   }
 
   private _setState(next: SurfaceState): void {
@@ -465,45 +563,239 @@ async function createInProcessPlaywrightDriver(): Promise<BrowserDriver> {
           if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
           return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
         };
+        const isVisible = (el: any) => {
+          if (!el || !(el instanceof Element)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === "none" || style.visibility === "hidden" || style.opacity === "0") return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+        const guessRole = (el: any, tag: string) =>
+          el.getAttribute("role")
+          ?? (tag === "a" ? "link" : tag === "input" ? (el.type === "checkbox" ? "checkbox" : "textbox") : tag);
+        const getName = (el: any) => normalize(
+          el.getAttribute("aria-label")
+            ?? el.getAttribute("aria-labelledby")
+            ?? el.getAttribute("name")
+            ?? el.getAttribute("title")
+            ?? el.getAttribute("placeholder")
+            ?? el.innerText
+            ?? el.textContent
+            ?? "",
+        ).slice(0, 200);
+        const buildSelectors = (el: any, tag: string, role: string, name: string) => {
+          const suggestions: Array<{ kind: "role" | "name" | "placeholder" | "testId" | "id" | "css"; value: string; selector: string }> = [];
+          const push = (kind: "role" | "name" | "placeholder" | "testId" | "id" | "css", value: string, selector: string) => {
+            if (!value || !selector || suggestions.some((item) => item.selector === selector)) return;
+            suggestions.push({ kind, value: normalize(value).slice(0, 200), selector });
+          };
+          const id = el.getAttribute("id");
+          const testId = el.getAttribute("data-testid");
+          const placeholder = el.getAttribute("placeholder");
+          const fieldName = el.getAttribute("name");
+          if (role && name) push("role", `${role}:${name}`, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`);
+          if (fieldName) push("name", fieldName, `${tag}[name="${fieldName.replace(/"/g, '\\"')}"]`);
+          if (placeholder) push("placeholder", placeholder, `placeholder=${placeholder.replace(/"/g, '\\"')}`);
+          if (testId) push("testId", testId, `[data-testid="${testId.replace(/"/g, '\\"')}"]`);
+          if (id) push("id", id, `#${esc(id)}`);
+          const css = id
+            ? `#${esc(id)}`
+            : testId
+              ? `${tag}[data-testid="${testId.replace(/"/g, '\\"')}"]`
+              : `${tag}${fieldName ? `[name="${fieldName.replace(/"/g, '\\"')}"]` : ""}`;
+          push("css", css, css);
+          return suggestions;
+        };
+        const serializeElement = (el: any) => {
+          const tag = el.tagName.toLowerCase();
+          const role = guessRole(el, tag);
+          const name = getName(el);
+          const text = normalize(el.innerText ?? el.textContent ?? "").slice(0, 200);
+          const id = el.getAttribute("id") ?? undefined;
+          const testId = el.getAttribute("data-testid") ?? undefined;
+          const placeholder = el.getAttribute("placeholder") ?? undefined;
+          const selectors = buildSelectors(el, tag, role, name);
+          const selectedValue = tag === "select"
+            ? normalize(Array.from(el.selectedOptions ?? []).map((option: any) => option.textContent ?? option.value ?? "").join(", ")).slice(0, 200)
+            : role === "tab" || role === "radio" || role === "checkbox"
+              ? String(el.getAttribute("aria-selected") === "true" || el.getAttribute("aria-checked") === "true" || el.checked === true)
+              : undefined;
+          return {
+            role,
+            name,
+            text,
+            selector: selectors[0]?.selector ?? undefined,
+            selectors,
+            tagName: tag,
+            placeholder,
+            testId,
+            id,
+            disabled: el.disabled === true || el.getAttribute("aria-disabled") === "true",
+            selected: el.selected === true || el.checked === true || el.getAttribute("aria-selected") === "true",
+            active: document.activeElement === el,
+            value: selectedValue,
+          };
+        };
 
         const rawElements = Array.from(
           document.querySelectorAll("a, button, input, textarea, select, [role], [onclick], [tabindex]"),
         ) as any[];
-        const limited = rawElements.slice(0, 60);
-
-        const elements = limited.map((el: any) => {
-          const tag = el.tagName.toLowerCase();
-          const role = el.getAttribute("role") ?? tag;
-          const name =
-            el.getAttribute("aria-label") ??
-            el.getAttribute("name") ??
-            el.getAttribute("title") ??
-            el.getAttribute("placeholder") ??
-            el.innerText?.trim() ??
-            "";
-          const text = el.innerText?.trim() ?? "";
-          const id = el.getAttribute("id");
-          const testId = el.getAttribute("data-testid");
-          const selector = id
-            ? `#${esc(id)}`
-            : testId
-              ? `${tag}[data-testid="${testId}"]`
-              : `${tag}${el.getAttribute("name") ? `[name="${el.getAttribute("name")}"]` : ""}`;
-          return {
-            role,
-            name: normalize(name).slice(0, 200),
-            text: normalize(text).slice(0, 200),
-            selector,
-          };
-        });
+        const elements = rawElements.filter((el: any) => isVisible(el)).slice(0, 60).map((el: any) => serializeElement(el));
+        const activeElement = document.activeElement && document.activeElement !== document.body
+          ? {
+            ...serializeElement(document.activeElement),
+            type: document.activeElement.getAttribute("type") ?? undefined,
+            readOnly: document.activeElement.readOnly === true,
+            isContentEditable: document.activeElement.isContentEditable === true,
+          }
+          : null;
+        const dialogs = Array.from(document.querySelectorAll("dialog[open], [role='dialog'], [role='alertdialog'], [aria-modal='true']"))
+          .filter((el: any) => isVisible(el))
+          .slice(0, 10)
+          .map((el: any) => ({
+            ...serializeElement(el),
+            title: normalize(
+              el.getAttribute("aria-label")
+                ?? document.getElementById(el.getAttribute("aria-labelledby") ?? "")?.textContent
+                ?? el.querySelector("h1, h2, h3, [data-dialog-title]")?.textContent
+                ?? el.innerText
+                ?? "",
+            ).slice(0, 200),
+            ariaModal: el.getAttribute("aria-modal") === "true",
+            open: el.hasAttribute("open") || el.getAttribute("aria-hidden") !== "true",
+          }));
+        const topLayer = Array.from(document.querySelectorAll("body *"))
+          .filter((el: any) => {
+            if (!isVisible(el)) return false;
+            const style = window.getComputedStyle(el);
+            if (style.pointerEvents === "none") return false;
+            if (!(style.position === "fixed" || style.position === "sticky")) return false;
+            const rect = el.getBoundingClientRect();
+            return rect.width >= window.innerWidth * 0.35 && rect.height >= window.innerHeight * 0.2;
+          })
+          .slice(0, 6)
+          .map((el: any) => {
+            const style = window.getComputedStyle(el);
+            return {
+              ...serializeElement(el),
+              reason: dialogs.some((dialog: any) => dialog.selector === buildSelectors(el, el.tagName.toLowerCase(), guessRole(el, el.tagName.toLowerCase()), getName(el))[0]?.selector)
+                ? "open dialog"
+                : "fixed or sticky overlay",
+              zIndex: Number.parseInt(style.zIndex || "0", 10) || 0,
+            };
+          });
 
         return {
           url: window.location.href,
           title,
           text: bodyText,
           elements,
+          activeElement,
+          dialogs,
+          obstruction: {
+            hasModal: dialogs.some((dialog: any) => dialog.ariaModal),
+            dialogCount: dialogs.length,
+            activeDialogTitle: dialogs[0]?.title ?? null,
+            topLayer,
+            notes: [
+              dialogs.length > 0 ? `${dialogs.length} dialog(s) visible.` : "No visible dialogs detected.",
+              topLayer.length > 0
+                ? "Top-layer obstruction diagnostics are heuristic and should be confirmed with a hit test when an action fails."
+                : "No likely top-layer blockers detected from static DOM inspection.",
+            ],
+          },
         };
       }) as Promise<BrowserPageSnapshot>, signal);
+    },
+    async diagnose(selector: string, signal?: AbortSignal) {
+      return withSignal(activePage.evaluate((targetSelector: string) => {
+        const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
+        const esc = (raw: string) => {
+          if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
+          return raw.replace(/[^a-zA-Z0-9_-]/g, "_");
+        };
+        const buildSelectors = (el: any) => {
+          const tag = el.tagName.toLowerCase();
+          const role = el.getAttribute("role") ?? tag;
+          const name = normalize(
+            el.getAttribute("aria-label")
+              ?? el.getAttribute("name")
+              ?? el.getAttribute("title")
+              ?? el.getAttribute("placeholder")
+              ?? el.innerText
+              ?? el.textContent
+              ?? "",
+          ).slice(0, 200);
+          const suggestions: Array<{ kind: "role" | "name" | "placeholder" | "testId" | "id" | "css"; value: string; selector: string }> = [];
+          const push = (kind: "role" | "name" | "placeholder" | "testId" | "id" | "css", value: string, valueSelector: string) => {
+            if (!value || !valueSelector || suggestions.some((item) => item.selector === valueSelector)) return;
+            suggestions.push({ kind, value, selector: valueSelector });
+          };
+          const id = el.getAttribute("id");
+          const testId = el.getAttribute("data-testid");
+          const placeholder = el.getAttribute("placeholder");
+          const fieldName = el.getAttribute("name");
+          if (role && name) push("role", `${role}:${name}`, `role=${role}[name="${name.replace(/"/g, '\\"')}"]`);
+          if (fieldName) push("name", fieldName, `${tag}[name="${fieldName.replace(/"/g, '\\"')}"]`);
+          if (placeholder) push("placeholder", placeholder, `placeholder=${placeholder.replace(/"/g, '\\"')}`);
+          if (testId) push("testId", testId, `[data-testid="${testId.replace(/"/g, '\\"')}"]`);
+          if (id) push("id", id, `#${esc(id)}`);
+          push("css", id ? `#${esc(id)}` : tag, id ? `#${esc(id)}` : tag);
+          return suggestions;
+        };
+        const describeElement = (el: any, reason: string) => ({
+          role: el?.getAttribute?.("role") ?? el?.tagName?.toLowerCase?.(),
+          tagName: el?.tagName?.toLowerCase?.(),
+          text: normalize(el?.innerText ?? el?.textContent ?? "").slice(0, 120),
+          selector: buildSelectors(el)[0]?.selector,
+          selectors: buildSelectors(el),
+          reason,
+          zIndex: Number.parseInt(window.getComputedStyle(el).zIndex || "0", 10) || 0,
+        });
+        const target = document.querySelector(targetSelector) as any;
+        if (!target) {
+          return { selector: targetSelector, found: false };
+        }
+        const selectors = buildSelectors(target);
+        const rect = target.getBoundingClientRect();
+        const centerX = Math.min(Math.max(rect.left + rect.width / 2, 0), window.innerWidth - 1);
+        const centerY = Math.min(Math.max(rect.top + rect.height / 2, 0), window.innerHeight - 1);
+        const topElement = document.elementFromPoint(centerX, centerY) as any;
+        const intercepted = topElement && topElement !== target && !target.contains(topElement) ? topElement : null;
+        const dialog = target.closest("dialog,[role='dialog'],[role='alertdialog'],[aria-modal='true']") as any;
+        return {
+          found: true,
+          role: target.getAttribute("role") ?? target.tagName.toLowerCase(),
+          name: normalize(
+            target.getAttribute("aria-label")
+              ?? target.getAttribute("name")
+              ?? target.getAttribute("title")
+              ?? target.getAttribute("placeholder")
+              ?? target.innerText
+              ?? target.textContent
+              ?? "",
+          ).slice(0, 200),
+          text: normalize(target.innerText ?? target.textContent ?? "").slice(0, 200),
+          selector: selectors[0]?.selector ?? targetSelector,
+          selectors,
+          tagName: target.tagName.toLowerCase(),
+          disabled: target.disabled === true || target.getAttribute("aria-disabled") === "true",
+          offscreen: rect.bottom < 0 || rect.right < 0 || rect.top > window.innerHeight || rect.left > window.innerWidth,
+          obscured: Boolean(intercepted),
+          obstructionReason: intercepted ? "Another element is receiving pointer hits at the target center point." : undefined,
+          interceptedBy: intercepted ? describeElement(intercepted, "hit-test interceptor") : null,
+          inDialog: Boolean(dialog),
+          dialogTitle: dialog
+            ? normalize(
+              dialog.getAttribute("aria-label")
+                ?? document.getElementById(dialog.getAttribute("aria-labelledby") ?? "")?.textContent
+                ?? dialog.querySelector("h1, h2, h3, [data-dialog-title]")?.textContent
+                ?? dialog.innerText
+                ?? "",
+            ).slice(0, 200)
+            : null,
+        };
+      }, selector) as Promise<BrowserTargetDiagnostics>, signal);
     },
     getEvents() {
       return [...events];
@@ -748,6 +1040,13 @@ async function createNodeBridgePlaywrightDriver(): Promise<BrowserDriver> {
       }
       return result as BrowserPageSnapshot;
     },
+    async diagnose(selector: string, signal?: AbortSignal) {
+      const result = await sendCommand("diagnose", { selector }, signal);
+      if (!result || typeof result !== "object") {
+        throw new Error("Node bridge returned invalid browser diagnostics.");
+      }
+      return result as BrowserTargetDiagnostics;
+    },
     getEvents() {
       return [...events];
     },
@@ -846,4 +1145,36 @@ async function launchBrowserWithFallback(
 function extractErrorMessage(err: unknown): string {
   if (err instanceof Error) return err.message;
   return String(err);
+}
+
+function enrichBrowserActionError(
+  action: string,
+  selector: string,
+  err: unknown,
+  diagnostics: BrowserTargetDiagnostics | null,
+): Error {
+  const parts = [`browser.${action} failed for '${selector}': ${extractErrorMessage(err)}`];
+  if (!diagnostics) return new Error(parts.join(" "));
+  if (!diagnostics.found) {
+    parts.push("Target was not found in the DOM.");
+    return new Error(parts.join(" "));
+  }
+  if (diagnostics.offscreen) parts.push("Target appears offscreen.");
+  if (diagnostics.disabled) parts.push("Target is disabled.");
+  if (diagnostics.inDialog) {
+    parts.push(`Target is inside dialog${diagnostics.dialogTitle ? ` '${diagnostics.dialogTitle}'` : ""}.`);
+  }
+  if (diagnostics.obscured) {
+    const interceptedBy = diagnostics.interceptedBy;
+    const interceptedLabel = interceptedBy
+      ? [interceptedBy.role ?? interceptedBy.tagName ?? "element", interceptedBy.text, interceptedBy.selector]
+        .filter(Boolean)
+        .join(" — ")
+      : null;
+    parts.push(
+      diagnostics.obstructionReason
+        ?? (interceptedLabel ? `Click may be intercepted by ${interceptedLabel}.` : "Click appears obstructed."),
+    );
+  }
+  return new Error(parts.join(" "));
 }

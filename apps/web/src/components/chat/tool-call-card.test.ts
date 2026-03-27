@@ -4,6 +4,7 @@ let formatStructuredValue: typeof import('./tool-call-card')['formatStructuredVa
 let shouldInitiallyCollapseToolCallGroup: typeof import('./tool-call-card')['shouldInitiallyCollapseToolCallGroup']
 let shouldInitiallyCollapseAgentToolCallWrapper: typeof import('./tool-call-card')['shouldInitiallyCollapseAgentToolCallWrapper']
 let isInlineToolCall: typeof import('./tool-call-card')['isInlineToolCall']
+let summarizeCollapsedToolCalls: typeof import('./tool-call-card')['summarizeCollapsedToolCalls']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -14,7 +15,13 @@ beforeAll(async () => {
       hostname: 'localhost',
     },
   }
-  ;({ formatStructuredValue, shouldInitiallyCollapseToolCallGroup, shouldInitiallyCollapseAgentToolCallWrapper, isInlineToolCall } = await import('./tool-call-card'))
+  ;({
+    formatStructuredValue,
+    shouldInitiallyCollapseToolCallGroup,
+    shouldInitiallyCollapseAgentToolCallWrapper,
+    isInlineToolCall,
+    summarizeCollapsedToolCalls,
+  } = await import('./tool-call-card'))
 }, 30_000)
 
 describe('formatStructuredValue', () => {
@@ -107,5 +114,24 @@ describe('AgentToolCallWrapper', () => {
       ],
       true,
     )).toBe(false)
+  })
+})
+
+describe('summarizeCollapsedToolCalls', () => {
+  it('groups tool calls by category for collapsed summaries', () => {
+    expect(summarizeCollapsedToolCalls([
+      { callId: '1', tool: 'terminal.run', args: { command: 'bun test' }, status: 'success', startedAt: 1, completedAt: 2 },
+      { callId: '2', tool: 'execute', args: { command: 'bun lint' }, status: 'success', startedAt: 3, completedAt: 4 },
+      { callId: '3', tool: 'edit', args: { path: 'src/app.ts', content: 'x' }, status: 'success', startedAt: 5, completedAt: 6 },
+      { callId: '4', tool: 'file.write', args: { path: 'src/app.ts', content: 'y' }, status: 'success', startedAt: 7, completedAt: 8 },
+      { callId: '5', tool: 'read', args: { path: 'src/app.ts' }, status: 'success', startedAt: 9, completedAt: 10 },
+    ])).toBe('5 tool calls: 2 terminal, 2 edit, 1 read')
+  })
+
+  it('uses a singular category summary when all calls are the same kind', () => {
+    expect(summarizeCollapsedToolCalls([
+      { callId: '1', tool: 'browser.click', args: { selector: 'button' }, status: 'success', startedAt: 1, completedAt: 2 },
+      { callId: '2', tool: 'browser.type', args: { selector: 'input', text: 'hello' }, status: 'success', startedAt: 3, completedAt: 4 },
+    ])).toBe('2 browser tool calls')
   })
 })

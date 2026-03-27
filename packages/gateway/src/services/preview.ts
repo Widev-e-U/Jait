@@ -1,6 +1,10 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
-import { BrowserSurface, type BrowserRuntimeEvent } from "../surfaces/browser.js";
+import {
+  BrowserSurface,
+  type BrowserPageSnapshot,
+  type BrowserRuntimeEvent,
+} from "../surfaces/browser.js";
 import {
   createPreviewRunner,
   type PreviewRunner,
@@ -246,18 +250,22 @@ export class PreviewService {
     return browser.describe();
   }
 
-  async inspect(sessionId: string): Promise<{
+  async inspect(sessionId: string, selector?: string): Promise<{
     status: PreviewStatus;
     url: string | null;
     browserEvents: BrowserRuntimeEvent[];
     logs: PreviewLogEntry[];
     screenshot: string | null;
+    page: BrowserPageSnapshot | null;
+    snapshot: string | null;
+    target?: import("../surfaces/browser.js").BrowserTargetDiagnostics | null;
   } | null> {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
 
     const events = this.readBrowserEvents(session);
     const screenshotBase64 = await this.screenshot(sessionId).catch(() => null);
+    const inspection = await this.inspectBrowserPage(session, selector).catch(() => null);
 
     return {
       status: session.status,
@@ -265,6 +273,9 @@ export class PreviewService {
       browserEvents: events,
       logs: [...session.logs],
       screenshot: screenshotBase64,
+      page: inspection?.snapshot ?? null,
+      snapshot: inspection ? this.formatInspectionSnapshot(inspection.snapshot) : null,
+      target: inspection?.target ?? null,
     };
   }
 
@@ -295,6 +306,37 @@ export class PreviewService {
     const surface = this.surfaceRegistry.getSurface(session.browserId);
     if (!surface || surface.type !== "browser" || surface.state !== "running") return session.browserEvents;
     return (surface as BrowserSurface).getEvents();
+  }
+
+  private async inspectBrowserPage(
+    session: InternalPreviewSession,
+    selector?: string,
+  ): Promise<{ snapshot: BrowserPageSnapshot; target?: import("../surfaces/browser.js").BrowserTargetDiagnostics } | null> {
+    if (!session.browserId) return null;
+    const surface = this.surfaceRegistry.getSurface(session.browserId);
+    if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
+    return (surface as BrowserSurface).inspect(selector);
+  }
+
+  private formatInspectionSnapshot(snapshot: BrowserPageSnapshot): string {
+    const lines = [
+      `URL: ${snapshot.url}`,
+      `Title: ${snapshot.title || "(untitled)"}`,
+      snapshot.activeElement
+        ? `Active element: ${[
+          snapshot.activeElement.role ?? snapshot.activeElement.tagName ?? "element",
+          snapshot.activeElement.name,
+          snapshot.activeElement.selector,
+        ].filter(Boolean).join(" - ")}`
+        : "Active element: (none)",
+      snapshot.dialogs?.length
+        ? `Dialogs: ${snapshot.dialogs.map((dialog) => dialog.title || dialog.name || dialog.selector || dialog.role || "dialog").join(", ")}`
+        : "Dialogs: (none)",
+      "",
+      "Text:",
+      snapshot.text.trim() || "(no textual content)",
+    ];
+    return lines.join("\n").trim();
   }
 
   private appendLog(

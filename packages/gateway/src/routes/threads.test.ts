@@ -1,6 +1,6 @@
 import Fastify from "fastify";
 import { EventEmitter } from "node:events";
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config.js";
 import { migrateDatabase, openDatabase } from "../db/index.js";
 import type {
@@ -18,6 +18,7 @@ import { ThreadService } from "../services/threads.js";
 import { UserService } from "../services/users.js";
 import { registerThreadRoutes } from "./threads.js";
 import type { WsControlPlane } from "../ws.js";
+import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 
 async function authHeader(jwtSecret: string, userId: string) {
   const token = await signAuthToken({ id: userId, username: `${userId}-name` }, jwtSecret);
@@ -88,12 +89,16 @@ class MockThreadProvider implements CliProviderAdapter {
     return () => this.emitter.off("event", handler);
   }
 
-  private emit(event: ProviderEvent): void {
+  emit(event: ProviderEvent): void {
     this.emitter.emit("event", event);
   }
 }
 
 describe("thread routes", () => {
+  afterEach(() => {
+    interventionRunResumeRegistry.clearForTests();
+  });
+
   it("creates threads in idle state until a provider session actually starts", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -309,6 +314,64 @@ describe("thread routes", () => {
 
     expect(sendResponse.statusCode).toBe(200);
     expect(provider.sendTurn).toHaveBeenNthCalledWith(2, "mock-session-1", "address the follow-up", undefined);
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("queues an intervention resume note onto the same running thread session", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("claude-code");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Claude helper", providerId: "claude-code", kind: "delegation" },
+    });
+    const thread = createResponse.json() as { id: string };
+
+    const startResponse = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "inspect ui", titleTask: "" },
+    });
+
+    expect(startResponse.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+
+    const resume = await interventionRunResumeRegistry.resumeThread(
+      thread.id,
+      "User completed intervention on browser session bs_123. Note: Continue from the current page.",
+    );
+    expect(resume).toEqual({ status: "queued" });
+
+    provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 2);
+    expect(provider.sendTurn).toHaveBeenNthCalledWith(
+      2,
+      "mock-session-1",
+      "User completed intervention on browser session bs_123. Note: Continue from the current page.",
+    );
+    expect(threadService.getById(thread.id)?.status).toBe("running");
+
+    provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+    await waitFor(() => threadService.getById(thread.id)?.status === "completed");
 
     await app.close();
     sqlite.close();

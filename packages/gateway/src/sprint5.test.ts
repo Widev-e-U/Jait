@@ -4,6 +4,7 @@ import { BrowserSurfaceFactory, type BrowserDriver, type BrowserPageSnapshot } f
 import {
   createBrowserNavigateTool,
   createBrowserSnapshotTool,
+  createBrowserInspectTool,
   createBrowserInteractionTools,
   createWebFetchTool,
   createWebSearchTool,
@@ -20,12 +21,16 @@ const toolContext = {
 class MockBrowserDriver implements BrowserDriver {
   calls: string[] = [];
   currentUrl = "about:blank";
+  failClickSelector: string | null = null;
 
   async navigate(url: string): Promise<void> {
     this.calls.push(`navigate:${url}`);
     this.currentUrl = url;
   }
   async click(selector: string): Promise<void> {
+    if (this.failClickSelector === selector) {
+      throw new Error("Element is not clickable");
+    }
     this.calls.push(`click:${selector}`);
   }
   async typeText(selector: string, text: string): Promise<void> {
@@ -50,9 +55,84 @@ class MockBrowserDriver implements BrowserDriver {
       title: "Mock Title",
       text: "Hello from mock browser",
       elements: [
-        { role: "button", name: "Submit", selector: "#submit" },
-        { role: "textbox", name: "Email", selector: "#email" },
+        {
+          role: "button",
+          name: "Submit",
+          selector: "#submit",
+          selectors: [
+            { kind: "id", value: "submit", selector: "#submit" },
+            { kind: "role", value: "button:Submit", selector: "role=button[name=\"Submit\"]" },
+          ],
+        },
+        {
+          role: "textbox",
+          name: "Email",
+          selector: "#email",
+          placeholder: "Enter email",
+          selectors: [
+            { kind: "id", value: "email", selector: "#email" },
+            { kind: "placeholder", value: "Enter email", selector: "placeholder=Enter email" },
+          ],
+        },
       ],
+      activeElement: {
+        role: "textbox",
+        name: "Email",
+        selector: "#email",
+        selectors: [{ kind: "id", value: "email", selector: "#email" }],
+        tagName: "input",
+        type: "email",
+      },
+      dialogs: [
+        {
+          role: "dialog",
+          title: "Sign in",
+          name: "Sign in",
+          selector: "[data-testid=\"login-dialog\"]",
+          selectors: [{ kind: "testId", value: "login-dialog", selector: "[data-testid=\"login-dialog\"]" }],
+          ariaModal: true,
+          open: true,
+        },
+      ],
+      obstruction: {
+        hasModal: true,
+        dialogCount: 1,
+        activeDialogTitle: "Sign in",
+        topLayer: [
+          {
+            role: "dialog",
+            tagName: "div",
+            selector: "[data-testid=\"login-dialog\"]",
+            reason: "open dialog",
+          },
+        ],
+        notes: ["1 dialog(s) visible."],
+      },
+    };
+  }
+  async diagnose(selector: string) {
+    return {
+      selector,
+      found: selector !== "#missing",
+      role: "button",
+      name: "Submit",
+      selector: "#submit",
+      selectors: [{ kind: "id", value: "submit", selector: "#submit" }],
+      tagName: "button",
+      disabled: false,
+      offscreen: false,
+      obscured: selector === "#submit",
+      obstructionReason: selector === "#submit" ? "Another element is receiving pointer hits at the target center point." : undefined,
+      interceptedBy: selector === "#submit"
+        ? {
+          role: "dialog",
+          tagName: "div",
+          selector: "[data-testid=\"login-dialog\"]",
+          reason: "hit-test interceptor",
+        }
+        : null,
+      inDialog: true,
+      dialogTitle: "Sign in",
     };
   }
   async close(): Promise<void> {
@@ -80,9 +160,39 @@ describe("Sprint 5 — Browser surface and tools", () => {
 
     const snapResult = await snapshot.execute({}, toolContext);
     expect(snapResult.ok).toBe(true);
-    const data = snapResult.data as { snapshot: string };
+    const data = snapResult.data as {
+      snapshot: string;
+      activeElement: { selector: string };
+      dialogs: Array<{ title: string }>;
+      obstruction: { hasModal: boolean };
+      interactiveElements: Array<{ selectors: Array<{ kind: string }> }>;
+    };
     expect(data.snapshot).toContain("URL: https://example.com");
     expect(data.snapshot).toContain("Interactive elements:");
+    expect(data.snapshot).toContain("Active element:");
+    expect(data.activeElement.selector).toBe("#email");
+    expect(data.dialogs[0]?.title).toBe("Sign in");
+    expect(data.obstruction.hasModal).toBe(true);
+    expect(data.interactiveElements[0]?.selectors[0]?.kind).toBe("id");
+  });
+
+  it("returns structured browser inspection data", async () => {
+    await createBrowserNavigateTool(registry).execute({ url: "https://example.com" }, toolContext);
+    const inspect = createBrowserInspectTool(registry);
+
+    const result = await inspect.execute({ selector: "#submit" }, toolContext);
+
+    expect(result.ok).toBe(true);
+    const data = result.data as {
+      target: { selector: string; obscured: boolean; interceptedBy: { role: string } };
+      activeElement: { selector: string };
+      dialogs: Array<{ title: string }>;
+    };
+    expect(data.target.selector).toBe("#submit");
+    expect(data.target.obscured).toBe(true);
+    expect(data.target.interceptedBy.role).toBe("dialog");
+    expect(data.activeElement.selector).toBe("#email");
+    expect(data.dialogs[0]?.title).toBe("Sign in");
   });
 
   it("executes browser interaction tools", async () => {
@@ -108,6 +218,58 @@ describe("Sprint 5 — Browser surface and tools", () => {
         "screenshot:artifacts/page.png",
       ]),
     );
+  });
+
+  it("adds obstruction diagnostics to click failures", async () => {
+    await createBrowserNavigateTool(registry).execute({ url: "https://example.com" }, toolContext);
+    driver.failClickSelector = "#submit";
+    const tools = createBrowserInteractionTools(registry);
+    const click = tools.find((tool) => tool.name === "browser.click");
+
+    await expect(click!.execute({ selector: "#submit" }, toolContext)).rejects.toThrow(
+      /Click may be intercepted|Another element is receiving pointer hits|inside dialog/i,
+    );
+  });
+
+  it("redacts browser captures and suppresses screenshots for secret-safe sessions", async () => {
+    const collaboration = {
+      assertAgentControl: vi.fn(),
+      getSessionByBrowserId: vi.fn().mockReturnValue({
+        id: "bs_secret",
+        secretSafe: true,
+        controller: "agent",
+      }),
+    };
+
+    await createBrowserNavigateTool(registry, collaboration as any).execute({ url: "https://example.com" }, toolContext);
+
+    const snapshot = await createBrowserSnapshotTool(registry, collaboration as any).execute({}, toolContext);
+    expect(snapshot.ok).toBe(true);
+    expect(snapshot.message).toContain("secret-safe");
+    expect(snapshot.data).toMatchObject({
+      captureSuppressed: true,
+      textPreview: "",
+      interactiveElements: [],
+      activeElement: null,
+      dialogs: [],
+      obstruction: null,
+    });
+
+    const inspect = await createBrowserInspectTool(registry, collaboration as any).execute({ selector: "#submit" }, toolContext);
+    expect(inspect.ok).toBe(true);
+    expect(inspect.message).toContain("secret-safe");
+    expect(inspect.data).toMatchObject({
+      captureSuppressed: true,
+      target: null,
+      dialogs: [],
+    });
+
+    const screenshotTool = createBrowserInteractionTools(registry, collaboration as any)
+      .find((tool) => tool.name === "browser.screenshot");
+    const screenshot = await screenshotTool!.execute({ path: "artifacts/page-secret.png" }, toolContext);
+    expect(screenshot.ok).toBe(false);
+    expect(screenshot.message).toContain("secret-safe");
+    expect(driver.calls).not.toContain("screenshot:artifacts/page-secret.png");
   });
 });
 

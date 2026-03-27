@@ -42,6 +42,7 @@ import {
 import type { WsEventType } from "@jait/shared";
 import type { ThreadInfo, ThreadRegistrySnapshot } from "@jait/shared";
 import type { ProviderModelInfo } from "../providers/contracts.js";
+import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 
 const KNOWN_PROVIDER_IDS = new Set<ProviderId>(["jait", "codex", "claude-code", "gemini", "opencode", "copilot"]);
 
@@ -159,6 +160,8 @@ export function registerThreadRoutes(
 
   // Track active onEvent unsubscribe functions per thread so we can clean up
   const threadUnsubs = new Map<string, () => void>();
+  const threadResumeUnsubs = new Map<string, () => void>();
+  const pendingInterventionMessages = new Map<string, string[]>();
 
   // Track RemoteCliProvider instances per thread so /send, /stop, /interrupt
   // can access them (they're not in the global providerRegistry)
@@ -222,6 +225,123 @@ export function registerThreadRoutes(
       ...(thread ? { thread } : {}),
       ...(error ? { error } : {}),
     });
+  }
+
+  function unregisterThreadResume(threadId: string): void {
+    const unregister = threadResumeUnsubs.get(threadId);
+    if (unregister) {
+      unregister();
+      threadResumeUnsubs.delete(threadId);
+    }
+    pendingInterventionMessages.delete(threadId);
+  }
+
+  function registerThreadResume(
+    threadId: string,
+    handler: (message: string) => Promise<{ status: "queued" | "not-running" | "error"; error?: string }>,
+  ): void {
+    unregisterThreadResume(threadId);
+    threadResumeUnsubs.set(threadId, interventionRunResumeRegistry.registerThread(threadId, handler));
+  }
+
+  async function flushPendingInterventionMessage(
+    threadId: string,
+    providerSessionId: string,
+    providerId: ProviderId,
+  ): Promise<boolean> {
+    const queued = pendingInterventionMessages.get(threadId);
+    const nextMessage = queued?.shift();
+    if (!nextMessage) return false;
+    if (queued && queued.length > 0) pendingInterventionMessages.set(threadId, queued);
+    else pendingInterventionMessages.delete(threadId);
+
+    const thread = threadService.getById(threadId);
+    if (!thread || thread.status !== "running" || thread.providerSessionId !== providerSessionId) {
+      return false;
+    }
+
+    const provider = remoteProviders.get(threadId) ?? providerRegistry.get(providerId);
+    if (!provider) {
+      pendingInterventionMessages.delete(threadId);
+      return false;
+    }
+
+    await provider.sendTurn(providerSessionId, nextMessage);
+    const userActivity = threadService.addActivity(threadId, "message", nextMessage.slice(0, 500), {
+      role: "user",
+      content: nextMessage,
+    });
+    broadcastThreadEvent(threadId, "activity", { activity: userActivity });
+    threadService.update(threadId, { status: "running", error: null });
+    broadcastThreadStatus(threadId, "running");
+    return true;
+  }
+
+  function buildThreadEventHandler(
+    threadId: string,
+    providerSessionId: string,
+    providerId: ProviderId,
+    options?: { suppressTitleTurnEvents?: () => number; decrementSuppressedTurn?: () => void },
+  ): (event: ProviderEvent) => void {
+    return (event: ProviderEvent) => {
+      if (!isThreadSessionEvent(event, providerSessionId)) {
+        return;
+      }
+
+      if ((options?.suppressTitleTurnEvents?.() ?? 0) > 0) {
+        if (event.type === "turn.completed") {
+          options?.decrementSuppressedTurn?.();
+          return;
+        }
+        if (event.type === "turn.started") {
+          return;
+        }
+      }
+
+      const activity = threadService.logProviderEvent(threadId, event);
+      if (activity) {
+        broadcastThreadEvent(threadId, "activity", { event, activity });
+      }
+
+      if (event.type === "session.completed") {
+        threadService.markCompleted(threadId);
+        broadcastThreadStatus(threadId, "completed");
+        const unsubscribe = threadUnsubs.get(threadId);
+        if (unsubscribe) {
+          unsubscribe();
+          threadUnsubs.delete(threadId);
+        }
+        unregisterThreadResume(threadId);
+      } else if (event.type === "session.error") {
+        threadService.markError(threadId, event.error);
+        broadcastThreadStatus(threadId, "error", event.error);
+        const unsubscribe = threadUnsubs.get(threadId);
+        if (unsubscribe) {
+          unsubscribe();
+          threadUnsubs.delete(threadId);
+        }
+        remoteProviders.delete(threadId);
+        unregisterThreadResume(threadId);
+      } else if (event.type === "turn.started") {
+        const cur = threadService.getById(threadId);
+        if (cur && cur.status !== "running") {
+          threadService.update(threadId, { status: "running", error: null });
+          broadcastThreadStatus(threadId, "running");
+        }
+      } else if (event.type === "turn.completed") {
+        void flushPendingInterventionMessage(threadId, providerSessionId, providerId)
+          .then((resumed) => {
+            if (resumed) return;
+            threadService.update(threadId, { status: "completed", error: null, completedAt: new Date().toISOString() });
+            broadcastThreadStatus(threadId, "completed");
+          })
+          .catch((error) => {
+            threadService.markError(threadId, error instanceof Error ? error.message : String(error));
+            broadcastThreadStatus(threadId, "error", error instanceof Error ? error.message : String(error));
+            unregisterThreadResume(threadId);
+          });
+      }
+    };
   }
 
   function isThreadSessionEvent(event: ProviderEvent, sessionId: string): boolean {
@@ -470,6 +590,7 @@ export function registerThreadRoutes(
         const unsub = threadUnsubs.get(id);
         if (unsub) { unsub(); threadUnsubs.delete(id); }
         remoteProviders.delete(id);
+        unregisterThreadResume(id);
 
         // Clean up worktree + branch (best effort, don't block the response)
         if (existing.workingDirectory) {
@@ -498,6 +619,8 @@ export function registerThreadRoutes(
         const provider = providerRegistry.get(existing.providerId as ProviderId);
         if (provider) await provider.stopSession(existing.providerSessionId);
       } catch { /* best effort */ }
+      const unsub = threadUnsubs.get(id);
+      if (unsub) { unsub(); threadUnsubs.delete(id); }
     }
 
     // Clean up the worktree and branch on disk (best effort, don't block delete)
@@ -507,6 +630,7 @@ export function registerThreadRoutes(
 
     threadService.delete(id);
     remoteProviders.delete(id);
+    unregisterThreadResume(id);
     broadcastThreadEvent(id, "deleted", {});
     return reply.status(204).send();
   });
@@ -648,62 +772,22 @@ export function registerThreadRoutes(
       let suppressTitleTurnEvents = 0;
 
       // Subscribe to provider events and log them
-      const unsubscribe = provider.onEvent((event: ProviderEvent) => {
-        if (!isThreadSessionEvent(event, session.id)) {
-          return;
-        }
-
-        // During the title turn we still log events but skip status changes
-        if (suppressTitleTurnEvents > 0) {
-          if (event.type === "turn.completed") {
-            suppressTitleTurnEvents--;
-            return;
-          }
-          // Also suppress turn.started during title gen to avoid redundant broadcasts
-          if (event.type === "turn.started") {
-            return;
-          }
-        }
-
-        const activity = threadService.logProviderEvent(id, event);
-        if (activity) {
-          broadcastThreadEvent(id, "activity", { event, activity });
-        }
-
-        // Handle session / turn lifecycle
-        if (event.type === "session.completed") {
-          threadService.markCompleted(id);
-          broadcastThreadStatus(id, "completed");
-          unsubscribe();
-          threadUnsubs.delete(id);
-          // Keep remoteProviders entry — the thread can still be resumed
-          // with a new session (e.g. to fix push failures). Cleaned up on
-          // PR merge/close or thread deletion.
-        } else if (event.type === "session.error") {
-          threadService.markError(id, event.error);
-          broadcastThreadStatus(id, "error", event.error);
-          unsubscribe();
-          threadUnsubs.delete(id);
-          remoteProviders.delete(id);
-        } else if (event.type === "turn.started") {
-          // A new turn began — make sure the thread is marked running.
-          // This acts as a safety net: if a previous turn.completed leaked
-          // (e.g. race between title-gen and suppression), this corrects it.
-          const cur = threadService.getById(id);
-          if (cur && cur.status !== "running") {
-            threadService.update(id, { status: "running", error: null });
-            broadcastThreadStatus(id, "running");
-          }
-        } else if (event.type === "turn.completed") {
-          // Turn finished but session is still alive — mark thread completed
-          // while keeping providerSessionId set.  The frontend checks
-          // providerSessionId to decide between /send and /start.
-          threadService.update(id, { status: "completed", error: null, completedAt: new Date().toISOString() });
-          broadcastThreadStatus(id, "completed");
-        }
-      });
+      const unsubscribe = provider.onEvent(buildThreadEventHandler(id, session.id, thread.providerId as ProviderId, {
+        suppressTitleTurnEvents: () => suppressTitleTurnEvents,
+        decrementSuppressedTurn: () => { suppressTitleTurnEvents--; },
+      }));
 
       threadUnsubs.set(id, unsubscribe);
+      registerThreadResume(id, async (message) => {
+        const activeThread = threadService.getById(id);
+        if (!activeThread?.providerSessionId || activeThread.status !== "running") {
+          return { status: "not-running" };
+        }
+        const queued = pendingInterventionMessages.get(id) ?? [];
+        queued.push(message);
+        pendingInterventionMessages.set(id, queued);
+        return { status: "queued" };
+      });
 
       threadService.markRunning(id, session.id);
       if (executionNode) {
@@ -816,6 +900,7 @@ export function registerThreadRoutes(
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);
           threadService.markError(id, errorMsg);
+          unregisterThreadResume(id);
           broadcastThreadStatus(id, "error", errorMsg);
         }
       })();
@@ -826,6 +911,7 @@ export function registerThreadRoutes(
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
       threadService.markError(id, errorMsg);
+      unregisterThreadResume(id);
       return reply.status(500).send({ error: errorMsg });
     }
   });
@@ -924,6 +1010,7 @@ export function registerThreadRoutes(
     }
 
     threadService.markInterrupted(id);
+    unregisterThreadResume(id);
     broadcastThreadStatus(id, "interrupted");
     return reply.status(200).send({ ok: true });
   });
@@ -1108,31 +1195,18 @@ export function registerThreadRoutes(
               const prevUnsub = threadUnsubs.get(id);
               if (prevUnsub) { prevUnsub(); threadUnsubs.delete(id); }
 
-              const unsub = provider.onEvent((evt: ProviderEvent) => {
-                if (!isThreadSessionEvent(evt, newSession.id)) return;
-                const act = threadService.logProviderEvent(id, evt);
-                if (act) broadcastThreadEvent(id, "activity", { event: evt, activity: act });
-
-                if (evt.type === "session.completed") {
-                  threadService.markCompleted(id);
-                  broadcastThreadStatus(id, "completed");
-                  unsub(); threadUnsubs.delete(id);
-                } else if (evt.type === "session.error") {
-                  threadService.markError(id, evt.error);
-                  broadcastThreadStatus(id, "error", evt.error);
-                  unsub(); threadUnsubs.delete(id);
-                } else if (evt.type === "turn.started") {
-                  const cur = threadService.getById(id);
-                  if (cur && cur.status !== "running") {
-                    threadService.update(id, { status: "running", error: null });
-                    broadcastThreadStatus(id, "running");
-                  }
-                } else if (evt.type === "turn.completed") {
-                  threadService.update(id, { status: "completed", error: null, completedAt: new Date().toISOString() });
-                  broadcastThreadStatus(id, "completed");
-                }
-              });
+              const unsub = provider.onEvent(buildThreadEventHandler(id, newSession.id, thread.providerId as ProviderId));
               threadUnsubs.set(id, unsub);
+              registerThreadResume(id, async (message) => {
+                const activeThread = threadService.getById(id);
+                if (!activeThread?.providerSessionId || activeThread.status !== "running") {
+                  return { status: "not-running" };
+                }
+                const queued = pendingInterventionMessages.get(id) ?? [];
+                queued.push(message);
+                pendingInterventionMessages.set(id, queued);
+                return { status: "queued" };
+              });
 
               // Send the turn first — only mark running if it succeeds
               try {

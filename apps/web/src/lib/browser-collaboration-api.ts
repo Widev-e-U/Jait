@@ -42,6 +42,11 @@ export interface BrowserIntervention {
   resolvedAt: string | null
 }
 
+export interface BrowserInterventionResumeResult {
+  chat?: { status: 'steered' | 'not-running' | 'error'; error?: string }
+  thread?: { status: 'queued' | 'not-running' | 'error'; error?: string }
+}
+
 function headers(token?: string | null, withJsonBody = false): HeadersInit {
   const next: HeadersInit = {}
   if (withJsonBody) next['Content-Type'] = 'application/json'
@@ -94,6 +99,6 @@ export const browserCollaborationApi = {
       headers: headers(token, true),
       body: JSON.stringify({ userNote: userNote ?? '' }),
     })
-    return parseJson<{ intervention: BrowserIntervention }>(res)
+    return parseJson<{ intervention: BrowserIntervention; resume?: BrowserInterventionResumeResult }>(res)
   },
 }
