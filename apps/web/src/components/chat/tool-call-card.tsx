@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Button } from '@/components/ui/button'
@@ -1070,8 +1070,49 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
   )
 }
 
+/**
+ * Compute parent/child relationships for "agent" tool calls within a flat list.
+ * Calls that appear sequentially after an agent tool_start and before its tool_result
+ * are considered children of that agent call.
+ */
+function computeAgentNesting(calls: ToolCallInfo[]): {
+  childMap: Map<string, ToolCallInfo[]>
+  parentSet: Set<string>
+} {
+  const childMap = new Map<string, ToolCallInfo[]>()
+  const parentSet = new Set<string>()
+
+  for (let i = 0; i < calls.length; i++) {
+    const call = calls[i]
+    if (normalizeTool(call.tool) !== 'agent') continue
+
+    const children: ToolCallInfo[] = []
+    for (let j = i + 1; j < calls.length; j++) {
+      const candidate = calls[j]
+      if (parentSet.has(candidate.callId)) continue
+
+      const isAgentActive = call.status === 'running' || call.status === 'pending'
+      const isWithinAgentLifetime = call.completedAt != null && candidate.startedAt <= call.completedAt
+
+      if (isAgentActive || isWithinAgentLifetime) {
+        children.push(candidate)
+        parentSet.add(candidate.callId)
+      } else {
+        break
+      }
+    }
+
+    if (children.length > 0) {
+      childMap.set(call.callId, children)
+    }
+  }
+
+  return { childMap, parentSet }
+}
+
 interface ToolCallCardProps {
   call: ToolCallInfo
+  childCalls?: ToolCallInfo[]
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
 }
@@ -1143,7 +1184,7 @@ function FileSummaryButton({
   )
 }
 
-function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardProps) {
+function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: ToolCallCardProps) {
   const initialInline = isInlineToolCall(call)
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
   const [now, setNow] = useState(() => Date.now())
@@ -1340,11 +1381,38 @@ function ToolCallCardInner({ call, onOpenTerminal, onOpenDiff }: ToolCallCardPro
   ) : bodyKind === 'browserScreenshot' ? (
     <BrowserScreenshotView path={screenshotPath!} />
   ) : bodyKind === 'subagent' ? (
-    <SubAgentHistoryView
-      data={resultData ?? {}}
-      message={call.result?.message}
-      status={call.status}
-    />
+    childCalls && childCalls.length > 0 ? (
+      <div className="rounded-lg border border-purple-500/20 bg-purple-500/[0.03] text-xs">
+        {(call.status === 'running' || call.status === 'pending') && childCalls.length > 0 && (
+          <div className="flex items-center justify-end gap-2 border-b border-purple-500/15 px-3 py-2 text-[11px] text-muted-foreground">
+            <Loader2 className="h-3 w-3 animate-spin text-purple-500" />
+            <span>{childCalls.length} tool{childCalls.length !== 1 ? 's' : ''}</span>
+          </div>
+        )}
+        {(call.status === 'running' || call.status === 'pending') && childCalls.length === 0 && (
+          <div className="px-3 py-2 text-[11px] text-muted-foreground">Agent is working...</div>
+        )}
+        <div className="divide-y divide-border/30">
+          {childCalls.map((child) => (
+            <ToolCallCard key={child.callId} call={child} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+          ))}
+        </div>
+        {call.result?.message && (call.status === 'success' || call.status === 'error') && (
+          <div className="border-t border-purple-500/15 px-3 py-2">
+            <div className="mb-1 text-[11px] font-medium text-muted-foreground">Result</div>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-[11px] leading-5">
+              {call.result.message}
+            </pre>
+          </div>
+        )}
+      </div>
+    ) : (
+      <SubAgentHistoryView
+        data={resultData ?? {}}
+        message={call.result?.message}
+        status={call.status}
+      />
+    )
   ) : bodyKind === 'editDiff' ? (
      <EditDiffView
       filePath={String(normalizedArgs.path ?? '')}
@@ -1491,8 +1559,12 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
   const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
   const prevAllDoneRef = useRef(false)
 
-  const activeCalls = calls.filter(c => c.status === 'running' || c.status === 'pending')
-  const completedCalls = calls.filter(c => c.status !== 'running' && c.status !== 'pending')
+  // Compute agent nesting so inner-agent tool calls render inside the agent card
+  const { childMap, parentSet } = useMemo(() => computeAgentNesting(calls), [calls])
+  const topLevelCalls = useMemo(() => calls.filter(c => !parentSet.has(c.callId)), [calls, parentSet])
+
+  const activeCalls = topLevelCalls.filter(c => c.status === 'running' || c.status === 'pending')
+  const completedCalls = topLevelCalls.filter(c => c.status !== 'running' && c.status !== 'pending')
   const allDone = activeCalls.length === 0 && completedCalls.length > 0
   const shouldCollapseGroup = collapsible && allDone && completedCalls.length >= MIN_CALLS_TO_COLLAPSE
 
@@ -1570,13 +1642,13 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
         </button>
       )}
       {showAll && completedCalls.slice(0, hiddenCount).map((call) => (
-        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+        <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
       ))}
       {visibleCompleted.map((call) => (
-        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+        <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
       ))}
       {activeCalls.map((call) => (
-        <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+        <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
       ))}
     </div>
   )
@@ -1631,9 +1703,13 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
     : undefined
   const SummaryIcon = getToolCallWrapperIcon(calls)
 
+  // Compute agent nesting so inner-agent tool calls render inside the agent card
+  const { childMap, parentSet } = useMemo(() => computeAgentNesting(calls), [calls])
+  const topLevelCalls = useMemo(() => calls.filter(c => !parentSet.has(c.callId)), [calls, parentSet])
+
   // Split into active and completed for inner collapsing
-  const activeCalls = calls.filter(c => c.status === 'running' || c.status === 'pending')
-  const completedCalls = calls.filter(c => c.status !== 'running' && c.status !== 'pending')
+  const activeCalls = topLevelCalls.filter(c => c.status === 'running' || c.status === 'pending')
+  const completedCalls = topLevelCalls.filter(c => c.status !== 'running' && c.status !== 'pending')
   const needsInnerCollapse = !showAll && completedCalls.length > MAX_VISIBLE_COMPLETED
   const hiddenCount = needsInnerCollapse ? completedCalls.length - MAX_VISIBLE_COMPLETED : 0
   const visibleCompleted = needsInnerCollapse ? completedCalls.slice(-MAX_VISIBLE_COMPLETED) : completedCalls
@@ -1703,13 +1779,13 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
               </button>
             )}
             {showAll && completedCalls.slice(0, hiddenCount).map((call) => (
-              <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+              <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
             ))}
             {visibleCompleted.map((call) => (
-              <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+              <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
             ))}
             {activeCalls.map((call) => (
-              <ToolCallCard key={call.callId} call={call} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+              <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
             ))}
           </div>
         </CollapsibleContent>
