@@ -835,6 +835,7 @@ function App() {
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const showWorkspaceRef = useRef(false)
+  const suppressWorkspaceAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
   const [workspacePreviewState, setWorkspacePreviewState] = useState<{ open: boolean; target: string | null }>({ open: false, target: null })
@@ -1301,6 +1302,10 @@ function App() {
     token,
     onLoginRequired,
   )
+  useEffect(() => {
+    suppressWorkspaceAutoOpenRef.current = false
+  }, [activeSessionId])
+
   const activeWorkspaceRecord = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null,
     [workspaces, activeWorkspaceId],
@@ -2214,6 +2219,7 @@ function App() {
   }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   const closeWorkspacePanel = useCallback(() => {
+    suppressWorkspaceAutoOpenRef.current = true
     showWorkspaceRef.current = false
     setShowWorkspace(false)
     if (activeWorkspace) {
@@ -2379,6 +2385,8 @@ function App() {
       return
     }
 
+    suppressWorkspaceAutoOpenRef.current = false
+
     if (viewMode === 'manager' && automation.selectedThread) {
       const threadWorkspace = automation.selectedThread.workingDirectory ?? selectedThreadRepo?.localPath
       if (threadWorkspace) {
@@ -2480,6 +2488,7 @@ function App() {
   // Auto-open workspace panel when the agent modifies files
   useEffect(() => {
     if (changedFiles.length === 0) return
+    if (suppressWorkspaceAutoOpenRef.current) return
     if (!showWorkspace) {
       showWorkspaceRef.current = true
       setShowWorkspace(true)

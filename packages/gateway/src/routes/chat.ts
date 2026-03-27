@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { FastifyInstance, FastifyRequest } from "fastify";
-import { type AppConfig, inferContextWindow } from "../config.js";
+import { type AppConfig } from "../config.js";
 import type { JaitDB } from "../db/index.js";
 import type { SessionService } from "../services/sessions.js";
 import type { UserService } from "../services/users.js";
@@ -24,6 +24,7 @@ import { eq } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { requireAuth } from "../security/http-auth.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { JaitConfigError, resolveJaitLlmConfig } from "../services/jait-llm.js";
 import {
   runAgentLoop,
   retryToolCall,
@@ -950,34 +951,27 @@ export function registerChatRoutes(
     const userSettings = userService?.getSettings(authUser.id);
     const userApiKeys = userSettings?.apiKeys ?? {};
     const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
-    const effectiveModel = requestBodyModel || userApiKeys["OPENAI_MODEL"]?.trim() || config.openaiModel;
-
-    const configuredBaseUrl = userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl;
     const jaitBackend = userSettings?.jaitBackend ?? "openai";
-    const isOpenRouterModel = effectiveModel.includes("/");
-    const isOpenRouterBaseUrl = configuredBaseUrl.toLowerCase().includes("openrouter.ai");
-    const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
-    const useOpenRouter = jaitBackend === "openrouter" || isOpenRouterModel || isOpenRouterBaseUrl;
-
-    if (jaitBackend === "openrouter" && !openRouterKey && !isOpenRouterBaseUrl) {
-      return reply.status(400).send({
-        error: "CONFIG_ERROR",
-        details: "OPENROUTER_API_KEY is required when the Jait backend provider is set to OpenRouter",
+    let llmRuntime;
+    try {
+      llmRuntime = resolveJaitLlmConfig({
+        config,
+        apiKeys: userApiKeys,
+        requestedModel: requestBodyModel || undefined,
+        jaitBackend,
       });
+      if (!(requestBodyModel || userApiKeys["OPENAI_MODEL"]?.trim())) {
+        llmRuntime = { ...llmRuntime, contextWindow: config.contextWindow };
+      }
+    } catch (error) {
+      if (error instanceof JaitConfigError) {
+        return reply.status(400).send({
+          error: error.code,
+          details: error.message,
+        });
+      }
+      throw error;
     }
-
-    const llmRuntime = {
-      openaiApiKey: useOpenRouter && openRouterKey
-        ? openRouterKey
-        : (userApiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey),
-      openaiBaseUrl: useOpenRouter && openRouterKey
-        ? "https://openrouter.ai/api/v1"
-        : configuredBaseUrl,
-      openaiModel: effectiveModel,
-      contextWindow: (requestBodyModel || userApiKeys["OPENAI_MODEL"]?.trim())
-        ? inferContextWindow(effectiveModel)
-        : config.contextWindow,
-    };
 
     // Set SSE headers (include CORS — reply.raw bypasses @fastify/cors)
     const reqOrigin = request.headers.origin ?? "*";

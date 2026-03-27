@@ -1,5 +1,7 @@
 import type { AppConfig } from "../config.js";
 import type { CliProviderAdapter, ProviderEvent } from "../providers/contracts.js";
+import { resolveJaitLlmConfig } from "./jait-llm.js";
+import type { JaitBackend } from "./users.js";
 
 const TITLE_MAX_LENGTH = 80;
 const TITLE_TURN_TIMEOUT_MS = 30_000;
@@ -12,6 +14,7 @@ export interface GenerateThreadTitleOptions {
   config: AppConfig;
   apiKeys?: Record<string, string>;
   model?: string;
+  jaitBackend?: JaitBackend | null;
 }
 
 /**
@@ -109,6 +112,47 @@ async function callLlm(options: GenerateThreadTitleOptions): Promise<string> {
     { role: "user", content: options.task.trim() },
   ];
 
+  if (options.jaitBackend) {
+    const llm = resolveJaitLlmConfig({
+      config: options.config,
+      apiKeys,
+      requestedModel: options.model,
+      jaitBackend: options.jaitBackend,
+    });
+    if (!llm.openaiApiKey) throw new Error(`${llm.backend.toUpperCase()} API key is not configured`);
+
+    const response = await fetch(`${llm.openaiBaseUrl.replace(/\/+$/, "")}/chat/completions`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${llm.openaiApiKey}`,
+      },
+      body: JSON.stringify({
+        model: llm.openaiModel,
+        temperature: 0.2,
+        max_tokens: 24,
+        messages: promptMessages,
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Jait title generation failed: ${response.status}`);
+    }
+
+    const data = await response.json() as {
+      choices?: Array<{ message?: { content?: string | Array<{ type?: string; text?: string }> } }>;
+    };
+    const content = data.choices?.[0]?.message?.content;
+    if (typeof content === "string") return content;
+    if (Array.isArray(content)) {
+      return content
+        .map((part) => (part?.type === "text" ? part.text ?? "" : ""))
+        .join("")
+        .trim();
+    }
+    throw new Error("Jait title generation returned no content");
+  }
+
   if (apiKeys["OPENAI_API_KEY"]?.trim() || options.config.llmProvider === "openai") {
     const apiKey = apiKeys["OPENAI_API_KEY"]?.trim() || options.config.openaiApiKey;
     if (!apiKey) throw new Error("OPENAI_API_KEY is not configured");
@@ -164,4 +208,3 @@ async function callLlm(options: GenerateThreadTitleOptions): Promise<string> {
   if (!content) throw new Error("Ollama title generation returned no content");
   return content;
 }
-

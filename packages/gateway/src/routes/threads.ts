@@ -765,12 +765,13 @@ export function registerThreadRoutes(
                 const raw = await generateTitleViaTurn(provider, session.id, titleTask);
                 generatedTitle = normalizeGeneratedThreadTitle(raw, "");
               } else {
-                const apiKeys = deps.userService?.getSettings(authUser.id).apiKeys ?? {};
+                const settings = deps.userService?.getSettings(authUser.id);
                 generatedTitle = await generateTitleViaApi({
                   task: titleTask,
                   config,
-                  apiKeys,
+                  apiKeys: settings?.apiKeys,
                   model: thread.model ?? undefined,
+                  jaitBackend: providerId === "jait" ? settings?.jaitBackend : undefined,
                 });
               }
               if (generatedTitle) {

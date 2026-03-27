@@ -7,8 +7,9 @@
  */
 
 import { EventEmitter } from "node:events";
-import { inferContextWindow, type AppConfig } from "../config.js";
+import type { AppConfig } from "../config.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import { resolveJaitLlmConfig } from "../services/jait-llm.js";
 import type { ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
 import {
@@ -228,26 +229,12 @@ export class JaitProvider implements CliProviderAdapter {
 
   private buildLlmConfig(userId?: string, requestedModel?: string): LLMConfig {
     const userSettings = userId ? this.deps.userService?.getSettings(userId) : undefined;
-    const apiKeys = userSettings?.apiKeys ?? {};
-    const configuredBaseUrl = apiKeys["OPENAI_BASE_URL"]?.trim() || this.deps.config.openaiBaseUrl;
-    const jaitBackend = userSettings?.jaitBackend ?? "openai";
-    const effectiveModel = requestedModel?.trim()
-      || apiKeys["OPENAI_MODEL"]?.trim()
-      || this.deps.config.openaiModel;
-    const isOpenRouterModel = effectiveModel.includes("/");
-    const isOpenRouterBaseUrl = configuredBaseUrl.toLowerCase().includes("openrouter.ai");
-    const openRouterKey = apiKeys["OPENROUTER_API_KEY"]?.trim();
-    const useOpenRouter = jaitBackend === "openrouter" || isOpenRouterModel || isOpenRouterBaseUrl;
-    return {
-      openaiApiKey: useOpenRouter && openRouterKey
-        ? openRouterKey
-        : (apiKeys["OPENAI_API_KEY"]?.trim() || this.deps.config.openaiApiKey),
-      openaiBaseUrl: useOpenRouter && openRouterKey
-        ? "https://openrouter.ai/api/v1"
-        : configuredBaseUrl,
-      openaiModel: effectiveModel,
-      contextWindow: inferContextWindow(effectiveModel),
-    };
+    return resolveJaitLlmConfig({
+      config: this.deps.config,
+      apiKeys: userSettings?.apiKeys,
+      requestedModel,
+      jaitBackend: userSettings?.jaitBackend,
+    });
   }
 
   private async executeTool(
