@@ -77,4 +77,16 @@ describe("runStackedAction – unstage on commit failure", () => {
     const status = git(repoDir, "status --porcelain");
     expect(status).toBe("");
   });
+
+  it("sync publishes the current branch when no upstream exists", { timeout: 15_000 }, async () => {
+    const bareRemote = await mkdtemp(join(tmpdir(), "git-sync-remote-"));
+    git(bareRemote, "init --bare");
+    git(repoDir, `remote add origin "${bareRemote}"`);
+
+    const result = await svc.sync(repoDir);
+
+    expect(result.pull.status).toBe("skipped_no_upstream");
+    expect(result.push.status).toBe("pushed");
+    expect(result.upstreamBranch).toBe("origin/master");
+  });
 });

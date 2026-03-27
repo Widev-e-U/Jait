@@ -115,6 +115,13 @@ export interface GitPullResult {
   upstreamBranch: string | null;
 }
 
+export interface GitSyncResult {
+  branch: string;
+  upstreamBranch: string | null;
+  pull: { status: "pulled" | "skipped_up_to_date" | "skipped_no_upstream" };
+  push: { status: "pushed" | "skipped_up_to_date" | "skipped_no_remote" };
+}
+
 export interface GitFetchResult {
   status: "fetched" | "skipped_no_remote";
   remote: string | null;
@@ -627,6 +634,49 @@ export class GitService {
       branch,
       upstreamBranch: upstream,
     };
+  }
+
+  async sync(cwd: string): Promise<GitSyncResult> {
+    const branch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD");
+    let upstream: string | null = null;
+    try {
+      upstream = await gitExec(cwd, `rev-parse --abbrev-ref ${branch}@{upstream}`);
+    } catch {
+      upstream = null;
+    }
+
+    const result: GitSyncResult = {
+      branch,
+      upstreamBranch: upstream,
+      pull: { status: upstream ? "skipped_up_to_date" : "skipped_no_upstream" },
+      push: { status: "skipped_up_to_date" },
+    };
+
+    if (upstream) {
+      const before = await gitExec(cwd, "rev-parse HEAD");
+      await gitExec(cwd, "pull --rebase");
+      const after = await gitExec(cwd, "rev-parse HEAD");
+      result.pull = { status: before === after ? "skipped_up_to_date" : "pulled" };
+
+      const aheadCount = Number.parseInt(await gitExec(cwd, "rev-list --count @{upstream}..HEAD").catch(() => "0"), 10);
+      if (Number.isFinite(aheadCount) && aheadCount > 0) {
+        await gitExec(cwd, "push --no-verify");
+        result.push = { status: "pushed" };
+      }
+
+      return result;
+    }
+
+    const remoteName = await this.getPreferredRemote(cwd, branch);
+    if (!remoteName) {
+      result.push = { status: "skipped_no_remote" };
+      return result;
+    }
+
+    await gitExec(cwd, `push --no-verify --set-upstream "${remoteName}" "${branch}"`);
+    result.upstreamBranch = `${remoteName}/${branch}`;
+    result.push = { status: "pushed" };
+    return result;
   }
 
   async fetch(cwd: string, allRemotes = false): Promise<GitFetchResult> {

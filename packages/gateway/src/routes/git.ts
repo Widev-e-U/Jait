@@ -18,7 +18,7 @@ import type { FastifyInstance } from "fastify";
 import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
-import { GitService, detectGitRemoteProvider, parseGitRemote } from "../services/git.js";
+import { GitService, detectGitRemoteProvider, parseGitRemote, type GitSyncResult } from "../services/git.js";
 import { getForge } from "../services/git-forge.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
@@ -336,6 +336,68 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       return result;
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Pull failed" });
+    }
+  });
+
+  /** Synchronize changes with the upstream branch using pull --rebase then push */
+  app.post("/api/git/sync", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { cwd } = request.body as { cwd: string };
+    if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      if (remoteNodeId && ws) {
+        const gitProxy = async (args: string, timeout = 60_000) => {
+          const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, timeout);
+          return r.stdout.trim();
+        };
+        const branch = await gitProxy("rev-parse --abbrev-ref HEAD");
+        let upstream: string | null = null;
+        try {
+          upstream = await gitProxy(`rev-parse --abbrev-ref ${branch}@{upstream}`);
+        } catch {
+          upstream = null;
+        }
+
+        const result: GitSyncResult = {
+          branch,
+          upstreamBranch: upstream,
+          pull: { status: upstream ? "skipped_up_to_date" : "skipped_no_upstream" },
+          push: { status: "skipped_up_to_date" },
+        };
+
+        if (upstream) {
+          const before = await gitProxy("rev-parse HEAD");
+          await gitProxy("pull --rebase", 120_000);
+          const after = await gitProxy("rev-parse HEAD");
+          result.pull = { status: before === after ? "skipped_up_to_date" : "pulled" };
+
+          const aheadCount = Number.parseInt(await gitProxy("rev-list --count @{upstream}..HEAD").catch(() => "0"), 10);
+          if (Number.isFinite(aheadCount) && aheadCount > 0) {
+            await gitProxy("push --no-verify", 120_000);
+            result.push = { status: "pushed" };
+          }
+
+          return result;
+        }
+
+        const remoteName = await gitProxy("remote").then((out) => out.split("\n").map((line) => line.trim()).find(Boolean) ?? null);
+        if (!remoteName) {
+          result.push = { status: "skipped_no_remote" };
+          return result;
+        }
+
+        await gitProxy(`push --no-verify --set-upstream "${remoteName}" "${branch}"`, 120_000);
+        result.upstreamBranch = `${remoteName}/${branch}`;
+        result.push = { status: "pushed" };
+        return result;
+      }
+
+      const result = await git.sync(cwd);
+      return result;
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Sync failed" });
     }
   });
 

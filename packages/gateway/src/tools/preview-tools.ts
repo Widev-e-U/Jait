@@ -3,7 +3,16 @@ import type { SessionStateService } from "../services/session-state.js";
 import type { ToolDefinition } from "./contracts.js";
 import type { PreviewService } from "../services/preview.js";
 import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
-import type { DevPreviewPanelState } from "@jait/shared";
+
+interface DevPreviewPanelState {
+  open: boolean;
+  target?: string | null;
+  workspaceRoot?: string | null;
+  browserSessionId?: string | null;
+  displayState?: "hidden" | "blank" | "connected";
+  displayTarget?: string | null;
+  storageScope?: "shared-browser" | "isolated-browser-session" | "unknown";
+}
 
 // ── preview.start (was preview.open) ─────────────────────────────────
 

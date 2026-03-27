@@ -100,6 +100,13 @@ export interface GitPullResult {
   upstreamBranch: string | null
 }
 
+export interface GitSyncResult {
+  branch: string
+  upstreamBranch: string | null
+  pull: { status: 'pulled' | 'skipped_up_to_date' | 'skipped_no_upstream' }
+  push: { status: 'pushed' | 'skipped_up_to_date' | 'skipped_no_remote' }
+}
+
 export interface GitFetchResult {
   status: 'fetched' | 'skipped_no_remote'
   remote: string | null
@@ -194,6 +201,10 @@ export const gitApi = {
 
   pull(cwd: string): Promise<GitPullResult> {
     return gitPost<GitPullResult>('pull', { cwd })
+  },
+
+  sync(cwd: string): Promise<GitSyncResult> {
+    return gitPost<GitSyncResult>('sync', { cwd })
   },
 
   fetch(cwd: string, all = false): Promise<GitFetchResult> {

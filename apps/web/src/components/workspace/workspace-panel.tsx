@@ -19,6 +19,7 @@ import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
 import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
 import { searchWorkspaceContent } from '@/lib/workspace-content-search'
+import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getOpenInterventionsForSession, resolvePreviewBrowserSession } from './workspace-preview-collaboration'
 import {
   WorkspacePreviewInspectPanel,
@@ -3513,6 +3514,20 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setGitActionBusy(false)
   }, [remoteRoot, gitActionBusy, fetchGitStatus, bumpTree])
 
+  const handleGitSync = useCallback(async () => {
+    if (!remoteRoot || gitActionBusy) return
+    setGitActionBusy(true)
+    setGitActionError(null)
+    try {
+      await gitApi.sync(remoteRoot)
+      await fetchGitStatus()
+      bumpTree()
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Sync failed')
+    }
+    setGitActionBusy(false)
+  }, [remoteRoot, gitActionBusy, fetchGitStatus, bumpTree])
+
   /* ---- Discard all changes ---- */
   const handleDiscardAll = useCallback(async () => {
     const count = new Set([
@@ -3865,7 +3880,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   )
   const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
-  const canRunGitCommitAction = !gitActionBusy && changedFileCount > 0
+  const canRunPrimaryGitAction = !gitActionBusy && (changedFileCount > 0 || canSyncChanges(gitStatus))
+  const canRunCommitAction = !gitActionBusy && changedFileCount > 0
+  const canRunCommitPushAction = !gitActionBusy && canCommitAndPush(changedFileCount, gitStatus)
+  const canRunSyncAction = !gitActionBusy && canSyncChanges(gitStatus)
+  const primaryGitAction = getPrimaryGitAction(changedFileCount, gitStatus)
 
   const renderSourceControlViewToggle = (mobile = false) => (
     <div className="ml-auto inline-flex items-center rounded-md border border-input bg-background/90 p-0.5 shadow-sm">
@@ -3905,14 +3924,24 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       <Button
         size="sm"
         className={cn(mobile ? 'h-8 rounded-md px-2.5 text-xs' : 'h-8 rounded-r-none px-2 text-xs')}
-        onClick={() => handleGitAction('commit')}
-        disabled={!canRunGitCommitAction}
-        title="Commit all changes (Ctrl+Enter)"
+        onClick={() => {
+          if (primaryGitAction === 'sync') {
+            void handleGitSync()
+            return
+          }
+          void handleGitAction('commit')
+        }}
+        disabled={!canRunPrimaryGitAction}
+        title={primaryGitAction === 'sync'
+          ? `Synchronize changes with Git${gitStatus ? ` (Behind ${gitStatus.behindCount}, Ahead ${gitStatus.aheadCount})` : ''}`
+          : 'Commit all changes (Ctrl+Enter)'}
       >
         {gitActionBusy
           ? <Loader2 className="h-3 w-3 animate-spin" />
-          : <GitCommit className="h-3 w-3" />}
-        Commit
+          : primaryGitAction === 'sync'
+            ? <RefreshCw className="h-3 w-3" />
+            : <GitCommit className="h-3 w-3" />}
+        {primaryGitAction === 'sync' ? 'Sync' : 'Commit'}
       </Button>
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
@@ -3923,7 +3952,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               'px-2',
               mobile ? 'h-8 rounded-md' : 'h-8 rounded-l-none border-l border-primary-foreground/20',
             )}
-            disabled={!canRunGitCommitAction}
+            disabled={gitActionBusy}
             title="More commit actions"
             aria-label="More commit actions"
           >
@@ -3931,13 +3960,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent align="start" className="w-44">
-          <DropdownMenuItem onSelect={() => handleGitAction('commit')} className="gap-2">
+          <DropdownMenuItem onSelect={() => { void handleGitAction('commit') }} className="gap-2" disabled={!canRunCommitAction}>
             <GitCommit className="h-3.5 w-3.5" />
             Commit
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => handleGitAction('commit_push')} className="gap-2">
+          <DropdownMenuItem onSelect={() => { void handleGitAction('commit_push') }} className="gap-2" disabled={!canRunCommitPushAction}>
             <CloudUpload className="h-3.5 w-3.5" />
             Commit & Push
+          </DropdownMenuItem>
+          <DropdownMenuItem onSelect={() => { void handleGitSync() }} className="gap-2" disabled={!canRunSyncAction}>
+            <RefreshCw className="h-3.5 w-3.5" />
+            Sync Changes
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -5141,7 +5174,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.ctrlKey || e.metaKey)) {
                     e.preventDefault()
-                    if (changedFileCount > 0) handleGitAction('commit')
+                    if (primaryGitAction === 'sync') {
+                      void handleGitSync()
+                    } else if (changedFileCount > 0) {
+                      void handleGitAction('commit')
+                    }
                   }
                 }}
                 disabled={gitActionBusy || commitMsgGenerating}
