@@ -868,8 +868,6 @@ function App() {
   )
   const cliModel = cliModelsByProvider[chatProvider] ?? null
   const [viewMode, setViewMode] = useState<ViewMode>('developer')
-  const [managerAnimPhase, setManagerAnimPhase] = useState<'idle' | 'center' | 'top'>('idle')
-  const [developerAnimPhase, setDeveloperAnimPhase] = useState<'idle' | 'animating'>('idle')
   const prevViewModeRef = useRef<ViewMode>(viewMode)
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -2148,21 +2146,6 @@ function App() {
   }, [chatProvider])
 
   useEffect(() => {
-    if (prevViewModeRef.current !== 'manager' && viewMode === 'manager') {
-      setManagerAnimPhase('center')
-      // Force browser to paint 'center' position before transitioning to 'top'.
-      // Double-rAF + forced reflow ensures the initial transform is committed.
-      requestAnimationFrame(() => {
-        // Force a layout/reflow so the browser commits the 'center' style
-        document.body.offsetHeight          // eslint-disable-line no-unused-expressions
-        requestAnimationFrame(() => setManagerAnimPhase('top'))
-      })
-    } else if (prevViewModeRef.current === 'manager' && viewMode === 'developer') {
-      setDeveloperAnimPhase('animating')
-      setManagerAnimPhase('idle')
-    } else {
-      setManagerAnimPhase('idle')
-    }
     prevViewModeRef.current = viewMode
   }, [viewMode])
 
@@ -4738,11 +4721,7 @@ function App() {
                     {/* Main content */}
                     <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
                       {/* Title + composer */}
-                      <div
-                        className={`relative z-10 flex flex-col items-center px-3 pb-1.5 pt-3 sm:px-4 sm:pb-2 sm:pt-4${managerAnimPhase !== 'idle' ? ' will-change-transform transition-transform duration-300 ease-[cubic-bezier(0.4,0,0.2,1)]' : ''}`}
-                        style={managerAnimPhase === 'center' ? { transform: 'translateY(calc(50vh - 200px))' } : managerAnimPhase === 'top' ? { transform: 'translateY(0)' } : undefined}
-                        onTransitionEnd={() => { if (managerAnimPhase === 'top') setManagerAnimPhase('idle') }}
-                      >
+                      <div className="relative z-10 flex flex-col items-center px-3 pb-1.5 pt-3 sm:px-4 sm:pb-2 sm:pt-4">
                         <div className="w-full max-w-3xl">
                           <h1 className="mb-3 text-center text-xl font-semibold tracking-tight sm:mb-4 sm:text-2xl">What do you want to build?</h1>
                           {automation.error && (
@@ -4857,9 +4836,7 @@ function App() {
                 )}
               </div>
             ) : !hasMessages ? (
-              <div className={`flex-1 min-w-0 flex flex-col items-center justify-center px-4 ${developerAnimPhase === 'animating' ? 'animate-slide-from-top' : ''}`}
-                onAnimationEnd={() => setDeveloperAnimPhase('idle')}
-              >
+              <div className="flex-1 min-w-0 flex flex-col items-center justify-center px-4">
                 <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>

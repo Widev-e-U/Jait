@@ -17,17 +17,37 @@ export interface ResolvedJaitLlmConfig extends LLMConfig {
   backend: JaitBackend;
 }
 
+const OPENROUTER_MODEL_ALIASES: Record<string, string> = {
+  "gpt-4o": "openai/gpt-4o",
+  "gpt-4o-mini": "openai/gpt-4o-mini",
+  "gpt-4.1": "openai/gpt-4.1",
+  "gpt-4.1-mini": "openai/gpt-4.1-mini",
+  "gpt-4.1-nano": "openai/gpt-4.1-nano",
+  "o4-mini": "openai/o4-mini",
+  "o3": "openai/o3",
+  "o3-mini": "openai/o3-mini",
+  "deepseek-chat": "deepseek/deepseek-chat-v3-0324",
+  "deepseek-reasoner": "deepseek/deepseek-r1",
+};
+
+export function normalizeOpenRouterModelId(model: string): string {
+  const trimmed = model.trim();
+  if (!trimmed || trimmed.includes("/")) return trimmed;
+  return OPENROUTER_MODEL_ALIASES[trimmed] ?? trimmed;
+}
+
 export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJaitLlmConfig {
   const apiKeys = options.apiKeys ?? {};
   const configuredBaseUrl = apiKeys["OPENAI_BASE_URL"]?.trim() || options.config.openaiBaseUrl;
   const backend = options.jaitBackend ?? "openai";
-  const effectiveModel = options.requestedModel?.trim()
+  const requestedModel = options.requestedModel?.trim()
     || apiKeys["OPENAI_MODEL"]?.trim()
     || options.config.openaiModel;
-  const isOpenRouterModel = effectiveModel.includes("/");
+  const isOpenRouterModel = requestedModel.includes("/");
   const isOpenRouterBaseUrl = configuredBaseUrl.toLowerCase().includes("openrouter.ai");
   const openRouterKey = apiKeys["OPENROUTER_API_KEY"]?.trim();
   const useOpenRouter = backend === "openrouter" || isOpenRouterModel || isOpenRouterBaseUrl;
+  const effectiveModel = useOpenRouter ? normalizeOpenRouterModelId(requestedModel) : requestedModel;
 
   if (backend === "openrouter" && !openRouterKey && !isOpenRouterBaseUrl) {
     throw new JaitConfigError(
