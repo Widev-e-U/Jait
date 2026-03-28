@@ -12,6 +12,12 @@ describe("PreviewService", () => {
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
       getEvents: vi.fn().mockReturnValue([]),
+      getLiveViewInfo: vi.fn().mockReturnValue({
+        display: ":99",
+        vncPort: 5900,
+        websockifyPort: 6080,
+        novncUrl: "ws://127.0.0.1:6080",
+      }),
       getMetrics: vi.fn().mockResolvedValue({
         sampledAt: "2026-03-27T00:00:00.000Z",
         url: "http://127.0.0.1:4173/",
@@ -40,6 +46,11 @@ describe("PreviewService", () => {
     expect(runnerStart).not.toHaveBeenCalled();
     expect(session.mode).toBe("url");
     expect(session.status).toBe("ready");
+    expect(session.url).toBe("ws://127.0.0.1:6080");
+    expect(session.remoteBrowser).toMatchObject({
+      containerName: "live-view",
+      novncUrl: "ws://127.0.0.1:6080",
+    });
     expect(surfaceRegistry.startSurface).toHaveBeenCalledWith("browser", "preview-browser-session-1", {
       sessionId: "session-1",
       workspaceRoot: "/workspace/app",
@@ -55,6 +66,12 @@ describe("PreviewService", () => {
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
       getEvents: vi.fn().mockReturnValue([{ id: 1, timestamp: "2026-03-27T00:00:00.000Z", type: "console", text: "ready" }]),
+      getLiveViewInfo: vi.fn().mockReturnValue({
+        display: ":99",
+        vncPort: 5900,
+        websockifyPort: 6080,
+        novncUrl: "ws://127.0.0.1:6080",
+      }),
       getMetrics: vi.fn().mockResolvedValue({
         sampledAt: "2026-03-27T00:00:01.000Z",
         url: "http://127.0.0.1:4173/",
@@ -108,7 +125,7 @@ describe("PreviewService", () => {
     expect(inspection).not.toBeNull();
     expect(inspection).toMatchObject({
       status: "ready",
-      url: "/api/dev-proxy/4173/",
+      url: "ws://127.0.0.1:6080",
       screenshot: Buffer.from("preview-image").toString("base64"),
       page: {
         title: "Preview App",
@@ -133,6 +150,12 @@ describe("PreviewService", () => {
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
       getEvents: vi.fn().mockReturnValue([]),
+      getLiveViewInfo: vi.fn().mockReturnValue({
+        display: ":99",
+        vncPort: 5900,
+        websockifyPort: 6080,
+        novncUrl: "ws://127.0.0.1:6080",
+      }),
       getMetrics: vi.fn().mockResolvedValue({
         sampledAt: "2026-03-27T00:00:00.000Z",
         url: "http://127.0.0.1:4173/",
@@ -194,6 +217,12 @@ describe("PreviewService", () => {
       state: "running",
       navigate: vi.fn().mockResolvedValue(undefined),
       getEvents: vi.fn().mockReturnValue([]),
+      getLiveViewInfo: vi.fn().mockReturnValue({
+        display: ":99",
+        vncPort: 5900,
+        websockifyPort: 6080,
+        novncUrl: "ws://127.0.0.1:6080",
+      }),
       getMetrics: vi.fn().mockResolvedValue({
         sampledAt: "2026-03-27T00:00:00.000Z",
         url: "http://127.0.0.1:4173/",
@@ -228,20 +257,50 @@ describe("PreviewService", () => {
     });
 
     const started = await service.startRemoteBrowser("session-1");
-    expect(sandboxManager.startBrowserSandbox).toHaveBeenCalledWith({
-      workspaceRoot: "/workspace/app",
-      novncPort: expect.any(Number),
-      vncPort: expect.any(Number),
-      mountMode: "read-only",
-    });
+    expect(sandboxManager.startBrowserSandbox).not.toHaveBeenCalled();
     expect(started?.remoteBrowser).toMatchObject({
-      containerName: "jait-browser-sb-test",
-      novncUrl: "http://127.0.0.1:6080/vnc.html",
+      containerName: "live-view",
+      novncUrl: "ws://127.0.0.1:6080",
     });
 
     const stopped = await service.stopRemoteBrowser("session-1");
     expect(stopped).toBe(true);
-    expect(sandboxManager.stopContainer).toHaveBeenCalledWith("jait-browser-sb-test");
+    expect(sandboxManager.stopContainer).not.toHaveBeenCalled();
     expect(service.get("session-1")?.remoteBrowser).toBeNull();
+  });
+
+  it("fails preview startup when the browser surface does not expose live view", async () => {
+    const browser = {
+      type: "browser",
+      state: "running",
+      navigate: vi.fn().mockResolvedValue(undefined),
+      getEvents: vi.fn().mockReturnValue([]),
+      getLiveViewInfo: vi.fn().mockReturnValue(null),
+      getMetrics: vi.fn().mockResolvedValue({
+        sampledAt: "2026-03-27T00:00:00.000Z",
+        url: "http://127.0.0.1:4173/",
+        title: "Preview App",
+      }),
+    };
+    const surfaceRegistry = {
+      stopSurface: vi.fn().mockResolvedValue(undefined),
+      startSurface: vi.fn().mockResolvedValue(browser),
+      getSurface: vi.fn().mockReturnValue(browser),
+    };
+    const service = new PreviewService(surfaceRegistry as any);
+    (service as any).runner = {
+      mode: "local",
+      start: vi.fn(),
+      stop: vi.fn(),
+    };
+
+    const session = await service.start({
+      sessionId: "session-1",
+      workspaceRoot: "/workspace/app",
+      target: "4173",
+    });
+
+    expect(session.status).toBe("error");
+    expect(session.lastError).toContain("Preview live view is unavailable");
   });
 });

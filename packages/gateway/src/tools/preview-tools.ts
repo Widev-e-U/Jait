@@ -64,7 +64,7 @@ export function createPreviewStartTool(
 ): ToolDefinition<PreviewStartInput> {
   return {
     name: "preview.start",
-    description: "Open a project preview. If `target` is a localhost URL or port, attach to the existing server. Otherwise, start a managed preview for the current workspace, launch the dev server, open a browser, and capture console/network/errors.",
+    description: "Create the complete live preview flow for the current project. Use this tool when you want preview handled end-to-end: attach to an existing local target or start the project if needed, create the dedicated browser session, and expose the live VNC/noVNC preview.",
     tier: "standard",
     category: "browser",
     source: "builtin",
@@ -109,6 +109,7 @@ export function createPreviewStartTool(
         port: typeof input.port === "number" ? input.port : undefined,
         frameworkHint: input.frameworkHint?.trim() || undefined,
       });
+      const previewTarget = preview.remoteBrowser?.novncUrl ?? preview.url ?? target ?? null;
       browserCollaborationService?.syncPreviewSession(preview, {
         userId: context.userId,
         workspaceRoot: workspaceRoot || undefined,
@@ -117,10 +118,10 @@ export function createPreviewStartTool(
 
       const panelState: DevPreviewPanelState = {
         open: true,
-        target: (preview.url ?? target) || null,
+        target: previewTarget,
         workspaceRoot: workspaceRoot || null,
-        displayState: ((preview.url ?? target) ? "connected" : "blank"),
-        displayTarget: (preview.url ?? target) || null,
+        displayState: (previewTarget ? "connected" : "blank"),
+        displayTarget: previewTarget,
         storageScope: "isolated-browser-session",
       };
       if (ws) {
@@ -177,7 +178,7 @@ export function createPreviewStopTool(
 ): ToolDefinition<PreviewStopInput> {
   return {
     name: "preview.stop",
-    description: "Stop the active managed preview session and kill its dev server process",
+    description: "Stop the active live preview flow and clean up its browser session and any managed preview process",
     tier: "standard",
     category: "browser",
     source: "builtin",

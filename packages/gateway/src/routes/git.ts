@@ -446,6 +446,31 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     }
   });
 
+  /** Bump workspace version(s), commit everything, and push with pull/retry handling. */
+  app.post("/api/git/run-commit-flow", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as Record<string, unknown>;
+    const cwd = typeof body["cwd"] === "string" ? body["cwd"] : "";
+    const githubToken = typeof body["githubToken"] === "string" ? body["githubToken"] : undefined;
+
+    if (!cwd) return reply.status(400).send({ error: "Missing cwd" });
+
+    try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
+      if (remoteNodeId && ws) {
+        const result = await ws.proxyFsOp(remoteNodeId, "git-run-commit-flow", {
+          cwd,
+          githubToken,
+        }, 120_000);
+        return result;
+      }
+      return await git.runVersionBumpCommitPushFlow(cwd, githubToken);
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Commit flow failed" });
+    }
+  });
+
   /** Get or set repo-local git author identity */
   app.post("/api/git/identity", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);

@@ -2108,17 +2108,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             </Button>
             {managedPreviewSession && (
               <>
-                <Button
-                  type="button"
-                  variant="ghost"
-                  size="sm"
-                  className="h-8 px-2 text-[11px]"
-                  onClick={() => { void (managedPreviewSession.remoteBrowser ? handleStopRemotePreviewSession() : handleStartRemotePreviewSession()) }}
-                  disabled={previewBusy || !previewWorkspaceRoot}
-                >
-                  <Globe className="mr-1 h-3 w-3" />
-                  {managedPreviewSession.remoteBrowser ? 'Stop Remote' : 'Start Remote'}
-                </Button>
                 <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => { void handleRestartManagedPreview() }} disabled={previewBusy}>
                   <RefreshCw className="mr-1 h-3 w-3" />
                   Restart
@@ -2146,7 +2135,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           ) : null}
           {managedPreviewSession?.remoteBrowser ? (
             <div className="rounded border bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
-              Remote session: <code>{managedPreviewSession.remoteBrowser.novncUrl}</code>
+              Live view: <code>{managedPreviewSession.remoteBrowser.novncUrl}</code>
             </div>
           ) : null}
           {managedPreviewSession?.lastError ? (
@@ -3462,56 +3451,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } catch (error) {
       setPreviewPanelError(error instanceof Error ? error.message : 'Failed to restart preview')
       setPreviewFrameLoading(false)
-    } finally {
-      setPreviewBusy(false)
-    }
-  }, [previewSessionId, previewToken])
-
-  const handleStartRemotePreviewSession = useCallback(async () => {
-    if (!previewSessionId || !previewToken) return
-    setPreviewBusy(true)
-    setPreviewPanelError(null)
-    try {
-      const response = await fetch(`${API_URL}/api/preview/remote/start`, {
-        method: 'POST',
-        headers: authHeaders(previewToken),
-        body: JSON.stringify({
-          sessionId: previewSessionId,
-          workspaceRoot: previewWorkspaceRoot,
-        }),
-      })
-      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
-      if (!response.ok || !data.session) {
-        throw new Error(data.error || 'Failed to start remote browser session')
-      }
-      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
-      setPreviewFrameLoading(true)
-    } catch (error) {
-      setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start remote browser session')
-      setPreviewFrameLoading(false)
-    } finally {
-      setPreviewBusy(false)
-    }
-  }, [previewSessionId, previewToken, previewWorkspaceRoot])
-
-  const handleStopRemotePreviewSession = useCallback(async () => {
-    if (!previewSessionId || !previewToken) return
-    setPreviewBusy(true)
-    setPreviewPanelError(null)
-    try {
-      const response = await fetch(`${API_URL}/api/preview/remote/stop`, {
-        method: 'POST',
-        headers: authHeaders(previewToken),
-        body: JSON.stringify({ sessionId: previewSessionId }),
-      })
-      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState | null; error?: string }
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to stop remote browser session')
-      }
-      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
-      setPreviewFrameLoading(false)
-    } catch (error) {
-      setPreviewPanelError(error instanceof Error ? error.message : 'Failed to stop remote browser session')
     } finally {
       setPreviewBusy(false)
     }

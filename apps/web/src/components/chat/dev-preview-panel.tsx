@@ -331,53 +331,6 @@ export function DevPreviewPanel({
     }
   }, [sessionId, token])
 
-  const handleStartRemoteSession = useCallback(async () => {
-    if (!sessionId || !token) return
-    setIsBusy(true)
-    setPanelError(null)
-    try {
-      const response = await fetch(`${getApiUrl()}/api/preview/remote/start`, {
-        method: 'POST',
-        headers: authHeaders(token),
-        body: JSON.stringify({ sessionId, workspaceRoot }),
-      })
-      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
-      if (!response.ok || !data.session) {
-        throw new Error(data.error || 'Failed to start remote browser session')
-      }
-      setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
-      setActiveTab('preview')
-      setIsFrameLoading(true)
-    } catch (error) {
-      setPanelError(error instanceof Error ? error.message : 'Failed to start remote browser session')
-    } finally {
-      setIsBusy(false)
-    }
-  }, [sessionId, token, workspaceRoot])
-
-  const handleStopRemoteSession = useCallback(async () => {
-    if (!sessionId || !token) return
-    setIsBusy(true)
-    setPanelError(null)
-    try {
-      const response = await fetch(`${getApiUrl()}/api/preview/remote/stop`, {
-        method: 'POST',
-        headers: authHeaders(token),
-        body: JSON.stringify({ sessionId }),
-      })
-      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState | null; error?: string }
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to stop remote browser session')
-      }
-      setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
-      setIsFrameLoading(false)
-    } catch (error) {
-      setPanelError(error instanceof Error ? error.message : 'Failed to stop remote browser session')
-    } finally {
-      setIsBusy(false)
-    }
-  }, [sessionId, token])
-
   useEffect(() => {
     if (!initialTarget?.trim()) return
     void startManagedPreview()
@@ -543,17 +496,6 @@ export function DevPreviewPanel({
                 <RefreshCw className="mr-1 h-3 w-3" />
                 Restart
               </Button>
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                className="h-7 px-2 text-[11px]"
-                onClick={() => { void (managedSession?.remoteBrowser ? handleStopRemoteSession() : handleStartRemoteSession()) }}
-                disabled={isBusy || !workspaceRoot}
-              >
-                <Globe className="mr-1 h-3 w-3" />
-                {managedSession?.remoteBrowser ? 'Stop Remote' : 'Start Remote'}
-              </Button>
               <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setActiveTab('console')}>
                 <MessageSquare className="mr-1 h-3 w-3" />
                 Console
@@ -617,7 +559,7 @@ export function DevPreviewPanel({
         ) : null}
         {managedSession?.remoteBrowser ? (
           <p className="text-[11px] text-muted-foreground">
-            Remote session: <code>{managedSession.remoteBrowser.novncUrl}</code>
+            Live view: <code>{managedSession.remoteBrowser.novncUrl}</code>
           </p>
         ) : null}
         {secretSafeWarning ? (
@@ -705,9 +647,9 @@ export function DevPreviewPanel({
             </div>
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-              Start a live preview to attach a dedicated browser session.
-            </div>
-          )
+            Start a live preview to attach a dedicated VNC browser session.
+          </div>
+        )
         ) : activeTab === 'logs' ? (
           <div className="h-full overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
             {managedSession?.logs.length ? managedSession.logs.map((entry) => (

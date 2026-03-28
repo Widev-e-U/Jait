@@ -98,6 +98,18 @@ function normalizeTargetUrl(target: string): string | null {
   }
 }
 
+function createLiveViewRemoteBrowser(
+  liveView: { novncUrl: string; vncPort: number; websockifyPort: number },
+): PreviewRemoteBrowserSession {
+  return {
+    containerName: "live-view",
+    novncUrl: liveView.novncUrl,
+    vncPort: liveView.vncPort,
+    novncPort: liveView.websockifyPort,
+    startedAt: nowIso(),
+  };
+}
+
 export class PreviewService {
   private readonly sessions = new Map<string, InternalPreviewSession>();
   private nextLogId = 1;
@@ -189,6 +201,10 @@ export class PreviewService {
       }
 
       await this.ensureBrowser(session);
+      if (!session.remoteBrowser) {
+        throw new Error("Preview live view is unavailable. Enable the browser live view backend before starting preview.");
+      }
+      session.url = session.remoteBrowser.novncUrl;
       session.status = "ready";
       session.updatedAt = nowIso();
       this.appendLog(session, "system", `Preview ready at ${session.url}`);
@@ -285,13 +301,8 @@ export class PreviewService {
       if (surface?.type === "browser" && typeof (surface as BrowserSurface).getLiveViewInfo === "function") {
         const liveView = (surface as BrowserSurface).getLiveViewInfo();
         if (liveView) {
-          session.remoteBrowser = {
-            containerName: "live-view",
-            novncUrl: liveView.novncUrl,
-            vncPort: liveView.vncPort,
-            novncPort: liveView.websockifyPort,
-            startedAt: nowIso(),
-          };
+          session.remoteBrowser = createLiveViewRemoteBrowser(liveView);
+          session.url = session.remoteBrowser.novncUrl;
           session.updatedAt = nowIso();
           this.appendLog(session, "system", `Live view of agent browser ready at ${liveView.novncUrl}`);
           return this.toPublicSession(session);
@@ -414,13 +425,7 @@ export class PreviewService {
     // Auto-populate remoteBrowser when the agent's browser has a live view
     const liveView = typeof browser.getLiveViewInfo === "function" ? browser.getLiveViewInfo() : null;
     if (liveView) {
-      session.remoteBrowser = {
-        containerName: "live-view",
-        novncUrl: liveView.novncUrl,
-        vncPort: liveView.vncPort,
-        novncPort: liveView.websockifyPort,
-        startedAt: nowIso(),
-      };
+      session.remoteBrowser = createLiveViewRemoteBrowser(liveView);
     }
   }
 

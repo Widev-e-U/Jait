@@ -636,6 +636,106 @@ export class GitService {
     };
   }
 
+  async bumpWorkspacePackageVersions(cwd: string): Promise<GitVersionBumpResult> {
+    const candidateFiles = [
+      join(cwd, "package.json"),
+      ...await listChildPackageJsonFiles(join(cwd, "packages")),
+      ...await listChildPackageJsonFiles(join(cwd, "apps")),
+    ];
+    const files = candidateFiles.filter((file, index) => candidateFiles.indexOf(file) === index);
+    const updatedFiles: string[] = [];
+    let previousVersion: string | null = null;
+    let nextVersion: string | null = null;
+
+    for (const file of files) {
+      if (!existsSync(file)) continue;
+      const raw = await readFile(file, "utf-8");
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      const currentVersion = typeof parsed["version"] === "string" ? parsed["version"].trim() : "";
+      if (!currentVersion) continue;
+      const bumped = bumpPatchVersion(currentVersion);
+      if (!bumped) continue;
+      parsed["version"] = bumped;
+      await writeFile(file, `${JSON.stringify(parsed, null, 2)}\n`, "utf-8");
+      updatedFiles.push(file);
+      if (!previousVersion) previousVersion = currentVersion;
+      if (!nextVersion) nextVersion = bumped;
+    }
+
+    if (!previousVersion || !nextVersion || updatedFiles.length === 0) {
+      throw new Error("No bumpable package.json version fields found in this workspace.");
+    }
+
+    return {
+      previousVersion,
+      nextVersion,
+      files: updatedFiles,
+    };
+  }
+
+  async runVersionBumpCommitPushFlow(cwd: string, githubToken?: string): Promise<GitCommitFlowResult> {
+    const statusBefore = await this.status(cwd, undefined, githubToken);
+    let sync: GitCommitFlowResult["sync"] = {
+      status: "skipped_no_upstream",
+      branch: statusBefore.branch,
+      upstreamBranch: null,
+    };
+
+    if (statusBefore.branch && statusBefore.hasUpstream) {
+      let upstreamBranch: string | null = null;
+      try {
+        upstreamBranch = await gitExec(cwd, `rev-parse --abbrev-ref ${statusBefore.branch}@{upstream}`);
+      } catch {
+        upstreamBranch = null;
+      }
+      if (statusBefore.behindCount > 0) {
+        try {
+          await gitExec(cwd, "pull --rebase --autostash");
+          sync = { status: "pulled", branch: statusBefore.branch, upstreamBranch };
+        } catch (err) {
+          const message = err instanceof Error ? err.message : String(err);
+          throw new Error(`Pull before push failed. Resolve the rebase conflict and retry. ${message}`);
+        }
+      } else {
+        sync = { status: "skipped_up_to_date", branch: statusBefore.branch, upstreamBranch };
+      }
+    }
+
+    const version = await this.bumpWorkspacePackageVersions(cwd);
+    const commitMessage = `chore: bump version to v${version.nextVersion}`;
+    const git = await this.runStackedAction(cwd, "commit_push", commitMessage, false, undefined, githubToken);
+
+    if (git.push.status === "failed" && isNonFastForwardPushError(git.push.error ?? "")) {
+      try {
+        await gitExec(cwd, "pull --rebase --autostash");
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Push was rejected and pull --rebase failed. Resolve the conflict and retry. ${message}`);
+      }
+
+      const branch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
+      if (!branch) {
+        throw new Error("Push retry failed because the current branch could not be determined.");
+      }
+      try {
+        await gitExec(cwd, "push --no-verify");
+        git.push = {
+          status: "pushed",
+          branch,
+          upstreamBranch: git.push.upstreamBranch,
+          error: undefined,
+        };
+      } catch (err) {
+        const message = err instanceof Error ? err.message : String(err);
+        throw new Error(`Push retry failed after pulling latest changes. ${message}`);
+      }
+    } else if (git.push.status === "failed") {
+      throw new Error(git.push.error ?? "Push failed");
+    }
+
+    return { version, sync, git };
+  }
+
   async sync(cwd: string): Promise<GitSyncResult> {
     const branch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD");
     let upstream: string | null = null;
