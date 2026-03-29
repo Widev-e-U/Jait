@@ -94,6 +94,15 @@ type WebSearchProvider = NonNullable<WebSearchInput["provider"]>;
 type ResolvedWebSearchProvider = Exclude<WebSearchProvider, "auto">;
 
 async function ensureBrowserSurface(registry: SurfaceRegistry, context: ToolContext, browserId?: string): Promise<BrowserSurface> {
+  // When no explicit browserId is given, prefer the active preview browser
+  // for this session so agents don't need to look it up separately.
+  if (!browserId && context.sessionId) {
+    const previewId = `preview-browser-${context.sessionId}`;
+    const preview = registry.getSurface(previewId);
+    if (preview?.type === "browser" && preview.state === "running") {
+      return preview as BrowserSurface;
+    }
+  }
   const id = browserId ?? DEFAULT_BROWSER_ID;
   const existing = registry.getSurface(id);
   if (existing?.type === "browser" && existing.state === "running") {
@@ -167,7 +176,7 @@ export function createBrowserNavigateTool(
 ): ToolDefinition<BrowserNavigateInput> {
   return {
     name: "browser.navigate",
-    description: "Navigate the browser to a URL and return a page summary",
+    description: "Navigate the browser to a URL and return a page summary. When a preview is active, automatically targets the preview browser.",
     tier: "standard",
     category: "browser",
     source: "builtin",
@@ -200,7 +209,7 @@ export function createBrowserSnapshotTool(
 ): ToolDefinition<BrowserSnapshotInput> {
   return {
     name: "browser.snapshot",
-    description: "Return a structured textual browser snapshot for the current page",
+    description: "Return a structured textual browser snapshot for the current page. When a preview is active, automatically targets the preview browser.",
     tier: "standard",
     category: "browser",
     source: "builtin",
@@ -239,7 +248,7 @@ export function createBrowserInspectTool(
 ): ToolDefinition<BrowserInspectInput> {
   return {
     name: "browser.inspect",
-    description: "Inspect the current browser page and optionally diagnose a target selector",
+    description: "Inspect the current browser page and optionally diagnose a target selector. When a preview is active, automatically targets the preview browser.",
     tier: "standard",
     category: "browser",
     source: "builtin",
@@ -293,10 +302,17 @@ function makeActionTool<TInput>(
       collaboration?.assertAgentControl(browserId);
       const surface = await ensureBrowserSurface(registry, context, browserId);
       const result = await action(surface, input, context.signal);
+      // Return a page snapshot after every action so agents can verify the
+      // result without a separate browser.snapshot / browser.inspect call.
+      const inspection = await surface.inspect(undefined, context.signal).catch(() => null);
+      const session = resolveBrowserSessionMetadata(collaboration, surface.id);
+      const payload = inspection
+        ? buildSnapshotPayload(surface.id, inspection.snapshot, session)
+        : { browserId: surface.id };
       return {
         ok: true,
         message: `${name} executed`,
-        data: { browserId: surface.id, result },
+        data: { ...payload, actionResult: result },
       };
     },
   };
@@ -311,10 +327,10 @@ export function createBrowserInteractionTools(
       registry,
       collaboration,
       "browser.click",
-      "Click an element by CSS selector",
+      "Click an element in the browser and return the updated page snapshot. When a preview is active, automatically targets the preview browser. Supports CSS selectors and Playwright text selectors (e.g. 'button:has-text(\"Save\")' or 'text=Submit').",
       {
-        selector: { type: "string", description: "CSS selector for the target element" },
-        browserId: { type: "string", description: "Optional browser surface ID" },
+        selector: { type: "string", description: "CSS or Playwright selector for the target element (e.g. '#my-btn', 'button:has-text(\"OK\")')." },
+        browserId: { type: "string", description: "Browser surface ID (from preview.inspect or preview.status). Auto-resolves to the preview browser when omitted." },
       },
       ["selector"],
       async (surface, input, signal) => {
@@ -326,11 +342,11 @@ export function createBrowserInteractionTools(
       registry,
       collaboration,
       "browser.type",
-      "Type text into an element selected by CSS selector",
+      "Type text into an element and return the updated page snapshot. When a preview is active, automatically targets the preview browser.",
       {
-        selector: { type: "string", description: "CSS selector for the target input" },
+        selector: { type: "string", description: "CSS or Playwright selector for the target input" },
         text: { type: "string", description: "Text to type" },
-        browserId: { type: "string", description: "Optional browser surface ID" },
+        browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
       ["selector", "text"],
       async (surface, input, signal) => {
@@ -342,11 +358,11 @@ export function createBrowserInteractionTools(
       registry,
       collaboration,
       "browser.scroll",
-      "Scroll the browser viewport",
+      "Scroll the browser viewport and return the updated page snapshot. When a preview is active, automatically targets the preview browser.",
       {
         x: { type: "number", description: "Horizontal scroll position" },
         y: { type: "number", description: "Vertical scroll position" },
-        browserId: { type: "string", description: "Optional browser surface ID" },
+        browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
       ["x", "y"],
       async (surface, input, signal) => {
@@ -358,11 +374,11 @@ export function createBrowserInteractionTools(
       registry,
       collaboration,
       "browser.select",
-      "Select a value from a select element",
+      "Select a value from a select element and return the updated page snapshot. When a preview is active, automatically targets the preview browser.",
       {
-        selector: { type: "string", description: "CSS selector for the select element" },
+        selector: { type: "string", description: "CSS or Playwright selector for the select element" },
         value: { type: "string", description: "Option value to choose" },
-        browserId: { type: "string", description: "Optional browser surface ID" },
+        browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
       ["selector", "value"],
       async (surface, input, signal) => {
@@ -374,11 +390,11 @@ export function createBrowserInteractionTools(
       registry,
       collaboration,
       "browser.wait",
-      "Wait for an element to appear",
+      "Wait for an element to appear and return the page snapshot once found. When a preview is active, automatically targets the preview browser.",
       {
-        selector: { type: "string", description: "CSS selector to wait for" },
+        selector: { type: "string", description: "CSS or Playwright selector to wait for" },
         timeoutMs: { type: "number", description: "Timeout in milliseconds (default 10000)" },
-        browserId: { type: "string", description: "Optional browser surface ID" },
+        browserId: { type: "string", description: "Browser surface ID. Auto-resolves to the preview browser when omitted." },
       },
       ["selector"],
       async (surface, input, signal) => {

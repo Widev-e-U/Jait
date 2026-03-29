@@ -172,3 +172,29 @@ export interface DevPreviewPanelState {
   displayTarget?: string | null;
   storageScope?: "shared-browser" | "isolated-browser-session" | "unknown";
 }
+
+/**
+ * Unified workspace UI state — single DB row per workspace.
+ * Stored under key `workspace.ui` in the workspace_state table.
+ */
+export interface WorkspaceUIState {
+  /** Workspace editor panel */
+  panel: {
+    open: boolean;
+    remotePath: string;
+    surfaceId?: string;
+    nodeId?: string;
+  } | null;
+  /** Open file tabs + active tab */
+  tabs: {
+    remoteRoot: string;
+    tabs: Array<{ path: string; label: string }>;
+    activePath: string | null;
+  } | null;
+  /** Tree/editor visibility */
+  layout: { tree: boolean; editor: boolean } | null;
+  /** Terminal panel */
+  terminal: { open: boolean } | null;
+  /** Dev preview / VNC browser panel */
+  preview: DevPreviewPanelState | null;
+}

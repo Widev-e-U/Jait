@@ -59,7 +59,8 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
       setActiveWorkspaceId(null)
       setActiveSessionId(null)
       setHasMoreWorkspaces(false)
-      setLoading(false)
+      // Keep loading=true until we get a real token and can actually fetch.
+      // Setting false here caused a flash of "Add Workspace" empty state.
       return
     }
 
@@ -125,8 +126,10 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
       }
       if (!res.ok) return null
       const workspace = await res.json() as Omit<WorkspaceRecord, 'sessions'> & { sessions?: WorkspaceSession[] }
-      const nextWorkspace: WorkspaceRecord = { ...workspace, sessions: workspace.sessions ?? [] }
+      let nextWorkspace!: WorkspaceRecord
       setWorkspaces((prev) => {
+        const existing = prev.find((entry) => entry.id === workspace.id)
+        nextWorkspace = { ...workspace, sessions: workspace.sessions ?? existing?.sessions ?? [] }
         const withoutExisting = prev.filter((entry) => entry.id !== nextWorkspace.id)
         return [nextWorkspace, ...withoutExisting].slice(0, visibleLimit)
       })
@@ -302,10 +305,74 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
       })
       return true
     } catch (err) {
-      console.error('Failed to delete workspace:', err)
+      console.error('Failed to archive workspace:', err)
       return false
     }
   }, [activeWorkspaceId, onLoginRequired, token, workspaces])
+
+  const clearArchivedWorkspaces = useCallback(async (): Promise<number> => {
+    if (!token) {
+      onLoginRequired?.()
+      return 0
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/workspaces/archived`, {
+        method: 'DELETE',
+        headers: authHeaders(token),
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return 0
+      }
+      if (!response.ok) return 0
+      const data = await response.json() as { ok: boolean; removed: number }
+      return data.removed
+    } catch (err) {
+      console.error('Failed to clear archived workspaces:', err)
+      return 0
+    }
+  }, [onLoginRequired, token])
+
+  const fetchArchivedWorkspaces = useCallback(async (): Promise<WorkspaceRecord[]> => {
+    if (!token) return []
+    try {
+      const response = await fetch(`${API_URL}/api/workspaces/archived`, {
+        headers: authHeaders(token),
+      })
+      if (!response.ok) return []
+      const data = await response.json() as { workspaces: WorkspaceRecord[] }
+      return data.workspaces
+    } catch {
+      return []
+    }
+  }, [token])
+
+  const restoreWorkspace = useCallback(async (workspaceId: string): Promise<boolean> => {
+    if (!token) {
+      onLoginRequired?.()
+      return false
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/workspaces/${workspaceId}/restore`, {
+        method: 'POST',
+        headers: authHeaders(token),
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return false
+      }
+      if (!response.ok) return false
+      const restored = await response.json() as WorkspaceRecord
+      setWorkspaces((prev) => {
+        if (prev.some((w) => w.id === restored.id)) return prev
+        return [{ ...restored, sessions: restored.sessions ?? [] }, ...prev]
+      })
+      return true
+    } catch (err) {
+      console.error('Failed to restore workspace:', err)
+      return false
+    }
+  }, [onLoginRequired, token])
 
   const renameSession = useCallback(async (sessionId: string, name: string) => {
     if (!token) {
@@ -370,6 +437,9 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     archiveSession,
     fetchArchivedSessions,
     removeWorkspace,
+    clearArchivedWorkspaces,
+    fetchArchivedWorkspaces,
+    restoreWorkspace,
     renameSession,
     showMoreWorkspaces,
     showFewerWorkspaces,

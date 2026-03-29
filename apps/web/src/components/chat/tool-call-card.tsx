@@ -1,6 +1,7 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
+import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { EditDiffView } from '@/components/chat/edit-diff-view'
@@ -793,44 +794,41 @@ function BrowserSnapshotView({ snapshot }: { snapshot: string }) {
 }
 
 function BrowserScreenshotView({ path }: { path: string }) {
-  const [coords, setCoords] = useState<{ x: number; y: number; xp: number; yp: number } | null>(null)
   const [loaded, setLoaded] = useState(false)
+  const [expanded, setExpanded] = useState(false)
   const trimmedPath = path.trim()
   const src = resolveChatImageUrl(trimmedPath) ?? `${getApiUrl()}/api/browser/screenshot?path=${encodeURIComponent(trimmedPath)}`
 
   return (
     <div className="space-y-2 rounded-md bg-muted/30 p-3 text-xs">
       <div className="text-[11px] text-muted-foreground">Screenshot path: <span className="font-mono break-all">{trimmedPath}</span></div>
-      <div className="overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
+      <div className="group relative overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
         <img
           src={src}
           alt="Browser screenshot"
-          className="max-h-80 w-full cursor-crosshair object-contain"
+          className="max-h-80 w-full cursor-pointer object-contain transition-opacity group-hover:opacity-80"
           onLoad={() => setLoaded(true)}
           onError={() => setLoaded(false)}
-          onClick={(event) => {
-            const rect = event.currentTarget.getBoundingClientRect()
-            const x = event.clientX - rect.left
-            const y = event.clientY - rect.top
-            setCoords({
-              x: Math.round(x),
-              y: Math.round(y),
-              xp: Math.round((x / rect.width) * 100),
-              yp: Math.round((y / rect.height) * 100),
-            })
-          }}
+          onClick={() => loaded && setExpanded(true)}
         />
+        {loaded && (
+          <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
+            <span className="rounded-full bg-black/60 px-3 py-1.5 text-[11px] font-medium text-white">Click to expand</span>
+          </div>
+        )}
       </div>
       {!loaded && (
         <div className="rounded bg-background p-2 text-muted-foreground">
           Preview unavailable in browser. Open the screenshot path directly from the host environment.
         </div>
       )}
-      {coords ? (
-        <div className="rounded bg-background p-2 font-mono text-[11px]">
-          click: x={coords.x}px y={coords.y}px ({coords.xp}%, {coords.yp}%)
-        </div>
-      ) : null}
+      {expanded && (
+        <Dialog open onOpenChange={(open) => !open && setExpanded(false)}>
+          <DialogContent className="max-w-[90vw] max-h-[90vh] p-2" showCloseButton>
+            <img src={src} alt="Browser screenshot" className="max-h-[85vh] w-full object-contain" />
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   )
 }

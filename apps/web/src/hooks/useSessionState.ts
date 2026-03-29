@@ -10,6 +10,7 @@
  */
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
+import { fetchStateBatched } from '@/lib/state-batch'
 
 const API_URL = getApiUrl()
 
@@ -53,14 +54,10 @@ export function useSessionState<T>(
     const fetchVersion = localWriteVersionRef.current
     setLoading(true)
 
-    fetch(`${API_URL}/api/sessions/${sessionId}/state?keys=${encodeURIComponent(key)}`, {
-      headers: authHeaders(token),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: Record<string, unknown> | null) => {
+    fetchStateBatched('sessions', sessionId, key, token!)
+      .then((val) => {
         if (cancelled) return
         if (!shouldApplySessionStateFetchResult(fetchVersion, localWriteVersionRef.current)) return
-        const val = data?.[key] ?? null
         setValueLocal(val as T | null)
         latestRef.current = val as T | null
       })

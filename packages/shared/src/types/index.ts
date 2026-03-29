@@ -17,6 +17,7 @@ export type {
   UIStateKey,
   UIStateUpdate,
   DevPreviewPanelState,
+  WorkspaceUIState,
   WorkspaceOpenData,
   WorkspaceCloseData,
   TerminalFocusData,

@@ -3,9 +3,11 @@ import { Activity, AlertCircle, Camera, ExternalLink, Globe, MessageSquare, Play
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
+import { isNoVncViewerUrl, isWebSocketUrl } from '@/lib/no-vnc'
 import { PreviewMetricsPanel, type PreviewPerformanceMetrics } from '@/components/workspace/workspace-preview-inspect-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { isSamePreviewSession } from '@/lib/preview-session'
+import { subscribePreviewSession } from '@/lib/preview-events'
 import type { BrowserSession } from '@/lib/browser-collaboration-api'
 
 interface DevPreviewPanelProps {
@@ -193,23 +195,24 @@ export function DevPreviewPanel({
   const [panelWarning, setPanelWarning] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState<'preview' | 'logs' | 'console' | 'issues' | 'network' | 'metrics'>('preview')
   const [screenshotUrl, setScreenshotUrl] = useState<string | null>(null)
-  const [livePreviewUrl, setLivePreviewUrl] = useState<string | null>(null)
-  const [livePreviewLoading, setLivePreviewLoading] = useState(false)
   const [isFrameLoading, setIsFrameLoading] = useState(false)
   const logsEndRef = useRef<HTMLDivElement>(null)
   const consoleEndRef = useRef<HTMLDivElement>(null)
   const networkEndRef = useRef<HTMLDivElement>(null)
 
-  const previewSessionId = managedBrowserSession?.previewSessionId ?? managedSession?.id ?? null
   const remotePreviewUrl = managedSession?.remoteBrowser?.novncUrl ?? null
   const previewLabel = remotePreviewUrl ?? managedBrowserSession?.previewUrl ?? managedBrowserSession?.targetUrl ?? managedSession?.url ?? null
   const previewOpenTarget = remotePreviewUrl ?? managedBrowserSession?.previewUrl ?? managedBrowserSession?.targetUrl ?? managedSession?.url ?? null
   const livePreviewFrameSrc = useMemo(() => {
     const trimmed = (remotePreviewUrl ?? previewOpenTarget)?.trim()
     if (!trimmed) return null
-    return trimmed.startsWith('/') ? `${getApiUrl()}${trimmed}` : trimmed
+    // Only allow noVNC/WebSocket URLs — never embed plain HTTP directly.
+    if (isWebSocketUrl(trimmed)) return trimmed
+    const resolved = trimmed.startsWith('/') ? `${getApiUrl()}${trimmed}` : trimmed
+    if (isNoVncViewerUrl(resolved)) return resolved
+    return null
   }, [previewOpenTarget, remotePreviewUrl])
-  const showLoadingBar = isFrameLoading && activeTab === 'preview' && !screenshotUrl && !livePreviewUrl
+  const showLoadingBar = isFrameLoading && activeTab === 'preview' && !screenshotUrl
 
   const fetchManagedSession = useCallback(async () => {
     if (!sessionId || !token) return null
@@ -227,13 +230,14 @@ export function DevPreviewPanel({
     void fetchManagedSession()
   }, [fetchManagedSession])
 
+  // Subscribe to WS-pushed preview session updates instead of polling
   useEffect(() => {
-    if (!sessionId || !token || !managedSession) return
-    const id = window.setInterval(() => {
-      void fetchManagedSession()
-    }, 2000)
-    return () => window.clearInterval(id)
-  }, [sessionId, token, fetchManagedSession, managedSession])
+    if (!sessionId) return
+    return subscribePreviewSession((session) => {
+      if (session.sessionId !== sessionId) return
+      setManagedSession((current) => isSamePreviewSession(current, session as any) ? current : session as any)
+    })
+  }, [sessionId])
 
   useEffect(() => {
     const next = initialTarget?.trim()
@@ -249,7 +253,6 @@ export function DevPreviewPanel({
     setIsBusy(true)
     setPanelError(null)
     setPanelWarning(null)
-    setLivePreviewUrl(null)
     setScreenshotUrl(null)
     setIsFrameLoading(true)
     try {
@@ -299,7 +302,6 @@ export function DevPreviewPanel({
       }
       setManagedSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
       setManagedBrowserSession(null)
-      setLivePreviewUrl(null)
     } catch (error) {
       setPanelError(error instanceof Error ? error.message : 'Failed to restart preview')
     } finally {
@@ -322,7 +324,6 @@ export function DevPreviewPanel({
       })
       setManagedSession(null)
       setManagedBrowserSession(null)
-      setLivePreviewUrl(null)
       setScreenshotUrl(null)
     } catch (error) {
       setPanelError(error instanceof Error ? error.message : 'Failed to stop preview')
@@ -335,56 +336,6 @@ export function DevPreviewPanel({
     if (!initialTarget?.trim()) return
     void startManagedPreview()
   }, [autoOpenKey, initialTarget, startManagedPreview])
-
-  const fetchLivePreview = useCallback(async () => {
-    if (!previewSessionId || !token) {
-      setLivePreviewUrl(null)
-      setIsFrameLoading(false)
-      return null
-    }
-    setLivePreviewLoading(true)
-    try {
-      const response = await fetch(`${getApiUrl()}/api/preview/screenshot/${previewSessionId}`, {
-        headers: authHeaders(token),
-      })
-      const data = await response.json().catch(() => ({})) as { screenshot?: string | null; suppressed?: boolean; reason?: string }
-      if (!response.ok) {
-        throw new Error((data as { error?: string }).error || 'Failed to load live preview')
-      }
-      if (data.suppressed) {
-        setPanelWarning(data.reason || 'Preview capture is currently suppressed for this browser session.')
-        setLivePreviewUrl(null)
-        return null
-      }
-      const nextUrl = data.screenshot ? `data:image/png;base64,${data.screenshot}` : null
-      setLivePreviewUrl(nextUrl)
-      return nextUrl
-    } catch (error) {
-      setPanelWarning(error instanceof Error ? error.message : 'Failed to load live preview')
-      return null
-    } finally {
-      setLivePreviewLoading(false)
-      setIsFrameLoading(false)
-    }
-  }, [previewSessionId, token])
-
-  useEffect(() => {
-    if (livePreviewFrameSrc) {
-      setLivePreviewUrl(null)
-      setLivePreviewLoading(false)
-      return
-    }
-    void fetchLivePreview()
-  }, [fetchLivePreview, livePreviewFrameSrc])
-
-  useEffect(() => {
-    if (livePreviewFrameSrc) return
-    if (!previewSessionId || !token || !managedSession) return
-    const id = window.setInterval(() => {
-      void fetchLivePreview()
-    }, 1200)
-    return () => window.clearInterval(id)
-  }, [fetchLivePreview, livePreviewFrameSrc, managedSession, previewSessionId, token])
 
   const issueEvents = useMemo(
     () => managedSession?.browserEvents.filter((event) =>
@@ -631,25 +582,20 @@ export function DevPreviewPanel({
                 onLoad={() => setIsFrameLoading(false)}
               />
             </div>
-          ) : livePreviewUrl ? (
-            <div className="relative h-full">
-              {showLoadingBar ? (
-                <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
-                  <div className="h-full w-full animate-pulse bg-primary/80" />
-                </div>
-              ) : null}
-              <img src={livePreviewUrl} alt="Live preview" className="h-full w-full object-contain bg-white" />
-              {livePreviewLoading ? (
-                <div className="absolute right-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
-                  Updating…
-                </div>
-              ) : null}
+          ) : managedSession?.status === 'starting' ? (
+            <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
+              Starting preview session…
+            </div>
+          ) : managedSession?.status === 'ready' ? (
+            <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
+              <p>Preview is running but the VNC viewer could not connect.</p>
+              <p className="text-xs">Check that Docker is running and the <code>jait/sandbox-browser</code> image is available.</p>
             </div>
           ) : (
             <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-            Start a live preview to attach a dedicated VNC browser session.
-          </div>
-        )
+              Start a live preview to attach a VNC browser session.
+            </div>
+          )
         ) : activeTab === 'logs' ? (
           <div className="h-full overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
             {managedSession?.logs.length ? managedSession.logs.map((entry) => (

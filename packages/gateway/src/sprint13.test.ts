@@ -77,7 +77,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
 
     expect(result.ok).toBe(true);
     expect(result.data).toMatchObject({
-      novncUrl: "http://127.0.0.1:6600/vnc.html",
+      novncUrl: "http://127.0.0.1:6600/vnc_lite.html",
       novncPort: 6600,
       vncPort: 6000,
     });
@@ -106,14 +106,16 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     });
 
     expect(result).toMatchObject({
-      novncUrl: "http://127.0.0.1:6601/vnc.html",
+      novncUrl: "http://127.0.0.1:6601/vnc_lite.html",
       novncPort: 6601,
       vncPort: 6001,
       cdpUrl: "http://127.0.0.1:9223",
     });
-    expect(commands[0]?.join(" ")).toContain("docker image inspect jait/sandbox-browser:latest");
-    expect(commands[1]?.join(" ")).toContain("--add-host host.docker.internal:host-gateway");
-    expect(commands[1]?.join(" ")).toContain("-p 9223:9222");
-    expect(commands[1]?.join(" ")).not.toContain("--network none");
+    const imageInspectCmd = commands.find((c) => c.join(" ").includes("image inspect"));
+    expect(imageInspectCmd?.join(" ")).toMatch(/(docker|podman) image inspect jait\/sandbox-browser:latest/);
+    const runCmd = commands.find((c) => c.join(" ").includes("--add-host"));
+    expect(runCmd?.join(" ")).toContain("--add-host host.docker.internal:");
+    expect(runCmd?.join(" ")).toContain("-p 9223:9223");
+    expect(runCmd?.join(" ")).not.toContain("--network none");
   });
 });

@@ -115,6 +115,8 @@ interface UseUICommandsOptions {
   onThreadEvent?: ThreadEventHandler
   /** Called when the gateway broadcasts browser collaboration state changes. */
   onBrowserCollaborationEvent?: BrowserCollaborationEventHandler
+  /** Called when the gateway broadcasts preview session state changes. */
+  onPreviewSessionEvent?: (session: Record<string, unknown>) => void
   /** Called when the gateway pushes native filesystem change events. */
   onFsChanges?: (payload: FsChangesPayload) => void
   /** Called when the UI command WebSocket connects, disconnects, or reconnects. */
@@ -147,6 +149,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
     onBrowserCollaborationEvent,
     onFsChanges,
     onConnectionStateChange,
+    onPreviewSessionEvent,
   } = opts
   const listenersRef = useRef(listeners)
   listenersRef.current = listeners
@@ -160,6 +163,8 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onThreadEventRef.current = onThreadEvent
   const onBrowserCollaborationEventRef = useRef(onBrowserCollaborationEvent)
   onBrowserCollaborationEventRef.current = onBrowserCollaborationEvent
+  const onPreviewSessionEventRef = useRef(onPreviewSessionEvent)
+  onPreviewSessionEventRef.current = onPreviewSessionEvent
   const onFsChangesRef = useRef(onFsChanges)
   onFsChangesRef.current = onFsChanges
   const onConnectionStateChangeRef = useRef(onConnectionStateChange)
@@ -267,6 +272,9 @@ export function useUICommands(opts: UseUICommandsOptions) {
         onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
       } else if (msg.type.startsWith('browser.')) {
         onBrowserCollaborationEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
+      } else if (msg.type === 'preview.session') {
+        const session = (msg.payload as Record<string, unknown>)?.session as Record<string, unknown> | undefined
+        if (session) onPreviewSessionEventRef.current?.(session)
       }
     } catch {
       // ignore parse errors

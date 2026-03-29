@@ -105,6 +105,40 @@ export function registerWorkspaceEntityRoutes(
     return workspaceService.getById(id, authUser.id);
   });
 
+  app.delete("/api/workspaces/archived", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const archived = workspaceService.list("archived", authUser.id);
+    for (const workspace of archived) {
+      sessionService.deleteByWorkspace(workspace.id, authUser.id);
+    }
+    const removed = workspaceService.deleteArchived(authUser.id);
+    return { ok: true, removed };
+  });
+
+  app.get("/api/workspaces/archived", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const archived = workspaceService.list("archived", authUser.id);
+    return { workspaces: archived };
+  });
+
+  app.post("/api/workspaces/:id/restore", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const { id } = request.params as { id: string };
+    const workspace = workspaceService.getById(id, authUser.id);
+    if (!workspace) {
+      return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
+    }
+    if (workspace.status !== "archived") {
+      return reply.status(400).send({ error: "BAD_REQUEST", details: "Workspace is not archived" });
+    }
+    sessionService.restoreByWorkspace(id, authUser.id);
+    workspaceService.restore(id, authUser.id);
+    return workspaceService.getById(id, authUser.id);
+  });
+
   app.delete("/api/workspaces/:id", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
@@ -113,17 +147,12 @@ export function registerWorkspaceEntityRoutes(
     if (!workspace) {
       return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
     }
-
-    const sessionsInWorkspace = sessionService.listByWorkspace(id, undefined, authUser.id);
-    const hasRetainedSessions = sessionsInWorkspace.some((session) => session.status !== "deleted");
-    if (hasRetainedSessions) {
-      return reply.status(409).send({
-        error: "WORKSPACE_NOT_EMPTY",
-        details: "Workspace still has sessions. Archive or move them before deleting the workspace.",
-      });
+    const sessions = sessionService.listByWorkspace(id, "active", authUser.id);
+    if (sessions.length > 0) {
+      return reply.status(409).send({ error: "CONFLICT", details: "Workspace still has active sessions" });
     }
-
-    workspaceService.delete(id, authUser.id);
+    sessionService.archiveByWorkspace(id, authUser.id);
+    workspaceService.archive(id, authUser.id);
     return reply.status(204).send();
   });
 

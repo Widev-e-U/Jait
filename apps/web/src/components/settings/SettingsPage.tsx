@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
-import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search } from 'lucide-react'
+import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { ActivityFeed } from '@/components/activity'
+import type { WorkspaceRecord } from '@/hooks/useWorkspaces'
 import type { ActivityEvent } from '@jait/ui-shared'
 import type { SttProvider } from '@/hooks/useAuth'
 import type { JaitBackend } from '@/hooks/useAuth'
@@ -88,6 +89,9 @@ interface SettingsPageProps {
   jaitBackend: JaitBackend
   onJaitBackendChange: (next: JaitBackend) => Promise<void>
   onClearArchive: () => Promise<number>
+  onClearArchivedWorkspaces: () => Promise<number>
+  onFetchArchivedWorkspaces: () => Promise<WorkspaceRecord[]>
+  onRestoreWorkspace: (workspaceId: string) => Promise<boolean>
   activityEvents?: ActivityEvent[]
   updateInfo: UpdateInfo | null
   updateChecking: boolean
@@ -107,6 +111,9 @@ export function SettingsPage({
   jaitBackend,
   onJaitBackendChange,
   onClearArchive,
+  onClearArchivedWorkspaces,
+  onFetchArchivedWorkspaces,
+  onRestoreWorkspace,
   activityEvents,
   updateInfo,
   updateChecking,
@@ -118,6 +125,10 @@ export function SettingsPage({
   const [draft, setDraft] = useState<Record<string, string>>(apiKeys)
   const [saving, setSaving] = useState(false)
   const [clearing, setClearing] = useState(false)
+  const [clearingWorkspaces, setClearingWorkspaces] = useState(false)
+  const [archivedWorkspaces, setArchivedWorkspaces] = useState<WorkspaceRecord[]>([])
+  const [loadingArchived, setLoadingArchived] = useState(false)
+  const [restoringId, setRestoringId] = useState<string | null>(null)
   const [status, setStatus] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
@@ -197,6 +208,48 @@ export function SettingsPage({
     }
   }
 
+  const handleClearArchivedWorkspaces = async () => {
+    setClearingWorkspaces(true)
+    setError(null)
+    setStatus(null)
+    try {
+      const removed = await onClearArchivedWorkspaces()
+      setArchivedWorkspaces([])
+      setStatus(`Cleared ${removed} archived workspace(s).`)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to clear archived workspaces')
+    } finally {
+      setClearingWorkspaces(false)
+    }
+  }
+
+  const loadArchivedWorkspaces = useCallback(async () => {
+    setLoadingArchived(true)
+    try {
+      const list = await onFetchArchivedWorkspaces()
+      setArchivedWorkspaces(list)
+    } finally {
+      setLoadingArchived(false)
+    }
+  }, [onFetchArchivedWorkspaces])
+
+  const handleRestoreWorkspace = async (workspaceId: string) => {
+    setRestoringId(workspaceId)
+    try {
+      const ok = await onRestoreWorkspace(workspaceId)
+      if (ok) {
+        setArchivedWorkspaces((prev) => prev.filter((w) => w.id !== workspaceId))
+        setStatus('Workspace restored.')
+      } else {
+        setError('Failed to restore workspace.')
+      }
+    } catch {
+      setError('Failed to restore workspace.')
+    } finally {
+      setRestoringId(null)
+    }
+  }
+
   function renderSourceBadge(field: FieldName) {
     const userHasValue = !!(draft[field]?.trim())
     const envHasValue = !!envSet[field]
@@ -234,6 +287,9 @@ export function SettingsPage({
   )
   const showArchiveSection = matchesSearch(
     'session archive archived clear delete messages history',
+  )
+  const showWorkspaceArchiveSection = matchesSearch(
+    'workspace archive archived clear delete workspaces remove',
   )
   const showJaitBackendSection = matchesSearch(
     'jait backend provider openai openrouter model api llm',
@@ -418,6 +474,56 @@ export function SettingsPage({
             </Card>
           )}
 
+          {showWorkspaceArchiveSection && (
+            <Card className="space-y-4 p-5">
+              <div>
+                <h2 className="text-base font-medium">{highlight('Workspace archive')}</h2>
+                <p className="text-sm text-muted-foreground">
+                  Restore or permanently remove archived workspaces and their sessions.
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <Button variant="outline" onClick={() => { void loadArchivedWorkspaces() }} disabled={loadingArchived}>
+                  {loadingArchived ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Loading...</> : 'Show archived workspaces'}
+                </Button>
+                <Button variant="destructive" onClick={() => { void handleClearArchivedWorkspaces() }} disabled={clearingWorkspaces}>
+                  {clearingWorkspaces ? 'Clearing...' : 'Clear all archived'}
+                </Button>
+              </div>
+              {archivedWorkspaces.length > 0 && (
+                <div className="space-y-2">
+                  {archivedWorkspaces.map((workspace) => (
+                    <div key={workspace.id} className="flex items-center justify-between gap-2 rounded-lg border px-3 py-2">
+                      <div className="flex items-center gap-2 min-w-0">
+                        <Folder className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium truncate">{workspace.title || workspace.rootPath || workspace.id}</p>
+                          {workspace.rootPath && workspace.title && (
+                            <p className="text-xs text-muted-foreground truncate">{workspace.rootPath}</p>
+                          )}
+                        </div>
+                      </div>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="shrink-0 h-7 text-xs"
+                        onClick={() => { void handleRestoreWorkspace(workspace.id) }}
+                        disabled={restoringId === workspace.id}
+                      >
+                        {restoringId === workspace.id ? (
+                          <Loader2 className="mr-1.5 h-3 w-3 animate-spin" />
+                        ) : (
+                          <ArchiveRestore className="mr-1.5 h-3 w-3" />
+                        )}
+                        Restore
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </Card>
+          )}
+
           {showJaitBackendSection && (
             <Card className="space-y-4 p-5">
               <div>
@@ -492,7 +598,7 @@ export function SettingsPage({
             </Card>
           )}
 
-          {!showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
+          {!showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showWorkspaceArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6">

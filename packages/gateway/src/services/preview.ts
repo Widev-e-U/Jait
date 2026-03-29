@@ -1,6 +1,5 @@
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { readFile } from "node:fs/promises";
-import { createServer } from "node:net";
 import type { SurfaceRegistry } from "../surfaces/registry.js";
 import {
   BrowserSurface,
@@ -8,7 +7,6 @@ import {
   type BrowserPageSnapshot,
   type BrowserRuntimeEvent,
 } from "../surfaces/browser.js";
-import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import {
   createPreviewRunner,
   type PreviewRunner,
@@ -114,11 +112,18 @@ export class PreviewService {
   private readonly sessions = new Map<string, InternalPreviewSession>();
   private nextLogId = 1;
   private readonly runner: PreviewRunner;
-  private readonly sandboxManager: SandboxManager;
+  private _onSessionChanged: ((session: PreviewSession) => void) | null = null;
 
-  constructor(private readonly surfaceRegistry: SurfaceRegistry, sandboxManager = new SandboxManager()) {
+  constructor(private readonly surfaceRegistry: SurfaceRegistry) {
     this.runner = createPreviewRunner(false);
-    this.sandboxManager = sandboxManager;
+  }
+
+  onSessionChanged(callback: (session: PreviewSession) => void): void {
+    this._onSessionChanged = callback;
+  }
+
+  private notifyChanged(session: InternalPreviewSession): void {
+    this._onSessionChanged?.(this.toPublicSession(session));
   }
 
   async start(input: StartPreviewInput): Promise<PreviewSession> {
@@ -189,6 +194,7 @@ export class PreviewService {
             const message = `Preview process exited (code=${code ?? "null"}, signal=${signal ?? "null"})`;
             session.lastError = message;
             this.appendLog(session, "stderr", message);
+            this.notifyChanged(session);
           });
         }
       } else {
@@ -201,19 +207,18 @@ export class PreviewService {
       }
 
       await this.ensureBrowser(session);
-      if (!session.remoteBrowser) {
-        throw new Error("Preview live view is unavailable. Enable the browser live view backend before starting preview.");
-      }
-      session.url = session.remoteBrowser.novncUrl;
+      session.url = session.remoteBrowser?.novncUrl ?? session.url;
       session.status = "ready";
       session.updatedAt = nowIso();
       this.appendLog(session, "system", `Preview ready at ${session.url}`);
+      this.notifyChanged(session);
       return this.toPublicSession(session);
     } catch (error) {
       session.status = "error";
       session.lastError = error instanceof Error ? error.message : "Preview start failed";
       session.updatedAt = nowIso();
       this.appendLog(session, "stderr", session.lastError);
+      this.notifyChanged(session);
       return this.toPublicSession(session);
     }
   }
@@ -239,7 +244,6 @@ export class PreviewService {
     } else if (session.process && !session.process.killed) {
       session.process.kill("SIGTERM");
     }
-    await this.stopRemoteBrowser(sessionId);
     if (session.browserId) {
       await this.surfaceRegistry.stopSurface(session.browserId, "preview-stop").catch(() => {});
     }
@@ -247,6 +251,7 @@ export class PreviewService {
     session.status = "stopped";
     session.updatedAt = nowIso();
     this.appendLog(session, "system", "Preview stopped");
+    this.notifyChanged(session);
     this.sessions.delete(sessionId);
     return true;
   }
@@ -282,67 +287,6 @@ export class PreviewService {
 
   list(): PreviewSession[] {
     return [...this.sessions.values()].map((s) => this.get(s.sessionId)!).filter(Boolean);
-  }
-
-  async startRemoteBrowser(
-    sessionId: string,
-    options?: { workspaceRoot?: string | null; mountMode?: SandboxMountMode },
-  ): Promise<PreviewSession | null> {
-    const session = this.sessions.get(sessionId);
-    if (!session) return null;
-    if (session.remoteBrowser?.containerName) {
-      await this.stopRemoteBrowser(sessionId);
-    }
-
-    // If the agent's browser already has a live view (BROWSER_LIVE_VIEW=true),
-    // use that instead of spinning up a separate Docker sandbox.
-    if (session.browserId) {
-      const surface = this.surfaceRegistry.getSurface(session.browserId);
-      if (surface?.type === "browser" && typeof (surface as BrowserSurface).getLiveViewInfo === "function") {
-        const liveView = (surface as BrowserSurface).getLiveViewInfo();
-        if (liveView) {
-          session.remoteBrowser = createLiveViewRemoteBrowser(liveView);
-          session.url = session.remoteBrowser.novncUrl;
-          session.updatedAt = nowIso();
-          this.appendLog(session, "system", `Live view of agent browser ready at ${liveView.novncUrl}`);
-          return this.toPublicSession(session);
-        }
-      }
-    }
-
-    // Fallback: start a separate sandboxed browser container
-    const workspaceRoot = options?.workspaceRoot?.trim() || session.workspaceRoot;
-    if (!workspaceRoot) {
-      throw new Error("workspaceRoot is required for a remote browser session");
-    }
-    const [novncPort, vncPort] = await Promise.all([reservePort(), reservePort()]);
-    const remote = await this.sandboxManager.startBrowserSandbox({
-      workspaceRoot,
-      novncPort,
-      vncPort,
-      mountMode: options?.mountMode ?? "read-only",
-    });
-    session.remoteBrowser = {
-      ...remote,
-      startedAt: nowIso(),
-    };
-    session.updatedAt = nowIso();
-    this.appendLog(session, "system", `Remote browser session ready at ${remote.novncUrl}`);
-    return this.toPublicSession(session);
-  }
-
-  async stopRemoteBrowser(sessionId: string): Promise<boolean> {
-    const session = this.sessions.get(sessionId);
-    const remote = session?.remoteBrowser;
-    if (!session || !remote?.containerName) return false;
-    // Live view processes are owned by the browser surface — don't try to docker rm them
-    if (remote.containerName !== "live-view") {
-      await this.sandboxManager.stopContainer(remote.containerName).catch(() => {});
-    }
-    session.remoteBrowser = null;
-    session.updatedAt = nowIso();
-    this.appendLog(session, "system", "Remote browser session stopped");
-    return true;
   }
 
   async screenshot(sessionId: string): Promise<string | null> {
@@ -422,11 +366,22 @@ export class PreviewService {
     session.browserEvents = browser.getEvents();
     session.metrics = await browser.getMetrics().catch(() => null);
 
-    // Auto-populate remoteBrowser when the agent's browser has a live view
-    const liveView = typeof browser.getLiveViewInfo === "function" ? browser.getLiveViewInfo() : null;
+    const liveView = this.readLiveView(session, browser);
     if (liveView) {
       session.remoteBrowser = createLiveViewRemoteBrowser(liveView);
     }
+  }
+
+  private readLiveView(
+    session: InternalPreviewSession,
+    surfaceOverride?: BrowserSurface,
+  ): { novncUrl: string; vncPort: number; websockifyPort: number } | null {
+    const surface = surfaceOverride
+      ?? (session.browserId ? this.surfaceRegistry.getSurface(session.browserId) : null);
+    if (!surface || surface.type !== "browser" || surface.state !== "running") return null;
+    return typeof (surface as BrowserSurface).getLiveViewInfo === "function"
+      ? (surface as BrowserSurface).getLiveViewInfo()
+      : null;
   }
 
   private readBrowserEvents(session: InternalPreviewSession): BrowserRuntimeEvent[] {
@@ -515,24 +470,4 @@ export class PreviewService {
       updatedAt: session.updatedAt,
     };
   }
-}
-
-async function reservePort(): Promise<number> {
-  return await new Promise<number>((resolve, reject) => {
-    const server = createServer();
-    server.unref();
-    server.on("error", reject);
-    server.listen(0, "127.0.0.1", () => {
-      const address = server.address();
-      if (!address || typeof address === "string") {
-        server.close(() => reject(new Error("Failed to reserve a port")));
-        return;
-      }
-      const { port } = address;
-      server.close((error) => {
-        if (error) reject(error);
-        else resolve(port);
-      });
-    });
-  });
 }

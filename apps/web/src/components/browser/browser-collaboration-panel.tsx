@@ -58,7 +58,7 @@ export function BrowserCollaborationPanel(props: BrowserCollaborationPanelProps)
     )
   }
 
-  if (!loading && openInterventions.length === 0) return null
+  if (openInterventions.length === 0) return null
 
   return (
     <div className="fixed left-4 bottom-4 z-50 w-[380px] max-w-[calc(100vw-2rem)] rounded-2xl border bg-background/95 shadow-2xl backdrop-blur">

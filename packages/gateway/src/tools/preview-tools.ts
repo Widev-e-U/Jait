@@ -109,7 +109,11 @@ export function createPreviewStartTool(
         port: typeof input.port === "number" ? input.port : undefined,
         frameworkHint: input.frameworkHint?.trim() || undefined,
       });
-      const previewTarget = preview.remoteBrowser?.novncUrl ?? preview.url ?? target ?? null;
+      // Persist the original user-facing target (e.g. "http://127.0.0.1:3000/")
+      // rather than the ephemeral noVNC container URL. The live noVNC URL is
+      // delivered via the managed preview session's remoteBrowser field and
+      // changes whenever the sandbox container is recreated.
+      const stableTarget = preview.target ?? target ?? null;
       browserCollaborationService?.syncPreviewSession(preview, {
         userId: context.userId,
         workspaceRoot: workspaceRoot || undefined,
@@ -118,10 +122,10 @@ export function createPreviewStartTool(
 
       const panelState: DevPreviewPanelState = {
         open: true,
-        target: previewTarget,
+        target: stableTarget,
         workspaceRoot: workspaceRoot || null,
-        displayState: (previewTarget ? "connected" : "blank"),
-        displayTarget: previewTarget,
+        displayState: preview.status === "ready" ? "connected" : "blank",
+        displayTarget: stableTarget,
         storageScope: "isolated-browser-session",
       };
       if (ws) {
@@ -265,7 +269,7 @@ export function createPreviewStatusTool(
 ): ToolDefinition<PreviewStatusInput> {
   return {
     name: "preview.status",
-    description: "Get the current status of the managed preview session including URL, mode, and any errors",
+    description: "Get the current status of the managed preview session including URL, mode, errors, and browserId for use with browser.click/type/etc.",
     tier: "standard",
     category: "browser",
     source: "builtin",
@@ -283,6 +287,7 @@ export function createPreviewStatusTool(
         message: `Preview ${session.status} at ${session.url ?? "unknown"} (${session.mode} mode)`,
         data: {
           active: true,
+          browserId: session.browserId,
           status: session.status,
           mode: session.mode,
           url: session.url,
@@ -392,7 +397,7 @@ export function createPreviewInspectTool(
 ): ToolDefinition<PreviewInspectInput> {
   return {
     name: "preview.inspect",
-    description: "Inspect the active preview: get browser events, errors, current DOM snapshot, and optionally a screenshot",
+    description: "Inspect the active preview and return its browserId, interactive elements with CSS selectors (for browser.click/type), DOM snapshot, browser events/errors, and optionally a screenshot. Use the returned browserId and element selectors with browser.* tools to interact with the preview.",
     tier: "standard",
     category: "browser",
     source: "builtin",
@@ -418,6 +423,8 @@ export function createPreviewInspectTool(
       if (!input.screenshot) {
         result.screenshot = null;
       }
+      const session = previewService.get(sessionId);
+      const browserId = session?.browserId ?? null;
       const data = browserSession?.secretSafe ? redactPreviewCapture(result) : result;
 
       const errorCount = data.browserEvents.filter((e) =>
@@ -429,7 +436,7 @@ export function createPreviewInspectTool(
         message: browserSession?.secretSafe
           ? `Preview ${data.status} at ${data.url ?? "unknown"} — capture suppressed because the linked browser session is marked secret-safe`
           : `Preview ${data.status} at ${data.url ?? "unknown"} — ${data.browserEvents.length} events, ${errorCount} errors${data.metrics ? ", metrics included" : ""}${data.screenshot ? ", screenshot included" : ""}`,
-        data,
+        data: { browserId, ...data },
       };
     },
   };

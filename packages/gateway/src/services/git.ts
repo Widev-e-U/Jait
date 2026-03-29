@@ -7,7 +7,7 @@
  */
 
 import { exec as execCb } from "node:child_process";
-import { readFile, writeFile, unlink, mkdir, rm } from "node:fs/promises";
+import { readFile, writeFile, unlink, mkdir, rm, readdir } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
@@ -122,6 +122,22 @@ export interface GitSyncResult {
   push: { status: "pushed" | "skipped_up_to_date" | "skipped_no_remote" };
 }
 
+export interface GitVersionBumpResult {
+  previousVersion: string;
+  nextVersion: string;
+  files: string[];
+}
+
+export interface GitCommitFlowResult {
+  version: GitVersionBumpResult;
+  sync: {
+    status: "pulled" | "skipped_up_to_date" | "skipped_no_upstream";
+    branch: string | null;
+    upstreamBranch: string | null;
+  };
+  git: GitStepResult;
+}
+
 export interface GitFetchResult {
   status: "fetched" | "skipped_no_remote";
   remote: string | null;
@@ -190,6 +206,37 @@ async function ghAvailable(cwd: string): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+async function listChildPackageJsonFiles(root: string): Promise<string[]> {
+  if (!existsSync(root)) return [];
+  const entries = await readdir(root, { withFileTypes: true });
+  const files: string[] = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    const packageJson = join(root, entry.name, "package.json");
+    if (existsSync(packageJson)) files.push(packageJson);
+  }
+  return files;
+}
+
+function bumpPatchVersion(version: string): string | null {
+  const match = version.trim().match(/^(\d+)\.(\d+)\.(\d+)([-+].+)?$/);
+  if (!match) return null;
+  const major = Number(match[1]);
+  const minor = Number(match[2]);
+  const patch = Number(match[3]);
+  const suffix = match[4] ?? "";
+  if (!Number.isFinite(major) || !Number.isFinite(minor) || !Number.isFinite(patch)) return null;
+  return `${major}.${minor}.${patch + 1}${suffix}`;
+}
+
+function isNonFastForwardPushError(message: string): boolean {
+  const normalized = message.toLowerCase();
+  return normalized.includes("non-fast-forward")
+    || normalized.includes("failed to push some refs")
+    || normalized.includes("tip of your current branch is behind")
+    || normalized.includes("fetch first");
 }
 
 function parseGithubRemote(raw: string | null): { host: string; owner: string; repo: string } | null {

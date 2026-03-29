@@ -12,6 +12,7 @@ describe("createPreviewOpenTool", () => {
       sessionId: "session-123",
       status: "ready",
       url: "http://127.0.0.1:5173/",
+      target: "3000",
       mode: "local",
       logs: [],
       browserEvents: [],
@@ -41,7 +42,7 @@ describe("createPreviewOpenTool", () => {
     expect(sendUICommand).toHaveBeenCalledWith(
       {
         command: "dev-preview.open",
-        data: { target: "http://127.0.0.1:5173/", workspaceRoot: "/workspace/app" },
+        data: { target: "3000", workspaceRoot: "/workspace/app" },
       },
       "session-123",
     );
@@ -54,10 +55,10 @@ describe("createPreviewOpenTool", () => {
           key: "dev-preview.panel",
           value: {
             open: true,
-            target: "http://127.0.0.1:5173/",
+            target: "3000",
             workspaceRoot: "/workspace/app",
             displayState: "connected",
-            displayTarget: "http://127.0.0.1:5173/",
+            displayTarget: "3000",
             storageScope: "isolated-browser-session",
           },
         },
@@ -66,10 +67,10 @@ describe("createPreviewOpenTool", () => {
     expect(set).toHaveBeenCalledWith("session-123", {
       "dev-preview.panel": {
         open: true,
-        target: "http://127.0.0.1:5173/",
+        target: "3000",
         workspaceRoot: "/workspace/app",
         displayState: "connected",
-        displayTarget: "http://127.0.0.1:5173/",
+        displayTarget: "3000",
         storageScope: "isolated-browser-session",
       },
     });
@@ -83,6 +84,7 @@ describe("createPreviewOpenTool", () => {
       start: vi.fn().mockResolvedValue({
         status: "ready",
         url: "http://127.0.0.1:8765/",
+        target: "8765",
         mode: "url",
       }),
     };
@@ -108,7 +110,7 @@ describe("createPreviewOpenTool", () => {
     expect(sendUICommand).toHaveBeenCalledWith(
       {
         command: "dev-preview.open",
-        data: { target: "http://127.0.0.1:8765/", workspaceRoot: "/workspace/mcp" },
+        data: { target: "8765", workspaceRoot: "/workspace/mcp" },
       },
       "mcp-session",
     );
@@ -122,10 +124,10 @@ describe("createPreviewOpenTool", () => {
     expect(set).toHaveBeenCalledWith("mcp-session", {
       "dev-preview.panel": {
         open: true,
-        target: "http://127.0.0.1:8765/",
+        target: "8765",
         workspaceRoot: "/workspace/mcp",
         displayState: "connected",
-        displayTarget: "http://127.0.0.1:8765/",
+        displayTarget: "8765",
         storageScope: "isolated-browser-session",
       },
     });
@@ -181,6 +183,7 @@ describe("createPreviewOpenTool", () => {
 describe("createPreviewInspectTool", () => {
   it("omits screenshots by default and reports browser error counts", async () => {
     const previewService = {
+      get: vi.fn().mockReturnValue({ browserId: "preview-browser-session-1" }),
       inspect: vi.fn().mockResolvedValue({
         status: "ready",
         url: "/api/dev-proxy/4173/",
@@ -208,6 +211,7 @@ describe("createPreviewInspectTool", () => {
     expect(result.message).toContain("2 errors");
     expect(result.message).not.toContain("screenshot included");
     expect(result.data).toMatchObject({
+      browserId: "preview-browser-session-1",
       status: "ready",
       screenshot: null,
       page: { title: "Preview App" },
@@ -217,6 +221,7 @@ describe("createPreviewInspectTool", () => {
 
   it("keeps screenshots when explicitly requested", async () => {
     const previewService = {
+      get: vi.fn().mockReturnValue({ browserId: "preview-browser-session-1" }),
       inspect: vi.fn().mockResolvedValue({
         status: "ready",
         url: "/api/dev-proxy/4173/",
@@ -245,6 +250,7 @@ describe("createPreviewInspectTool", () => {
 
   it("suppresses preview inspection capture when the linked browser session is secret-safe", async () => {
     const previewService = {
+      get: vi.fn().mockReturnValue({ browserId: "preview-browser-session-1" }),
       inspect: vi.fn().mockResolvedValue({
         status: "ready",
         url: "/api/dev-proxy/4173/",

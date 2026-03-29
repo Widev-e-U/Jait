@@ -152,11 +152,22 @@ export class CodexProvider implements CliProviderAdapter {
    */
   async listModels(): Promise<ProviderModelInfo[]> {
     const spawnSpec = parseCommand(this.codexPath ?? "codex");
-    const child = spawn(spawnSpec.command, [...spawnSpec.args, "app-server"], {
-      cwd: process.cwd(),
-      env: process.env as Record<string, string>,
-      stdio: ["pipe", "pipe", "pipe"],
-      windowsHide: true,
+    let child: ReturnType<typeof spawn>;
+    try {
+      child = spawn(spawnSpec.command, [...spawnSpec.args, "app-server"], {
+        cwd: process.cwd(),
+        env: process.env as Record<string, string>,
+        stdio: ["pipe", "pipe", "pipe"],
+        windowsHide: true,
+        shell: process.platform === "win32",
+      });
+    } catch {
+      return [];
+    }
+
+    // Handle spawn errors (e.g. ENOENT when codex is not installed)
+    const spawnError = new Promise<never>((_, reject) => {
+      child.on("error", (err) => reject(err));
     });
 
     const rl = readline.createInterface({ input: child.stdout! });
@@ -199,11 +210,14 @@ export class CodexProvider implements CliProviderAdapter {
     });
 
     try {
-      // Handshake
-      await sendReq("initialize", {
-        clientInfo: { name: "jait", title: "Jait Gateway", version: "1.0.0" },
-        capabilities: { experimentalApi: true },
-      });
+      // Handshake (race against spawn errors like ENOENT)
+      await Promise.race([
+        sendReq("initialize", {
+          clientInfo: { name: "jait", title: "Jait Gateway", version: "1.0.0" },
+          capabilities: { experimentalApi: true },
+        }),
+        spawnError,
+      ]);
       writeMsg({ method: "initialized" });
 
       // Fetch model list — response shape: { data: [{id, model, displayName, description, isDefault, ...}], nextCursor }
@@ -229,7 +243,8 @@ export class CodexProvider implements CliProviderAdapter {
       }
       return models;
     } catch (err) {
-      console.error("[codex] model/list failed:", err);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.error(`[codex] model/list failed: ${msg}`);
       return [];
     } finally {
       // Clean up
@@ -258,6 +273,7 @@ export class CodexProvider implements CliProviderAdapter {
         },
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
+        shell: process.platform === "win32",
       },
     );
 
@@ -588,6 +604,7 @@ export class CodexProvider implements CliProviderAdapter {
       const child = spawn(spawnSpec.command, [...spawnSpec.args, "--version"], {
         stdio: "pipe",
         windowsHide: true,
+        shell: process.platform === "win32",
       });
       const timer = setTimeout(() => {
         child.kill();

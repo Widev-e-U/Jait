@@ -33,7 +33,7 @@ export function isWebSocketUrl(value?: string | null): boolean {
 
 export function isNoVncViewerUrl(value?: string | null): boolean {
   const trimmed = normalizeUrl(value)
-  return Boolean(trimmed && /\/noVNC\/vnc(?:_lite)?\.html(?:[?#].*)?$/i.test(trimmed))
+  return Boolean(trimmed && /\/(?:noVNC\/)?vnc(?:_lite)?\.html(?:[?#].*)?$/i.test(trimmed))
 }
 
 export function buildNoVncViewerUrl(options: NoVncSessionOptions): string {

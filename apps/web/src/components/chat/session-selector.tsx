@@ -1,16 +1,16 @@
-import { useEffect, useState } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Trash2, WifiOff } from 'lucide-react'
+import { useMemo } from 'react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import type { WorkspaceRecord } from '@/hooks/useWorkspaces'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
-import { agentsApi } from '@/lib/agents-api'
 
 interface SessionSelectorProps {
   workspaces: WorkspaceRecord[]
   activeWorkspaceId: string | null
+  loading?: boolean
   hasMoreWorkspaces?: boolean
   showFewerWorkspaces?: boolean
   onSelectWorkspace: (workspaceId: string) => void
@@ -55,6 +55,7 @@ function NodeIcon({ platform }: { platform: string }) {
 export function SessionSelector({
   workspaces,
   activeWorkspaceId,
+  loading = false,
   hasMoreWorkspaces = false,
   showFewerWorkspaces = false,
   onSelectWorkspace,
@@ -66,15 +67,11 @@ export function SessionSelector({
   sessionInfo,
   nodes = [],
 }: SessionSelectorProps) {
-  const [onlineNodeIds, setOnlineNodeIds] = useState<Set<string>>(new Set())
-
-  useEffect(() => {
-    agentsApi.listProviders()
-      .then(({ remoteProviders }) => {
-        setOnlineNodeIds(new Set(remoteProviders.map((n) => n.nodeId)))
-      })
-      .catch(() => {/* ignore */})
-  }, [])
+  // Derive online node IDs from the nodes prop (already fetched by App.tsx)
+  const onlineNodeIds = useMemo(
+    () => new Set(nodes.filter((n) => !n.isGateway).map((n) => n.id)),
+    [nodes],
+  )
 
   return (
     <div className="flex flex-col h-full">
@@ -94,7 +91,11 @@ export function SessionSelector({
 
       <ScrollArea className="flex-1">
         <div className="p-1.5 space-y-0.5">
-          {workspaces.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            </div>
+          ) : workspaces.length === 0 ? (
             <p className="text-xs text-muted-foreground text-center py-4">
               No workspaces yet.
               <br />
@@ -178,24 +179,22 @@ export function SessionSelector({
                           </TooltipTrigger>
                           <TooltipContent side="right">Change directory</TooltipContent>
                         </Tooltip>
-                        {workspace.sessions.length === 0 && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onRemoveWorkspace(workspace.id)
-                                }}
-                              >
-                                <Trash2 className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">Remove empty workspace</TooltipContent>
-                          </Tooltip>
-                        )}
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onRemoveWorkspace(workspace.id)
+                              }}
+                            >
+                              <Archive className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">Archive workspace</TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
                   </div>

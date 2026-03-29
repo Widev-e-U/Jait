@@ -3,7 +3,6 @@ import { join } from "node:path";
 import { tmpdir } from "node:os";
 import { describe, expect, it, vi } from "vitest";
 import { PreviewService } from "./preview.js";
-import { SandboxManager } from "../security/sandbox-manager.js";
 
 describe("PreviewService", () => {
   it("attaches to an existing localhost target instead of spawning a managed preview", async () => {
@@ -211,65 +210,7 @@ describe("PreviewService", () => {
     });
   });
 
-  it("starts and stops a remote browser session bound to a preview session", async () => {
-    const browser = {
-      type: "browser",
-      state: "running",
-      navigate: vi.fn().mockResolvedValue(undefined),
-      getEvents: vi.fn().mockReturnValue([]),
-      getLiveViewInfo: vi.fn().mockReturnValue({
-        display: ":99",
-        vncPort: 5900,
-        websockifyPort: 6080,
-        novncUrl: "ws://127.0.0.1:6080",
-      }),
-      getMetrics: vi.fn().mockResolvedValue({
-        sampledAt: "2026-03-27T00:00:00.000Z",
-        url: "http://127.0.0.1:4173/",
-        title: "Preview App",
-      }),
-    };
-    const surfaceRegistry = {
-      stopSurface: vi.fn().mockResolvedValue(undefined),
-      startSurface: vi.fn().mockResolvedValue(browser),
-      getSurface: vi.fn().mockReturnValue(browser),
-    };
-    const sandboxManager = {
-      startBrowserSandbox: vi.fn().mockResolvedValue({
-        containerName: "jait-browser-sb-test",
-        novncUrl: "http://127.0.0.1:6080/vnc.html",
-        novncPort: 6080,
-        vncPort: 5900,
-      }),
-      stopContainer: vi.fn().mockResolvedValue(undefined),
-    };
-    const service = new PreviewService(surfaceRegistry as any, sandboxManager as unknown as SandboxManager);
-    (service as any).runner = {
-      mode: "local",
-      start: vi.fn(),
-      stop: vi.fn(),
-    };
-
-    await service.start({
-      sessionId: "session-1",
-      workspaceRoot: "/workspace/app",
-      target: "4173",
-    });
-
-    const started = await service.startRemoteBrowser("session-1");
-    expect(sandboxManager.startBrowserSandbox).not.toHaveBeenCalled();
-    expect(started?.remoteBrowser).toMatchObject({
-      containerName: "live-view",
-      novncUrl: "ws://127.0.0.1:6080",
-    });
-
-    const stopped = await service.stopRemoteBrowser("session-1");
-    expect(stopped).toBe(true);
-    expect(sandboxManager.stopContainer).not.toHaveBeenCalled();
-    expect(service.get("session-1")?.remoteBrowser).toBeNull();
-  });
-
-  it("fails preview startup when the browser surface does not expose live view", async () => {
+  it("keeps preview ready on the proxied app URL when the browser surface has no live view", async () => {
     const browser = {
       type: "browser",
       state: "running",
@@ -300,7 +241,10 @@ describe("PreviewService", () => {
       target: "4173",
     });
 
-    expect(session.status).toBe("error");
-    expect(session.lastError).toContain("Preview live view is unavailable");
+    expect(session.status).toBe("ready");
+    expect(session.url).toBe("/api/dev-proxy/4173/");
+    expect(session.remoteBrowser).toBeNull();
+    expect(session.lastError).toBeNull();
   });
+
 });

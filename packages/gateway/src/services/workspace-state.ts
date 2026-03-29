@@ -26,6 +26,41 @@ export class WorkspaceStateService {
         result[row.key] = row.value;
       }
     }
+
+    // Auto-migrate: if legacy fragmented keys exist but workspace.ui doesn't,
+    // merge them into the unified key and delete the old rows.
+    const shouldMigrate = !result['workspace.ui'] && (!keys || keys.includes('workspace.ui'));
+    if (shouldMigrate) {
+      // Fetch all rows to check for legacy keys (if we only fetched specific keys above)
+      const allRows = keys?.length
+        ? this.db.select().from(workspaceState).where(eq(workspaceState.workspaceId, workspaceId)).all()
+        : rows;
+      const allResult: Record<string, unknown> = {};
+      for (const row of allRows) {
+        try { allResult[row.key] = row.value ? JSON.parse(row.value) : null; }
+        catch { allResult[row.key] = row.value; }
+      }
+
+      const legacyKeys = ['workspace.panel', 'workspace.tabs', 'workspace.layout', 'workspace.layout.mobile', 'terminal.panel', 'dev-preview.panel'];
+      const hasLegacy = legacyKeys.some(k => k in allResult);
+      if (hasLegacy) {
+        const ui = {
+          panel: (allResult['workspace.panel'] as Record<string, unknown> | null) ?? null,
+          tabs: (allResult['workspace.tabs'] as Record<string, unknown> | null) ?? null,
+          layout: (allResult['workspace.layout'] as Record<string, unknown> | null) ?? (allResult['workspace.layout.mobile'] as Record<string, unknown> | null) ?? null,
+          terminal: (allResult['terminal.panel'] as Record<string, unknown> | null) ?? null,
+          preview: (allResult['dev-preview.panel'] as Record<string, unknown> | null) ?? null,
+        };
+        this.set(workspaceId, { 'workspace.ui': ui });
+        for (const k of legacyKeys) {
+          if (k in allResult) {
+            this.db.delete(workspaceState).where(and(eq(workspaceState.workspaceId, workspaceId), eq(workspaceState.key, k))).run();
+          }
+        }
+        result['workspace.ui'] = ui;
+      }
+    }
+
     return result;
   }
 

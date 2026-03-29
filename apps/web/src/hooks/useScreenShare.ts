@@ -419,6 +419,11 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
     // causing state churn and drag-lag on Windows/Electron.
     if (!token) return
 
+    // On the web (non-Electron) the screen-share WS is only useful when
+    // the user actively requests a share.  Skip the always-on connection
+    // to avoid noisy reconnect loops in the gateway logs.
+    if (!window.jaitDesktop) return
+
     let mounted = true
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
 
@@ -619,9 +624,9 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
 
       ws.onclose = () => {
         wsRef.current = null
-        // Auto-reconnect after 2s
+        // Auto-reconnect after 30s (no rush when idle)
         if (mounted) {
-          reconnectTimer = setTimeout(connect, 2000)
+          reconnectTimer = setTimeout(connect, 30_000)
         }
       }
 
@@ -642,8 +647,9 @@ export function useScreenShare(options: UseScreenShareOptions = {}) {
   }, [token])
 
   // Register on mount, fetch initial state once (no polling — WS pushes updates)
+  // Only on Electron — web browser doesn't participate in screen sharing.
   useEffect(() => {
-    if (!token) return
+    if (!token || !window.jaitDesktop) return
     registerDevice()
     refreshState()
   }, [token, registerDevice, refreshState])

@@ -142,12 +142,41 @@ export class WorkspaceService {
       .run();
   }
 
+  archive(id: string, userId?: string) {
+    this.db
+      .update(workspaces)
+      .set({ status: "archived" })
+      .where(userId ? and(eq(workspaces.id, id), eq(workspaces.userId, userId)) : eq(workspaces.id, id))
+      .run();
+  }
+
+  restore(id: string, userId?: string) {
+    this.db
+      .update(workspaces)
+      .set({ status: "active" })
+      .where(userId ? and(eq(workspaces.id, id), eq(workspaces.userId, userId)) : eq(workspaces.id, id))
+      .run();
+  }
+
   delete(id: string, userId?: string) {
     this.db
       .update(workspaces)
       .set({ status: "deleted" })
       .where(userId ? and(eq(workspaces.id, id), eq(workspaces.userId, userId)) : eq(workspaces.id, id))
       .run();
+  }
+
+  /** Delete (soft) all archived workspaces for a user. Returns count of affected rows. */
+  deleteArchived(userId: string): number {
+    const archived = this.list("archived", userId);
+    if (archived.length === 0) return 0;
+    const ids = archived.map((w) => w.id);
+    this.db
+      .update(workspaces)
+      .set({ status: "deleted" })
+      .where(and(inArray(workspaces.id, ids), eq(workspaces.userId, userId)))
+      .run();
+    return archived.length;
   }
 
   getActiveSessionCounts(userId: string): Map<string, number> {

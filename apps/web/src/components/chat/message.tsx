@@ -837,8 +837,10 @@ function MessageInner({
                             setEditSegments(editPromptInputRef.current?.getSegments() ?? [])
                           }}
                           onSubmit={(_chipFiles, _attachments, nextSegments) => {
-                            setEditSegments(nextSegments ?? [])
-                            void saveEditedMessage(editDraft, nextSegments ?? [])
+                            const freshSegments = nextSegments ?? []
+                            const freshText = userMessageTextFromSegments(freshSegments) || editDraft
+                            setEditSegments(freshSegments)
+                            void saveEditedMessage(freshText, freshSegments)
                           }}
                           disabled={isSavingEdit}
                           controlsDisabled={isSavingEdit}

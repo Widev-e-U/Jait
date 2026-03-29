@@ -74,6 +74,10 @@ interface WorkspacePanelProps {
   fsWatcherVersion?: number
   /** Persisted editor tab state for this session/workspace */
   savedTabsState?: WorkspaceTabsState | null
+  /** True once the app shell has finished applying the initial WS-pushed state.
+   *  The persist effect is suppressed until this becomes true to prevent
+   *  overwriting the DB with an empty/interim state during startup. */
+  stateReady?: boolean
   /** Called when open tabs/active tab change (for DB + WS sync) */
   onTabsStateChange?: (state: WorkspaceTabsState | null) => void
   /** Apply a merged review diff result to the backing file. */
@@ -271,6 +275,7 @@ function isDescendantPath(parentPath: string, candidatePath: string): boolean {
 /* ------------------------------------------------------------------ */
 import { getApiUrl } from '@/lib/gateway-url'
 import { isSamePreviewSession } from '@/lib/preview-session'
+import { subscribePreviewSession } from '@/lib/preview-events'
 
 const API_URL = getApiUrl()
 
@@ -595,9 +600,14 @@ function getLivePreviewLabel(target?: string | null, browserSession?: BrowserSes
 function resolveWorkspacePreviewSrc(target?: string | null): string | null {
   const trimmed = target?.trim()
   if (!trimmed) return null
-  if (trimmed.startsWith('/')) return `${API_URL}${trimmed}`
   if (/^wss?:\/\//i.test(trimmed)) return trimmed
-  if (/^[a-z]+:\/\//i.test(trimmed)) return trimmed
+  // Only allow noVNC viewer URLs through — plain HTTP or gateway reverse-proxy
+  // paths would embed the page directly in the user's browser context (sharing
+  // dark mode, cookies, network stack). Those must fall through to the isolated
+  // Playwright screenshot path instead.
+  if (/\/(?:noVNC\/)?vnc(?:_lite)?\.html(?:[?#].*)?$/i.test(trimmed)) {
+    return trimmed.startsWith('/') ? `${API_URL}${trimmed}` : trimmed
+  }
   return null
 }
 
@@ -605,6 +615,7 @@ export interface WorkspaceTabsState {
   remoteRoot: string
   tabs: Array<{ path: string; label: string }>
   activePath: string | null
+  activePreview?: boolean
 }
 
 interface MobileTreeDragState {
@@ -993,6 +1004,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   changedPaths,
   fsWatcherVersion,
   savedTabsState,
+  stateReady,
   onTabsStateChange,
   onApplyDiff,
   provider,
@@ -1156,8 +1168,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [previewInspectSelector, setPreviewInspectSelector] = useState('')
   const [previewInspectLoading, setPreviewInspectLoading] = useState(false)
   const [previewInspectError, setPreviewInspectError] = useState<string | null>(null)
-  const [previewBrowserScreenshotUrl, setPreviewBrowserScreenshotUrl] = useState<string | null>(null)
-  const [previewBrowserScreenshotLoading, setPreviewBrowserScreenshotLoading] = useState(false)
   const previewLogsEndRef = useRef<HTMLDivElement | null>(null)
   const previewConsoleEndRef = useRef<HTMLDivElement | null>(null)
   const activePreviewTab = useMemo(() => openTabs.find((tab) => tab.type === 'preview') ?? null, [openTabs])
@@ -1183,7 +1193,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     [activeBrowserSession?.id, browserInterventions],
   )
   const activePreviewSessionId = activeBrowserSession?.previewSessionId ?? previewSessionId ?? null
-  const previewUsesBrowserSurface = Boolean(activePreviewTab?.browserSessionId && activeBrowserSession?.previewSessionId)
   const activePreviewSrc = useMemo(
     () => managedPreviewSession?.remoteBrowser?.novncUrl
       ?? activePreviewTab?.previewSrc
@@ -1194,6 +1203,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   )
 
   const restoredTabsRootRef = useRef<string | null>(null)
+  const restoringTabsRef = useRef(false)
+  const waitingForPreviewRef = useRef(false)
   const lastPersistedTabsRef = useRef<string>('')
   const handledPreviewRequestKeyRef = useRef<number | null>(null)
   const handledArchitectureRequestKeyRef = useRef<number | null>(null)
@@ -1214,6 +1225,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         if (
           existing.label === nextTab.label &&
           existing.previewTarget === nextTab.previewTarget &&
+          existing.previewSrc === nextTab.previewSrc &&
           existing.browserSessionId === nextTab.browserSessionId &&
           existing.path === nextTab.path
         ) {
@@ -1331,36 +1343,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
   }, [activePreviewSessionId, managedPreviewSession?.status, managedPreviewSession?.url, previewToken])
 
-  const fetchPreviewBrowserScreenshot = useCallback(async () => {
-    if (!activeBrowserSession?.previewSessionId || !previewToken) {
-      setPreviewBrowserScreenshotUrl(null)
-      return null
-    }
-    setPreviewBrowserScreenshotLoading(true)
-    try {
-      const response = await fetch(`${API_URL}/api/preview/screenshot/${activeBrowserSession.previewSessionId}`, {
-        headers: authHeaders(previewToken),
-      })
-      const data = await response.json().catch(() => ({})) as { screenshot?: string | null; suppressed?: boolean; reason?: string }
-      if (!response.ok) {
-        throw new Error((data as { error?: string }).error || 'Failed to load browser session preview')
-      }
-      if (data.suppressed) {
-        setPreviewPanelWarning(data.reason || 'Preview capture is currently suppressed for this browser session.')
-        setPreviewBrowserScreenshotUrl(null)
-        return null
-      }
-      const next = data.screenshot ? `data:image/png;base64,${data.screenshot}` : null
-      setPreviewBrowserScreenshotUrl(next)
-      return next
-    } catch (error) {
-      setPreviewPanelWarning(error instanceof Error ? error.message : 'Failed to load browser session preview')
-      return null
-    } finally {
-      setPreviewBrowserScreenshotLoading(false)
-    }
-  }, [activeBrowserSession?.previewSessionId, previewToken])
-
   // Auto-scroll active tab into view (VS Code behaviour)
   useEffect(() => {
     if (!activeTabId) return
@@ -1388,26 +1370,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     void fetchManagedPreviewSession()
   }, [fetchManagedPreviewSession])
 
+  // Subscribe to WS-pushed preview session updates instead of polling
   useEffect(() => {
-    if (!activePreviewSessionId || !previewToken || (!managedPreviewSession && !activePreviewTab)) return
-    const intervalId = window.setInterval(() => {
-      void fetchManagedPreviewSession()
-    }, 2000)
-    return () => window.clearInterval(intervalId)
-  }, [activePreviewSessionId, activePreviewTab, fetchManagedPreviewSession, managedPreviewSession, previewToken])
-
-  useEffect(() => {
-    if (!previewUsesBrowserSurface || activePreviewSrc) {
-      setPreviewBrowserScreenshotUrl(null)
-      setPreviewBrowserScreenshotLoading(false)
-      return
-    }
-    void fetchPreviewBrowserScreenshot()
-    const intervalId = window.setInterval(() => {
-      void fetchPreviewBrowserScreenshot()
-    }, 1200)
-    return () => window.clearInterval(intervalId)
-  }, [activePreviewSrc, fetchPreviewBrowserScreenshot, previewUsesBrowserSurface])
+    if (!activePreviewSessionId) return
+    return subscribePreviewSession((session) => {
+      if (session.sessionId !== activePreviewSessionId) return
+      setManagedPreviewSession((current) => isSamePreviewSession(current, session as any) ? current : session as any)
+    })
+  }, [activePreviewSessionId])
 
   useEffect(() => {
     if (previewSideTab === 'logs') {
@@ -1432,13 +1402,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     syncPreviewTab((current) => {
       if (!current) return current
       const nextBrowserSessionId = current.browserSessionId ?? activeBrowserSession?.id ?? previewBrowserSessionId ?? undefined
+      // Keep the original stable target (e.g. http://127.0.0.1:8000/) for
+      // persistence. Ephemeral container URLs (noVNC) belong in previewSrc
+      // only so they don't get saved and break on reload.
+      const stableTarget = managedPreviewSession.target ?? current.previewTarget
       return {
         ...current,
-        label: getLivePreviewLabel(managedPreviewSession.target ?? managedPreviewSession.url ?? current.previewTarget, activeBrowserSession),
-        previewTarget: managedPreviewSession.target ?? managedPreviewSession.url ?? current.previewTarget,
+        label: getLivePreviewLabel(stableTarget ?? managedPreviewSession.url, activeBrowserSession),
+        previewTarget: stableTarget,
         browserSessionId: nextBrowserSessionId,
         previewSrc: managedPreviewSession.remoteBrowser?.novncUrl
-          ?? resolveWorkspacePreviewSrc(managedPreviewSession.url ?? managedPreviewSession.target ?? current.previewTarget),
+          ?? resolveWorkspacePreviewSrc(managedPreviewSession.url ?? stableTarget),
         previewMode: 'managed',
       }
     })
@@ -1449,9 +1423,20 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (!remoteRoot || !savedTabsState || savedTabsState.remoteRoot !== remoteRoot) return
     if (restoredTabsRootRef.current === remoteRoot) return
     restoredTabsRootRef.current = remoteRoot
+    // If the saved state expects the preview tab to be active, flag it so
+    // the persist effect waits until the preview tab is actually created.
+    waitingForPreviewRef.current = savedTabsState.activePreview === true
+    if (savedTabsState.activePreview) {
+      // Directly activate the preview tab to cover the race where
+      // syncPreviewTab's setActiveTabId('preview') commits in a later
+      // render than its setOpenTabs call.  The preview tab may not be in
+      // openTabs yet — when it appears, activeTab will resolve via useMemo.
+      setActiveTabId('preview')
+    }
     if (savedTabsState.tabs.length === 0) return
 
     let cancelled = false
+    restoringTabsRef.current = true
     const restore = async () => {
       const restored: EditorTab[] = []
       for (const t of savedTabsState.tabs) {
@@ -1484,7 +1469,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         ? preferred
         : restored[restored.length - 1]?.id ?? null
 
-      if (active) {
+      // When the preview tab was the active tab before reload, skip
+      // setting activeTabId to a file tab — the preview tab is activated
+      // directly above (or by the preview restoration flow).
+      if (active && !savedTabsState.activePreview) {
         const activeFile = restored.find((t) => t.id === active)
         setActiveTabId(active)
         if (activeFile) {
@@ -1497,15 +1485,27 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       }
     }
 
-    void restore()
+    void restore().finally(() => {
+      restoringTabsRef.current = false
+    })
     return () => {
       cancelled = true
+      restoringTabsRef.current = false
     }
   }, [remoteRoot, savedTabsState, surfaceId, onActiveFileChange])
 
   // Persist only regular workspace file tabs (exclude diff/ext tabs).
   useEffect(() => {
     if (!onTabsStateChange) return
+    if (restoringTabsRef.current) return
+    if (!stateReady) return
+    const hasPreviewTab = openTabs.some(t => t.type === 'preview')
+    if (waitingForPreviewRef.current) {
+      if (!hasPreviewTab) return
+      if (activeTabId !== 'preview') return
+      // Preview tab is present and active — restore complete.
+      waitingForPreviewRef.current = false
+    }
     if (!remoteRoot) {
       if (lastPersistedTabsRef.current !== '') {
         lastPersistedTabsRef.current = ''
@@ -1520,12 +1520,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     const activePath = activeTab && activeTab.type === 'file' && activeTab.id.startsWith('file:')
       ? activeTab.path
       : null
-    const nextState: WorkspaceTabsState = { remoteRoot, tabs: fileTabs, activePath }
+    const activePreview = activeTabId === 'preview'
+    const nextState: WorkspaceTabsState = { remoteRoot, tabs: fileTabs, activePath, activePreview }
     const serialized = JSON.stringify(nextState)
     if (serialized === lastPersistedTabsRef.current) return
     lastPersistedTabsRef.current = serialized
     onTabsStateChange(nextState)
-  }, [openTabs, activeTab, remoteRoot, onTabsStateChange])
+  }, [openTabs, activeTab, activeTabId, remoteRoot, stateReady, onTabsStateChange])
 
   const lastNotifiedPreviewRef = useRef<string>('')
   useEffect(() => {
@@ -2245,7 +2246,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const renderPreviewPane = (emptyLabel: string) => (
     <div className="relative h-full bg-muted/5">
-      {(previewFrameLoading || previewBrowserScreenshotLoading) && (
+      {previewFrameLoading && (
         <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
           <div className="h-full w-full animate-pulse bg-primary/80" />
         </div>
@@ -2259,25 +2260,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           overlay={activeBrowserSession?.name ?? null}
           onLoad={() => setPreviewFrameLoading(false)}
         />
-      ) : previewUsesBrowserSurface && previewBrowserScreenshotUrl ? (
-        <div className="relative h-full">
-          <img
-            src={previewBrowserScreenshotUrl}
-            alt={activeBrowserSession?.name ?? 'Browser session preview'}
-            className="h-full w-full object-contain bg-white"
-          />
-          <div className="absolute left-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
-            {activeBrowserSession?.name ?? 'Browser session'}
-          </div>
-          {previewBrowserScreenshotLoading ? (
-            <div className="absolute right-2 top-2 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
-              Updating…
-            </div>
-          ) : null}
-        </div>
-      ) : activeTab?.browserSessionId ? (
+      ) : managedPreviewSession?.status === 'starting' ? (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
-          Waiting for the linked browser session to attach to the preview surface.
+          Starting preview session…
+        </div>
+      ) : managedPreviewSession?.status === 'ready' ? (
+        <div className="flex h-full flex-col items-center justify-center gap-2 px-6 text-center text-sm text-muted-foreground">
+          <p>Preview is running but the VNC viewer could not connect.</p>
+          <p className="text-xs">Check that Docker is running and the <code>jait/sandbox-browser</code> image is available.</p>
         </div>
       ) : (
         <div className="flex h-full items-center justify-center px-6 text-center text-sm text-muted-foreground">
@@ -3243,25 +3233,35 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       || activeBrowserSession?.id
       || undefined
 
+    // Only stop the managed session when switching to a genuinely different
+    // target. Re-opening the same target (e.g. the gateway tool sending
+    // dev-preview.open right after preview.start) must NOT kill the container
+    // that was just created.
     if (managedPreviewSession) {
-      void stopManagedPreviewSession(false)
+      const currentTarget = managedPreviewSession.target?.trim() ?? ''
+      const isSameTarget = trimmed && currentTarget && trimmed === currentTarget
+      if (!isSameTarget) {
+        void stopManagedPreviewSession(false)
+      }
     }
 
     setPreviewInput(trimmed || previewInput)
     setPreviewPanelError(null)
     setPreviewPanelWarning(null)
     setPreviewFrameLoading(Boolean(linkedBrowserSessionId))
-    setPreviewBrowserScreenshotUrl(null)
     setPreviewSidePanelOpen(true)
     setPreviewSideTab('controls')
-    syncPreviewTab(() => ({
+    syncPreviewTab((existing) => ({
       id: 'preview',
       type: 'preview',
       path: trimmed || '__preview__',
       label: getLivePreviewLabel(trimmed, activeBrowserSession),
       previewTarget: trimmed || undefined,
       browserSessionId: linkedBrowserSessionId,
-      previewSrc: resolveWorkspacePreviewSrc(trimmed),
+      // Preserve the live previewSrc from the managed session sync if the
+      // managed session is still running (e.g. noVNC URL set by the sync
+      // effect). Only compute a fresh src when there's no existing one.
+      previewSrc: existing?.previewSrc ?? resolveWorkspacePreviewSrc(trimmed),
       previewMode: linkedBrowserSessionId ? 'managed' : null,
     }), true)
     return true
@@ -3383,7 +3383,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const handleRefreshPreviewTarget = useCallback(() => {
     setPreviewFrameLoading(true)
-    setPreviewBrowserScreenshotUrl(null)
     void fetchManagedPreviewSession()
     setOpenTabs((prev) => prev.map((tab) => (
       tab.type === 'preview'
@@ -3403,7 +3402,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       setPreviewPanelError(null)
       setPreviewPanelWarning(null)
       setPreviewFrameLoading(true)
-      setPreviewBrowserScreenshotUrl(null)
       handleOpenPreviewTarget(null)
       try {
         const response = await fetch(`${API_URL}/api/preview/start`, {

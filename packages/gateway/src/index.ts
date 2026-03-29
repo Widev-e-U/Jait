@@ -132,6 +132,14 @@ async function main() {
   surfaceRegistry.register(new RemoteFileSystemSurfaceFactory(ws));
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
   const previewService = new PreviewService(surfaceRegistry);
+  previewService.onSessionChanged((session) => {
+    ws.broadcastAll({
+      type: "preview.session" as any,
+      sessionId: session.sessionId,
+      timestamp: new Date().toISOString(),
+      payload: { session },
+    });
+  });
   const browserCollaborationService = new BrowserCollaborationService(db);
   browserCollaborationService.onSessionChanged((session) => {
     ws.broadcastAll({
@@ -580,18 +588,52 @@ async function main() {
     }
   };
 
-  // Push full session state when a client subscribes to a session.
-  // This ensures every client gets the authoritative state on connect/reconnect.
+  // ── Full state push on client subscribe ─────────────────────────────
+  // This is the single authoritative source for initial UI state.
+  // When a client subscribes to a session, push ALL session-scoped AND
+  // workspace-scoped state in one message so the frontend can hydrate
+  // immediately without waiting for REST round-trips.
+  //
+  // AGENT NOTE: To add new persisted state keys to the initial push:
+  //   1. Session-scoped keys: automatically included (sessionState.get
+  //      returns all keys for the session).
+  //   2. Workspace-scoped keys: all workspace state lives in a single
+  //      `workspace.ui` key (WorkspaceUIState). Add new fields there.
+  //      The _workspace envelope below includes it automatically.
+  //   3. Frontend: handle in handleFullState() in App.tsx.
   ws.onClientSubscribe = (sid, clientId) => {
     try {
-      const allState = sessionState.get(sid);
+      const allState: Record<string, unknown> = sessionState.get(sid);
+
+      // Include workspace-scoped state (workspace.ui) so the client
+      // doesn't need a separate REST round-trip.
+      const session = sessionService.getById(sid);
+      if (session?.workspaceId) {
+        allState._workspace = {
+          id: session.workspaceId,
+          state: workspaceState.get(session.workspaceId),
+        };
+      }
+
       ws.sendToClient(clientId, {
         type: "ui.full-state",
         sessionId: sid,
         timestamp: new Date().toISOString(),
-        payload: allState, // Record<string, unknown>
+        payload: allState,
       });
       console.log(`Full state pushed to client ${clientId}: session=${sid} keys=${Object.keys(allState).join(", ") || "(empty)"}`);
+
+      // Re-push active preview session so the client can hydrate the managed
+      // preview immediately without waiting for a REST round-trip.
+      const activePreview = previewService.get(sid);
+      if (activePreview) {
+        ws.sendToClient(clientId, {
+          type: "preview.session" as any,
+          sessionId: sid,
+          timestamp: new Date().toISOString(),
+          payload: { session: activePreview },
+        });
+      }
     } catch (err) {
       console.error(`Failed to push full state to client ${clientId}:`, err);
     }

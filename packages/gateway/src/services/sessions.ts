@@ -1,7 +1,7 @@
 /**
  * Session service — CRUD for sessions in SQLite.
  */
-import { and, eq, desc } from "drizzle-orm";
+import { and, eq, desc, not } from "drizzle-orm";
 import type { JaitDB } from "../db/connection.js";
 import { sessions } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
@@ -153,6 +153,27 @@ export class SessionService {
       .set({ status: "deleted" })
       .where(userId ? and(eq(sessions.id, id), eq(sessions.userId, userId)) : eq(sessions.id, id))
       .run();
+  }
+
+  /** Archive all active sessions in a workspace. */
+  archiveByWorkspace(workspaceId: string, userId?: string) {
+    const conditions = [eq(sessions.workspaceId, workspaceId), eq(sessions.status, "active")];
+    if (userId) conditions.push(eq(sessions.userId, userId));
+    this.db.update(sessions).set({ status: "archived" }).where(and(...conditions)).run();
+  }
+
+  /** Restore all archived sessions in a workspace back to active. */
+  restoreByWorkspace(workspaceId: string, userId?: string) {
+    const conditions = [eq(sessions.workspaceId, workspaceId), eq(sessions.status, "archived")];
+    if (userId) conditions.push(eq(sessions.userId, userId));
+    this.db.update(sessions).set({ status: "active" }).where(and(...conditions)).run();
+  }
+
+  /** Delete (soft) all non-deleted sessions in a workspace. */
+  deleteByWorkspace(workspaceId: string, userId?: string) {
+    const conditions = [eq(sessions.workspaceId, workspaceId), not(eq(sessions.status, "deleted"))];
+    if (userId) conditions.push(eq(sessions.userId, userId));
+    this.db.update(sessions).set({ status: "deleted" }).where(and(...conditions)).run();
   }
 
   /** Update session name, metadata, or workspacePath. */

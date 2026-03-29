@@ -15,8 +15,8 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("You are operating inside Jait, a tool-centric coding workspace and gateway.");
     expect(prompt).toContain("Respect Jait workspace boundaries");
     expect(prompt).toContain("If the user asks to open, switch, or use a workspace, project, or repo");
-    expect(prompt).toContain("attach to that existing server instead of starting a new one");
-    expect(prompt).toContain("If attaching a preview fails, fall back to opening the localhost URL directly in the browser surface.");
+    expect(prompt).toContain("attach to an existing local target when available");
+    expect(prompt).toContain("If `preview.start` fails, then fall back to opening the localhost URL directly in the browser surface.");
     expect(prompt).toContain("You are working in the workspace: /tmp/project");
   });
 });

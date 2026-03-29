@@ -229,22 +229,62 @@ export class AgentsApi {
 
   // ── Providers ──────────────────────────────────────────────────
 
+  private _providersInflight: Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> | null = null
+  private _providersCachedAt = 0
+
   async listProviders(): Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> {
-    const res = await fetch(`${API_URL}/api/providers`, {
-      headers: this.getHeaders(),
+    // Deduplicate: reuse in-flight request or recent cache (5s TTL)
+    const now = Date.now()
+    if (this._providersInflight && now - this._providersCachedAt < 5_000) {
+      return this._providersInflight
+    }
+    this._providersCachedAt = now
+    this._providersInflight = (async () => {
+      const res = await fetch(`${API_URL}/api/providers`, {
+        headers: this.getHeaders(),
+      })
+      if (!res.ok) throw new Error(`Failed to list providers: ${res.statusText}`)
+      const data = await res.json() as { providers: ProviderInfo[]; remoteProviders?: RemoteProviderInfo[] }
+      return { providers: data.providers, remoteProviders: data.remoteProviders ?? [] }
+    })()
+    this._providersInflight.catch(() => {
+      // Clear cache on error so next call retries
+      this._providersInflight = null
+      this._providersCachedAt = 0
     })
-    if (!res.ok) throw new Error(`Failed to list providers: ${res.statusText}`)
-    const data = await res.json() as { providers: ProviderInfo[]; remoteProviders?: RemoteProviderInfo[] }
-    return { providers: data.providers, remoteProviders: data.remoteProviders ?? [] }
+    return this._providersInflight
   }
 
+  /** Force-refresh providers (bypasses the dedup cache). */
+  async listProvidersFresh(): Promise<{ providers: ProviderInfo[]; remoteProviders: RemoteProviderInfo[] }> {
+    this._providersInflight = null
+    this._providersCachedAt = 0
+    return this.listProviders()
+  }
+
+  private _modelsInflight = new Map<string, Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }>>()
+  private _modelsCachedAt = new Map<string, number>()
+
   async listProviderModels(providerId: ProviderId): Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }> {
-    const res = await fetch(`${API_URL}/api/providers/${providerId}/models`, {
-      headers: this.getHeaders(),
+    const now = Date.now()
+    const cachedAt = this._modelsCachedAt.get(providerId) ?? 0
+    const existing = this._modelsInflight.get(providerId)
+    if (existing && now - cachedAt < 5_000) return existing
+
+    this._modelsCachedAt.set(providerId, now)
+    const promise = (async () => {
+      const res = await fetch(`${API_URL}/api/providers/${providerId}/models`, {
+        headers: this.getHeaders(),
+      })
+      if (!res.ok) throw new Error(`Failed to list models: ${res.statusText}`)
+      return res.json() as Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }>
+    })()
+    this._modelsInflight.set(providerId, promise)
+    promise.catch(() => {
+      this._modelsInflight.delete(providerId)
+      this._modelsCachedAt.delete(providerId)
     })
-    if (!res.ok) throw new Error(`Failed to list models: ${res.statusText}`)
-    const data = await res.json() as { models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }
-    return data
+    return promise
   }
 
   // ── Threads CRUD ───────────────────────────────────────────────

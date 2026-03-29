@@ -14,5 +14,6 @@ describe('noVNC helpers', () => {
   it('recognizes websocket and viewer urls', () => {
     expect(isWebSocketUrl('ws://127.0.0.1:5900')).toBe(true)
     expect(isNoVncViewerUrl('/noVNC/vnc.html')).toBe(true)
+    expect(isNoVncViewerUrl('/noVNC/vnc_lite.html')).toBe(true)
   })
 })

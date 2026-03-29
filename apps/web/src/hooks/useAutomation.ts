@@ -209,7 +209,7 @@ export function useAutomation(enabled = true) {
     if (!getAuthToken()) return
     try {
       const [provResult, repos] = await Promise.all([
-        agentsApi.listProviders(),
+        agentsApi.listProvidersFresh(),
         agentsApi.listRepos(),
       ])
       setProviders(provResult.providers)

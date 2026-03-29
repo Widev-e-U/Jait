@@ -539,11 +539,16 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
     }
   }, [headers, fetchTopology])
 
-  // Initial load + polling
+  // Initial load + polling (paused when tab is hidden)
   useEffect(() => {
     void fetchTopology()
-    const interval = setInterval(() => void fetchTopology(), 15_000)
-    return () => clearInterval(interval)
+    let interval: ReturnType<typeof setInterval> | null = null
+    const start = () => { if (!interval) interval = setInterval(() => void fetchTopology(), 60_000) }
+    const stop = () => { if (interval) { clearInterval(interval); interval = null } }
+    const onVisibility = () => { document.hidden ? stop() : start() }
+    document.addEventListener('visibilitychange', onVisibility)
+    if (!document.hidden) start()
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility) }
   }, [fetchTopology])
 
   // Resize observer

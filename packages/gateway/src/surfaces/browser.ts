@@ -445,36 +445,16 @@ async function createPlaywrightDriver(input: SurfaceStartInput): Promise<Browser
   if (runtime === "node-bridge") {
     return createNodeBridgePlaywrightDriver();
   }
-
-  try {
-    return await createInProcessPlaywrightDriver(input);
-  } catch (err) {
-    if (runtime === "auto" && isBunWindowsRuntime() && shouldFallbackToNodeBridge(err)) {
-      return createNodeBridgePlaywrightDriver();
-    }
-    throw err;
-  }
+  return createInProcessPlaywrightDriver(input);
 }
 
 type BrowserRuntimeMode = "auto" | "in-process" | "node-bridge";
 
-function resolveBrowserRuntimeMode(): BrowserRuntimeMode {
+export function resolveBrowserRuntimeMode(): BrowserRuntimeMode {
   const configured = process.env["BROWSER_RUNTIME"]?.trim().toLowerCase();
   if (configured === "in-process") return "in-process";
   if (configured === "node" || configured === "node-bridge") return "node-bridge";
-  if (isBunWindowsRuntime()) return "node-bridge";
   return "auto";
-}
-
-function isBunWindowsRuntime(): boolean {
-  return process.platform === "win32" && Boolean(process.versions.bun);
-}
-
-function shouldFallbackToNodeBridge(err: unknown): boolean {
-  const message = extractErrorMessage(err).toLowerCase();
-  return message.includes("launch: timeout")
-    || message.includes("playwright browser launch failed")
-    || message.includes("failed to create playwright browser context");
 }
 
 async function connectOrLaunchBrowser(
@@ -559,8 +539,9 @@ async function createInProcessPlaywrightDriver(input: SurfaceStartInput): Promis
       if (liveViewSession.kind === "host") {
         process.env["DISPLAY"] = liveViewSession.display;
       }
-    } catch {
+    } catch (err) {
       // Docker or host live-view dependencies unavailable — fall back to headless
+      console.warn("[browser] startLiveView failed, falling back to headless:", (err as Error)?.message ?? err);
       liveViewSession = null;
     }
   }
@@ -966,7 +947,7 @@ async function createInProcessPlaywrightDriver(input: SurfaceStartInput): Promis
         let lcpMs: number | null = null;
         let cls = 0;
         let inpMs: number | null = null;
-        const w = window as Window & {
+        const w = window as {
           __jaitLcpMs?: number;
           __jaitCls?: number;
           __jaitInpMs?: number;

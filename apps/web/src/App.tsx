@@ -58,6 +58,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, SessionSwitcher, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
 import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
+import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
 import { PlanReview } from '@/components/chat/plan-review'
@@ -88,10 +89,11 @@ import { useSessionState } from '@/hooks/useSessionState'
 import { useWorkspaceState } from '@/hooks/useWorkspaceState'
 import { useAutomation } from '@/hooks/useAutomation'
 import { useBrowserCollaboration } from '@/hooks/useBrowserCollaboration'
+import { emitPreviewSession } from '@/lib/preview-events'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
-import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState } from '@jait/shared'
+import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, WorkspaceUIState } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 
@@ -1313,6 +1315,9 @@ function App() {
     switchSession,
     fetchArchivedSessions,
     removeWorkspace,
+    clearArchivedWorkspaces,
+    fetchArchivedWorkspaces,
+    restoreWorkspace,
     renameSession,
     fetchWorkspaces,
     hasMoreWorkspaces,
@@ -1349,14 +1354,23 @@ function App() {
     setFolderPickerOpen(true)
   }, [])
 
+  const confirmDialog = useConfirmDialog()
   const handleRemoveWorkspace = useCallback(async (workspaceId: string) => {
+    const workspace = workspaces.find(w => w.id === workspaceId)
+    const confirmed = await confirmDialog({
+      title: 'Archive workspace',
+      description: `Are you sure you want to archive "${workspace?.title || workspace?.rootPath || 'this workspace'}"? You can clear archived workspaces later from Settings.`,
+      confirmLabel: 'Archive',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
     const removed = await removeWorkspace(workspaceId)
     if (removed) {
-      toast.success('Workspace removed.')
+      toast.success('Workspace archived.')
       return
     }
-    toast.error('Only empty workspaces can be removed.')
-  }, [removeWorkspace])
+    toast.error('Failed to archive workspace.')
+  }, [confirmDialog, removeWorkspace, workspaces])
   const {
     messages,
     isLoading,
@@ -1462,9 +1476,19 @@ function App() {
   }, [])
 
   // Track whether the WS has delivered an authoritative full-state push.
-  // When true, the REST-based restore effects are skipped to avoid races.
   const wsFullStateReceivedRef = useRef(false)
   const suppressedUiSyncKeysRef = useRef<Set<string>>(new Set())
+
+  // Workspace-scoped state delivered by WS full-state push that depends on
+  // activeWorkspaceRecord (loaded async from REST). Stashed here by
+  // handleFullState and applied by a deferred effect once the record loads.
+  const pendingWsWorkspaceStateRef = useRef<{
+    workspaceId: string
+    ui: WorkspaceUIState
+  } | null>(null)
+  // Bumped when the ref is set so the deferred effect re-runs even if
+  // activeWorkspaceRecord was already available before the WS push arrived.
+  const [pendingWsVersion, setPendingWsVersion] = useState(0)
 
   const suppressNextUiSync = useCallback((key: string) => {
     suppressedUiSyncKeysRef.current.add(key)
@@ -1603,46 +1627,73 @@ function App() {
     cancelRequest()
   }, [cancelRequest])
 
-  // ── Persistent session state for panels ───────────────────────────
-  interface WorkspacePanelState { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string }
-  const [savedWorkspace, setSavedWorkspace] = useWorkspaceState<WorkspacePanelState>(
-    activeWorkspaceId, 'workspace.panel', token,
+  // ── Unified workspace UI state (single DB row) ─────────────────────
+  const [workspaceUI, setWorkspaceUI] = useWorkspaceState<WorkspaceUIState>(
+    activeWorkspaceId, 'workspace.ui', token,
   )
-  const [savedScreenShare, setSavedScreenShare] = useSessionState<{ open: boolean }>(
+  const workspaceUIRef = useRef<WorkspaceUIState | null>(null)
+  workspaceUIRef.current = workspaceUI
+
+  // Merge helper: updates one slice of the unified state and persists.
+  // Eagerly update the ref so consecutive calls within the same render
+  // cycle each see the previous call's updates instead of clobbering them.
+  const updateWorkspaceUI = useCallback(<K extends keyof WorkspaceUIState>(
+    key: K, value: WorkspaceUIState[K],
+  ) => {
+    const prev = workspaceUIRef.current ?? { panel: null, tabs: null, layout: null, terminal: null, preview: null }
+    const next = { ...prev, [key]: value }
+    workspaceUIRef.current = next
+    setWorkspaceUI(next)
+  }, [setWorkspaceUI])
+
+  // Derived convenience setters matching previous per-key API
+  const setSavedWorkspace = useCallback((v: { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string } | null) => {
+    updateWorkspaceUI('panel', v)
+  }, [updateWorkspaceUI])
+
+  const setSavedTerminal = useCallback((v: { open: boolean } | null) => {
+    updateWorkspaceUI('terminal', v)
+  }, [updateWorkspaceUI])
+
+  const setSavedDevPreview = useCallback((v: DevPreviewPanelState | null) => {
+    updateWorkspaceUI('preview', v)
+  }, [updateWorkspaceUI])
+
+  const loadingWorkspaceLayout = !workspaceUI && !!activeWorkspaceId && !!token
+  const setSavedWorkspaceLayout = useCallback((v: { tree: boolean; editor: boolean } | null) => {
+    updateWorkspaceUI('layout', v)
+  }, [updateWorkspaceUI])
+
+  const setSavedWorkspaceTabs = useCallback((v: WorkspaceTabsState | null) => {
+    updateWorkspaceUI('tabs', v)
+  }, [updateWorkspaceUI])
+
+  const savedDevPreview = workspaceUI?.preview ?? null
+
+  const [, setSavedScreenShare] = useSessionState<{ open: boolean }>(
     activeSessionId, 'screen-share.panel', token,
   )
-  const [savedDevPreview, setSavedDevPreview] = useWorkspaceState<DevPreviewPanelState>(
-    activeWorkspaceId, 'dev-preview.panel', token,
-  )
-  const [savedTerminal, setSavedTerminal] = useWorkspaceState<{ open: boolean }>(
-    activeWorkspaceId, 'terminal.panel', token,
-  )
-  const workspaceLayoutStateKey = isMobile ? 'workspace.layout.mobile' : 'workspace.layout'
-  const [savedWorkspaceLayout, setSavedWorkspaceLayout, loadingWorkspaceLayout] = useWorkspaceState<{ tree: boolean; editor: boolean }>(
-    activeWorkspaceId, workspaceLayoutStateKey, token,
-  )
-  const [savedChatMode, setSavedChatMode, loadingChatMode] = useSessionState<ChatMode>(
+  const [, setSavedChatMode, loadingChatMode] = useSessionState<ChatMode>(
     activeSessionId, 'chat.mode', token,
   )
-  const [savedProviderRuntimeMode, setSavedProviderRuntimeMode, loadingProviderRuntimeMode] = useSessionState<RuntimeMode>(
+  const [, setSavedProviderRuntimeMode, loadingProviderRuntimeMode] = useSessionState<RuntimeMode>(
     activeSessionId, 'chat.providerRuntimeMode', token,
   )
-  const [savedCliModels, setSavedCliModels, loadingCliModels] = useSessionState<Partial<Record<CliProviderId, string | null>>>(
+  const [, setSavedCliModels, loadingCliModels] = useSessionState<Partial<Record<CliProviderId, string | null>>>(
     activeSessionId, 'chat.cliModels', token,
   )
-  const [savedChatView, setSavedChatView, loadingChatView] = useSessionState<ViewMode>(
+  const [, setSavedChatView, loadingChatView] = useSessionState<ViewMode>(
     activeSessionId, 'chat.view', token,
   )
-  const [savedWorkspaceTabs, setSavedWorkspaceTabs] = useWorkspaceState<WorkspaceTabsState>(
-    activeWorkspaceId, 'workspace.tabs', token,
-  )
-  const [savedQueuedMessages, setSavedQueuedMessages] = useSessionState<SavedQueuedMessage[]>(
+  const [, setSavedQueuedMessages] = useSessionState<SavedQueuedMessage[]>(
     activeSessionId, 'queued_messages', token,
   )
   const [workspaceTabsState, setWorkspaceTabsState] = useState<WorkspaceTabsState | null>(null)
+  const [workspaceStateReady, setWorkspaceStateReady] = useState(false)
 
   useEffect(() => {
     setWorkspaceTabsState(null)
+    setWorkspaceStateReady(false)
   }, [activeWorkspaceId])
 
   useEffect(() => {
@@ -1655,63 +1706,64 @@ function App() {
     setActiveWorkspace(null)
   }, [activeWorkspaceId])
 
-  // ── Persistent session state for todos & changed files ────────────
-  type SavedTodo = { id: number; title: string; status: 'not-started' | 'in-progress' | 'completed' }
-  const [savedTodos] = useSessionState<SavedTodo[]>(activeSessionId, 'todo_list', token)
+  // ── Persistent session state for changed files ─────────────────────
   type SavedChangedFile = ChangedFile | { path: string; name: string; state?: 'undecided' | 'accepted' | 'rejected' | null }
-  const [savedChangedFiles, setSavedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
+  const [, setSavedChangedFiles] = useSessionState<SavedChangedFile[]>(activeSessionId, 'changed_files', token)
 
-  // Restore panel state from REST fallback (only if WS full-state hasn't arrived yet)
+  // ── Deferred workspace state from WS push ──────────────────────────
+  // Panel and preview fields depend on activeWorkspaceRecord (loaded async
+  // from REST). This effect applies the stashed WS state once available.
   useEffect(() => {
-    if (wsFullStateReceivedRef.current) return // WS already delivered authoritative state
-    if (!savedWorkspace) return
-    if (activeWorkspace) return
-    const savedPath = savedWorkspace.remotePath?.trim() || null
-    const recordedPath = activeWorkspaceRecord?.rootPath?.trim() || null
-    const restoredPath = recordedPath || savedPath
-    if (restoredPath) {
-      const pathMatchesRecord = Boolean(savedPath && recordedPath && savedPath === recordedPath)
-      setActiveWorkspace({
-        surfaceId: pathMatchesRecord ? (savedWorkspace.surfaceId ?? '') : '',
-        workspaceRoot: restoredPath,
-        nodeId: activeWorkspaceRecord?.nodeId ?? savedWorkspace.nodeId,
-      })
-      showWorkspaceRef.current = savedWorkspace.open === true
-      setShowWorkspace(savedWorkspace.open === true)
+    const pending = pendingWsWorkspaceStateRef.current
+    if (!pending) {
+      // No stashed WS state to apply — if the workspace record is loaded,
+      // we know there's nothing deferred and can unblock persisting.
+      if (activeWorkspaceRecord) setWorkspaceStateReady(true)
+      return
     }
-  }, [activeWorkspace, activeWorkspaceRecord?.nodeId, activeWorkspaceRecord?.rootPath, savedWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
+    if (!activeWorkspaceRecord) return
+    if (pending.workspaceId !== activeWorkspaceId) return
 
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    if (savedScreenShare?.open) setShowScreenShare(true)
-  }, [savedScreenShare]) // eslint-disable-line react-hooks/exhaustive-deps
+    const { ui } = pending
 
-  const restoredDevPreviewKeyRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    const nextTarget = savedDevPreview?.target?.trim() || null
-    const key = `${savedDevPreview?.open ?? false}:${nextTarget ?? ''}:${savedDevPreview?.workspaceRoot ?? ''}:${savedDevPreview?.browserSessionId ?? ''}:${savedDevPreview?.displayState ?? ''}:${savedDevPreview?.displayTarget ?? ''}:${savedDevPreview?.storageScope ?? ''}`
-    if (key === restoredDevPreviewKeyRef.current) return
-    restoredDevPreviewKeyRef.current = key
-    if (nextTarget) setDevPreviewTarget(nextTarget)
-    setDevPreviewBrowserSessionId(savedDevPreview?.browserSessionId?.trim() || null)
-    if (savedDevPreview?.open) {
-      routePreviewToWorkspace(nextTarget, savedDevPreview?.workspaceRoot ?? null, savedDevPreview?.browserSessionId ?? null)
+    // Apply workspace panel
+    const wp = ui.panel
+    if (wp) {
+      const savedPath = wp.remotePath?.trim() || null
+      const recordedPath = activeWorkspaceRecord.rootPath?.trim() || null
+      const restoredPath = recordedPath || savedPath
+      if (restoredPath) {
+        const pathMatchesRecord = Boolean(savedPath && recordedPath && savedPath === recordedPath)
+        setActiveWorkspace({
+          surfaceId: pathMatchesRecord ? (wp.surfaceId ?? '') : '',
+          workspaceRoot: restoredPath,
+          nodeId: activeWorkspaceRecord.nodeId ?? wp.nodeId,
+        })
+        showWorkspaceRef.current = wp.open === true
+        setShowWorkspace(wp.open === true)
+      }
     }
-  }, [savedDevPreview, routePreviewToWorkspace])
 
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    if (savedTerminal?.open) setShowTerminal(true)
-  }, [savedTerminal]) // eslint-disable-line react-hooks/exhaustive-deps
+    // Re-apply workspace tabs — the reset effect
+    // (setWorkspaceTabsState(null) on activeWorkspaceId change) may have
+    // wiped the value that handleFullState set if the session state loaded
+    // (changing activeWorkspaceId) after the WS push arrived.
+    if (ui.tabs) setWorkspaceTabsState(ui.tabs)
 
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    if (savedWorkspaceLayout) {
-      setShowWorkspaceTree(savedWorkspaceLayout.tree !== false)
-      setShowWorkspaceEditor(savedWorkspaceLayout.editor !== false)
+    // Apply dev preview
+    const dp = ui.preview
+    if (dp) {
+      const nextTarget = dp.target?.trim() || null
+      if (nextTarget) setDevPreviewTarget(nextTarget)
+      setDevPreviewBrowserSessionId(dp.browserSessionId?.trim() || null)
+      if (dp.open) {
+        routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null, dp.browserSessionId ?? null)
+      }
     }
-  }, [savedWorkspaceLayout])
+
+    pendingWsWorkspaceStateRef.current = null
+    setWorkspaceStateReady(true)
+  }, [activeWorkspaceRecord, activeWorkspaceId, pendingWsVersion, routePreviewToWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const mobileWorkspaceInitKeyRef = useRef<string | null>(null)
   useEffect(() => {
@@ -1727,74 +1779,6 @@ function App() {
     setShowWorkspaceTree(nextLayout.tree)
     setShowWorkspaceEditor(nextLayout.editor)
   }, [showMobileWorkspace, activeWorkspaceId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor])
-
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    if (savedChatMode) setChatMode(savedChatMode)
-  }, [savedChatMode])
-
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    if (savedProviderRuntimeMode === 'supervised' || savedProviderRuntimeMode === 'full-access') {
-      setChatProviderRuntimeMode(savedProviderRuntimeMode)
-    }
-  }, [savedProviderRuntimeMode])
-
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    if (savedCliModels && Object.keys(savedCliModels).length > 0) {
-      setCliModelsByProvider(prev => {
-        const keys = Object.keys(savedCliModels) as CliProviderId[]
-        if (keys.length === Object.keys(prev).length && keys.every(k => prev[k] === savedCliModels[k])) return prev
-        return savedCliModels
-      })
-      return
-    }
-
-    const migrated = loadLegacyCliModelsByProvider(chatProvider)
-    if (Object.keys(migrated).length > 0) {
-      setCliModelsByProvider(migrated)
-    }
-  }, [savedCliModels, chatProvider])
-
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    if (savedChatView) setViewMode(savedChatView)
-  }, [savedChatView])
-
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    setWorkspaceTabsState(savedWorkspaceTabs ?? null)
-  }, [savedWorkspaceTabs])
-
-  const prevSavedQueuedRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    const serialized = JSON.stringify(savedQueuedMessages ?? [])
-    if (serialized === prevSavedQueuedRef.current) return
-    prevSavedQueuedRef.current = serialized
-    setMessageQueueState((savedQueuedMessages ?? []) as SavedQueuedMessage[])
-  }, [savedQueuedMessages, setMessageQueueState])
-
-  // Restore todos and changed files (REST fallback)
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    if (savedTodos && savedTodos.length > 0) setTodoList(savedTodos)
-  }, [savedTodos, setTodoList])
-
-  const prevSavedChangedFilesRef = useRef<string | null>(null)
-  useEffect(() => {
-    if (wsFullStateReceivedRef.current) return
-    const normalized = (savedChangedFiles ?? []).map((f) => ({
-      path: f.path,
-      name: f.name,
-      state: f.state === 'accepted' || f.state === 'rejected' || f.state === 'undecided' ? f.state : 'undecided' as const,
-    }))
-    const serialized = JSON.stringify(normalized)
-    if (serialized === prevSavedChangedFilesRef.current) return
-    prevSavedChangedFilesRef.current = serialized
-    setChangedFiles(normalized)
-  }, [savedChangedFiles, setChangedFiles])
 
   // ── Cross-client state sync handler ───────────────────────────────
   const handleStateSync = useCallback((key: string, value: unknown) => {
@@ -1867,9 +1851,24 @@ function App() {
   }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview, isMobile, suppressNextUiSync])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
+  // This is called when the WebSocket delivers the initial full-state push.
+  // It contains ALL session-scoped state AND workspace-scoped state (in the
+  // `_workspace` envelope) so the UI can hydrate in a single message without
+  // waiting for REST round-trips.
+  //
+  // AGENT NOTE: To handle a new persisted state key here:
+  //   1. Add a case below for the key (session-scoped keys directly,
+  //      workspace-scoped keys in the `_workspace.state` section).
+  //   2. Session keys: apply directly in this callback.
+  //      Workspace keys that depend on activeWorkspaceRecord: stash in
+  //      `pendingWsWorkspaceStateRef` — the deferred effect will apply them.
+  //   3. Backend: session keys are automatically included.  Workspace keys
+  //      are automatically included via `_workspace` in index.ts.
   const handleFullState = useCallback((state: Record<string, unknown>) => {
     wsFullStateReceivedRef.current = true
     for (const key of Object.keys(state)) suppressNextUiSync(key)
+
+    // ── Session-scoped state ──────────────────────────────────────
 
     // Screen share panel
     const sp = state['screen-share.panel'] as { open?: boolean } | null | undefined
@@ -1877,14 +1876,6 @@ function App() {
       setShowScreenShare(true)
     } else {
       setShowScreenShare(false)
-    }
-
-    // Terminal panel
-    const tp = state['terminal.panel'] as { open?: boolean } | null | undefined
-    if (tp && tp.open !== false) {
-      setShowTerminal(true)
-    } else {
-      setShowTerminal(false)
     }
 
     const cm = state['chat.mode']
@@ -1932,7 +1923,41 @@ function App() {
     } else {
       setMessageQueueState([])
     }
-  }, [setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync])
+
+    // ── Workspace-scoped state (bundled inside _workspace envelope) ──
+    // All workspace UI state is stored under a single `workspace.ui` key.
+    // Simple fields are applied immediately; fields that depend on
+    // activeWorkspaceRecord are stashed for deferred application.
+    const wsEnvelope = state._workspace as { id: string; state: Record<string, unknown> } | null | undefined
+    if (wsEnvelope?.id && wsEnvelope.state) {
+      const ui = wsEnvelope.state['workspace.ui'] as WorkspaceUIState | null | undefined
+
+      if (ui) {
+        // Terminal panel
+        if (ui.terminal?.open) {
+          setShowTerminal(true)
+        } else {
+          setShowTerminal(false)
+        }
+
+        // Workspace tabs
+        if (ui.tabs) setWorkspaceTabsState(ui.tabs)
+
+        // Workspace layout
+        if (ui.layout) {
+          setShowWorkspaceTree(ui.layout.tree !== false)
+          setShowWorkspaceEditor(ui.layout.editor !== false)
+        }
+
+        // Stash the full UI state for deferred panel + preview application
+        pendingWsWorkspaceStateRef.current = {
+          workspaceId: wsEnvelope.id,
+          ui,
+        }
+        setPendingWsVersion(v => v + 1)
+      }
+    }
+  }, [setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync, isMobile])
 
   const { sendUIState, sendArchitectureRenderResult } = useUICommands({
     sessionId: activeSessionId,
@@ -2001,6 +2026,7 @@ function App() {
       }, [openArchitectureInWorkspace]),
     },
     onBrowserCollaborationEvent: browserCollaboration.handleWsEvent,
+    onPreviewSessionEvent: emitPreviewSession,
   })
 
   const handleArchitectureRenderResult = useCallback((result: { ok: true } | { ok: false; error: string }) => {
@@ -3534,6 +3560,18 @@ function App() {
     return result.removed
   }
 
+  const handleClearArchivedWorkspaces = async () => {
+    const removed = await clearArchivedWorkspaces()
+    await fetchWorkspaces()
+    return removed
+  }
+
+  const handleRestoreWorkspace = async (workspaceId: string) => {
+    const restored = await restoreWorkspace(workspaceId)
+    if (restored) await fetchWorkspaces()
+    return restored
+  }
+
   const handleClearApproveAll = useCallback(async () => {
     if (!activeSessionId) return
     try {
@@ -4501,6 +4539,9 @@ function App() {
                 await updateSettings({ jait_backend: next })
               }}
               onClearArchive={handleClearArchive}
+              onClearArchivedWorkspaces={handleClearArchivedWorkspaces}
+              onFetchArchivedWorkspaces={fetchArchivedWorkspaces}
+              onRestoreWorkspace={handleRestoreWorkspace}
               activityEvents={activityEvents}
               updateInfo={updateInfo}
               updateChecking={updateChecking}
@@ -4517,6 +4558,7 @@ function App() {
                 <SessionSelector
                   workspaces={workspaces}
                   activeWorkspaceId={activeWorkspaceId}
+                  loading={workspacesLoading}
                   hasMoreWorkspaces={hasMoreWorkspaces}
                   showFewerWorkspaces={workspaces.length > workspaceListLimit}
                   onSelectWorkspace={handleSwitchWorkspace}
@@ -4588,6 +4630,7 @@ function App() {
                 changedPaths={changedPaths}
                 fsWatcherVersion={fsWatcherVersion}
                 savedTabsState={workspaceTabsState}
+                stateReady={workspaceStateReady}
                 previewRequest={workspacePreviewRequest}
                 onTabsStateChange={handleWorkspaceTabsStateChange}
                 onPreviewOpenChange={handleWorkspacePreviewOpenChange}
@@ -4637,6 +4680,7 @@ function App() {
                   changedPaths={changedPaths}
                   isMobile
                   savedTabsState={workspaceTabsState}
+                  stateReady={workspaceStateReady}
                   previewRequest={workspacePreviewRequest}
                   onTabsStateChange={handleWorkspaceTabsStateChange}
                   onPreviewOpenChange={handleWorkspacePreviewOpenChange}

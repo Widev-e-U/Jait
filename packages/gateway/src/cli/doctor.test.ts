@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { resolve, join } from "node:path";
 import { runDoctor, resolveDoctorEnvCandidates } from "./doctor.js";
 
 describe("doctor", () => {
@@ -11,8 +12,8 @@ describe("doctor", () => {
 
     expect(candidates).toEqual([
       "/tmp/custom.env",
-      "/tmp/project/.env",
-      "/tmp/.jait/.env",
+      resolve("/tmp/project", ".env"),
+      join("/tmp/.jait", ".env"),
     ]);
   });
 

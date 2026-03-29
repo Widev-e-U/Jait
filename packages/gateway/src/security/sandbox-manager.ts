@@ -1,7 +1,28 @@
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { createServer, createConnection } from "node:net";
 import { resolve } from "node:path";
+
+/**
+ * Resolve the container runtime binary.  On Windows with Podman, `docker` is
+ * only a PowerShell alias and cannot be used from `child_process.spawn`.
+ * We probe for `docker` first then fall back to `podman`.
+ */
+let _containerBinary: string | null = null;
+function containerBinary(): string {
+  if (_containerBinary) return _containerBinary;
+  for (const bin of ["docker", "podman"]) {
+    try {
+      execFileSync(bin, ["--version"], { stdio: "ignore", windowsHide: true, timeout: 5_000 });
+      _containerBinary = bin;
+      return bin;
+    } catch {
+      // not available
+    }
+  }
+  _containerBinary = "docker"; // let the caller fail with a clear error
+  return _containerBinary;
+}
 
 export type SandboxMountMode = "none" | "read-only" | "read-write";
 
@@ -65,7 +86,7 @@ export class SandboxManager {
     const cpuArgs = options.cpuLimit ? ["--cpus", options.cpuLimit] : [];
 
     const cmd = [
-      "docker",
+      containerBinary(),
       "run",
       "--rm",
       "--name",
@@ -100,11 +121,13 @@ export class SandboxManager {
     const cdpPort = options.cdpPort;
     const mountArgs = this.buildMountArgs(workspaceRoot, options.mountMode ?? "read-only");
     const networkArgs = options.networkEnabled === false ? ["--network", "none"] : [];
-    const hostGatewayArgs = options.hostGateway ? ["--add-host", "host.docker.internal:host-gateway"] : [];
+    const hostGatewayArgs = options.hostGateway
+      ? ["--add-host", `host.docker.internal:${await resolveHostGatewayValue(this.runProcess)}`]
+      : [];
 
     const containerName = `jait-browser-sb-${Date.now().toString(36)}`;
     const cmd = [
-      "docker",
+      containerBinary(),
       "run",
       "-d",
       "--rm",
@@ -126,17 +149,22 @@ export class SandboxManager {
       throw new Error(`Failed to start sandbox browser: ${result.output}`);
     }
 
+    // Detect the reachable host for forwarded ports.
+    // Podman on Windows uses WSL with wslrelay which often fails to relay TCP
+    // from 127.0.0.1/[::1].  Resolve to the container's actual IP instead.
+    const host = await resolveContainerHost(this.runProcess, containerName);
+
     if (typeof cdpPort === "number" && options.waitForCdp !== false) {
-      await waitForPort("127.0.0.1", cdpPort, 15_000);
-      await waitForHttpReady(`http://127.0.0.1:${cdpPort}/json/version`, 15_000);
+      await waitForPort(host, cdpPort, 15_000);
+      await waitForHttpReady(`http://${host}:${cdpPort}/json/version`, 15_000);
     }
 
     return {
       containerName,
-      novncUrl: `http://127.0.0.1:${novncPort}/vnc.html`,
+      novncUrl: `http://${host}:${novncPort}/vnc_lite.html`,
       vncPort,
       novncPort,
-      cdpUrl: typeof cdpPort === "number" ? `http://127.0.0.1:${cdpPort}` : undefined,
+      cdpUrl: typeof cdpPort === "number" ? `http://${host}:${cdpPort}` : undefined,
     };
   }
 
@@ -144,7 +172,7 @@ export class SandboxManager {
     const trimmed = containerName.trim();
     if (!trimmed) return;
     await this.runProcess([
-      "docker",
+      containerBinary(),
       "rm",
       "-f",
       trimmed,
@@ -159,7 +187,7 @@ export class SandboxManager {
   }
 
   private async ensureBrowserSandboxImage(): Promise<void> {
-    const inspect = await this.runProcess(["docker", "image", "inspect", "jait/sandbox-browser:latest"], 15_000);
+    const inspect = await this.runProcess([containerBinary(), "image", "inspect", "jait/sandbox-browser:latest"], 15_000);
     if (inspect.exitCode === 0) return;
     await buildBrowserSandboxImage();
   }
@@ -197,7 +225,7 @@ async function runDockerProcess(cmd: string[], timeoutMs: number): Promise<Proce
 
 async function buildBrowserSandboxImage(): Promise<void> {
   const result = await runProcessWithInput(
-    ["docker", "build", "-t", "jait/sandbox-browser:latest", "-f", "-", "."],
+    [containerBinary(), "build", "-t", "jait/sandbox-browser:latest", "-f", "-", "."],
     10 * 60_000,
     SANDBOX_BROWSER_DOCKERFILE,
   );
@@ -259,8 +287,12 @@ async function waitForPort(host: string, port: number, timeoutMs: number): Promi
 async function waitForHttpReady(url: string, timeoutMs: number): Promise<void> {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    const remaining = deadline - Date.now();
+    if (remaining <= 0) break;
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, {
+        signal: AbortSignal.timeout(Math.min(remaining, 5_000)),
+      });
       if (response.ok) return;
     } catch {
       // Retry until the CDP endpoint responds.
@@ -268,6 +300,87 @@ async function waitForHttpReady(url: string, timeoutMs: number): Promise<void> {
     await new Promise((resolveDelay) => setTimeout(resolveDelay, 200));
   }
   throw new Error(`HTTP endpoint ${url} did not become ready within ${timeoutMs}ms`);
+}
+
+/**
+ * Resolve the IP that containers should use to reach the Windows host.
+ *
+ * On Docker Desktop `host-gateway` works out of the box for `--add-host`.
+ * On Podman + WSL2, `host-gateway` maps to `169.254.1.2` which silently drops
+ * TCP traffic.  Instead we use the WSL VM's default gateway — the Windows host's
+ * virtual-switch IP — which *is* routable from slirp4netns containers.
+ */
+async function resolveHostGatewayValue(
+  runProcess: (cmd: string[], timeoutMs: number) => Promise<ProcessResult>,
+): Promise<string> {
+  if (process.platform !== "win32" || containerBinary() !== "podman") return "host-gateway";
+
+  try {
+    const machineList = await runProcess(
+      [containerBinary(), "machine", "ls", "--format", "{{.Name}}"],
+      10_000,
+    );
+    const rawName = machineList.output.trim().split(/\s+/)[0]?.replace(/\*$/, "") ?? "default";
+    const wslDistro = rawName.startsWith("podman-machine-") ? rawName : `podman-machine-${rawName}`;
+
+    const gw = await runProcess(
+      ["wsl", "-d", wslDistro, "sh", "-c", "ip route 2>/dev/null | awk '/^default/{print $3}'"],
+      10_000,
+    );
+    const gwMatch = gw.output.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
+    if (gwMatch) return gwMatch[1]!;
+  } catch { /* fall through */ }
+
+  return "host-gateway";
+}
+
+/**
+ * Determine the reachable IP for a container's forwarded ports.
+ *
+ * On native Docker Desktop, `127.0.0.1` works because Docker binds ports on the
+ * host network.  On Podman + WSL, port forwarding goes through `wslrelay.exe`
+ * (bound to `[::1]`) which frequently fails to relay TCP data.  In that case we
+ * resolve to the WSL VM's IP that is directly routable from the Windows host.
+ */
+async function resolveContainerHost(
+  runProcess: (cmd: string[], timeoutMs: number) => Promise<ProcessResult>,
+  containerName: string,
+): Promise<string> {
+  // 1. Try the container's own IP (works on Docker Desktop and native Linux).
+  const inspect = await runProcess(
+    [containerBinary(), "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", containerName],
+    10_000,
+  );
+  const containerIp = inspect.output.trim();
+  if (containerIp && /^\d+\.\d+\.\d+\.\d+$/.test(containerIp)) return containerIp;
+
+  // 2. Podman on WSL: container has no routable IP in NetworkSettings.
+  //    Ports are forwarded to the WSL VM.  Get the VM's eth0 IP which is
+  //    reachable from the Windows host.
+  if (process.platform === "win32") {
+    // Find the WSL distro backing Podman.
+    const machineList = await runProcess(
+      [containerBinary(), "machine", "ls", "--format", "{{.Name}}"],
+      10_000,
+    );
+    // `podman machine ls` returns names like "podman-machine-default" or just
+    // "default" depending on version.  The WSL distro is always prefixed with
+    // "podman-machine-".
+    const rawName = machineList.output.trim().split(/\s+/)[0]?.replace(/\*$/, "") ?? "default";
+    const wslDistro = rawName.startsWith("podman-machine-") ? rawName : `podman-machine-${rawName}`;
+
+    const wslIp = await runProcess(
+      ["wsl", "-d", wslDistro, "sh", "-c", "ip -4 addr show eth0 2>/dev/null | sed -n 's/.*inet \\([0-9.]*\\).*/\\1/p'"],
+      10_000,
+    );
+    // wsl may write path-translation warnings to stderr which gets mixed into
+    // output.  Extract the first valid IPv4 address from the combined output.
+    const ipMatch = wslIp.output.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})\b/);
+    if (ipMatch) return ipMatch[1]!;
+  }
+
+  // 3. Fallback: 127.0.0.1
+  return "127.0.0.1";
 }
 
 export async function reserveLocalPort(): Promise<number> {
@@ -297,11 +410,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \\
   xvfb \\
   websockify \\
   novnc \\
-  fluxbox \\
+  socat \\
   ca-certificates \\
-  && rm -rf /var/lib/apt/lists/*
+  && rm -rf /var/lib/apt/lists/* \\
+  && sed -i 's/#top_bar {/#top_bar { display:none !important;/' /usr/share/novnc/vnc_lite.html
 
 EXPOSE 5900 6080 9223
 
-CMD ["bash", "-lc", "export DISPLAY=:99; Xvfb :99 -screen 0 1280x720x24 & sleep 1; fluxbox & chromium --no-sandbox --disable-gpu --remote-debugging-port=9222 about:blank & socat TCP-LISTEN:9223,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:9222 & x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -forever -shared -rfbport 5900 & websockify --web /usr/share/novnc/ 6080 localhost:5900"]
+CMD ["bash", "-lc", "export DISPLAY=:99; Xvfb :99 -screen 0 1280x720x24 & sleep 1; chromium --no-sandbox --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --kiosk --start-fullscreen --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 about:blank & socat TCP-LISTEN:9223,bind=0.0.0.0,reuseaddr,fork TCP:127.0.0.1:9222 & x11vnc -display :99 -nopw -listen 0.0.0.0 -xkb -forever -shared -rfbport 5900 & websockify --web /usr/share/novnc/ 6080 localhost:5900"]
 `;

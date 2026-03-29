@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
+import { fetchStateBatched } from '@/lib/state-batch'
 
 const API_URL = getApiUrl()
 
@@ -32,15 +33,12 @@ export function useWorkspaceState<T>(
     let cancelled = false
     setLoading(true)
 
-    fetch(`${API_URL}/api/workspaces/${workspaceId}/state?keys=${encodeURIComponent(key)}`, {
-      headers: authHeaders(token),
-    })
-      .then((res) => (res.ok ? res.json() : null))
-      .then((data: Record<string, unknown> | null) => {
+    fetchStateBatched('workspaces', workspaceId, key, token!)
+      .then((val) => {
         if (cancelled) return
-        const next = data?.[key] ?? null
-        setValueLocal(next as T | null)
-        latestRef.current = next as T | null
+        const next = val as T | null
+        setValueLocal(next)
+        latestRef.current = next
       })
       .catch(() => {
         if (!cancelled) setValueLocal(null)
