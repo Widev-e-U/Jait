@@ -81,4 +81,29 @@ describe("browser tools with collaboration", () => {
       target: null,
     });
   });
+
+  it("locks browser actions to the linked preview browser when one exists", async () => {
+    const collaboration = {
+      getSessionByPreviewSessionId: vi.fn().mockReturnValue({
+        id: "bs_preview_1",
+        browserId: "preview-browser-session-1",
+      }),
+      assertAgentControl: vi.fn(),
+    };
+    const registry = {
+      getSurface: vi.fn(),
+      startSurface: vi.fn(),
+    };
+    const tool = createBrowserNavigateTool(registry as any, collaboration as any);
+
+    await expect(tool.execute({ url: "https://example.com", browserId: "browser-sidecar-1" }, {
+      sessionId: "session-1",
+      actionId: "action-1",
+      workspaceRoot: "/workspace/app",
+      requestedBy: "assistant",
+    })).rejects.toThrow(/visible preview browser/i);
+
+    expect(collaboration.assertAgentControl).not.toHaveBeenCalled();
+    expect(registry.startSurface).not.toHaveBeenCalled();
+  });
 });

@@ -6,6 +6,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import type { WorkspaceRecord } from '@/hooks/useWorkspaces'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
+import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 
 interface SessionSelectorProps {
   workspaces: WorkspaceRecord[]
@@ -119,6 +120,18 @@ export function SessionSelector({
                       } ${
                         isActiveWorkspace ? 'bg-secondary/70' : offline ? '' : 'hover:bg-muted/40'
                       }`}
+                      draggable={Boolean(workspace.rootPath)}
+                      onDragStart={(e) => {
+                        if (!workspace.rootPath) {
+                          e.preventDefault()
+                          return
+                        }
+                        e.dataTransfer.effectAllowed = 'copy'
+                        e.dataTransfer.setData(
+                          JAIT_WORKSPACE_REF_MIME,
+                          JSON.stringify(buildWorkspaceDragPayload(workspace.rootPath, workspace.title || undefined)),
+                        )
+                      }}
                       onClick={() => { if (!offline && !isActiveWorkspace) onSelectWorkspace(workspace.id) }}
                     >
                       {isActiveWorkspace ? (

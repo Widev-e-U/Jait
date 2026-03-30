@@ -500,6 +500,22 @@ export function createTerminalRunTool(
   };
 }
 
+export function createJaitTerminalTool(
+  registry: SurfaceRegistry,
+  sandboxManager = new SandboxManager(),
+  ws?: WsControlPlane,
+): ToolDefinition<TerminalRunInput> {
+  const base = createTerminalRunTool(registry, sandboxManager, ws);
+  return {
+    ...base,
+    name: "jait.terminal",
+    tier: "standard",
+    description:
+      "Jait terminal MCP tool. Execute a shell command in Jait and optionally target an existing terminal by terminalId. " +
+      "Use this when the user refers to a specific terminal or wants commands run in the integrated terminal.",
+  };
+}
+
 export function createTerminalStreamTool(registry: SurfaceRegistry): ToolDefinition<TerminalStreamInput> {
   return {
     name: "terminal.stream",

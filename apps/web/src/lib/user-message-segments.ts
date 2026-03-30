@@ -4,6 +4,17 @@ export interface UserReferencedFile {
   kind?: 'file' | 'dir'
 }
 
+export interface UserWorkspaceReference {
+  path: string
+  name: string
+}
+
+export interface UserTerminalReference {
+  terminalId: string
+  name: string
+  workspaceRoot?: string | null
+}
+
 export interface UserImageAttachment {
   name: string
   mimeType: string
@@ -15,6 +26,8 @@ const JAIT_REF_MIME = 'application/x-jait-user-message+json'
 export type UserMessageSegment =
   | { type: 'text'; text: string }
   | ({ type: 'file' } & UserReferencedFile)
+  | ({ type: 'workspace' } & UserWorkspaceReference)
+  | ({ type: 'terminal' } & UserTerminalReference)
   | ({ type: 'image' } & UserImageAttachment)
 
 export function normalizeUserMessageSegments(segments: UserMessageSegment[] | null | undefined): UserMessageSegment[] {
@@ -40,6 +53,27 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
         path: segment.path,
         name: segment.name || segment.path.split(/[\\/]/).pop() || segment.path,
         ...(segment.kind ? { kind: segment.kind } : {}),
+      })
+      continue
+    }
+
+    if (segment.type === 'workspace') {
+      if (!segment.path.trim()) continue
+      normalized.push({
+        type: 'workspace',
+        path: segment.path,
+        name: segment.name || segment.path.split(/[\\/]/).pop() || segment.path,
+      })
+      continue
+    }
+
+    if (segment.type === 'terminal') {
+      if (!segment.terminalId.trim()) continue
+      normalized.push({
+        type: 'terminal',
+        terminalId: segment.terminalId,
+        name: segment.name || segment.terminalId,
+        ...(segment.workspaceRoot ? { workspaceRoot: segment.workspaceRoot } : {}),
       })
       continue
     }
@@ -74,6 +108,36 @@ export function userReferencedFilesFromSegments(segments: UserMessageSegment[] |
   }
 
   return files
+}
+
+export function userReferencedWorkspacesFromSegments(segments: UserMessageSegment[] | null | undefined): UserWorkspaceReference[] {
+  const workspaces: UserWorkspaceReference[] = []
+  const seen = new Set<string>()
+
+  for (const segment of normalizeUserMessageSegments(segments)) {
+    if (segment.type !== 'workspace' || seen.has(segment.path)) continue
+    seen.add(segment.path)
+    workspaces.push({ path: segment.path, name: segment.name })
+  }
+
+  return workspaces
+}
+
+export function userReferencedTerminalsFromSegments(segments: UserMessageSegment[] | null | undefined): UserTerminalReference[] {
+  const terminals: UserTerminalReference[] = []
+  const seen = new Set<string>()
+
+  for (const segment of normalizeUserMessageSegments(segments)) {
+    if (segment.type !== 'terminal' || seen.has(segment.terminalId)) continue
+    seen.add(segment.terminalId)
+    terminals.push({
+      terminalId: segment.terminalId,
+      name: segment.name,
+      ...(segment.workspaceRoot ? { workspaceRoot: segment.workspaceRoot } : {}),
+    })
+  }
+
+  return terminals
 }
 
 export function buildFallbackUserMessageSegments(
@@ -136,6 +200,8 @@ export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegm
   return normalizeUserMessageSegments(segments).map((segment) => {
     if (segment.type === 'text') return segment.text
     if (segment.type === 'file') return `@${segment.path}`
+    if (segment.type === 'workspace') return `[workspace:${segment.path}]`
+    if (segment.type === 'terminal') return `[terminal:${segment.terminalId}]`
     return `[image:${segment.name}]`
   }).join('')
 }
@@ -209,6 +275,23 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
         path: record.path,
         name: typeof record.name === 'string' ? record.name : record.path.split(/[\\/]/).pop() ?? record.path,
         ...(record.kind === 'file' || record.kind === 'dir' ? { kind: record.kind } : {}),
+      })
+      continue
+    }
+    if (record.type === 'workspace' && typeof record.path === 'string') {
+      parsed.push({
+        type: 'workspace',
+        path: record.path,
+        name: typeof record.name === 'string' ? record.name : record.path.split(/[\\/]/).pop() ?? record.path,
+      })
+      continue
+    }
+    if (record.type === 'terminal' && typeof record.terminalId === 'string') {
+      parsed.push({
+        type: 'terminal',
+        terminalId: record.terminalId,
+        name: typeof record.name === 'string' ? record.name : record.terminalId,
+        ...(typeof record.workspaceRoot === 'string' ? { workspaceRoot: record.workspaceRoot } : {}),
       })
       continue
     }

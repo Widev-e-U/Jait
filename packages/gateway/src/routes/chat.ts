@@ -81,6 +81,8 @@ interface QueuedChatMessage {
   displaySegments?: Array<
     { type: "text"; text: string }
     | { type: "file"; path: string; name: string }
+    | { type: "workspace"; path: string; name: string }
+    | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string }
     | { type: "image"; name: string; mimeType: string; data: string }
   >;
 }
@@ -88,12 +90,16 @@ interface QueuedChatMessage {
 function parseUserDisplaySegments(raw: unknown): Array<
   { type: "text"; text: string }
   | { type: "file"; path: string; name: string }
+  | { type: "workspace"; path: string; name: string }
+  | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string }
   | { type: "image"; name: string; mimeType: string; data: string }
 > | undefined {
   if (!Array.isArray(raw)) return undefined;
   const segments: Array<
     { type: "text"; text: string }
     | { type: "file"; path: string; name: string }
+    | { type: "workspace"; path: string; name: string }
+    | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string }
     | { type: "image"; name: string; mimeType: string; data: string }
   > = [];
   for (const entry of raw) {
@@ -108,6 +114,23 @@ function parseUserDisplaySegments(raw: unknown): Array<
         type: "file",
         path: record.path,
         name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+      });
+      continue;
+    }
+    if (record.type === "workspace" && typeof record.path === "string") {
+      segments.push({
+        type: "workspace",
+        path: record.path,
+        name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+      });
+      continue;
+    }
+    if (record.type === "terminal" && typeof record.terminalId === "string") {
+      segments.push({
+        type: "terminal",
+        terminalId: record.terminalId,
+        name: typeof record.name === "string" ? record.name : record.terminalId,
+        ...(typeof record.workspaceRoot === "string" ? { workspaceRoot: record.workspaceRoot } : {}),
       });
       continue;
     }

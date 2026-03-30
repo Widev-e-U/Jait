@@ -15,6 +15,7 @@ import type { SessionInfo, ChatAttachment } from '@/hooks/useChat'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
+import { JAIT_TERMINAL_REF_MIME, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 import {
   JAIT_REF_MIME,
   normalizeUserMessageSegments,
@@ -22,6 +23,8 @@ import {
   parseUserMessageMarkdown,
   serializeUserMessageSegmentsForClipboard,
   type UserMessageSegment,
+  type UserTerminalReference,
+  type UserWorkspaceReference,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
@@ -36,6 +39,11 @@ export interface ReferencedFile {
   name: string
   kind?: 'file' | 'dir'
 }
+
+type PromptChipReference =
+  | ReferencedFile
+  | ({ type: 'workspace' } & UserWorkspaceReference)
+  | ({ type: 'terminal' } & UserTerminalReference)
 
 interface PromptInputProps {
   value: string
@@ -96,20 +104,46 @@ interface PromptInputProps {
 /* ------------------------------------------------------------------ */
 
 /** Build a non-editable inline chip DOM node for a file reference. */
-function createChipNode(file: ReferencedFile, onRemove?: (path: string) => void): HTMLSpanElement {
+function getChipRefKey(ref: PromptChipReference): string {
+  if ('type' in ref && ref.type === 'workspace') return `workspace:${ref.path}`
+  if ('type' in ref && ref.type === 'terminal') return `terminal:${ref.terminalId}`
+  return `file:${ref.path}`
+}
+
+function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) => void): HTMLSpanElement {
   const chip = document.createElement('span')
   chip.contentEditable = 'false'
-  chip.setAttribute('data-file-path', file.path)
-  chip.setAttribute('data-file-name', file.name)
-  if (file.kind) chip.setAttribute('data-kind', file.kind)
+  const refKey = getChipRefKey(file)
+  chip.setAttribute('data-chip-ref', refKey)
+  if ('type' in file && file.type === 'workspace') {
+    chip.setAttribute('data-segment-type', 'workspace')
+    chip.setAttribute('data-workspace-path', file.path)
+    chip.setAttribute('data-chip-name', file.name)
+  } else if ('type' in file && file.type === 'terminal') {
+    chip.setAttribute('data-segment-type', 'terminal')
+    chip.setAttribute('data-terminal-id', file.terminalId)
+    chip.setAttribute('data-chip-name', file.name)
+    if (file.workspaceRoot) chip.setAttribute('data-workspace-root', file.workspaceRoot)
+  } else {
+    chip.setAttribute('data-segment-type', 'file')
+    chip.setAttribute('data-file-path', file.path)
+    chip.setAttribute('data-chip-name', file.name)
+    if (file.kind) chip.setAttribute('data-kind', file.kind)
+  }
   chip.className =
     'inline-flex items-center gap-1.5 align-middle text-[12px] font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground cursor-default whitespace-nowrap transition-colors'
 
   // Icon (file or folder)
   const icon = document.createElement('span')
   icon.className = 'inline-flex items-center shrink-0'
-  const iconName = file.kind === 'dir' ? getVsFolderIconName(file.name) : getVsIconName(file.name)
-  icon.innerHTML = `<img src="${ICON_CDN}${iconName}" alt="" class="h-3.5 w-3.5" draggable="false" />`
+  if ('type' in file && file.type === 'workspace') {
+    icon.innerHTML = `<img src="${ICON_CDN}${DEFAULT_FOLDER}" alt="" class="h-3.5 w-3.5" draggable="false" />`
+  } else if ('type' in file && file.type === 'terminal') {
+    icon.innerHTML = '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round" class="h-3.5 w-3.5 text-muted-foreground"><path d="M4 17l6-6-6-6"/><path d="M12 19h8"/></svg>'
+  } else {
+    const iconName = file.kind === 'dir' ? getVsFolderIconName(file.name) : getVsIconName(file.name)
+    icon.innerHTML = `<img src="${ICON_CDN}${iconName}" alt="" class="h-3.5 w-3.5" draggable="false" />`
+  }
   chip.appendChild(icon)
 
   // Name label
@@ -131,7 +165,7 @@ function createChipNode(file: ReferencedFile, onRemove?: (path: string) => void)
     e.preventDefault()
     e.stopPropagation()
     chip.remove()
-    onRemove?.(file.path)
+    onRemove?.(refKey)
   })
   chip.appendChild(btn)
 
@@ -157,7 +191,7 @@ function getTextFromEditable(el: HTMLElement): string {
     if (node.nodeType === Node.TEXT_NODE) {
       text += node.textContent ?? ''
     } else if (node instanceof HTMLElement) {
-      if (node.hasAttribute('data-file-path')) {
+      if (node.hasAttribute('data-chip-ref')) {
         // Skip chips — they're represented separately
         continue
       } else if (node.tagName === 'BR') {
@@ -185,7 +219,7 @@ function isTextEmpty(s: string): boolean {
 /** Get file paths from all chip nodes in the editable div. */
 function getChipPaths(el: HTMLElement): string[] {
   const paths: string[] = []
-  el.querySelectorAll('[data-file-path]').forEach((chip) => {
+  el.querySelectorAll('[data-segment-type="file"][data-file-path]').forEach((chip) => {
     paths.push(chip.getAttribute('data-file-path')!)
   })
   return paths
@@ -194,11 +228,11 @@ function getChipPaths(el: HTMLElement): string[] {
 /** Get all chip file references from the editable div. */
 function getChipFiles(el: HTMLElement): ReferencedFile[] {
   const files: ReferencedFile[] = []
-  el.querySelectorAll('[data-file-path]').forEach((chip) => {
+  el.querySelectorAll('[data-segment-type="file"][data-file-path]').forEach((chip) => {
     const kind = chip.getAttribute('data-kind')
     files.push({
       path: chip.getAttribute('data-file-path')!,
-      name: chip.getAttribute('data-file-name') || chip.getAttribute('data-file-path')!.split(/[\\/]/).pop()!,
+      name: chip.getAttribute('data-chip-name') || chip.getAttribute('data-file-path')!.split(/[\\/]/).pop()!,
       ...(kind === 'file' || kind === 'dir' ? { kind } : {}),
     })
   })
@@ -217,14 +251,37 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
 
     if (!(node instanceof HTMLElement)) return
 
-    if (node.hasAttribute('data-file-path')) {
+    if (node.hasAttribute('data-chip-ref')) {
+      const segmentType = node.getAttribute('data-segment-type')
+      if (segmentType === 'workspace') {
+        const path = node.getAttribute('data-workspace-path')
+        if (!path) return
+        segments.push({
+          type: 'workspace',
+          path,
+          name: node.getAttribute('data-chip-name') || path.split(/[\\/]/).pop() || path,
+        })
+        return
+      }
+      if (segmentType === 'terminal') {
+        const terminalId = node.getAttribute('data-terminal-id')
+        if (!terminalId) return
+        const workspaceRoot = node.getAttribute('data-workspace-root')
+        segments.push({
+          type: 'terminal',
+          terminalId,
+          name: node.getAttribute('data-chip-name') || terminalId,
+          ...(workspaceRoot ? { workspaceRoot } : {}),
+        })
+        return
+      }
       const path = node.getAttribute('data-file-path')
       if (!path) return
       const kind = node.getAttribute('data-kind')
       segments.push({
         type: 'file',
         path,
-        name: node.getAttribute('data-file-name') || path.split(/[\\/]/).pop() || path,
+        name: node.getAttribute('data-chip-name') || path.split(/[\\/]/).pop() || path,
         ...(kind === 'file' || kind === 'dir' ? { kind } : {}),
       })
       return
@@ -240,6 +297,10 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
 
   for (const child of el.childNodes) visit(child)
   return normalizeUserMessageSegments(segments)
+}
+
+function hasChipRefs(el: HTMLElement | null): boolean {
+  return Boolean(el?.querySelector('[data-chip-ref]'))
 }
 
 function restoreCaretAfterChipRemoval(root: HTMLElement, nextSibling: Node | null, childIndex: number) {
@@ -271,7 +332,7 @@ function buildEditableContent(
   el: HTMLElement,
   segments: UserMessageSegment[] | undefined,
   fallbackValue: string,
-  onRemove: (path: string) => void,
+  onRemove: (refKey: string) => void,
 ) {
   el.innerHTML = ''
 
@@ -295,7 +356,7 @@ function buildEditableContent(
 function insertSegmentsAtCursor(
   el: HTMLElement,
   segments: UserMessageSegment[],
-  onRemove: (path: string) => void,
+  onRemove: (refKey: string) => void,
 ) {
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) {
@@ -538,16 +599,16 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   }, [draftStateKey, attachments])
 
   /** Remove a chip from the editable DOM and update isEmpty. */
-  const handleRemoveChip = useCallback((path: string) => {
+  const handleRemoveChip = useCallback((refKey: string) => {
     const el = editableRef.current
     if (!el) return
     pushUndoRef.current(true)
-    el.querySelector(`[data-file-path="${CSS.escape(path)}"]`)?.remove()
+    el.querySelector(`[data-chip-ref="${CSS.escape(refKey)}"]`)?.remove()
     draftSegmentsRef.current = getComposerSegments(el)
     isSyncing.current = true
     onChangeRef.current(getTextFromEditable(el))
     isSyncing.current = false
-    setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]'))
+    setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
   }, [])
 
   const resetComposer = useCallback(() => {
@@ -595,7 +656,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     draftSegmentsRef.current = getComposerSegments(el)
     const text = getTextFromEditable(el)
     onChangeRef.current(text)
-    setIsEmpty(isTextEmpty(text) && !el.querySelector('[data-file-path]'))
+    setIsEmpty(isTextEmpty(text) && !hasChipRefs(el))
     isSyncing.current = false
     moveCursorToEnd(el)
   }, [handleRemoveChip])
@@ -606,7 +667,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const el = editableRef.current
       if (!el) return
       // Don't add duplicate
-      if (el.querySelector(`[data-file-path="${CSS.escape(file.path)}"]`)) return
+      if (el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(file))}"]`)) return
       pushUndoRef.current(true)
       cleanEmptyNodes(el)
       const chip = createChipNode(file, handleRemoveChip)
@@ -720,7 +781,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     if (!el || isSyncing.current) return
 
     const hasRenderedContent = el.childNodes.length > 0
-      && (((el.textContent ?? '').length > 0) || el.querySelector('[data-file-path]'))
+      && (((el.textContent ?? '').length > 0) || hasChipRefs(el))
 
     if (hasRenderedContent && !shouldSyncComposerDraft(lastAppliedDraftSignatureRef.current, value, segments, draftSegmentsRef.current)) {
       lastAppliedDraftSignatureRef.current = getPromptDraftSignature(value, segments)
@@ -730,7 +791,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     isSyncing.current = true
     buildEditableContent(el, segments, value, handleRemoveChip)
     draftSegmentsRef.current = getComposerSegments(el)
-    setIsEmpty(isTextEmpty(value) && !editableRef.current?.querySelector('[data-file-path]'))
+    setIsEmpty(isTextEmpty(value) && !hasChipRefs(editableRef.current))
     isSyncing.current = false
     lastAppliedDraftSignatureRef.current = getPromptDraftSignature(value, segments)
   }, [value, segments, handleRemoveChip])
@@ -829,7 +890,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const text = getTextFromEditable(el)
       draftSegmentsRef.current = getComposerSegments(el)
       onChangeRef.current(text)
-      setIsEmpty(isTextEmpty(text) && !el.querySelector('[data-file-path]'))
+      setIsEmpty(isTextEmpty(text) && !hasChipRefs(el))
       isSyncing.current = false
       pushUndoRef.current()
 
@@ -960,7 +1021,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         })
         if (shouldRemove) {
           const prev = el.childNodes[childIndex - 1]
-          if (prev instanceof HTMLElement && prev.hasAttribute('data-file-path')) {
+          if (prev instanceof HTMLElement && prev.hasAttribute('data-chip-ref')) {
             e.preventDefault()
             const nextSibling = prev.nextSibling
             prev.remove()
@@ -969,7 +1030,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             isSyncing.current = true
             onChangeRef.current(getTextFromEditable(el))
             isSyncing.current = false
-            setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]'))
+            setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
             return
           }
         }
@@ -978,7 +1039,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       // Case 2: cursor is at offset 0 of a text node — check if previous sibling is a chip
       if (startContainer.nodeType === Node.TEXT_NODE && startOffset === 0) {
         const prev = startContainer.previousSibling
-        if (prev instanceof HTMLElement && prev.hasAttribute('data-file-path')) {
+        if (prev instanceof HTMLElement && prev.hasAttribute('data-chip-ref')) {
           e.preventDefault()
           const nextSibling = prev.nextSibling
           prev.remove()
@@ -987,7 +1048,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           isSyncing.current = true
           onChangeRef.current(getTextFromEditable(el))
           isSyncing.current = false
-          setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]'))
+          setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
           return
         }
       }
@@ -998,7 +1059,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const text = el ? getTextFromEditable(el).trim() : value.trim()
       const chips = el ? getChipFiles(el) : []
       const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
-      if (!(text || chips.length > 0 || attachments.length > 0)) return
+      const hasStructuredRefs = nextSegments.some((segment) => segment.type !== 'text' && segment.type !== 'image')
+      if (!(text || chips.length > 0 || hasStructuredRefs || attachments.length > 0)) return
       if (isLoading && onQueue) {
         onQueue(chips, attachments, nextSegments)
         setAttachments([])
@@ -1045,7 +1107,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     setAttachments((prev) => {
       const next = prev.filter((a) => a.name !== name)
       const el = editableRef.current
-      if (next.length === 0 && el && isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]')) {
+      if (next.length === 0 && el && isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el)) {
         setIsEmpty(true)
       }
       return next
@@ -1073,9 +1135,26 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         return
       }
       if (!(node instanceof HTMLElement)) return
-      if (node.hasAttribute('data-file-path')) {
+      if (node.hasAttribute('data-chip-ref')) {
+        const segmentType = node.getAttribute('data-segment-type')
+        if (segmentType === 'workspace') {
+          const path = node.getAttribute('data-workspace-path')!
+          segments.push({ type: 'workspace', path, name: node.getAttribute('data-chip-name') || path.split('/').pop() || path })
+          return
+        }
+        if (segmentType === 'terminal') {
+          const terminalId = node.getAttribute('data-terminal-id')!
+          const workspaceRoot = node.getAttribute('data-workspace-root')
+          segments.push({
+            type: 'terminal',
+            terminalId,
+            name: node.getAttribute('data-chip-name') || terminalId,
+            ...(workspaceRoot ? { workspaceRoot } : {}),
+          })
+          return
+        }
         const path = node.getAttribute('data-file-path')!
-        segments.push({ type: 'file', path, name: node.getAttribute('data-file-name') || path.split('/').pop() || path })
+        segments.push({ type: 'file', path, name: node.getAttribute('data-chip-name') || path.split('/').pop() || path })
         return
       }
       if (node.tagName === 'BR') {
@@ -1086,9 +1165,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     }
     for (const child of tempDiv.childNodes) visit(child)
 
-    if (segments.some(s => s.type === 'file')) {
+    if (segments.some(s => s.type === 'file' || s.type === 'workspace' || s.type === 'terminal')) {
       e.preventDefault()
-      const plainText = segments.map(s => s.type === 'file' ? `@${s.path}` : s.type === 'text' ? s.text : '').join('')
+      const plainText = segments.map((s) => {
+        if (s.type === 'file') return `@${s.path}`
+        if (s.type === 'workspace') return `[workspace:${s.path}]`
+        if (s.type === 'terminal') return `[terminal:${s.terminalId}]`
+        if (s.type === 'image') return `[image:${s.name}]`
+        return s.text
+      }).join('')
       e.clipboardData.setData('text/plain', plainText)
       const structured = serializeUserMessageSegmentsForClipboard(segments)
       if (structured) e.clipboardData.setData(JAIT_REF_MIME, structured)
@@ -1120,7 +1205,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       isSyncing.current = true
       onChange(getTextFromEditable(el))
       isSyncing.current = false
-      setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !el.querySelector('[data-file-path]'))
+      setIsEmpty(isTextEmpty(getTextFromEditable(el)) && !hasChipRefs(el))
       return
     }
     e.preventDefault()
@@ -1158,25 +1243,45 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     const el = editableRef.current
     if (!el) return
 
+    const appendChip = (ref: PromptChipReference) => {
+      if (el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(ref))}"]`)) return false
+      cleanEmptyNodes(el)
+      const chip = createChipNode(ref, handleRemoveChip)
+      el.appendChild(chip)
+      el.appendChild(document.createTextNode(' '))
+      draftSegmentsRef.current = getComposerSegments(el)
+      moveCursorToEnd(el)
+      isSyncing.current = true
+      onChange(getTextFromEditable(el))
+      isSyncing.current = false
+      setIsEmpty(false)
+      return true
+    }
+
     // Handle workspace tree file/folder drop
     const jaitFile = e.dataTransfer.getData('text/jait-file')
     if (jaitFile) {
       try {
         const file = JSON.parse(jaitFile) as ReferencedFile
-        // Don't add if already present
-        if (!el.querySelector(`[data-file-path="${CSS.escape(file.path)}"]`)) {
-          cleanEmptyNodes(el)
-          const chip = createChipNode(file, handleRemoveChip)
-          el.appendChild(chip)
-          el.appendChild(document.createTextNode(' '))
-          draftSegmentsRef.current = getComposerSegments(el)
-          moveCursorToEnd(el)
-          // Sync text
-          isSyncing.current = true
-          onChange(getTextFromEditable(el))
-          isSyncing.current = false
-          setIsEmpty(false)
-        }
+        appendChip(file)
+      } catch { /* invalid JSON */ }
+      return
+    }
+
+    const jaitWorkspace = e.dataTransfer.getData(JAIT_WORKSPACE_REF_MIME)
+    if (jaitWorkspace) {
+      try {
+        const workspace = JSON.parse(jaitWorkspace) as UserWorkspaceReference
+        appendChip({ type: 'workspace', ...workspace })
+      } catch { /* invalid JSON */ }
+      return
+    }
+
+    const jaitTerminal = e.dataTransfer.getData(JAIT_TERMINAL_REF_MIME)
+    if (jaitTerminal) {
+      try {
+        const terminal = JSON.parse(jaitTerminal) as UserTerminalReference
+        appendChip({ type: 'terminal', ...terminal })
       } catch { /* invalid JSON */ }
       return
     }
@@ -1198,20 +1303,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         const name = filePath.split(/[\\/]/).pop() ?? filePath
         const entry = items?.[i]?.webkitGetAsEntry?.()
         const kind: 'file' | 'dir' = entry?.isDirectory ? 'dir' : (f.type === '' && f.size === 0) ? 'dir' : 'file'
-        if (!el.querySelector(`[data-file-path="${CSS.escape(filePath)}"]`)) {
-          const chip = createChipNode({ path: filePath, name, kind }, handleRemoveChip)
-          el.appendChild(chip)
-          el.appendChild(document.createTextNode(' '))
-          added = true
-        }
+        added = appendChip({ path: filePath, name, kind }) || added
       }
       if (added) {
-        draftSegmentsRef.current = getComposerSegments(el)
-        moveCursorToEnd(el)
-        isSyncing.current = true
-        onChange(getTextFromEditable(el))
-        isSyncing.current = false
-        setIsEmpty(false)
         pushUndoRef.current(true)
       }
     } else if (e.dataTransfer.files?.length) {

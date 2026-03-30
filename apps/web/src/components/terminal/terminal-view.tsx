@@ -5,6 +5,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links'
 import '@xterm/xterm/css/xterm.css'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 import { shouldAcceptTerminalOutput, type TerminalOutputPayload } from './terminal-stream'
+import { buildTerminalDragPayload, JAIT_TERMINAL_REF_MIME } from '@/lib/jait-dnd'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
@@ -241,6 +242,18 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
           key={t.id}
           role="tab"
           tabIndex={0}
+          draggable
+          onDragStart={(e) => {
+            e.dataTransfer.effectAllowed = 'copy'
+            e.dataTransfer.setData(
+              JAIT_TERMINAL_REF_MIME,
+              JSON.stringify(buildTerminalDragPayload(
+                t.id,
+                t.id.replace(/^term-/, '').slice(0, 8),
+                t.workspaceRoot,
+              )),
+            )
+          }}
           onClick={() => onSelect(t.id)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(t.id) }}
           className={`group flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors cursor-pointer ${

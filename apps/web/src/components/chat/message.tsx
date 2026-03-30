@@ -21,7 +21,7 @@ import {
 } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import { FileIcon } from '@/components/icons/file-icons'
+import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
@@ -912,6 +912,24 @@ function MessageInner({
                                     title={segment.path}
                                   >
                                     <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="max-w-[180px] truncate">{segment.name}</span>
+                                  </span>
+                                ) : segment.type === 'workspace' ? (
+                                  <span
+                                    key={`${segment.path}-${index}`}
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground align-middle select-none"
+                                    title={segment.path}
+                                  >
+                                    <FolderIcon name={segment.name} className="h-3.5 w-3.5 shrink-0" />
+                                    <span className="max-w-[180px] truncate">{segment.name}</span>
+                                  </span>
+                                ) : segment.type === 'terminal' ? (
+                                  <span
+                                    key={`${segment.terminalId}-${index}`}
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground align-middle select-none"
+                                    title={segment.workspaceRoot ? `${segment.terminalId} · ${segment.workspaceRoot}` : segment.terminalId}
+                                  >
+                                    <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-[9px] font-bold uppercase text-muted-foreground">T</span>
                                     <span className="max-w-[180px] truncate">{segment.name}</span>
                                   </span>
                                 ) : null,

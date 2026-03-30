@@ -7,7 +7,7 @@ export type {
 } from "./contracts.js";
 export { ToolRegistry } from "./registry.js";
 
-export { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tools.js";
+export { createTerminalRunTool, createJaitTerminalTool, createTerminalStreamTool } from "./terminal-tools.js";
 export {
   createFileReadTool,
   createFileWriteTool,
@@ -121,7 +121,7 @@ import type { MemoryService } from "../memory/contracts.js";
 import type { HookBus } from "../scheduler/hooks.js";
 import type { ScreenShareService } from "@jait/screen-share";
 import { ToolRegistry } from "./registry.js";
-import { createTerminalRunTool, createTerminalStreamTool } from "./terminal-tools.js";
+import { createTerminalRunTool, createJaitTerminalTool, createTerminalStreamTool } from "./terminal-tools.js";
 import {
   createFileReadTool,
   createFileWriteTool,
@@ -262,6 +262,7 @@ export function createToolRegistry(
 
   // Terminal tools (underlying implementations for core "execute")
   tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws));
+  tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws));
   tools.register(createTerminalStreamTool(surfaceRegistry));
 
   // File tools (underlying implementations for core "read"/"edit")

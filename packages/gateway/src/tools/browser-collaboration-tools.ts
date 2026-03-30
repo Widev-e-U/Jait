@@ -16,6 +16,34 @@ interface BrowserInterventionResolveInput {
   userNote?: string;
 }
 
+function getScopedBrowserSessions(
+  collaboration: BrowserCollaborationService,
+  sessionId?: string | null,
+  userId?: string | null,
+) {
+  const linkedPreview = sessionId?.trim()
+    ? collaboration.getSessionByPreviewSessionId(sessionId.trim())
+    : null;
+  if (!linkedPreview) return collaboration.listSessions(userId);
+  if (userId && linkedPreview.createdBy && linkedPreview.createdBy !== userId) return [];
+  return [linkedPreview];
+}
+
+function resolveScopedBrowserSession(
+  collaboration: BrowserCollaborationService,
+  browserSessionId: string,
+  sessionId?: string | null,
+  userId?: string | null,
+) {
+  const sessions = getScopedBrowserSessions(collaboration, sessionId, userId);
+  const session = sessions.find((item) => item.id === browserSessionId) ?? null;
+  if (session) return session;
+  if (sessionId?.trim()) {
+    throw new Error("This chat session is locked to its visible preview browser session. Use that session only.");
+  }
+  return null;
+}
+
 export function createBrowserSessionListTool(
   collaboration?: BrowserCollaborationService,
 ): ToolDefinition<BrowserSessionListInput> {
@@ -28,7 +56,7 @@ export function createBrowserSessionListTool(
     parameters: { type: "object", properties: {} },
     async execute(_input, context): Promise<ToolResult> {
       if (!collaboration) return { ok: false, message: "Browser collaboration service is not available" };
-      const sessions = collaboration.listSessions(context.userId);
+      const sessions = getScopedBrowserSessions(collaboration, context.sessionId, context.userId);
       return {
         ok: true,
         message: sessions.length ? `Found ${sessions.length} browser session(s)` : "No collaborative browser sessions",
@@ -56,6 +84,7 @@ export function createBrowserSessionTakeControlTool(
     },
     async execute(input, context): Promise<ToolResult> {
       if (!collaboration) return { ok: false, message: "Browser collaboration service is not available" };
+      resolveScopedBrowserSession(collaboration, input.browserSessionId, context.sessionId, context.userId);
       const session = collaboration.takeControl(input.browserSessionId, context.userId);
       if (!session) return { ok: false, message: "Browser session not found" };
       return {
@@ -85,6 +114,7 @@ export function createBrowserSessionReturnControlTool(
     },
     async execute(input, context): Promise<ToolResult> {
       if (!collaboration) return { ok: false, message: "Browser collaboration service is not available" };
+      resolveScopedBrowserSession(collaboration, input.browserSessionId, context.sessionId, context.userId);
       const session = collaboration.returnControl(input.browserSessionId, context.userId);
       if (!session) return { ok: false, message: "Browser session not found" };
       return {
@@ -123,6 +153,7 @@ export function createBrowserInterventionRequestTool(
     },
     async execute(input, context): Promise<ToolResult> {
       if (!collaboration) return { ok: false, message: "Browser collaboration service is not available" };
+      resolveScopedBrowserSession(collaboration, input.browserSessionId, context.sessionId, context.userId);
       const intervention = collaboration.requestIntervention({
         browserSessionId: input.browserSessionId,
         reason: input.reason,

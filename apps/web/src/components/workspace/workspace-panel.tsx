@@ -20,6 +20,7 @@ import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
 import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
 import { searchWorkspaceContent } from '@/lib/workspace-content-search'
+import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getOpenInterventionsForSession, resolvePreviewBrowserSession } from './workspace-preview-collaboration'
 import {
@@ -4629,6 +4630,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     mobileTreeDrag?.dropDir === remoteRoot ? 'bg-primary/15 ring-1 ring-primary/40 text-foreground' : 'bg-muted/30'
                   }`}
                   data-tree-drop-root="true"
+                  draggable={!isMobile}
+                  onDragStart={(e) => {
+                    e.dataTransfer.effectAllowed = 'copy'
+                    e.dataTransfer.setData(JAIT_WORKSPACE_REF_MIME, JSON.stringify(buildWorkspaceDragPayload(remoteRoot)))
+                  }}
                 >
                   <FolderOpen className="h-4 w-4 shrink-0" />
                   <span className="truncate">Workspace root</span>
@@ -5083,6 +5089,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <div
                 className="mb-1 flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground bg-muted/30"
                 data-tree-drop-root="true"
+                draggable
+                onDragStart={(e) => {
+                  e.dataTransfer.effectAllowed = 'copy'
+                  e.dataTransfer.setData(JAIT_WORKSPACE_REF_MIME, JSON.stringify(buildWorkspaceDragPayload(remoteRoot)))
+                }}
                 onDragOver={(e) => {
                   if (!e.dataTransfer.types.includes('text/jait-tree-node')) return
                   e.preventDefault()

@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createBrowserSessionListTool, createBrowserSessionReturnControlTool } from "./browser-collaboration-tools.js";
 import { createPreviewInspectTool, createPreviewOpenTool } from "./preview-tools.js";
 import type { ToolContext } from "./contracts.js";
 
@@ -285,5 +286,54 @@ describe("createPreviewInspectTool", () => {
       page: null,
       snapshot: null,
     });
+  });
+});
+
+describe("browser collaboration tool scoping", () => {
+  it("lists only the linked preview browser session for the active chat session", async () => {
+    const previewSession = {
+      id: "bs_preview_only",
+      browserId: "preview-browser-session-1",
+      previewSessionId: "session-1",
+      createdBy: "user-1",
+    };
+    const collaboration = {
+      getSessionByPreviewSessionId: vi.fn().mockReturnValue(previewSession),
+      listSessions: vi.fn(),
+    };
+    const tool = createBrowserSessionListTool(collaboration as any);
+
+    const result = await tool.execute({}, {
+      sessionId: "session-1",
+      actionId: "action-1",
+      requestedBy: "assistant",
+      userId: "user-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(collaboration.listSessions).not.toHaveBeenCalled();
+    expect(result.data).toEqual({ sessions: [previewSession] });
+  });
+
+  it("rejects control changes for non-preview browser sessions when a preview session is linked", async () => {
+    const collaboration = {
+      getSessionByPreviewSessionId: vi.fn().mockReturnValue({
+        id: "bs_preview_only",
+        browserId: "preview-browser-session-1",
+        previewSessionId: "session-1",
+        createdBy: "user-1",
+      }),
+      returnControl: vi.fn(),
+    };
+    const tool = createBrowserSessionReturnControlTool(collaboration as any);
+
+    await expect(tool.execute({ browserSessionId: "bs_sidecar" }, {
+      sessionId: "session-1",
+      actionId: "action-1",
+      requestedBy: "assistant",
+      userId: "user-1",
+    })).rejects.toThrow(/locked to its visible preview browser session/i);
+
+    expect(collaboration.returnControl).not.toHaveBeenCalled();
   });
 });

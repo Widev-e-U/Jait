@@ -120,6 +120,8 @@ import {
   type UserMessageSegment,
   userMessageTextFromSegments,
   userReferencedFilesFromSegments,
+  userReferencedTerminalsFromSegments,
+  userReferencedWorkspacesFromSegments,
 } from '@/lib/user-message-segments'
 
 const API_URL = getApiUrl()
@@ -864,7 +866,7 @@ function App() {
   const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
   const architectureRenderRequestIdRef = useRef<string | null>(null)
   const loadedArchitectureWorkspaceRef = useRef<string | null>(null)
-  const [terminalWidth, setTerminalWidth] = useState(480)
+  const [terminalHeight, setTerminalHeight] = useState(240)
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
   const floatingDragRef = useRef<{ pointerId: number; startX: number; startY: number; posX: number; posY: number } | null>(null)
@@ -2292,6 +2294,11 @@ function App() {
   const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
   const openTerminalPanel = useCallback(() => {
+    if (!showWorkspaceRef.current) {
+      showWorkspaceRef.current = true
+      setShowWorkspace(true)
+      setShowWorkspaceEditor(true)
+    }
     setShowTerminal(true)
     setSavedTerminal({ open: true })
     if (consumeSuppressedUiSync('terminal.panel')) return
@@ -2709,9 +2716,9 @@ function App() {
   const handleTerminalDragStart = useCallback((e: React.MouseEvent) => {
     e.preventDefault()
     isDragging.current = true
-    const startX = e.clientX
-    const startW = terminalWidth
-    const maxW = window.innerWidth * 0.5
+    const startY = e.clientY
+    const startH = terminalHeight
+    const maxH = window.innerHeight * 0.6
     const cleanup = () => {
       isDragging.current = false
       document.removeEventListener('mousemove', onMove)
@@ -2722,8 +2729,8 @@ function App() {
     }
     const onMove = (ev: MouseEvent) => {
       if (!isDragging.current) return
-      const delta = ev.clientX - startX
-      setTerminalWidth(Math.min(maxW, Math.max(320, startW + delta)))
+      const delta = startY - ev.clientY
+      setTerminalHeight(Math.min(maxH, Math.max(160, startH + delta)))
     }
     const onUp = () => {
       cleanup()
@@ -2731,12 +2738,12 @@ function App() {
     const onWindowBlur = () => {
       cleanup()
     }
-    document.body.style.cursor = 'col-resize'
+    document.body.style.cursor = 'row-resize'
     document.body.style.userSelect = 'none'
     document.addEventListener('mousemove', onMove)
     document.addEventListener('mouseup', onUp)
     window.addEventListener('blur', onWindowBlur)
-  }, [terminalWidth])
+  }, [terminalHeight])
 
   const activeWorkspaceRoot = activeWorkspace?.workspaceRoot ?? activeWorkspaceRecord?.rootPath ?? null
 
@@ -3055,8 +3062,14 @@ function App() {
       : chipFiles?.length
         ? chipFiles.map((file) => ({ path: file.path, name: file.name }))
         : []
+    const referencedWorkspaces = normalizedSegments?.length
+      ? userReferencedWorkspacesFromSegments(normalizedSegments)
+      : []
+    const referencedTerminals = normalizedSegments?.length
+      ? userReferencedTerminalsFromSegments(normalizedSegments)
+      : []
 
-    if (!text && referencedFiles.length === 0) return null
+    if (!text && referencedFiles.length === 0 && referencedWorkspaces.length === 0 && referencedTerminals.length === 0) return null
 
     const fileContents: { path: string; content: string }[] = []
     const attachments = new Set<string>()
@@ -3084,10 +3097,28 @@ function App() {
       }
     }
 
-    const promptWithReferences = fileContents.length > 0
-      ? `${text}${text ? '\n\n' : ''}Referenced files:\n${fileContents
+    const referenceSections: string[] = []
+
+    if (referencedWorkspaces.length > 0) {
+      referenceSections.push(`Referenced workspaces:\n${referencedWorkspaces
+        .map((workspace) => `- ${workspace.path}`)
+        .join('\n')}`)
+    }
+
+    if (referencedTerminals.length > 0) {
+      referenceSections.push(`Referenced terminals:\n${referencedTerminals
+        .map((terminal) => `- ${terminal.terminalId}${terminal.workspaceRoot ? ` (workspace: ${terminal.workspaceRoot})` : ''}`)
+        .join('\n')}\nUse the terminal ID when you need to run commands in one of these existing terminals.`)
+    }
+
+    if (fileContents.length > 0) {
+      referenceSections.push(`Referenced files:\n${fileContents
         .map((file) => `- ${file.path}\n\`\`\`\n${file.content.slice(0, 2000)}\n\`\`\``)
-        .join('\n')}`
+        .join('\n')}`)
+    }
+
+    const promptWithReferences = referenceSections.length > 0
+      ? `${text}${text ? '\n\n' : ''}${referenceSections.join('\n\n')}`
       : text
 
     return {
@@ -4573,91 +4604,96 @@ function App() {
               </aside>
             )}
 
-            {viewMode === 'developer' && showTerminal && !isMobile && currentView === 'chat' && (
-              <div className="flex shrink-0 overflow-hidden border-r" style={{ width: terminalWidth }}>
-                <div className="flex flex-col flex-1 min-w-0">
-                  <div className="relative">
-                    <TerminalTabs
-                      terminals={workspaceTerminals}
-                      activeTerminalId={activeTerminalId}
-                      onSelect={setActiveTerminalId}
-                      onCreate={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
-                      onKill={handleKillTerminal}
+            {((viewMode === 'developer' && currentView === 'chat' && (showDesktopWorkspace || showTerminal))
+              || (viewMode === 'manager' && automation.selectedThread && showDesktopWorkspace)) && (
+              <div
+                className="flex min-h-0 shrink-0 flex-col"
+                style={!showDesktopWorkspace && showTerminal ? { width: 480, maxWidth: '70vw' } : undefined}
+              >
+                {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
+                  <WorkspacePanel
+                    ref={workspaceRef}
+                    autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
+                    surfaceId={activeWorkspace?.surfaceId ?? null}
+                    files={workspaceFiles}
+                    activeFileId={activeWorkspaceFileId}
+                    onActiveFileChange={setActiveWorkspaceFileId}
+                    onFileDrop={(files) => { void handleFileDrop(files) }}
+                    onReferenceFile={(file) => promptInputRef.current?.insertChip({ path: file.path, name: file.name })}
+                    onAvailableFilesChange={setAvailableFilesForMention}
+                    showTree={showWorkspaceTree}
+                    showEditor={showWorkspaceEditor}
+                    onToggleTree={toggleWorkspaceTree}
+                    onToggleEditor={toggleWorkspaceEditor}
+                    changedPaths={changedPaths}
+                    fsWatcherVersion={fsWatcherVersion}
+                    savedTabsState={workspaceTabsState}
+                    stateReady={workspaceStateReady}
+                    previewRequest={workspacePreviewRequest}
+                    onTabsStateChange={handleWorkspaceTabsStateChange}
+                    onPreviewOpenChange={handleWorkspacePreviewOpenChange}
+                    previewSessionId={activeSessionId}
+                    previewToken={token}
+                    previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
+                    previewInitialTarget={devPreviewTarget}
+                    previewBrowserSessionId={devPreviewBrowserSessionId}
+                    browserSessions={browserCollaboration.sessions}
+                    browserInterventions={browserCollaboration.interventions}
+                    onTakeBrowserControl={browserCollaboration.takeControl}
+                    onReturnBrowserControl={browserCollaboration.returnControl}
+                    onResumeBrowserSession={browserCollaboration.resume}
+                    onResolveBrowserIntervention={browserCollaboration.resolveIntervention}
+                    architectureDiagram={architectureDiagram}
+                    architectureGenerating={architectureGenerating}
+                    architectureRequest={architectureRequest}
+                    onArchitectureOpenChange={setShowArchitecture}
+                    onArchitectureRenderResult={handleArchitectureRenderResult}
+                    onGenerateArchitecture={() => {
+                      setArchitectureGenerating(true)
+                      handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                    }}
+                    onApplyDiff={handleApplyWorkspaceDiff}
+                    provider={chatProvider}
+                    cliModel={cliModel}
+                  />
+                )}
+                {viewMode === 'developer' && showTerminal && !isMobile && currentView === 'chat' && (
+                  <div className="flex min-h-0 shrink-0 flex-col border-r border-t bg-background" style={{ height: terminalHeight }}>
+                    <div
+                      onMouseDown={handleTerminalDragStart}
+                      className="h-1 cursor-row-resize hover:bg-primary/30 transition-colors shrink-0"
                     />
-                    <button
-                      onClick={closeTerminalPanel}
-                      className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      aria-label="Close terminal"
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </button>
-                  </div>
-                  {activeTerminalId ? (
-                    <TerminalView terminalId={activeTerminalId} className="flex-1 min-h-0" token={token} />
-                  ) : (
-                    <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
+                    <div className="relative">
+                      <TerminalTabs
+                        terminals={workspaceTerminals}
+                        activeTerminalId={activeTerminalId}
+                        onSelect={setActiveTerminalId}
+                        onCreate={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                        onKill={handleKillTerminal}
+                      />
                       <button
-                        onClick={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
-                        className="hover:text-foreground transition-colors"
+                        onClick={closeTerminalPanel}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label="Close terminal"
                       >
-                        + New Terminal
+                        <X className="h-3.5 w-3.5" />
                       </button>
                     </div>
-                  )}
-                </div>
-                <div
-                  onMouseDown={handleTerminalDragStart}
-                  className="w-1 cursor-col-resize hover:bg-primary/30 transition-colors shrink-0"
-                />
+                    {activeTerminalId ? (
+                      <TerminalView terminalId={activeTerminalId} className="flex-1 min-h-0" token={token} />
+                    ) : (
+                      <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
+                        <button
+                          onClick={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                          className="hover:text-foreground transition-colors"
+                        >
+                          + New Terminal
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
-            )}
-
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
-              <WorkspacePanel
-                ref={workspaceRef}
-                autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
-                surfaceId={activeWorkspace?.surfaceId ?? null}
-                files={workspaceFiles}
-                activeFileId={activeWorkspaceFileId}
-                onActiveFileChange={setActiveWorkspaceFileId}
-                onFileDrop={(files) => { void handleFileDrop(files) }}
-                onReferenceFile={(file) => promptInputRef.current?.insertChip({ path: file.path, name: file.name })}
-                onAvailableFilesChange={setAvailableFilesForMention}
-                showTree={showWorkspaceTree}
-                showEditor={showWorkspaceEditor}
-                onToggleTree={toggleWorkspaceTree}
-                onToggleEditor={toggleWorkspaceEditor}
-                changedPaths={changedPaths}
-                fsWatcherVersion={fsWatcherVersion}
-                savedTabsState={workspaceTabsState}
-                stateReady={workspaceStateReady}
-                previewRequest={workspacePreviewRequest}
-                onTabsStateChange={handleWorkspaceTabsStateChange}
-                onPreviewOpenChange={handleWorkspacePreviewOpenChange}
-                previewSessionId={activeSessionId}
-                previewToken={token}
-                previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
-                previewInitialTarget={devPreviewTarget}
-                previewBrowserSessionId={devPreviewBrowserSessionId}
-                browserSessions={browserCollaboration.sessions}
-                browserInterventions={browserCollaboration.interventions}
-                onTakeBrowserControl={browserCollaboration.takeControl}
-                onReturnBrowserControl={browserCollaboration.returnControl}
-                onResumeBrowserSession={browserCollaboration.resume}
-                onResolveBrowserIntervention={browserCollaboration.resolveIntervention}
-                architectureDiagram={architectureDiagram}
-                architectureGenerating={architectureGenerating}
-                architectureRequest={architectureRequest}
-                onArchitectureOpenChange={setShowArchitecture}
-                onArchitectureRenderResult={handleArchitectureRenderResult}
-                onGenerateArchitecture={() => {
-                  setArchitectureGenerating(true)
-                  handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
-                }}
-                onApplyDiff={handleApplyWorkspaceDiff}
-                provider={chatProvider}
-                cliModel={cliModel}
-              />
             )}
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
               <section className="flex-1 min-h-0 border-b bg-background overflow-hidden">

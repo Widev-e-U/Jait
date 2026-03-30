@@ -93,7 +93,52 @@ const DEFAULT_KIMI_MODEL = "moonshot-v1-128k";
 type WebSearchProvider = NonNullable<WebSearchInput["provider"]>;
 type ResolvedWebSearchProvider = Exclude<WebSearchProvider, "auto">;
 
-async function ensureBrowserSurface(registry: SurfaceRegistry, context: ToolContext, browserId?: string): Promise<BrowserSurface> {
+function resolveActivePreviewSession(
+  collaboration: BrowserCollaborationService | undefined,
+  context: ToolContext,
+): BrowserSessionRecord | null {
+  const sessionId = context.sessionId?.trim();
+  if (!sessionId || !collaboration) return null;
+  const getter = (collaboration as Partial<BrowserCollaborationService>).getSessionByPreviewSessionId;
+  if (typeof getter !== "function") return null;
+  return getter.call(collaboration, sessionId);
+}
+
+function assertPreviewBrowserSelection(
+  previewSession: BrowserSessionRecord | null,
+  browserId?: string,
+): void {
+  if (!previewSession) return;
+  const previewBrowserId = previewSession.browserId?.trim();
+  if (!previewBrowserId) {
+    throw new Error("The active preview session is missing its linked browser. Restart the preview and try again.");
+  }
+  if (browserId && browserId !== previewBrowserId) {
+    throw new Error(
+      `An active preview is linked to this session. Use the visible preview browser '${previewBrowserId}' instead of '${browserId}'.`,
+    );
+  }
+}
+
+async function ensureBrowserSurface(
+  registry: SurfaceRegistry,
+  context: ToolContext,
+  browserId?: string,
+  collaboration?: BrowserCollaborationService,
+): Promise<BrowserSurface> {
+  const previewSession = resolveActivePreviewSession(collaboration, context);
+  assertPreviewBrowserSelection(previewSession, browserId);
+
+  if (previewSession?.browserId) {
+    const preview = registry.getSurface(previewSession.browserId);
+    if (preview?.type === "browser" && preview.state === "running") {
+      return preview as BrowserSurface;
+    }
+    throw new Error(
+      `The visible preview browser '${previewSession.browserId}' is not running. Restart the preview before using browser tools.`,
+    );
+  }
+
   // When no explicit browserId is given, prefer the active preview browser
   // for this session so agents don't need to look it up separately.
   if (!browserId && context.sessionId) {
@@ -190,8 +235,10 @@ export function createBrowserNavigateTool(
     },
     async execute(input, context): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
-      collaboration?.assertAgentControl(input.browserId);
-      const surface = await ensureBrowserSurface(registry, context, input.browserId);
+      const previewSession = resolveActivePreviewSession(collaboration, context);
+      assertPreviewBrowserSelection(previewSession, input.browserId);
+      collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
+      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
       const snapshot = await surface.navigate(input.url, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
@@ -221,8 +268,10 @@ export function createBrowserSnapshotTool(
     },
     async execute(input, context): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
-      collaboration?.assertAgentControl(input.browserId);
-      const surface = await ensureBrowserSurface(registry, context, input.browserId);
+      const previewSession = resolveActivePreviewSession(collaboration, context);
+      assertPreviewBrowserSelection(previewSession, input.browserId);
+      collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
+      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
       const description = await surface.describe(context.signal);
       const inspection = await surface.inspect(undefined, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
@@ -261,8 +310,10 @@ export function createBrowserInspectTool(
     },
     async execute(input, context): Promise<ToolResult> {
       if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
-      collaboration?.assertAgentControl(input.browserId);
-      const surface = await ensureBrowserSurface(registry, context, input.browserId);
+      const previewSession = resolveActivePreviewSession(collaboration, context);
+      assertPreviewBrowserSelection(previewSession, input.browserId);
+      collaboration?.assertAgentControl(previewSession?.browserId ?? input.browserId);
+      const surface = await ensureBrowserSurface(registry, context, input.browserId, collaboration);
       const inspection = await surface.inspect(input.selector, context.signal);
       const session = resolveBrowserSessionMetadata(collaboration, surface.id);
       return {
@@ -299,8 +350,10 @@ function makeActionTool<TInput>(
       const browserId = typeof input === "object" && input !== null && "browserId" in input
         ? String((input as { browserId?: string }).browserId ?? "") || undefined
         : undefined;
-      collaboration?.assertAgentControl(browserId);
-      const surface = await ensureBrowserSurface(registry, context, browserId);
+      const previewSession = resolveActivePreviewSession(collaboration, context);
+      assertPreviewBrowserSelection(previewSession, browserId);
+      collaboration?.assertAgentControl(previewSession?.browserId ?? browserId);
+      const surface = await ensureBrowserSurface(registry, context, browserId, collaboration);
       const result = await action(surface, input, context.signal);
       // Return a page snapshot after every action so agents can verify the
       // result without a separate browser.snapshot / browser.inspect call.
@@ -418,8 +471,10 @@ export function createBrowserInteractionTools(
       async execute(input: BrowserScreenshotInput, context: ToolContext): Promise<ToolResult> {
         if (context.signal?.aborted) return { ok: false, message: "Cancelled" };
         const browserId = input.browserId?.trim() || undefined;
-        collaboration?.assertAgentControl(browserId);
-        const surface = await ensureBrowserSurface(registry, context, browserId);
+        const previewSession = resolveActivePreviewSession(collaboration, context);
+        assertPreviewBrowserSelection(previewSession, browserId);
+        collaboration?.assertAgentControl(previewSession?.browserId ?? browserId);
+        const surface = await ensureBrowserSurface(registry, context, browserId, collaboration);
         const session = resolveBrowserSessionMetadata(collaboration, surface.id);
         if (isSecretSafeSession(session)) {
           return {

@@ -11,6 +11,7 @@ export const ToolName = {
   // ── Terminal ──
   TerminalRun: "terminal.run",
   TerminalStream: "terminal.stream",
+  JaitTerminal: "jait.terminal",
 
   // ── File system ──
   FileRead: "file.read",
