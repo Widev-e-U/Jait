@@ -1047,20 +1047,19 @@ async function startOptionalLiveView(
   const enableLiveView = requireLiveView || process.env["BROWSER_LIVE_VIEW"] !== "false";
   if (!enableLiveView) return null;
 
+  const { startLiveView } = await import("../services/live-view-manager.js");
   try {
-    const { startLiveView } = await import("../services/live-view-manager.js");
-    const liveViewSession = await startLiveView({ workspaceRoot: input.workspaceRoot });
+    const liveViewSession = await startLiveView({
+      workspaceRoot: input.workspaceRoot,
+      preferContainer: true,
+    });
     if (liveViewSession.kind === "host") {
       process.env["DISPLAY"] = liveViewSession.display;
     }
     return liveViewSession;
   } catch (err) {
-    if (requireLiveView) {
-      throw new Error(`Live preview requires a VNC-backed browser session: ${(err as Error)?.message ?? err}`);
-    }
-    // Docker or host live-view dependencies unavailable — fall back to headless
-    console.warn("[browser] startLiveView failed, falling back to headless:", (err as Error)?.message ?? err);
-    return null;
+    if (err instanceof Error) throw err;
+    throw new Error(String(err));
   }
 }
 

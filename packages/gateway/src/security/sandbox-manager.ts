@@ -149,10 +149,9 @@ export class SandboxManager {
       throw new Error(`Failed to start sandbox browser: ${result.output}`);
     }
 
-    // Detect the reachable host for forwarded ports.
-    // Podman on Windows uses WSL with wslrelay which often fails to relay TCP
-    // from 127.0.0.1/[::1].  Resolve to the container's actual IP instead.
-    const host = await resolveContainerHost(this.runProcess, containerName);
+    // Port mappings are published on the host, so consumers must connect to the
+    // host-side endpoint rather than mixing a host port with a container IP.
+    const host = await resolvePublishedPortHost(this.runProcess);
 
     if (typeof cdpPort === "number" && options.waitForCdp !== false) {
       await waitForPort(host, cdpPort, 15_000);
@@ -342,21 +341,16 @@ async function resolveHostGatewayValue(
  * (bound to `[::1]`) which frequently fails to relay TCP data.  In that case we
  * resolve to the WSL VM's IP that is directly routable from the Windows host.
  */
-async function resolveContainerHost(
+async function resolvePublishedPortHost(
   runProcess: (cmd: string[], timeoutMs: number) => Promise<ProcessResult>,
-  containerName: string,
 ): Promise<string> {
-  // 1. Try the container's own IP (works on Docker Desktop and native Linux).
-  const inspect = await runProcess(
-    [containerBinary(), "inspect", "-f", "{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}", containerName],
-    10_000,
-  );
-  const containerIp = inspect.output.trim();
-  if (containerIp && /^\d+\.\d+\.\d+\.\d+$/.test(containerIp)) return containerIp;
+  // Docker on Linux and Docker Desktop expose published ports on localhost.
+  if (!(process.platform === "win32" && containerBinary() === "podman")) {
+    return "127.0.0.1";
+  }
 
-  // 2. Podman on WSL: container has no routable IP in NetworkSettings.
-  //    Ports are forwarded to the WSL VM.  Get the VM's eth0 IP which is
-  //    reachable from the Windows host.
+  // Podman on WSL forwards ports through the WSL VM rather than localhost.
+  // Use the VM's routable IP so the published ports are reachable.
   if (process.platform === "win32") {
     // Find the WSL distro backing Podman.
     const machineList = await runProcess(
@@ -379,7 +373,7 @@ async function resolveContainerHost(
     if (ipMatch) return ipMatch[1]!;
   }
 
-  // 3. Fallback: 127.0.0.1
+  // Fallback: localhost
   return "127.0.0.1";
 }
 

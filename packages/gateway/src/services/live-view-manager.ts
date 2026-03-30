@@ -31,8 +31,7 @@ export async function startLiveView(options?: {
     try {
       return await startContainerLiveView(options);
     } catch (err) {
-      // Fall back to host-installed X11 tools if Docker or the sandbox image is unavailable.
-      console.warn("[live-view] Container live-view failed:", (err as Error)?.message ?? err);
+      throw new Error(`Docker sandbox browser failed: ${(err as Error)?.message ?? err}`);
     }
   }
 
