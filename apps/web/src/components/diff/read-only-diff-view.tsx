@@ -9,6 +9,7 @@ interface ReadOnlyDiffViewProps {
   original: string
   modified: string
   language: string
+  modelKey?: string
   className?: string
   editorClassName?: string
   renderSideBySide?: boolean
@@ -31,6 +32,7 @@ export function ReadOnlyDiffView({
   original,
   modified,
   language,
+  modelKey,
   className,
   editorClassName,
   renderSideBySide = false,
@@ -43,6 +45,13 @@ export function ReadOnlyDiffView({
   const [changes, setChanges] = useState<DiffChange[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const theme = useResolvedTheme()
+  const diffUpdateDisposableRef = useRef<{ dispose: () => void } | null>(null)
+  const explicitModelsRef = useRef<{ original: { dispose: () => void } | null; modified: { dispose: () => void } | null }>({
+    original: null,
+    modified: null,
+  })
+
+  const modelPathBase = useMemo(() => `inmemory://jait-diff/${encodeURIComponent(modelKey ?? `${language}:${original.length}:${modified.length}`)}`, [language, modelKey, modified.length, original.length])
 
   useEffect(() => {
     setActiveIndex(0)
@@ -60,33 +69,61 @@ export function ReadOnlyDiffView({
     })))
   }, [])
 
-  const disposableRef = useRef<any>(null)
-
   const handleMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor
     monacoRef.current = monaco
-    disposableRef.current = editor.onDidUpdateDiff(() => syncChanges())
+    diffUpdateDisposableRef.current?.dispose()
+    diffUpdateDisposableRef.current = editor.onDidUpdateDiff(() => syncChanges())
     syncChanges()
   }, [syncChanges])
 
-  /* Dispose listener and models before the DiffEditor unmounts */
   useEffect(() => {
     return () => {
-      disposableRef.current?.dispose()
-      disposableRef.current = null
+      diffUpdateDisposableRef.current?.dispose()
+      diffUpdateDisposableRef.current = null
+
       const editor = editorRef.current
-      if (editor) {
-        try {
-          const model = editor.getModel()
-          editor.dispose()
-          model?.original?.dispose()
-          model?.modified?.dispose()
-        } catch { /* already disposed */ }
+      const models = explicitModelsRef.current
+      try {
+        editor?.setModel?.(null)
+      } catch {
+        // Ignore teardown races during unmount.
       }
+      models.original?.dispose?.()
+      models.modified?.dispose?.()
+      explicitModelsRef.current = { original: null, modified: null }
       editorRef.current = null
       monacoRef.current = null
     }
   }, [])
+
+  useEffect(() => {
+    const editor = editorRef.current
+    const monaco = monacoRef.current
+    if (!editor || !monaco) return
+
+    const previous = explicitModelsRef.current
+    const originalModel = monaco.editor.createModel(original, language, monaco.Uri.parse(`${modelPathBase}.original`))
+    const modifiedModel = monaco.editor.createModel(modified, language, monaco.Uri.parse(`${modelPathBase}.modified`))
+
+    editor.setModel({ original: originalModel, modified: modifiedModel })
+    explicitModelsRef.current = { original: originalModel, modified: modifiedModel }
+
+    return () => {
+      try {
+        editor.setModel(null)
+      } catch {
+        // Ignore teardown races during model swaps.
+      }
+      previous.original?.dispose?.()
+      previous.modified?.dispose?.()
+      originalModel.dispose()
+      modifiedModel.dispose()
+      if (explicitModelsRef.current.original === originalModel || explicitModelsRef.current.modified === modifiedModel) {
+        explicitModelsRef.current = { original: null, modified: null }
+      }
+    }
+  }, [language, modelPathBase, modified, original])
 
   useEffect(() => {
     if (changes.length === 0) return
@@ -188,6 +225,10 @@ export function ReadOnlyDiffView({
           original={original}
           modified={modified}
           language={language}
+          originalModelPath={`${modelPathBase}.original`}
+          modifiedModelPath={`${modelPathBase}.modified`}
+          keepCurrentOriginalModel
+          keepCurrentModifiedModel
           theme={theme === 'dark' ? 'vs-dark' : 'vs'}
           keepCurrentOriginalModel
           keepCurrentModifiedModel

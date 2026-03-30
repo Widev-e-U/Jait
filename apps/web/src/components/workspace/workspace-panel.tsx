@@ -23,6 +23,7 @@ import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getOpenInterventionsForSession, resolvePreviewBrowserSession } from './workspace-preview-collaboration'
+import { getDesktopWorkspacePanelStyle } from './workspace-panel-layout'
 import {
   PreviewMetricsPanel,
   type PreviewPerformanceMetrics,
@@ -5031,11 +5032,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 />
               ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
                 <ReadOnlyDiffView
+                  key={`${activeTab.id}:${activeTab.version ?? 0}`}
                   className="h-full"
                   editorClassName="h-full"
                   original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
                   modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
                   language={activeTab.language ?? 'plaintext'}
+                  modelKey={`${activeTab.id}:${activeTab.version ?? 0}`}
                   renderSideBySide={false}
                   options={{
                     minimap: { enabled: false },
@@ -5088,12 +5091,16 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   return (
     <aside
-      className={`bg-muted/20 flex min-h-0 shrink-0 relative ${panel.collapsed ? '' : 'border-r'}`}
-      style={{
-        width: panelWidth,
-        maxWidth: panel.collapsed ? 8 : panel.maxCollapsed ? '100%' : '70vw',
-        transition: panel.isDragging ? 'none' : 'width 0.15s ease-out',
-      }}
+      className={cn(
+        'bg-muted/20 flex min-h-0 shrink-0',
+        tabMaximized ? 'z-30 border-r shadow-2xl' : 'border-r',
+      )}
+      style={getDesktopWorkspacePanelStyle({
+        showTree: showTreeProp,
+        showEditor: showEditorProp,
+        panelSize: panel.size,
+        treeSize: tree.size,
+      })}
     >
       {/* Restore button when workspace is fully collapsed */}
       {panel.collapsed && (
@@ -5668,11 +5675,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           />
         ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
           <ReadOnlyDiffView
+            key={`${activeTab.id}:${activeTab.version ?? 0}`}
             className="h-full"
             editorClassName="h-full"
             original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
             modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
             language={activeTab.language ?? inferLanguage(activeTab.path)}
+            modelKey={`${activeTab.id}:${activeTab.version ?? 0}`}
             renderSideBySide={!isMobile}
             options={{
               minimap: { enabled: false },
