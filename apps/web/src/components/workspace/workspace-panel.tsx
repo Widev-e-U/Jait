@@ -3110,13 +3110,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const handleScOpenDiff = useCallback(async (filePath: string) => {
     if (!remoteRoot) return
     const tabId = `git-diff:${filePath}`
-    // If diff tab already open, just activate it
-    const existingTab = openTabs.find(t => t.id === tabId)
-    if (existingTab) {
-      setActiveTabId(tabId)
-      setScDiffFile(existingTab.diffEntry ?? null)
-      return
-    }
     setScDiffLoading(true)
     try {
       const diffs = await gitApi.fileDiffs(remoteRoot)
@@ -3149,7 +3142,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           modifiedContent: entry.modified,
           diffEntry: entry,
         }
-        setOpenTabs(prev => [...prev, newTab])
+        setOpenTabs(prev => {
+          const existingIndex = prev.findIndex((tab) => tab.id === tabId)
+          if (existingIndex === -1) return [...prev, newTab]
+          const existing = prev[existingIndex]
+          const next = [...prev]
+          next[existingIndex] = {
+            ...existing,
+            ...newTab,
+            version: (existing.version ?? 0) + 1,
+          }
+          return next
+        })
         setActiveTabId(tabId)
       } else {
         // Fallback so source-control clicks still open a comparable view even
@@ -3176,12 +3180,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           originalContent: content,
           modifiedContent: content,
         }
-        setOpenTabs(prev => [...prev, newTab])
+        setOpenTabs(prev => {
+          const existingIndex = prev.findIndex((tab) => tab.id === tabId)
+          if (existingIndex === -1) return [...prev, newTab]
+          const existing = prev[existingIndex]
+          const next = [...prev]
+          next[existingIndex] = {
+            ...existing,
+            ...newTab,
+            version: (existing.version ?? 0) + 1,
+          }
+          return next
+        })
         setActiveTabId(tabId)
       }
     } catch { /* ignore */ }
     setScDiffLoading(false)
-  }, [remoteRoot, openTabs, surfaceId])
+  }, [remoteRoot, surfaceId])
 
   const handleOpenReviewDiff = useCallback(async ({
     path,
@@ -4878,7 +4893,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 />
               ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
                 <ReadOnlyDiffView
-                  key={activeTab.id}
+                  key={`${activeTab.id}:${activeTab.version ?? 0}`}
                   className="h-full"
                   editorClassName="h-full"
                   original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
@@ -5463,7 +5478,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           />
         ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
           <ReadOnlyDiffView
-            key={activeTab.id}
+            key={`${activeTab.id}:${activeTab.version ?? 0}`}
             className="h-full"
             editorClassName="h-full"
             original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
