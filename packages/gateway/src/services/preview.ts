@@ -207,6 +207,9 @@ export class PreviewService {
       }
 
       await this.ensureBrowser(session);
+      if (!session.remoteBrowser) {
+        throw new Error("Preview browser did not expose a live VNC session");
+      }
       session.url = session.remoteBrowser?.novncUrl ?? session.url;
       session.status = "ready";
       session.updatedAt = nowIso();
@@ -357,6 +360,7 @@ export class PreviewService {
     const started = await this.surfaceRegistry.startSurface("browser", browserId, {
       sessionId: session.sessionId,
       workspaceRoot: session.workspaceRoot ?? process.cwd(),
+      requireLiveView: true,
     });
     if (started.type !== "browser") {
       throw new Error("Preview browser surface failed to start");

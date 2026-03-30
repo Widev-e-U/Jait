@@ -53,6 +53,7 @@ describe("PreviewService", () => {
     expect(surfaceRegistry.startSurface).toHaveBeenCalledWith("browser", "preview-browser-session-1", {
       sessionId: "session-1",
       workspaceRoot: "/workspace/app",
+      requireLiveView: true,
     });
     expect(browser.navigate).toHaveBeenCalledWith("http://127.0.0.1:4173/");
   });
@@ -210,7 +211,7 @@ describe("PreviewService", () => {
     });
   });
 
-  it("keeps preview ready on the proxied app URL when the browser surface has no live view", async () => {
+  it("requires live view for preview browser sessions", async () => {
     const browser = {
       type: "browser",
       state: "running",
@@ -241,10 +242,15 @@ describe("PreviewService", () => {
       target: "4173",
     });
 
-    expect(session.status).toBe("ready");
+    expect(surfaceRegistry.startSurface).toHaveBeenCalledWith("browser", "preview-browser-session-1", {
+      sessionId: "session-1",
+      workspaceRoot: "/workspace/app",
+      requireLiveView: true,
+    });
+    expect(session.status).toBe("error");
     expect(session.url).toBe("/api/dev-proxy/4173/");
     expect(session.remoteBrowser).toBeNull();
-    expect(session.lastError).toBeNull();
+    expect(session.lastError).toBe("Preview browser did not expose a live VNC session");
   });
 
 });

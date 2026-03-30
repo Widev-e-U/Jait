@@ -442,10 +442,12 @@ export class BrowserSurfaceFactory {
 
 async function createPlaywrightDriver(input: SurfaceStartInput): Promise<BrowserDriver> {
   const runtime = resolveBrowserRuntimeMode();
+  const requireLiveView = input.requireLiveView === true;
+  const liveViewSession = await startOptionalLiveView(input, requireLiveView);
   if (runtime === "node-bridge") {
-    return createNodeBridgePlaywrightDriver();
+    return createNodeBridgePlaywrightDriver(liveViewSession);
   }
-  return createInProcessPlaywrightDriver(input);
+  return createInProcessPlaywrightDriver(input, liveViewSession);
 }
 
 type BrowserRuntimeMode = "auto" | "in-process" | "node-bridge";
@@ -525,25 +527,6 @@ async function createInProcessPlaywrightDriver(input: SurfaceStartInput): Promis
   const chromium = (mod as { chromium?: PlaywrightChromium }).chromium;
   if (!chromium) {
     throw new Error("Failed to load Playwright chromium driver.");
-  }
-
-  // Start Xvfb + VNC so users can watch the agent's browser in real time via noVNC.
-  // Disabled only when BROWSER_LIVE_VIEW is explicitly set to "false".
-  const enableLiveView = process.env["BROWSER_LIVE_VIEW"] !== "false";
-  let liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null = null;
-
-  if (enableLiveView) {
-    try {
-      const { startLiveView } = await import("../services/live-view-manager.js");
-      liveViewSession = await startLiveView({ workspaceRoot: input.workspaceRoot });
-      if (liveViewSession.kind === "host") {
-        process.env["DISPLAY"] = liveViewSession.display;
-      }
-    } catch (err) {
-      // Docker or host live-view dependencies unavailable — fall back to headless
-      console.warn("[browser] startLiveView failed, falling back to headless:", (err as Error)?.message ?? err);
-      liveViewSession = null;
-    }
   }
 
   const headless = liveViewSession ? false : process.env["BROWSER_HEADLESS"] !== "false";
@@ -1052,6 +1035,30 @@ async function createInProcessPlaywrightDriver(input: SurfaceStartInput): Promis
   };
 
   return driver;
+}
+
+async function startOptionalLiveView(
+  input: SurfaceStartInput,
+  requireLiveView: boolean,
+): Promise<Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null> {
+  const enableLiveView = requireLiveView || process.env["BROWSER_LIVE_VIEW"] !== "false";
+  if (!enableLiveView) return null;
+
+  try {
+    const { startLiveView } = await import("../services/live-view-manager.js");
+    const liveViewSession = await startLiveView({ workspaceRoot: input.workspaceRoot });
+    if (liveViewSession.kind === "host") {
+      process.env["DISPLAY"] = liveViewSession.display;
+    }
+    return liveViewSession;
+  } catch (err) {
+    if (requireLiveView) {
+      throw new Error(`Live preview requires a VNC-backed browser session: ${(err as Error)?.message ?? err}`);
+    }
+    // Docker or host live-view dependencies unavailable — fall back to headless
+    console.warn("[browser] startLiveView failed, falling back to headless:", (err as Error)?.message ?? err);
+    return null;
+  }
 }
 
 async function createNodeBridgePlaywrightDriver(
