@@ -101,7 +101,7 @@ function createLiveViewRemoteBrowser(
 ): PreviewRemoteBrowserSession {
   return {
     containerName: "live-view",
-    novncUrl: liveView.novncUrl,
+    novncUrl: `/noVNC/vnc_lite.html?path=api/live-view/${liveView.websockifyPort}/websockify`,
     vncPort: liveView.vncPort,
     novncPort: liveView.websockifyPort,
     startedAt: nowIso(),

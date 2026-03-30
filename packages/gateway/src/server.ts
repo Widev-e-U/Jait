@@ -2,6 +2,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import cors from "@fastify/cors";
 import fastifyCookie from "@fastify/cookie";
 import fastifyStatic from "@fastify/static";
+import { WebSocket, WebSocketServer } from "ws";
 import { existsSync } from "node:fs";
 import { join, dirname, extname, relative, resolve, sep } from "node:path";
 import { readFile, stat } from "node:fs/promises";
@@ -220,6 +221,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   registerBrowserAssetRoutes(app);
   registerWorkspacePreviewRoutes(app);
   registerDevProxyRoutes(app);
+  registerLiveViewProxyRoutes(app);
   if (deps.previewService) {
     registerPreviewRoutes(app, config, {
       previewService: deps.previewService,
@@ -466,6 +468,57 @@ function registerDevProxyRoutes(app: FastifyInstance): void {
 
   app.all("/api/dev-proxy/:port", handler);
   app.all("/api/dev-proxy/:port/*", handler);
+}
+
+function registerLiveViewProxyRoutes(app: FastifyInstance): void {
+  const liveViewWss = new WebSocketServer({ noServer: true });
+
+  liveViewWss.on("connection", (client, request) => {
+    const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+    const match = requestUrl.pathname.match(/^\/api\/live-view\/(\d+)\/websockify$/);
+    const port = match?.[1];
+    if (!port) {
+      client.close(1008, "Invalid live-view target");
+      return;
+    }
+
+    const upstream = new WebSocket(`ws://127.0.0.1:${port}/websockify${requestUrl.search}`);
+
+    const closePeer = (
+      source: WebSocket,
+      target: WebSocket,
+      code?: number,
+      reason?: Buffer | string,
+    ) => {
+      if (target.readyState === WebSocket.OPEN || target.readyState === WebSocket.CONNECTING) {
+        target.close(code, typeof reason === "string" ? reason : reason?.toString());
+      }
+      if (source.readyState === WebSocket.OPEN || source.readyState === WebSocket.CONNECTING) {
+        source.close(code, typeof reason === "string" ? reason : reason?.toString());
+      }
+    };
+
+    client.on("message", (data, isBinary) => {
+      if (upstream.readyState === WebSocket.OPEN) upstream.send(data, { binary: isBinary });
+    });
+    upstream.on("message", (data, isBinary) => {
+      if (client.readyState === WebSocket.OPEN) client.send(data, { binary: isBinary });
+    });
+
+    client.on("close", (code, reason) => closePeer(client, upstream, code, reason));
+    upstream.on("close", (code, reason) => closePeer(upstream, client, code, reason));
+
+    client.on("error", () => closePeer(client, upstream, 1011, "Live-view client websocket error"));
+    upstream.on("error", () => closePeer(upstream, client, 1011, "Live-view upstream websocket error"));
+  });
+
+  app.server.on("upgrade", (request, socket, head) => {
+    const requestUrl = new URL(request.url ?? "/", `http://${request.headers.host ?? "localhost"}`);
+    if (!/^\/api\/live-view\/\d+\/websockify$/.test(requestUrl.pathname)) return;
+    liveViewWss.handleUpgrade(request, socket, head, (ws) => {
+      liveViewWss.emit("connection", ws, request);
+    });
+  });
 }
 
 async function proxyPreviewRequest(

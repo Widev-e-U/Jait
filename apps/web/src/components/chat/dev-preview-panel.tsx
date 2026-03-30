@@ -578,7 +578,6 @@ export function DevPreviewPanel({
                 source={livePreviewFrameSrc}
                 title={previewLabel ?? 'Live preview'}
                 className="h-full w-full bg-white"
-                overlay={managedBrowserSession?.name ?? managedBrowserSession?.id ?? null}
                 onLoad={() => setIsFrameLoading(false)}
               />
             </div>

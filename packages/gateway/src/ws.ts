@@ -95,8 +95,15 @@ export class WsControlPlane {
    */
   start(httpServer?: HttpServer) {
     if (httpServer) {
-      this.wss = new WebSocketServer({ server: httpServer });
+      this.wss = new WebSocketServer({ noServer: true });
       console.log("WebSocket control plane attached to HTTP server (shared port)");
+      httpServer.on("upgrade", (req, socket, head) => {
+        const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
+        if (url.pathname.startsWith("/api/live-view/")) return;
+        this.wss?.handleUpgrade(req, socket, head, (ws) => {
+          this.wss?.emit("connection", ws, req);
+        });
+      });
     } else {
       this.wss = new WebSocketServer({ port: this.config.wsPort });
       console.log(`WebSocket control plane listening on port ${this.config.wsPort}`);

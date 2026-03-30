@@ -45,10 +45,10 @@ describe("PreviewService", () => {
     expect(runnerStart).not.toHaveBeenCalled();
     expect(session.mode).toBe("url");
     expect(session.status).toBe("ready");
-    expect(session.url).toBe("ws://127.0.0.1:6080");
+    expect(session.url).toBe("/noVNC/vnc_lite.html?path=api/live-view/6080/websockify");
     expect(session.remoteBrowser).toMatchObject({
       containerName: "live-view",
-      novncUrl: "ws://127.0.0.1:6080",
+      novncUrl: "/noVNC/vnc_lite.html?path=api/live-view/6080/websockify",
     });
     expect(surfaceRegistry.startSurface).toHaveBeenCalledWith("browser", "preview-browser-session-1", {
       sessionId: "session-1",
@@ -125,7 +125,7 @@ describe("PreviewService", () => {
     expect(inspection).not.toBeNull();
     expect(inspection).toMatchObject({
       status: "ready",
-      url: "ws://127.0.0.1:6080",
+      url: "/noVNC/vnc_lite.html?path=api/live-view/6080/websockify",
       screenshot: Buffer.from("preview-image").toString("base64"),
       page: {
         title: "Preview App",

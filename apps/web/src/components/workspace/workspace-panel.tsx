@@ -2257,7 +2257,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           source={activePreviewSrc}
           title={activeBrowserSession?.name ?? activeTab?.label ?? 'Live preview'}
           className="h-full w-full bg-white"
-          overlay={activeBrowserSession?.name ?? null}
           onLoad={() => setPreviewFrameLoading(false)}
         />
       ) : managedPreviewSession?.status === 'starting' ? (
