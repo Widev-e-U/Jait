@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
 import Editor from '@monaco-editor/react'
-import { AlertCircle, ArrowLeft, Boxes, Check, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Boxes, Check, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
@@ -49,6 +49,7 @@ interface WorkspacePanelProps {
   onActiveFileChange: (id: string) => void
   onFileDrop: (files: FileList | File[]) => void
   onReferenceFile: (file: WorkspaceFile) => void
+  onReferenceSelection?: (file: WorkspaceFile, selection: string, startLine: number, endLine: number) => void
   /** Called whenever the set of browsable files changes (for @ mention) */
   onAvailableFilesChange?: (files: { path: string; name: string; kind?: 'file' | 'dir' }[]) => void
   /** When set, automatically open a remote (server-backed) workspace at this path */
@@ -992,6 +993,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onActiveFileChange,
   onFileDrop: _onFileDrop,
   onReferenceFile,
+  onReferenceSelection,
   onAvailableFilesChange,
   autoOpenRemotePath,
   surfaceId,
@@ -1061,9 +1063,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [previewLanguage, setPreviewLanguage] = useState('plaintext')
   const [previewPath, setPreviewPath] = useState<string | null>(null)
   const [loadingFile, setLoadingFile] = useState(false)
+  const lastEditorSelectionKeyRef = useRef<string | null>(null)
 
   const [treeVersion, setTreeVersion] = useState(0)
   const bumpTree = useCallback(() => setTreeVersion((v) => v + 1), [])
+  const [tabMaximized, setTabMaximized] = useState(false)
 
   // ── Git status state ──
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
@@ -1115,6 +1119,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const [activeTabId, setActiveTabId] = useState<string | null>(null)
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
   const activeTabEditable = isEditableWorkspaceTab(activeTab)
+  const canMaximizeActiveTab = Boolean(activeTab)
+  const effectiveShowTree = showTreeProp && !tabMaximized
+  const effectiveShowEditor = showEditorProp || tabMaximized
+
+  useEffect(() => {
+    if (activeTab) return
+    setTabMaximized(false)
+  }, [activeTab])
   const [draggingTabId, setDraggingTabId] = useState<string | null>(null)
   const [tabContextMenu, setTabContextMenu] = useState<{ tabId: string; x: number; y: number } | null>(null)
   const [fileContextMenu, setFileContextMenu] = useState<{ node: LazyNode; x: number; y: number } | null>(null)
@@ -4392,6 +4404,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (isMobile) setMobileTab('editor')
   }, [handleSelectExtFile, isMobile])
 
+  const handleEditorSelectionReference = useCallback((file: WorkspaceFile, selection: string, startLine: number, endLine: number) => {
+    const trimmed = selection.trim()
+    if (!trimmed) {
+      lastEditorSelectionKeyRef.current = null
+      return
+    }
+    const selectionKey = `${file.path}:${startLine}:${endLine}:${trimmed}`
+    if (lastEditorSelectionKeyRef.current === selectionKey) return
+    lastEditorSelectionKeyRef.current = selectionKey
+    onReferenceSelection?.(file, trimmed, startLine, endLine)
+  }, [onReferenceSelection])
+
   /* ---- Mobile layout ---- */
   if (isMobile) {
     // Auto-correct tab when its panel is hidden
@@ -4889,7 +4913,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 </div>
               ) : activeTab?.type === 'diff' && activeTab.diffMode === 'review' ? (
                 <DiffView
-                  key={`${activeTab.id}:${activeTab.version ?? 0}`}
                   filePath={activeTab.path}
                   originalContent={activeTab.originalContent ?? ''}
                   modifiedContent={activeTab.modifiedContent ?? ''}
@@ -4899,7 +4922,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 />
               ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
                 <ReadOnlyDiffView
-                  key={`${activeTab.id}:${activeTab.version ?? 0}`}
                   className="h-full"
                   editorClassName="h-full"
                   original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
@@ -4952,9 +4974,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /* ---- Desktop layout ---- */
 
   return (
-    <aside className="border-r bg-muted/20 flex min-h-0 shrink-0" style={{ width: !showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size, maxWidth: '70vw' }}>
+    <aside
+      className={cn(
+        'bg-muted/20 flex min-h-0 shrink-0',
+        tabMaximized ? 'absolute inset-0 z-30 border-r shadow-2xl' : 'border-r',
+      )}
+      style={tabMaximized
+        ? { width: '100%' }
+        : { width: !showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size, maxWidth: '70vw' }}
+    >
       {/* File explorer pane */}
-      {showTreeProp && (
+      {effectiveShowTree && (
       <div
         className={`border-r bg-background transition-colors flex flex-col shrink-0 overflow-hidden`}
         style={{ width: tree.size }}
@@ -5315,7 +5345,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       )}
 
       {/* Resize handle: tree ↔ editor */}
-      {showTreeProp && showEditorProp && (
+      {effectiveShowTree && effectiveShowEditor && (
       <div
         className="relative w-2 -mx-0.5 shrink-0 cursor-col-resize group touch-none"
         onPointerDown={tree.onPointerDown}
@@ -5325,7 +5355,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       )}
 
       {/* Editor pane */}
-      {showEditorProp && (
+      {effectiveShowEditor && (
       <div className="flex-1 min-w-0 min-h-0 flex flex-col">
         {/* Tab bar — VS Code style */}
         <div className="flex items-center h-[35px] bg-[var(--tab-bg,hsl(var(--muted)/0.3))] border-b shrink-0 min-w-0">
@@ -5424,8 +5454,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )
             })}
           </div>
-          {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor) && (
+          {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor || canMaximizeActiveTab) && (
             <div className="flex items-center shrink-0">
+              {canMaximizeActiveTab && (
+                <button
+                  onClick={() => setTabMaximized((prev) => !prev)}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  title={tabMaximized ? 'Restore tab size' : 'Maximize active tab'}
+                >
+                  {tabMaximized ? <Minimize2 className="h-3 w-3" /> : <Expand className="h-3 w-3" />}
+                </button>
+              )}
               {activeTabEditable && (
                 <button
                   onClick={() => { if (activeTabId) void handleSaveTab(activeTabId) }}
@@ -5479,7 +5518,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
         ) : activeTab?.type === 'diff' && activeTab.diffMode === 'review' ? (
           <DiffView
-            key={`${activeTab.id}:${activeTab.version ?? 0}`}
             filePath={activeTab.path}
             originalContent={activeTab.originalContent ?? ''}
             modifiedContent={activeTab.modifiedContent ?? ''}
@@ -5489,7 +5527,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           />
         ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
           <ReadOnlyDiffView
-            key={`${activeTab.id}:${activeTab.version ?? 0}`}
             className="h-full"
             editorClassName="h-full"
             original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
@@ -5526,6 +5563,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
             readOnly={!isEditableWorkspaceTab(activeTab)}
             onChange={(value) => handleTabContentChange(activeTab.id, value)}
+            onReferenceSelection={(selection, startLine, endLine) => handleEditorSelectionReference({
+              id: activeTab.id,
+              name: getEditorTabTitle(activeTab),
+              path: activeTab.path,
+              content: activeTab.content ?? '',
+              language: activeTab.language ?? 'plaintext',
+            }, selection, startLine, endLine)}
             onApplyReview={async (resultContent) => {
               await onApplyDiff?.(activeTab.path, resultContent)
               setOpenTabs((prev) => prev.map((tab) => (
@@ -5542,6 +5586,33 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             path={editorFile.path}
             language={editorFile.language}
             value={editorFile.content}
+            onMount={(editor) => {
+              const emitSelectionReference = () => {
+                const model = editor.getModel?.()
+                const selection = editor.getSelection?.()
+                if (!model || !selection || selection.isEmpty()) {
+                  lastEditorSelectionKeyRef.current = null
+                  return
+                }
+                const text = model.getValueInRange(selection).trim()
+                if (!text) {
+                  lastEditorSelectionKeyRef.current = null
+                  return
+                }
+                const selectionKey = `${editorFile.path}:${selection.startLineNumber}:${selection.endLineNumber}:${text}`
+                if (lastEditorSelectionKeyRef.current === selectionKey) return
+                lastEditorSelectionKeyRef.current = selectionKey
+                onReferenceSelection?.({
+                  id: editorFile.path,
+                  name: editorFile.path.split('/').pop() ?? editorFile.path,
+                  path: editorFile.path,
+                  content: editorFile.content,
+                  language: editorFile.language,
+                }, text, selection.startLineNumber, selection.endLineNumber)
+              }
+              editor.onMouseUp(() => window.setTimeout(emitSelectionReference, 0))
+              editor.onKeyUp(() => window.setTimeout(emitSelectionReference, 0))
+            }}
             options={{
               readOnly: true,
               minimap: { enabled: false },

@@ -189,6 +189,11 @@ async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Pr
   return stdout.trim();
 }
 
+function gitRevisionPath(filePath: string): string {
+  const normalized = filePath.replace(/\\/g, "/").replace(/^\.\/+/, "");
+  return `./${normalized}`;
+}
+
 function ghCleanEnv(): NodeJS.ProcessEnv {
   const { GH_REPO, GH_HOST, GH_TOKEN, GITHUB_TOKEN, ...rest } = process.env;
   return rest;
@@ -1752,7 +1757,7 @@ export class GitService {
       let original = "";
       if (status !== "A" && status !== "?") {
         try {
-          original = await gitExec(cwd, `show HEAD:${JSON.stringify(filePath)}`);
+          original = await gitExec(cwd, `show HEAD:${JSON.stringify(gitRevisionPath(filePath))}`);
         } catch {
           original = "";
         }
@@ -1803,7 +1808,7 @@ export class GitService {
       let original = "";
       if (status !== "A") {
         try {
-          original = await gitExec(cwd, `show ${baseBranch}:${JSON.stringify(filePath)}`);
+          original = await gitExec(cwd, `show ${baseBranch}:${JSON.stringify(gitRevisionPath(filePath))}`);
         } catch { original = ""; }
       }
 

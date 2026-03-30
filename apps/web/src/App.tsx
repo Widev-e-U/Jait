@@ -118,6 +118,7 @@ import {
 } from '@/lib/mobile-workspace-layout'
 import {
   type UserMessageSegment,
+  type UserTerminalReference,
   userMessageTextFromSegments,
   userReferencedFilesFromSegments,
   userReferencedTerminalsFromSegments,
@@ -174,6 +175,29 @@ function appendTranscript(prev: string, transcript: string): string {
   const normalizedTranscript = normalizeTranscript(transcript)
   if (!normalizedTranscript) return normalizedPrev
   return normalizedPrev ? `${normalizedPrev} ${normalizedTranscript}` : normalizedTranscript
+}
+
+function buildFileSelectionReferenceSegments(
+  file: ReferencedFile,
+  selection: string,
+  startLine: number,
+  endLine: number,
+): UserMessageSegment[] {
+  const lineLabel = startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`
+  return [
+    { type: 'text', text: `Selected ${lineLabel} from ${file.path}:\n\`\`\`\n${selection.trim()}\n\`\`\`\n` },
+    { type: 'file', path: file.path, name: file.name, ...(file.kind ? { kind: file.kind } : {}) },
+  ]
+}
+
+function buildTerminalSelectionReferenceSegments(
+  terminal: UserTerminalReference,
+  selection: string,
+): UserMessageSegment[] {
+  return [
+    { type: 'text', text: `Selected terminal output from ${terminal.name}:\n\`\`\`\n${selection.trim()}\n\`\`\`\n` },
+    { type: 'terminal', terminalId: terminal.terminalId, name: terminal.name, ...(terminal.workspaceRoot ? { workspaceRoot: terminal.workspaceRoot } : {}) },
+  ]
 }
 
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
@@ -2798,6 +2822,30 @@ function App() {
     await ensureActiveTerminal(terminalId)
   }, [ensureActiveTerminal, openTerminalPanel])
 
+  const handleReferenceFile = useCallback((file: ReferencedFile) => {
+    promptInputRef.current?.insertChip(file)
+    promptInputRef.current?.focus()
+  }, [])
+
+  const handleReferenceFileSelection = useCallback((file: ReferencedFile, selection: string, startLine: number, endLine: number) => {
+    const trimmed = selection.trim()
+    if (!trimmed) return
+    promptInputRef.current?.insertSegments(buildFileSelectionReferenceSegments(file, trimmed, startLine, endLine))
+    promptInputRef.current?.focus()
+  }, [])
+
+  const handleReferenceTerminalSelection = useCallback((terminalId: string, selection: string, workspaceRoot?: string | null) => {
+    const trimmed = selection.trim()
+    if (!trimmed) return
+    const name = terminalId.replace(/^term-/, '').slice(0, 8) || terminalId
+    promptInputRef.current?.insertSegments(buildTerminalSelectionReferenceSegments({
+      terminalId,
+      name,
+      ...(workspaceRoot ? { workspaceRoot } : {}),
+    }, trimmed))
+    promptInputRef.current?.focus()
+  }, [])
+
   const handleToggleTerminal = useCallback(async () => {
     if (showTerminal) {
       closeTerminalPanel()
@@ -3245,6 +3293,61 @@ function App() {
       },
     )
   }
+
+  const chatQueueProcessingRef = useRef(false)
+
+  useEffect(() => {
+    if (viewMode === 'manager' || sendTarget === 'thread') return
+    if (!token || !activeSessionId) return
+    if (isLoading || isLoadingHistory) return
+    if (chatQueueProcessingRef.current) return
+
+    const [nextItem] = messageQueue
+    if (!nextItem) return
+
+    chatQueueProcessingRef.current = true
+    dequeueMessage(nextItem.id)
+
+    void Promise.resolve(sendMessage(nextItem.content, {
+      token,
+      sessionId: activeSessionId,
+      mode: nextItem.mode,
+      provider: nextItem.provider,
+      runtimeMode: nextItem.runtimeMode,
+      model: nextItem.model,
+      onLoginRequired: () => setShowLoginDialog(true),
+      ...(nextItem.attachments?.length ? { attachments: nextItem.attachments } : {}),
+      ...(nextItem.displayContent ? { displayContent: nextItem.displayContent } : {}),
+      ...(nextItem.referencedFiles?.length ? { referencedFiles: nextItem.referencedFiles } : {}),
+      ...(nextItem.displaySegments?.length ? { displaySegments: nextItem.displaySegments } : {}),
+    })).catch((err) => {
+      enqueueMessage({
+        content: nextItem.content,
+        displayContent: nextItem.displayContent,
+        mode: nextItem.mode,
+        provider: nextItem.provider,
+        runtimeMode: nextItem.runtimeMode,
+        model: nextItem.model,
+        referencedFiles: nextItem.referencedFiles,
+        displaySegments: nextItem.displaySegments,
+        attachments: nextItem.attachments,
+      })
+      toast.error(err instanceof Error ? err.message : 'Failed to send queued message')
+    }).finally(() => {
+      chatQueueProcessingRef.current = false
+    })
+  }, [
+    activeSessionId,
+    dequeueMessage,
+    enqueueMessage,
+    isLoading,
+    isLoadingHistory,
+    messageQueue,
+    sendMessage,
+    sendTarget,
+    token,
+    viewMode,
+  ])
 
   const enqueueManagerMessage = useCallback((threadId: string, item: ManagerQueuedMessage) => {
     setManagerMessageQueues((prev) => ({
@@ -4584,78 +4687,82 @@ function App() {
           </div>
         ) : (
           <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
-            {viewMode === 'developer' && showSidebar && (
-              <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-64 border-r shrink-0'}`}>
-                <SessionSelector
-                  workspaces={workspaces}
-                  activeWorkspaceId={activeWorkspaceId}
-                  loading={workspacesLoading}
-                  hasMoreWorkspaces={hasMoreWorkspaces}
-                  showFewerWorkspaces={workspaces.length > workspaceListLimit}
-                  onSelectWorkspace={handleSwitchWorkspace}
-                  onCreateWorkspace={handleCreateWorkspace}
-                  onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
-                  onChangeDirectory={handleChangeDirectory}
-                  onShowMore={showMoreWorkspaces}
-                  onShowFewer={showFewerWorkspaces}
-                  sessionInfo={sessionInfo}
-                  nodes={fsNodes}
-                />
-              </aside>
-            )}
-
-            {((viewMode === 'developer' && currentView === 'chat' && (showDesktopWorkspace || showTerminal))
-              || (viewMode === 'manager' && automation.selectedThread && showDesktopWorkspace)) && (
-              <div
-                className="flex min-h-0 shrink-0 flex-col"
-                style={!showDesktopWorkspace && showTerminal ? { width: 480, maxWidth: '70vw' } : undefined}
-              >
-                {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
-                  <WorkspacePanel
-                    ref={workspaceRef}
-                    autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
-                    surfaceId={activeWorkspace?.surfaceId ?? null}
-                    files={workspaceFiles}
-                    activeFileId={activeWorkspaceFileId}
-                    onActiveFileChange={setActiveWorkspaceFileId}
-                    onFileDrop={(files) => { void handleFileDrop(files) }}
-                    onReferenceFile={(file) => promptInputRef.current?.insertChip({ path: file.path, name: file.name })}
-                    onAvailableFilesChange={setAvailableFilesForMention}
-                    showTree={showWorkspaceTree}
-                    showEditor={showWorkspaceEditor}
-                    onToggleTree={toggleWorkspaceTree}
-                    onToggleEditor={toggleWorkspaceEditor}
-                    changedPaths={changedPaths}
-                    fsWatcherVersion={fsWatcherVersion}
-                    savedTabsState={workspaceTabsState}
-                    stateReady={workspaceStateReady}
-                    previewRequest={workspacePreviewRequest}
-                    onTabsStateChange={handleWorkspaceTabsStateChange}
-                    onPreviewOpenChange={handleWorkspacePreviewOpenChange}
-                    previewSessionId={activeSessionId}
-                    previewToken={token}
-                    previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
-                    previewInitialTarget={devPreviewTarget}
-                    previewBrowserSessionId={devPreviewBrowserSessionId}
-                    browserSessions={browserCollaboration.sessions}
-                    browserInterventions={browserCollaboration.interventions}
-                    onTakeBrowserControl={browserCollaboration.takeControl}
-                    onReturnBrowserControl={browserCollaboration.returnControl}
-                    onResumeBrowserSession={browserCollaboration.resume}
-                    onResolveBrowserIntervention={browserCollaboration.resolveIntervention}
-                    architectureDiagram={architectureDiagram}
-                    architectureGenerating={architectureGenerating}
-                    architectureRequest={architectureRequest}
-                    onArchitectureOpenChange={setShowArchitecture}
-                    onArchitectureRenderResult={handleArchitectureRenderResult}
-                    onGenerateArchitecture={() => {
-                      setArchitectureGenerating(true)
-                      handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
-                    }}
-                    onApplyDiff={handleApplyWorkspaceDiff}
-                    provider={chatProvider}
-                    cliModel={cliModel}
+            <div className={isMobile ? 'contents' : 'relative flex min-h-0 shrink-0'}>
+              {viewMode === 'developer' && showSidebar && (
+                <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-64 border-r shrink-0'}`}>
+                  <SessionSelector
+                    workspaces={workspaces}
+                    activeWorkspaceId={activeWorkspaceId}
+                    loading={workspacesLoading}
+                    hasMoreWorkspaces={hasMoreWorkspaces}
+                    showFewerWorkspaces={workspaces.length > workspaceListLimit}
+                    onSelectWorkspace={handleSwitchWorkspace}
+                    onCreateWorkspace={handleCreateWorkspace}
+                    onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
+                    onChangeDirectory={handleChangeDirectory}
+                    onShowMore={showMoreWorkspaces}
+                    onShowFewer={showFewerWorkspaces}
+                    sessionInfo={sessionInfo}
+                    nodes={fsNodes}
                   />
+                </aside>
+              )}
+
+              {((viewMode === 'developer' && currentView === 'chat' && (showDesktopWorkspace || showTerminal))
+                || (viewMode === 'manager' && automation.selectedThread && showDesktopWorkspace)) && (
+                <div
+                  className="flex min-h-0 shrink-0 flex-col"
+                  style={!showDesktopWorkspace && showTerminal ? { width: 480, maxWidth: '70vw' } : undefined}
+                >
+                {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
+                  <div className="flex min-h-0 flex-1">
+                    <WorkspacePanel
+                      ref={workspaceRef}
+                      autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
+                      surfaceId={activeWorkspace?.surfaceId ?? null}
+                      files={workspaceFiles}
+                      activeFileId={activeWorkspaceFileId}
+                      onActiveFileChange={setActiveWorkspaceFileId}
+                      onFileDrop={(files) => { void handleFileDrop(files) }}
+                    onReferenceFile={handleReferenceFile}
+                    onReferenceSelection={handleReferenceFileSelection}
+                      onAvailableFilesChange={setAvailableFilesForMention}
+                      showTree={showWorkspaceTree}
+                      showEditor={showWorkspaceEditor}
+                      onToggleTree={toggleWorkspaceTree}
+                      onToggleEditor={toggleWorkspaceEditor}
+                      changedPaths={changedPaths}
+                      fsWatcherVersion={fsWatcherVersion}
+                      savedTabsState={workspaceTabsState}
+                      stateReady={workspaceStateReady}
+                      previewRequest={workspacePreviewRequest}
+                      onTabsStateChange={handleWorkspaceTabsStateChange}
+                      onPreviewOpenChange={handleWorkspacePreviewOpenChange}
+                      previewSessionId={activeSessionId}
+                      previewToken={token}
+                      previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
+                      previewInitialTarget={devPreviewTarget}
+                      previewBrowserSessionId={devPreviewBrowserSessionId}
+                      browserSessions={browserCollaboration.sessions}
+                      browserInterventions={browserCollaboration.interventions}
+                      onTakeBrowserControl={browserCollaboration.takeControl}
+                      onReturnBrowserControl={browserCollaboration.returnControl}
+                      onResumeBrowserSession={browserCollaboration.resume}
+                      onResolveBrowserIntervention={browserCollaboration.resolveIntervention}
+                      architectureDiagram={architectureDiagram}
+                      architectureGenerating={architectureGenerating}
+                      architectureRequest={architectureRequest}
+                      onArchitectureOpenChange={setShowArchitecture}
+                      onArchitectureRenderResult={handleArchitectureRenderResult}
+                      onGenerateArchitecture={() => {
+                        setArchitectureGenerating(true)
+                        handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                      }}
+                      onApplyDiff={handleApplyWorkspaceDiff}
+                      provider={chatProvider}
+                      cliModel={cliModel}
+                    />
+                  </div>
                 )}
                 {viewMode === 'developer' && showTerminal && !isMobile && currentView === 'chat' && (
                   <div className="flex min-h-0 shrink-0 flex-col border-r border-t bg-background" style={{ height: terminalHeight }}>
@@ -4680,7 +4787,13 @@ function App() {
                       </button>
                     </div>
                     {activeTerminalId ? (
-                      <TerminalView terminalId={activeTerminalId} className="flex-1 min-h-0" token={token} />
+                      <TerminalView
+                        terminalId={activeTerminalId}
+                        className="flex-1 min-h-0"
+                        token={token}
+                        workspaceRoot={activeWorkspaceRoot ?? undefined}
+                        onReferenceSelection={handleReferenceTerminalSelection}
+                      />
                     ) : (
                       <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
                         <button
@@ -4694,7 +4807,8 @@ function App() {
                   </div>
                 )}
               </div>
-            )}
+              )}
+            </div>
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
               <section className="flex-1 min-h-0 border-b bg-background overflow-hidden">
                 <WorkspacePanel
@@ -4705,7 +4819,8 @@ function App() {
                   activeFileId={activeWorkspaceFileId}
                   onActiveFileChange={setActiveWorkspaceFileId}
                   onFileDrop={(files) => { void handleFileDrop(files) }}
-                  onReferenceFile={(file) => promptInputRef.current?.insertChip({ path: file.path, name: file.name })}
+                  onReferenceFile={handleReferenceFile}
+                  onReferenceSelection={handleReferenceFileSelection}
                   onAvailableFilesChange={setAvailableFilesForMention}
                   showTree={showWorkspaceTree}
                   showEditor={showWorkspaceEditor}

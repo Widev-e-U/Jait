@@ -427,9 +427,32 @@ function cleanEmptyNodes(el: HTMLElement) {
   }
 }
 
+function appendSegmentNodes(
+  el: HTMLElement,
+  segments: UserMessageSegment[],
+  onRemoveChip?: (refKey: string) => void,
+) {
+  cleanEmptyNodes(el)
+  for (const segment of normalizeUserMessageSegments(segments)) {
+    if (segment.type === 'text') {
+      if (segment.text) el.appendChild(document.createTextNode(segment.text))
+      continue
+    }
+    if (segment.type === 'image') continue
+    const ref: PromptChipReference = segment.type === 'file'
+      ? { path: segment.path, name: segment.name, ...(segment.kind ? { kind: segment.kind } : {}) }
+      : segment
+    if (el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(ref))}"]`)) continue
+    el.appendChild(createChipNode(ref, onRemoveChip))
+    el.appendChild(document.createTextNode(' '))
+  }
+}
+
 export interface PromptInputHandle {
   /** Insert a file chip into the input (used by workspace Send button). */
   insertChip: (file: ReferencedFile) => void
+  /** Insert text and/or structured references into the composer. */
+  insertSegments: (segments: UserMessageSegment[]) => void
   /** Read the current ordered text/file segments from the composer. */
   getSegments: () => UserMessageSegment[]
   /** Focus the editor and move the caret to the end. */
@@ -673,6 +696,20 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const chip = createChipNode(file, handleRemoveChip)
       el.appendChild(chip)
       el.appendChild(document.createTextNode(' '))
+      draftSegmentsRef.current = getComposerSegments(el)
+      moveCursorToEnd(el)
+      isSyncing.current = true
+      onChangeRef.current(getTextFromEditable(el))
+      isSyncing.current = false
+      setIsEmpty(false)
+    },
+    insertSegments: (nextSegments: UserMessageSegment[]) => {
+      const el = editableRef.current
+      if (!el) return
+      const normalized = normalizeUserMessageSegments(nextSegments)
+      if (!normalized.length) return
+      pushUndoRef.current(true)
+      appendSegmentNodes(el, normalized, handleRemoveChip)
       draftSegmentsRef.current = getComposerSegments(el)
       moveCursorToEnd(el)
       isSyncing.current = true
@@ -1245,10 +1282,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
     const appendChip = (ref: PromptChipReference) => {
       if (el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(ref))}"]`)) return false
-      cleanEmptyNodes(el)
-      const chip = createChipNode(ref, handleRemoveChip)
-      el.appendChild(chip)
-      el.appendChild(document.createTextNode(' '))
+      const segment: UserMessageSegment = 'type' in ref
+        ? ref
+        : { type: 'file', path: ref.path, name: ref.name, ...(ref.kind ? { kind: ref.kind } : {}) }
+      appendSegmentNodes(el, [segment], handleRemoveChip)
       draftSegmentsRef.current = getComposerSegments(el)
       moveCursorToEnd(el)
       isSyncing.current = true

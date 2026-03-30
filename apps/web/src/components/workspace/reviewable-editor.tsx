@@ -13,6 +13,7 @@ interface ReviewableEditorProps {
   readOnly?: boolean
   onChange?: (value: string | undefined) => void
   onApplyReview?: (resultContent: string) => void | Promise<void>
+  onReferenceSelection?: (selection: string, startLine: number, endLine: number) => void
 }
 
 export function ReviewableEditor({
@@ -24,8 +25,10 @@ export function ReviewableEditor({
   readOnly,
   onChange,
   onApplyReview,
+  onReferenceSelection,
 }: ReviewableEditorProps) {
   const editorRef = useRef<any>(null)
+  const lastSelectionKeyRef = useRef<string | null>(null)
   const [hunks, setHunks] = useState<ReviewHunk[]>([])
   const [actionPositions, setActionPositions] = useState<Array<{ hunkIndex: number; top: number }>>([])
   const [isApplying, setIsApplying] = useState(false)
@@ -90,6 +93,25 @@ export function ReviewableEditor({
     )))
   }, [])
 
+  const emitSelectionReference = useCallback(() => {
+    const editor = editorRef.current
+    const model = editor?.getModel?.()
+    const selection = editor?.getSelection?.()
+    if (!editor || !model || !selection || selection.isEmpty()) {
+      lastSelectionKeyRef.current = null
+      return
+    }
+    const text = model.getValueInRange(selection).trim()
+    if (!text) {
+      lastSelectionKeyRef.current = null
+      return
+    }
+    const selectionKey = `${selection.startLineNumber}:${selection.endLineNumber}:${text}`
+    if (lastSelectionKeyRef.current === selectionKey) return
+    lastSelectionKeyRef.current = selectionKey
+    onReferenceSelection?.(text, selection.startLineNumber, selection.endLineNumber)
+  }, [onReferenceSelection])
+
   return (
     <div className="relative h-full">
       <Editor
@@ -106,6 +128,8 @@ export function ReviewableEditor({
             editor.onDidScrollChange(() => updateActionPositions()),
             editor.onDidLayoutChange(() => updateActionPositions()),
             editor.onDidContentSizeChange(() => updateActionPositions()),
+            editor.onMouseUp(() => window.setTimeout(emitSelectionReference, 0)),
+            editor.onKeyUp(() => window.setTimeout(emitSelectionReference, 0)),
           ]
           window.setTimeout(updateActionPositions, 0)
           ;(editor as any).__jaitReviewDisposables = disposables

@@ -91,13 +91,16 @@ interface TerminalViewProps {
   terminalId: string
   className?: string
   token?: string | null
+  workspaceRoot?: string | null
+  onReferenceSelection?: (terminalId: string, selection: string, workspaceRoot?: string | null) => void
 }
 
-export function TerminalView({ terminalId, className, token }: TerminalViewProps) {
+export function TerminalView({ terminalId, className, token, workspaceRoot, onReferenceSelection }: TerminalViewProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
+  const lastSelectionKeyRef = useRef<string | null>(null)
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -125,6 +128,18 @@ export function TerminalView({ terminalId, className, token }: TerminalViewProps
     term.loadAddon(fitAddon)
     term.loadAddon(linksAddon)
     term.open(containerRef.current)
+
+    const emitSelectionReference = () => {
+      const selection = term.getSelection().trim()
+      if (!selection) {
+        lastSelectionKeyRef.current = null
+        return
+      }
+      const selectionKey = `${terminalId}:${selection}`
+      if (lastSelectionKeyRef.current === selectionKey) return
+      lastSelectionKeyRef.current = selectionKey
+      onReferenceSelection?.(terminalId, selection, workspaceRoot)
+    }
 
     // Initial fit + focus so the terminal can receive keyboard input
     requestAnimationFrame(() => {
@@ -207,17 +222,40 @@ export function TerminalView({ terminalId, className, token }: TerminalViewProps
     })
     resizeObserver.observe(containerRef.current)
 
+    const rootEl = containerRef.current
+    const handleMouseUp = () => {
+      window.setTimeout(emitSelectionReference, 0)
+    }
+    const handleKeyUp = () => {
+      window.setTimeout(emitSelectionReference, 0)
+    }
+    const handleContextMenu = (event: MouseEvent) => {
+      event.preventDefault()
+      void navigator.clipboard.readText().then((text) => {
+        if (!text) return
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
+        }
+      }).catch(() => {})
+    }
+    rootEl.addEventListener('mouseup', handleMouseUp)
+    rootEl.addEventListener('keyup', handleKeyUp)
+    rootEl.addEventListener('contextmenu', handleContextMenu)
+
     return () => {
       disposed = true
       if (reconnectTimer) clearTimeout(reconnectTimer)
       resizeObserver.disconnect()
+      rootEl.removeEventListener('mouseup', handleMouseUp)
+      rootEl.removeEventListener('keyup', handleKeyUp)
+      rootEl.removeEventListener('contextmenu', handleContextMenu)
       if (ws) ws.close()
       term.dispose()
       termRef.current = null
       fitRef.current = null
       wsRef.current = null
     }
-  }, [terminalId, token])
+  }, [terminalId, token, workspaceRoot, onReferenceSelection])
 
   return (
     <div className={`w-full overflow-hidden ${className ?? ''}`} onClick={() => termRef.current?.focus()}>
