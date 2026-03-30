@@ -510,7 +510,10 @@ function rewriteContainerBrowserUrlToPublic(
   }
 }
 
-async function createInProcessPlaywrightDriver(input: SurfaceStartInput): Promise<BrowserDriver> {
+async function createInProcessPlaywrightDriver(
+  _input: SurfaceStartInput,
+  liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null = null,
+): Promise<BrowserDriver> {
   // Optional runtime dependency: keep static imports out so gateway can still
   // boot in environments that do not need browser automation.
   const loadPlaywright = new Function("return import('playwright')") as () => Promise<unknown>;
