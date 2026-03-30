@@ -23,6 +23,7 @@ import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getOpenInterventionsForSession, resolvePreviewBrowserSession } from './workspace-preview-collaboration'
+import { getDesktopWorkspacePanelStyle } from './workspace-panel-layout'
 import {
   PreviewMetricsPanel,
   type PreviewPerformanceMetrics,
@@ -4922,11 +4923,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 />
               ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
                 <ReadOnlyDiffView
+                  key={`${activeTab.id}:${activeTab.version ?? 0}`}
                   className="h-full"
                   editorClassName="h-full"
                   original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
                   modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
                   language={activeTab.language ?? 'plaintext'}
+                  modelKey={`${activeTab.id}:${activeTab.version ?? 0}`}
                   renderSideBySide={false}
                   options={{
                     minimap: { enabled: false },
@@ -4977,11 +4980,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     <aside
       className={cn(
         'bg-muted/20 flex min-h-0 shrink-0',
-        tabMaximized ? 'absolute inset-0 z-30 border-r shadow-2xl' : 'border-r',
+        tabMaximized ? 'z-30 border-r shadow-2xl' : 'border-r',
       )}
-      style={tabMaximized
-        ? { width: '100%' }
-        : { width: !showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size, maxWidth: '70vw' }}
+      style={getDesktopWorkspacePanelStyle({
+        showTree: showTreeProp,
+        showEditor: showEditorProp,
+        panelSize: panel.size,
+        treeSize: tree.size,
+      })}
     >
       {/* File explorer pane */}
       {effectiveShowTree && (
@@ -5527,11 +5533,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           />
         ) : activeTab?.type === 'diff' && activeTab.diffMode === 'git' ? (
           <ReadOnlyDiffView
+            key={`${activeTab.id}:${activeTab.version ?? 0}`}
             className="h-full"
             editorClassName="h-full"
             original={activeTab.originalContent ?? activeTab.diffEntry?.original ?? ''}
             modified={activeTab.modifiedContent ?? activeTab.diffEntry?.modified ?? ''}
             language={activeTab.language ?? inferLanguage(activeTab.path)}
+            modelKey={`${activeTab.id}:${activeTab.version ?? 0}`}
             renderSideBySide={!isMobile}
             options={{
               minimap: { enabled: false },

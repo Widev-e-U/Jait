@@ -167,6 +167,7 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
                     original={selected.original}
                     modified={selected.modified}
                     language={language}
+                    modelKey={selected.path}
                     className="h-full"
                     editorClassName="h-full"
                     renderSideBySide={!isNarrow}
