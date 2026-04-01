@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { DiffEditor } from '@monaco-editor/react'
+import loader from '@monaco-editor/loader'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
@@ -40,27 +40,37 @@ export function ReadOnlyDiffView({
   options,
 }: ReadOnlyDiffViewProps) {
   /* eslint-disable @typescript-eslint/no-explicit-any */
+  const containerRef = useRef<HTMLDivElement | null>(null)
   const editorRef = useRef<any>(null)
   const monacoRef = useRef<any>(null)
+  const diffUpdateDisposableRef = useRef<{ dispose: () => void } | null>(null)
+  const explicitModelsRef = useRef<{ original: any | null; modified: any | null }>({ original: null, modified: null })
+  const [isReady, setIsReady] = useState(false)
   const [changes, setChanges] = useState<DiffChange[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const theme = useResolvedTheme()
-  const diffUpdateDisposableRef = useRef<{ dispose: () => void } | null>(null)
-  const explicitModelsRef = useRef<{ original: { dispose: () => void } | null; modified: { dispose: () => void } | null }>({
-    original: null,
-    modified: null,
-  })
 
-  const modelPathBase = useMemo(() => `inmemory://jait-diff/${encodeURIComponent(modelKey ?? `${language}:${original.length}:${modified.length}`)}`, [language, modelKey, modified.length, original.length])
+  const modelPathBase = useMemo(
+    () => `inmemory://jait-diff/${encodeURIComponent(modelKey ?? `${language}:${original.length}:${modified.length}`)}`,
+    [language, modelKey, modified.length, original.length],
+  )
 
-  useEffect(() => {
-    setActiveIndex(0)
-  }, [original, modified, language])
+  const mergedOptions = useMemo(() => ({
+    readOnly: true,
+    renderSideBySide,
+    minimap: { enabled: false },
+    fontSize: 13,
+    automaticLayout: true,
+    scrollBeyondLastLine: false,
+    renderOverviewRuler: true,
+    ignoreTrimWhitespace: false,
+    ...(options ?? {}),
+  }), [options, renderSideBySide])
 
   const syncChanges = useCallback(() => {
     const editor = editorRef.current
     if (!editor) return
-    const lineChanges = editor.getLineChanges() ?? []
+    const lineChanges = editor.getLineChanges?.() ?? []
     setChanges(lineChanges.map((change: DiffChange) => ({
       originalStartLineNumber: change.originalStartLineNumber,
       originalEndLineNumber: change.originalEndLineNumber,
@@ -69,33 +79,54 @@ export function ReadOnlyDiffView({
     })))
   }, [])
 
-  const handleMount = useCallback((editor: any, monaco: any) => {
-    editorRef.current = editor
-    monacoRef.current = monaco
-    diffUpdateDisposableRef.current?.dispose()
-    diffUpdateDisposableRef.current = editor.onDidUpdateDiff(() => syncChanges())
-    syncChanges()
-  }, [syncChanges])
-
   useEffect(() => {
+    let cancelled = false
+    const init = loader.init()
+
+    void init.then((monaco) => {
+      if (cancelled || !containerRef.current) return
+      monacoRef.current = monaco
+      const editor = monaco.editor.createDiffEditor(containerRef.current, {
+        automaticLayout: true,
+        ...mergedOptions,
+      })
+      editorRef.current = editor
+      diffUpdateDisposableRef.current = editor.onDidUpdateDiff(() => syncChanges())
+      monaco.editor.setTheme(theme === 'dark' ? 'vs-dark' : 'vs')
+      setIsReady(true)
+      syncChanges()
+    }).catch((error) => {
+      if (!cancelled && error?.type !== 'cancelation') {
+        console.error('Monaco initialization: error:', error)
+      }
+    })
+
     return () => {
+      cancelled = true
       diffUpdateDisposableRef.current?.dispose()
       diffUpdateDisposableRef.current = null
 
       const editor = editorRef.current
       const models = explicitModelsRef.current
       try {
-        editor?.setModel?.(null)
+        editor?.setModel(null)
       } catch {
         // Ignore teardown races during unmount.
       }
+      editor?.dispose?.()
       models.original?.dispose?.()
       models.modified?.dispose?.()
       explicitModelsRef.current = { original: null, modified: null }
       editorRef.current = null
       monacoRef.current = null
+      setIsReady(false)
+      init.cancel()
     }
-  }, [])
+  }, [syncChanges])
+
+  useEffect(() => {
+    setActiveIndex(0)
+  }, [original, modified, language])
 
   useEffect(() => {
     const editor = editorRef.current
@@ -103,11 +134,16 @@ export function ReadOnlyDiffView({
     if (!editor || !monaco) return
 
     const previous = explicitModelsRef.current
-    const originalModel = monaco.editor.createModel(original, language, monaco.Uri.parse(`${modelPathBase}.original`))
-    const modifiedModel = monaco.editor.createModel(modified, language, monaco.Uri.parse(`${modelPathBase}.modified`))
+    const originalUri = monaco.Uri.parse(`${modelPathBase}.original`)
+    const modifiedUri = monaco.Uri.parse(`${modelPathBase}.modified`)
+    monaco.editor.getModel(originalUri)?.dispose()
+    monaco.editor.getModel(modifiedUri)?.dispose()
+    const originalModel = monaco.editor.createModel(original, language, originalUri)
+    const modifiedModel = monaco.editor.createModel(modified, language, modifiedUri)
 
     editor.setModel({ original: originalModel, modified: modifiedModel })
     explicitModelsRef.current = { original: originalModel, modified: modifiedModel }
+    syncChanges()
 
     return () => {
       try {
@@ -123,7 +159,17 @@ export function ReadOnlyDiffView({
         explicitModelsRef.current = { original: null, modified: null }
       }
     }
-  }, [language, modelPathBase, modified, original])
+  }, [language, modelPathBase, modified, original, syncChanges])
+
+  useEffect(() => {
+    const monaco = monacoRef.current
+    if (!monaco) return
+    monaco.editor.setTheme(theme === 'dark' ? 'vs-dark' : 'vs')
+  }, [theme])
+
+  useEffect(() => {
+    editorRef.current?.updateOptions?.(mergedOptions)
+  }, [mergedOptions])
 
   useEffect(() => {
     if (changes.length === 0) return
@@ -206,34 +252,17 @@ export function ReadOnlyDiffView({
     setActiveIndex((prev) => Math.min(prev + 1, changes.length - 1))
   }, [changes.length])
 
-  const mergedOptions = useMemo(() => ({
-    readOnly: true,
-    renderSideBySide,
-    minimap: { enabled: false },
-    fontSize: 13,
-    automaticLayout: true,
-    scrollBeyondLastLine: false,
-    renderOverviewRuler: true,
-    ignoreTrimWhitespace: false,
-    ...(options ?? {}),
-  }), [options, renderSideBySide])
-
   return (
     <div className={cn('relative min-h-0', className)}>
       <div className={cn('h-full min-h-0', editorClassName)}>
-        <DiffEditor
-          original={original}
-          modified={modified}
-          language={language}
-          originalModelPath={`${modelPathBase}.original`}
-          modifiedModelPath={`${modelPathBase}.modified`}
-          keepCurrentOriginalModel
-          keepCurrentModifiedModel
-          theme={theme === 'dark' ? 'vs-dark' : 'vs'}
-          onMount={handleMount}
-          options={mergedOptions}
-        />
+        <div ref={containerRef} className="h-full min-h-0" />
       </div>
+
+      {!isReady && (
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">
+          Loading diff...
+        </div>
+      )}
 
       {changes.length > 1 && (
         <div className="absolute right-3 top-1/2 z-10 flex -translate-y-1/2 flex-col gap-1.5">
@@ -263,7 +292,7 @@ export function ReadOnlyDiffView({
         </div>
       )}
 
-      {changes.length === 0 && original === modified && (
+      {changes.length === 0 && original === modified && isReady && (
         <div className="pointer-events-none absolute inset-x-3 bottom-3 rounded-md border bg-background/90 px-3 py-2 text-center text-xs text-muted-foreground shadow-sm">
           {emptyMessage}
         </div>
