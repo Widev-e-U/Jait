@@ -112,15 +112,12 @@ export function Conversation({ children, className, loading }: ConversationProps
     if (!stickToBottom || loading) return
     const el = scrollRef.current
     if (!el) return
-    let id: number
-    const tick = () => {
-      if (!stickToBottomRef.current) return // user scrolled up — stop immediately
+    const id = setInterval(() => {
+      if (!stickToBottomRef.current) return
       const dist = el.scrollHeight - el.scrollTop - el.clientHeight
       if (dist > 1) el.scrollTo({ top: el.scrollHeight, behavior: 'auto' })
-      id = requestAnimationFrame(tick)
-    }
-    id = requestAnimationFrame(tick)
-    return () => cancelAnimationFrame(id)
+    }, 150)
+    return () => clearInterval(id)
   }, [stickToBottom, loading])
 
   useLayoutEffect(() => {

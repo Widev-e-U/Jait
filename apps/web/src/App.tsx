@@ -9,6 +9,7 @@ import {
   ChevronDown,
   Code,
   Eye,
+  EyeOff,
   FolderTree,
   FolderOpen,
   Globe,
@@ -891,6 +892,12 @@ function App() {
   const architectureRenderRequestIdRef = useRef<string | null>(null)
   const loadedArchitectureWorkspaceRef = useRef<string | null>(null)
   const [terminalHeight, setTerminalHeight] = useState(240)
+  const [chatWidth, setChatWidth] = useState<number | null>(() => {
+    if (typeof window === 'undefined') return null
+    const raw = window.localStorage.getItem('jait:chatPanelWidth')
+    const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
+    return Number.isFinite(parsed) ? parsed : null
+  })
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
   const floatingDragRef = useRef<{ pointerId: number; startX: number; startY: number; posX: number; posY: number } | null>(null)
@@ -914,6 +921,9 @@ function App() {
   const [registerPassword, setRegisterPassword] = useState('')
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
+  const [showLoginPassword, setShowLoginPassword] = useState(false)
+  const [showRegisterPassword, setShowRegisterPassword] = useState(false)
+  const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false)
   const [serverHasUsers, setServerHasUsers] = useState<boolean | null>(null)
   const [gatewayUrlInput, setGatewayUrlInput] = useState(() => getStoredGatewayUrl() ?? '')
   const isStandaloneApp = !!(window as any).jaitDesktop || !!(window as any).Capacitor
@@ -4029,6 +4039,56 @@ function App() {
     (showWorkspaceTree || showWorkspaceEditor)
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
+
+  // ── Memoised edit-composer bag (prevents every Message from re-rendering) ──
+  const handleVoiceStop = useCallback(() => { void stopRecordingAndTranscribe() }, [stopRecordingAndTranscribe])
+  const handleFolderPickerOpen = useCallback(() => { automation.setFolderPickerOpen(true) }, [automation.setFolderPickerOpen])
+  const editComposerFooter = useMemo(() => {
+    if (sendTarget !== 'thread') return undefined
+    return (
+      <ManagerRepoPicker
+        repositories={automation.repositories}
+        selectedRepo={automation.selectedRepo}
+        disabled={automation.creating}
+        getRuntimeInfo={automation.getRuntimeInfoForRepository}
+        onSelect={automation.setSelectedRepoId}
+        onAddRepository={handleFolderPickerOpen}
+      />
+    )
+  }, [sendTarget, automation.repositories, automation.selectedRepo, automation.creating, automation.getRuntimeInfoForRepository, automation.setSelectedRepoId, handleFolderPickerOpen])
+
+  const editComposerBag = useMemo(() => ({
+    onVoiceInput: handleVoiceInput,
+    voiceRecording,
+    voiceLevels,
+    voiceTranscribing,
+    onVoiceStop: handleVoiceStop,
+    mode: chatMode,
+    onModeChange: setChatMode,
+    sendTarget,
+    onSendTargetChange: setSendTarget,
+    provider: chatProvider,
+    onProviderChange: handleChatProviderChange,
+    providerRuntimeMode: chatProviderRuntimeMode,
+    onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
+    cliModel,
+    onCliModelChange: handleCliModelChange,
+    repoRuntime: sendTarget === 'thread' ? selectedRepoRuntime : null,
+    onMoveToGateway: sendTarget === 'thread' ? handleMoveRepoToGateway : undefined,
+    footerLeadingContent: editComposerFooter,
+    availableFiles: availableFilesForMention,
+    onSearchFiles: handleSearchFiles,
+    workspaceOpen: showWorkspace,
+    sessionInfo,
+    workspaceNodeId: activeWorkspace?.nodeId,
+  }), [
+    handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop,
+    chatMode, setChatMode, sendTarget, setSendTarget, chatProvider, handleChatProviderChange,
+    chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
+    selectedRepoRuntime, handleMoveRepoToGateway, editComposerFooter,
+    availableFilesForMention, handleSearchFiles, showWorkspace, sessionInfo, activeWorkspace?.nodeId,
+  ])
+
   const activityEvents: ActivityEvent[] = [
     ...messages.slice(-10).map((msg) => createActivityEvent({
       id: `msg-${msg.id}`,
@@ -5267,40 +5327,7 @@ function App() {
                       provider={chatProvider}
                       onOpenTerminal={handleOpenTerminalFromToolCall}
                       onEditMessage={handleEditPreviousMessage}
-                      editComposer={{
-                        onVoiceInput: handleVoiceInput,
-                        voiceRecording,
-                        voiceLevels,
-                        voiceTranscribing,
-                        onVoiceStop: () => { void stopRecordingAndTranscribe() },
-                        mode: chatMode,
-                        onModeChange: setChatMode,
-                        sendTarget,
-                        onSendTargetChange: setSendTarget,
-                        provider: chatProvider,
-                        onProviderChange: handleChatProviderChange,
-                        providerRuntimeMode: chatProviderRuntimeMode,
-                        onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
-                        cliModel,
-                        onCliModelChange: handleCliModelChange,
-                        repoRuntime: sendTarget === 'thread' ? selectedRepoRuntime : null,
-                        onMoveToGateway: sendTarget === 'thread' ? handleMoveRepoToGateway : undefined,
-                        footerLeadingContent: sendTarget === 'thread' ? (
-                          <ManagerRepoPicker
-                            repositories={automation.repositories}
-                            selectedRepo={automation.selectedRepo}
-                            disabled={automation.creating}
-                            getRuntimeInfo={automation.getRuntimeInfoForRepository}
-                            onSelect={automation.setSelectedRepoId}
-                            onAddRepository={() => automation.setFolderPickerOpen(true)}
-                          />
-                        ) : undefined,
-                        availableFiles: availableFilesForMention,
-                        onSearchFiles: handleSearchFiles,
-                        workspaceOpen: showWorkspace,
-                        sessionInfo,
-                        workspaceNodeId: activeWorkspace?.nodeId,
-                      }}
+                      editComposer={editComposerBag}
                       onOpenPath={handleOpenMessagePath}
                       onOpenDiff={handleChangedFileClick}
                     />
@@ -5577,14 +5604,27 @@ function App() {
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="login-password">Password</Label>
-                          <Input
-                            id="login-password"
-                            type="password"
-                            value={loginPassword}
-                            onChange={(event) => setLoginPassword(event.target.value)}
-                            autoComplete="current-password"
-                            required
-                          />
+                          <div className="group/pw relative">
+                            <Input
+                              id="login-password"
+                              type={showLoginPassword ? 'text' : 'password'}
+                              value={loginPassword}
+                              onChange={(event) => setLoginPassword(event.target.value)}
+                              autoComplete="current-password"
+                              required
+                              className="pr-10"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-0 h-full px-3 hover:bg-transparent opacity-0 group-focus-within/pw:opacity-100 transition-opacity"
+                              onClick={() => setShowLoginPassword(!showLoginPassword)}
+                              tabIndex={-1}
+                            >
+                              {showLoginPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                            </Button>
+                          </div>
                         </div>
                         <Button type="submit" className="w-full">Login</Button>
                       </form>
@@ -5603,25 +5643,51 @@ function App() {
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="register-password">Password</Label>
-                          <Input
-                            id="register-password"
-                            type="password"
-                            value={registerPassword}
-                            onChange={(event) => setRegisterPassword(event.target.value)}
-                            autoComplete="new-password"
-                            required
-                          />
+                          <div className="group/pw relative">
+                            <Input
+                              id="register-password"
+                              type={showRegisterPassword ? 'text' : 'password'}
+                              value={registerPassword}
+                              onChange={(event) => setRegisterPassword(event.target.value)}
+                              autoComplete="new-password"
+                              required
+                              className="pr-10"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-0 h-full px-3 hover:bg-transparent opacity-0 group-focus-within/pw:opacity-100 transition-opacity"
+                              onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                              tabIndex={-1}
+                            >
+                              {showRegisterPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                            </Button>
+                          </div>
                         </div>
                         <div className="space-y-1.5">
                           <Label htmlFor="register-password-confirm">Confirm password</Label>
-                          <Input
-                            id="register-password-confirm"
-                            type="password"
-                            value={registerPasswordConfirm}
-                            onChange={(event) => setRegisterPasswordConfirm(event.target.value)}
-                            autoComplete="new-password"
-                            required
-                          />
+                          <div className="group/pw relative">
+                            <Input
+                              id="register-password-confirm"
+                              type={showRegisterConfirmPassword ? 'text' : 'password'}
+                              value={registerPasswordConfirm}
+                              onChange={(event) => setRegisterPasswordConfirm(event.target.value)}
+                              autoComplete="new-password"
+                              required
+                              className="pr-10"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-0 h-full px-3 hover:bg-transparent opacity-0 group-focus-within/pw:opacity-100 transition-opacity"
+                              onClick={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}
+                              tabIndex={-1}
+                            >
+                              {showRegisterConfirmPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                            </Button>
+                          </div>
                         </div>
                         <Button type="submit" className="w-full">{serverHasUsers === false ? 'Get Started' : 'Create account'}</Button>
                       </form>
@@ -5727,14 +5793,27 @@ function App() {
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="login-password">Password</Label>
-                        <Input
-                          id="login-password"
-                          type="password"
-                          value={loginPassword}
-                          onChange={(event) => setLoginPassword(event.target.value)}
-                          autoComplete="current-password"
-                          required
-                        />
+                        <div className="group/pw relative">
+                          <Input
+                            id="login-password"
+                            type={showLoginPassword ? 'text' : 'password'}
+                            value={loginPassword}
+                            onChange={(event) => setLoginPassword(event.target.value)}
+                            autoComplete="current-password"
+                            required
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent opacity-0 group-focus-within/pw:opacity-100 transition-opacity"
+                            onClick={() => setShowLoginPassword(!showLoginPassword)}
+                            tabIndex={-1}
+                          >
+                            {showLoginPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                        </div>
                       </div>
                       <Button type="submit" className="w-full">Login</Button>
                     </form>
@@ -5753,25 +5832,51 @@ function App() {
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="register-password">Password</Label>
-                        <Input
-                          id="register-password"
-                          type="password"
-                          value={registerPassword}
-                          onChange={(event) => setRegisterPassword(event.target.value)}
-                          autoComplete="new-password"
-                          required
-                        />
+                        <div className="group/pw relative">
+                          <Input
+                            id="register-password"
+                            type={showRegisterPassword ? 'text' : 'password'}
+                            value={registerPassword}
+                            onChange={(event) => setRegisterPassword(event.target.value)}
+                            autoComplete="new-password"
+                            required
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent opacity-0 group-focus-within/pw:opacity-100 transition-opacity"
+                            onClick={() => setShowRegisterPassword(!showRegisterPassword)}
+                            tabIndex={-1}
+                          >
+                            {showRegisterPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                        </div>
                       </div>
                       <div className="space-y-1.5">
                         <Label htmlFor="register-password-confirm">Confirm password</Label>
-                        <Input
-                          id="register-password-confirm"
-                          type="password"
-                          value={registerPasswordConfirm}
-                          onChange={(event) => setRegisterPasswordConfirm(event.target.value)}
-                          autoComplete="new-password"
-                          required
-                        />
+                        <div className="group/pw relative">
+                          <Input
+                            id="register-password-confirm"
+                            type={showRegisterConfirmPassword ? 'text' : 'password'}
+                            value={registerPasswordConfirm}
+                            onChange={(event) => setRegisterPasswordConfirm(event.target.value)}
+                            autoComplete="new-password"
+                            required
+                            className="pr-10"
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="absolute right-0 top-0 h-full px-3 hover:bg-transparent opacity-0 group-focus-within/pw:opacity-100 transition-opacity"
+                            onClick={() => setShowRegisterConfirmPassword(!showRegisterConfirmPassword)}
+                            tabIndex={-1}
+                          >
+                            {showRegisterConfirmPassword ? <EyeOff className="h-4 w-4 text-muted-foreground" /> : <Eye className="h-4 w-4 text-muted-foreground" />}
+                          </Button>
+                        </div>
                       </div>
                       <Button type="submit" className="w-full">{serverHasUsers === false ? 'Get Started' : 'Create account'}</Button>
                     </form>

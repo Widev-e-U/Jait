@@ -91,21 +91,38 @@ export function DiffView({
   }, [hunks])
 
   /* ---- Monaco mount ---- */
+  const disposablesRef = useRef<any[]>([])
   const handleMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor
     monacoRef.current = monaco
     const modEditor = editor.getModifiedEditor()
-    const disposables = [
+    disposablesRef.current = [
       modEditor.onDidScrollChange(() => updateActionPositions()),
       modEditor.onDidLayoutChange(() => updateActionPositions()),
       modEditor.onDidContentSizeChange(() => updateActionPositions()),
       editor.onDidUpdateDiff(() => updateActionPositions()),
     ]
     window.setTimeout(updateActionPositions, 0)
-    return () => {
-      for (const disposable of disposables) disposable.dispose()
-    }
   }, [updateActionPositions])
+
+  /* Dispose listeners and models before the DiffEditor unmounts */
+  useEffect(() => {
+    return () => {
+      for (const d of disposablesRef.current) d.dispose()
+      disposablesRef.current = []
+      const editor = editorRef.current
+      if (editor) {
+        try {
+          const model = editor.getModel()
+          editor.dispose()
+          model?.original?.dispose()
+          model?.modified?.dispose()
+        } catch { /* already disposed */ }
+      }
+      editorRef.current = null
+      monacoRef.current = null
+    }
+  }, [])
 
   /* ---- Scroll to active hunk ---- */
   useEffect(() => {
@@ -292,6 +309,8 @@ export function DiffView({
           modified={modifiedContent}
           language={language}
           theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          keepCurrentOriginalModel
+          keepCurrentModifiedModel
           onMount={handleMount}
           options={{
             readOnly: true,

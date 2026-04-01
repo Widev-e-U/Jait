@@ -60,12 +60,33 @@ export function ReadOnlyDiffView({
     })))
   }, [])
 
+  const disposableRef = useRef<any>(null)
+
   const handleMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor
     monacoRef.current = monaco
-    editor.onDidUpdateDiff(() => syncChanges())
+    disposableRef.current = editor.onDidUpdateDiff(() => syncChanges())
     syncChanges()
   }, [syncChanges])
+
+  /* Dispose listener and models before the DiffEditor unmounts */
+  useEffect(() => {
+    return () => {
+      disposableRef.current?.dispose()
+      disposableRef.current = null
+      const editor = editorRef.current
+      if (editor) {
+        try {
+          const model = editor.getModel()
+          editor.dispose()
+          model?.original?.dispose()
+          model?.modified?.dispose()
+        } catch { /* already disposed */ }
+      }
+      editorRef.current = null
+      monacoRef.current = null
+    }
+  }, [])
 
   useEffect(() => {
     if (changes.length === 0) return
@@ -168,6 +189,8 @@ export function ReadOnlyDiffView({
           modified={modified}
           language={language}
           theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          keepCurrentOriginalModel
+          keepCurrentModifiedModel
           onMount={handleMount}
           options={mergedOptions}
         />

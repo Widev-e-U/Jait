@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo } from 'react'
 import Editor from '@monaco-editor/react'
 import { AlertCircle, ArrowLeft, Boxes, Check, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
@@ -388,7 +388,7 @@ function GitStatusBadge({ status, className = '' }: { status: string; className?
   )
 }
 
-/** Build a set of directory prefixes that contain changed files */
+/** Build a set of directory prefixes that contain changed files (using normalised forward-slash paths) */
 function buildDirChangesSet(gitStatusMap: Map<string, string>): Set<string> {
   const dirs = new Set<string>()
   for (const filePath of gitStatusMap.keys()) {
@@ -399,6 +399,38 @@ function buildDirChangesSet(gitStatusMap: Map<string, string>): Set<string> {
     }
   }
   return dirs
+}
+
+/** O(depth) check whether a node path matches a changed directory */
+function dirHasChanges(dirPath: string, changesSet: Set<string>): boolean {
+  if (changesSet.size === 0) return false
+  const norm = dirPath.replace(/\\/g, '/')
+  // Check progressively longer suffixes of the path
+  let start = 0
+  while (true) {
+    const idx = norm.indexOf('/', start)
+    if (idx === -1) break
+    const suffix = norm.slice(idx + 1)
+    if (suffix && changesSet.has(suffix)) return true
+    start = idx + 1
+  }
+  // Also check the full path and bare name
+  return changesSet.has(norm)
+}
+
+/**
+ * Build a normalised path→status map so tree rows can do O(1) lookups
+ * instead of scanning the entire map per file.
+ */
+function buildNormalisedStatusMap(gitStatusMap: Map<string, string>): Map<string, string> {
+  const m = new Map<string, string>()
+  for (const [k, v] of gitStatusMap) {
+    m.set(k, v)
+    // Also index the normalised forward-slash variant
+    const norm = k.replace(/\\/g, '/')
+    if (norm !== k) m.set(norm, v)
+  }
+  return m
 }
 
 interface SourceControlEntry {
@@ -777,7 +809,7 @@ function HighlightMatch({ text, query }: { text: string; query: string }) {
 /*  Tree node component                                                */
 /* ------------------------------------------------------------------ */
 
-function TreeNodeRow({
+const TreeNodeRow = memo(function TreeNodeRow({
   node,
   depth,
   activeFilePath,
@@ -789,7 +821,7 @@ function TreeNodeRow({
   onMoveNode,
   onMobilePointerStart,
   isMobile,
-  gitStatusMap,
+  normStatusMap,
   dirChangesSet,
   mobileDragTargetPath,
 }: {
@@ -804,7 +836,7 @@ function TreeNodeRow({
   onMoveNode: (srcPath: string, destDir: string) => void
   onMobilePointerStart?: (node: LazyNode, event: React.PointerEvent<HTMLDivElement>) => void
   isMobile?: boolean
-  gitStatusMap?: Map<string, string>
+  normStatusMap?: Map<string, string>
   dirChangesSet?: Set<string>
   mobileDragTargetPath?: string | null
 }) {
@@ -820,13 +852,7 @@ function TreeNodeRow({
   if (node.kind === 'dir') {
     const expanded = expandedDirs.has(node.path)
     const loading = node.childrenLoading
-    const dirRel = node.path.replace(/\\/g, '/')
-    const folderHasChanges = dirChangesSet ? (() => {
-      for (const d of dirChangesSet) {
-        if (dirRel.endsWith('/' + d) || dirRel === d) return true
-      }
-      return false
-    })() : false
+    const folderHasChanges = dirChangesSet ? dirHasChanges(node.path, dirChangesSet) : false
     return (
       <>
         <div
@@ -919,7 +945,7 @@ function TreeNodeRow({
             onMoveNode={onMoveNode}
             onMobilePointerStart={onMobilePointerStart}
             isMobile={isMobile}
-            gitStatusMap={gitStatusMap}
+            normStatusMap={normStatusMap}
             dirChangesSet={dirChangesSet}
             mobileDragTargetPath={mobileDragTargetPath}
           />
@@ -929,15 +955,8 @@ function TreeNodeRow({
   }
 
   const isActive = activeFilePath === node.path
-  const fileGitStatus = gitStatusMap?.get(node.name) ?? gitStatusMap?.get(node.path)
   const relPath = node.path.replace(/\\/g, '/')
-  const matchedStatus = fileGitStatus ?? (() => {
-    if (!gitStatusMap) return undefined
-    for (const [k, v] of gitStatusMap) {
-      if (relPath.endsWith('/' + k) || relPath === k) return v
-    }
-    return undefined
-  })()
+  const matchedStatus = normStatusMap?.get(node.name) ?? normStatusMap?.get(node.path) ?? normStatusMap?.get(relPath)
   return (
     <div
       className={`group flex items-center gap-1.5 rounded px-1 cursor-pointer ${
@@ -981,7 +1000,7 @@ function TreeNodeRow({
       )}
     </div>
   )
-}
+})
 
 /* ------------------------------------------------------------------ */
 /*  WorkspacePanel                                                     */
@@ -1087,6 +1106,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [gitStatus])
   /** Set of directory prefixes (relative) that contain changed files */
   const dirChangesSet = useMemo(() => buildDirChangesSet(gitStatusMap), [gitStatusMap])
+  /** Normalised path→status map for O(1) tree-row lookups */
+  const normStatusMap = useMemo(() => buildNormalisedStatusMap(gitStatusMap), [gitStatusMap])
   /** Tree pane active tab */
   const [treeTabInternal, setTreeTabInternal] = useState<'files' | 'git'>('files')
   const treeTab = treeTabProp ?? treeTabInternal
@@ -4291,28 +4312,30 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
           >
             {actions === 'stage' ? (
-              <button
-                type="button"
-                className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
-                onClick={() => void handleStageAll()}
-                disabled={gitActionBusy || files.length === 0}
-                title="Stage all changes"
-                aria-label="Stage all changes"
-              >
-                <Plus className="h-3 w-3" />
-              </button>
-            ) : (
               <>
                 <button
                   type="button"
-                  className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
-                  onClick={() => void handleUnstageAll()}
+                  className={cn(headerActionClassName, 'text-red-600 hover:text-red-700 disabled:pointer-events-none disabled:opacity-40 dark:text-red-400')}
+                  onClick={() => setDiscardConfirm({ kind: 'all' })}
                   disabled={gitActionBusy || files.length === 0}
-                  title="Unstage all files"
-                  aria-label="Unstage all files"
+                  title="Discard all changes"
+                  aria-label="Discard all changes"
                 >
-                  <Minus className="h-3 w-3" />
+                  <Undo2 className="h-3 w-3" />
                 </button>
+                <button
+                  type="button"
+                  className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
+                  onClick={() => void handleStageAll()}
+                  disabled={gitActionBusy || files.length === 0}
+                  title="Stage all changes"
+                  aria-label="Stage all changes"
+                >
+                  <Plus className="h-3 w-3" />
+                </button>
+              </>
+            ) : (
+              <>
                 <button
                   type="button"
                   className={cn(headerActionClassName, 'text-red-600 hover:text-red-700 disabled:pointer-events-none disabled:opacity-40 dark:text-red-400')}
@@ -4323,11 +4346,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 >
                   <Undo2 className="h-3 w-3" />
                 </button>
+                <button
+                  type="button"
+                  className={cn(headerActionClassName, 'hover:text-foreground disabled:pointer-events-none disabled:opacity-40')}
+                  onClick={() => void handleUnstageAll()}
+                  disabled={gitActionBusy || files.length === 0}
+                  title="Unstage all files"
+                  aria-label="Unstage all files"
+                >
+                  <Minus className="h-3 w-3" />
+                </button>
               </>
             )}
           </div>
         </div>
-        {actions === 'unstage' && discardConfirm?.kind === 'all' && changedFileCount > 0 && (
+        {discardConfirm?.kind === 'all' && changedFileCount > 0 && (
           <div className="mx-2 mb-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
             <span className="flex-1 text-red-500">Discard all changes?</span>
             <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
@@ -4678,7 +4711,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   onMoveNode={handleMoveTreeNode}
                   onMobilePointerStart={handleMobileTreePointerStart}
                   isMobile
-                  gitStatusMap={gitStatusMap}
+                  normStatusMap={normStatusMap}
                   dirChangesSet={dirChangesSet}
                   mobileDragTargetPath={mobileTreeDrag?.dropDir ?? null}
                 />
@@ -4975,13 +5008,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   return (
     <aside
-      className={cn(
-        'bg-muted/20 flex min-h-0 shrink-0',
-        tabMaximized ? 'absolute inset-0 z-30 border-r shadow-2xl' : 'border-r',
-      )}
-      style={tabMaximized
-        ? { width: '100%' }
-        : { width: !showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size, maxWidth: '70vw' }}
+      className="bg-muted/20 flex min-h-0 shrink-0 border-r relative"
+      style={{ width: !showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size, maxWidth: '70vw' }}
     >
       {/* File explorer pane */}
       {effectiveShowTree && (
@@ -5153,7 +5181,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 onContextFile={handleContextNativeNode}
                 onTreeContextMenu={handleTreeContextMenu}
                 onMoveNode={handleMoveTreeNode}
-                gitStatusMap={gitStatusMap}
+                normStatusMap={normStatusMap}
                 dirChangesSet={dirChangesSet}
                 mobileDragTargetPath={mobileTreeDrag?.dropDir ?? null}
               />
@@ -5356,7 +5384,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
       {/* Editor pane */}
       {effectiveShowEditor && (
-      <div className="flex-1 min-w-0 min-h-0 flex flex-col">
+      <div className={tabMaximized ? 'absolute inset-0 z-20 flex flex-col bg-background' : 'flex-1 min-w-0 min-h-0 flex flex-col'}>
         {/* Tab bar — VS Code style */}
         <div className="flex items-center h-[35px] bg-[var(--tab-bg,hsl(var(--muted)/0.3))] border-b shrink-0 min-w-0">
           <div
@@ -5949,7 +5977,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
       {/* Resize handle: panel ↔ chat (right edge) */}
       <div
-        className="relative w-2 -mx-0.5 shrink-0 cursor-col-resize group touch-none"
+        className={tabMaximized
+          ? 'absolute right-0 inset-y-0 w-2 z-30 cursor-col-resize group touch-none'
+          : 'relative w-2 -mx-0.5 shrink-0 cursor-col-resize group touch-none'}
         onPointerDown={panel.onPointerDown}
       >
         <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/60 transition-colors group-hover:bg-primary/40 group-active:bg-primary/50" />

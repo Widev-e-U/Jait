@@ -500,7 +500,8 @@ function MessageInner({
   useEffect(() => {
     if (!optimisticUserDisplaySegments && optimisticUserDisplayText == null) return
     const matchesText = optimisticUserDisplayText === userDisplayText
-    const matchesSegments = JSON.stringify(optimisticUserDisplaySegments ?? []) === JSON.stringify(userDisplaySegments)
+    const matchesSegments = optimisticUserDisplaySegments === userDisplaySegments
+      || JSON.stringify(optimisticUserDisplaySegments ?? []) === JSON.stringify(userDisplaySegments)
     if (matchesText && matchesSegments) {
       setOptimisticUserDisplayText(null)
       setOptimisticUserDisplaySegments(null)
@@ -992,5 +993,13 @@ function MessageInner({
   )
 }
 
-export const Message = memo(MessageInner)
+export const Message = memo(MessageInner, (prev, next) => {
+  // messageFromEnd / messageIndex only affect the edit callback, not rendering.
+  // They change for every message when a new one is added, busting memo for the
+  // entire list.  Skip them so only render-relevant props trigger re-renders.
+  const { messageFromEnd: _a, messageIndex: _b, ...prevRest } = prev
+  const { messageFromEnd: _c, messageIndex: _d, ...nextRest } = next
+  const keys = Object.keys(nextRest) as (keyof typeof nextRest)[]
+  return keys.length === Object.keys(prevRest).length && keys.every((k) => Object.is(prevRest[k], nextRest[k]))
+})
 Message.displayName = 'Message'
