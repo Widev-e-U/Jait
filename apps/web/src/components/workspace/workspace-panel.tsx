@@ -1073,6 +1073,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // ── Git status state ──
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
   const [gitStatusLoading, setGitStatusLoading] = useState(false)
+  const [workingTreeDiffEntries, setWorkingTreeDiffEntries] = useState<FileDiffEntry[]>([])
   const gitStatusRequestSeqRef = useRef(0)
   /** Map of relative file path → status code (A/M/D/R/?) */
   const gitStatusMap = useMemo(() => {
@@ -1573,13 +1574,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     const requestSeq = ++gitStatusRequestSeqRef.current
     setGitStatusLoading(true)
     try {
-      const status = await gitApi.status(remoteRoot)
+      const [status, diffs] = await Promise.all([
+        gitApi.status(remoteRoot),
+        gitApi.fileDiffs(remoteRoot).catch(() => [] as FileDiffEntry[]),
+      ])
       if (requestSeq === gitStatusRequestSeqRef.current) {
         setGitStatus(status)
+        setWorkingTreeDiffEntries(diffs)
       }
     } catch {
       if (requestSeq === gitStatusRequestSeqRef.current) {
         setGitStatus(null)
+        setWorkingTreeDiffEntries([])
       }
     } finally {
       if (requestSeq === gitStatusRequestSeqRef.current) {
@@ -3126,7 +3132,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     const tabId = `git-diff:${filePath}`
     setScDiffLoading(true)
     try {
-      const diffs = await gitApi.fileDiffs(remoteRoot)
       const normalizedFilePath = normalizePath(filePath)
       const normalizedRoot = normalizePath(remoteRoot)
       const relativeFilePath = normalizedFilePath === normalizedRoot
@@ -3135,7 +3140,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           ? normalizedFilePath.slice(normalizedRoot.length + 1)
           : normalizedFilePath
 
-      const entry = diffs.find((diff) => {
+      const entry = workingTreeDiffEntries.find((diff) => {
         const normalizedDiffPath = normalizePath(diff.path)
         return normalizedDiffPath === normalizedFilePath
           || normalizedDiffPath === relativeFilePath
@@ -3210,7 +3215,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       }
     } catch { /* ignore */ }
     setScDiffLoading(false)
-  }, [remoteRoot, surfaceId])
+  }, [remoteRoot, surfaceId, workingTreeDiffEntries])
 
   const handleOpenReviewDiff = useCallback(async ({
     path,
@@ -3933,7 +3938,33 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     else if (showEditorProp && !showTreeProp) setMobileTab('editor')
   }, [isMobile, treeTabProp, showTreeProp, showEditorProp])
   const stagedFiles = gitStatus?.index.files ?? []
-  const workingTreeFiles = gitStatus?.workingTree.files ?? []
+  const workingTreeFiles = useMemo(() => {
+    const statusFiles = gitStatus?.workingTree.files ?? []
+    if (workingTreeDiffEntries.length === 0) return statusFiles
+
+    const statusByPath = new Map(statusFiles.map((file) => [normalizePath(file.path), file] as const))
+    const usedPaths = new Set<string>()
+    const merged = workingTreeDiffEntries.map((entry) => {
+      const normalizedEntryPath = normalizePath(entry.path)
+      const statusMatch = statusByPath.get(normalizedEntryPath)
+      usedPaths.add(normalizedEntryPath)
+      return statusMatch ?? {
+        path: entry.path,
+        insertions: 0,
+        deletions: 0,
+        status: entry.status,
+      }
+    })
+
+    for (const file of statusFiles) {
+      const normalizedPath = normalizePath(file.path)
+      if (!usedPaths.has(normalizedPath)) {
+        merged.push(file)
+      }
+    }
+
+    return merged
+  }, [gitStatus?.workingTree.files, workingTreeDiffEntries])
   const stagedTree = useMemo(
     () => buildSourceControlTree(stagedFiles.map((file) => ({
       path: file.path,
