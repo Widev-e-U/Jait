@@ -1,14 +1,9 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import ForceGraph2D, { type ForceGraphMethods } from 'react-force-graph-2d'
+import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { siLinux, siApple, siAndroid } from 'simple-icons'
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import {
   Search,
   RefreshCw,
@@ -117,10 +112,10 @@ const NODE_COLORS: Record<string, string> = {
 }
 
 const NODE_SIZES: Record<string, number> = {
-  gateway: 14,
-  device: 10,
-  mesh: 10,
-  host: 8,
+  gateway: 28,
+  device: 20,
+  mesh: 20,
+  host: 16,
 }
 
 function assignInitialPositions(nodes: GraphNode[]) {
@@ -210,166 +205,176 @@ function getOsImage(data: TopologyNode): HTMLImageElement | null {
 // ---------------------------------------------------------------------------
 
 function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; onClose: () => void; onDeploy?: (ip: string) => void }) {
-  if (!node) return null
+  const Icon = node
+    ? (node.type === 'gateway' ? Server
+      : node.type === 'device' ? ('platform' in node && (node.platform === 'android' || node.platform === 'ios') ? Smartphone : Monitor)
+        : node.type === 'mesh' ? Globe
+          : ('isRouter' in node && node.isRouter) ? Wifi
+          : Monitor)
+    : Monitor
 
-  const Icon = node.type === 'gateway' ? Server
-    : node.type === 'device' ? ('platform' in node && (node.platform === 'android' || node.platform === 'ios') ? Smartphone : Monitor)
-      : node.type === 'mesh' ? Globe
-        : ('isRouter' in node && node.isRouter) ? Wifi
-        : Monitor
+  const color = node ? (NODE_COLORS[node.type] ?? '#6b7280') : '#6b7280'
 
-  const color = NODE_COLORS[node.type] ?? '#6b7280'
-
-  const showDeploy = 'sshReachable' in node && node.sshReachable
+  const showDeploy = node && 'sshReachable' in node && node.sshReachable
     && 'agentStatus' in node && node.agentStatus !== 'running'
     && 'ip' in node
 
   return (
-    <Dialog open={!!node} onOpenChange={(o) => !o && onClose()}>
-      <DialogContent className="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+    <div
+      className={cn(
+        'absolute right-0 top-0 bottom-0 w-72 bg-background border-l z-10 flex flex-col transition-transform duration-200 ease-in-out',
+        node ? 'translate-x-0' : 'translate-x-full',
+      )}
+    >
+      {node && (
+        <>
+          {/* Header */}
+          <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
             <div className="h-8 w-8 rounded-lg flex items-center justify-center shrink-0"
               style={{ backgroundColor: `${color}22`, color }}>
               <Icon className="h-4 w-4" />
             </div>
-            <div className="min-w-0">
-              <div className="truncate">{node.name}</div>
-              <div className="text-xs font-normal text-muted-foreground capitalize">{'isRouter' in node && node.isRouter ? 'router' : node.type}</div>
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium">{node.name}</div>
+              <div className="text-xs text-muted-foreground capitalize">{'isRouter' in node && node.isRouter ? 'router' : node.type}</div>
             </div>
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-3 text-sm">
-          {/* Status */}
-          <div className="flex items-center gap-2">
-            <span className={`h-2.5 w-2.5 rounded-full ${node.online ? 'bg-green-500' : 'bg-red-500'}`} />
-            <span>{node.online ? 'Online' : 'Offline'}</span>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+              <X className="h-3.5 w-3.5" />
+            </Button>
           </div>
 
-          {/* Platform */}
-          {'platform' in node && node.platform && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Platform</span>
-              <span className="flex items-center gap-1.5 capitalize">{node.platform}</span>
+          {/* Content */}
+          <div className="flex-1 overflow-y-auto px-4 py-3 space-y-3 text-sm">
+            {/* Status */}
+            <div className="flex items-center gap-2">
+              <span className={`h-2.5 w-2.5 rounded-full ${node.online ? 'bg-green-500' : 'bg-red-500'}`} />
+              <span>{node.online ? 'Online' : 'Offline'}</span>
             </div>
-          )}
 
-          {/* IP */}
-          {'ip' in node && node.ip && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">IP Address</span>
-              <code className="text-xs bg-muted px-2 py-0.5 rounded">{node.ip}</code>
-            </div>
-          )}
-
-          {'isRouter' in node && node.isRouter && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Role</span>
-              <Badge variant="secondary" className="text-[10px]">Router</Badge>
-            </div>
-          )}
-
-          {/* Version */}
-          {'version' in node && node.version && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Version</span>
-              <Badge variant="secondary" className="font-mono text-[10px]">v{node.version}</Badge>
-            </div>
-          )}
-
-          {/* OS Version (gateway + hosts) */}
-          {'osVersion' in node && node.osVersion && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">OS</span>
-              <span className="text-xs">{node.osVersion}</span>
-            </div>
-          )}
-
-          {/* MAC */}
-          {'mac' in node && node.mac && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">MAC Address</span>
-              <code className="text-xs bg-muted px-2 py-0.5 rounded">{node.mac}</code>
-            </div>
-          )}
-
-          {/* Providers */}
-          {'providers' in node && node.providers.length > 0 && (
-            <div>
-              <span className="text-muted-foreground block mb-1.5">Providers</span>
-              <div className="flex flex-wrap gap-1">
-                {node.providers.map(p => (
-                  <Badge key={p} variant="outline" className="text-[10px]">
-                    <Terminal className="h-2.5 w-2.5 mr-1" />{p}
-                  </Badge>
-                ))}
+            {/* Platform */}
+            {'platform' in node && node.platform && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Platform</span>
+                <span className="flex items-center gap-1.5 capitalize">{node.platform}</span>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* Open Ports */}
-          {'openPorts' in node && node.openPorts.length > 0 && (
-            <div>
-              <span className="text-muted-foreground block mb-1.5">Open Ports</span>
-              <div className="flex flex-wrap gap-1">
-                {node.openPorts.map(p => (
-                  <Badge key={p} variant="outline" className="text-[10px] font-mono">{p}</Badge>
-                ))}
+            {/* IP */}
+            {'ip' in node && node.ip && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">IP Address</span>
+                <code className="text-xs bg-muted px-2 py-0.5 rounded">{node.ip}</code>
               </div>
-            </div>
-          )}
+            )}
 
-          {/* SSH */}
-          {'sshReachable' in node && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">SSH</span>
-              <span className="flex items-center gap-1.5">
-                <Shield className="h-3 w-3" />
-                {node.sshReachable ? 'Reachable' : 'Not reachable'}
-              </span>
-            </div>
-          )}
+            {'isRouter' in node && node.isRouter && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Role</span>
+                <Badge variant="secondary" className="text-[10px]">Router</Badge>
+              </div>
+            )}
 
-          {/* Agent Status */}
-          {'agentStatus' in node && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Agent</span>
-              <Badge variant={node.agentStatus === 'running' ? 'default' : 'secondary'} className="text-[10px]">
-                {node.agentStatus}
-              </Badge>
-            </div>
-          )}
+            {/* Version */}
+            {'version' in node && node.version && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Version</span>
+                <Badge variant="secondary" className="font-mono text-[10px]">v{node.version}</Badge>
+              </div>
+            )}
 
-          {/* Registered At (devices) */}
-          {'registeredAt' in node && node.registeredAt && (
-            <div className="flex items-center justify-between">
-              <span className="text-muted-foreground">Connected</span>
-              <span className="text-xs">{new Date(node.registeredAt).toLocaleString()}</span>
-            </div>
-          )}
+            {/* OS Version */}
+            {'osVersion' in node && node.osVersion && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">OS</span>
+                <span className="text-xs">{node.osVersion}</span>
+              </div>
+            )}
 
-          {/* Gateway link for running agents */}
-          {('agentStatus' in node && node.agentStatus === 'running' && 'ip' in node) && (
-            <Button size="sm" variant="outline" className="w-full mt-2" asChild>
-              <a href={`http://${node.ip}:8000`} target="_blank" rel="noopener noreferrer">
-                <Globe className="h-3.5 w-3.5 mr-1.5" />
-                Open Dashboard
-              </a>
-            </Button>
-          )}
+            {/* MAC */}
+            {'mac' in node && node.mac && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">MAC Address</span>
+                <code className="text-xs bg-muted px-2 py-0.5 rounded">{node.mac}</code>
+              </div>
+            )}
 
-          {/* Deploy Node button — shown when SSH is reachable but agent is not running */}
-          {showDeploy && onDeploy && (
-            <Button size="sm" variant="default" className="w-full mt-2"
-              onClick={() => { onDeploy((node as TopologyHost).ip); onClose(); }}>
-              <Rocket className="h-3.5 w-3.5 mr-1.5" />
-              Deploy Node
-            </Button>
-          )}
-        </div>
-      </DialogContent>
-    </Dialog>
+            {/* Providers */}
+            {'providers' in node && node.providers.length > 0 && (
+              <div>
+                <span className="text-muted-foreground block mb-1.5">Providers</span>
+                <div className="flex flex-wrap gap-1">
+                  {node.providers.map(p => (
+                    <Badge key={p} variant="outline" className="text-[10px]">
+                      <Terminal className="h-2.5 w-2.5 mr-1" />{p}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Open Ports */}
+            {'openPorts' in node && node.openPorts.length > 0 && (
+              <div>
+                <span className="text-muted-foreground block mb-1.5">Open Ports</span>
+                <div className="flex flex-wrap gap-1">
+                  {node.openPorts.map(p => (
+                    <Badge key={p} variant="outline" className="text-[10px] font-mono">{p}</Badge>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* SSH */}
+            {'sshReachable' in node && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">SSH</span>
+                <span className="flex items-center gap-1.5">
+                  <Shield className="h-3 w-3" />
+                  {node.sshReachable ? 'Reachable' : 'Not reachable'}
+                </span>
+              </div>
+            )}
+
+            {/* Agent Status */}
+            {'agentStatus' in node && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Agent</span>
+                <Badge variant={node.agentStatus === 'running' ? 'default' : 'secondary'} className="text-[10px]">
+                  {node.agentStatus}
+                </Badge>
+              </div>
+            )}
+
+            {/* Registered At */}
+            {'registeredAt' in node && node.registeredAt && (
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Connected</span>
+                <span className="text-xs">{new Date(node.registeredAt).toLocaleString()}</span>
+              </div>
+            )}
+
+            {/* Gateway link for running agents */}
+            {('agentStatus' in node && node.agentStatus === 'running' && 'ip' in node) && (
+              <Button size="sm" variant="outline" className="w-full mt-2" asChild>
+                <a href={`http://${node.ip}:8000`} target="_blank" rel="noopener noreferrer">
+                  <Globe className="h-3.5 w-3.5 mr-1.5" />
+                  Open Dashboard
+                </a>
+              </Button>
+            )}
+
+            {/* Deploy Node button */}
+            {showDeploy && onDeploy && (
+              <Button size="sm" variant="default" className="w-full mt-2"
+                onClick={() => { onDeploy((node as TopologyHost).ip); onClose(); }}>
+                <Rocket className="h-3.5 w-3.5 mr-1.5" />
+                Deploy Node
+              </Button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   )
 }
 
@@ -377,102 +382,159 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
 // Deploy Dialog
 // ---------------------------------------------------------------------------
 
-function DeployDialog({ ip, token, onClose }: { ip: string | null; token?: string | null; onClose: () => void }) {
+function DeployView({ ip, token, onClose }: { ip: string | null; token?: string | null; onClose: () => void }) {
+  const [logs, setLogs] = useState<string[]>([])
+  const [status, setStatus] = useState<'connecting' | 'running' | 'done' | 'error'>('connecting')
   const [username, setUsername] = useState('')
-  const [authMethod, setAuthMethod] = useState<'password' | 'key'>('password')
-  const [result, setResult] = useState<{ instructions: string[]; sshCommand: string } | null>(null)
-  const [loading, setLoading] = useState(false)
+  const [started, setStarted] = useState(false)
+  const logRef = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    if (logRef.current) logRef.current.scrollTop = logRef.current.scrollHeight
+  }, [logs])
+
+  useEffect(() => {
+    if (!ip || !started) return
+    setLogs([])
+    setStatus('connecting')
+
+    const controller = new AbortController()
+    const run = async () => {
+      try {
+        const headers: Record<string, string> = { 'Content-Type': 'application/json' }
+        if (token) headers['Authorization'] = `Bearer ${token}`
+        const res = await fetch(`${API_URL}/api/network/deploy`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({ ip, username: username || 'root' }),
+          signal: controller.signal,
+        })
+        if (!res.ok || !res.body) {
+          setLogs(prev => [...prev, `Error: ${res.statusText}`])
+          setStatus('error')
+          return
+        }
+        setStatus('running')
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+          buffer += decoder.decode(value, { stream: true })
+          const parts = buffer.split('\n\n')
+          buffer = parts.pop() ?? ''
+          for (const part of parts) {
+            const eventMatch = part.match(/^event:\s*(.+)$/m)
+            const dataMatch = part.match(/^data:\s*(.+)$/m)
+            if (!eventMatch || !dataMatch) continue
+            const event = eventMatch[1]
+            let data: string
+            try { data = JSON.parse(dataMatch[1]) } catch { data = dataMatch[1] }
+            if (event === 'log') {
+              setLogs(prev => [...prev, data])
+            } else if (event === 'done') {
+              setLogs(prev => [...prev, `✓ ${data}`])
+              setStatus('done')
+            } else if (event === 'error') {
+              setLogs(prev => [...prev, `✗ ${data}`])
+              setStatus('error')
+            }
+          }
+        }
+      } catch (err) {
+        if (!controller.signal.aborted) {
+          setLogs(prev => [...prev, `Error: ${err instanceof Error ? err.message : 'Connection failed'}`])
+          setStatus('error')
+        }
+      }
+    }
+    void run()
+    return () => controller.abort()
+  }, [ip, token, started, username])
 
   if (!ip) return null
 
-  const handleDeploy = async () => {
-    setLoading(true)
-    try {
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' }
-      if (token) headers['Authorization'] = `Bearer ${token}`
-      const res = await fetch(`${API_URL}/api/network/deploy`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ ip, username, authMethod }),
-      })
-      if (res.ok) {
-        const data = await res.json() as { instructions: string[]; sshCommand: string }
-        setResult(data)
-      }
-    } catch {
-      // ignore
-    } finally {
-      setLoading(false)
-    }
-  }
-
   return (
-    <Dialog open={!!ip} onOpenChange={(o) => { if (!o) { setResult(null); setUsername(''); onClose(); } }}>
-      <DialogContent className="sm:max-w-lg">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <Rocket className="h-4 w-4" />
-            Deploy Jait Node to {ip}
-          </DialogTitle>
-        </DialogHeader>
+    <div className="absolute inset-0 z-20 bg-background flex flex-col">
+      {/* Header */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b shrink-0">
+        <Rocket className="h-4 w-4 text-primary" />
+        <div className="flex-1 min-w-0">
+          <div className="text-sm font-medium truncate">Deploy to {ip}</div>
+          <div className="text-[10px] text-muted-foreground">
+            {status === 'connecting' && !started && 'Ready'}
+            {status === 'connecting' && started && 'Connecting...'}
+            {status === 'running' && 'Deploying...'}
+            {status === 'done' && 'Completed'}
+            {status === 'error' && 'Failed'}
+          </div>
+        </div>
+        <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={onClose}>
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      </div>
 
-        {!result ? (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">SSH Username</label>
-              <input
-                type="text"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                placeholder="e.g. pi, ubuntu, root"
-                className="w-full px-3 py-2 text-sm rounded-md border bg-background"
-              />
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm text-muted-foreground">Auth Method</label>
-              <div className="flex gap-2">
-                <Button size="sm" variant={authMethod === 'password' ? 'default' : 'outline'}
-                  onClick={() => setAuthMethod('password')}>
-                  Password
-                </Button>
-                <Button size="sm" variant={authMethod === 'key' ? 'default' : 'outline'}
-                  onClick={() => setAuthMethod('key')}>
-                  SSH Key
-                </Button>
+      {!started ? (
+        <div className="flex-1 flex flex-col gap-3 p-4">
+          <div className="space-y-2">
+            <label className="text-xs text-muted-foreground">SSH Username</label>
+            <input
+              type="text"
+              value={username}
+              onChange={(e) => setUsername(e.target.value)}
+              placeholder="root"
+              className="w-full px-3 py-2 text-sm rounded-md border bg-background"
+              onKeyDown={(e) => e.key === 'Enter' && setStarted(true)}
+            />
+          </div>
+          <div className="text-[10px] text-muted-foreground">
+            Uses your SSH key for authentication. Make sure the key is authorized on the target.
+          </div>
+          <Button className="w-full" onClick={() => setStarted(true)}>
+            <Rocket className="h-3.5 w-3.5 mr-1.5" />
+            Deploy
+          </Button>
+        </div>
+      ) : (
+        <>
+          {/* Log output */}
+          <div ref={logRef} className="flex-1 overflow-y-auto p-3 font-mono text-[11px] leading-5 space-y-0.5">
+            {logs.map((line, i) => (
+              <div key={i} className={cn(
+                line.startsWith('✓') ? 'text-green-500' :
+                line.startsWith('✗') ? 'text-red-500' :
+                line.startsWith('[') ? 'text-blue-400' :
+                'text-muted-foreground'
+              )}>
+                {line}
               </div>
-            </div>
-
-            <Button className="w-full" onClick={() => void handleDeploy()} disabled={!username.trim() || loading}>
-              {loading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Rocket className="h-4 w-4 mr-2" />}
-              Generate Deploy Script
-            </Button>
+            ))}
+            {status === 'connecting' && <div className="text-muted-foreground animate-pulse">Connecting...</div>}
+            {status === 'running' && <div className="text-muted-foreground animate-pulse">●</div>}
           </div>
-        ) : (
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <span className="text-sm font-medium">Instructions</span>
-              <ol className="text-sm text-muted-foreground space-y-1 list-decimal list-inside">
-                {result.instructions.map((step, i) => (
-                  <li key={i}>{step}</li>
-                ))}
-              </ol>
-            </div>
 
-            <div className="space-y-2">
-              <span className="text-sm font-medium">SSH Command</span>
-              <pre className="text-xs bg-muted p-3 rounded-md overflow-x-auto whitespace-pre-wrap break-all">
-                {result.sshCommand}
-              </pre>
+          {/* Footer */}
+          {(status === 'done' || status === 'error') && (
+            <div className="p-3 border-t shrink-0">
+              {status === 'done' && (
+                <Button size="sm" variant="outline" className="w-full" asChild>
+                  <a href={`http://${ip}:8000`} target="_blank" rel="noopener noreferrer">
+                    <Globe className="h-3.5 w-3.5 mr-1.5" />
+                    Open Dashboard
+                  </a>
+                </Button>
+              )}
+              {status === 'error' && (
+                <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]) }}>
+                  Try Again
+                </Button>
+              )}
             </div>
-
-            <Button variant="outline" className="w-full" onClick={() => { navigator.clipboard.writeText(result.sshCommand); }}>
-              Copy Command
-            </Button>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+          )}
+        </>
+      )}
+    </div>
   )
 }
 
@@ -599,6 +661,29 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
     return { nodes: assignInitialPositions(nodes), links }
   }, [topology])
 
+  // Set a tighter initial zoom once the graph first has data
+  const didInitialZoom = useRef(false)
+  useEffect(() => {
+    if (didInitialZoom.current || graphData.nodes.length === 0) return
+    didInitialZoom.current = true
+    // Defer so ForceGraph2D has mounted and graphRef is populated
+    requestAnimationFrame(() => {
+      const fg = graphRef.current
+      if (!fg) return
+      // Moderate repulsion — more distance between nodes than default
+      const charge = fg.d3Force('charge')
+      if (charge && typeof (charge as any).strength === 'function') {
+        ;(charge as any).strength(-200)
+      }
+      // Slightly longer link distance
+      const link = fg.d3Force('link')
+      if (link && typeof (link as any).distance === 'function') {
+        ;(link as any).distance(80)
+      }
+      fg.zoom(3.5, 0)
+    })
+  }, [graphData])
+
   // Draw node
   const drawNode = useCallback((node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number) => {
     const { data } = node
@@ -713,7 +798,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
   const drawLink = useCallback((link: GraphLink, ctx: CanvasRenderingContext2D) => {
     const source = link.source as unknown as GraphNode
     const target = link.target as unknown as GraphNode
-    if (!source?.x || !target?.x) return
+    if (source?.x == null || target?.x == null) return
 
     ctx.beginPath()
     ctx.moveTo(source.x, source.y!)
@@ -814,7 +899,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
       </div>
 
       {/* Graph */}
-      <div ref={containerRef} className="flex-1 min-h-0 relative bg-background">
+      <div ref={containerRef} className="flex-1 min-h-0 relative bg-background overflow-hidden">
         {graphData.nodes.length > 0 && dimensions.width > 0 && dimensions.height > 0 ? (
           <ForceGraph2D
             ref={graphRef as React.MutableRefObject<ForceGraphMethods<GraphNode, GraphLink> | undefined>}
@@ -837,7 +922,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
             d3VelocityDecay={0.3}
             d3AlphaDecay={0.02}
             minZoom={0.65}
-            maxZoom={3}
+            maxZoom={8}
             enableNodeDrag
             enableZoomInteraction
             enablePanInteraction
@@ -863,13 +948,18 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
             </Button>
           </div>
         )}
+
+        {/* Node detail sidebar */}
+        <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} onDeploy={(ip) => setDeployIp(ip)} />
+
+        {/* Deploy view (overlays sidebar area) */}
+        <div className={cn(
+          'absolute top-0 right-0 h-full w-80 border-l bg-background transition-transform duration-200 ease-in-out z-30',
+          deployIp ? 'translate-x-0' : 'translate-x-full'
+        )}>
+          <DeployView ip={deployIp} token={token} onClose={() => setDeployIp(null)} />
+        </div>
       </div>
-
-      {/* Node detail dialog */}
-      <NodeDetail node={selectedNode} onClose={() => setSelectedNode(null)} onDeploy={(ip) => setDeployIp(ip)} />
-
-      {/* Deploy dialog */}
-      <DeployDialog ip={deployIp} token={token} onClose={() => setDeployIp(null)} />
     </div>
   )
 }

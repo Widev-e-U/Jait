@@ -1,0 +1,66 @@
+{
+  "name": "Jait",
+  "short_name": "Jait",
+  "description": "Jait AI agent gateway",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#09090b",
+  "theme_color": "#09090b",
+  "icons": [
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png"
+    },
+    {
+      "src": "/favicon-32x32.png",
+      "sizes": "32x32",
+      "type": "image/png"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "256x256",
+      "type": "image/png"
+    },
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["productivity", "utilities"],
+  "id": "/",
+  "file_handlers": [
+    {
+      "action": "/",
+      "accept": {
+        "image/*": [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg"],
+        "text/plain": [".txt", ".log", ".csv"],
+        "text/markdown": [".md"],
+        "application/json": [".json"],
+        "application/x-yaml": [".yaml", ".yml"],
+        "application/toml": [".toml"],
+        "text/html": [".html"],
+        "text/css": [".css"],
+        "text/xml": [".xml"],
+        "text/x-typescript": [".ts", ".tsx"],
+        "text/javascript": [".js", ".jsx"],
+        "text/x-python": [".py"],
+        "text/x-sh": [".sh", ".bat"],
+        "text/x-rustsrc": [".rs"],
+        "text/x-go": [".go"],
+        "text/x-java": [".java"],
+        "text/x-csrc": [".c", ".h"],
+        "text/x-c++src": [".cpp", ".hpp"]
+      }
+    }
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+jait",
+      "url": "/?jait=%s"
+    }
+  ]
+}

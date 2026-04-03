@@ -866,6 +866,9 @@ function App() {
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const showWorkspaceRef = useRef(false)
+  const [, setWorkspaceCollapsed] = useState(false)
+  const [chatCollapsed, setChatCollapsed] = useState(false)
+  const workspaceRestoreRef = useRef<(() => void) | null>(null)
   const browserCollaborationSessionsRef = useRef<ReturnType<typeof useBrowserCollaboration>['sessions']>([])
   const suppressWorkspaceAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
@@ -892,12 +895,13 @@ function App() {
   const architectureRenderRequestIdRef = useRef<string | null>(null)
   const loadedArchitectureWorkspaceRef = useRef<string | null>(null)
   const [terminalHeight, setTerminalHeight] = useState(240)
-  const [chatWidth, setChatWidth] = useState<number | null>(() => {
+  const [_chatWidth, _setChatWidth] = useState<number | null>(() => {
     if (typeof window === 'undefined') return null
     const raw = window.localStorage.getItem('jait:chatPanelWidth')
     const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
     return Number.isFinite(parsed) ? parsed : null
   })
+  void _chatWidth; void _setChatWidth // TODO: remove when chat resize is wired
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
   const floatingDragRef = useRef<{ pointerId: number; startX: number; startY: number; posX: number; posY: number } | null>(null)
@@ -968,7 +972,60 @@ function App() {
     showWorkspaceRef.current = showWorkspace
   }, [showWorkspace])
 
-  // Native filesystem watcher — incremented whenever the server pushes fs.changes
+  // ── Deep link: jait:// protocol handler ───────────────────────
+  // When a jait:// URL is opened, the browser navigates to /?jait=<full-url>.
+  // Parse it once on mount to jump to the requested view.
+  useEffect(() => {
+    const raw = new URLSearchParams(window.location.search).get('jait')
+    if (!raw) return
+    try {
+      const url = new URL(raw)
+      const view = url.hostname || url.pathname.replace(/^\/+/, '')
+      const validViews = ['chat', 'jobs', 'network', 'settings'] as const
+      type ValidView = typeof validViews[number]
+      if (validViews.includes(view as ValidView)) {
+        setCurrentView(view as ValidView)
+      }
+    } catch {
+      // malformed URL — ignore
+    }
+    // Remove the ?jait param from the address bar without reloading
+    const clean = new URL(window.location.href)
+    clean.searchParams.delete('jait')
+    window.history.replaceState(null, '', clean.toString())
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── PWA file_handlers: launchQueue ────────────────────────────
+  // When the OS opens a file with Jait (via file_handlers in manifest.json),
+  // the browser hands us the files through launchQueue. We read them and add
+  // them as attachments to the chat input.
+  useEffect(() => {
+    const lq = (window as any).launchQueue
+    if (!lq) return
+    lq.setConsumer(async (launchParams: { files: FileSystemFileHandle[] }) => {
+      if (!launchParams.files.length) return
+      for (const handle of launchParams.files) {
+        try {
+          const file: File = await handle.getFile()
+          const mimeType = file.type || 'application/octet-stream'
+          const reader = new FileReader()
+          reader.onload = () => {
+            const data = (reader.result as string).split(',')[1] ?? ''
+            const preview = mimeType.startsWith('image/') ? (reader.result as string) : undefined
+            promptInputRef.current?.addAttachment({ name: file.name, mimeType, data, preview })
+            promptInputRef.current?.focus()
+          }
+          if (file.type.startsWith('image/')) {
+            reader.readAsDataURL(file)
+          } else {
+            reader.readAsDataURL(new Blob([await file.arrayBuffer()], { type: mimeType }))
+          }
+        } catch {
+          // skip unreadable file
+        }
+      }
+    })
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [fsWatcherVersion, setFsWatcherVersion] = useState(0)
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
@@ -4821,6 +4878,9 @@ function App() {
                       onApplyDiff={handleApplyWorkspaceDiff}
                       provider={chatProvider}
                       cliModel={cliModel}
+                      onCollapsedChange={setWorkspaceCollapsed}
+                      onMaxCollapsedChange={setChatCollapsed}
+                      restoreRef={workspaceRestoreRef}
                     />
                   </div>
                 )}
@@ -5262,43 +5322,15 @@ function App() {
                 </div>
               </div>
             ) : (
-              <div className="flex flex-col flex-1 min-w-0 min-h-0 transition-all duration-300 ease-out">
-                {/* Sticky show-panel buttons when workspace panels are hidden */}
-                {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
-                  <div className="flex h-[35px] items-center gap-1 px-2 border-b bg-muted/20 shrink-0">
-                    {!showWorkspaceTree && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={showWorkspaceTreePanel}
-                            className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          >
-                            <Eye className="h-3 w-3" />
-                            <FolderTree className="h-3 w-3" />
-                            <GitBranch className="h-3 w-3" />
-                            Show Files + Changes
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">Show files and source control</TooltipContent>
-                      </Tooltip>
-                    )}
-                    {!showWorkspaceEditor && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <button
-                            onClick={showWorkspaceEditorPanel}
-                            className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                          >
-                            <Eye className="h-3 w-3" />
-                            <Code className="h-3 w-3" />
-                            Show Editor
-                          </button>
-                        </TooltipTrigger>
-                        <TooltipContent side="bottom">Show editor</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                )}
+              <div
+                className="flex flex-col min-h-0 min-w-0 overflow-hidden"
+                style={{
+                  flex: chatCollapsed ? '0 0 auto' : '1 1 0%',
+                  minWidth: chatCollapsed ? 0 : undefined,
+                }}
+              >
+
+                {!chatCollapsed && (<>
                 <Conversation
                   key={activeSessionId ?? 'developer-empty'}
                   className="min-h-0 flex-1 border-b"
@@ -5490,6 +5522,7 @@ function App() {
                     </div>
                   </div>
                 </div>
+                </>)}
               </div>
             ))}
           </div>

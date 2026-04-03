@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo } from 'react'
 import Editor from '@monaco-editor/react'
-import { AlertCircle, ArrowLeft, Boxes, Check, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Boxes, Check, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, PanelLeft, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
@@ -123,6 +123,12 @@ interface WorkspacePanelProps {
   onGenerateArchitecture?: () => void
   /** Reports render success/failure for generated Mermaid diagrams. */
   onArchitectureRenderResult?: (result: { ok: true } | { ok: false; error: string }) => void
+  /** Called when the workspace panel collapses or restores via drag. */
+  onCollapsedChange?: (collapsed: boolean) => void
+  /** Called when the chat panel (opposite side) collapses or restores via drag. */
+  onMaxCollapsedChange?: (collapsed: boolean) => void
+  /** Restore the panel from a collapsed state (called externally via button). */
+  restoreRef?: React.MutableRefObject<(() => void) | null>
 }
 
 export interface WorkspacePanelHandle {
@@ -674,7 +680,11 @@ function useDragResize(
   max: number,
   direction: 'horizontal' | 'vertical' = 'horizontal',
   storageKey?: string,
+  options?: { snapCollapse?: boolean; snapMaxCollapse?: boolean; snapMaxSize?: number },
 ) {
+  const snapCollapse = options?.snapCollapse ?? false
+  const snapMaxCollapse = options?.snapMaxCollapse ?? false
+  const snapMaxSize = options?.snapMaxSize ?? max
   const [size, setSize] = useState(() => {
     if (!storageKey || typeof window === 'undefined') return initial
     const raw = window.localStorage.getItem(storageKey)
@@ -682,15 +692,26 @@ function useDragResize(
     if (!Number.isFinite(parsed)) return initial
     return Math.min(max, Math.max(min, parsed))
   })
+  const [collapsed, setCollapsed] = useState(false)
+  const [maxCollapsed, setMaxCollapsed] = useState(false)
+  const cachedSizeRef = useRef(initial)
   const dragging = useRef(false)
   const [isDragging, setIsDragging] = useState(false)
   const frameRef = useRef<number | null>(null)
   const pendingSizeRef = useRef<number | null>(null)
+  // sentinel values for snap states
+  const SNAP_MIN = -1
+  const SNAP_MAX = -2
 
-  // Clamp size when constraints change (e.g., panel shrinks → tree max decreases)
+  // Keep cachedSizeRef in sync with actual size when not collapsed
   useEffect(() => {
-    setSize((prev) => Math.min(max, Math.max(min, prev)))
-  }, [min, max])
+    if (!collapsed && !maxCollapsed && size >= min) cachedSizeRef.current = size
+  }, [size, collapsed, maxCollapsed, min])
+
+  // Clamp size when constraints change
+  useEffect(() => {
+    if (!collapsed && !maxCollapsed) setSize((prev) => Math.min(max, Math.max(min, prev)))
+  }, [min, max, collapsed, maxCollapsed])
   const cleanupRef = useRef<(() => void) | null>(null)
 
   useEffect(() => {
@@ -702,6 +723,30 @@ function useDragResize(
     }
   }, [])
 
+  const restore = useCallback(() => {
+    const restored = Math.min(max, Math.max(min, cachedSizeRef.current))
+    setSize(restored)
+    setCollapsed(false)
+    setMaxCollapsed(false)
+  }, [min, max])
+
+  const applyPending = useCallback((nextSize: number | null) => {
+    if (nextSize === null) return
+    if (nextSize === SNAP_MIN) {
+      setCollapsed(true)
+      setMaxCollapsed(false)
+      setSize(0)
+    } else if (nextSize === SNAP_MAX) {
+      setMaxCollapsed(true)
+      setCollapsed(false)
+      setSize(snapMaxSize)
+    } else {
+      setCollapsed(false)
+      setMaxCollapsed(false)
+      setSize(nextSize)
+    }
+  }, [snapMaxSize])
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       e.preventDefault()
@@ -712,20 +757,28 @@ function useDragResize(
       cleanupRef.current?.()
       target.setPointerCapture?.(pointerId)
       const startPos = direction === 'horizontal' ? e.clientX : e.clientY
-      const startSize = size
+      const startSize = collapsed ? 0 : maxCollapsed ? snapMaxSize : size
+      const minSnapThreshold = min / 2
+      const maxSnapThreshold = max + (snapMaxSize - max) / 2
 
       const onMove = (ev: PointerEvent) => {
         if (!dragging.current) return
         const pos = direction === 'horizontal' ? ev.clientX : ev.clientY
         const delta = pos - startPos
-        pendingSizeRef.current = Math.min(max, Math.max(min, startSize + delta))
+        const raw = startSize + delta
+
+        if (snapCollapse && raw < minSnapThreshold) {
+          pendingSizeRef.current = SNAP_MIN
+        } else if (snapMaxCollapse && raw > maxSnapThreshold) {
+          pendingSizeRef.current = SNAP_MAX
+        } else {
+          pendingSizeRef.current = Math.min(max, Math.max(min, raw))
+        }
+
         if (frameRef.current !== null) return
         frameRef.current = window.requestAnimationFrame(() => {
           frameRef.current = null
-          const nextSize = pendingSizeRef.current
-          if (nextSize !== null) {
-            setSize(nextSize)
-          }
+          applyPending(pendingSizeRef.current)
         })
       }
       const cleanup = () => {
@@ -739,7 +792,7 @@ function useDragResize(
           frameRef.current = null
         }
         if (pendingSizeRef.current !== null) {
-          setSize(pendingSizeRef.current)
+          applyPending(pendingSizeRef.current)
           pendingSizeRef.current = null
         }
         document.removeEventListener('pointermove', onMove)
@@ -769,15 +822,15 @@ function useDragResize(
       target.addEventListener('lostpointercapture', onLostPointerCapture)
       window.addEventListener('blur', onWindowBlur)
     },
-    [size, min, max, direction],
+    [size, min, max, direction, snapCollapse, snapMaxCollapse, snapMaxSize, collapsed, maxCollapsed, applyPending],
   )
 
   useEffect(() => {
     if (!storageKey || typeof window === 'undefined') return
-    window.localStorage.setItem(storageKey, String(size))
-  }, [size, storageKey])
+    if (!collapsed && !maxCollapsed) window.localStorage.setItem(storageKey, String(size))
+  }, [size, storageKey, collapsed, maxCollapsed])
 
-  return { size, onPointerDown, isDragging } as const
+  return { size, collapsed, maxCollapsed, onPointerDown, isDragging, restore } as const
 }
 
 /* ------------------------------------------------------------------ */
@@ -1050,6 +1103,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onArchitectureOpenChange,
   onGenerateArchitecture,
   onArchitectureRenderResult,
+  onCollapsedChange,
+  onMaxCollapsedChange,
+  restoreRef,
 }, ref) {
   const confirm = useConfirmDialog()
   const resolvedTheme = useResolvedTheme()
@@ -1067,12 +1123,32 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
 
   const panelMax = Math.max(400, viewportWidth - sidebarWidth - minChatWidth)
+  const panelFullWidth = Math.max(panelMax, viewportWidth - sidebarWidth)
   const initialPanel = Math.round((viewportWidth - sidebarWidth) * (4 / 6))
-  const panel = useDragResize(initialPanel, 400, panelMax, 'horizontal', 'workspacePanelWidth')
+  const panel = useDragResize(initialPanel, 400, panelMax, 'horizontal', 'workspacePanelWidth', {
+    snapCollapse: true,
+    snapMaxCollapse: true,
+    snapMaxSize: panelFullWidth,
+  })
+
+  // Notify parent when collapse state changes
+  useEffect(() => { onCollapsedChange?.(panel.collapsed) }, [panel.collapsed, onCollapsedChange])
+  useEffect(() => { onMaxCollapsedChange?.(panel.maxCollapsed) }, [panel.maxCollapsed, onMaxCollapsedChange])
+  useEffect(() => { if (restoreRef) restoreRef.current = panel.restore }, [restoreRef, panel.restore])
 
   // Tree max is clamped so the editor pane never disappears
   const treeMax = Math.max(180, panel.size - minEditorWidth)
-  const tree = useDragResize(260, 180, treeMax, 'horizontal', 'workspaceTreePaneWidth')
+  const tree = useDragResize(260, 180, treeMax, 'horizontal', 'workspaceTreePaneWidth', {
+    snapCollapse: true,
+  })
+
+  // When tree snaps collapsed via drag, sync parent toggle state
+  useEffect(() => {
+    if (tree.collapsed && showTreeProp && onToggleTree) {
+      tree.restore()
+      onToggleTree()
+    }
+  }, [tree.collapsed])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy tree state
   const [lazyTree, setLazyTree] = useState<LazyNode[]>([])
@@ -1141,8 +1217,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
   const activeTabEditable = isEditableWorkspaceTab(activeTab)
   const canMaximizeActiveTab = Boolean(activeTab)
-  const effectiveShowTree = showTreeProp && !tabMaximized
-  const effectiveShowEditor = showEditorProp || tabMaximized
+  const effectiveShowTree = showTreeProp && !tabMaximized && !panel.collapsed
+  const effectiveShowEditor = (showEditorProp || tabMaximized) && !panel.collapsed
 
   useEffect(() => {
     if (activeTab) return
@@ -5006,11 +5082,30 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- Desktop layout ---- */
 
+  const panelWidth = panel.collapsed ? 8
+    : panel.maxCollapsed ? panelFullWidth
+    : (!showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size)
+
   return (
     <aside
-      className="bg-muted/20 flex min-h-0 shrink-0 border-r relative"
-      style={{ width: !showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size, maxWidth: '70vw' }}
+      className={`bg-muted/20 flex min-h-0 shrink-0 relative ${panel.collapsed ? '' : 'border-r'}`}
+      style={{
+        width: panelWidth,
+        maxWidth: panel.collapsed ? 8 : panel.maxCollapsed ? '100%' : '70vw',
+        transition: panel.isDragging ? 'none' : 'width 0.15s ease-out',
+      }}
     >
+      {/* Restore button when workspace is fully collapsed */}
+      {panel.collapsed && (
+        <button
+          onClick={panel.restore}
+          className="absolute inset-0 z-10 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer"
+          title="Show Workspace"
+        >
+          <PanelLeft className="h-3.5 w-3.5" />
+        </button>
+      )}
+
       {/* File explorer pane */}
       {effectiveShowTree && (
       <div
@@ -5018,23 +5113,23 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         style={{ width: tree.size }}
       >
         {/* Tab bar: Files | Source Control */}
-        <div className="flex items-center h-[35px] border-b bg-muted/20 shrink-0 px-1 gap-0.5">
+        <div className="flex items-center h-[35px] border-b bg-muted/20 shrink-0 px-1 gap-0.5 overflow-hidden">
           <button
-            className={`flex h-7 items-center gap-1 px-2 rounded text-[11px] font-medium transition-colors ${
+            className={`flex h-7 items-center gap-1 px-2 rounded text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
               treeTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => { setTreeTab('files'); setScDiffFile(null) }}
           >
-            <FolderOpen className="h-3 w-3" />
+            <FolderOpen className="h-3 w-3 shrink-0" />
             Files
           </button>
           <button
-            className={`flex h-7 items-center gap-1 px-2 rounded text-[11px] font-medium transition-colors ${
+            className={`flex h-7 items-center gap-1 px-2 rounded text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
               treeTab === 'git' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => { setTreeTab('git'); setScDiffFile(null) }}
           >
-            <GitBranch className="h-3 w-3" />
+            <GitBranch className="h-3 w-3 shrink-0" />
             Source Control
             {changedFileCount > 0 && (
               <span className="ml-0.5 text-[9px] bg-primary/20 text-primary rounded-full px-1.5 leading-tight font-bold">
@@ -5482,8 +5577,26 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )
             })}
           </div>
-          {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor || canMaximizeActiveTab) && (
+          {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor || canMaximizeActiveTab || panel.maxCollapsed || (!effectiveShowTree && onToggleTree)) && (
             <div className="flex items-center shrink-0">
+              {!effectiveShowTree && onToggleTree && (
+                <button
+                  onClick={onToggleTree}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  title="Show Files"
+                >
+                  <FolderTree className="h-3 w-3" />
+                </button>
+              )}
+              {panel.maxCollapsed && (
+                <button
+                  onClick={panel.restore}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  title="Show Chat"
+                >
+                  <MessageSquare className="h-3 w-3" />
+                </button>
+              )}
               {canMaximizeActiveTab && (
                 <button
                   onClick={() => setTabMaximized((prev) => !prev)}
@@ -5977,12 +6090,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
       {/* Resize handle: panel ↔ chat (right edge) */}
       <div
-        className={tabMaximized
-          ? 'absolute right-0 inset-y-0 w-2 z-30 cursor-col-resize group touch-none'
-          : 'relative w-2 -mx-0.5 shrink-0 cursor-col-resize group touch-none'}
+        className={`${tabMaximized && !panel.collapsed
+          ? 'absolute right-0 inset-y-0 w-2 z-30'
+          : panel.collapsed
+            ? 'absolute left-0 inset-y-0 w-2 z-30'
+            : 'relative w-2 -mx-0.5 shrink-0'} cursor-col-resize touch-none sash-handle`}
         onPointerDown={panel.onPointerDown}
+        onDoubleClick={(panel.collapsed || panel.maxCollapsed) ? panel.restore : undefined}
       >
-        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/60 transition-colors group-hover:bg-primary/40 group-active:bg-primary/50" />
+        <div className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-[background-color] duration-100 ease-out ${panel.isDragging ? 'bg-primary/50' : 'bg-border/60'}`} />
+        <style>{`.sash-handle:hover > div { background-color: hsl(var(--primary) / 0.4) !important; transition-delay: 300ms; }
+.sash-handle:active > div { background-color: hsl(var(--primary) / 0.5) !important; transition-delay: 0ms; }`}</style>
       </div>
     </aside>
   )

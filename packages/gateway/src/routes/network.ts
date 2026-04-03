@@ -1,9 +1,12 @@
 import type { FastifyInstance } from "fastify";
-import { exec } from "node:child_process";
+import { exec, spawn } from "node:child_process";
 import { promisify } from "node:util";
-import { platform } from "node:os";
+import { platform, tmpdir } from "node:os";
 import { networkInterfaces } from "node:os";
 import { createConnection } from "node:net";
+import { dirname, resolve, join } from "node:path";
+import { fileURLToPath } from "node:url";
+import { existsSync, mkdirSync, statSync } from "node:fs";
 import type { NetworkHost, NetworkScanResult, SshTestResult, GatewayNode } from "@jait/shared";
 import type { WsControlPlane } from "../ws.js";
 import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-tools.js";
@@ -13,6 +16,8 @@ import { scanNetwork } from "../lib/network-scan.js";
 
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require("../../package.json") as { version: string };
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
 
 const execAsync = promisify(exec);
 
@@ -114,6 +119,92 @@ const knownNodes = new Map<string, GatewayNode>();
 // ---------------------------------------------------------------------------
 // Route registration
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Cached gateway node — expensive to compute (shell execs + provider checks),
+// so we build it once and refresh every 5 minutes in the background.
+// ---------------------------------------------------------------------------
+
+interface CachedGatewayNode {
+  node: {
+    id: string;
+    type: "gateway";
+    name: string;
+    platform: string;
+    ip: string;
+    version: string;
+    osVersion: string | null;
+    providers: string[];
+    online: true;
+  };
+  builtAt: number;
+}
+
+let cachedGateway: CachedGatewayNode | null = null;
+const GATEWAY_CACHE_TTL = 5 * 60_000; // 5 minutes
+
+async function buildGatewayNode(providerRegistry?: import("../providers/registry.js").ProviderRegistry): Promise<CachedGatewayNode["node"]> {
+  const ifaces = networkInterfaces();
+  let gatewayIp = "127.0.0.1";
+  for (const entries of Object.values(ifaces)) {
+    if (!entries) continue;
+    for (const entry of entries) {
+      if (entry.family === "IPv4" && !entry.internal && !entry.address.startsWith("169.254.")) {
+        gatewayIp = entry.address;
+        break;
+      }
+    }
+    if (gatewayIp !== "127.0.0.1") break;
+  }
+
+  let osVersion: string | null = null;
+  try {
+    if (platform() === "win32") {
+      const { stdout } = await execAsync("cmd /c ver", { timeout: 3000 });
+      osVersion = stdout.trim().replace(/^\s*\n+/, "") || null;
+    } else if (platform() === "darwin") {
+      const { stdout } = await execAsync("sw_vers -productVersion", { timeout: 3000 });
+      osVersion = `macOS ${stdout.trim()}`;
+    } else {
+      const { stdout } = await execAsync("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'", { timeout: 3000 });
+      osVersion = stdout.trim() || null;
+    }
+  } catch {}
+
+  const gatewayProviders: string[] = [];
+  if (providerRegistry) {
+    for (const p of providerRegistry.list()) {
+      try { await p.checkAvailability(); } catch {}
+      if (p.info.available) gatewayProviders.push(p.id);
+    }
+  }
+
+  const name = platform() === "win32"
+    ? process.env.COMPUTERNAME ?? "Gateway"
+    : await execAsync("hostname").then(r => r.stdout.trim()).catch(() => "Gateway");
+
+  return {
+    id: "gateway",
+    type: "gateway" as const,
+    name,
+    platform: platform() === "win32" ? "windows" : platform() === "darwin" ? "macos" : "linux",
+    ip: gatewayIp,
+    version: PKG_VERSION,
+    osVersion,
+    providers: gatewayProviders,
+    online: true,
+  };
+}
+
+async function getGatewayNode(providerRegistry?: import("../providers/registry.js").ProviderRegistry): Promise<CachedGatewayNode["node"]> {
+  const now = Date.now();
+  if (cachedGateway && now - cachedGateway.builtAt < GATEWAY_CACHE_TTL) {
+    return cachedGateway.node;
+  }
+  const node = await buildGatewayNode(providerRegistry);
+  cachedGateway = { node, builtAt: now };
+  return node;
+}
 
 export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane, sqlite?: SqliteDatabase, providerRegistry?: import("../providers/registry.js").ProviderRegistry) {
   // ---- GET /api/network/interfaces — local NIC info ----
@@ -246,84 +337,176 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
     return { platform: key || "linux", ...info };
   });
 
-  // ---- POST /api/network/deploy — deploy gateway to a remote host via SSH ----
-  app.post("/api/network/deploy", async (request) => {
+  // ---- POST /api/network/deploy — deploy gateway binary to a remote host ----
+  app.post("/api/network/deploy", async (request, reply) => {
     const body = (request.body ?? {}) as Record<string, unknown>;
     const ip = String(body["ip"] ?? "").trim();
-    const username = String(body["username"] ?? "").trim();
-    const authMethod = String(body["authMethod"] ?? "password");
+    const username = String(body["username"] ?? "root").trim();
 
-    if (!ip || !username) {
-      return { error: "IP and username are required" };
+    if (!ip) {
+      return reply.status(400).send({ error: "IP address is required" });
     }
 
-    // Build the deployment script that would be executed via SSH
-    const deployScript = [
-      "#!/bin/bash",
-      "set -e",
-      "",
-      "echo '[1/5] Checking system requirements...'",
-      "which curl > /dev/null 2>&1 || { echo 'curl is required'; exit 1; }",
-      "",
-      "echo '[2/5] Installing Bun runtime...'",
-      "curl -fsSL https://bun.sh/install | bash",
-      "export PATH=$HOME/.bun/bin:$PATH",
-      "",
-      "echo '[3/5] Downloading Jait Gateway...'",
-      "mkdir -p ~/.jait",
-      "cd ~/.jait",
-      "bun init -y 2>/dev/null || true",
-      "bun add @jait/gateway@latest",
-      "",
-      "echo '[4/5] Configuring gateway...'",
-      `cat > ~/.jait/.env << 'ENVEOF'`,
-      "PORT=8000",
-      "HOST=0.0.0.0",
-      "LOG_LEVEL=info",
-      "CORS_ORIGIN=*",
-      "ENVEOF",
-      "",
-      "echo '[5/5] Starting gateway service...'",
-      "# Create systemd service",
-      "sudo tee /etc/systemd/system/jait-gateway.service > /dev/null << 'SVCEOF'",
-      "[Unit]",
-      "Description=Jait Gateway",
-      "After=network.target",
-      "",
-      "[Service]",
-      `User=${username}`,
-      "WorkingDirectory=%h/.jait",
-      "ExecStart=%h/.bun/bin/bun run node_modules/@jait/gateway/src/index.ts",
-      "Restart=on-failure",
-      "Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin",
-      "",
-      "[Install]",
-      "WantedBy=multi-user.target",
-      "SVCEOF",
-      "",
-      "sudo systemctl daemon-reload",
-      "sudo systemctl enable --now jait-gateway",
-      "echo 'Jait Gateway deployed successfully!'",
-    ].join("\n");
+    // Stream deploy output via SSE
+    const reqOrigin = request.headers.origin ?? "*";
+    reply.raw.writeHead(200, {
+      "Content-Type": "text/event-stream",
+      "Cache-Control": "no-cache",
+      "Connection": "keep-alive",
+      "Access-Control-Allow-Origin": reqOrigin,
+      "Access-Control-Allow-Credentials": "true",
+    });
 
-    // Build the SSH command (user would need to enter password or have key auth)
-    const sshCommand = authMethod === "key"
-      ? `ssh -o StrictHostKeyChecking=no ${username}@${ip} 'bash -s' << 'DEPLOY'\n${deployScript}\nDEPLOY`
-      : `sshpass -p '<PASSWORD>' ssh -o StrictHostKeyChecking=no ${username}@${ip} 'bash -s' << 'DEPLOY'\n${deployScript}\nDEPLOY`;
-
-    return {
-      ip,
-      username,
-      authMethod,
-      deployScript,
-      sshCommand,
-      instructions: [
-        `SSH into ${ip} as ${username}`,
-        "The deployment script will install Bun, download Jait Gateway, configure it, and set up a systemd service.",
-        "After deployment, the gateway will be accessible at http://" + ip + ":8000",
-      ],
-      estimatedDuration: "2-5 minutes",
+    const send = (event: string, data: string) => {
+      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
     };
+
+    const sshBase = [
+      "-o", "StrictHostKeyChecking=no",
+      "-o", "ConnectTimeout=10",
+      "-o", "BatchMode=yes",
+    ];
+
+    /** Run a command on the remote host and return stdout. */
+    const sshExec = (cmd: string): Promise<string> =>
+      new Promise((res, rej) => {
+        const proc = spawn("ssh", [...sshBase, `${username}@${ip}`, cmd], {
+          stdio: ["ignore", "pipe", "pipe"],
+        });
+        let out = "";
+        proc.stdout.on("data", (d: Buffer) => { out += d.toString(); });
+        proc.stderr.on("data", (d: Buffer) => {
+          d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
+        });
+        proc.on("close", (code) => (code === 0 ? res(out.trim()) : rej(new Error(`exit ${code}`))));
+        proc.on("error", rej);
+      });
+
+    /** Run a long script on the remote host, streaming output via SSE. */
+    const sshScript = (script: string): Promise<void> =>
+      new Promise((res, rej) => {
+        const proc = spawn("ssh", [...sshBase, `${username}@${ip}`, "bash -s"], {
+          stdio: ["pipe", "pipe", "pipe"],
+        });
+        proc.stdin.write(script);
+        proc.stdin.end();
+        proc.stdout.on("data", (d: Buffer) => {
+          d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
+        });
+        proc.stderr.on("data", (d: Buffer) => {
+          d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
+        });
+        proc.on("close", (code) => (code === 0 ? res() : rej(new Error(`exit ${code}`))));
+        proc.on("error", rej);
+        setTimeout(() => { proc.kill(); rej(new Error("Timed out")); }, 5 * 60_000);
+      });
+
+    try {
+      // --- Phase 1: Detect remote architecture ---
+      send("log", `Connecting to ${username}@${ip}...`);
+      const raw = await sshExec("uname -m");
+      let arch: string;
+      if (raw === "x86_64" || raw === "amd64") arch = "x64";
+      else if (raw === "aarch64" || raw === "arm64") arch = "arm64";
+      else {
+        send("error", `Unsupported architecture: ${raw}`);
+        reply.raw.end();
+        return reply;
+      }
+      send("log", `Detected linux-${arch}`);
+
+      // --- Phase 2: Compile binary (cached by version+arch) ---
+      send("log", "[1/3] Compiling gateway binary...");
+      const cacheDir = join(tmpdir(), "jait-deploy");
+      mkdirSync(cacheDir, { recursive: true });
+      const outFile = join(cacheDir, `jait-gateway-${PKG_VERSION}-linux-${arch}`);
+
+      if (existsSync(outFile)) {
+        send("log", `Using cached binary (v${PKG_VERSION})`);
+      } else {
+        // Find entry point — .ts in dev, .js from npm install
+        const tsEntry = resolve(__dirname, "../index.ts");
+        const jsEntry = resolve(__dirname, "../index.js");
+        const entry = existsSync(tsEntry) ? tsEntry : jsEntry;
+
+        await new Promise<void>((res, rej) => {
+          const target = `bun-linux-${arch}`;
+          const args = ["build", "--compile", `--target=${target}`, "--minify", entry, "--outfile", outFile];
+          send("log", `bun build --compile --target=${target} --minify`);
+          const proc = spawn("bun", args, { stdio: ["ignore", "pipe", "pipe"] });
+          proc.stdout.on("data", (d: Buffer) => {
+            d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
+          });
+          proc.stderr.on("data", (d: Buffer) => {
+            d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
+          });
+          proc.on("close", (code) => (code === 0 ? res() : rej(new Error("Compilation failed"))));
+          proc.on("error", rej);
+        });
+        send("log", "Binary compiled");
+      }
+
+      // --- Phase 3: Transfer binary via SCP ---
+      const sizeMB = (statSync(outFile).size / 1_048_576).toFixed(1);
+      send("log", `[2/3] Transferring binary (${sizeMB} MB)...`);
+
+      await sshExec("mkdir -p ~/.jait");
+
+      await new Promise<void>((res, rej) => {
+        const proc = spawn("scp", [...sshBase, outFile, `${username}@${ip}:~/.jait/jait-gateway`]);
+        proc.stderr.on("data", (d: Buffer) => {
+          d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
+        });
+        proc.on("close", (code) => (code === 0 ? res() : rej(new Error("Transfer failed"))));
+        proc.on("error", rej);
+        setTimeout(() => { proc.kill(); rej(new Error("Transfer timed out")); }, 5 * 60_000);
+      });
+      send("log", "Binary transferred");
+
+      // --- Phase 4: Configure and start ---
+      send("log", "[3/3] Configuring and starting...");
+
+      const setupScript = [
+        "set -e",
+        "chmod +x ~/.jait/jait-gateway",
+        "",
+        "# Write .env if it doesn't exist yet",
+        "[ -f ~/.jait/.env ] || cat > ~/.jait/.env << 'ENVEOF'",
+        "PORT=8000",
+        "HOST=0.0.0.0",
+        "LOG_LEVEL=info",
+        "CORS_ORIGIN=*",
+        "ENVEOF",
+        "",
+        "# Systemd service",
+        "sudo tee /etc/systemd/system/jait-gateway.service > /dev/null << SVCEOF",
+        "[Unit]",
+        "Description=Jait Gateway",
+        "After=network.target",
+        "",
+        "[Service]",
+        `User=${username}`,
+        "WorkingDirectory=%h/.jait",
+        "ExecStart=%h/.jait/jait-gateway",
+        "Restart=on-failure",
+        "",
+        "[Install]",
+        "WantedBy=multi-user.target",
+        "SVCEOF",
+        "",
+        "sudo systemctl daemon-reload",
+        "sudo systemctl enable --now jait-gateway",
+        "echo 'Jait Gateway deployed successfully!'",
+      ].join("\n");
+
+      await sshScript(setupScript);
+      send("done", `Gateway v${PKG_VERSION} deployed to ${ip}`);
+    } catch (err) {
+      send("error", err instanceof Error ? err.message : "Deployment failed");
+    }
+
+    reply.raw.end();
+    return reply;
   });
 
   // ---- GET /api/network/nodes — list known gateway mesh nodes ----
@@ -358,55 +541,8 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
 
   // ---- GET /api/network/topology — unified graph data for the force-graph visualization ----
   app.get("/api/network/topology", async () => {
-    // Gateway node (self)
-    const ifaces = networkInterfaces();
-    let gatewayIp = "127.0.0.1";
-    for (const entries of Object.values(ifaces)) {
-      if (!entries) continue;
-      for (const entry of entries) {
-        if (entry.family === "IPv4" && !entry.internal && !entry.address.startsWith("169.254.")) {
-          gatewayIp = entry.address;
-          break;
-        }
-      }
-      if (gatewayIp !== "127.0.0.1") break;
-    }
-
-    let osVersion: string | null = null;
-    try {
-      if (platform() === "win32") {
-        const { stdout } = await execAsync("cmd /c ver", { timeout: 3000 });
-        osVersion = stdout.trim().replace(/^\s*\n+/, "") || null;
-      } else if (platform() === "darwin") {
-        const { stdout } = await execAsync("sw_vers -productVersion", { timeout: 3000 });
-        osVersion = `macOS ${stdout.trim()}`;
-      } else {
-        // Try /etc/os-release for Linux distros
-        const { stdout } = await execAsync("cat /etc/os-release 2>/dev/null | grep PRETTY_NAME | cut -d= -f2 | tr -d '\"'", { timeout: 3000 });
-        osVersion = stdout.trim() || null;
-      }
-    } catch {}
-
-    // Discover local providers available on the gateway
-    const gatewayProviders: string[] = [];
-    if (providerRegistry) {
-      for (const p of providerRegistry.list()) {
-        try { await p.checkAvailability(); } catch {}
-        if (p.info.available) gatewayProviders.push(p.id);
-      }
-    }
-
-    const gatewayNode = {
-      id: "gateway",
-      type: "gateway" as const,
-      name: platform() === "win32" ? process.env.COMPUTERNAME ?? "Gateway" : (await execAsync("hostname").then(r => r.stdout.trim()).catch(() => "Gateway")),
-      platform: platform() === "win32" ? "windows" : platform() === "darwin" ? "macos" : "linux",
-      ip: gatewayIp,
-      version: PKG_VERSION,
-      osVersion,
-      providers: gatewayProviders,
-      online: true,
-    };
+    // Gateway node — cached, refreshed every 5 min
+    const gatewayNode = await getGatewayNode(providerRegistry);
 
     // Connected FsNode devices
     const connectedDevices = (ws?.getFsNodes() ?? []).filter(n => !n.isGateway).map(n => ({

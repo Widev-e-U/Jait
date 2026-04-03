@@ -457,6 +457,8 @@ export interface PromptInputHandle {
   getSegments: () => UserMessageSegment[]
   /** Focus the editor and move the caret to the end. */
   focus: () => void
+  /** Append a file attachment (binary/text) directly to the attachments list. */
+  addAttachment: (attachment: import('@/hooks/useChat').ChatAttachment) => void
 }
 
 const attachmentDraftStore = new Map<string, ChatAttachment[]>()
@@ -726,6 +728,10 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       if (!el) return
       el.focus()
       moveCursorToEnd(el)
+    },
+    addAttachment: (attachment) => {
+      setAttachments(prev => [...prev, attachment])
+      setIsEmpty(false)
     },
   }), [handleRemoveChip, segments])
 

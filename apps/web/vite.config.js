@@ -22,6 +22,14 @@ export default defineConfig({
                 target: gatewayTarget,
                 changeOrigin: true,
             },
+            '/jobs': {
+                target: gatewayTarget,
+                changeOrigin: true,
+            },
+            '/hooks': {
+                target: gatewayTarget,
+                changeOrigin: true,
+            },
         },
         // Allow WebSocket upgrade for screen sharing signaling
         hmr: {
