@@ -235,6 +235,8 @@ export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
   return toolRegistry.list().filter((tool) => {
     const source = tool.source ?? "builtin";
     const tier = tool.tier ?? "standard";
+    // Expose builtin non-core tools AND plugin-contributed tools
+    if (source.startsWith("plugin:")) return true;
     return source === "builtin" && tier !== "core";
   });
 }

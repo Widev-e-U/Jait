@@ -18,6 +18,10 @@ import { MemoryEngine } from "./memory/service.js";
 import { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
 import { join } from "node:path";
 import { homedir } from "node:os";
+import { createRequire } from "node:module";
+
+const require = createRequire(import.meta.url);
+const { version: GATEWAY_VERSION } = require("../package.json") as { version: string };
 import { ConsentManager } from "./security/consent-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
@@ -47,6 +51,7 @@ import { ArchitectureDiagramService } from "./services/architecture-diagrams.js"
 import { WorkspaceService } from "./services/workspaces.js";
 import { AssistantProfileService } from "./services/assistant-profiles.js";
 import { BrowserCollaborationService } from "./services/browser-collaboration.js";
+import { PluginManager } from "./plugins/manager.js";
 
 async function main() {
   const config = loadConfig();
@@ -481,6 +486,44 @@ async function main() {
 
   console.log(`Consent manager initialized (profile: ${activeToolProfileName}, timeout: 120s, ${permissions.size} tool permissions)`);
 
+  // Plugin manager — discover and load enabled extensions
+  // Also scan for OpenClaw-format plugins in common locations
+  const openclawDirs: string[] = [];
+  const openclawEnvDir = process.env.OPENCLAW_EXTENSIONS_DIR;
+  if (openclawEnvDir) openclawDirs.push(openclawEnvDir);
+  // Auto-detect sibling openclaw/extensions directory (dev convenience)
+  const siblingOpenClaw = join(process.cwd(), "..", "openclaw", "extensions");
+  try { const s = await import("node:fs").then(fs => fs.statSync(siblingOpenClaw)); if (s.isDirectory()) openclawDirs.push(siblingOpenClaw); } catch { /* not present */ }
+
+  const pluginManager = new PluginManager({
+    sqlite,
+    toolRegistry,
+    gatewayVersion: GATEWAY_VERSION,
+    workspaceRoot: process.cwd(),
+    openclawExtensionsDirs: openclawDirs,
+  });
+  await pluginManager.syncAndLoad();
+
+  // Skill registry — discover skills from user dir, workspace, and OpenClaw
+  const { SkillRegistry, userSkillsDir } = await import("./skills/index.js");
+  const skillRegistry = new SkillRegistry();
+  const skillScanDirs: { path: string; source: "bundled" | "user" | "workspace" | "plugin" }[] = [
+    { path: userSkillsDir(), source: "user" },
+    { path: join(process.cwd(), ".jait", "skills"), source: "workspace" },
+    { path: join(process.cwd(), ".agents", "skills"), source: "workspace" },
+  ];
+  // Scan OpenClaw skills directory if present
+  const siblingOpenClawSkills = join(process.cwd(), "..", "openclaw", "skills");
+  try { const fs = await import("node:fs"); if (fs.statSync(siblingOpenClawSkills).isDirectory()) skillScanDirs.push({ path: siblingOpenClawSkills, source: "bundled" }); } catch { /* not present */ }
+  const openclawSkillsEnv = process.env.OPENCLAW_SKILLS_DIR;
+  if (openclawSkillsEnv) skillScanDirs.push({ path: openclawSkillsEnv, source: "bundled" });
+  await skillRegistry.discover(skillScanDirs);
+  console.log(`Skills: ${skillRegistry.size} discovered (${skillRegistry.listEnabled().length} enabled)`);
+
+  // ClawHub marketplace client
+  const { ClawHubClient } = await import("./clawhub/client.js");
+  const clawhubClient = new ClawHubClient(process.env.CLAWHUB_REGISTRY);
+
   const server = await createServer(config, {
     db,
     sqlite,
@@ -520,6 +563,9 @@ async function main() {
     previewService,
     architectureDiagramService,
     browserCollaborationService,
+    pluginManager,
+    skillRegistry,
+    clawhubClient,
     shutdown: shutdownRef,
   });
 
@@ -736,6 +782,7 @@ async function main() {
     if (forceTimer.unref) forceTimer.unref();
     try {
       consentManager.cancelAll("shutdown");
+      await pluginManager.disposeAll();
       await previewService.stopAll();
       await surfaceRegistry.stopAll("shutdown");
       scheduler.stop();

@@ -42,6 +42,9 @@ export { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
 
 export type { ScheduledJob, SchedulerService } from "./scheduler/contracts.js";
 
-export type { PluginContext, PluginModule, PluginToolDeclaration, PluginDescriptor } from "./plugins/contracts.js";
+export type { PluginContext, PluginModule, PluginToolDeclaration, PluginDescriptor, PluginEntry, InstalledPlugin, LoadedPlugin } from "./plugins/contracts.js";
+export { definePlugin } from "./plugins/contracts.js";
+export type { PluginManifest } from "./plugins/manifest.js";
+export { PluginManager } from "./plugins/manager.js";
 
 export type { SessionDescriptor, SessionRouter } from "./sessions/contracts.js";

@@ -14,6 +14,7 @@ import { ProviderRegistry } from "../providers/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
 import type { GitStepResult } from "../services/git.js";
 import { SessionStateService } from "../services/session-state.js";
+import { SkillRegistry } from "../skills/index.js";
 import { ThreadService } from "../services/threads.js";
 import { UserService } from "../services/users.js";
 import { registerThreadRoutes } from "./threads.js";
@@ -256,6 +257,69 @@ describe("thread routes", () => {
     expect(response.statusCode).toBe(200);
     await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
     expect(provider.sendTurn).toHaveBeenCalledWith("mock-session-1", "inspect ui", undefined);
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("prepends the enabled skills block on the first thread turn", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("codex");
+    providerRegistry.register(provider);
+    const skillRegistry = new SkillRegistry();
+    skillRegistry.add({
+      id: "word-docx",
+      name: "Word / DOCX",
+      description: "Handle DOCX files without formatting drift.",
+      filePath: "C:/skills/word-docx/SKILL.md",
+      source: "user",
+      enabled: true,
+    });
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      skillRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "DOCX helper",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "Inspect the template", titleTask: "" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+    expect(provider.sendTurn).toHaveBeenCalledWith(
+      "mock-session-1",
+      expect.stringContaining("<available_skills>"),
+      undefined,
+    );
+    expect(provider.sendTurn).toHaveBeenCalledWith(
+      "mock-session-1",
+      expect.stringContaining("<name>Word / DOCX</name>"),
+      undefined,
+    );
+    expect(provider.sendTurn).toHaveBeenCalledWith(
+      "mock-session-1",
+      expect.stringContaining("Inspect the template"),
+      undefined,
+    );
 
     await app.close();
     sqlite.close();

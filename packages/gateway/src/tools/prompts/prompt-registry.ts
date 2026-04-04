@@ -73,11 +73,16 @@ class PromptRegistry {
 
 export const promptRegistry = new PromptRegistry();
 
+import type { Skill } from "../../skills/index.js";
+import { formatSkillsForPrompt } from "../../skills/index.js";
+
 // ── Helpers ──────────────────────────────────────────────────────────
 
 export interface PromptContext {
   /** The resolved workspace root for the current session (if any) */
   workspaceRoot?: string;
+  /** Enabled skills to inject into the system prompt */
+  skills?: Skill[];
 }
 
 export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?: PromptContext): string {
@@ -91,6 +96,11 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
   // Inject workspace context so the agent knows its working directory
   if (ctx?.workspaceRoot) {
     prompt += `\n\n<workspaceContext>\nYou are working in the workspace: ${ctx.workspaceRoot}\nAll relative file paths and searches default to this directory. Use relative paths when possible. Do not search from the drive root — scope operations to this workspace.\n</workspaceContext>`;
+  }
+
+  // Inject available skills
+  if (ctx?.skills && ctx.skills.length > 0) {
+    prompt += formatSkillsForPrompt(ctx.skills);
   }
 
   return prompt;

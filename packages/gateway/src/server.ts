@@ -44,6 +44,9 @@ import { registerUpdateRoutes } from "./routes/update.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerArchitectureRoutes } from "./routes/architecture.js";
 import { registerBrowserCollaborationRoutes } from "./routes/browser-collaboration.js";
+import { registerPluginRoutes } from "./routes/plugins.js";
+import { registerSkillRoutes } from "./routes/skills.js";
+import { registerStoreRoutes } from "./routes/store.js";
 import type { SessionService } from "./services/sessions.js";
 import type { AuditWriter } from "./services/audit.js";
 import type { SurfaceRegistry } from "./surfaces/index.js";
@@ -117,6 +120,9 @@ export interface ServerDeps {
   previewService?: import("./services/preview.js").PreviewService;
   architectureDiagramService?: import("./services/architecture-diagrams.js").ArchitectureDiagramService;
   browserCollaborationService?: BrowserCollaborationService;
+  pluginManager?: import("./plugins/manager.js").PluginManager;
+  skillRegistry?: import("./skills/index.js").SkillRegistry;
+  clawhubClient?: import("./clawhub/client.js").ClawHubClient;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -155,6 +161,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     sessionState: deps.sessionState,
     workspaceService: deps.workspaceService,
     providerRegistry: deps.providerRegistry,
+    skillRegistry: deps.skillRegistry,
   });
 
   if (deps.sessionService && deps.audit) {
@@ -256,6 +263,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       userService: deps.userService,
       sessionState: deps.sessionState,
       repoService: deps.repoService,
+      skillRegistry: deps.skillRegistry,
       ws: deps.ws,
       gitService: deps.gitService,
     });
@@ -288,6 +296,24 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       maintenanceService: deps.maintenanceService,
       notifications: deps.notifications,
       ws: deps.ws,
+    });
+  }
+
+  // Plugin / extension management routes
+  if (deps.pluginManager) {
+    registerPluginRoutes(app, deps.pluginManager);
+  }
+
+  // Skill management routes
+  if (deps.skillRegistry) {
+    registerSkillRoutes(app, deps.skillRegistry);
+  }
+
+  // ClawHub store routes (marketplace browse + install)
+  if (deps.clawhubClient && deps.skillRegistry) {
+    registerStoreRoutes(app, {
+      clawhub: deps.clawhubClient,
+      skillRegistry: deps.skillRegistry,
     });
   }
 

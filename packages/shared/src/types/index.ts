@@ -91,3 +91,11 @@ export type {
   EnvironmentConnector,
   EnvironmentSnapshot,
 } from "./environment.js";
+
+export type {
+  PluginStatus,
+  PluginInfo,
+  SkillInfo,
+  ClawHubSkillListing,
+  ClawHubPackageListing,
+} from "./plugin.js";

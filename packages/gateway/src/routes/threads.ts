@@ -34,6 +34,8 @@ import type { UserService } from "../services/users.js";
 import type { RepositoryService } from "../services/repositories.js";
 import { assertOwnership } from "../security/ownership.js";
 import { existsSync } from "node:fs";
+import type { SkillRegistry } from "../skills/index.js";
+import { formatSkillsForPrompt } from "../skills/index.js";
 import {
   generateTitleViaTurn,
   generateTitleViaApi,
@@ -136,6 +138,7 @@ export interface ThreadRouteDeps {
   userService?: UserService;
   sessionState?: SessionStateService;
   repoService?: RepositoryService;
+  skillRegistry?: SkillRegistry;
   ws?: WsControlPlane;
   gitService?: {
     runStackedAction(
@@ -895,7 +898,14 @@ export function registerThreadRoutes(
               displaySegments,
             });
             broadcastThreadEvent(id, "activity", { activity: userActivity });
-            await provider.sendTurn(session.id, fullMessage, attachments);
+
+            // Prepend skills context on the first turn of a new CLI session
+            let turnMessage = fullMessage;
+            if (deps.skillRegistry) {
+              const skillsBlock = formatSkillsForPrompt(deps.skillRegistry.listEnabled());
+              if (skillsBlock) turnMessage = `${skillsBlock}\n\n${fullMessage}`;
+            }
+            await provider.sendTurn(session.id, turnMessage, attachments);
           }
         } catch (err) {
           const errorMsg = err instanceof Error ? err.message : String(err);

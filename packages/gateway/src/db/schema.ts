@@ -444,3 +444,18 @@ export const browserInterventions = sqliteTable(
     index("idx_browser_interventions_status").on(table.status, table.requestedAt),
   ],
 );
+
+// ─── Plugins ───────────────────────────────────────────────────────
+export const plugins = sqliteTable("plugins", {
+  id: text("id").primaryKey(),
+  displayName: text("display_name").notNull(),
+  version: text("version").notNull(),
+  description: text("description"),
+  author: text("author"),
+  path: text("path").notNull(),
+  status: text("status").notNull().default("installed"), // 'installed' | 'enabled' | 'disabled' | 'error'
+  config: text("config").notNull().default("{}"),
+  error: text("error"),
+  installedAt: text("installed_at").notNull(),
+  updatedAt: text("updated_at").notNull(),
+});

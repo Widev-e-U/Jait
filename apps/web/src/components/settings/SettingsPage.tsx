@@ -6,6 +6,8 @@ import { Card } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { ToolSettings } from './ToolSettings'
+import { ExtensionSettings } from './ExtensionSettings'
+import { SkillSettings } from './SkillSettings'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
@@ -79,7 +81,7 @@ export interface UpdateInfo {
   hasUpdate: boolean
 }
 
-type SettingsTab = 'general' | 'api' | 'tools' | 'activity'
+type SettingsTab = 'general' | 'api' | 'tools' | 'extensions' | 'skills' | 'activity'
 
 interface SettingsPageProps {
   username: string
@@ -336,6 +338,12 @@ export function SettingsPage({
   const showActivitySection = matchesSearch(
     'activity recent messages terminal sessions feed history',
   )
+  const showExtensionsSection = matchesSearch(
+    'extensions plugins store install uninstall enable disable',
+  )
+  const showSkillsSection = matchesSearch(
+    'skills instructions prompts specialized workflows SKILL.md',
+  )
   const showThemeSection = matchesSearch(...getVsCodeThemeSearchTerms(), 'import json token colors workbench sidebar tabs')
 
   const emptyState = (
@@ -371,6 +379,8 @@ export function SettingsPage({
           <TabsTrigger value="general" className="flex-1 sm:flex-none">General</TabsTrigger>
           <TabsTrigger value="api" className="flex-1 sm:flex-none">API</TabsTrigger>
           <TabsTrigger value="tools" className="flex-1 sm:flex-none">Tools</TabsTrigger>
+          <TabsTrigger value="extensions" className="flex-1 sm:flex-none">Extensions</TabsTrigger>
+          <TabsTrigger value="skills" className="flex-1 sm:flex-none">Skills</TabsTrigger>
           <TabsTrigger value="activity" className="flex-1 sm:flex-none">Activity</TabsTrigger>
         </TabsList>
 
@@ -752,6 +762,14 @@ export function SettingsPage({
 
         <TabsContent value="tools" className="space-y-6">
       {showToolsSection ? <ToolSettings token={token} /> : emptyState}
+        </TabsContent>
+
+        <TabsContent value="extensions" className="space-y-6">
+          {showExtensionsSection ? <ExtensionSettings token={token} /> : emptyState}
+        </TabsContent>
+
+        <TabsContent value="skills" className="space-y-6">
+          {showSkillsSection ? <SkillSettings token={token} /> : emptyState}
         </TabsContent>
 
         <TabsContent value="activity" className="space-y-6">

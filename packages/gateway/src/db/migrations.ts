@@ -656,4 +656,27 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 025: Plugins table ──────────────────────────────────────────
+  {
+    id: 25,
+    name: "plugins_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS plugins (
+          id TEXT PRIMARY KEY,
+          display_name TEXT NOT NULL,
+          version TEXT NOT NULL,
+          description TEXT,
+          author TEXT,
+          path TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'installed',
+          config TEXT NOT NULL DEFAULT '{}',
+          error TEXT,
+          installed_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+
 ];

@@ -42,6 +42,8 @@ import {
   isValidChatMode,
 } from "../tools/chat-modes.js";
 import { buildSystemPrompt, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
+import type { SkillRegistry } from "../skills/index.js";
+import { formatSkillsForPrompt } from "../skills/index.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -655,6 +657,7 @@ export interface ChatRouteDeps {
   sessionState?: SessionStateService;
   workspaceService?: WorkspaceService;
   providerRegistry?: ProviderRegistry;
+  skillRegistry?: SkillRegistry;
   toolExecutor?: (
     toolName: string,
     input: unknown,
@@ -682,6 +685,7 @@ export function registerChatRoutes(
   let sessionStateService: SessionStateService | undefined;
   let workspaceService: WorkspaceService | undefined;
   let providerRegistry: ProviderRegistry | undefined;
+  let skillRegistry: SkillRegistry | undefined;
 
   if (depsOrDb && typeof depsOrDb === "object" && "sessionService" in depsOrDb) {
     const deps = depsOrDb as ChatRouteDeps;
@@ -697,6 +701,7 @@ export function registerChatRoutes(
     sessionStateService = deps.sessionState;
     workspaceService = deps.workspaceService;
     providerRegistry = deps.providerRegistry;
+    skillRegistry = deps.skillRegistry;
   } else {
     db = depsOrDb as JaitDB | undefined;
     sessionService = sessionServiceArg;
@@ -1040,7 +1045,7 @@ export function registerChatRoutes(
     const wsRoot = surfaceRegistry
       ? resolveWorkspaceRoot(surfaceRegistry, sessionId, workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)
       : ((workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)?.trim() || process.cwd());
-    const promptCtx: PromptContext = { workspaceRoot: wsRoot };
+    const promptCtx: PromptContext = { workspaceRoot: wsRoot, skills: skillRegistry?.listEnabled() };
 
     if (!sessionHistory.has(sessionId)) {
       sessionHistory.set(sessionId, [
@@ -1211,6 +1216,7 @@ export function registerChatRoutes(
         // ── Reuse an existing CLI session if one is alive for this Jait session ──
         const cachedCliSession = activeCliSessions.get(sessionId);
         let providerSessionId: string;
+        let isNewCliSession = false;
 
         if (cachedCliSession && cachedCliSession.providerId === requestProvider && cachedCliSession.runtimeMode === runtimeMode) {
           // Existing session with the same provider — try to reuse it
@@ -1232,6 +1238,7 @@ export function registerChatRoutes(
             mcpServers,
           });
           providerSessionId = session.id;
+          isNewCliSession = true;
           activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider });
           console.log(`[chat/cli] Started new ${requestProvider}/${runtimeMode}${isRemote ? " (remote)" : ""} session ${providerSessionId} for ${sessionId}`);
         }
@@ -1431,9 +1438,19 @@ export function registerChatRoutes(
           }
         });
 
+        // ── Prepend skills context on the first turn of a new CLI session ──
+        let cliContent = content;
+        if (isNewCliSession && skillRegistry) {
+          const enabledSkills = skillRegistry.listEnabled();
+          const skillsBlock = formatSkillsForPrompt(enabledSkills);
+          if (skillsBlock) {
+            cliContent = `${skillsBlock}\n\n${content}`;
+          }
+        }
+
         // Send the turn — with recovery if the cached session died between messages
         try {
-          await cliProvider.sendTurn(providerSessionId, content);
+          await cliProvider.sendTurn(providerSessionId, cliContent);
         } catch (sendErr) {
           // Session likely died (process exited) — start a fresh one
           console.warn(`[chat/cli] sendTurn failed on cached session, recovering:`, sendErr);
@@ -1448,7 +1465,16 @@ export function registerChatRoutes(
           providerSessionId = freshSession.id;
           activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider });
           console.log(`[chat/cli] Recovered with new ${requestProvider}/${runtimeMode} session ${providerSessionId}`);
-          await cliProvider.sendTurn(providerSessionId, content);
+          // Fresh session — re-inject skills context
+          let recoveryContent = content;
+          if (skillRegistry) {
+            const enabledSkills = skillRegistry.listEnabled();
+            const skillsBlock = formatSkillsForPrompt(enabledSkills);
+            if (skillsBlock) {
+              recoveryContent = `${skillsBlock}\n\n${content}`;
+            }
+          }
+          await cliProvider.sendTurn(providerSessionId, recoveryContent);
         }
 
         // Wait for turn completion or error

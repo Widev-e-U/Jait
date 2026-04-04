@@ -67,9 +67,13 @@ export function ToolSettings({ token }: ToolSettingsProps) {
         const res = await fetch(`${API_URL}/auth/settings/tools`, {
           headers: { Authorization: `Bearer ${token}` },
         })
-        if (res.ok && !cancelled) {
-          const data = (await res.json()) as { tools: ToolInfo[] }
-          setTools(data.tools)
+        if (!cancelled) {
+          if (res.ok) {
+            const data = (await res.json()) as { tools: ToolInfo[] }
+            setTools(data.tools)
+          } else {
+            setError(`Failed to load tools (${res.status})`)
+          }
         }
       } catch {
         if (!cancelled) setError('Failed to load tools')
