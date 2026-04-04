@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo } from 'react'
 import Editor from '@monaco-editor/react'
-import { AlertCircle, ArrowLeft, Boxes, Check, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, PanelLeft, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Boxes, Check, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
 import type { ProviderId } from '@/lib/agents-api'
 import { ArchitecturePanel } from './architecture-panel'
@@ -741,6 +741,15 @@ function useDragResize(
     setMaxCollapsed(false)
   }, [min, max])
 
+  const collapse = useCallback(() => {
+    if (!collapsed) {
+      cachedSizeRef.current = size
+      setCollapsed(true)
+      setMaxCollapsed(false)
+      setSize(0)
+    }
+  }, [collapsed, size])
+
   const applyPending = useCallback((nextSize: number | null) => {
     if (nextSize === null) return
     if (nextSize === SNAP_MIN) {
@@ -841,7 +850,7 @@ function useDragResize(
     if (!collapsed && !maxCollapsed) window.localStorage.setItem(storageKey, String(size))
   }, [size, storageKey, collapsed, maxCollapsed])
 
-  return { size, collapsed, maxCollapsed, onPointerDown, isDragging, restore } as const
+  return { size, collapsed, maxCollapsed, onPointerDown, isDragging, restore, collapse } as const
 }
 
 /* ------------------------------------------------------------------ */
@@ -1157,18 +1166,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   useEffect(() => { if (restoreRef) restoreRef.current = panel.restore }, [restoreRef, panel.restore])
 
   // Tree max is clamped so the editor pane never disappears
-  const treeMax = Math.max(180, panel.size - minEditorWidth)
-  const tree = useDragResize(260, 180, treeMax, 'horizontal', 'workspaceTreePaneWidth', {
+  const treeMax = Math.max(220, panel.size - minEditorWidth)
+  const tree = useDragResize(260, 220, treeMax, 'horizontal', 'workspaceTreePaneWidth', {
     snapCollapse: true,
   })
 
-  // When tree snaps collapsed via drag, sync parent toggle state
+  // When workspace panel snaps collapsed via drag, restore drag state and let parent close
   useEffect(() => {
-    if (tree.collapsed && showTreeProp && onToggleTree) {
-      tree.restore()
-      onToggleTree()
+    if (panel.collapsed) {
+      panel.restore()
     }
-  }, [tree.collapsed])  // eslint-disable-line react-hooks/exhaustive-deps
+  }, [panel.collapsed])  // eslint-disable-line react-hooks/exhaustive-deps
 
   // Lazy tree state
   const [lazyTree, setLazyTree] = useState<LazyNode[]>([])
@@ -1238,7 +1246,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const activeTab = useMemo(() => openTabs.find(t => t.id === activeTabId) ?? null, [openTabs, activeTabId])
   const activeTabEditable = isEditableWorkspaceTab(activeTab)
   const canMaximizeActiveTab = Boolean(activeTab)
-  const effectiveShowTree = showTreeProp && !tabMaximized && !panel.collapsed
+  const effectiveShowTree = showTreeProp && !tabMaximized && !panel.collapsed && !tree.collapsed
   const effectiveShowEditor = (showEditorProp || tabMaximized) && !panel.collapsed
 
   useEffect(() => {
@@ -2050,11 +2058,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const renderPreviewSidePanel = () => (
     <div className="absolute inset-y-0 right-0 z-20 flex w-full max-w-[360px] flex-col border-l bg-background/95 shadow-2xl backdrop-blur">
-      <div className="flex items-center gap-2 border-b px-3 py-2">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <Settings2 className="h-4 w-4 text-muted-foreground" />
-            <span className="text-sm font-medium">Preview Controls</span>
+      <div className="flex items-center gap-2 border-b px-3 py-2 shrink-0">
+        <div className="min-w-0 flex-1 overflow-hidden">
+          <div className="flex items-center gap-2 whitespace-nowrap overflow-hidden">
+            <Settings2 className="h-4 w-4 text-muted-foreground shrink-0" />
+            <span className="text-sm font-medium truncate">Preview Controls</span>
             {managedPreviewSession && (
               <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
                 {managedPreviewSession.status}
@@ -2382,7 +2390,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   )
 
   const renderPreviewPane = (emptyLabel: string) => (
-    <div className="relative h-full bg-muted/5">
+    <div className="relative h-full bg-muted/5 overflow-hidden">
       {previewFrameLoading && (
         <div className="absolute inset-x-0 top-0 z-10 h-1 overflow-hidden bg-transparent">
           <div className="h-full w-full animate-pulse bg-primary/80" />
@@ -5151,7 +5159,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   return (
     <aside
       className={cn(
-        'bg-muted/20 flex min-h-0 shrink-0',
+        'bg-muted/20 flex min-h-0',
+        panel.maxCollapsed ? 'flex-1' : 'shrink-0',
         tabMaximized ? 'z-30 border-r shadow-2xl' : 'border-r',
       )}
       style={getDesktopWorkspacePanelStyle({
@@ -5159,25 +5168,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         showEditor: showEditorProp,
         panelSize: panel.size,
         treeSize: tree.size,
+        maxCollapsed: panel.maxCollapsed,
       })}
     >
-      {/* Restore button when workspace is fully collapsed */}
-      {panel.collapsed && (
-        <button
-          onClick={panel.restore}
-          className="absolute inset-0 z-10 flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted/40 transition-colors cursor-pointer"
-          title="Show Workspace"
-        >
-          <PanelLeft className="h-3.5 w-3.5" />
-        </button>
-      )}
+
 
       {/* File explorer pane */}
-      {effectiveShowTree && (
+      {showTreeProp && !tabMaximized && !panel.collapsed && (
       <div
         className={`border-r bg-background transition-colors flex flex-col shrink-0 overflow-hidden`}
-        style={{ width: tree.size }}
+        style={{ width: tree.collapsed ? 0 : tree.size }}
       >
+      {effectiveShowTree && (<>
         {/* Tab bar: Files | Source Control */}
         <div className="flex items-center h-[35px] border-b bg-muted/20 shrink-0 px-1 gap-0.5 overflow-hidden">
           <button
@@ -5204,14 +5206,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
           </button>
           <div className="flex-1" />
-          {onToggleTree && (
-            <button
-              onClick={onToggleTree}
-              className="flex h-7 items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1 hover:bg-muted"
-            >
-              <EyeOff className="h-3 w-3" />
-            </button>
-          )}
+          <button
+            onClick={() => tree.collapse()}
+            className="flex h-7 items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1 hover:bg-muted"
+          >
+            <EyeOff className="h-3 w-3" />
+          </button>
         </div>
 
         {/* Files tab */}
@@ -5530,16 +5530,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         </div>
         )}
 
+      </>)}
       </div>
       )}
 
       {/* Resize handle: tree ↔ editor */}
-      {effectiveShowTree && effectiveShowEditor && (
+      {showTreeProp && !tabMaximized && !panel.collapsed && effectiveShowEditor && (
       <div
-        className="relative w-2 -mx-0.5 shrink-0 cursor-col-resize group touch-none"
+        className="relative w-2 -mx-0.5 shrink-0 cursor-col-resize touch-none sash-handle"
         onPointerDown={tree.onPointerDown}
+        onDoubleClick={tree.collapsed ? () => tree.restore() : undefined}
       >
-        <div className="absolute inset-y-0 left-1/2 w-px -translate-x-1/2 bg-border/60 transition-colors group-hover:bg-primary/40 group-active:bg-primary/50" />
+        <div className={`absolute inset-y-0 left-1/2 w-px -translate-x-1/2 transition-[background-color] duration-100 ease-out ${tree.isDragging ? 'bg-primary/50' : 'bg-border/60'}`} />
       </div>
       )}
 
@@ -5548,6 +5550,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       <div className={tabMaximized ? 'absolute inset-0 z-20 flex flex-col bg-background' : 'flex-1 min-w-0 min-h-0 flex flex-col'}>
         {/* Tab bar — VS Code style */}
         <div className="flex items-center h-[35px] bg-[var(--tab-bg,hsl(var(--muted)/0.3))] border-b shrink-0 min-w-0">
+          {!effectiveShowTree && (showTreeProp || onToggleTree) && (
+            <button
+              onClick={() => { if (tree.collapsed) tree.restore(); else if (onToggleTree) onToggleTree() }}
+              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 ml-1"
+              title="Show Files"
+            >
+              <FolderTree className="h-3 w-3" />
+            </button>
+          )}
           <div
             ref={tabScrollRef}
             className="flex items-center flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-none"
@@ -5643,26 +5654,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )
             })}
           </div>
-          {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor || canMaximizeActiveTab || panel.maxCollapsed || (!effectiveShowTree && onToggleTree)) && (
+          {(activeTabEditable || activeTab?.type === 'preview' || onToggleEditor || canMaximizeActiveTab) && (
             <div className="flex items-center shrink-0">
-              {!effectiveShowTree && onToggleTree && (
-                <button
-                  onClick={onToggleTree}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                  title="Show Files"
-                >
-                  <FolderTree className="h-3 w-3" />
-                </button>
-              )}
-              {panel.maxCollapsed && (
-                <button
-                  onClick={panel.restore}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
-                  title="Show Chat"
-                >
-                  <MessageSquare className="h-3 w-3" />
-                </button>
-              )}
               {canMaximizeActiveTab && (
                 <button
                   onClick={() => setTabMaximized((prev) => !prev)}
@@ -5700,12 +5693,21 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   </button>
                 </>
               )}
-              {onToggleEditor && (
+              {onToggleEditor && !panel.collapsed && !panel.maxCollapsed && (
                 <button
                   onClick={onToggleEditor}
                   className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 mx-1"
                 >
                   <EyeOff className="h-3 w-3" />
+                </button>
+              )}
+              {panel.maxCollapsed && (
+                <button
+                  onClick={panel.restore}
+                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  title="Show Chat"
+                >
+                  <MessageSquare className="h-3 w-3" />
                 </button>
               )}
             </div>

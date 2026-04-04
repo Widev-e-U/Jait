@@ -1,21 +1,25 @@
 import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
 import { cn } from '@/lib/utils'
+import { estimateMessageHeight } from '@/lib/pretext-height'
 
 interface ConversationProps {
   children: React.ReactNode
   className?: string
   compact?: boolean
   loading?: boolean
+  /** Raw text per child item for pretext-based virtual item height estimation. */
+  messageContents?: string[]
 }
 
 const STICKY_BOTTOM_THRESHOLD_PX = 24
-type VirtualScrollBehavior = 'auto' | 'smooth'
+const DEFAULT_ITEM_HEIGHT = 120
 
-export function Conversation({ children, className, loading }: ConversationProps) {
+export function Conversation({ children, className, loading, messageContents }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
-  const contentRef = useRef<HTMLDivElement | null>(null)
+  const sizerRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [stickToBottom, setStickToBottom] = useState(true)
@@ -25,6 +29,45 @@ export function Conversation({ children, className, loading }: ConversationProps
   const stickToBottomRef = useRef(true)
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+
+  // Track inner container width for pretext layout calculations.
+  const innerRef = useRef<HTMLDivElement | null>(null)
+  const containerWidthRef = useRef(600)
+
+  useEffect(() => {
+    const el = innerRef.current
+    if (!el) return
+    containerWidthRef.current = el.clientWidth
+    const ro = new ResizeObserver((entries) => {
+      for (const entry of entries) {
+        containerWidthRef.current = entry.contentRect.width
+      }
+    })
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [loading])
+
+  // Keep messageContents in a ref so estimateSize stays stable.
+  const messageContentsRef = useRef(messageContents)
+  messageContentsRef.current = messageContents
+
+  const virtualizer = useVirtualizer({
+    count: childItems.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: (index) => {
+      const text = messageContentsRef.current?.[index]
+      if (!text) return DEFAULT_ITEM_HEIGHT
+      return estimateMessageHeight(text, containerWidthRef.current)
+    },
+    overscan: 5,
+    getItemKey: (index) => {
+      const child = childItems[index]
+      if (typeof child === 'object' && child !== null && 'key' in child) {
+        return String(child.key)
+      }
+      return index
+    },
+  })
 
   // Track user-initiated scroll gestures (wheel/touch) so we don't
   // confuse layout-induced scrollTop changes (tool cards collapsing)
@@ -80,7 +123,7 @@ export function Conversation({ children, className, loading }: ConversationProps
     })
   }, [])
 
-  const scrollToBottom = useCallback((behavior: VirtualScrollBehavior = 'smooth') => {
+  const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     const el = scrollRef.current
     if (!el) return
     el.scrollTo({ top: el.scrollHeight, behavior })
@@ -105,9 +148,8 @@ export function Conversation({ children, className, loading }: ConversationProps
     }
   }, [childItems.length, loading, scrollToBottom])
 
-  // Continuous rAF loop: while stickToBottom is active, poll every frame
-  // so tool-card expansions/collapses (which may not trigger a
-  // ResizeObserver on the content wrapper) still keep us pinned.
+  // Continuous poll: while stickToBottom is active, keep us pinned so
+  // tool-card expansions/collapses and streaming updates stay anchored.
   useEffect(() => {
     if (!stickToBottom || loading) return
     const el = scrollRef.current
@@ -120,9 +162,11 @@ export function Conversation({ children, className, loading }: ConversationProps
     return () => clearInterval(id)
   }, [stickToBottom, loading])
 
+  // Observe the virtual sizer for immediate stick-to-bottom response
+  // when virtualizer recalculates total height.
   useLayoutEffect(() => {
-    const contentEl = contentRef.current
-    if (!contentEl || typeof ResizeObserver === 'undefined') return
+    const sizerEl = sizerRef.current
+    if (!sizerEl || typeof ResizeObserver === 'undefined') return
 
     const observer = new ResizeObserver(() => {
       if (!stickToBottomRef.current) {
@@ -132,7 +176,7 @@ export function Conversation({ children, className, loading }: ConversationProps
       scrollToBottom('auto')
     })
 
-    observer.observe(contentEl)
+    observer.observe(sizerEl)
     return () => observer.disconnect()
   }, [scrollToBottom, updateBottomState])
 
@@ -151,15 +195,32 @@ export function Conversation({ children, className, loading }: ConversationProps
           onScroll={updateBottomState}
           className="h-full overflow-y-auto"
         >
-          <div ref={contentRef} className="mx-auto max-w-3xl px-4 py-6 sm:px-5">
-            {childItems.map((child, index) => (
-              <div
-                key={typeof child === 'object' && child !== null && 'key' in child ? String(child.key) : index}
-                data-index={index}
-              >
-                {child}
-              </div>
-            ))}
+          <div ref={innerRef} className="mx-auto max-w-3xl px-4 py-6 sm:px-5">
+            <div
+              ref={sizerRef}
+              style={{
+                height: virtualizer.getTotalSize(),
+                width: '100%',
+                position: 'relative',
+              }}
+            >
+              {virtualizer.getVirtualItems().map((virtualItem) => (
+                <div
+                  key={virtualItem.key}
+                  data-index={virtualItem.index}
+                  ref={virtualizer.measureElement}
+                  style={{
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
+                  }}
+                >
+                  {childItems[virtualItem.index]}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       )}

@@ -866,7 +866,6 @@ function App() {
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const showWorkspaceRef = useRef(false)
-  const [, setWorkspaceCollapsed] = useState(false)
   const [chatCollapsed, setChatCollapsed] = useState(false)
   const workspaceRestoreRef = useRef<(() => void) | null>(null)
   const browserCollaborationSessionsRef = useRef<ReturnType<typeof useBrowserCollaboration>['sessions']>([])
@@ -1037,15 +1036,6 @@ function App() {
       return
     }
     setShowWorkspaceEditor(true)
-  }, [isMobile])
-  const showWorkspaceTreePanel = useCallback(() => {
-    if (isMobile) {
-      const nextLayout = showMobileWorkspacePane('tree')
-      setShowWorkspaceTree(nextLayout.tree)
-      setShowWorkspaceEditor(nextLayout.editor)
-      return
-    }
-    setShowWorkspaceTree(true)
   }, [isMobile])
   const openArchitectureInWorkspace = useCallback((workspaceRoot?: string | null) => {
     const targetWorkspaceRoot = workspaceRoot?.trim() || activeWorkspace?.workspaceRoot || null
@@ -4828,7 +4818,7 @@ function App() {
           </div>
         ) : (
           <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
-            <div className={isMobile ? 'contents' : 'relative flex min-h-0 shrink-0'}>
+            <div className={isMobile ? 'contents' : `relative flex min-h-0 ${chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}>
               {viewMode === 'developer' && showSidebar && (
                 <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-64 border-r shrink-0'}`}>
                   <SessionSelector
@@ -4852,7 +4842,7 @@ function App() {
               {((viewMode === 'developer' && currentView === 'chat' && (showDesktopWorkspace || showTerminal))
                 || (viewMode === 'manager' && automation.selectedThread && showDesktopWorkspace)) && (
                 <div
-                  className="flex min-h-0 shrink-0 flex-col"
+                  className={`flex min-h-0 flex-col ${chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}
                   style={!showDesktopWorkspace && showTerminal ? { width: 480, maxWidth: '70vw' } : undefined}
                 >
                 {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
@@ -4902,7 +4892,7 @@ function App() {
                       onApplyDiff={handleApplyWorkspaceDiff}
                       provider={chatProvider}
                       cliModel={cliModel}
-                      onCollapsedChange={setWorkspaceCollapsed}
+                      onCollapsedChange={(collapsed) => { if (collapsed) closeWorkspacePanel() }}
                       onMaxCollapsedChange={setChatCollapsed}
                       restoreRef={workspaceRestoreRef}
                     />
@@ -5049,45 +5039,12 @@ function App() {
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
                 {automation.selectedThread ? (
                   <>
-                    {showWorkspace && (!showWorkspaceTree || !showWorkspaceEditor) && !isMobile && (
-                      <div className="flex h-[35px] items-center gap-1 px-2 border-b bg-muted/20 shrink-0">
-                        {!showWorkspaceTree && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={showWorkspaceTreePanel}
-                                className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              >
-                                <Eye className="h-3 w-3" />
-                                <FolderTree className="h-3 w-3" />
-                                <GitBranch className="h-3 w-3" />
-                                Show Files + Changes
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">Show files and source control</TooltipContent>
-                          </Tooltip>
-                        )}
-                        {!showWorkspaceEditor && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <button
-                                onClick={showWorkspaceEditorPanel}
-                                className="flex h-6 items-center gap-1 rounded px-2 text-[11px] text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                              >
-                                <Eye className="h-3 w-3" />
-                                <Code className="h-3 w-3" />
-                                Show Editor
-                              </button>
-                            </TooltipTrigger>
-                            <TooltipContent side="bottom">Show editor</TooltipContent>
-                          </Tooltip>
-                        )}
-                      </div>
-                    )}
+
                     <Conversation
                       key={automation.selectedThread?.id ?? 'manager-empty'}
                       className="min-h-0 flex-1 border-b"
                       loading={automation.loadingActivities}
+                      messageContents={automationMessages.map((msg) => msg.content)}
                     >
                       {automationMessages.length === 0 && !automation.loadingActivities && (
                         <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
@@ -5387,8 +5344,10 @@ function App() {
               <div
                 className="flex flex-col min-h-0 min-w-0 overflow-hidden"
                 style={{
-                  flex: chatCollapsed ? '0 0 auto' : '1 1 0%',
+                  flex: chatCollapsed ? '0 0 0px' : '1 1 0%',
+                  width: chatCollapsed ? 0 : undefined,
                   minWidth: chatCollapsed ? 0 : undefined,
+                  visibility: chatCollapsed ? 'hidden' : undefined,
                 }}
               >
 
@@ -5398,6 +5357,7 @@ function App() {
                   className="min-h-0 flex-1 border-b"
                   compact={showDesktopWorkspace}
                   loading={isLoadingHistory}
+                  messageContents={messages.map((msg) => msg.content)}
                 >
                   {messages.map((msg, idx) => (
                     <Message

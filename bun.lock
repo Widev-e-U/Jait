@@ -11,7 +11,7 @@
     },
     "apps/desktop": {
       "name": "@jait/desktop",
-      "version": "0.1.53",
+      "version": "0.1.58",
       "dependencies": {
         "@jait/api-client": "workspace:*",
         "@jait/shared": "workspace:*",
@@ -27,7 +27,7 @@
     },
     "apps/mobile": {
       "name": "@jait/mobile",
-      "version": "0.1.14",
+      "version": "0.1.15",
       "dependencies": {
         "@capacitor/core": "^6.2.0",
         "@capacitor/filesystem": "^6.0.0",
@@ -57,15 +57,17 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.118",
+      "version": "0.1.140",
       "dependencies": {
         "@capacitor/filesystem": "^6.0.0",
+        "@chenglou/pretext": "^0.0.4",
         "@jait/api-client": "workspace:*",
         "@jait/shared": "workspace:*",
         "@jait/ui-shared": "workspace:*",
         "@llm-ui/markdown": "^0.13.3",
         "@llm-ui/react": "^0.13.3",
         "@lobehub/icons": "^4.9.0",
+        "@monaco-editor/loader": "^1.7.0",
         "@monaco-editor/react": "^4.7.0",
         "@radix-ui/react-avatar": "^1.1.11",
         "@radix-ui/react-collapsible": "^1.1.12",
@@ -117,7 +119,7 @@
     },
     "packages/api-client": {
       "name": "@jait/api-client",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "dependencies": {
         "@jait/shared": "workspace:*",
       },
@@ -127,7 +129,7 @@
     },
     "packages/cli": {
       "name": "@jait/cli",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "bin": {
         "jait": "dist/index.js",
       },
@@ -141,7 +143,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.229",
+      "version": "0.1.272",
       "bin": {
         "jait": "./bin/jait.mjs",
       },
@@ -172,7 +174,7 @@
     },
     "packages/screen-share": {
       "name": "@jait/screen-share",
-      "version": "0.1.23",
+      "version": "0.1.24",
       "dependencies": {
         "@jait/shared": "workspace:*",
       },
@@ -183,7 +185,7 @@
     },
     "packages/shared": {
       "name": "@jait/shared",
-      "version": "0.1.38",
+      "version": "0.1.41",
       "dependencies": {
         "zod": "^3.24.0",
       },
@@ -193,7 +195,7 @@
     },
     "packages/ui-shared": {
       "name": "@jait/ui-shared",
-      "version": "0.1.10",
+      "version": "0.1.11",
       "devDependencies": {
         "typescript": "^5.7.3",
       },
@@ -495,6 +497,8 @@
     "@capacitor/keyboard": ["@capacitor/keyboard@6.0.4", "", { "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-tNeyQGxIOTiSv3g+dTxJ/plVpGMnB4daJuCHz1E2Kelo+jOx+FKlyFY9L1Ow144SCzuXK48NXr8WoxXfXgQEKA=="],
 
     "@capacitor/screen-reader": ["@capacitor/screen-reader@6.0.4", "", { "peerDependencies": { "@capacitor/core": "^6.0.0" } }, "sha512-0pORo6cmOyIDkUsemVlM7J3YOkc0yGjVnnoMi80TsC7IUMDFHagxKVoHiD7j6UOskDjnqvYSeesLcXsHnqx2ww=="],
+
+    "@chenglou/pretext": ["@chenglou/pretext@0.0.4", "", {}, "sha512-FnPAFMid1/p1j2V2gRPUVBarGUIb2PhkkC9YNnTOfPtTDgHKh8siO8PP9pCxpFfYlcodWPJpE1UbSHGQqt8pQQ=="],
 
     "@chevrotain/cst-dts-gen": ["@chevrotain/cst-dts-gen@11.1.2", "", { "dependencies": { "@chevrotain/gast": "11.1.2", "@chevrotain/types": "11.1.2", "lodash-es": "4.17.23" } }, "sha512-XTsjvDVB5nDZBQB8o0o/0ozNelQtn2KrUVteIHSlPd2VAV2utEb6JzyCJaJ8tGxACR4RiBNWy5uYUHX2eji88Q=="],
 
