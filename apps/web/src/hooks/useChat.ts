@@ -24,6 +24,13 @@ function authHeaders(token?: string | null): Record<string, string> {
   return { Authorization: `Bearer ${token}` }
 }
 
+function createOptimisticMessageId(prefix: 'user' | 'assistant'): string {
+  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
+    return `${prefix}-${crypto.randomUUID()}`
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+}
+
 function isTransientConnectionError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   if (error.name === 'AbortError') return false
@@ -635,10 +642,10 @@ export function useChat(
     const effectiveToken = token ?? authToken
     const notifyLoginRequired = requestLoginRequired ?? onLoginRequired
     const requestSessionId = explicitSessionId ?? sessionId // prefer explicit override
-    const assistantId = `assistant-${Date.now()}`
+    const assistantId = createOptimisticMessageId('assistant')
 
     const userMessage: ChatMessage = {
-      id: `user-${Date.now()}`,
+      id: createOptimisticMessageId('user'),
       role: 'user',
       content,
       ...(options.displayContent ? { displayContent: options.displayContent } : {}),
@@ -728,6 +735,7 @@ export function useChat(
       const toolCalls: ToolCallInfo[] = []
       const segments: MessageSegment[] = []
       let lineBuffer = ''
+      let completed = false
 
       /** Push or extend a text segment at the end of the segments list */
       const appendTextSegment = (text: string) => {
@@ -932,6 +940,7 @@ export function useChat(
                 return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
               })
             } else if (data.type === 'done') {
+              completed = true
               flushPendingMessageUpdates()
               if (thinkingStart && !thinkingDuration) {
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
@@ -974,6 +983,31 @@ export function useChat(
         }
       }
       flushPendingMessageUpdates()
+      if (!completed && !isStale()) {
+        if (thinkingStart && !thinkingDuration) {
+          thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)
+        }
+        const isEmptyAssistant = assistantContent.length === 0 && thinkingContent.length === 0 && toolCalls.length === 0
+        setState(prev => ({
+          ...prev,
+          isLoading: false,
+          messages: isEmptyAssistant
+            ? prev.messages.filter(m => m.id !== assistantId)
+            : prev.messages.map(m =>
+                m.id === assistantId
+                  ? {
+                      ...m,
+                      content: assistantContent,
+                      thinking: thinkingContent || undefined,
+                      thinkingDuration,
+                      toolCalls: toolCalls.length > 0 ? toolCalls : undefined,
+                      segments: segments.length > 0 ? segments : undefined,
+                    }
+                  : m
+              ),
+        }))
+        setCompletionCount((prev) => prev + 1)
+      }
     } catch (error) {
       if (pendingMessageFrame !== null) {
         window.cancelAnimationFrame(pendingMessageFrame)

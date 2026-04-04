@@ -671,6 +671,16 @@ interface MobileTreeDragState {
   dropDir: string | null
 }
 
+function releasePointerCaptureIfHeld(target: Element | null, pointerId: number) {
+  if (!(target instanceof HTMLElement)) return
+  if (!target.hasPointerCapture?.(pointerId)) return
+  try {
+    target.releasePointerCapture(pointerId)
+  } catch {
+    /* ignore browsers that throw on stale captures */
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /*  Drag resize hook                                                   */
 /* ------------------------------------------------------------------ */
@@ -896,12 +906,21 @@ const TreeNodeRow = memo(function TreeNodeRow({
 }) {
   const paddingLeft = isMobile ? 6 + depth * 12 : 8 + depth * 14
   const [dragOver, setDragOver] = useState(false)
-  const openMobileMenu = useCallback((event: React.SyntheticEvent<HTMLButtonElement>) => {
-    event.preventDefault()
-    event.stopPropagation()
-    const rect = event.currentTarget.getBoundingClientRect()
+  const openMobileMenu = useCallback((anchor: HTMLElement) => {
+    const rect = anchor.getBoundingClientRect()
     onTreeContextMenu(node, rect.right - 8, rect.bottom + 4)
   }, [node, onTreeContextMenu])
+  const handleMobileMenuPointerDown = useCallback((event: React.PointerEvent<HTMLButtonElement>) => {
+    event.stopPropagation()
+    if (event.pointerType === 'mouse') return
+    event.preventDefault()
+    openMobileMenu(event.currentTarget)
+  }, [openMobileMenu])
+  const handleMobileMenuClick = useCallback((event: React.MouseEvent<HTMLButtonElement>) => {
+    event.preventDefault()
+    event.stopPropagation()
+    openMobileMenu(event.currentTarget)
+  }, [openMobileMenu])
 
   if (node.kind === 'dir') {
     const expanded = expandedDirs.has(node.path)
@@ -967,8 +986,8 @@ const TreeNodeRow = memo(function TreeNodeRow({
             <button
               type="button"
               className="rounded p-2 hover:bg-background touch-manipulation"
-              onPointerDown={(e) => e.stopPropagation()}
-              onClick={openMobileMenu}
+              onPointerDown={handleMobileMenuPointerDown}
+              onClick={handleMobileMenuClick}
               title="More actions"
             >
               <MoreVertical className="h-3.5 w-3.5" />
@@ -1036,8 +1055,8 @@ const TreeNodeRow = memo(function TreeNodeRow({
         <button
           type="button"
           className="rounded p-2 hover:bg-background touch-manipulation"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={openMobileMenu}
+          onPointerDown={handleMobileMenuPointerDown}
+          onClick={handleMobileMenuClick}
           title="More actions"
         >
           <MoreVertical className="h-3.5 w-3.5" />
@@ -1242,6 +1261,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const mobileTreeDragRef = useRef<MobileTreeDragState | null>(null)
   const mobileTreeDragTimerRef = useRef<number | null>(null)
   const mobileTreeMenuTimerRef = useRef<number | null>(null)
+  const mobileTreePointerCaptureRef = useRef<HTMLElement | null>(null)
   const suppressTreeClickRef = useRef(false)
   const consumeSuppressedTreeClick = useCallback(() => {
     if (!suppressTreeClickRef.current) return false
@@ -2930,6 +2950,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     const target = event.target as HTMLElement | null
     if (target?.closest('button')) return
     clearMobileTreeGestureTimers()
+    event.currentTarget.setPointerCapture?.(event.pointerId)
+    mobileTreePointerCaptureRef.current = event.currentTarget
     const rowRect = event.currentTarget.getBoundingClientRect()
     const nextDragState: MobileTreeDragState = {
       node,
@@ -2958,6 +2980,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       if (!current || current.pointerId !== event.pointerId || current.active) return
       suppressTreeClickRef.current = true
       clearMobileTreeGestureTimers()
+      releasePointerCaptureIfHeld(mobileTreePointerCaptureRef.current, event.pointerId)
+      mobileTreePointerCaptureRef.current = null
       mobileTreeDragRef.current = null
       setMobileTreeDrag(null)
       handleTreeContextMenu(node, rowRect.right - 8, rowRect.top + 12)
@@ -2991,6 +3015,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       if (!current.ready) {
         if (distance > 6) {
           clearMobileTreeGestureTimers()
+          releasePointerCaptureIfHeld(mobileTreePointerCaptureRef.current, event.pointerId)
+          mobileTreePointerCaptureRef.current = null
           mobileTreeDragRef.current = null
           setMobileTreeDrag(null)
         }
@@ -3018,6 +3044,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       const current = mobileTreeDragRef.current
       if (!current || current.pointerId !== pointerId) return
       clearMobileTreeGestureTimers()
+      releasePointerCaptureIfHeld(mobileTreePointerCaptureRef.current, pointerId)
+      mobileTreePointerCaptureRef.current = null
       if (current.active) {
         suppressTreeClickRef.current = true
         if (current.dropDir) void handleMoveTreeNode(current.node.path, current.dropDir)
@@ -3034,6 +3062,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     window.addEventListener('pointercancel', onPointerCancel)
     return () => {
       clearMobileTreeGestureTimers()
+      const pointerId = mobileTreeDragRef.current?.pointerId
+      if (pointerId != null) releasePointerCaptureIfHeld(mobileTreePointerCaptureRef.current, pointerId)
+      mobileTreePointerCaptureRef.current = null
       window.removeEventListener('pointermove', onPointerMove)
       window.removeEventListener('pointerup', onPointerUp)
       window.removeEventListener('pointercancel', onPointerCancel)
@@ -4563,41 +4594,51 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     const effectiveMobileTab = (mobileTab === 'files' || mobileTab === 'git') && !showTreeProp ? 'editor'
       : mobileTab === 'editor' && !showEditorProp ? 'files'
       : mobileTab
+    const selectMobileTab = (nextTab: 'files' | 'git' | 'editor') => {
+      setMobileTab(nextTab)
+      if (nextTab === 'files' || nextTab === 'git') {
+        onTreeTabChange?.(nextTab)
+      }
+    }
 
     // Both panels hidden — render nothing (App.tsx should also collapse the section)
     if (!showTreeProp && !showEditorProp) return null
 
     return (
       <div className="flex flex-col h-full min-h-0">
-        {/* Tab bar — keep Files/Changes available whenever the tree pane exists (hide when externally controlled) */}
-        {showTreeProp && !treeTabProp && (
+        {/* Tab bar — always available on mobile so editor tabs remain reachable */}
+        {(showTreeProp || showEditorProp) && (
         <div className="flex items-center h-[35px] border-b bg-muted/30 shrink-0 px-1 gap-0.5">
-          <button
-            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-              effectiveMobileTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
-            }`}
-            onClick={() => setMobileTab('files')}
-          >
-            <FolderOpen className="h-3 w-3" />
-            Files
-          </button>
-          <button
-            className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-              effectiveMobileTab === 'git' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
-            }`}
-            onClick={() => setMobileTab('git')}
-          >
-            <GitBranch className="h-3 w-3" />
-            Changes
-            {changedFileCount > 0 && (
-              <span className="text-[9px] bg-primary/20 text-primary rounded-full px-1.5 leading-tight font-bold">
-                {changedFileCount}
-              </span>
-            )}
-          </button>
+          {showTreeProp && (
+            <>
+              <button
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                  effectiveMobileTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+                }`}
+                onClick={() => selectMobileTab('files')}
+              >
+                <FolderOpen className="h-3 w-3" />
+                Files
+              </button>
+              <button
+                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+                  effectiveMobileTab === 'git' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
+                }`}
+                onClick={() => selectMobileTab('git')}
+              >
+                <GitBranch className="h-3 w-3" />
+                Changes
+                {changedFileCount > 0 && (
+                  <span className="text-[9px] bg-primary/20 text-primary rounded-full px-1.5 leading-tight font-bold">
+                    {changedFileCount}
+                  </span>
+                )}
+              </button>
+            </>
+          )}
           {showEditorProp && (
           openTabs.length > 0 ? (
-            <DropdownMenu onOpenChange={(open) => { if (open) setMobileTab('editor') }}>
+            <DropdownMenu onOpenChange={(open) => { if (open) selectMobileTab('editor') }}>
               <DropdownMenuTrigger asChild>
                 <button
                   className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors min-w-0 ${
@@ -4628,7 +4669,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       onSelect={() => {
                         if (isActive) return
                         handleSwitchTab(tab.id)
-                        setMobileTab('editor')
+                        selectMobileTab('editor')
                       }}
                       className={cn(
                         'gap-2',
@@ -4667,7 +4708,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
                 effectiveMobileTab === 'editor' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
               }`}
-              onClick={() => setMobileTab('editor')}
+              onClick={() => selectMobileTab('editor')}
             >
               Editor
               {editorFile && (
@@ -4679,15 +4720,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           )
           )}
         </div>
-        )}
-
-        {/* Single-pane header when only the editor pane is visible */}
-        {!showTreeProp && showEditorProp && (
-          <div className="flex items-center justify-between h-[35px] border-b bg-muted/30 shrink-0 px-2">
-            <span className="text-[11px] font-medium text-muted-foreground">
-              Editor
-            </span>
-          </div>
         )}
 
         {/* Files tab */}
@@ -5115,10 +5147,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }
 
   /* ---- Desktop layout ---- */
-
-  const panelWidth = panel.collapsed ? 8
-    : panel.maxCollapsed ? panelFullWidth
-    : (!showTreeProp && !showEditorProp ? 0 : !showTreeProp ? Math.max(panel.size - tree.size, 300) : !showEditorProp ? tree.size + 8 : panel.size)
 
   return (
     <aside

@@ -2628,24 +2628,6 @@ function App() {
     handleWorkspaceFolderSelected,
   ])
 
-  const handleMobileWorkspaceDropdownAction = useCallback(async (target: 'files' | 'git' | 'editor' | 'hide') => {
-    if (target === 'hide') {
-      closeWorkspacePanel()
-      return
-    }
-
-    if (!showWorkspace) {
-      await handleToggleEditor()
-    }
-
-    if (target === 'editor') {
-      showMobileWorkspaceEditorTab()
-      return
-    }
-
-    showMobileWorkspaceTreeTab(target)
-  }, [closeWorkspacePanel, handleToggleEditor, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, showWorkspace])
-
   // Verify workspace surface is alive; re-create if stale (e.g. after gateway restart)
   useEffect(() => {
     if (!activeWorkspace?.workspaceRoot || !activeSessionId) return
@@ -2888,6 +2870,36 @@ function App() {
     openTerminalPanel()
     await ensureActiveTerminal(terminalId)
   }, [ensureActiveTerminal, openTerminalPanel])
+
+  const handleMobileWorkspaceDropdownAction = useCallback(async (target: 'files' | 'git' | 'editor' | 'terminal' | 'hide') => {
+    if (target === 'hide') {
+      closeTerminalPanel()
+      closeWorkspacePanel()
+      return
+    }
+
+    if (target === 'terminal') {
+      setCurrentView('chat')
+      openTerminalPanel()
+      await ensureActiveTerminal()
+      return
+    }
+
+    if (showTerminal) {
+      closeTerminalPanel()
+    }
+
+    if (!showWorkspace) {
+      await handleToggleEditor()
+    }
+
+    if (target === 'editor') {
+      showMobileWorkspaceEditorTab()
+      return
+    }
+
+    showMobileWorkspaceTreeTab(target)
+  }, [closeTerminalPanel, closeWorkspacePanel, ensureActiveTerminal, handleToggleEditor, openTerminalPanel, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, setCurrentView, showTerminal, showWorkspace])
 
   const handleReferenceFile = useCallback((file: ReferencedFile) => {
     promptInputRef.current?.insertChip(file)
@@ -4093,7 +4105,13 @@ function App() {
   const showMobileWorkspaceFullscreen =
     isMobile &&
     showMobileWorkspace &&
+    !showTerminal &&
     (showWorkspaceTree || showWorkspaceEditor)
+  const showMobileTerminalFullscreen =
+    isMobile &&
+    currentView === 'chat' &&
+    viewMode === 'developer' &&
+    showTerminal
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
 
@@ -4520,6 +4538,12 @@ function App() {
                           <Code className="h-4 w-4 mr-2" />
                           Editor
                         </DropdownMenuItem>
+                        {viewMode === 'developer' && (
+                          <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('terminal') }}>
+                            <TerminalIcon className="h-4 w-4 mr-2" />
+                            Terminal
+                          </DropdownMenuItem>
+                        )}
                         {showWorkspace && (
                           <>
                             <DropdownMenuSeparator />
@@ -4929,6 +4953,44 @@ function App() {
               </div>
               )}
             </div>
+            {showMobileTerminalFullscreen && (
+              <section className="flex flex-1 min-h-0 flex-col border-b bg-background overflow-hidden">
+                <div className="relative shrink-0 border-b">
+                  <TerminalTabs
+                    terminals={workspaceTerminals}
+                    activeTerminalId={activeTerminalId}
+                    onSelect={setActiveTerminalId}
+                    onCreate={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                    onKill={handleKillTerminal}
+                  />
+                  <button
+                    onClick={closeTerminalPanel}
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    aria-label="Close terminal"
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                </div>
+                {activeTerminalId ? (
+                  <TerminalView
+                    terminalId={activeTerminalId}
+                    className="flex-1 min-h-0"
+                    token={token}
+                    workspaceRoot={activeWorkspaceRoot ?? undefined}
+                    onReferenceSelection={handleReferenceTerminalSelection}
+                  />
+                ) : (
+                  <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
+                    <button
+                      onClick={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                      className="hover:text-foreground transition-colors"
+                    >
+                      + New Terminal
+                    </button>
+                  </div>
+                )}
+              </section>
+            )}
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
               <section className="flex-1 min-h-0 border-b bg-background overflow-hidden">
                 <WorkspacePanel
