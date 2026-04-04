@@ -868,6 +868,11 @@ function App() {
   const showWorkspaceRef = useRef(false)
   const [chatCollapsed, setChatCollapsed] = useState(false)
   const workspaceRestoreRef = useRef<(() => void) | null>(null)
+  const closeWorkspacePanelRef = useRef<(() => void) | null>(null)
+
+  const handleWorkspaceCollapsedChange = useCallback((collapsed: boolean) => {
+    if (collapsed) closeWorkspacePanelRef.current?.()
+  }, [])
   const browserCollaborationSessionsRef = useRef<ReturnType<typeof useBrowserCollaboration>['sessions']>([])
   const suppressWorkspaceAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
@@ -2407,6 +2412,7 @@ function App() {
     }
     setShowArchitecture(false)
   }, [activeWorkspace, setSavedWorkspace])
+  closeWorkspacePanelRef.current = closeWorkspacePanel
 
   const toggleWorkspaceTree = useCallback(() => {
     if (isMobile) {
@@ -4892,7 +4898,7 @@ function App() {
                       onApplyDiff={handleApplyWorkspaceDiff}
                       provider={chatProvider}
                       cliModel={cliModel}
-                      onCollapsedChange={(collapsed) => { if (collapsed) closeWorkspacePanel() }}
+                      onCollapsedChange={handleWorkspaceCollapsedChange}
                       onMaxCollapsedChange={setChatCollapsed}
                       restoreRef={workspaceRestoreRef}
                     />
@@ -5263,8 +5269,15 @@ function App() {
                 )}
               </div>
             ) : !hasMessages ? (
-              <div className="flex-1 min-w-0 flex flex-col items-center justify-center px-4">
-                <div className="w-full max-w-3xl space-y-8">
+              <div
+                className={`flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'}`}
+                style={{
+                  flex: chatCollapsed ? '0 0 0px' : undefined,
+                  width: chatCollapsed ? 0 : undefined,
+                  minWidth: chatCollapsed ? 0 : undefined,
+                  visibility: chatCollapsed ? 'hidden' : undefined,
+                }}
+              >                <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
                     <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>

@@ -1160,9 +1160,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     snapMaxSize: panelFullWidth,
   })
 
-  // Notify parent when collapse state changes
-  useEffect(() => { onCollapsedChange?.(panel.collapsed) }, [panel.collapsed, onCollapsedChange])
-  useEffect(() => { onMaxCollapsedChange?.(panel.maxCollapsed) }, [panel.maxCollapsed, onMaxCollapsedChange])
+  // Notify parent when collapse state changes (layout effects prevent one-frame flash)
+  useLayoutEffect(() => { onCollapsedChange?.(panel.collapsed) }, [panel.collapsed, onCollapsedChange])
+  useLayoutEffect(() => { onMaxCollapsedChange?.(panel.maxCollapsed) }, [panel.maxCollapsed, onMaxCollapsedChange])
   useEffect(() => { if (restoreRef) restoreRef.current = panel.restore }, [restoreRef, panel.restore])
 
   // Tree max is clamped so the editor pane never disappears
@@ -1171,12 +1171,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     snapCollapse: true,
   })
 
-  // When workspace panel snaps collapsed via drag, restore drag state and let parent close
-  useEffect(() => {
-    if (panel.collapsed) {
-      panel.restore()
-    }
-  }, [panel.collapsed])  // eslint-disable-line react-hooks/exhaustive-deps
+  // When workspace panel snaps collapsed via drag, let parent close
+  // (component will unmount, so no need to restore drag state here)
 
   // Lazy tree state
   const [lazyTree, setLazyTree] = useState<LazyNode[]>([])
@@ -5161,7 +5157,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       className={cn(
         'bg-muted/20 flex min-h-0',
         panel.maxCollapsed ? 'flex-1' : 'shrink-0',
-        tabMaximized ? 'z-30 border-r shadow-2xl' : 'border-r',
+        tabMaximized ? 'z-30 border-r shadow-2xl' : !panel.maxCollapsed && 'border-r',
       )}
       style={getDesktopWorkspacePanelStyle({
         showTree: showTreeProp,
