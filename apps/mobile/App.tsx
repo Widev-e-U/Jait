@@ -1,9 +1,36 @@
-import { SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View } from 'react-native'
+import { useState, useEffect } from 'react'
+import { SafeAreaView, ScrollView, StatusBar, StyleSheet, Text, View, Pressable } from 'react-native'
 import { designTokens } from '@jait/ui-shared'
 import { AdaptiveLayout } from './src/components/AdaptiveLayout'
 import { BaseCard } from './src/components/BaseCard'
+import { VoiceAssistant } from './src/components/VoiceAssistant'
+import { bootstrapMobileClient } from './src/mobile-bootstrap'
+
+type Screen = 'home' | 'assistant'
 
 export default function App() {
+  const [screen, setScreen] = useState<Screen>('assistant')
+  const [apiBaseUrl, setApiBaseUrl] = useState<string | null>(null)
+  const [token] = useState<string | null>(null) // TODO: wire up auth flow
+
+  // Auto-discover gateway on launch
+  useEffect(() => {
+    const gatewayUrl = 'http://192.168.178.60:1337' // TODO: make configurable / use discovery
+    bootstrapMobileClient(gatewayUrl)
+      .then(result => setApiBaseUrl(result.apiBaseUrl))
+      .catch(err => console.warn('Gateway discovery failed:', err))
+  }, [])
+
+  if (screen === 'assistant' && apiBaseUrl) {
+    return (
+      <VoiceAssistant
+        apiBaseUrl={apiBaseUrl}
+        token={token}
+        sttProvider="whisper"
+      />
+    )
+  }
+
   return (
     <SafeAreaView style={styles.screen}>
       <StatusBar barStyle="light-content" />
@@ -15,11 +42,17 @@ export default function App() {
             <Text style={styles.subtitle}>
               React-Native-Startpunkt mit denselben Design-Tokens und responsivem Grundlayout.
             </Text>
+
+            <Pressable onPress={() => setScreen('assistant')}>
+              <BaseCard title="🎤 Voice Assistant" subtitle="Tap to open the voice assistant — say 'Hey Jait' to activate hands-free." />
+            </Pressable>
+
             <BaseCard title="Chat" subtitle="Bestehende Web-Komponenten werden hier schrittweise nativ umgesetzt." />
             <BaseCard title="Roadmap" subtitle="1) Basiskomponenten vereinheitlichen 2) Screens migrieren 3) Feature-Parität herstellen">
               <View style={styles.bulletList}>
                 <Text style={styles.bullet}>• Shared tokens: fertig</Text>
                 <Text style={styles.bullet}>• Adaptive Layout: fertig</Text>
+                <Text style={styles.bullet}>• Voice Assistant: fertig</Text>
                 <Text style={styles.bullet}>• Chat/Jobs/Settings: als nächste Schritte</Text>
               </View>
             </BaseCard>
