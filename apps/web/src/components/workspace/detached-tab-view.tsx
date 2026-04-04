@@ -7,6 +7,8 @@ import { ReviewableEditor } from './reviewable-editor'
 import { Button } from '@/components/ui/button'
 import { getApiUrl } from '@/lib/gateway-url'
 import { clearDetachedWorkspaceTab, loadDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
+import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
+import { useConfiguredTheme } from '@/hooks/use-configured-theme'
 
 function resolveDetachedPreviewSrc(src: string | null | undefined): string | null {
   const trimmed = src?.trim()
@@ -33,6 +35,7 @@ export function DetachedTabView({ detachedTabId }: { detachedTabId: string }) {
   const [fileContent, setFileContent] = useState(payload?.tab.content ?? '')
   const [isSaving, setIsSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
+  const { monacoThemeName } = useConfiguredTheme(payload?.theme ?? 'dark')
 
   useEffect(() => {
     const sync = () => setPayload(loadDetachedWorkspaceTab(detachedTabId))
@@ -44,11 +47,6 @@ export function DetachedTabView({ detachedTabId }: { detachedTabId: string }) {
   useEffect(() => {
     if (!payload) return
     document.title = payload.title || payload.tab.label || 'Jait'
-  }, [payload])
-
-  useEffect(() => {
-    if (!payload) return
-    document.documentElement.classList.toggle('dark', payload.theme === 'dark')
   }, [payload])
 
   useEffect(() => {
@@ -151,13 +149,14 @@ export function DetachedTabView({ detachedTabId }: { detachedTabId: string }) {
             language={payload.tab.language ?? 'plaintext'}
             value={fileContent}
             originalContent={payload.tab.originalContent}
-            theme={payload.theme === 'dark' ? 'vs-dark' : 'vs'}
+            theme={monacoThemeName}
             onChange={(value) => setFileContent(value ?? '')}
           />
         ) : (
           <Editor
             height="100%"
-            theme={payload.theme === 'dark' ? 'vs-dark' : 'vs'}
+            beforeMount={ensureActiveMonacoTheme}
+            theme={monacoThemeName}
             path={payload.tab.path}
             language={payload.tab.language ?? 'plaintext'}
             value={fileContent}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -16,6 +16,8 @@ import type { SttProvider } from '@/hooks/useAuth'
 import type { JaitBackend } from '@/hooks/useAuth'
 import { getApiUrl } from '@/lib/gateway-url'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
+import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
+import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -135,6 +137,8 @@ export function SettingsPage({
   const [visible, setVisible] = useState<Record<string, boolean>>({})
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [search, setSearch] = useState('')
+  const fileInputRef = useRef<HTMLInputElement | null>(null)
+  const { importedThemes, activeTheme } = useVsCodeThemeStore()
 
   // ── Desktop close-to-tray setting ───────────────────────────────
   const [closeOnWindowClose, setCloseOnWindowClose] = useState(false)
@@ -250,6 +254,24 @@ export function SettingsPage({
     }
   }
 
+  const handleThemeImport = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setError(null)
+    setStatus(null)
+    try {
+      const imported = importVsCodeThemeFromText(file.name, await file.text())
+      setStatus(
+        imported.hasInclude
+          ? `Imported theme "${imported.name}". Relative "include" files are not resolved yet.`
+          : `Imported theme "${imported.name}".`,
+      )
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to import theme')
+    }
+  }, [])
+
   function renderSourceBadge(field: FieldName) {
     const userHasValue = !!(draft[field]?.trim())
     const envHasValue = !!envSet[field]
@@ -314,6 +336,7 @@ export function SettingsPage({
   const showActivitySection = matchesSearch(
     'activity recent messages terminal sessions feed history',
   )
+  const showThemeSection = matchesSearch(...getVsCodeThemeSearchTerms(), 'import json token colors workbench sidebar tabs')
 
   const emptyState = (
     <Card className="p-5">
@@ -352,6 +375,67 @@ export function SettingsPage({
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
+          {showThemeSection && (
+            <Card className="space-y-4 p-5">
+              <div>
+                <h2 className="text-base font-medium">{highlight('Editor theme')}</h2>
+                <p className="text-sm text-muted-foreground">
+                  Import a VS Code theme JSON file and apply its Monaco token colors plus a mapped shell palette.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={(event) => { void handleThemeImport(event) }}
+                />
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                  Import theme JSON
+                </Button>
+                <Button variant="ghost" size="sm" disabled={!activeTheme} onClick={() => setActiveVsCodeTheme(null)}>
+                  Use built-in theme
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Imported themes stay local to this device. The quick light/system/dark toggle falls back to the built-in theme set.
+              </p>
+              {importedThemes.length > 0 ? (
+                <div className="space-y-2">
+                  {importedThemes.map((theme) => {
+                    const isActive = activeTheme?.id === theme.id
+                    return (
+                      <div key={theme.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium">{theme.name}</p>
+                            <Badge variant={isActive ? 'default' : 'outline'} className="h-5 px-1.5 text-[10px]">
+                              {isActive ? 'active' : theme.colorMode}
+                            </Badge>
+                          </div>
+                          <p className="truncate text-xs text-muted-foreground">{theme.sourceLabel}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {!isActive && (
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setActiveVsCodeTheme(theme.id)}>
+                              Apply
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => removeVsCodeTheme(theme.id)}>
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No imported themes yet.</p>
+              )}
+            </Card>
+          )}
+
           {showUpdateSection && (
             <Card className="space-y-4 p-5">
               <div>
@@ -598,7 +682,7 @@ export function SettingsPage({
             </Card>
           )}
 
-          {!showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showWorkspaceArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
+          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showWorkspaceArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6">

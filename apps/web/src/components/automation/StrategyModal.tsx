@@ -15,6 +15,8 @@ import { Button } from '@/components/ui/button'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Loader2, Sparkles, Save, RotateCcw } from 'lucide-react'
 import { agentsApi } from '@/lib/agents-api'
+import { useEditorThemeName } from '@/hooks/use-editor-theme'
+import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
 
 // ── Props ────────────────────────────────────────────────────────────
 
@@ -38,8 +40,7 @@ export function StrategyModal({ open, onOpenChange, repoId, repoName }: Strategy
 
   const isDirty = strategy !== savedStrategy
 
-  // Detect dark mode from the document
-  const isDark = typeof document !== 'undefined' && document.documentElement.classList.contains('dark')
+  const monacoThemeName = useEditorThemeName()
 
   // ── Load strategy when modal opens ──────────────────────────────
 
@@ -148,7 +149,8 @@ export function StrategyModal({ open, onOpenChange, repoId, repoName }: Strategy
               <Editor
                 height="55vh"
                 language="markdown"
-                theme={isDark ? 'vs-dark' : 'light'}
+                beforeMount={ensureActiveMonacoTheme}
+                theme={monacoThemeName}
                 value={strategy}
                 onChange={(value) => setStrategy(value ?? '')}
                 options={{

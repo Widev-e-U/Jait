@@ -77,6 +77,10 @@ function normalizeStatusChar(char: string): string {
   return "M";
 }
 
+function trimCommandOutput(stdout: string): string {
+  return stdout.replace(/\r?\n$/, "");
+}
+
 async function generateCommitMessageWithCliProvider(
   provider: CliProviderAdapter,
   cwd: string,
@@ -155,7 +159,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         // Remote: run basic git commands via proxy and build a simplified status
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 30_000);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         let currentBranch: string | null = null;
         try { currentBranch = await gitProxy("rev-parse --abbrev-ref HEAD"); if (currentBranch === "HEAD") currentBranch = null; } catch { /* */ }
@@ -266,7 +270,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 15_000);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         try { await gitProxy("rev-parse --is-inside-work-tree"); } catch { return { branches: [], isRepo: false }; }
         const raw = await gitProxy("branch -a --format='%(HEAD) %(refname:short)'").catch(() => "");
@@ -330,7 +334,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       const remoteNodeId = findRemoteNodeForCwd(ws, cwd);
       if (remoteNodeId && ws) {
         const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args: "pull --rebase" }, 60_000);
-        return { ok: true, output: r.stdout.trim() };
+        return { ok: true, output: trimCommandOutput(r.stdout) };
       }
       const result = await git.pull(cwd);
       return result;
@@ -350,7 +354,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string, timeout = 60_000) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, timeout);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         const branch = await gitProxy("rev-parse --abbrev-ref HEAD");
         let upstream: string | null = null;
@@ -488,7 +492,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         const readConfig = async (key: string) => {
           try {
             const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args: `config --get ${key}` }, 15_000);
-            return r.stdout.trim() || null;
+            return trimCommandOutput(r.stdout) || null;
           } catch {
             return null;
           }
@@ -555,7 +559,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         if (body.baseBranch) {
           await gitProxy(`checkout "${body.baseBranch}"`);
@@ -585,7 +589,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 30_000);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         const staged = await gitProxy("diff --cached").catch(() => "");
         const unstaged = await gitProxy("diff").catch(() => "");
@@ -635,7 +639,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 30_000);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         if (!body.paths?.length) {
           await gitProxy("reset --hard HEAD").catch(() => "");
@@ -676,7 +680,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         if (!body.paths?.length) {
           await gitProxy("add -A");
@@ -706,7 +710,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 15_000);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         if (!body.paths?.length) {
           await gitProxy("reset HEAD");
@@ -1015,7 +1019,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
       if (remoteNodeId && ws) {
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd, args }, 30_000);
-          return r.stdout.trim();
+          return trimCommandOutput(r.stdout);
         };
         const staged = await gitProxy("diff --cached").catch(() => "");
         const unstaged = await gitProxy("diff HEAD").catch(() => "");

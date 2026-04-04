@@ -2,7 +2,8 @@ import { useRef, useState, useEffect, useCallback, useMemo } from 'react'
 import { DiffEditor } from '@monaco-editor/react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useResolvedTheme } from '@/hooks/use-resolved-theme'
+import { useEditorThemeName } from '@/hooks/use-editor-theme'
+import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { cn } from '@/lib/utils'
 import { buildReviewHunks, computeMergedContent, getReviewAnchorLine, type ReviewHunk } from './review-hunks'
 
@@ -48,7 +49,7 @@ export function DiffView({
   const [hunks, setHunks] = useState<ReviewHunk[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
   const [isNarrow, setIsNarrow] = useState(() => typeof window !== 'undefined' && window.innerWidth < 768)
-  const theme = useResolvedTheme()
+  const monacoThemeName = useEditorThemeName()
 
   const fileName = filePath.split(/[/\\]/).pop() ?? filePath
 
@@ -308,7 +309,8 @@ export function DiffView({
           original={originalContent}
           modified={modifiedContent}
           language={language}
-          theme={theme === 'dark' ? 'vs-dark' : 'vs'}
+          beforeMount={ensureActiveMonacoTheme}
+          theme={monacoThemeName}
           keepCurrentOriginalModel
           keepCurrentModifiedModel
           onMount={handleMount}

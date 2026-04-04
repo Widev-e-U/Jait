@@ -66,6 +66,7 @@ interface InternalPreviewSession extends PreviewSession {
   browserUrl: string | null;
   process: ChildProcessWithoutNullStreams | null;
   runnerResult: PreviewRunnerResult | null;
+  terminating: boolean;
 }
 
 const MAX_PREVIEW_LOGS = 400;
@@ -156,6 +157,7 @@ export class PreviewService {
       browserUrl: null,
       process: null,
       runnerResult: null,
+      terminating: false,
     };
     this.sessions.set(input.sessionId, session);
     this.appendLog(session, "system", "Starting preview session");
@@ -188,7 +190,7 @@ export class PreviewService {
         // Listen for process exit
         if (result.process) {
           result.process.on("exit", (code, signal) => {
-            if (session.status === "stopped") return;
+            if (session.status === "stopped" || session.terminating) return;
             session.updatedAt = nowIso();
             session.status = "error";
             const message = `Preview process exited (code=${code ?? "null"}, signal=${signal ?? "null"})`;
@@ -241,6 +243,8 @@ export class PreviewService {
   async stop(sessionId: string): Promise<boolean> {
     const session = this.sessions.get(sessionId);
     if (!session) return false;
+
+    session.terminating = true;
 
     if (session.runnerResult) {
       await this.runner.stop(session.runnerResult).catch(() => {});

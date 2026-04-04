@@ -2,7 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import loader from '@monaco-editor/loader'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 import { Button } from '@/components/ui/button'
-import { useResolvedTheme } from '@/hooks/use-resolved-theme'
+import { useEditorThemeName } from '@/hooks/use-editor-theme'
+import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { cn } from '@/lib/utils'
 
 interface ReadOnlyDiffViewProps {
@@ -48,7 +49,7 @@ export function ReadOnlyDiffView({
   const [isReady, setIsReady] = useState(false)
   const [changes, setChanges] = useState<DiffChange[]>([])
   const [activeIndex, setActiveIndex] = useState(0)
-  const theme = useResolvedTheme()
+  const monacoThemeName = useEditorThemeName()
 
   const modelPathBase = useMemo(
     () => `inmemory://jait-diff/${encodeURIComponent(modelKey ?? `${language}:${original.length}:${modified.length}`)}`,
@@ -86,13 +87,14 @@ export function ReadOnlyDiffView({
     void init.then((monaco) => {
       if (cancelled || !containerRef.current) return
       monacoRef.current = monaco
+      ensureActiveMonacoTheme(monaco)
       const editor = monaco.editor.createDiffEditor(containerRef.current, {
         automaticLayout: true,
         ...mergedOptions,
       })
       editorRef.current = editor
       diffUpdateDisposableRef.current = editor.onDidUpdateDiff(() => syncChanges())
-      monaco.editor.setTheme(theme === 'dark' ? 'vs-dark' : 'vs')
+      monaco.editor.setTheme(monacoThemeName)
       setIsReady(true)
       syncChanges()
     }).catch((error) => {
@@ -164,8 +166,9 @@ export function ReadOnlyDiffView({
   useEffect(() => {
     const monaco = monacoRef.current
     if (!monaco) return
-    monaco.editor.setTheme(theme === 'dark' ? 'vs-dark' : 'vs')
-  }, [theme])
+    ensureActiveMonacoTheme(monaco)
+    monaco.editor.setTheme(monacoThemeName)
+  }, [monacoThemeName])
 
   useEffect(() => {
     editorRef.current?.updateOptions?.(mergedOptions)

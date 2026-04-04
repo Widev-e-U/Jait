@@ -3,13 +3,14 @@ import Editor from '@monaco-editor/react'
 import { Check, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { buildReviewHunks, computeMergedContent, getReviewAnchorLine, type ReviewHunk } from './review-hunks'
+import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
 
 interface ReviewableEditorProps {
   path: string
   language: string
   value: string
   originalContent?: string | null
-  theme: 'vs' | 'vs-dark'
+  theme: string
   readOnly?: boolean
   onChange?: (value: string | undefined) => void
   onApplyReview?: (resultContent: string) => void | Promise<void>
@@ -117,6 +118,7 @@ export function ReviewableEditor({
       <Editor
         key={path}
         height="100%"
+        beforeMount={ensureActiveMonacoTheme}
         theme={theme}
         path={path}
         language={language}

@@ -12,6 +12,7 @@ import { ScrollArea } from '@/components/ui/scroll-area'
 import { Textarea } from '@/components/ui/textarea'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
+import { useEditorThemeName } from '@/hooks/use-editor-theme'
 import type { BrowserIntervention, BrowserSession } from '@/lib/browser-collaboration-api'
 import { DiffView } from './diff-view'
 import { ReadOnlyDiffView } from '@/components/diff/read-only-diff-view'
@@ -19,6 +20,7 @@ import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
 import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
+import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
@@ -1138,6 +1140,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 }, ref) {
   const confirm = useConfirmDialog()
   const resolvedTheme = useResolvedTheme()
+  const monacoThemeName = useEditorThemeName()
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
   /** When non-null, we're in remote (server-backed) mode */
   const [remoteRoot, setRemoteRoot] = useState<string | null>(null)
@@ -5767,7 +5770,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             language={activeTab.language ?? 'plaintext'}
             value={activeTab.content ?? ''}
             originalContent={activeTab.originalContent}
-            theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
+            theme={monacoThemeName}
             readOnly={!isEditableWorkspaceTab(activeTab)}
             onChange={(value) => handleTabContentChange(activeTab.id, value)}
             onReferenceSelection={(selection, startLine, endLine) => handleEditorSelectionReference({
@@ -5789,7 +5792,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         ) : editorFile ? (
           <Editor
             height="100%"
-            theme={resolvedTheme === 'dark' ? 'vs-dark' : 'vs'}
+            beforeMount={ensureActiveMonacoTheme}
+            theme={monacoThemeName}
             path={editorFile.path}
             language={editorFile.language}
             value={editorFile.content}

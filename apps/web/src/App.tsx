@@ -97,6 +97,8 @@ import type { SendTarget } from '@/components/chat/send-target-selector'
 import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, WorkspaceUIState } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useConfiguredTheme } from '@/hooks/use-configured-theme'
+import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-store'
 
 import { Badge } from '@/components/ui/badge'
 import { BrowserCollaborationPanel } from '@/components/browser/browser-collaboration-panel'
@@ -261,12 +263,6 @@ function loadLegacyCliModelsByProvider(currentProvider: ProviderId): Partial<Rec
   }
 
   return models
-}
-
-function applyTheme(mode: ThemeMode) {
-  const systemDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  const dark = mode === 'dark' || (mode === 'system' && systemDark)
-  document.documentElement.classList.toggle('dark', dark)
 }
 
 const TITLE_PLACEHOLDER_SUFFIX = 'Generating title\u2026'
@@ -938,6 +934,7 @@ function App() {
   const isElectron = !!(window as any).jaitDesktop
   const isCapacitor = !!(window as any).Capacitor
   const appPlatform: 'web' | 'electron' | 'capacitor' = isElectron ? 'electron' : isCapacitor ? 'capacitor' : 'web'
+  const { resolvedTheme: appliedThemeMode } = useConfiguredTheme(themeMode)
   const detachedWorkspaceTabId = typeof window !== 'undefined'
     ? new URLSearchParams(window.location.search).get('detachedWorkspaceTab')
     : null
@@ -2687,31 +2684,16 @@ function App() {
   }, [settings.chat_provider, authLoading])
 
   useEffect(() => {
-    applyTheme(themeMode)
-    // Sync Windows titlebar overlay color with theme
-    if (isElectron && desktopPlatform === 'win32') {
-      const dark = themeMode === 'dark' || (themeMode === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches)
-      ;(window as any).jaitDesktop?.setTitleBarOverlay?.({
-        color: dark ? '#202020' : '#e8ecf1',
-        symbolColor: dark ? '#f2f2f2' : '#0a0a0a',
-        height: 39,
-      })
-    }
-    const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const onSystemThemeChanged = () => {
-      if (themeMode === 'system') applyTheme('system')
-      if (isElectron && desktopPlatform === 'win32') {
-        const dark = media.matches
-        ;(window as any).jaitDesktop?.setTitleBarOverlay?.({
-          color: dark ? '#202020' : '#e8ecf1',
-          symbolColor: dark ? '#f2f2f2' : '#0a0a0a',
-          height: 39,
-        })
-      }
-    }
-    media.addEventListener('change', onSystemThemeChanged)
-    return () => media.removeEventListener('change', onSystemThemeChanged)
-  }, [themeMode, desktopPlatform])
+    if (!(isElectron && desktopPlatform === 'win32')) return
+    const styles = getComputedStyle(document.documentElement)
+    const background = styles.getPropertyValue('--background').trim()
+    const foreground = styles.getPropertyValue('--foreground').trim()
+    ;(window as any).jaitDesktop?.setTitleBarOverlay?.({
+      color: background ? `hsl(${background})` : (appliedThemeMode === 'dark' ? '#202020' : '#e8ecf1'),
+      symbolColor: foreground ? `hsl(${foreground})` : (appliedThemeMode === 'dark' ? '#f2f2f2' : '#0a0a0a'),
+      height: 39,
+    })
+  }, [appliedThemeMode, desktopPlatform, isElectron])
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -2774,11 +2756,14 @@ function App() {
 
   const handleThemeModeChange = useCallback(async (next: ThemeMode) => {
     const previous = themeMode
+    const previousVsCodeThemeId = getActiveVsCodeTheme()?.id ?? null
     setThemeMode(next)
+    setActiveVsCodeTheme(null)
     try {
       await updateSettings({ theme: next })
     } catch {
       setThemeMode(previous)
+      setActiveVsCodeTheme(previousVsCodeThemeId)
     }
   }, [themeMode, updateSettings])
 

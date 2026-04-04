@@ -19,6 +19,10 @@ function exec(cmd: string, opts?: Record<string, unknown>) {
 }
 const DEFAULT_TIMEOUT = 30_000;
 
+function trimCommandOutput(stdout: string): string {
+  return stdout.replace(/\r?\n$/, "");
+}
+
 // ── Types ──────────────────────────────────────────────────────────
 
 export type GitStackedAction = "commit" | "commit_push" | "commit_push_pr";
@@ -186,7 +190,7 @@ export interface ParsedRemote {
 
 async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
   const { stdout } = await exec(`git ${args}`, { cwd, timeout });
-  return stdout.trim();
+  return trimCommandOutput(stdout);
 }
 
 function gitRevisionPath(filePath: string): string {
@@ -201,7 +205,7 @@ function ghCleanEnv(): NodeJS.ProcessEnv {
 
 async function ghExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
   const { stdout } = await exec(`gh ${args}`, { cwd, timeout, env: ghCleanEnv() });
-  return stdout.trim();
+  return trimCommandOutput(stdout);
 }
 
 async function ghAvailable(cwd: string): Promise<boolean> {
@@ -406,7 +410,7 @@ async function azAvailable(cwd: string): Promise<boolean> {
 
 async function azExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
   const { stdout } = await exec(`az ${args}`, { cwd, timeout });
-  return stdout.trim();
+  return trimCommandOutput(stdout);
 }
 
 // ── Service ────────────────────────────────────────────────────────
