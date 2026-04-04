@@ -1770,7 +1770,15 @@ export function registerChatRoutes(
 
     const target = visibleEntries[targetVisibleIndex]!;
     if (target.role !== "user") {
-      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Only user messages can be edited/restarted" });
+      // The frontend messageFromEnd count can be off by 1 when it includes an
+      // optimistic/streaming assistant message that the backend hasn't persisted.
+      // Walk backwards to find the nearest user message as a fallback.
+      let adjusted = targetVisibleIndex - 1;
+      while (adjusted >= 0 && visibleEntries[adjusted]!.role !== "user") adjusted--;
+      if (adjusted < 0) {
+        return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Only user messages can be edited/restarted" });
+      }
+      targetVisibleIndex = adjusted;
     }
 
     if (memoryService) {
