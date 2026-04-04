@@ -24,7 +24,10 @@ export interface UseWakeWordOptions {
   enabled: boolean
   /** Language / locale for speech recognition (default: navigator language). */
   lang?: string
-  /** Custom wake phrases — any match activates. Default: ["jait", "hey jait"]. */
+  /**
+   * Custom wake phrases — any match activates. Default includes "jait" plus
+   * common misrecognitions by Google's speech engine (jade, jayit, gate, etc.).
+   */
   wakePhrases?: string[]
   /** Called with the command text once a wake-word activation + command is captured. */
   onCommand: (text: string) => void
@@ -47,9 +50,68 @@ export interface UseWakeWordReturn {
 
 const LISTENING_TIMEOUT_MS = 8_000
 
-// SpeechRecognition is non-standard (prefixed as webkitSpeechRecognition in most
-// Chromium builds). TypeScript's DOM lib may or may not declare it depending on
-// the version, so we use a minimal inline interface and cast at runtime.
+/**
+ * "Jait" is not a dictionary word, so Google's speech recognition will
+ * transcribe it as various real words depending on accent/language.
+ * We match all known variants phonetically.
+ */
+const DEFAULT_WAKE_PHRASES = [
+  // Exact
+  'hey jait', 'jait',
+  // Common English misrecognitions
+  'hey jade', 'jade',
+  'hey jayit', 'jayit',
+  'hey gate', 'gate',
+  'hey jate', 'jate',
+  'hey jay', 'jay',
+  'hey date', 'date',
+  'hey jake', 'jake',
+  'hey jet', 'jet',
+  'hey jayt', 'jayt',
+  'hey jayed', 'jayed',
+  'hey jaid', 'jaid',
+  'hey jayett', 'jayett',
+  'hey jit', 'jit',
+  'hey jai', 'jai',
+  // German misrecognitions (since your lang might be de)
+  'hey dschaid', 'dschaid',
+  'hey tscheit', 'tscheit',
+  'hey dscheit', 'dscheit',
+  'hey tschait', 'tschait',
+  'hey jeid', 'jeid',
+  'hey jäd', 'jäd',
+  'hey tschäd', 'tschäd',
+  'hey scheide', 'hey scheid',
+  'hey jäit', 'jäit',
+]
+
+/**
+ * Phonetic check: does the word sound like "jait"?
+ * Strips common prefixes and checks if the core sounds like /dʒeɪt/.
+ */
+function soundsLikeJait(word: string): boolean {
+  const w = word.toLowerCase()
+    .replace(/^(hey|hej|he)\s+/, '') // strip "hey" prefix
+    .replace(/[^a-zäöüß]/g, '')      // strip punctuation
+    .trim()
+
+  if (w.length < 2 || w.length > 8) return false
+
+  // Direct matches for common transcriptions
+  const directMatches = [
+    'jait', 'jade', 'jate', 'gate', 'jay', 'jai', 'jet',
+    'jake', 'jayed', 'jaid', 'jayit', 'jayt', 'jayett', 'jit',
+    'dschaid', 'tscheit', 'dscheit', 'tschait', 'jeid', 'jäd',
+    'tschäd', 'jäit', 'scheid', 'scheide',
+  ]
+  if (directMatches.includes(w)) return true
+
+  // Phonetic pattern: starts with j/g/dj/dsch/tsch, ends with t/d/te/de
+  if (/^(j|g|dj|dsch|tsch|sch)/.test(w) && /(t|d|te|de|ed)$/.test(w)) return true
+
+  return false
+}
+
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type SpeechRecognitionInstance = any
 
@@ -76,7 +138,7 @@ export function useWakeWord(options: UseWakeWordOptions): UseWakeWordReturn {
 
   enabledRef.current = enabled
 
-  const phrases = wakePhrases ?? ['hey jait', 'jait']
+  const phrases = wakePhrases ?? DEFAULT_WAKE_PHRASES
   const phrasesRef = useRef(phrases)
   phrasesRef.current = phrases
 
@@ -139,6 +201,7 @@ export function useWakeWord(options: UseWakeWordOptions): UseWakeWordReturn {
     stoppedIntentionally.current = false
 
     recognition.onstart = () => {
+      console.debug('[useWakeWord] SpeechRecognition started — say "Hey Jait" to activate')
       setIsRunning(true)
     }
 
@@ -148,6 +211,11 @@ export function useWakeWord(options: UseWakeWordOptions): UseWakeWordReturn {
         const result = event.results[i]
         const transcript = result[0]?.transcript?.trim() ?? ''
         const isFinal = result.isFinal
+
+        // Debug: log what the Speech API is hearing
+        if (transcript) {
+          console.debug(`[useWakeWord] ${isFinal ? 'FINAL' : 'interim'}: "${transcript}"`)
+        }
 
         if (isListeningRef.current) {
           // We're in active-listening mode (wake word already triggered)
@@ -162,11 +230,14 @@ export function useWakeWord(options: UseWakeWordOptions): UseWakeWordReturn {
             setInterimTranscript(transcript)
           }
         } else {
-          // Passive mode — scan for wake phrase
+          // Passive mode — scan for wake phrase via exact list OR phonetic match
           const lower = transcript.toLowerCase()
-          const matched = phrasesRef.current.some(p => lower.includes(p.toLowerCase()))
+          const exactMatch = phrasesRef.current.some(p => lower.includes(p.toLowerCase()))
+          const phoneticMatch = !exactMatch && transcript.split(/\s+/).some((w: string) => soundsLikeJait(w))
+          const matched = exactMatch || phoneticMatch
 
           if (matched && isFinal) {
+            console.debug(`[useWakeWord] Wake word DETECTED in: "${transcript}"`)
             // Check if there's a command after the wake phrase
             const cleaned = stripWakePhrase(transcript, phrasesRef.current)
             onWakeWordDetectedRef.current?.()
@@ -189,18 +260,28 @@ export function useWakeWord(options: UseWakeWordOptions): UseWakeWordReturn {
     recognition.onerror = (event: any) => {
       // "no-speech" and "aborted" are normal — just restart
       if (event.error === 'no-speech' || event.error === 'aborted') return
+      // "not-allowed" means mic permission was denied
+      if (event.error === 'not-allowed') {
+        console.warn('[useWakeWord] Microphone permission denied — disabling wake word')
+        stoppedIntentionally.current = true
+        return
+      }
       console.warn('[useWakeWord] SpeechRecognition error:', event.error)
     }
 
     recognition.onend = () => {
       setIsRunning(false)
-      // Auto-restart unless we intentionally stopped
+      // Auto-restart unless we intentionally stopped.
+      // Use a small delay to avoid rapid restart loops.
       if (enabledRef.current && !stoppedIntentionally.current) {
-        try {
-          recognition.start()
-        } catch {
-          // Already started or DOM not ready
-        }
+        setTimeout(() => {
+          if (!enabledRef.current || stoppedIntentionally.current) return
+          try {
+            recognition.start()
+          } catch {
+            // Already started or DOM not ready
+          }
+        }, 300)
       }
     }
 
@@ -225,6 +306,7 @@ export function useWakeWord(options: UseWakeWordOptions): UseWakeWordReturn {
 /**
  * Remove the wake phrase from the beginning of a transcript and return the
  * remaining command. Returns empty string if nothing remains.
+ * Handles both exact phrase matches and phonetic jait-like words.
  */
 function stripWakePhrase(transcript: string, phrases: string[]): string {
   let text = transcript.trim()
@@ -233,11 +315,26 @@ function stripWakePhrase(transcript: string, phrases: string[]): string {
   // Sort phrases longest-first so "hey jait" is matched before "jait"
   const sorted = [...phrases].sort((a, b) => b.length - a.length)
 
+  let stripped = false
   for (const phrase of sorted) {
     const idx = lower.indexOf(phrase.toLowerCase())
     if (idx !== -1) {
       text = (text.slice(0, idx) + text.slice(idx + phrase.length)).trim()
+      stripped = true
       break
+    }
+  }
+
+  // If no exact phrase matched, try phonetic: strip first word(s) that sound like "jait"
+  if (!stripped) {
+    const words = text.split(/\s+/)
+    // Strip "hey" prefix if present
+    let startIdx = 0
+    if (words[0]?.toLowerCase() === 'hey' || words[0]?.toLowerCase() === 'hej') {
+      startIdx = 1
+    }
+    if (words[startIdx] && soundsLikeJait(words[startIdx])) {
+      text = words.slice(startIdx + 1).join(' ')
     }
   }
 
