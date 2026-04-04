@@ -12,7 +12,7 @@ let state: VsCodeThemeStoreState = loadState()
 let storageListenerAttached = false
 
 function loadState(): VsCodeThemeStoreState {
-  if (typeof window === 'undefined') return { importedThemes: [], activeThemeId: null }
+  if (typeof window === 'undefined' || !window.localStorage) return { importedThemes: [], activeThemeId: null }
   const raw = window.localStorage.getItem(STORAGE_KEY)
   if (!raw) return { importedThemes: [], activeThemeId: null }
   try {
@@ -32,7 +32,7 @@ function loadState(): VsCodeThemeStoreState {
 
 function persist(nextState: VsCodeThemeStoreState): void {
   state = nextState
-  if (typeof window !== 'undefined') {
+  if (typeof window !== 'undefined' && window.localStorage) {
     window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState))
   }
   for (const listener of listeners) listener()
