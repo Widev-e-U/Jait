@@ -12,7 +12,6 @@
 import { WebSocketServer, WebSocket } from "ws";
 import type { IncomingMessage } from "node:http";
 import type { Duplex } from "node:stream";
-import type { AppConfig } from "../config.js";
 import type { VoiceClientMessage, VoiceServerMessage } from "@jait/shared";
 import { getVoiceToolSchemas, executeVoiceTool, type VoiceToolDeps } from "./tools.js";
 

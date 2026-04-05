@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo, useCallback } from 'react'
+import { useEffect, useRef, useMemo } from 'react'
 import type { VoiceAssistantState } from '@jait/shared'
 import { ReactShaderToy } from '@/components/react-shader-toy'
 import { cn } from '@/lib/utils'

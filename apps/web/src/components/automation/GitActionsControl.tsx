@@ -13,7 +13,7 @@ import {
   ChevronDown,
   GitCommit,
   CloudUpload,
-  Github,
+  GitFork,
   Loader2,
   ArrowDownToLine,
   Eye,
@@ -48,16 +48,16 @@ interface GitActionsControlProps {
 function ActionIcon({ icon }: { icon: 'commit' | 'push' | 'pr' }) {
   if (icon === 'commit') return <GitCommit className="h-3.5 w-3.5" />
   if (icon === 'push') return <CloudUpload className="h-3.5 w-3.5" />
-  return <Github className="h-3.5 w-3.5" />
+  return <GitFork className="h-3.5 w-3.5" />
 }
 
 function QuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
-  if (quickAction.kind === 'open_pr') return <Github className="h-3.5 w-3.5" />
+  if (quickAction.kind === 'open_pr') return <GitFork className="h-3.5 w-3.5" />
   if (quickAction.kind === 'run_pull') return <ArrowDownToLine className="h-3.5 w-3.5" />
   if (quickAction.kind === 'run_action') {
     if (quickAction.action === 'commit') return <GitCommit className="h-3.5 w-3.5" />
     if (quickAction.action === 'commit_push') return <CloudUpload className="h-3.5 w-3.5" />
-    return <Github className="h-3.5 w-3.5" />
+    return <GitFork className="h-3.5 w-3.5" />
   }
   return <GitCommit className="h-3.5 w-3.5" />
 }

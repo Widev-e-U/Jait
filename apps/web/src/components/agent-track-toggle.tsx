@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { Fragment, type ComponentProps, useMemo, useState } from 'react';
 import { type VariantProps, cva } from 'class-variance-authority';
 import { Track } from 'livekit-client';

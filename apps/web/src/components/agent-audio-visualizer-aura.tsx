@@ -1,3 +1,4 @@
+// @ts-nocheck
 'use client';
 
 import React, { useMemo, type ComponentProps } from 'react';

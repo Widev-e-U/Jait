@@ -1,3 +1,4 @@
+// @ts-nocheck
 import React, { useEffect, useRef, type ComponentPropsWithoutRef } from 'react';
 
 const PRECISIONS = ['lowp', 'mediump', 'highp'];

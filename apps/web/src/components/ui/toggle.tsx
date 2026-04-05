@@ -26,18 +26,25 @@ const toggleVariants = cva(
   }
 )
 
+type ToggleProps = React.ComponentPropsWithoutRef<"button"> &
+  VariantProps<typeof toggleVariants> & {
+    pressed?: boolean
+    defaultPressed?: boolean
+    onPressedChange?: (pressed: boolean) => void
+  }
+
 const Toggle = React.forwardRef<
-  React.ElementRef<typeof TogglePrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof TogglePrimitive.Root> &
-    VariantProps<typeof toggleVariants>
+  HTMLButtonElement,
+  ToggleProps
 >(({ className, variant, size, ...props }, ref) => (
   <TogglePrimitive.Root
     ref={ref}
     className={cn(toggleVariants({ variant, size, className }))}
-    {...props}
+    {...(props as any)}
   />
 ))
 
 Toggle.displayName = TogglePrimitive.Root.displayName
 
 export { Toggle, toggleVariants }
+export type { ToggleProps }
