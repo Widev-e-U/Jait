@@ -10,7 +10,6 @@ import {
   Code,
   Eye,
   EyeOff,
-  FolderTree,
   FolderOpen,
   Globe,
   GitBranch,
@@ -122,6 +121,10 @@ import {
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
 } from '@/lib/mobile-workspace-layout'
+import {
+  isMobileWorkspaceTargetActive,
+  type MobileWorkspaceTarget,
+} from '@/lib/mobile-workspace-controls'
 import {
   type UserMessageSegment,
   type UserTerminalReference,
@@ -2855,15 +2858,27 @@ function App() {
     await ensureActiveTerminal(terminalId)
   }, [ensureActiveTerminal, openTerminalPanel])
 
-  const handleMobileWorkspaceDropdownAction = useCallback(async (target: 'files' | 'git' | 'editor' | 'terminal' | 'hide') => {
-    if (target === 'hide') {
-      closeTerminalPanel()
+  const handleMobileWorkspaceTargetAction = useCallback(async (target: MobileWorkspaceTarget) => {
+    const controlState = {
+      showWorkspace,
+      showTerminal,
+      showWorkspaceTree,
+      showWorkspaceEditor,
+      treeTab: mobileTreeTab,
+    }
+
+    if (isMobileWorkspaceTargetActive(controlState, target)) {
+      if (target === 'terminal') {
+        closeTerminalPanel()
+        return
+      }
       closeWorkspacePanel()
       return
     }
 
     if (target === 'terminal') {
       setCurrentView('chat')
+      closeWorkspacePanel()
       openTerminalPanel()
       await ensureActiveTerminal()
       return
@@ -2883,7 +2898,7 @@ function App() {
     }
 
     showMobileWorkspaceTreeTab(target)
-  }, [closeTerminalPanel, closeWorkspacePanel, ensureActiveTerminal, handleToggleEditor, openTerminalPanel, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, setCurrentView, showTerminal, showWorkspace])
+  }, [closeTerminalPanel, closeWorkspacePanel, ensureActiveTerminal, handleToggleEditor, mobileTreeTab, openTerminalPanel, setCurrentView, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree])
 
   const handleReferenceFile = useCallback((file: ReferencedFile) => {
     promptInputRef.current?.insertChip(file)
@@ -4115,6 +4130,13 @@ function App() {
     currentView === 'chat' &&
     viewMode === 'developer' &&
     showTerminal
+  const mobileWorkspaceControlState = useMemo(() => ({
+    showWorkspace,
+    showTerminal,
+    showWorkspaceTree,
+    showWorkspaceEditor,
+    treeTab: mobileTreeTab,
+  }), [mobileTreeTab, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree])
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
 
@@ -4547,49 +4569,71 @@ function App() {
 
                 <div className="relative flex items-center shrink-0">
                   {isMobile ? (
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button
-                          variant={showWorkspace ? 'secondary' : 'ghost'}
-                          size="sm"
-                          className="h-7 rounded-md px-2 text-xs"
-                        >
-                          <Code className="h-3 w-3 mr-1" />
-                          Editor
-                          <ChevronDown className="h-3 w-3 ml-1" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="start">
-                        <DropdownMenuLabel>Workspace</DropdownMenuLabel>
-                        <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('files') }}>
-                          <FolderTree className="h-4 w-4 mr-2" />
-                          Files
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('git') }}>
-                          <GitBranch className="h-4 w-4 mr-2" />
-                          Changes
-                        </DropdownMenuItem>
-                        <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('editor') }}>
-                          <Code className="h-4 w-4 mr-2" />
-                          Editor
-                        </DropdownMenuItem>
-                        {viewMode === 'developer' && (
-                          <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('terminal') }}>
-                            <TerminalIcon className="h-4 w-4 mr-2" />
-                            Terminal
-                          </DropdownMenuItem>
-                        )}
-                        {showWorkspace && (
-                          <>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem onSelect={() => { void handleMobileWorkspaceDropdownAction('hide') }}>
-                              <X className="h-4 w-4 mr-2" />
-                              Hide workspace
-                            </DropdownMenuItem>
-                          </>
-                        )}
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div className="flex items-center gap-1 rounded-md border bg-background/70 p-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'files') ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-7 w-7 rounded-md p-0"
+                            aria-label="Files"
+                            onClick={() => { void handleMobileWorkspaceTargetAction('files') }}
+                          >
+                            <FolderOpen className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">Files</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'git') ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="relative h-7 w-7 rounded-md p-0"
+                            aria-label="Changes"
+                            onClick={() => { void handleMobileWorkspaceTargetAction('git') }}
+                          >
+                            <GitBranch className="h-3.5 w-3.5" />
+                            {changedFiles.length > 0 && (
+                              <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[8px] font-bold leading-[14px] text-primary-foreground">
+                                {changedFiles.length > 99 ? '99+' : changedFiles.length}
+                              </span>
+                            )}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">Changes</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'editor') ? 'secondary' : 'ghost'}
+                            size="sm"
+                            className="h-7 w-7 rounded-md p-0"
+                            aria-label="Editor"
+                            onClick={() => { void handleMobileWorkspaceTargetAction('editor') }}
+                          >
+                            <Code className="h-3.5 w-3.5" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">Editor</TooltipContent>
+                      </Tooltip>
+                      {viewMode === 'developer' && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'}
+                              size="sm"
+                              className="h-7 w-7 rounded-md p-0"
+                              aria-label="Terminal"
+                              onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }}
+                            >
+                              <TerminalIcon className="h-3.5 w-3.5" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="bottom">Terminal</TooltipContent>
+                        </Tooltip>
+                      )}
+                    </div>
                   ) : (
                     <Tooltip>
                       <TooltipTrigger asChild>
