@@ -100,6 +100,7 @@ export class WsControlPlane {
       httpServer.on("upgrade", (req, socket, head) => {
         const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
         if (url.pathname.startsWith("/api/live-view/")) return;
+        if (url.pathname.startsWith("/ws/voice-assistant")) return;
         this.wss?.handleUpgrade(req, socket, head, (ws) => {
           this.wss?.emit("connection", ws, req);
         });

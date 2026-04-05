@@ -45,6 +45,10 @@ export interface AppConfig {
   heartbeatCron: string;
   /** URL of the local Faster Whisper server (default http://localhost:8178) */
   whisperUrl: string;
+  /** OpenAI model for the real-time voice assistant (Realtime API). */
+  realtimeModel: string;
+  /** Voice used by the real-time assistant (alloy, echo, shimmer, etc.). */
+  realtimeVoice: string;
 }
 
 /** Infer context window size from model name. Conservative defaults. */
@@ -92,5 +96,7 @@ export function loadConfig(): AppConfig {
     hookSecret: process.env["HOOK_SECRET"] ?? "jait-hook-secret",
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
+    realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-4o-mini-realtime-preview",
+    realtimeVoice: process.env["OPENAI_REALTIME_VOICE"] ?? "alloy",
   };
 }

@@ -31,6 +31,11 @@ export default defineConfig({
         target: gatewayTarget,
         changeOrigin: true,
       },
+      '/ws': {
+        target: gatewayTarget,
+        changeOrigin: true,
+        ws: true,
+      },
     },
   },
 })

@@ -25,7 +25,7 @@ function ThemeAwareToaster() {
   // On Electron/Windows, offset toasts below the titlebar overlay controls
   const isElectronWin32 = !!window.jaitDesktop && navigator.userAgent.includes('Windows')
 
-  return <Toaster position="top-right" theme={theme} closeButton offset={isElectronWin32 ? 44 : undefined} />
+  return <Toaster position="top-right" theme={theme} closeButton gap={8} visibleToasts={4} offset={isElectronWin32 ? 44 : undefined} />
 }
 
 ReactDOM.createRoot(document.getElementById('root')!).render(

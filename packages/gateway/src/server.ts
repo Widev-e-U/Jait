@@ -123,6 +123,7 @@ export interface ServerDeps {
   pluginManager?: import("./plugins/manager.js").PluginManager;
   skillRegistry?: import("./skills/index.js").SkillRegistry;
   clawhubClient?: import("./clawhub/client.js").ClawHubClient;
+  voiceAssistantService?: import("./voice-assistant/service.js").VoiceAssistantService;
 }
 
 export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
@@ -195,6 +196,7 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.voiceService && deps.consentManager) {
     registerVoiceRoutes(app, deps.voiceService, deps.consentManager, config, deps.userService);
   }
+
   if (deps.trustEngine) {
     registerTrustRoutes(app, deps.trustEngine);
   }
@@ -332,6 +334,17 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
   if (deps.shutdown) {
     registerUpdateRoutes(app, config, { shutdown: deps.shutdown, port: config.port });
   }
+
+  // ── Voice assistant WebSocket (OpenAI Realtime) ─────────────────
+  // Status endpoint (always available — reports whether OpenAI key is set)
+  app.get("/api/voice-assistant/status", async () => ({
+    available: !!config.openaiApiKey,
+    model: config.realtimeModel,
+    voice: config.realtimeVoice,
+  }));
+  // The actual WebSocket upgrade for /ws/voice-assistant is attached to
+  // the raw HTTP server in index.ts after app.listen(), since Fastify's
+  // server object is needed for the upgrade handler.
 
   // ── Serve the web frontend (SPA) if the built files exist ────────
   // Probe paths in order: JAIT_WEB_DIR env, co-located ../web/dist

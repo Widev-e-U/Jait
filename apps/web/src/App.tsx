@@ -100,6 +100,8 @@ import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useConfiguredTheme } from '@/hooks/use-configured-theme'
 import { useWakeWord } from '@/hooks/useWakeWord'
+import { useVoiceAssistant } from '@/hooks/useVoiceAssistant'
+import { VoiceAssistantOverlay } from '@/components/voice-assistant/VoiceAssistantOverlay'
 import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-store'
 
 import { Badge } from '@/components/ui/badge'
@@ -4366,11 +4368,41 @@ function App() {
     })
   }, [])
 
+  // ── Voice-assistant session (OpenAI Realtime via gateway) ───
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false)
+
+  const voiceAssistant = useVoiceAssistant({
+    authToken: token,
+    onError: (err) => {
+      // Keep the overlay open so the user sees the error state inside the Aura UI
+      toast.error(`Voice: ${err}`, { duration: 4000 })
+    },
+    onConnected: () => {
+      toast.success('Voice assistant connected', { duration: 2000 })
+    },
+    onDisconnected: () => {
+      setVoiceOverlayOpen(false)
+    },
+  })
+
+  const startVoiceSession = useCallback(() => {
+    setVoiceOverlayOpen(true)
+    void voiceAssistant.connect()
+  }, [voiceAssistant])
+
   const wakeWord = useWakeWord({
-    enabled: wakeWordEnabled && isAuthenticated && !voiceRecording,
+    enabled: wakeWordEnabled && isAuthenticated && !voiceRecording && !voiceOverlayOpen,
     lang: navigator.language,
-    onCommand: (text) => { void submitVoiceTranscript(text) },
-    onWakeWordDetected: () => { toast('Listening...', { duration: 2000 }) },
+    onCommand: () => {
+      // When the user says "Hey Jait <command>", start the voice session.
+      // The command will be picked up by the mic once the session opens.
+      startVoiceSession()
+    },
+    onWakeWordDetected: () => {
+      // Just the wake word — start voice session immediately
+      toast('Connecting to Jait...', { duration: 2000 })
+      startVoiceSession()
+    },
   })
 
   useEffect(() => {
@@ -4595,31 +4627,37 @@ function App() {
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
-                    onClick={toggleWakeWord}
+                    onClick={voiceOverlayOpen ? () => { voiceAssistant.disconnect(); setVoiceOverlayOpen(false) } : toggleWakeWord}
                     className={`ui-pill shrink-0 cursor-pointer transition-colors ${
-                      wakeWordEnabled
-                        ? wakeWord.isListening
-                          ? 'text-green-400'
-                          : 'text-blue-400'
-                        : 'text-muted-foreground opacity-50'
+                      voiceOverlayOpen
+                        ? 'text-green-400 animate-pulse'
+                        : wakeWordEnabled
+                          ? wakeWord.isListening
+                            ? 'text-green-400'
+                            : 'text-blue-400'
+                          : 'text-muted-foreground opacity-50'
                     }`}
                   >
-                    {wakeWordEnabled ? (
+                    {voiceOverlayOpen ? (
+                      <Mic className="h-3 w-3 animate-pulse" />
+                    ) : wakeWordEnabled ? (
                       <Mic className={`h-3 w-3 ${wakeWord.isListening ? 'animate-pulse' : ''}`} />
                     ) : (
                       <MicOff className="h-3 w-3" />
                     )}
                     <span className="hidden sm:inline text-xs">
-                      {wakeWord.isListening ? 'Listening...' : wakeWordEnabled ? 'Hey Jait' : 'Wake word'}
+                      {voiceOverlayOpen ? 'Voice active' : wakeWord.isListening ? 'Listening...' : wakeWordEnabled ? 'Hey Jait' : 'Wake word'}
                     </span>
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">
-                  {wakeWordEnabled
-                    ? wakeWord.isListening
-                      ? 'Listening for your command...'
-                      : 'Say "Hey Jait" to activate — click to disable'
-                    : 'Click to enable always-on "Hey Jait" wake word'}
+                  {voiceOverlayOpen
+                    ? 'Voice assistant active — click to disconnect'
+                    : wakeWordEnabled
+                      ? wakeWord.isListening
+                        ? 'Listening for your command...'
+                        : 'Say "Hey Jait" to start voice assistant — click to disable'
+                      : 'Click to enable always-on "Hey Jait" wake word'}
                 </TooltipContent>
               </Tooltip>
             )}
@@ -6467,6 +6505,14 @@ function App() {
           onResolveIntervention={browserCollaboration.resolveIntervention}
         />
       </div>
+
+      {/* Voice-assistant fullscreen overlay */}
+      {voiceOverlayOpen && (
+        <VoiceAssistantOverlay
+          session={voiceAssistant}
+          onClose={() => setVoiceOverlayOpen(false)}
+        />
+      )}
     </TooltipProvider>
   )
 }

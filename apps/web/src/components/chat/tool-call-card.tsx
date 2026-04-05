@@ -1167,18 +1167,26 @@ function FileSummaryButton({
   }
 
   return (
-    <button
-      type="button"
-      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground transition-colors hover:bg-muted"
+    <span
+      role="button"
+      tabIndex={0}
+      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground transition-colors hover:bg-muted cursor-pointer"
       title={`Open diff for ${path}`}
       onClick={(event) => {
         event.preventDefault()
         event.stopPropagation()
         onOpenDiff(path)
       }}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault()
+          event.stopPropagation()
+          onOpenDiff(path)
+        }
+      }}
     >
       {content}
-    </button>
+    </span>
   )
 }
 

@@ -99,3 +99,11 @@ export type {
   ClawHubSkillListing,
   ClawHubPackageListing,
 } from "./plugin.js";
+
+export type {
+  VoiceAssistantStatus,
+  VoiceAssistantState,
+  VoiceClientMessage,
+  VoiceServerMessage,
+} from "./voice-assistant.js";
+export { VOICE_ASSISTANT_INITIAL_STATE } from "./voice-assistant.js";

@@ -40,6 +40,8 @@ import { JaitProvider } from "./providers/jait-provider.js";
 import { GeminiProvider } from "./providers/gemini-provider.js";
 import { OpenCodeProvider } from "./providers/opencode-provider.js";
 import { CopilotProvider } from "./providers/copilot-provider.js";
+import { VoiceAssistantService } from "./voice-assistant/service.js";
+import { verifyAuthToken } from "./security/http-auth.js";
 import { WorkspaceWatcher } from "./services/workspace-watcher.js";
 import type { FileChangeEvent } from "./services/workspace-watcher.js";
 import { GitService } from "./services/git.js";
@@ -554,6 +556,19 @@ async function main() {
   const { ClawHubClient } = await import("./clawhub/client.js");
   const clawhubClient = new ClawHubClient(process.env.CLAWHUB_REGISTRY);
 
+  // Voice assistant (OpenAI Realtime — global session, not workspace-scoped)
+  const voiceAssistantService = new VoiceAssistantService({
+    config,
+    verifyToken: (token) => verifyAuthToken(token, config.jwtSecret),
+    sessionService,
+    threadService,
+    workspaceService,
+    memoryService: memory,
+    toolRegistry,
+    providerRegistry,
+    toolExecutor: async (name, input, ctx) => toolExecutor(name, input, ctx),
+  });
+
   const server = await createServer(config, {
     db,
     sqlite,
@@ -596,6 +611,7 @@ async function main() {
     pluginManager,
     skillRegistry,
     clawhubClient,
+    voiceAssistantService,
     shutdown: shutdownRef,
   });
 
@@ -800,7 +816,19 @@ async function main() {
   // Start Fastify first, then attach WS to its HTTP server (shared port)
   await server.listen({ port: config.port, host: config.host });
   ws.start(server.server); // shares port with Fastify
+
+  // Attach voice-assistant WebSocket upgrade to the HTTP server
+  const httpServer = server.server;
+  httpServer.on("upgrade", (req, socket, head) => {
+    const pathname = req.url?.split("?")[0];
+    if (pathname === "/ws/voice-assistant") {
+      voiceAssistantService.handleUpgrade(req, socket, head);
+    }
+    // Other upgrade requests (WsControlPlane) are handled by ws.start() above
+  });
+
   console.log(`Jait Gateway listening on http://${config.host}:${config.port} (HTTP + WS)`);
+  console.log(`Voice assistant available at ws://${config.host}:${config.port}/ws/voice-assistant`);
 
   // ── Terminal idle reaper — stop PTY terminals idle for 30+ minutes ──
   const TERMINAL_IDLE_MS = 30 * 60 * 1000; // 30 minutes

@@ -30,6 +30,11 @@ export default defineConfig({
                 target: gatewayTarget,
                 changeOrigin: true,
             },
+            '/ws': {
+                target: gatewayTarget,
+                changeOrigin: true,
+                ws: true,
+            },
         },
         // Allow WebSocket upgrade for screen sharing signaling
         hmr: {
