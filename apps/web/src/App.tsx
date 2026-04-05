@@ -2221,6 +2221,22 @@ function App() {
   }, [activeSessionId, activeWorkspace, activeWorkspaceId, consumeSuppressedUiSync, sendUIState, setSavedWorkspace, showWorkspace, token, workspaceStateReady])
 
   const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
+  const applyWorkspaceLayout = useCallback((
+    layout: { tree: boolean; editor: boolean },
+    options?: { immediateSync?: boolean },
+  ) => {
+    setShowWorkspaceTree(layout.tree)
+    setShowWorkspaceEditor(layout.editor)
+
+    if (!options?.immediateSync) return
+
+    prevWorkspaceLayoutPayloadRef.current = JSON.stringify(layout)
+    setSavedWorkspaceLayout(layout, { immediate: true })
+    if (activeSessionId) {
+      sendUIState('workspace.layout', layout, activeSessionId)
+    }
+  }, [activeSessionId, sendUIState, setSavedWorkspaceLayout])
+
   useEffect(() => {
     if (activeWorkspaceId && token && loadingWorkspaceLayout) return
     const layout = { tree: showWorkspaceTree, editor: showWorkspaceEditor }
@@ -2463,9 +2479,7 @@ function App() {
     setShowWorkspace(false)
     if (isMobile) {
       const collapsedLayout = collapseMobileWorkspace()
-      setShowWorkspaceTree(collapsedLayout.tree)
-      setShowWorkspaceEditor(collapsedLayout.editor)
-      setSavedWorkspaceLayout(collapsedLayout, { immediate: true })
+      applyWorkspaceLayout(collapsedLayout, { immediateSync: true })
     }
     if (activeWorkspace) {
       setSavedWorkspace({
@@ -2476,43 +2490,37 @@ function App() {
       }, { immediate: true })
     }
     setShowArchitecture(false)
-  }, [activeWorkspace, isMobile, setSavedWorkspace, setSavedWorkspaceLayout])
+  }, [activeWorkspace, applyWorkspaceLayout, isMobile, setSavedWorkspace])
   closeWorkspacePanelRef.current = closeWorkspacePanel
 
   const toggleWorkspaceTree = useCallback(() => {
     if (isMobile) {
       const nextLayout = toggleMobileWorkspacePane({ tree: showWorkspaceTree, editor: showWorkspaceEditor }, 'tree')
-      setShowWorkspaceTree(nextLayout.tree)
-      setShowWorkspaceEditor(nextLayout.editor)
+      applyWorkspaceLayout(nextLayout, { immediateSync: true })
       return
     }
     setShowWorkspaceTree(prev => !prev)
-  }, [isMobile, showWorkspaceTree, showWorkspaceEditor])
+  }, [applyWorkspaceLayout, isMobile, showWorkspaceTree, showWorkspaceEditor])
 
   const toggleWorkspaceEditor = useCallback(() => {
     if (isMobile) {
       const nextLayout = toggleMobileWorkspacePane({ tree: showWorkspaceTree, editor: showWorkspaceEditor }, 'editor')
-      setShowWorkspaceTree(nextLayout.tree)
-      setShowWorkspaceEditor(nextLayout.editor)
+      applyWorkspaceLayout(nextLayout, { immediateSync: true })
       return
     }
     setShowWorkspaceEditor(prev => !prev)
-  }, [isMobile, showWorkspaceTree, showWorkspaceEditor])
+  }, [applyWorkspaceLayout, isMobile, showWorkspaceTree, showWorkspaceEditor])
 
   const showMobileWorkspaceTreeTab = useCallback((tab: 'files' | 'git') => {
     setMobileTreeTab(tab)
     const nextLayout = showMobileWorkspacePane('tree')
-    setShowWorkspaceTree(nextLayout.tree)
-    setShowWorkspaceEditor(nextLayout.editor)
-    setSavedWorkspaceLayout(nextLayout, { immediate: true })
-  }, [setSavedWorkspaceLayout])
+    applyWorkspaceLayout(nextLayout, { immediateSync: true })
+  }, [applyWorkspaceLayout])
 
   const showMobileWorkspaceEditorTab = useCallback(() => {
     const nextLayout = showMobileWorkspacePane('editor')
-    setShowWorkspaceTree(nextLayout.tree)
-    setShowWorkspaceEditor(nextLayout.editor)
-    setSavedWorkspaceLayout(nextLayout, { immediate: true })
-  }, [setSavedWorkspaceLayout])
+    applyWorkspaceLayout(nextLayout, { immediateSync: true })
+  }, [applyWorkspaceLayout])
 
   const openDevPreviewPanel = useCallback((target?: string | null) => {
     setCurrentView('chat')
@@ -2625,8 +2633,12 @@ function App() {
     showWorkspaceRef.current = nextOpen
     await openRemoteWorkspaceOnGateway(path, nodeId, session.id)
     setShowWorkspace(nextOpen)
+    if (nextOpen && isMobile) {
+      const nextLayout = showMobileWorkspacePane('editor')
+      applyWorkspaceLayout(nextLayout, { immediateSync: true })
+    }
     setSavedWorkspace({ open: nextOpen, remotePath: path, nodeId })
-  }, [changeDirectoryWorkspaceId, createSession, createWorkspace, updateWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
+  }, [applyWorkspaceLayout, changeDirectoryWorkspaceId, createSession, createWorkspace, isMobile, updateWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
 
   const handleToggleEditor = useCallback(async () => {
     if (showWorkspace) {
@@ -2642,7 +2654,8 @@ function App() {
         if (activeWorkspace?.workspaceRoot === threadWorkspace) {
           showWorkspaceRef.current = true
           setShowWorkspace(true)
-          setShowWorkspaceTree(true)
+          if (isMobile) showWorkspaceEditorPanel()
+          else setShowWorkspaceTree(true)
           const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId, nodeId: activeWorkspace.nodeId }
           setSavedWorkspace(state)
           return
@@ -2662,7 +2675,8 @@ function App() {
     if (activeWorkspace) {
       showWorkspaceRef.current = true
       setShowWorkspace(true)
-      setShowWorkspaceTree(true)
+      if (isMobile) showWorkspaceEditorPanel()
+      else setShowWorkspaceTree(true)
       const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId, nodeId: activeWorkspace.nodeId }
       setSavedWorkspace(state)
       return
@@ -2689,6 +2703,8 @@ function App() {
     selectedThreadRepo,
     createSession,
     handleWorkspaceFolderSelected,
+    isMobile,
+    showWorkspaceEditorPanel,
   ])
 
   // Verify workspace surface is alive; re-create if stale (e.g. after gateway restart)
@@ -4622,14 +4638,15 @@ function App() {
                   <Button
                     variant={showSidebar ? 'secondary' : 'ghost'}
                     size="sm"
-                    className="h-7 shrink-0 rounded-md px-2 text-xs"
+                    className={isMobile ? 'h-9 w-9 shrink-0 rounded-md p-0' : 'h-7 shrink-0 rounded-md px-2 text-xs'}
                     onClick={() => setShowSidebar(s => !s)}
+                    aria-label="Toggle workspaces sidebar"
                   >
                     {showSidebar
-                      ? <PanelLeftClose className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
-                      : <PanelLeftOpen className={`h-3 w-3 mr-1${isMobile ? ' rotate-90' : ''}`} />
+                      ? <PanelLeftClose className={`h-3 w-3${isMobile ? ' rotate-90' : ' mr-1'}`} />
+                      : <PanelLeftOpen className={`h-3 w-3${isMobile ? ' rotate-90' : ' mr-1'}`} />
                     }
-                    Workspaces
+                    {!isMobile && 'Workspaces'}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Toggle workspaces sidebar</TooltipContent>
@@ -4656,9 +4673,9 @@ function App() {
                   </Tooltip>
                 )}
 
-                <div className="relative flex items-center shrink-0">
+                <div className={`flex items-center shrink-0 ${isMobile ? 'gap-1' : ''}`}>
                   {isMobile ? (
-                    <div className="flex items-center gap-1.5 rounded-lg border bg-background/70 px-1.5 py-1">
+                    <>
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
@@ -4722,7 +4739,7 @@ function App() {
                           <TooltipContent side="bottom">Terminal</TooltipContent>
                         </Tooltip>
                       )}
-                    </div>
+                    </>
                   ) : (
                     <Tooltip>
                       <TooltipTrigger asChild>
@@ -4748,7 +4765,8 @@ function App() {
                       <Button
                         variant={previewOpen ? 'secondary' : 'ghost'}
                         size="sm"
-                        className="h-7 shrink-0 rounded-md px-2 text-xs"
+                        className={isMobile ? 'h-9 w-9 shrink-0 rounded-md p-0' : 'h-7 shrink-0 rounded-md px-2 text-xs'}
+                        aria-label={previewOpen ? 'Close preview' : 'Open preview'}
                         onClick={() => {
                           if (previewOpen) {
                             if (workspacePreviewState.open) {
@@ -4768,9 +4786,9 @@ function App() {
                           }
                         }}
                       >
-                        <Globe className="h-3 w-3 mr-1" />
-                        Preview
-                        {previewOpen && <X className="h-3 wer-3 ml-1" />}
+                        <Globe className={`h-3 w-3${isMobile ? '' : ' mr-1'}`} />
+                        {!isMobile && 'Preview'}
+                        {!isMobile && previewOpen && <X className="h-3 wer-3 ml-1" />}
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="bottom">{previewOpen ? 'Close preview' : 'Open dev preview'}</TooltipContent>
@@ -4785,7 +4803,8 @@ function App() {
                   <Button
                     variant={showArchitecture ? 'secondary' : 'ghost'}
                     size="sm"
-                    className="h-7 shrink-0 rounded-md px-2 text-xs"
+                    className={isMobile ? 'h-9 w-9 shrink-0 rounded-md p-0' : 'h-7 shrink-0 rounded-md px-2 text-xs'}
+                    aria-label={showArchitecture ? 'Close architecture' : 'Open architecture'}
                     onClick={() => {
                       if (showArchitecture) {
                         workspaceRef.current?.closeArchitectureTab()
@@ -4796,9 +4815,9 @@ function App() {
                       }
                     }}
                   >
-                    <Boxes className="h-3 w-3 mr-1" />
-                    Architecture
-                    {showArchitecture && <X className="h-3 w-3 ml-1" />}
+                    <Boxes className={`h-3 w-3${isMobile ? '' : ' mr-1'}`} />
+                    {!isMobile && 'Architecture'}
+                    {!isMobile && showArchitecture && <X className="h-3 w-3 ml-1" />}
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Software architecture diagram</TooltipContent>
