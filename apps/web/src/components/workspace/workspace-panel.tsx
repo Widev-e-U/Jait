@@ -4616,7 +4616,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       <div className="flex flex-col h-full min-h-0">
         {/* Tab bar — always available on mobile so editor tabs remain reachable */}
         {(showTreeProp || showEditorProp) && (
-        <div className="flex items-center h-[35px] border-b bg-muted/30 shrink-0 px-1 gap-0.5">
+        <div data-testid="mobile-workspace-tabbar" className="flex items-center h-[35px] border-b bg-muted/30 shrink-0 px-1 gap-0.5">
           {showTreeProp && (
             <>
               <button
@@ -4726,6 +4726,27 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )}
             </button>
           )
+          )}
+          {effectiveMobileTab === 'editor' && activeTab?.type === 'preview' && (
+            <>
+              <div className="flex-1" />
+              <button
+                type="button"
+                onClick={handleRefreshPreviewTarget}
+                className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
+                title="Refresh preview"
+              >
+                <RefreshCw className="h-3 w-3" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPreviewSidePanelOpen((prev) => !prev)}
+                className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
+                title="Preview controls"
+              >
+                <Settings2 className="h-3 w-3" />
+              </button>
+            </>
           )}
         </div>
         )}
@@ -5023,69 +5044,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         {/* Editor tab */}
         {effectiveMobileTab === 'editor' && showEditorProp && (
           <div className="flex-1 flex flex-col min-h-0">
-            {/* Mobile editor header */}
-            <div className="flex items-center h-8 bg-muted/30 border-b shrink-0 overflow-x-auto overflow-y-hidden">
-              {showTreeProp && (
-                <button
-                  className="flex items-center px-2 text-muted-foreground hover:text-foreground shrink-0"
-                  onClick={() => { setMobileTab(scDiffFile ? 'git' : 'files') }}
-                >
-                  <ArrowLeft className="h-3.5 w-3.5" />
-                </button>
-              )}
-              <span className="min-w-0 flex-1 truncate px-1 text-[11px] text-muted-foreground">
-                {activeTab ? getEditorTabTitle(activeTab) : 'Editor'}
-              </span>
-              <div className="flex-1" />
-              {activeTab?.type === 'preview' && (
-                <>
-                  <button
-                    onClick={handleRefreshPreviewTarget}
-                    className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
-                    title="Refresh preview"
-                  >
-                    <RefreshCw className="h-3 w-3" />
-                  </button>
-                  <button
-                    onClick={() => setPreviewSidePanelOpen((prev) => !prev)}
-                    className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
-                    title="Preview controls"
-                  >
-                    <Settings2 className="h-3 w-3" />
-                  </button>
-                </>
-              )}
-              {onToggleEditor && !treeTabProp && (
-                <button
-                  onClick={onToggleEditor}
-                  className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
-                >
-                  <EyeOff className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-            {/* Fallback header when no tabs */}
-            {openTabs.length === 0 && (
-            <div className="flex items-center gap-1.5 h-7 px-2 border-b bg-muted/20 shrink-0">
-              {showTreeProp && (
-                <button
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground"
-                  onClick={() => setMobileTab('files')}
-                >
-                  <ArrowLeft className="h-3 w-3" />
-                </button>
-              )}
-              <span className="text-[11px] text-muted-foreground flex-1">Editor</span>
-              {onToggleEditor && !treeTabProp && (
-                <button
-                  onClick={onToggleEditor}
-                  className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5"
-                >
-                  <EyeOff className="h-3 w-3" />
-                </button>
-              )}
-            </div>
-            )}
             <div className="flex-1 min-h-0 overflow-auto">
               {scDiffLoading ? (
                 <div className="h-full flex items-center justify-center text-sm text-muted-foreground gap-2">
