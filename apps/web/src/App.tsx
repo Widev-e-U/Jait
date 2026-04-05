@@ -122,6 +122,7 @@ import {
   toggleMobileWorkspacePane,
 } from '@/lib/mobile-workspace-layout'
 import {
+  getMobileWorkspaceActiveTarget,
   isMobileWorkspaceTargetActive,
   type MobileWorkspaceTarget,
 } from '@/lib/mobile-workspace-controls'
@@ -1729,21 +1730,21 @@ function App() {
   // Eagerly update the ref so consecutive calls within the same render
   // cycle each see the previous call's updates instead of clobbering them.
   const updateWorkspaceUI = useCallback(<K extends keyof WorkspaceUIState>(
-    key: K, value: WorkspaceUIState[K],
+    key: K, value: WorkspaceUIState[K], options?: { immediate?: boolean },
   ) => {
     const prev = workspaceUIRef.current ?? { panel: null, tabs: null, layout: null, terminal: null, preview: null }
     const next = { ...prev, [key]: value }
     workspaceUIRef.current = next
-    setWorkspaceUI(next)
+    setWorkspaceUI(next, options)
   }, [setWorkspaceUI])
 
   // Derived convenience setters matching previous per-key API
-  const setSavedWorkspace = useCallback((v: { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string } | null) => {
-    updateWorkspaceUI('panel', v)
+  const setSavedWorkspace = useCallback((v: { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string } | null, options?: { immediate?: boolean }) => {
+    updateWorkspaceUI('panel', v, options)
   }, [updateWorkspaceUI])
 
-  const setSavedTerminal = useCallback((v: { open: boolean } | null) => {
-    updateWorkspaceUI('terminal', v)
+  const setSavedTerminal = useCallback((v: { open: boolean } | null, options?: { immediate?: boolean }) => {
+    updateWorkspaceUI('terminal', v, options)
   }, [updateWorkspaceUI])
 
   const setSavedDevPreview = useCallback((v: DevPreviewPanelState | null) => {
@@ -1751,8 +1752,8 @@ function App() {
   }, [updateWorkspaceUI])
 
   const loadingWorkspaceLayout = !workspaceUI && !!activeWorkspaceId && !!token
-  const setSavedWorkspaceLayout = useCallback((v: { tree: boolean; editor: boolean } | null) => {
-    updateWorkspaceUI('layout', v)
+  const setSavedWorkspaceLayout = useCallback((v: { tree: boolean; editor: boolean } | null, options?: { immediate?: boolean }) => {
+    updateWorkspaceUI('layout', v, options)
   }, [updateWorkspaceUI])
 
   const setSavedWorkspaceTabs = useCallback((v: WorkspaceTabsState | null) => {
@@ -2383,38 +2384,44 @@ function App() {
   const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
   const openTerminalPanel = useCallback(() => {
-    if (!showWorkspaceRef.current) {
+    if (!isMobile && !showWorkspaceRef.current) {
       showWorkspaceRef.current = true
       setShowWorkspace(true)
       setShowWorkspaceEditor(true)
     }
     setShowTerminal(true)
-    setSavedTerminal({ open: true })
+    setSavedTerminal({ open: true }, { immediate: isMobile })
     if (consumeSuppressedUiSync('terminal.panel')) return
     sendUIState('terminal.panel', { open: true }, activeSessionId)
-  }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync])
+  }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync, isMobile])
 
   const closeTerminalPanel = useCallback(() => {
     setShowTerminal(false)
-    setSavedTerminal(null)
+    setSavedTerminal(null, { immediate: isMobile })
     if (consumeSuppressedUiSync('terminal.panel')) return
     sendUIState('terminal.panel', null, activeSessionId)
-  }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync])
+  }, [setSavedTerminal, sendUIState, activeSessionId, consumeSuppressedUiSync, isMobile])
 
   const closeWorkspacePanel = useCallback(() => {
     suppressWorkspaceAutoOpenRef.current = true
     showWorkspaceRef.current = false
     setShowWorkspace(false)
+    if (isMobile) {
+      const collapsedLayout = collapseMobileWorkspace()
+      setShowWorkspaceTree(collapsedLayout.tree)
+      setShowWorkspaceEditor(collapsedLayout.editor)
+      setSavedWorkspaceLayout(collapsedLayout, { immediate: true })
+    }
     if (activeWorkspace) {
       setSavedWorkspace({
         open: false,
         remotePath: activeWorkspace.workspaceRoot,
         surfaceId: activeWorkspace.surfaceId,
         nodeId: activeWorkspace.nodeId,
-      })
+      }, { immediate: true })
     }
     setShowArchitecture(false)
-  }, [activeWorkspace, setSavedWorkspace])
+  }, [activeWorkspace, isMobile, setSavedWorkspace, setSavedWorkspaceLayout])
   closeWorkspacePanelRef.current = closeWorkspacePanel
 
   const toggleWorkspaceTree = useCallback(() => {
@@ -2442,13 +2449,15 @@ function App() {
     const nextLayout = showMobileWorkspacePane('tree')
     setShowWorkspaceTree(nextLayout.tree)
     setShowWorkspaceEditor(nextLayout.editor)
-  }, [])
+    setSavedWorkspaceLayout(nextLayout, { immediate: true })
+  }, [setSavedWorkspaceLayout])
 
   const showMobileWorkspaceEditorTab = useCallback(() => {
     const nextLayout = showMobileWorkspacePane('editor')
     setShowWorkspaceTree(nextLayout.tree)
     setShowWorkspaceEditor(nextLayout.editor)
-  }, [])
+    setSavedWorkspaceLayout(nextLayout, { immediate: true })
+  }, [setSavedWorkspaceLayout])
 
   const openDevPreviewPanel = useCallback((target?: string | null) => {
     setCurrentView('chat')
@@ -4120,16 +4129,26 @@ function App() {
   const limitReached = error === 'limit_reached'
   const hasMessages = messages.length > 0 || isLoadingHistory
   const requiresAuthGate = !authLoading && !isAuthenticated
+  const mobileActiveWorkspaceTarget = useMemo(
+    () => getMobileWorkspaceActiveTarget({
+      showWorkspace,
+      showTerminal,
+      showWorkspaceTree,
+      showWorkspaceEditor,
+      treeTab: mobileTreeTab,
+    }),
+    [mobileTreeTab, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree],
+  )
   const showMobileWorkspaceFullscreen =
     isMobile &&
     showMobileWorkspace &&
-    !showTerminal &&
-    (showWorkspaceTree || showWorkspaceEditor)
+    mobileActiveWorkspaceTarget !== null &&
+    mobileActiveWorkspaceTarget !== 'terminal'
   const showMobileTerminalFullscreen =
     isMobile &&
     currentView === 'chat' &&
     viewMode === 'developer' &&
-    showTerminal
+    mobileActiveWorkspaceTarget === 'terminal'
   const mobileWorkspaceControlState = useMemo(() => ({
     showWorkspace,
     showTerminal,
@@ -4251,7 +4270,7 @@ function App() {
               <Wifi className="h-3.5 w-3.5 sm:mr-1.5" />
               <span className="hidden sm:inline">Network</span>
             </Button>
-            {viewMode === 'developer' && (
+            {viewMode === 'developer' && !isMobile && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -4404,7 +4423,7 @@ function App() {
             <div className="md:hidden shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0 shrink-0">
+                  <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0">
                     <EllipsisVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -4524,7 +4543,7 @@ function App() {
                 className={`flex border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${
                   compactManagerToolbar
                     ? 'min-h-[35px] flex-wrap items-start gap-2 py-1.5'
-                    : 'h-[35px] items-center gap-1 overflow-x-auto scrollbar-none'
+                    : 'h-11 md:h-[35px] items-center gap-1 overflow-x-auto scrollbar-none'
                 }`}
               >
             {viewMode === 'developer' && (
@@ -4550,7 +4569,7 @@ function App() {
             {/* Chat workspace / terminal controls */}
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && (
               <>
-                {viewMode === 'developer' && (
+                {viewMode === 'developer' && !isMobile && (
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button
@@ -4569,17 +4588,17 @@ function App() {
 
                 <div className="relative flex items-center shrink-0">
                   {isMobile ? (
-                    <div className="flex items-center gap-1 rounded-md border bg-background/70 p-1">
+                    <div className="flex items-center gap-1.5 rounded-lg border bg-background/70 px-1.5 py-1">
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Button
                             variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'files') ? 'secondary' : 'ghost'}
                             size="sm"
-                            className="h-7 w-7 rounded-md p-0"
+                            className="h-9 w-9 rounded-md p-0"
                             aria-label="Files"
                             onClick={() => { void handleMobileWorkspaceTargetAction('files') }}
                           >
-                            <FolderOpen className="h-3.5 w-3.5" />
+                            <FolderOpen className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom">Files</TooltipContent>
@@ -4589,11 +4608,11 @@ function App() {
                           <Button
                             variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'git') ? 'secondary' : 'ghost'}
                             size="sm"
-                            className="relative h-7 w-7 rounded-md p-0"
+                            className="relative h-9 w-9 rounded-md p-0"
                             aria-label="Changes"
                             onClick={() => { void handleMobileWorkspaceTargetAction('git') }}
                           >
-                            <GitBranch className="h-3.5 w-3.5" />
+                            <GitBranch className="h-4 w-4" />
                             {changedFiles.length > 0 && (
                               <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[8px] font-bold leading-[14px] text-primary-foreground">
                                 {changedFiles.length > 99 ? '99+' : changedFiles.length}
@@ -4608,11 +4627,11 @@ function App() {
                           <Button
                             variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'editor') ? 'secondary' : 'ghost'}
                             size="sm"
-                            className="h-7 w-7 rounded-md p-0"
+                            className="h-9 w-9 rounded-md p-0"
                             aria-label="Editor"
                             onClick={() => { void handleMobileWorkspaceTargetAction('editor') }}
                           >
-                            <Code className="h-3.5 w-3.5" />
+                            <Code className="h-4 w-4" />
                           </Button>
                         </TooltipTrigger>
                         <TooltipContent side="bottom">Editor</TooltipContent>
@@ -4623,11 +4642,11 @@ function App() {
                             <Button
                               variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'}
                               size="sm"
-                              className="h-7 w-7 rounded-md p-0"
+                              className="h-9 w-9 rounded-md p-0"
                               aria-label="Terminal"
                               onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }}
                             >
-                              <TerminalIcon className="h-3.5 w-3.5" />
+                              <TerminalIcon className="h-4 w-4" />
                             </Button>
                           </TooltipTrigger>
                           <TooltipContent side="bottom">Terminal</TooltipContent>
@@ -5123,7 +5142,7 @@ function App() {
               </section>
             )}
 
-            {!showMobileWorkspaceFullscreen && (viewMode === 'manager' ? (
+            {!showMobileWorkspaceFullscreen && !showMobileTerminalFullscreen && (viewMode === 'manager' ? (
               /* ── Manager main content ────────────────────────────── */
               <div className="flex-1 min-w-0 flex flex-col min-h-0">
                 {automation.selectedThread ? (

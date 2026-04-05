@@ -14,7 +14,7 @@ export function useWorkspaceState<T>(
   workspaceId: string | null,
   key: string,
   token?: string | null,
-): [T | null, (value: T | null) => void, boolean] {
+): [T | null, (value: T | null, options?: { immediate?: boolean }) => void, boolean] {
   const [value, setValueLocal] = useState<T | null>(null)
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
@@ -52,18 +52,25 @@ export function useWorkspaceState<T>(
     }
   }, [workspaceId, key, token])
 
-  const setValue = useCallback((next: T | null) => {
+  const setValue = useCallback((next: T | null, options?: { immediate?: boolean }) => {
     setValueLocal(next)
     latestRef.current = next
 
     if (!workspaceId || !token) return
     if (debounceRef.current) clearTimeout(debounceRef.current)
-    debounceRef.current = setTimeout(() => {
+    const persist = () => {
       fetch(`${API_URL}/api/workspaces/${workspaceId}/state`, {
         method: 'PATCH',
         headers: authHeaders(token),
         body: JSON.stringify({ [key]: latestRef.current }),
       }).catch(() => undefined)
+    }
+    if (options?.immediate) {
+      persist()
+      return
+    }
+    debounceRef.current = setTimeout(() => {
+      persist()
     }, 300)
   }, [workspaceId, key, token])
 

@@ -8,21 +8,31 @@ export interface MobileWorkspaceControlState {
   treeTab: 'files' | 'git'
 }
 
+export function getMobileWorkspaceActiveTarget(
+  state: MobileWorkspaceControlState,
+): MobileWorkspaceTarget | null {
+  if (state.showTerminal) {
+    return 'terminal'
+  }
+
+  if (!state.showWorkspace) {
+    return null
+  }
+
+  if (state.showWorkspaceEditor) {
+    return 'editor'
+  }
+
+  if (state.showWorkspaceTree) {
+    return state.treeTab
+  }
+
+  return null
+}
+
 export function isMobileWorkspaceTargetActive(
   state: MobileWorkspaceControlState,
   target: MobileWorkspaceTarget,
 ): boolean {
-  if (target === 'terminal') {
-    return state.showTerminal
-  }
-
-  if (!state.showWorkspace || state.showTerminal) {
-    return false
-  }
-
-  if (target === 'editor') {
-    return state.showWorkspaceEditor
-  }
-
-  return state.showWorkspaceTree && state.treeTab === target
+  return getMobileWorkspaceActiveTarget(state) === target
 }
