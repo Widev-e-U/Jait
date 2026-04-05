@@ -10,6 +10,22 @@ function authHeaders(token?: string | null): Record<string, string> {
   return h
 }
 
+export function createWorkspaceStatePersistRequestInit(
+  token: string | null | undefined,
+  key: string,
+  value: unknown,
+  options?: { immediate?: boolean },
+): RequestInit {
+  return {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ [key]: value }),
+    // `keepalive` makes immediate writes much more reliable during mobile
+    // reloads/navigation where the document can be torn down mid-request.
+    keepalive: options?.immediate === true,
+  }
+}
+
 export function useWorkspaceState<T>(
   workspaceId: string | null,
   key: string,
@@ -60,9 +76,7 @@ export function useWorkspaceState<T>(
     if (debounceRef.current) clearTimeout(debounceRef.current)
     const persist = () => {
       fetch(`${API_URL}/api/workspaces/${workspaceId}/state`, {
-        method: 'PATCH',
-        headers: authHeaders(token),
-        body: JSON.stringify({ [key]: latestRef.current }),
+        ...createWorkspaceStatePersistRequestInit(token, key, latestRef.current, options),
       }).catch(() => undefined)
     }
     if (options?.immediate) {

@@ -20,6 +20,18 @@ function authHeaders(token?: string | null): Record<string, string> {
   return h
 }
 
+export function createSessionStatePersistRequestInit(
+  token: string | null | undefined,
+  key: string,
+  value: unknown,
+): RequestInit {
+  return {
+    method: 'PATCH',
+    headers: authHeaders(token),
+    body: JSON.stringify({ [key]: value }),
+  }
+}
+
 export function shouldApplySessionStateFetchResult(
   fetchWriteVersion: number,
   currentWriteVersion: number,
@@ -86,9 +98,7 @@ export function useSessionState<T>(
       if (debounceRef.current) clearTimeout(debounceRef.current)
       debounceRef.current = setTimeout(() => {
         fetch(`${API_URL}/api/sessions/${sessionId}/state`, {
-          method: 'PATCH',
-          headers: authHeaders(token),
-          body: JSON.stringify({ [key]: latestRef.current }),
+          ...createSessionStatePersistRequestInit(token, key, latestRef.current),
         }).catch(() => {
           // Silently ignore write failures — local state stays optimistic
         })

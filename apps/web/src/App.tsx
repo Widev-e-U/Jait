@@ -894,6 +894,8 @@ function App() {
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
   const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>('files')
   const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
+  const activeWorkspaceRef = useRef(activeWorkspace)
+  activeWorkspaceRef.current = activeWorkspace
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [showArchitecture, setShowArchitecture] = useState(false)
   const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null)
@@ -1428,6 +1430,18 @@ function App() {
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null,
     [workspaces, activeWorkspaceId],
   )
+  const tokenRef = useRef(token)
+  tokenRef.current = token
+  const authLoadingRef = useRef(authLoading)
+  authLoadingRef.current = authLoading
+  const workspacesLoadingRef = useRef(workspacesLoading)
+  workspacesLoadingRef.current = workspacesLoading
+  const workspacesRef = useRef(workspaces)
+  workspacesRef.current = workspaces
+  const activeSessionIdRef = useRef(activeSessionId)
+  activeSessionIdRef.current = activeSessionId
+  const activeWorkspaceRecordRef = useRef(activeWorkspaceRecord)
+  activeWorkspaceRecordRef.current = activeWorkspaceRecord
   const activeSessionRecord = useMemo(
     () => activeWorkspaceRecord?.sessions.find((session) => session.id === activeSessionId) ?? null,
     [activeSessionId, activeWorkspaceRecord],
@@ -1441,6 +1455,13 @@ function App() {
       .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
       .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
   }, [activeWorkspaceRecord, archivedSessionsByWorkspace])
+  const waitForWorkspaceHydration = useCallback(async () => {
+    const deadline = Date.now() + 1500
+    while (Date.now() < deadline) {
+      if (!authLoadingRef.current && !workspacesLoadingRef.current) return
+      await new Promise((resolve) => window.setTimeout(resolve, 50))
+    }
+  }, [])
   const handleChangeDirectory = useCallback((workspaceId: string) => {
     setChangeDirectoryWorkspaceId(workspaceId)
     setFolderPickerOpen(true)
@@ -2477,20 +2498,27 @@ function App() {
     suppressWorkspaceAutoOpenRef.current = true
     showWorkspaceRef.current = false
     setShowWorkspace(false)
+    const nextPanel = activeWorkspace
+      ? {
+          open: false,
+          remotePath: activeWorkspace.workspaceRoot,
+          surfaceId: activeWorkspace.surfaceId,
+          nodeId: activeWorkspace.nodeId,
+        }
+      : null
+    prevWorkspacePanelPayloadRef.current = JSON.stringify(nextPanel)
     if (isMobile) {
       const collapsedLayout = collapseMobileWorkspace()
       applyWorkspaceLayout(collapsedLayout, { immediateSync: true })
     }
-    if (activeWorkspace) {
-      setSavedWorkspace({
-        open: false,
-        remotePath: activeWorkspace.workspaceRoot,
-        surfaceId: activeWorkspace.surfaceId,
-        nodeId: activeWorkspace.nodeId,
-      }, { immediate: true })
+    if (nextPanel) {
+      setSavedWorkspace(nextPanel, { immediate: true })
+      if (activeSessionId) {
+        sendUIState('workspace.panel', nextPanel, activeSessionId)
+      }
     }
     setShowArchitecture(false)
-  }, [activeWorkspace, applyWorkspaceLayout, isMobile, setSavedWorkspace])
+  }, [activeSessionId, activeWorkspace, applyWorkspaceLayout, isMobile, sendUIState, setSavedWorkspace])
   closeWorkspacePanelRef.current = closeWorkspacePanel
 
   const toggleWorkspaceTree = useCallback(() => {
@@ -2640,6 +2668,23 @@ function App() {
     setSavedWorkspace({ open: nextOpen, remotePath: path, nodeId })
   }, [applyWorkspaceLayout, changeDirectoryWorkspaceId, createSession, createWorkspace, isMobile, updateWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
 
+  const reopenPersistedWorkspace = useCallback(async (
+    path: string,
+    nodeId?: string | null,
+    sessionIdOverride?: string | null,
+  ) => {
+    await openRemoteWorkspaceOnGateway(path, nodeId ?? undefined, sessionIdOverride)
+    showWorkspaceRef.current = true
+    setShowWorkspace(true)
+    if (isMobile) {
+      applyWorkspaceLayout(showMobileWorkspacePane('editor'), { immediateSync: true })
+    } else {
+      setShowWorkspaceTree(true)
+      setShowWorkspaceEditor(true)
+    }
+    setSavedWorkspace({ open: true, remotePath: path, nodeId: nodeId ?? undefined })
+  }, [applyWorkspaceLayout, isMobile, openRemoteWorkspaceOnGateway, setSavedWorkspace])
+
   const handleToggleEditor = useCallback(async () => {
     if (showWorkspace) {
       closeWorkspacePanel()
@@ -2648,44 +2693,159 @@ function App() {
 
     suppressWorkspaceAutoOpenRef.current = false
 
+    if (!activeWorkspaceRef.current && !activeWorkspaceRecordRef.current && (authLoadingRef.current || workspacesLoadingRef.current)) {
+      await waitForWorkspaceHydration()
+    }
+
+    const currentActiveWorkspace = activeWorkspaceRef.current
+    const currentActiveWorkspaceRecord = activeWorkspaceRecordRef.current
+    const currentActiveSessionId = activeSessionIdRef.current
+    const currentWorkspaces = workspacesRef.current
+    const currentToken = tokenRef.current
+
     if (viewMode === 'manager' && automation.selectedThread) {
       const threadWorkspace = automation.selectedThread.workingDirectory ?? selectedThreadRepo?.localPath
       if (threadWorkspace) {
-        if (activeWorkspace?.workspaceRoot === threadWorkspace) {
+        if (currentActiveWorkspace?.workspaceRoot === threadWorkspace) {
           showWorkspaceRef.current = true
           setShowWorkspace(true)
           if (isMobile) showWorkspaceEditorPanel()
           else setShowWorkspaceTree(true)
-          const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId, nodeId: activeWorkspace.nodeId }
+          const state = { open: true, remotePath: currentActiveWorkspace.workspaceRoot, surfaceId: currentActiveWorkspace.surfaceId, nodeId: currentActiveWorkspace.nodeId }
           setSavedWorkspace(state)
           return
         }
-        let workspaceSessionId = activeSessionId
+        let workspaceSessionId = currentActiveSessionId
         if (!workspaceSessionId) {
           await handleWorkspaceFolderSelected(threadWorkspace, selectedThreadRepo?.deviceId ?? 'gateway', { openEditor: true })
           return
         }
         if (!workspaceSessionId) return
-        await openRemoteWorkspaceOnGateway(threadWorkspace, selectedThreadRepo?.deviceId ?? undefined, workspaceSessionId)
+        await reopenPersistedWorkspace(threadWorkspace, selectedThreadRepo?.deviceId ?? undefined, workspaceSessionId)
         return
       }
     }
 
     // If there's an existing remote workspace, just reopen the panel
-    if (activeWorkspace) {
+    if (currentActiveWorkspace) {
       showWorkspaceRef.current = true
       setShowWorkspace(true)
       if (isMobile) showWorkspaceEditorPanel()
       else setShowWorkspaceTree(true)
-      const state = { open: true, remotePath: activeWorkspace.workspaceRoot, surfaceId: activeWorkspace.surfaceId, nodeId: activeWorkspace.nodeId }
+      const state = { open: true, remotePath: currentActiveWorkspace.workspaceRoot, surfaceId: currentActiveWorkspace.surfaceId, nodeId: currentActiveWorkspace.nodeId }
       setSavedWorkspace(state)
       return
     }
 
     // If a workspace record exists with a rootPath, open it directly instead of showing the picker
-    if (activeWorkspaceRecord?.rootPath) {
-      await handleWorkspaceFolderSelected(activeWorkspaceRecord.rootPath, activeWorkspaceRecord.nodeId ?? 'gateway', { openEditor: true })
+    if (currentActiveWorkspaceRecord?.rootPath) {
+      await reopenPersistedWorkspace(currentActiveWorkspaceRecord.rootPath, currentActiveWorkspaceRecord.nodeId ?? 'gateway', currentActiveSessionId)
       return
+    }
+
+    const pendingWorkspacePanel = pendingWsWorkspaceStateRef.current?.ui.panel
+    const pendingWorkspaceRoot = pendingWorkspacePanel?.remotePath?.trim() || null
+    if (pendingWorkspaceRoot && currentActiveSessionId) {
+      await reopenPersistedWorkspace(
+        pendingWorkspaceRoot,
+        pendingWorkspacePanel?.nodeId ?? undefined,
+        currentActiveSessionId,
+      )
+      return
+    }
+
+    const persistedWorkspacePanel = workspaceUIRef.current?.panel
+    const persistedWorkspaceRoot = persistedWorkspacePanel?.remotePath?.trim() || null
+    if (persistedWorkspaceRoot && currentActiveSessionId) {
+      await reopenPersistedWorkspace(
+        persistedWorkspaceRoot,
+        persistedWorkspacePanel?.nodeId ?? undefined,
+        currentActiveSessionId,
+      )
+      return
+    }
+
+    // Fallback: the mobile UI can race ahead of workspace hydration after a
+    // reconnect/reload. Recover from the loaded workspace list instead of
+    // dropping the user into the picker when we already know the workspace.
+    const fallbackWorkspace = (
+      (currentActiveSessionId
+        ? currentWorkspaces.find((workspace) => workspace.sessions.some((session) => session.id === currentActiveSessionId))
+        : null)
+      ?? (currentWorkspaces.length === 1 ? currentWorkspaces[0] ?? null : null)
+    )
+    const fallbackRoot = fallbackWorkspace?.rootPath?.trim() || null
+    if (fallbackWorkspace && fallbackRoot) {
+      const fallbackSession = fallbackWorkspace.sessions.find((session) => session.id === currentActiveSessionId)
+        ?? fallbackWorkspace.sessions[0]
+        ?? null
+      if (fallbackSession) {
+        switchSession(fallbackWorkspace.id, fallbackSession.id)
+        await reopenPersistedWorkspace(fallbackRoot, fallbackWorkspace.nodeId ?? undefined, fallbackSession.id)
+        return
+      }
+      await handleWorkspaceFolderSelected(fallbackRoot, fallbackWorkspace.nodeId ?? 'gateway', { openEditor: true })
+      return
+    }
+
+    if (currentActiveSessionId && currentToken) {
+      try {
+        const sessionRes = await fetch(`${API_URL}/api/sessions/${currentActiveSessionId}`, {
+          headers: { Authorization: `Bearer ${currentToken}` },
+        })
+        if (sessionRes.ok) {
+          const session = await sessionRes.json() as {
+            id: string
+            workspaceId?: string | null
+            workspacePath?: string | null
+          }
+          let serverWorkspace: { id: string; rootPath?: string | null; nodeId?: string | null } | null = null
+          if (session.workspaceId) {
+            const workspaceRes = await fetch(`${API_URL}/api/workspaces/${session.workspaceId}`, {
+              headers: { Authorization: `Bearer ${currentToken}` },
+            })
+            if (workspaceRes.ok) {
+              serverWorkspace = await workspaceRes.json() as { id: string; rootPath?: string | null; nodeId?: string | null }
+            }
+          }
+
+          const serverRoot = serverWorkspace?.rootPath?.trim() || session.workspacePath?.trim() || null
+          if (serverRoot) {
+            if (serverWorkspace?.id) switchSession(serverWorkspace.id, session.id)
+            await reopenPersistedWorkspace(serverRoot, serverWorkspace?.nodeId ?? undefined, session.id)
+            return
+          }
+        }
+      } catch {
+        // Fall through to the picker when server recovery also fails.
+      }
+    }
+
+    if (currentToken) {
+      try {
+        const lastActiveRes = await fetch(`${API_URL}/api/workspaces/last-active`, {
+          headers: { Authorization: `Bearer ${currentToken}` },
+        })
+        if (lastActiveRes.ok) {
+          const lastActive = await lastActiveRes.json() as {
+            workspace: { id: string; rootPath?: string | null; nodeId?: string | null } | null
+            session: { id: string } | null
+          }
+          const lastActiveRoot = lastActive.workspace?.rootPath?.trim() || persistedWorkspaceRoot
+          const lastActiveSessionId = lastActive.session?.id ?? currentActiveSessionId
+          if (lastActive.workspace?.id && lastActiveRoot && lastActiveSessionId) {
+            switchSession(lastActive.workspace.id, lastActiveSessionId)
+            await reopenPersistedWorkspace(
+              lastActiveRoot,
+              lastActive.workspace.nodeId ?? persistedWorkspacePanel?.nodeId ?? undefined,
+              lastActiveSessionId,
+            )
+            return
+          }
+        }
+      } catch {
+        // Fall through to the picker when last-active recovery also fails.
+      }
     }
 
     setWorkspacePickerMode('editor')
@@ -2697,14 +2857,17 @@ function App() {
     closeWorkspacePanel,
     setSavedWorkspace,
     activeSessionId,
-    openRemoteWorkspaceOnGateway,
     viewMode,
     automation.selectedThread,
     selectedThreadRepo,
-    createSession,
+    workspaces,
+    switchSession,
+    token,
     handleWorkspaceFolderSelected,
     isMobile,
     showWorkspaceEditorPanel,
+    reopenPersistedWorkspace,
+    waitForWorkspaceHydration,
   ])
 
   // Verify workspace surface is alive; re-create if stale (e.g. after gateway restart)
