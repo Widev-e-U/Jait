@@ -155,11 +155,28 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
     let disposed = false
     let reconnectDelay = 1000
+    let pausedForHiddenDocument = false
     const MAX_RECONNECT_DELAY = 30000
     const lastSeqByStream = new Map<string, number>()
 
+    function clearReconnectTimer() {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+    }
+
+    function closeSocket() {
+      if (!ws) return
+      ws.onclose = null
+      ws.close()
+      ws = null
+      wsRef.current = null
+    }
+
     function connect() {
       if (disposed) return
+      if (typeof document !== 'undefined' && document.hidden) return
       const query = token ? `?token=${encodeURIComponent(token)}` : ''
       ws = new WebSocket(`${WS_URL}${query}`)
       wsRef.current = ws
@@ -181,7 +198,7 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
       }
 
       ws.onclose = () => {
-        if (!disposed) {
+        if (!disposed && !pausedForHiddenDocument) {
           reconnectTimer = setTimeout(connect, reconnectDelay)
           reconnectDelay = Math.min(reconnectDelay * 1.5, MAX_RECONNECT_DELAY)
         }
@@ -192,7 +209,22 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
       }
     }
 
+    const handleVisibilityChange = () => {
+      const hidden = typeof document !== 'undefined' && document.hidden
+      pausedForHiddenDocument = hidden
+      if (hidden) {
+        clearReconnectTimer()
+        closeSocket()
+        return
+      }
+      reconnectDelay = 1000
+      if (!ws) connect()
+    }
+
     connect()
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+    }
 
     // Forward user input to the terminal via WS
     term.onData((data) => {
@@ -244,12 +276,15 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
 
     return () => {
       disposed = true
-      if (reconnectTimer) clearTimeout(reconnectTimer)
+      clearReconnectTimer()
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
       resizeObserver.disconnect()
       rootEl.removeEventListener('mouseup', handleMouseUp)
       rootEl.removeEventListener('keyup', handleKeyUp)
       rootEl.removeEventListener('contextmenu', handleContextMenu)
-      if (ws) ws.close()
+      closeSocket()
       term.dispose()
       termRef.current = null
       fitRef.current = null

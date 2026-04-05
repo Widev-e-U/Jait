@@ -1825,6 +1825,7 @@ function App() {
       const recordedPath = activeWorkspaceRecord.rootPath?.trim() || null
       const restoredPath = recordedPath || savedPath
       if (restoredPath) {
+        suppressNextUiSync('workspace.panel')
         const pathMatchesRecord = Boolean(savedPath && recordedPath && savedPath === recordedPath)
         setActiveWorkspace({
           surfaceId: pathMatchesRecord ? (wp.surfaceId ?? '') : '',
@@ -1876,6 +1877,34 @@ function App() {
   const handleStateSync = useCallback((key: string, value: unknown) => {
     suppressNextUiSync(key)
     switch (key) {
+      case 'workspace.panel':
+        if (!value) {
+          showWorkspaceRef.current = false
+          setShowWorkspace(false)
+          break
+        }
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const panel = value as { open?: boolean; remotePath?: string; surfaceId?: string; nodeId?: string }
+          const workspaceRoot = panel.remotePath?.trim() || activeWorkspace?.workspaceRoot || null
+          if (workspaceRoot) {
+            setActiveWorkspace({
+              surfaceId: panel.surfaceId ?? activeWorkspace?.surfaceId ?? '',
+              workspaceRoot,
+              nodeId: panel.nodeId ?? activeWorkspace?.nodeId,
+            })
+          }
+          const isOpen = panel.open === true
+          showWorkspaceRef.current = isOpen
+          setShowWorkspace(isOpen)
+        }
+        break
+      case 'workspace.layout':
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          const layout = value as { tree?: boolean; editor?: boolean }
+          setShowWorkspaceTree(layout.tree !== false)
+          setShowWorkspaceEditor(layout.editor !== false)
+        }
+        break
       case 'screen-share.panel':
         if (!value) setShowScreenShare(false)
         else {
@@ -1940,7 +1969,7 @@ function App() {
         break
       }
     }
-  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview, isMobile, suppressNextUiSync])
+  }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview, isMobile, suppressNextUiSync, activeWorkspace?.nodeId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot])
 
   // ── Full state hydration from backend (authoritative, pushed on subscribe) ──
   // This is called when the WebSocket delivers the initial full-state push.
@@ -2037,6 +2066,7 @@ function App() {
 
         // Workspace layout
         if (ui.layout) {
+          suppressNextUiSync('workspace.layout')
           setShowWorkspaceTree(ui.layout.tree !== false)
           setShowWorkspaceEditor(ui.layout.editor !== false)
         }
@@ -2169,6 +2199,27 @@ function App() {
     }
   }, [activeWorkspace?.workspaceRoot, token])
 
+  const prevWorkspacePanelPayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeWorkspaceId && token && !workspaceStateReady) return
+    const panel = activeWorkspace
+      ? {
+          open: showWorkspace,
+          remotePath: activeWorkspace.workspaceRoot,
+          surfaceId: activeWorkspace.surfaceId,
+          nodeId: activeWorkspace.nodeId,
+        }
+      : null
+    const serialized = JSON.stringify(panel)
+    if (serialized === prevWorkspacePanelPayloadRef.current) return
+    prevWorkspacePanelPayloadRef.current = serialized
+    setSavedWorkspace(panel)
+    if (activeSessionId) {
+      if (consumeSuppressedUiSync('workspace.panel')) return
+      sendUIState('workspace.panel', panel, activeSessionId)
+    }
+  }, [activeSessionId, activeWorkspace, activeWorkspaceId, consumeSuppressedUiSync, sendUIState, setSavedWorkspace, showWorkspace, token, workspaceStateReady])
+
   const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeWorkspaceId && token && loadingWorkspaceLayout) return
@@ -2177,7 +2228,11 @@ function App() {
     if (serialized === prevWorkspaceLayoutPayloadRef.current) return
     prevWorkspaceLayoutPayloadRef.current = serialized
     setSavedWorkspaceLayout(layout)
-  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token])
+    if (activeSessionId) {
+      if (consumeSuppressedUiSync('workspace.layout')) return
+      sendUIState('workspace.layout', layout, activeSessionId)
+    }
+  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token, activeSessionId, consumeSuppressedUiSync, sendUIState])
 
   const prevChatModePayloadRef = useRef<string | null>(null)
   useEffect(() => {
@@ -4243,44 +4298,59 @@ function App() {
 
           {/* Nav — hidden on mobile, visible on md+ */}
           <nav className="hidden md:flex items-center gap-1 min-w-0 overflow-x-auto scrollbar-none" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            <Button
-              variant={currentView === 'chat' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-8 shrink-0 rounded-lg px-2.5 text-xs sm:px-3"
-              onClick={() => setCurrentView('chat')}
-            >
-              <MessageSquare className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Chat</span>
-            </Button>
-            <Button
-              variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-8 shrink-0 rounded-lg px-2.5 text-xs sm:px-3"
-              onClick={() => setCurrentView('jobs')}
-            >
-              <Calendar className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Jobs</span>
-            </Button>
-            <Button
-              variant={currentView === 'network' ? 'secondary' : 'ghost'}
-              size="sm"
-              className="h-8 shrink-0 rounded-lg px-2.5 text-xs sm:px-3"
-              onClick={() => setCurrentView('network')}
-            >
-              <Wifi className="h-3.5 w-3.5 sm:mr-1.5" />
-              <span className="hidden sm:inline">Network</span>
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={currentView === 'chat' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8 shrink-0 rounded-lg"
+                  onClick={() => setCurrentView('chat')}
+                  aria-label="Chat"
+                >
+                  <MessageSquare className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Chat</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8 shrink-0 rounded-lg"
+                  onClick={() => setCurrentView('jobs')}
+                  aria-label="Jobs"
+                >
+                  <Calendar className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Jobs</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={currentView === 'network' ? 'secondary' : 'ghost'}
+                  size="icon"
+                  className="h-8 w-8 shrink-0 rounded-lg"
+                  onClick={() => setCurrentView('network')}
+                  aria-label="Network"
+                >
+                  <Wifi className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Network</TooltipContent>
+            </Tooltip>
             {viewMode === 'developer' && !isMobile && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant={showScreenShare ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className="h-8 shrink-0 rounded-lg px-2.5 text-xs sm:px-3"
+                    size="icon"
+                    className="h-8 w-8 shrink-0 rounded-lg"
                     onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
+                    aria-label="Screen sharing"
                   >
-                    <Cast className="h-3.5 w-3.5 sm:mr-1.5" />
-                    <span className="hidden sm:inline">Share</span>
+                    <Cast className="h-3.5 w-3.5" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Screen sharing</TooltipContent>

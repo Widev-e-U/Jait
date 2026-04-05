@@ -224,7 +224,22 @@ async function main() {
         const session = sessionService.getById(sid);
         if (session?.workspaceId) {
           try {
-            workspaceState.set(session.workspaceId, { "workspace.panel": panelState });
+            const existing = workspaceState.get(session.workspaceId, ["workspace.ui"])["workspace.ui"] as {
+              panel?: unknown;
+              tabs?: unknown;
+              layout?: unknown;
+              terminal?: unknown;
+              preview?: unknown;
+            } | null | undefined;
+            workspaceState.set(session.workspaceId, {
+              "workspace.ui": {
+                panel: panelState,
+                tabs: existing?.tabs ?? null,
+                layout: existing?.layout ?? null,
+                terminal: existing?.terminal ?? null,
+                preview: existing?.preview ?? null,
+              },
+            });
           } catch (err) {
             console.error("Failed to persist workspace state:", err);
           }
@@ -270,7 +285,22 @@ async function main() {
         const session = sessionService.getById(sid);
         if (session?.workspaceId) {
           try {
-            workspaceState.set(session.workspaceId, { "workspace.panel": null });
+            const existing = workspaceState.get(session.workspaceId, ["workspace.ui"])["workspace.ui"] as {
+              panel?: unknown;
+              tabs?: unknown;
+              layout?: unknown;
+              terminal?: unknown;
+              preview?: unknown;
+            } | null | undefined;
+            workspaceState.set(session.workspaceId, {
+              "workspace.ui": {
+                panel: null,
+                tabs: existing?.tabs ?? null,
+                layout: existing?.layout ?? null,
+                terminal: existing?.terminal ?? null,
+                preview: existing?.preview ?? null,
+              },
+            });
           } catch (err) {
             console.error("Failed to clear workspace state:", err);
           }
@@ -615,6 +645,27 @@ async function main() {
   ws.onUIStateUpdate = (sid, key, value, clientId) => {
     try {
       sessionState.set(sid, { [key]: value });
+      if (key === "workspace.layout" || key === "workspace.panel") {
+        const session = sessionService.getById(sid);
+        if (session?.workspaceId) {
+          const existing = workspaceState.get(session.workspaceId, ["workspace.ui"])["workspace.ui"] as {
+            panel?: unknown;
+            tabs?: unknown;
+            layout?: unknown;
+            terminal?: unknown;
+            preview?: unknown;
+          } | null | undefined;
+          workspaceState.set(session.workspaceId, {
+            "workspace.ui": {
+              panel: key === "workspace.panel" ? value : existing?.panel ?? null,
+              tabs: existing?.tabs ?? null,
+              layout: key === "workspace.layout" ? value : existing?.layout ?? null,
+              terminal: existing?.terminal ?? null,
+              preview: existing?.preview ?? null,
+            },
+          });
+        }
+      }
       // Broadcast to other session clients so they stay in sync
       ws.broadcastExcluding(sid, clientId, {
         type: "ui.state-sync",

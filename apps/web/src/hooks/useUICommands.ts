@@ -512,9 +512,27 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
     mountedRef.current = true
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+    let pausedForHiddenDocument = false
+
+    const clearReconnectTimer = () => {
+      if (reconnectTimer) {
+        clearTimeout(reconnectTimer)
+        reconnectTimer = null
+      }
+    }
+
+    const closeSocket = () => {
+      const ws = wsRef.current
+      if (!ws) return
+      ws.onclose = null
+      ws.close()
+      wsRef.current = null
+      currentSessionRef.current = null
+    }
 
     const connect = () => {
       if (!mountedRef.current) return
+      if (typeof document !== 'undefined' && document.hidden) return
       const ws = new WebSocket(`${WS_URL}?token=${tokenRef.current ?? 'dev'}`)
       wsRef.current = ws
 
@@ -592,7 +610,7 @@ export function useUICommands(opts: UseUICommandsOptions) {
         currentSessionRef.current = null
         onConnectionStateChangeRef.current?.({ connected: false, reconnected: false })
         // Auto-reconnect after 1s
-        if (mountedRef.current) {
+        if (mountedRef.current && !pausedForHiddenDocument) {
           reconnectTimer = setTimeout(connect, 1000)
         }
       }
@@ -602,7 +620,21 @@ export function useUICommands(opts: UseUICommandsOptions) {
       }
     }
 
+    const handleVisibilityChange = () => {
+      const hidden = typeof document !== 'undefined' && document.hidden
+      pausedForHiddenDocument = hidden
+      if (hidden) {
+        clearReconnectTimer()
+        closeSocket()
+        return
+      }
+      if (!wsRef.current) connect()
+    }
+
     connect()
+    if (typeof document !== 'undefined') {
+      document.addEventListener('visibilitychange', handleVisibilityChange)
+    }
 
     // Set up Electron IPC listener for provider events from child processes
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -626,17 +658,15 @@ export function useUICommands(opts: UseUICommandsOptions) {
 
     return () => {
       mountedRef.current = false
-      if (reconnectTimer) clearTimeout(reconnectTimer)
+      clearReconnectTimer()
+      if (typeof document !== 'undefined') {
+        document.removeEventListener('visibilitychange', handleVisibilityChange)
+      }
       // Clean up Electron IPC listener
       if (detectPlatform() === 'electron' && window.jaitDesktop?.removeGatewayEventListener) {
         window.jaitDesktop.removeGatewayEventListener()
       }
-      const ws = wsRef.current
-      if (ws) {
-        ws.onclose = null // prevent reconnect on intentional close
-        ws.close()
-        wsRef.current = null
-      }
+      closeSocket()
     }
   // Only reconnect the WS when the auth token changes
   // eslint-disable-next-line react-hooks/exhaustive-deps

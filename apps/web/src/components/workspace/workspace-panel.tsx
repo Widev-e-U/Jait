@@ -1893,6 +1893,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     const id = setInterval(async () => {
       if (cancelled) return
+      if (typeof document !== 'undefined' && document.hidden) return
       const mt = await remoteStatFile(path, sid)
       if (cancelled || !mt) return
       if (lastMtimeRef.current && mt !== lastMtimeRef.current) {
