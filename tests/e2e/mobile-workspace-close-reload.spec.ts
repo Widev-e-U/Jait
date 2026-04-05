@@ -64,6 +64,58 @@ async function getWorkspaceUiState(
   return payload['workspace.ui'] ?? null
 }
 
+async function setWorkspaceUiState(
+  request: Parameters<typeof test>[0]['request'],
+  token: string,
+  workspaceId: string,
+  value: Record<string, unknown> | null,
+) {
+  const response = await request.patch(`${API_URL}/api/workspaces/${workspaceId}/state`, {
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    data: {
+      'workspace.ui': value,
+    },
+  })
+  expect(response.ok()).toBeTruthy()
+}
+
+async function expectWorkspaceUiState(
+  request: Parameters<typeof test>[0]['request'],
+  token: string,
+  workspaceId: string,
+  expected: {
+    open: boolean | null
+    tree: boolean | null
+    editor: boolean | null
+    previewOpen?: boolean | null
+  },
+) {
+  await expect.poll(async () => {
+    const state = await getWorkspaceUiState(request, token, workspaceId)
+    return {
+      open: state?.panel?.open ?? null,
+      tree: state?.layout?.tree ?? null,
+      editor: state?.layout?.editor ?? null,
+      previewOpen: state?.preview?.open ?? null,
+    }
+  }, {
+    timeout: 15000,
+    message: 'workspace.ui should match the expected mobile layout state',
+  }).toEqual({
+    open: expected.open,
+    tree: expected.tree,
+    editor: expected.editor,
+    previewOpen: expected.previewOpen ?? null,
+  })
+}
+
+function mobileEditorPlaceholder(page: Parameters<typeof test>[0]['page']) {
+  return page.getByText('Tap a file in the Files tab to view it here.')
+}
+
 async function loginInBrowser(
   page: Parameters<typeof test>[0]['page'],
   username: string,
@@ -94,7 +146,70 @@ async function loginInBrowser(
 test.describe('mobile workspace close + reload', () => {
   test.describe.configure({ mode: 'serial' })
 
-  test('keeps the editor closed after an immediate reload on mobile', async ({ page, request }, testInfo) => {
+  test('does not reopen the editor on reload when preview state is persisted', async ({ page, request }, testInfo) => {
+    test.setTimeout(90000)
+    test.skip(!testInfo.project.name.startsWith('mobile'), 'mobile-only regression test')
+
+    const { token, username, password } = await registerUser(request)
+    const { workspaceId, sessionId } = await createWorkspaceAndSession(request, token)
+
+    await page.addInitScript(([gatewayUrl]) => {
+      window.localStorage.setItem('jait-gateway-url', gatewayUrl)
+    }, [API_URL] as const)
+
+    await page.goto('/')
+    await loginInBrowser(page, username, password)
+    const historyMarker = page.getByText('History').first()
+    await expect(historyMarker).toBeVisible({ timeout: 15000 })
+
+    const openResponse = await request.post(`${API_URL}/api/workspace/open`, {
+      data: {
+        path: WORKSPACE_ROOT,
+        sessionId,
+        nodeId: 'gateway',
+      },
+    })
+    expect(openResponse.ok()).toBeTruthy()
+
+    await setWorkspaceUiState(request, token, workspaceId, {
+      panel: {
+        open: false,
+        remotePath: WORKSPACE_ROOT,
+        nodeId: 'gateway',
+      },
+      layout: {
+        tree: false,
+        editor: false,
+      },
+      tabs: {
+        remoteRoot: WORKSPACE_ROOT,
+        tabs: [],
+        activePath: null,
+        activePreview: true,
+      },
+      terminal: null,
+      preview: {
+        open: true,
+        target: null,
+        workspaceRoot: WORKSPACE_ROOT,
+        browserSessionId: null,
+      },
+    })
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(historyMarker).toBeVisible({ timeout: 15000 })
+
+    await expectWorkspaceUiState(request, token, workspaceId, {
+      open: false,
+      tree: false,
+      editor: false,
+      previewOpen: true,
+    })
+    await expect(page.getByText('Open or start a preview from the side controls.')).toHaveCount(0)
+    await expect(mobileEditorPlaceholder(page)).toHaveCount(0)
+  })
+
+  test('does not reopen the editor on reload when architecture was open before closing it', async ({ page, request }, testInfo) => {
     test.setTimeout(90000)
     test.skip(!testInfo.project.name.startsWith('mobile'), 'mobile-only regression test')
 
@@ -122,36 +237,27 @@ test.describe('mobile workspace close + reload', () => {
     await page.reload({ waitUntil: 'domcontentloaded' })
     await expect(historyMarker).toBeVisible({ timeout: 15000 })
 
+    const architectureButton = page.locator('button[aria-label="Open architecture"]').first()
+    await architectureButton.click()
+    await expect(page.getByText('Software Architecture')).toBeVisible({ timeout: 15000 })
+
     const editorButton = page.locator('button[aria-label="Editor"]').first()
     await editorButton.click()
-    await expect.poll(async () => {
-      const state = await getWorkspaceUiState(request, token, workspaceId)
-      return state?.layout?.editor ?? null
-    }, {
-      timeout: 15000,
-      message: 'mobile editor should be marked open before closing it again',
-    }).toBe(true)
-
-    await editorButton.click()
-
-    await page.reload({ waitUntil: 'domcontentloaded' })
-
-    await expect(historyMarker).toBeVisible({ timeout: 15000 })
-
-    await expect.poll(async () => {
-      const state = await getWorkspaceUiState(request, token, workspaceId)
-      return {
-        open: state?.panel?.open ?? null,
-        tree: state?.layout?.tree ?? null,
-        editor: state?.layout?.editor ?? null,
-      }
-    }, {
-      timeout: 15000,
-      message: 'workspace.ui should persist the closed mobile editor state',
-    }).toEqual({
+    await expectWorkspaceUiState(request, token, workspaceId, {
       open: false,
       tree: false,
       editor: false,
     })
+
+    await page.reload({ waitUntil: 'domcontentloaded' })
+    await expect(historyMarker).toBeVisible({ timeout: 15000 })
+
+    await expectWorkspaceUiState(request, token, workspaceId, {
+      open: false,
+      tree: false,
+      editor: false,
+    })
+    await expect(page.getByText('Software Architecture')).toHaveCount(0)
+    await expect(mobileEditorPlaceholder(page)).toHaveCount(0)
   })
 })

@@ -1622,6 +1622,11 @@ function App() {
     setInputSegments(undefined)
   }, [activeSessionId])
 
+  const previousChangedFilesCountRef = useRef<number | null>(null)
+  useEffect(() => {
+    previousChangedFilesCountRef.current = null
+  }, [activeSessionId])
+
   const handleMessageComplete = useCallback(() => {
     refreshMessages()
     setRemoteMessageCompleteCount((prev) => prev + 1)
@@ -1870,7 +1875,7 @@ function App() {
       const nextTarget = dp.target?.trim() || null
       if (nextTarget) setDevPreviewTarget(nextTarget)
       setDevPreviewBrowserSessionId(dp.browserSessionId?.trim() || null)
-      if (dp.open) {
+      if (dp.open && ui.panel?.open === true) {
         routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null, dp.browserSessionId ?? null)
       }
     }
@@ -2903,7 +2908,12 @@ function App() {
 
   // Auto-open workspace panel when the agent modifies files
   useEffect(() => {
+    const previousCount = previousChangedFilesCountRef.current
+    previousChangedFilesCountRef.current = changedFiles.length
+
+    if (previousCount === null) return
     if (changedFiles.length === 0) return
+    if (changedFiles.length <= previousCount) return
     if (suppressWorkspaceAutoOpenRef.current) return
     if (!showWorkspace) {
       showWorkspaceRef.current = true
