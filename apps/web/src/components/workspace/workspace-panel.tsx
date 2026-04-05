@@ -1349,10 +1349,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const handledArchitectureRequestKeyRef = useRef<number | null>(null)
 
   const syncPreviewTab = useCallback((updater: (prev: EditorTab | null) => EditorTab | null, activate = false) => {
-    let nextTab: EditorTab | null = null
+    const currentPreviewTab = openTabs.find((tab) => tab.type === 'preview') ?? null
+    const nextTab = updater(currentPreviewTab)
     setOpenTabs((prev) => {
-      const currentPreviewTab = prev.find((tab) => tab.type === 'preview') ?? null
-      nextTab = updater(currentPreviewTab)
       const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
       if (!nextTab) {
         if (previewIndex < 0) return prev
@@ -1378,15 +1377,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     })
 
     if (activate && nextTab) {
-      setActiveTabId((nextTab as EditorTab).id)
+      setActiveTabId(nextTab.id)
       setScDiffFile(null)
       setActiveNativePath(null)
       setPreviewContent(null)
-      setPreviewPath((nextTab as EditorTab).previewTarget ?? (nextTab as EditorTab).path)
+      setPreviewPath(nextTab.previewTarget ?? nextTab.path)
       setPreviewLanguage('plaintext')
       onActiveFileChange('')
     }
-  }, [onActiveFileChange])
+  }, [onActiveFileChange, openTabs])
 
   const stopManagedPreviewSession = useCallback(async (preserveTab: boolean) => {
     if (previewSessionId && previewToken) {

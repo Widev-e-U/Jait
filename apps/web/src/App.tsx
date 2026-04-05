@@ -1079,9 +1079,19 @@ function App() {
   const routePreviewToWorkspace = useCallback((target?: string | null, workspaceRoot?: string | null, browserSessionId?: string | null) => {
     const trimmed = target?.trim() || resolveBrowserSessionPreviewTarget(browserSessionId) || null
     const nextBrowserSessionId = browserSessionId?.trim() || null
+    const nextPreviewState: DevPreviewPanelState = {
+      open: true,
+      target: trimmed,
+      workspaceRoot: workspaceRoot?.trim() || activeWorkspace?.workspaceRoot || null,
+      browserSessionId: nextBrowserSessionId,
+      displayState: (trimmed || nextBrowserSessionId) ? 'connected' : 'blank',
+      displayTarget: trimmed,
+      storageScope: 'isolated-browser-session',
+    }
     setViewMode('developer')
     setDevPreviewTarget(trimmed)
     setDevPreviewBrowserSessionId(nextBrowserSessionId)
+    setWorkspacePreviewState(nextPreviewState)
     if (workspaceRoot?.trim()) {
       setActiveWorkspace((prev) => {
         if (prev?.workspaceRoot === workspaceRoot.trim()) return prev
@@ -1095,7 +1105,7 @@ function App() {
     showWorkspaceEditorPanel()
     setWorkspacePreviewRequest({ target: trimmed, browserSessionId: nextBrowserSessionId, key: Date.now() })
     return true
-  }, [resolveBrowserSessionPreviewTarget, showWorkspace, showWorkspaceEditorPanel])
+  }, [activeWorkspace?.workspaceRoot, resolveBrowserSessionPreviewTarget, showWorkspace, showWorkspaceEditorPanel])
 
   const getFloatingViewport = useCallback(() => ({
     width: window.innerWidth,
@@ -4802,7 +4812,7 @@ function App() {
                 className={`flex border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${
                   compactManagerToolbar
                     ? 'min-h-[35px] flex-wrap items-start gap-2 py-1.5'
-                    : 'h-11 md:h-[35px] items-center gap-1 overflow-x-auto scrollbar-none'
+                    : 'h-11 md:h-[35px] items-center gap-1 overflow-x-auto overflow-y-visible scrollbar-none'
                 }`}
               >
             {viewMode === 'developer' && (
@@ -4874,7 +4884,7 @@ function App() {
                           >
                             <GitBranch className="h-4 w-4" />
                             {changedFiles.length > 0 && (
-                              <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[8px] font-bold leading-[14px] text-primary-foreground">
+                              <span className="absolute -right-1 -top-1 z-10 min-w-[14px] rounded-full bg-primary px-1 text-[8px] font-bold leading-[14px] text-primary-foreground">
                                 {changedFiles.length > 99 ? '99+' : changedFiles.length}
                               </span>
                             )}
