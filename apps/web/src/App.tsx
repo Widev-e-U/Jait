@@ -937,6 +937,7 @@ function App() {
   const [registerPassword, setRegisterPassword] = useState('')
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
+  const [authSubmitting, setAuthSubmitting] = useState(false)
   const [showLoginPassword, setShowLoginPassword] = useState(false)
   const [showRegisterPassword, setShowRegisterPassword] = useState(false)
   const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false)
@@ -2148,6 +2149,7 @@ function App() {
         setCurrentView('chat')
         setShowTerminal(true)
         setSavedTerminal({ open: true })
+        void refresh()
         if (data.terminalId) {
           setActiveTerminalId(data.terminalId)
         }
@@ -2157,7 +2159,7 @@ function App() {
             duration: 10000,
           })
         }
-      }, [setSavedTerminal, setActiveTerminalId]),
+      }, [refresh, setSavedTerminal, setActiveTerminalId]),
       'dev-preview.open': useCallback((data: { target?: string | null; workspaceRoot?: string | null }) => {
         const target = typeof data.target === 'string' ? data.target.trim() : ''
         setCurrentView('chat')
@@ -3947,7 +3949,9 @@ function App() {
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (authSubmitting) return
     setAuthError(null)
+    setAuthSubmitting(true)
     try {
       await login(loginUsername, loginPassword)
       setShowLoginDialog(false)
@@ -3955,11 +3959,14 @@ function App() {
       setCurrentView('chat')
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Login failed')
+    } finally {
+      setAuthSubmitting(false)
     }
   }
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (authSubmitting) return
     setAuthError(null)
     if (!registerUsername || !registerPassword) {
       setAuthError('Username and password are required')
@@ -3969,6 +3976,7 @@ function App() {
       setAuthError('Passwords do not match')
       return
     }
+    setAuthSubmitting(true)
     try {
       await register(registerUsername, registerPassword)
       setShowLoginDialog(false)
@@ -3982,6 +3990,8 @@ function App() {
       })
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Registration failed')
+    } finally {
+      setAuthSubmitting(false)
     }
   }
 
@@ -4552,12 +4562,13 @@ function App() {
               <TooltipTrigger asChild>
                 <Button
                   variant={currentView === 'chat' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
                   onClick={() => setCurrentView('chat')}
                   aria-label="Chat"
                 >
                   <MessageSquare className="h-3.5 w-3.5" />
+                  <span>Chat</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Chat</TooltipContent>
@@ -4566,12 +4577,13 @@ function App() {
               <TooltipTrigger asChild>
                 <Button
                   variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
                   onClick={() => setCurrentView('jobs')}
                   aria-label="Jobs"
                 >
                   <Calendar className="h-3.5 w-3.5" />
+                  <span>Jobs</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Jobs</TooltipContent>
@@ -4580,12 +4592,13 @@ function App() {
               <TooltipTrigger asChild>
                 <Button
                   variant={currentView === 'network' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
                   onClick={() => setCurrentView('network')}
                   aria-label="Network"
                 >
                   <Wifi className="h-3.5 w-3.5" />
+                  <span>Network</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Network</TooltipContent>
@@ -4595,12 +4608,13 @@ function App() {
                 <TooltipTrigger asChild>
                   <Button
                     variant={showScreenShare ? 'secondary' : 'ghost'}
-                    size="icon"
-                    className="h-8 w-8 shrink-0 rounded-lg"
+                    size="sm"
+                    className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
                     onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                     aria-label="Screen sharing"
                   >
                     <Cast className="h-3.5 w-3.5" />
+                    <span>Screen Share</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Screen sharing</TooltipContent>
@@ -5255,7 +5269,7 @@ function App() {
           </div>
         ) : currentView === 'network' ? (
           <div className="flex-1 overflow-y-auto">
-            <NetworkPanel token={token} />
+            <NetworkPanel token={token} sessionId={activeSessionId ?? 'default'} />
           </div>
         ) : currentView === 'settings' ? (
           <div className="flex-1 overflow-y-auto">
@@ -6157,7 +6171,9 @@ function App() {
                             </Button>
                           </div>
                         </div>
-                        <Button type="submit" className="w-full">Login</Button>
+                        <Button type="submit" className="w-full" disabled={authSubmitting}>
+                          {authSubmitting ? 'Signing in…' : 'Login'}
+                        </Button>
                       </form>
                     </TabsContent>
                     <TabsContent value="register" className="pt-4">
@@ -6220,7 +6236,9 @@ function App() {
                             </Button>
                           </div>
                         </div>
-                        <Button type="submit" className="w-full">{serverHasUsers === false ? 'Get Started' : 'Create account'}</Button>
+                        <Button type="submit" className="w-full" disabled={authSubmitting}>
+                          {authSubmitting ? 'Creating account…' : serverHasUsers === false ? 'Get Started' : 'Create account'}
+                        </Button>
                       </form>
                     </TabsContent>
                   </Tabs>
@@ -6346,7 +6364,9 @@ function App() {
                           </Button>
                         </div>
                       </div>
-                      <Button type="submit" className="w-full">Login</Button>
+                      <Button type="submit" className="w-full" disabled={authSubmitting}>
+                        {authSubmitting ? 'Signing in…' : 'Login'}
+                      </Button>
                     </form>
                   </TabsContent>
                   <TabsContent value="register" className="pt-4">
@@ -6409,7 +6429,9 @@ function App() {
                           </Button>
                         </div>
                       </div>
-                      <Button type="submit" className="w-full">{serverHasUsers === false ? 'Get Started' : 'Create account'}</Button>
+                      <Button type="submit" className="w-full" disabled={authSubmitting}>
+                        {authSubmitting ? 'Creating account…' : serverHasUsers === false ? 'Get Started' : 'Create account'}
+                      </Button>
                     </form>
                   </TabsContent>
                 </Tabs>

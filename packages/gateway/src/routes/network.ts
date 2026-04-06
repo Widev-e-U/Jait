@@ -1,18 +1,20 @@
 import type { FastifyInstance } from "fastify";
-import { exec, spawn } from "node:child_process";
+import { exec } from "node:child_process";
 import { promisify } from "node:util";
-import { platform, tmpdir } from "node:os";
+import { platform } from "node:os";
 import { networkInterfaces } from "node:os";
 import { createConnection } from "node:net";
-import { dirname, resolve, join } from "node:path";
+import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { existsSync } from "node:fs";
 import type { NetworkHost, NetworkScanResult, SshTestResult, GatewayNode } from "@jait/shared";
 import type { WsControlPlane } from "../ws.js";
 import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-tools.js";
 import type { SqliteDatabase } from "../db/sqlite-shim.js";
 import { createRequire } from "node:module";
 import { scanNetwork } from "../lib/network-scan.js";
+import type { SurfaceRegistry } from "../surfaces/index.js";
+import { TerminalSurface } from "../surfaces/terminal.js";
 
 const require = createRequire(import.meta.url);
 const { version: PKG_VERSION } = require("../../package.json") as { version: string };
@@ -33,6 +35,104 @@ function probePort(ip: string, port: number, timeoutMs = 2000): Promise<boolean>
     socket.once("timeout", () => { socket.destroy(); resolve(false); });
     socket.once("error", () => { socket.destroy(); resolve(false); });
   });
+}
+
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+}
+
+export function buildSshAuthArgs(authMethod: string, password: string): string[] {
+  if (authMethod === "password" && password) {
+    return [
+      "-o", "BatchMode=no",
+      "-o", "PreferredAuthentications=password,keyboard-interactive",
+      "-o", "PubkeyAuthentication=no",
+      "-o", "NumberOfPasswordPrompts=1",
+    ];
+  }
+  return ["-o", "BatchMode=yes"];
+}
+
+export function buildInteractiveDeployCommand(ip: string, username: string, version = PKG_VERSION): string {
+  const tsEntry = resolve(__dirname, "../index.ts");
+  const jsEntry = resolve(__dirname, "../index.js");
+  const entry = existsSync(tsEntry) ? tsEntry : jsEntry;
+
+  return [
+    "bash <<'JAIT_DEPLOY'",
+    "set -euo pipefail",
+    `IP=${shellQuote(ip)}`,
+    `USERNAME=${shellQuote(username)}`,
+    `VERSION=${shellQuote(version)}`,
+    `ENTRY=${shellQuote(entry)}`,
+    "",
+    "echo \"Connecting to ${USERNAME}@${IP}...\"",
+    "raw=\"$(ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \"${USERNAME}@${IP}\" \"uname -m\" | tr -d '\\r' | tail -n 1)\"",
+    "case \"$raw\" in",
+    "  x86_64|amd64) arch='x64' ;;",
+    "  aarch64|arm64) arch='arm64' ;;",
+    "  *) echo \"Unsupported architecture: $raw\"; exit 1 ;;",
+    "esac",
+    "echo \"Detected linux-${arch}\"",
+    "",
+    "echo '[1/3] Compiling gateway binary...'",
+    "cacheDir=\"${TMPDIR:-/tmp}/jait-deploy\"",
+    "mkdir -p \"$cacheDir\"",
+    "outFile=\"$cacheDir/jait-gateway-${VERSION}-linux-${arch}\"",
+    "if [ -f \"$outFile\" ]; then",
+    "  echo \"Using cached binary (v${VERSION})\"",
+    "else",
+    "  target=\"bun-linux-${arch}\"",
+    "  echo \"bun build --compile --target=${target} --minify\"",
+    "  bun build --compile \"--target=${target}\" --minify \"$ENTRY\" --outfile \"$outFile\"",
+    "  echo 'Binary compiled'",
+    "fi",
+    "",
+    "size_mb=\"$(du -m \"$outFile\" | cut -f1)\"",
+    "echo \"[2/3] Transferring binary (${size_mb} MB)...\"",
+    "ssh -o StrictHostKeyChecking=no -o ConnectTimeout=10 \"${USERNAME}@${IP}\" 'mkdir -p ~/.jait'",
+    "scp -o StrictHostKeyChecking=no -o ConnectTimeout=10 \"$outFile\" \"${USERNAME}@${IP}:~/.jait/jait-gateway\"",
+    "echo 'Binary transferred'",
+    "",
+    "echo '[3/3] Configuring and starting...'",
+    `ssh -tt -o StrictHostKeyChecking=no -o ConnectTimeout=10 "${username}@${ip}" 'bash -s' <<'REMOTE_SETUP'`,
+    "set -e",
+    "chmod +x ~/.jait/jait-gateway",
+    "SUDO=''",
+    "if [ \"$(id -u)\" -ne 0 ] && command -v sudo >/dev/null 2>&1; then",
+    "  SUDO='sudo'",
+    "fi",
+    "",
+    "[ -f ~/.jait/.env ] || cat > ~/.jait/.env <<'ENVEOF'",
+    "PORT=8000",
+    "HOST=0.0.0.0",
+    "LOG_LEVEL=info",
+    "CORS_ORIGIN=*",
+    "ENVEOF",
+    "",
+    "${SUDO:+$SUDO }tee /etc/systemd/system/jait-gateway.service > /dev/null <<'SVCEOF'",
+    "[Unit]",
+    "Description=Jait Gateway",
+    "After=network.target",
+    "",
+    "[Service]",
+    `User=${username}`,
+    "WorkingDirectory=%h/.jait",
+    "ExecStart=%h/.jait/jait-gateway",
+    "Restart=on-failure",
+    "",
+    "[Install]",
+    "WantedBy=multi-user.target",
+    "SVCEOF",
+    "",
+    "${SUDO:+$SUDO }systemctl daemon-reload",
+    "${SUDO:+$SUDO }systemctl enable --now jait-gateway",
+    "echo 'Jait Gateway deployed successfully!'",
+    "REMOTE_SETUP",
+    "",
+    "echo \"Gateway v${VERSION} deployed to ${IP}\"",
+    "JAIT_DEPLOY",
+  ].join("\n");
 }
 
 // ---------------------------------------------------------------------------
@@ -206,7 +306,13 @@ async function getGatewayNode(providerRegistry?: import("../providers/registry.j
   return node;
 }
 
-export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane, sqlite?: SqliteDatabase, providerRegistry?: import("../providers/registry.js").ProviderRegistry) {
+export function registerNetworkRoutes(
+  app: FastifyInstance,
+  ws?: WsControlPlane,
+  sqlite?: SqliteDatabase,
+  providerRegistry?: import("../providers/registry.js").ProviderRegistry,
+  surfaceRegistry?: SurfaceRegistry,
+) {
   // ---- GET /api/network/interfaces — local NIC info ----
   app.get("/api/network/interfaces", async () => {
     const ifaces = networkInterfaces();
@@ -342,171 +448,35 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
     const body = (request.body ?? {}) as Record<string, unknown>;
     const ip = String(body["ip"] ?? "").trim();
     const username = String(body["username"] ?? "root").trim();
+    const terminalId = String(body["terminalId"] ?? "").trim();
 
     if (!ip) {
       return reply.status(400).send({ error: "IP address is required" });
     }
-
-    // Stream deploy output via SSE
-    const reqOrigin = request.headers.origin ?? "*";
-    reply.raw.writeHead(200, {
-      "Content-Type": "text/event-stream",
-      "Cache-Control": "no-cache",
-      "Connection": "keep-alive",
-      "Access-Control-Allow-Origin": reqOrigin,
-      "Access-Control-Allow-Credentials": "true",
-    });
-
-    const send = (event: string, data: string) => {
-      reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-    };
-
-    const sshBase = [
-      "-o", "StrictHostKeyChecking=no",
-      "-o", "ConnectTimeout=10",
-      "-o", "BatchMode=yes",
-    ];
-
-    /** Run a command on the remote host and return stdout. */
-    const sshExec = (cmd: string): Promise<string> =>
-      new Promise((res, rej) => {
-        const proc = spawn("ssh", [...sshBase, `${username}@${ip}`, cmd], {
-          stdio: ["ignore", "pipe", "pipe"],
-        });
-        let out = "";
-        proc.stdout.on("data", (d: Buffer) => { out += d.toString(); });
-        proc.stderr.on("data", (d: Buffer) => {
-          d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
-        });
-        proc.on("close", (code) => (code === 0 ? res(out.trim()) : rej(new Error(`exit ${code}`))));
-        proc.on("error", rej);
-      });
-
-    /** Run a long script on the remote host, streaming output via SSE. */
-    const sshScript = (script: string): Promise<void> =>
-      new Promise((res, rej) => {
-        const proc = spawn("ssh", [...sshBase, `${username}@${ip}`, "bash -s"], {
-          stdio: ["pipe", "pipe", "pipe"],
-        });
-        proc.stdin.write(script);
-        proc.stdin.end();
-        proc.stdout.on("data", (d: Buffer) => {
-          d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
-        });
-        proc.stderr.on("data", (d: Buffer) => {
-          d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
-        });
-        proc.on("close", (code) => (code === 0 ? res() : rej(new Error(`exit ${code}`))));
-        proc.on("error", rej);
-        setTimeout(() => { proc.kill(); rej(new Error("Timed out")); }, 5 * 60_000);
-      });
-
-    try {
-      // --- Phase 1: Detect remote architecture ---
-      send("log", `Connecting to ${username}@${ip}...`);
-      const raw = await sshExec("uname -m");
-      let arch: string;
-      if (raw === "x86_64" || raw === "amd64") arch = "x64";
-      else if (raw === "aarch64" || raw === "arm64") arch = "arm64";
-      else {
-        send("error", `Unsupported architecture: ${raw}`);
-        reply.raw.end();
-        return reply;
-      }
-      send("log", `Detected linux-${arch}`);
-
-      // --- Phase 2: Compile binary (cached by version+arch) ---
-      send("log", "[1/3] Compiling gateway binary...");
-      const cacheDir = join(tmpdir(), "jait-deploy");
-      mkdirSync(cacheDir, { recursive: true });
-      const outFile = join(cacheDir, `jait-gateway-${PKG_VERSION}-linux-${arch}`);
-
-      if (existsSync(outFile)) {
-        send("log", `Using cached binary (v${PKG_VERSION})`);
-      } else {
-        // Find entry point — .ts in dev, .js from npm install
-        const tsEntry = resolve(__dirname, "../index.ts");
-        const jsEntry = resolve(__dirname, "../index.js");
-        const entry = existsSync(tsEntry) ? tsEntry : jsEntry;
-
-        await new Promise<void>((res, rej) => {
-          const target = `bun-linux-${arch}`;
-          const args = ["build", "--compile", `--target=${target}`, "--minify", entry, "--outfile", outFile];
-          send("log", `bun build --compile --target=${target} --minify`);
-          const proc = spawn("bun", args, { stdio: ["ignore", "pipe", "pipe"] });
-          proc.stdout.on("data", (d: Buffer) => {
-            d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
-          });
-          proc.stderr.on("data", (d: Buffer) => {
-            d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
-          });
-          proc.on("close", (code) => (code === 0 ? res() : rej(new Error("Compilation failed"))));
-          proc.on("error", rej);
-        });
-        send("log", "Binary compiled");
-      }
-
-      // --- Phase 3: Transfer binary via SCP ---
-      const sizeMB = (statSync(outFile).size / 1_048_576).toFixed(1);
-      send("log", `[2/3] Transferring binary (${sizeMB} MB)...`);
-
-      await sshExec("mkdir -p ~/.jait");
-
-      await new Promise<void>((res, rej) => {
-        const proc = spawn("scp", [...sshBase, outFile, `${username}@${ip}:~/.jait/jait-gateway`]);
-        proc.stderr.on("data", (d: Buffer) => {
-          d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
-        });
-        proc.on("close", (code) => (code === 0 ? res() : rej(new Error("Transfer failed"))));
-        proc.on("error", rej);
-        setTimeout(() => { proc.kill(); rej(new Error("Transfer timed out")); }, 5 * 60_000);
-      });
-      send("log", "Binary transferred");
-
-      // --- Phase 4: Configure and start ---
-      send("log", "[3/3] Configuring and starting...");
-
-      const setupScript = [
-        "set -e",
-        "chmod +x ~/.jait/jait-gateway",
-        "",
-        "# Write .env if it doesn't exist yet",
-        "[ -f ~/.jait/.env ] || cat > ~/.jait/.env << 'ENVEOF'",
-        "PORT=8000",
-        "HOST=0.0.0.0",
-        "LOG_LEVEL=info",
-        "CORS_ORIGIN=*",
-        "ENVEOF",
-        "",
-        "# Systemd service",
-        "sudo tee /etc/systemd/system/jait-gateway.service > /dev/null << SVCEOF",
-        "[Unit]",
-        "Description=Jait Gateway",
-        "After=network.target",
-        "",
-        "[Service]",
-        `User=${username}`,
-        "WorkingDirectory=%h/.jait",
-        "ExecStart=%h/.jait/jait-gateway",
-        "Restart=on-failure",
-        "",
-        "[Install]",
-        "WantedBy=multi-user.target",
-        "SVCEOF",
-        "",
-        "sudo systemctl daemon-reload",
-        "sudo systemctl enable --now jait-gateway",
-        "echo 'Jait Gateway deployed successfully!'",
-      ].join("\n");
-
-      await sshScript(setupScript);
-      send("done", `Gateway v${PKG_VERSION} deployed to ${ip}`);
-    } catch (err) {
-      send("error", err instanceof Error ? err.message : "Deployment failed");
+    if (!terminalId) {
+      return reply.status(400).send({ error: "Terminal ID is required" });
+    }
+    if (!surfaceRegistry) {
+      return reply.status(503).send({ error: "Terminal support is unavailable" });
     }
 
-    reply.raw.end();
-    return reply;
+    const surface = surfaceRegistry.getSurface(terminalId);
+    if (!surface || surface.type !== "terminal") {
+      return reply.status(404).send({ error: "Terminal not found" });
+    }
+    const terminal = surface as TerminalSurface;
+
+    try {
+      await terminal.waitForPrompt();
+      terminal.write(buildInteractiveDeployCommand(ip, username) + "\r");
+      return {
+        ok: true,
+        terminalId,
+        message: `Deploy started in terminal ${terminalId}`,
+      };
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Deployment failed" });
+    }
   });
 
   // ---- GET /api/network/nodes — list known gateway mesh nodes ----
