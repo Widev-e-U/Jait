@@ -449,7 +449,6 @@ export function registerNetworkRoutes(
     const ip = String(body["ip"] ?? "").trim();
     const username = String(body["username"] ?? "root").trim();
     const terminalId = String(body["terminalId"] ?? "").trim();
-    const sessionId = String(body["sessionId"] ?? "default").trim() || "default";
 
     if (!ip) {
       return reply.status(400).send({ error: "IP address is required" });
@@ -470,14 +469,6 @@ export function registerNetworkRoutes(
     try {
       await terminal.waitForPrompt();
       terminal.write(buildInteractiveDeployCommand(ip, username) + "\r");
-      ws?.sendUICommand({
-        command: "terminal.focus",
-        data: {
-          terminalId,
-          reason: "interactive-input-required",
-          message: `Deploy started for ${username}@${ip}. Continue in the terminal for SSH and sudo prompts.`,
-        },
-      }, sessionId);
       return {
         ok: true,
         terminalId,

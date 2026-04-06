@@ -19,6 +19,7 @@ import {
   Rocket,
 } from 'lucide-react'
 import { getApiUrl } from '@/lib/gateway-url'
+import { TerminalView } from '@/components/terminal/terminal-view'
 
 const API_URL = getApiUrl()
 
@@ -384,7 +385,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
 
 function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; token?: string | null; sessionId: string; onClose: () => void }) {
   const [logs, setLogs] = useState<string[]>([])
-  const [status, setStatus] = useState<'ready' | 'starting' | 'done' | 'error'>('ready')
+  const [status, setStatus] = useState<'ready' | 'starting' | 'running' | 'error'>('ready')
   const [username, setUsername] = useState('')
   const [terminalId, setTerminalId] = useState<string | null>(null)
   const [started, setStarted] = useState(false)
@@ -437,13 +438,13 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
           setStatus('error')
           return
         }
-        const data = await res.json() as { terminalId?: string }
+        await res.json().catch(() => null)
         setLogs([
-          `Deploy started in terminal ${data.terminalId ?? terminal.id}.`,
-          'SSH and sudo will prompt there directly.',
-          `Continue deployment for ${username || 'root'}@${ip} in the terminal panel.`,
+          `Deploy started for ${username || 'root'}@${ip}.`,
+          'Continue here in the embedded terminal below.',
+          'SSH and sudo prompts will appear in this side panel.',
         ])
-        setStatus('done')
+        setStatus('running')
       } catch (err) {
         if (!controller.signal.aborted) {
           setLogs(prev => [...prev, `Error: ${err instanceof Error ? err.message : 'Connection failed'}`])
@@ -467,7 +468,7 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
           <div className="text-[10px] text-muted-foreground">
             {status === 'ready' && 'Ready'}
             {status === 'starting' && 'Preparing terminal...'}
-            {status === 'done' && 'Running in terminal'}
+            {status === 'running' && 'Interactive session ready'}
             {status === 'error' && 'Failed'}
           </div>
         </div>
@@ -490,7 +491,7 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
             />
           </div>
           <div className="text-[10px] text-muted-foreground">
-            Opens a real terminal for deployment. If SSH or sudo needs a password, it will prompt there directly.
+            Starts a real terminal inside this side panel. If SSH or sudo needs a password, it will prompt here directly.
           </div>
           <Button className="w-full" onClick={() => setStarted(true)}>
             <Rocket className="h-3.5 w-3.5 mr-1.5" />
@@ -500,7 +501,7 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
       ) : (
         <>
           {/* Log output */}
-          <div ref={logRef} className="flex-1 overflow-y-auto p-3 font-mono text-[11px] leading-5 space-y-0.5">
+          <div ref={logRef} className="shrink-0 overflow-y-auto border-b p-3 font-mono text-[11px] leading-5 space-y-0.5 max-h-32">
             {logs.map((line, i) => (
               <div key={i} className={cn(
                 line.startsWith('✓') ? 'text-green-500' :
@@ -513,16 +514,26 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
             ))}
             {status === 'starting' && <div className="text-muted-foreground animate-pulse">Preparing terminal...</div>}
           </div>
+          {terminalId && status === 'running' && (
+            <div className="flex min-h-0 flex-1 flex-col">
+              <div className="flex items-center justify-between border-b px-3 py-2 text-[10px] text-muted-foreground">
+                <span>Interactive deploy session</span>
+                <span className="truncate">Terminal: {terminalId}</span>
+              </div>
+              <TerminalView
+                terminalId={terminalId}
+                className="flex-1 min-h-0"
+                token={token}
+              />
+            </div>
+          )}
 
           {/* Footer */}
-          {(status === 'done' || status === 'error') && (
+          {status === 'error' && (
             <div className="p-3 border-t shrink-0">
-              {status === 'done' && terminalId && <div className="text-[10px] text-muted-foreground">Terminal: {terminalId}</div>}
-              {status === 'error' && (
-                <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]); setStatus('ready') }}>
-                  Try Again
-                </Button>
-              )}
+              <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]); setStatus('ready'); setTerminalId(null) }}>
+                Try Again
+              </Button>
             </div>
           )}
         </>

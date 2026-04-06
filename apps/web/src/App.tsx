@@ -4553,12 +4553,13 @@ function App() {
               <TooltipTrigger asChild>
                 <Button
                   variant={currentView === 'chat' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
                   onClick={() => setCurrentView('chat')}
                   aria-label="Chat"
                 >
                   <MessageSquare className="h-3.5 w-3.5" />
+                  <span>Chat</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Chat</TooltipContent>
@@ -4567,12 +4568,13 @@ function App() {
               <TooltipTrigger asChild>
                 <Button
                   variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
                   onClick={() => setCurrentView('jobs')}
                   aria-label="Jobs"
                 >
                   <Calendar className="h-3.5 w-3.5" />
+                  <span>Jobs</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Jobs</TooltipContent>
@@ -4581,12 +4583,13 @@ function App() {
               <TooltipTrigger asChild>
                 <Button
                   variant={currentView === 'network' ? 'secondary' : 'ghost'}
-                  size="icon"
-                  className="h-8 w-8 shrink-0 rounded-lg"
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
                   onClick={() => setCurrentView('network')}
                   aria-label="Network"
                 >
                   <Wifi className="h-3.5 w-3.5" />
+                  <span>Network</span>
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">Network</TooltipContent>
@@ -4596,12 +4599,13 @@ function App() {
                 <TooltipTrigger asChild>
                   <Button
                     variant={showScreenShare ? 'secondary' : 'ghost'}
-                    size="icon"
-                    className="h-8 w-8 shrink-0 rounded-lg"
+                    size="sm"
+                    className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
                     onClick={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}
                     aria-label="Screen sharing"
                   >
                     <Cast className="h-3.5 w-3.5" />
+                    <span>Screen Share</span>
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent side="bottom">Screen sharing</TooltipContent>
