@@ -116,8 +116,8 @@ export class SandboxManager {
   async startBrowserSandbox(options: SandboxBrowserOptions): Promise<SandboxBrowserResult> {
     await this.ensureBrowserSandboxImage();
     const workspaceRoot = resolve(options.workspaceRoot);
-    const novncPort = options.novncPort ?? 6080;
-    const vncPort = options.vncPort ?? 5900;
+    const novncPort = options.novncPort ?? await reserveLocalPort();
+    const vncPort = options.vncPort ?? await reserveLocalPort();
     const cdpPort = options.cdpPort;
     const mountArgs = this.buildMountArgs(workspaceRoot, options.mountMode ?? "read-only");
     const networkArgs = options.networkEnabled === false ? ["--network", "none"] : [];
@@ -144,7 +144,15 @@ export class SandboxManager {
       "jait/sandbox-browser:latest",
     ];
 
-    const result = await this.runProcess(cmd, 30_000);
+    let result = await this.runProcess(cmd, 30_000);
+    if (result.exitCode !== 0 && isPortBindConflict(result.output)) {
+      await this.cleanupConflictingBrowserSandboxes({
+        novncPort,
+        vncPort,
+        cdpPort,
+      });
+      result = await this.runProcess(cmd, 30_000);
+    }
     if (result.exitCode !== 0) {
       throw new Error(`Failed to start sandbox browser: ${result.output}`);
     }
@@ -190,6 +198,40 @@ export class SandboxManager {
     if (inspect.exitCode === 0) return;
     await buildBrowserSandboxImage();
   }
+
+  private async cleanupConflictingBrowserSandboxes(ports: {
+    novncPort: number;
+    vncPort: number;
+    cdpPort?: number;
+  }): Promise<void> {
+    const list = await this.runProcess(
+      [containerBinary(), "ps", "--format", "{{.Names}}\t{{.Ports}}"],
+      15_000,
+    );
+    if (list.exitCode !== 0) return;
+    const candidates = list.output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [rawName, portInfo = ""] = line.split("\t");
+        const name = rawName?.trim() ?? "";
+        return { name, portInfo };
+      })
+      .filter(({ name, portInfo }) =>
+        /^jait-browser-sb-/.test(name)
+        && [ports.novncPort, ports.vncPort, ports.cdpPort]
+          .filter((value): value is number => typeof value === "number")
+          .some((port) => new RegExp(`(^|[,: ])${port}->`).test(portInfo) || portInfo.includes(`:${port}->`)),
+      );
+    for (const candidate of candidates) {
+      await this.runProcess([containerBinary(), "rm", "-f", candidate.name], 15_000).catch(() => {});
+    }
+  }
+}
+
+function isPortBindConflict(output: string): boolean {
+  return /port is already allocated|address already in use|Bind for .* failed/i.test(output);
 }
 
 async function runDockerProcess(cmd: string[], timeoutMs: number): Promise<ProcessResult> {

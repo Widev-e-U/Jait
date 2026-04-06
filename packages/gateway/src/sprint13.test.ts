@@ -118,4 +118,45 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     expect(runCmd?.join(" ")).toContain("-p 9223:9223");
     expect(runCmd?.join(" ")).not.toContain("--network none");
   });
+
+  it("reaps conflicting stale browser sandboxes and retries startup", async () => {
+    const commands: string[][] = [];
+    let call = 0;
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      call += 1;
+      if (call === 1) {
+        return { output: "[]", exitCode: 0, timedOut: false };
+      }
+      if (call === 2) {
+        return {
+          output: "docker: Error response from daemon: Bind for 0.0.0.0:6080 failed: port is already allocated",
+          exitCode: 125,
+          timedOut: false,
+        };
+      }
+      if (call === 3) {
+        return {
+          output: "jait-browser-sb-old\t0.0.0.0:6080->6080/tcp, 0.0.0.0:5900->5900/tcp",
+          exitCode: 0,
+          timedOut: false,
+        };
+      }
+      return { output: "container-id", exitCode: 0, timedOut: false };
+    });
+
+    const result = await manager.startBrowserSandbox({
+      workspaceRoot: testWorkspace,
+      novncPort: 6080,
+      vncPort: 5900,
+    });
+
+    expect(result).toMatchObject({
+      novncPort: 6080,
+      vncPort: 5900,
+      novncUrl: "http://127.0.0.1:6080/vnc_lite.html",
+    });
+    expect(commands.some((cmd) => cmd.includes("ps") && cmd.includes("--format"))).toBe(true);
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-browser-sb-old"))).toBe(true);
+  });
 });

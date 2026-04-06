@@ -55,6 +55,25 @@ export interface DetectedFramework {
   likelyPort: number;
 }
 
+function isAllowedPreviewHost(hostname: string): boolean {
+  const host = hostname.trim().toLowerCase().replace(/^\[(.*)\]$/, "$1");
+  if (!host) return false;
+  if (["127.0.0.1", "localhost", "0.0.0.0", "::1"].includes(host)) return true;
+  if (host.endsWith(".localhost")) return true;
+  if (host === "host.docker.internal") return true;
+  const ipv4Match = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4Match) return false;
+  const a = Number.parseInt(ipv4Match[1] ?? "", 10);
+  const b = Number.parseInt(ipv4Match[2] ?? "", 10);
+  if (![a, b].every((part) => Number.isFinite(part) && part >= 0 && part <= 255)) return false;
+  if (a === 10) return true;
+  if (a === 127) return true;
+  if (a === 192 && b === 168) return true;
+  if (a === 169 && b === 254) return true;
+  if (a === 172 && b >= 16 && b <= 31) return true;
+  return false;
+}
+
 function buildExecCommand(
   packageManager: "bun" | "pnpm" | "npm",
   executable: string,
@@ -178,8 +197,7 @@ function normalizeTargetUrl(target: string, port: number): string {
   const withScheme = /^[a-z]+:\/\//i.test(trimmed) ? trimmed : `http://${trimmed}`;
   try {
     const url = new URL(withScheme);
-    const host = url.hostname.toLowerCase();
-    if (!["127.0.0.1", "localhost", "0.0.0.0", "::1", "[::1]"].includes(host)) {
+    if (!isAllowedPreviewHost(url.hostname)) {
       return `http://127.0.0.1:${port}/`;
     }
     return url.toString();

@@ -79,6 +79,7 @@ import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
 import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
 import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
+import type { PreviewInspectInteractiveElement } from '@/components/workspace/workspace-preview-inspect-panel'
 import { DetachedTabView } from '@/components/workspace/detached-tab-view'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
@@ -211,6 +212,20 @@ function buildTerminalSelectionReferenceSegments(
     { type: 'text', text: `Selected terminal output from ${terminal.name}:\n\`\`\`\n${selection.trim()}\n\`\`\`\n` },
     { type: 'terminal', terminalId: terminal.terminalId, name: terminal.name, ...(terminal.workspaceRoot ? { workspaceRoot: terminal.workspaceRoot } : {}) },
   ]
+}
+
+function buildPreviewElementReferenceSegments(
+  element: PreviewInspectInteractiveElement,
+): UserMessageSegment[] {
+  const label = element.name?.trim() || element.text?.trim() || element.placeholder?.trim() || 'unnamed element'
+  const kind = element.role ?? element.tagName ?? 'element'
+  const details = [
+    `Selected preview element: ${kind} "${label}"`,
+    element.selector ? `Selector: ${element.selector}` : null,
+    element.placeholder ? `Placeholder: ${element.placeholder}` : null,
+    element.value ? `Value: ${element.value}` : null,
+  ].filter(Boolean).join('\n')
+  return [{ type: 'text', text: `${details}\n` }]
 }
 
 type AppView = 'chat' | 'jobs' | 'network' | 'settings'
@@ -3192,6 +3207,13 @@ function App() {
     promptInputRef.current?.focus()
   }, [])
 
+  const handleReferencePreviewElement = useCallback((element: PreviewInspectInteractiveElement) => {
+    if (!element.selector) return
+    promptInputRef.current?.insertSegments(buildPreviewElementReferenceSegments(element))
+    promptInputRef.current?.focus()
+    setCurrentView('chat')
+  }, [setCurrentView])
+
   const handleToggleTerminal = useCallback(async () => {
     if (showTerminal) {
       closeTerminalPanel()
@@ -5338,8 +5360,9 @@ function App() {
                       activeFileId={activeWorkspaceFileId}
                       onActiveFileChange={setActiveWorkspaceFileId}
                       onFileDrop={(files) => { void handleFileDrop(files) }}
-                    onReferenceFile={handleReferenceFile}
-                    onReferenceSelection={handleReferenceFileSelection}
+                      onReferenceFile={handleReferenceFile}
+                      onReferenceSelection={handleReferenceFileSelection}
+                      onReferencePreviewElement={handleReferencePreviewElement}
                       onAvailableFilesChange={setAvailableFilesForMention}
                       showTree={showWorkspaceTree}
                       showEditor={showWorkspaceEditor}
@@ -5476,6 +5499,7 @@ function App() {
                   onFileDrop={(files) => { void handleFileDrop(files) }}
                   onReferenceFile={handleReferenceFile}
                   onReferenceSelection={handleReferenceFileSelection}
+                  onReferencePreviewElement={handleReferencePreviewElement}
                   onAvailableFilesChange={setAvailableFilesForMention}
                   showTree={showWorkspaceTree}
                   showEditor={showWorkspaceEditor}

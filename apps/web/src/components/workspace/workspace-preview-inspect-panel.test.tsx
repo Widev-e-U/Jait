@@ -14,7 +14,13 @@ describe('WorkspacePreviewInspectPanel', () => {
         url: 'http://127.0.0.1:4173/',
         title: 'Preview App',
         text: 'Ready',
-        elements: [],
+        elements: [
+          {
+            role: 'button',
+            name: 'Save',
+            selector: '#save',
+          },
+        ],
         activeElement: {
           role: 'textbox',
           name: 'Email',
@@ -48,7 +54,10 @@ describe('WorkspacePreviewInspectPanel', () => {
     }
 
     const markup = renderToStaticMarkup(
-      createElement(WorkspacePreviewInspectPanel, { inspectState }),
+      createElement(WorkspacePreviewInspectPanel, {
+        inspectState,
+        onInsertElementReference: () => {},
+      }),
     )
 
     expect(markup).toContain('Preview App')
@@ -59,6 +68,9 @@ describe('WorkspacePreviewInspectPanel', () => {
     expect(markup).toContain('Selector Diagnosis')
     expect(markup).toContain('Obscured: yes')
     expect(markup).toContain('Intercepted by dialog')
+    expect(markup).toContain('Interactive Elements')
+    expect(markup).toContain('button - Save')
+    expect(markup).toContain('Insert Into Chat')
   })
 
   it('renders suppression state', () => {

@@ -28,6 +28,7 @@ import { getOpenInterventionsForSession, resolvePreviewBrowserSession } from './
 import { getDesktopWorkspacePanelStyle } from './workspace-panel-layout'
 import {
   PreviewMetricsPanel,
+  type PreviewInspectInteractiveElement,
   type PreviewPerformanceMetrics,
   WorkspacePreviewInspectPanel,
   type PreviewInspectRenderState,
@@ -69,6 +70,8 @@ interface WorkspacePanelProps {
   onToggleTree?: () => void
   /** Called when user hides the editor pane from within the panel */
   onToggleEditor?: () => void
+  /** Insert a preview/browser element reference into the active chat composer. */
+  onReferencePreviewElement?: (element: PreviewInspectInteractiveElement) => void
   /** Controlled tree tab ('files' | 'git'). When provided, overrides internal state. */
   treeTab?: 'files' | 'git'
   /** Called when tree tab changes internally (for controlled mode). */
@@ -1105,6 +1108,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   showEditor: showEditorProp = true,
   onToggleTree,
   onToggleEditor,
+  onReferencePreviewElement,
   treeTab: treeTabProp,
   onTreeTabChange,
   changedPaths,
@@ -2327,6 +2331,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             inspectState={previewInspectState}
             loading={previewInspectLoading}
             error={previewInspectError}
+            onInsertElementReference={onReferencePreviewElement}
           />
         </div>
       ) : previewSideTab === 'logs' ? (

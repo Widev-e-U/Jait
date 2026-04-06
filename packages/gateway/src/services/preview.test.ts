@@ -58,6 +58,49 @@ describe("PreviewService", () => {
     expect(browser.navigate).toHaveBeenCalledWith("http://127.0.0.1:4173/");
   });
 
+  it("attaches to an existing private-network target URL instead of spawning a managed preview", async () => {
+    const browser = {
+      type: "browser",
+      state: "running",
+      navigate: vi.fn().mockResolvedValue(undefined),
+      getEvents: vi.fn().mockReturnValue([]),
+      getLiveViewInfo: vi.fn().mockReturnValue({
+        display: ":99",
+        vncPort: 5900,
+        websockifyPort: 6080,
+        novncUrl: "ws://127.0.0.1:6080",
+      }),
+      getMetrics: vi.fn().mockResolvedValue({
+        sampledAt: "2026-03-27T00:00:00.000Z",
+        url: "http://172.17.0.1:4174/",
+        title: "Preview App",
+      }),
+    };
+    const surfaceRegistry = {
+      stopSurface: vi.fn().mockResolvedValue(undefined),
+      startSurface: vi.fn().mockResolvedValue(browser),
+      getSurface: vi.fn().mockReturnValue(browser),
+    };
+    const service = new PreviewService(surfaceRegistry as any);
+    const runnerStart = vi.fn();
+    (service as any).runner = {
+      mode: "local",
+      start: runnerStart,
+      stop: vi.fn(),
+    };
+
+    const session = await service.start({
+      sessionId: "session-1",
+      workspaceRoot: "/workspace/app",
+      target: "http://172.17.0.1:4174/",
+    });
+
+    expect(runnerStart).not.toHaveBeenCalled();
+    expect(session.mode).toBe("url");
+    expect(session.status).toBe("ready");
+    expect(browser.navigate).toHaveBeenCalledWith("http://172.17.0.1:4174/");
+  });
+
   it("returns the browser page snapshot in preview inspection results", async () => {
     const screenshotPath = join(tmpdir(), `preview-${Date.now()}.png`);
     await writeFile(screenshotPath, Buffer.from("preview-image"));

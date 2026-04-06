@@ -1,3 +1,5 @@
+import { Button } from '@/components/ui/button'
+
 export interface PreviewInspectInteractiveElement {
   role?: string
   name?: string
@@ -171,12 +173,14 @@ interface WorkspacePreviewInspectPanelProps {
   inspectState: PreviewInspectRenderState | null
   loading?: boolean
   error?: string | null
+  onInsertElementReference?: (element: PreviewInspectInteractiveElement) => void
 }
 
 export function WorkspacePreviewInspectPanel({
   inspectState,
   loading = false,
   error = null,
+  onInsertElementReference,
 }: WorkspacePreviewInspectPanelProps) {
   if (error) {
     return (
@@ -216,6 +220,17 @@ export function WorkspacePreviewInspectPanel({
           <div className="mt-1 space-y-1 text-muted-foreground">
             <div>{[inspectState.page.activeElement.role ?? inspectState.page.activeElement.tagName ?? 'element', inspectState.page.activeElement.name].filter(Boolean).join(' - ')}</div>
             {inspectState.page.activeElement.selector ? <div><code>{inspectState.page.activeElement.selector}</code></div> : null}
+            {inspectState.page.activeElement.selector && onInsertElementReference ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 h-7 px-2 text-[11px]"
+                onClick={() => onInsertElementReference(inspectState.page!.activeElement!)}
+              >
+                Insert Into Chat
+              </Button>
+            ) : null}
           </div>
         ) : (
           <div className="mt-1 text-muted-foreground">No active input detected.</div>
@@ -270,9 +285,55 @@ export function WorkspacePreviewInspectPanel({
                 {inspectState.target.interceptedBy.selector ? ` (${inspectState.target.interceptedBy.selector})` : ''}
               </div>
             ) : null}
+            {inspectState.target.selector && onInsertElementReference ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="mt-2 h-7 px-2 text-[11px]"
+                onClick={() => onInsertElementReference(inspectState.target!)}
+              >
+                Insert Into Chat
+              </Button>
+            ) : null}
           </div>
         </div>
       ) : null}
+      <div className="rounded border p-2">
+        <div className="font-medium text-foreground">Interactive Elements</div>
+        {inspectState.page?.elements?.length ? (
+          <div className="mt-2 space-y-2">
+            {inspectState.page.elements.map((element, index) => {
+              const title = [element.role ?? element.tagName ?? 'element', element.name || element.text].filter(Boolean).join(' - ')
+              return (
+                <div key={`${element.selector ?? title ?? 'element'}:${index}`} className="rounded bg-muted/40 px-2 py-1.5 text-muted-foreground">
+                  <div className="font-medium text-foreground">{title || 'Unnamed element'}</div>
+                  {element.selector ? <div className="mt-1 break-all"><code>{element.selector}</code></div> : null}
+                  {element.placeholder ? <div className="mt-1">Placeholder: {element.placeholder}</div> : null}
+                  {element.value ? <div className="mt-1">Value: {element.value}</div> : null}
+                  <div className="mt-1 text-[10px]">
+                    {element.disabled ? 'Disabled' : 'Enabled'}
+                    {element.active ? ' · Active' : ''}
+                  </div>
+                  {element.selector && onInsertElementReference ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="mt-2 h-7 px-2 text-[11px]"
+                      onClick={() => onInsertElementReference(element)}
+                    >
+                      Insert Into Chat
+                    </Button>
+                  ) : null}
+                </div>
+              )
+            })}
+          </div>
+        ) : (
+          <div className="mt-1 text-muted-foreground">No interactive elements captured.</div>
+        )}
+      </div>
       <div className="rounded border p-2">
         <div className="font-medium text-foreground">Metrics</div>
         <div className="mt-2">
