@@ -6,7 +6,7 @@ import { networkInterfaces } from "node:os";
 import { createConnection } from "node:net";
 import { dirname, resolve, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { existsSync, mkdirSync, statSync } from "node:fs";
+import { chmodSync, existsSync, mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from "node:fs";
 import type { NetworkHost, NetworkScanResult, SshTestResult, GatewayNode } from "@jait/shared";
 import type { WsControlPlane } from "../ws.js";
 import { getLatestNetworkScan, setLatestNetworkScan } from "../tools/network-tools.js";
@@ -33,6 +33,41 @@ function probePort(ip: string, port: number, timeoutMs = 2000): Promise<boolean>
     socket.once("timeout", () => { socket.destroy(); resolve(false); });
     socket.once("error", () => { socket.destroy(); resolve(false); });
   });
+}
+
+export function shellQuote(value: string): string {
+  return `'${value.replace(/'/g, `'\"'\"'`)}'`;
+}
+
+export function buildSshAuthArgs(authMethod: string, password: string): string[] {
+  if (authMethod === "password" && password) {
+    return [
+      "-o", "BatchMode=no",
+      "-o", "PreferredAuthentications=password,keyboard-interactive",
+      "-o", "PubkeyAuthentication=no",
+      "-o", "NumberOfPasswordPrompts=1",
+    ];
+  }
+  return ["-o", "BatchMode=yes"];
+}
+
+function createAskpassEnv(password: string): { env: NodeJS.ProcessEnv; cleanup: () => void } {
+  const askpassDir = mkdtempSync(join(tmpdir(), "jait-ssh-askpass-"));
+  const askpassPath = join(askpassDir, "askpass.sh");
+  writeFileSync(askpassPath, "#!/bin/sh\nprintf '%s\\n' \"$JAIT_DEPLOY_SSH_PASSWORD\"\n");
+  chmodSync(askpassPath, 0o700);
+  return {
+    env: {
+      ...process.env,
+      DISPLAY: process.env.DISPLAY || "jait-askpass",
+      SSH_ASKPASS: askpassPath,
+      SSH_ASKPASS_REQUIRE: "force",
+      JAIT_DEPLOY_SSH_PASSWORD: password,
+    },
+    cleanup: () => {
+      rmSync(askpassDir, { force: true, recursive: true });
+    },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -342,9 +377,14 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
     const body = (request.body ?? {}) as Record<string, unknown>;
     const ip = String(body["ip"] ?? "").trim();
     const username = String(body["username"] ?? "root").trim();
+    const authMethod = String(body["authMethod"] ?? "publickey").trim();
+    const password = String(body["password"] ?? "");
 
     if (!ip) {
       return reply.status(400).send({ error: "IP address is required" });
+    }
+    if (authMethod === "password" && !password) {
+      return reply.status(400).send({ error: "Password is required for password authentication" });
     }
 
     // Stream deploy output via SSE
@@ -364,14 +404,17 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
     const sshBase = [
       "-o", "StrictHostKeyChecking=no",
       "-o", "ConnectTimeout=10",
-      "-o", "BatchMode=yes",
+      ...buildSshAuthArgs(authMethod, password),
     ];
+    const askpass = authMethod === "password" && password ? createAskpassEnv(password) : null;
+    const spawnEnv = askpass?.env ?? process.env;
 
     /** Run a command on the remote host and return stdout. */
     const sshExec = (cmd: string): Promise<string> =>
       new Promise((res, rej) => {
         const proc = spawn("ssh", [...sshBase, `${username}@${ip}`, cmd], {
           stdio: ["ignore", "pipe", "pipe"],
+          env: spawnEnv,
         });
         let out = "";
         proc.stdout.on("data", (d: Buffer) => { out += d.toString(); });
@@ -387,6 +430,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       new Promise((res, rej) => {
         const proc = spawn("ssh", [...sshBase, `${username}@${ip}`, "bash -s"], {
           stdio: ["pipe", "pipe", "pipe"],
+          env: spawnEnv,
         });
         proc.stdin.write(script);
         proc.stdin.end();
@@ -453,7 +497,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       await sshExec("mkdir -p ~/.jait");
 
       await new Promise<void>((res, rej) => {
-        const proc = spawn("scp", [...sshBase, outFile, `${username}@${ip}:~/.jait/jait-gateway`]);
+        const proc = spawn("scp", [...sshBase, outFile, `${username}@${ip}:~/.jait/jait-gateway`], { env: spawnEnv });
         proc.stderr.on("data", (d: Buffer) => {
           d.toString().split("\n").filter(Boolean).forEach((l) => send("log", l));
         });
@@ -469,6 +513,19 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       const setupScript = [
         "set -e",
         "chmod +x ~/.jait/jait-gateway",
+        "SUDO=''",
+        "if [ \"$(id -u)\" -ne 0 ] && command -v sudo >/dev/null 2>&1; then",
+        "  SUDO='sudo'",
+        "fi",
+        `if [ \"$SUDO\" = 'sudo' ] && [ ${shellQuote(authMethod)} = 'password' ]; then`,
+        "  cat > ~/.jait/.deploy-sudo-askpass <<'ASKPASS'",
+        "  #!/bin/sh",
+        `  printf '%s\\n' ${shellQuote(password)}`,
+        "ASKPASS",
+        "  chmod 700 ~/.jait/.deploy-sudo-askpass",
+        "  export SUDO_ASKPASS=~/.jait/.deploy-sudo-askpass",
+        "  SUDO='sudo -A'",
+        "fi",
         "",
         "# Write .env if it doesn't exist yet",
         "[ -f ~/.jait/.env ] || cat > ~/.jait/.env << 'ENVEOF'",
@@ -479,7 +536,7 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
         "ENVEOF",
         "",
         "# Systemd service",
-        "sudo tee /etc/systemd/system/jait-gateway.service > /dev/null << SVCEOF",
+        "${SUDO:+$SUDO }tee /etc/systemd/system/jait-gateway.service > /dev/null << SVCEOF",
         "[Unit]",
         "Description=Jait Gateway",
         "After=network.target",
@@ -494,8 +551,9 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
         "WantedBy=multi-user.target",
         "SVCEOF",
         "",
-        "sudo systemctl daemon-reload",
-        "sudo systemctl enable --now jait-gateway",
+        "${SUDO:+$SUDO }systemctl daemon-reload",
+        "${SUDO:+$SUDO }systemctl enable --now jait-gateway",
+        "rm -f ~/.jait/.deploy-sudo-askpass",
         "echo 'Jait Gateway deployed successfully!'",
       ].join("\n");
 
@@ -503,6 +561,8 @@ export function registerNetworkRoutes(app: FastifyInstance, ws?: WsControlPlane,
       send("done", `Gateway v${PKG_VERSION} deployed to ${ip}`);
     } catch (err) {
       send("error", err instanceof Error ? err.message : "Deployment failed");
+    } finally {
+      askpass?.cleanup();
     }
 
     reply.raw.end();

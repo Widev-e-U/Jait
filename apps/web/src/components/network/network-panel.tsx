@@ -386,6 +386,8 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
   const [logs, setLogs] = useState<string[]>([])
   const [status, setStatus] = useState<'connecting' | 'running' | 'done' | 'error'>('connecting')
   const [username, setUsername] = useState('')
+  const [authMethod, setAuthMethod] = useState<'publickey' | 'password'>('publickey')
+  const [password, setPassword] = useState('')
   const [started, setStarted] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
@@ -406,7 +408,12 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
         const res = await fetch(`${API_URL}/api/network/deploy`, {
           method: 'POST',
           headers,
-          body: JSON.stringify({ ip, username: username || 'root' }),
+          body: JSON.stringify({
+            ip,
+            username: username || 'root',
+            authMethod,
+            password: authMethod === 'password' ? password : undefined,
+          }),
           signal: controller.signal,
         })
         if (!res.ok || !res.body) {
@@ -451,7 +458,7 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
     }
     void run()
     return () => controller.abort()
-  }, [ip, token, started, username])
+  }, [authMethod, ip, password, token, started, username])
 
   if (!ip) return null
 
@@ -488,10 +495,36 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
               onKeyDown={(e) => e.key === 'Enter' && setStarted(true)}
             />
           </div>
-          <div className="text-[10px] text-muted-foreground">
-            Uses your SSH key for authentication. Make sure the key is authorized on the target.
+          <div className="space-y-2">
+            <label className="text-xs text-muted-foreground">Authentication</label>
+            <select
+              value={authMethod}
+              onChange={(e) => setAuthMethod(e.target.value as 'publickey' | 'password')}
+              className="w-full px-3 py-2 text-sm rounded-md border bg-background"
+            >
+              <option value="publickey">SSH Key</option>
+              <option value="password">Password</option>
+            </select>
           </div>
-          <Button className="w-full" onClick={() => setStarted(true)}>
+          {authMethod === 'password' && (
+            <div className="space-y-2">
+              <label className="text-xs text-muted-foreground">SSH Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="Enter the remote account password"
+                className="w-full px-3 py-2 text-sm rounded-md border bg-background"
+                onKeyDown={(e) => e.key === 'Enter' && password && setStarted(true)}
+              />
+            </div>
+          )}
+          <div className="text-[10px] text-muted-foreground">
+            {authMethod === 'publickey'
+              ? 'Uses your SSH key. Switch to password if the target does not have your public key authorized.'
+              : 'Uses the remote account password for SSH. If sudo is required during setup, the same password will be tried there too.'}
+          </div>
+          <Button className="w-full" disabled={authMethod === 'password' && !password} onClick={() => setStarted(true)}>
             <Rocket className="h-3.5 w-3.5 mr-1.5" />
             Deploy
           </Button>
@@ -526,7 +559,7 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
                 </Button>
               )}
               {status === 'error' && (
-                <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]) }}>
+                <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]); setStatus('connecting') }}>
                   Try Again
                 </Button>
               )}
