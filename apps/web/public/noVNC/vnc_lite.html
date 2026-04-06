@@ -30,22 +30,7 @@
         }
 
         #top_bar {
-            background-color: #6e84a3;
-            color: white;
-            font: bold 12px Helvetica;
-            padding: 6px 5px 4px 5px;
-            border-bottom: 1px outset;
-        }
-        #status {
-            text-align: center;
-        }
-        #sendCtrlAltDelButton {
-            position: fixed;
-            top: 0px;
-            right: 0px;
-            border: 1px outset;
-            padding: 5px 5px 4px 5px;
-            cursor: pointer;
+            display: none;
         }
 
         #screen {
@@ -123,8 +108,7 @@
             return defaultValue;
         }
 
-        document.getElementById('sendCtrlAltDelButton')
-            .onclick = sendCtrlAltDel;
+        // top_bar hidden — no CtrlAltDel button to wire
 
         // Read parameters specified in the URL query string
         // By default, use the host and port of server that served this file
