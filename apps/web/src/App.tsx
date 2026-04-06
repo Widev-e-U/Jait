@@ -937,6 +937,7 @@ function App() {
   const [registerPassword, setRegisterPassword] = useState('')
   const [registerPasswordConfirm, setRegisterPasswordConfirm] = useState('')
   const [authTab, setAuthTab] = useState<'login' | 'register'>('login')
+  const [authSubmitting, setAuthSubmitting] = useState(false)
   const [showLoginPassword, setShowLoginPassword] = useState(false)
   const [showRegisterPassword, setShowRegisterPassword] = useState(false)
   const [showRegisterConfirmPassword, setShowRegisterConfirmPassword] = useState(false)
@@ -3948,7 +3949,9 @@ function App() {
 
   const handleLogin = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (authSubmitting) return
     setAuthError(null)
+    setAuthSubmitting(true)
     try {
       await login(loginUsername, loginPassword)
       setShowLoginDialog(false)
@@ -3956,11 +3959,14 @@ function App() {
       setCurrentView('chat')
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Login failed')
+    } finally {
+      setAuthSubmitting(false)
     }
   }
 
   const handleRegister = async (event: React.FormEvent) => {
     event.preventDefault()
+    if (authSubmitting) return
     setAuthError(null)
     if (!registerUsername || !registerPassword) {
       setAuthError('Username and password are required')
@@ -3970,6 +3976,7 @@ function App() {
       setAuthError('Passwords do not match')
       return
     }
+    setAuthSubmitting(true)
     try {
       await register(registerUsername, registerPassword)
       setShowLoginDialog(false)
@@ -3983,6 +3990,8 @@ function App() {
       })
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Registration failed')
+    } finally {
+      setAuthSubmitting(false)
     }
   }
 
@@ -6162,7 +6171,9 @@ function App() {
                             </Button>
                           </div>
                         </div>
-                        <Button type="submit" className="w-full">Login</Button>
+                        <Button type="submit" className="w-full" disabled={authSubmitting}>
+                          {authSubmitting ? 'Signing in…' : 'Login'}
+                        </Button>
                       </form>
                     </TabsContent>
                     <TabsContent value="register" className="pt-4">
@@ -6225,7 +6236,9 @@ function App() {
                             </Button>
                           </div>
                         </div>
-                        <Button type="submit" className="w-full">{serverHasUsers === false ? 'Get Started' : 'Create account'}</Button>
+                        <Button type="submit" className="w-full" disabled={authSubmitting}>
+                          {authSubmitting ? 'Creating account…' : serverHasUsers === false ? 'Get Started' : 'Create account'}
+                        </Button>
                       </form>
                     </TabsContent>
                   </Tabs>
@@ -6351,7 +6364,9 @@ function App() {
                           </Button>
                         </div>
                       </div>
-                      <Button type="submit" className="w-full">Login</Button>
+                      <Button type="submit" className="w-full" disabled={authSubmitting}>
+                        {authSubmitting ? 'Signing in…' : 'Login'}
+                      </Button>
                     </form>
                   </TabsContent>
                   <TabsContent value="register" className="pt-4">
@@ -6414,7 +6429,9 @@ function App() {
                           </Button>
                         </div>
                       </div>
-                      <Button type="submit" className="w-full">{serverHasUsers === false ? 'Get Started' : 'Create account'}</Button>
+                      <Button type="submit" className="w-full" disabled={authSubmitting}>
+                        {authSubmitting ? 'Creating account…' : serverHasUsers === false ? 'Get Started' : 'Create account'}
+                      </Button>
                     </form>
                   </TabsContent>
                 </Tabs>

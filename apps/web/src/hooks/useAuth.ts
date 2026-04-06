@@ -114,13 +114,20 @@ export function useAuth() {
 
   const persistAuth = useCallback(async (payload: AuthResponse) => {
     setAuthToken(payload.access_token)
-    const settings = await fetchSettings(payload.access_token)
     setState({
       user: payload.user,
       token: payload.access_token,
-      settings: settings ?? EMPTY_SETTINGS,
+      settings: EMPTY_SETTINGS,
       isLoading: false,
     })
+
+    const settings = await fetchSettings(payload.access_token)
+    if (settings) {
+      setState((prev) => {
+        if (prev.token !== payload.access_token) return prev
+        return { ...prev, settings }
+      })
+    }
   }, [])
 
   const login = useCallback(async (username: string, password: string) => {
