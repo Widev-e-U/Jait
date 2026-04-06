@@ -382,12 +382,11 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
 // Deploy Dialog
 // ---------------------------------------------------------------------------
 
-function DeployView({ ip, token, onClose }: { ip: string | null; token?: string | null; onClose: () => void }) {
+function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; token?: string | null; sessionId: string; onClose: () => void }) {
   const [logs, setLogs] = useState<string[]>([])
-  const [status, setStatus] = useState<'connecting' | 'running' | 'done' | 'error'>('connecting')
+  const [status, setStatus] = useState<'ready' | 'starting' | 'done' | 'error'>('ready')
   const [username, setUsername] = useState('')
-  const [authMethod, setAuthMethod] = useState<'publickey' | 'password'>('publickey')
-  const [password, setPassword] = useState('')
+  const [terminalId, setTerminalId] = useState<string | null>(null)
   const [started, setStarted] = useState(false)
   const logRef = useRef<HTMLDivElement>(null)
 
@@ -398,57 +397,53 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
   useEffect(() => {
     if (!ip || !started) return
     setLogs([])
-    setStatus('connecting')
+    setStatus('starting')
 
     const controller = new AbortController()
     const run = async () => {
       try {
         const headers: Record<string, string> = { 'Content-Type': 'application/json' }
         if (token) headers['Authorization'] = `Bearer ${token}`
+        const terminalRes = await fetch(`${API_URL}/api/terminals`, {
+          method: 'POST',
+          headers,
+          body: JSON.stringify({
+            sessionId,
+          }),
+          signal: controller.signal,
+        })
+        if (!terminalRes.ok) {
+          setLogs(prev => [...prev, `Error: ${terminalRes.statusText}`])
+          setStatus('error')
+          return
+        }
+        const terminal = await terminalRes.json() as { id: string }
+        setTerminalId(terminal.id)
+
         const res = await fetch(`${API_URL}/api/network/deploy`, {
           method: 'POST',
           headers,
           body: JSON.stringify({
             ip,
             username: username || 'root',
-            authMethod,
-            password: authMethod === 'password' ? password : undefined,
+            terminalId: terminal.id,
+            sessionId,
           }),
           signal: controller.signal,
         })
-        if (!res.ok || !res.body) {
-          setLogs(prev => [...prev, `Error: ${res.statusText}`])
+        if (!res.ok) {
+          const errorBody = await res.json().catch(() => null) as { error?: string } | null
+          setLogs(prev => [...prev, `Error: ${errorBody?.error ?? res.statusText}`])
           setStatus('error')
           return
         }
-        setStatus('running')
-        const reader = res.body.getReader()
-        const decoder = new TextDecoder()
-        let buffer = ''
-        while (true) {
-          const { done, value } = await reader.read()
-          if (done) break
-          buffer += decoder.decode(value, { stream: true })
-          const parts = buffer.split('\n\n')
-          buffer = parts.pop() ?? ''
-          for (const part of parts) {
-            const eventMatch = part.match(/^event:\s*(.+)$/m)
-            const dataMatch = part.match(/^data:\s*(.+)$/m)
-            if (!eventMatch || !dataMatch) continue
-            const event = eventMatch[1]
-            let data: string
-            try { data = JSON.parse(dataMatch[1]) } catch { data = dataMatch[1] }
-            if (event === 'log') {
-              setLogs(prev => [...prev, data])
-            } else if (event === 'done') {
-              setLogs(prev => [...prev, `✓ ${data}`])
-              setStatus('done')
-            } else if (event === 'error') {
-              setLogs(prev => [...prev, `✗ ${data}`])
-              setStatus('error')
-            }
-          }
-        }
+        const data = await res.json() as { terminalId?: string }
+        setLogs([
+          `Deploy started in terminal ${data.terminalId ?? terminal.id}.`,
+          'SSH and sudo will prompt there directly.',
+          `Continue deployment for ${username || 'root'}@${ip} in the terminal panel.`,
+        ])
+        setStatus('done')
       } catch (err) {
         if (!controller.signal.aborted) {
           setLogs(prev => [...prev, `Error: ${err instanceof Error ? err.message : 'Connection failed'}`])
@@ -458,7 +453,7 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
     }
     void run()
     return () => controller.abort()
-  }, [authMethod, ip, password, token, started, username])
+  }, [ip, sessionId, started, token, username])
 
   if (!ip) return null
 
@@ -470,10 +465,9 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">Deploy to {ip}</div>
           <div className="text-[10px] text-muted-foreground">
-            {status === 'connecting' && !started && 'Ready'}
-            {status === 'connecting' && started && 'Connecting...'}
-            {status === 'running' && 'Deploying...'}
-            {status === 'done' && 'Completed'}
+            {status === 'ready' && 'Ready'}
+            {status === 'starting' && 'Preparing terminal...'}
+            {status === 'done' && 'Running in terminal'}
             {status === 'error' && 'Failed'}
           </div>
         </div>
@@ -495,36 +489,10 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
               onKeyDown={(e) => e.key === 'Enter' && setStarted(true)}
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">Authentication</label>
-            <select
-              value={authMethod}
-              onChange={(e) => setAuthMethod(e.target.value as 'publickey' | 'password')}
-              className="w-full px-3 py-2 text-sm rounded-md border bg-background"
-            >
-              <option value="publickey">SSH Key</option>
-              <option value="password">Password</option>
-            </select>
-          </div>
-          {authMethod === 'password' && (
-            <div className="space-y-2">
-              <label className="text-xs text-muted-foreground">SSH Password</label>
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                placeholder="Enter the remote account password"
-                className="w-full px-3 py-2 text-sm rounded-md border bg-background"
-                onKeyDown={(e) => e.key === 'Enter' && password && setStarted(true)}
-              />
-            </div>
-          )}
           <div className="text-[10px] text-muted-foreground">
-            {authMethod === 'publickey'
-              ? 'Uses your SSH key. Switch to password if the target does not have your public key authorized.'
-              : 'Uses the remote account password for SSH. If sudo is required during setup, the same password will be tried there too.'}
+            Opens a real terminal for deployment. If SSH or sudo needs a password, it will prompt there directly.
           </div>
-          <Button className="w-full" disabled={authMethod === 'password' && !password} onClick={() => setStarted(true)}>
+          <Button className="w-full" onClick={() => setStarted(true)}>
             <Rocket className="h-3.5 w-3.5 mr-1.5" />
             Deploy
           </Button>
@@ -543,23 +511,15 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
                 {line}
               </div>
             ))}
-            {status === 'connecting' && <div className="text-muted-foreground animate-pulse">Connecting...</div>}
-            {status === 'running' && <div className="text-muted-foreground animate-pulse">●</div>}
+            {status === 'starting' && <div className="text-muted-foreground animate-pulse">Preparing terminal...</div>}
           </div>
 
           {/* Footer */}
           {(status === 'done' || status === 'error') && (
             <div className="p-3 border-t shrink-0">
-              {status === 'done' && (
-                <Button size="sm" variant="outline" className="w-full" asChild>
-                  <a href={`http://${ip}:8000`} target="_blank" rel="noopener noreferrer">
-                    <Globe className="h-3.5 w-3.5 mr-1.5" />
-                    Open Dashboard
-                  </a>
-                </Button>
-              )}
+              {status === 'done' && terminalId && <div className="text-[10px] text-muted-foreground">Terminal: {terminalId}</div>}
               {status === 'error' && (
-                <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]); setStatus('connecting') }}>
+                <Button size="sm" variant="outline" className="w-full" onClick={() => { setStarted(false); setLogs([]); setStatus('ready') }}>
                   Try Again
                 </Button>
               )}
@@ -577,9 +537,10 @@ function DeployView({ ip, token, onClose }: { ip: string | null; token?: string 
 
 interface NetworkPanelProps {
   token?: string | null
+  sessionId: string
 }
 
-export function NetworkPanel({ token }: NetworkPanelProps) {
+export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
   const containerRef = useRef<HTMLDivElement>(null)
   const graphRef = useRef<ForceGraphMethods<GraphNode, GraphLink> | undefined>(undefined)
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 })
@@ -990,7 +951,7 @@ export function NetworkPanel({ token }: NetworkPanelProps) {
           'absolute top-0 right-0 h-full w-80 border-l bg-background transition-transform duration-200 ease-in-out z-30',
           deployIp ? 'translate-x-0' : 'translate-x-full'
         )}>
-          <DeployView ip={deployIp} token={token} onClose={() => setDeployIp(null)} />
+          <DeployView ip={deployIp} token={token} sessionId={sessionId} onClose={() => setDeployIp(null)} />
         </div>
       </div>
     </div>

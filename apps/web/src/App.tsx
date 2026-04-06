@@ -2148,6 +2148,7 @@ function App() {
         setCurrentView('chat')
         setShowTerminal(true)
         setSavedTerminal({ open: true })
+        void refresh()
         if (data.terminalId) {
           setActiveTerminalId(data.terminalId)
         }
@@ -2157,7 +2158,7 @@ function App() {
             duration: 10000,
           })
         }
-      }, [setSavedTerminal, setActiveTerminalId]),
+      }, [refresh, setSavedTerminal, setActiveTerminalId]),
       'dev-preview.open': useCallback((data: { target?: string | null; workspaceRoot?: string | null }) => {
         const target = typeof data.target === 'string' ? data.target.trim() : ''
         setCurrentView('chat')
@@ -5255,7 +5256,7 @@ function App() {
           </div>
         ) : currentView === 'network' ? (
           <div className="flex-1 overflow-y-auto">
-            <NetworkPanel token={token} />
+            <NetworkPanel token={token} sessionId={activeSessionId ?? 'default'} />
           </div>
         ) : currentView === 'settings' ? (
           <div className="flex-1 overflow-y-auto">
