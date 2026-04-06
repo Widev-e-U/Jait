@@ -1,110 +1,123 @@
-import { useRef, useState, useEffect, useCallback } from 'react';
+import { useRef, useEffect } from 'react';
 import {
-  type AnimationPlaybackControlsWithThen,
+  type AnimationPlaybackControls,
   type ValueAnimationTransition,
   animate,
   useMotionValue,
-  useMotionValueEvent,
 } from 'motion/react';
-import {
-  type AgentState,
-  type TrackReference,
-  type TrackReferenceOrPlaceholder,
-  useTrackVolume,
-} from '@livekit/components-react';
-import { LocalAudioTrack, RemoteAudioTrack } from 'livekit-client';
+
+/**
+ * Matches LiveKit AgentState strings so the component can accept them directly.
+ * We also accept our own VoiceAssistantStatus values and map them.
+ */
+export type WaveAgentState =
+  | 'disconnected'
+  | 'connecting'
+  | 'initializing'
+  | 'listening'
+  | 'thinking'
+  | 'speaking'
+  // Jait-specific extras (mapped internally)
+  | 'connected'
+  | 'reconnecting'
+  | 'error';
 
 const DEFAULT_SPEED = 5;
-const DEFAULT_AMPLITUDE = 0.025;
-const DEFAULT_FREQUENCY = 10;
+const DEFAULT_AMPLITUDE = 0.07;
+const DEFAULT_FREQUENCY = 12;
 const DEFAULT_TRANSITION: ValueAnimationTransition = { duration: 0.2, ease: 'easeOut' };
 
-function useAnimatedValue<T>(initialValue: T) {
-  const [value, setValue] = useState(initialValue);
-  const motionValue = useMotionValue(initialValue);
-  const controlsRef = useRef<AnimationPlaybackControlsWithThen | null>(null);
-  useMotionValueEvent(motionValue, 'change', (value) => setValue(value as T));
-
-  const animateFn = useCallback(
-    (targetValue: T | T[], transition: ValueAnimationTransition) => {
-      controlsRef.current = animate(motionValue, targetValue, transition);
-    },
-    [motionValue],
-  );
-
-  return { value, controls: controlsRef, animate: animateFn };
+export interface UseAgentAudioVisualizerWaveArgs {
+  state?: WaveAgentState;
 }
 
-interface UseAgentAudioVisualizerWaveAnimatorArgs {
-  state?: AgentState;
-  audioTrack?: LocalAudioTrack | RemoteAudioTrack | TrackReferenceOrPlaceholder;
-}
-
+/**
+ * Drive wave shader uniforms entirely via motion values (no React state / re-renders).
+ *
+ * Returns an object whose `.get()` values update every frame via motion's internal
+ * scheduler — the consuming component only re-renders on actual state *transitions*,
+ * not on every animation tick.
+ */
 export function useAgentAudioVisualizerWave({
   state,
-  audioTrack,
-}: UseAgentAudioVisualizerWaveAnimatorArgs) {
-  const [speed, setSpeed] = useState(DEFAULT_SPEED);
-  const { value: amplitude, animate: animateAmplitude } = useAnimatedValue(DEFAULT_AMPLITUDE);
-  const { value: frequency, animate: animateFrequency } = useAnimatedValue(DEFAULT_FREQUENCY);
-  const { value: opacity, animate: animateOpacity } = useAnimatedValue(1.0);
+}: UseAgentAudioVisualizerWaveArgs) {
+  const speed = useMotionValue(DEFAULT_SPEED);
+  const amplitude = useMotionValue(DEFAULT_AMPLITUDE);
+  const frequency = useMotionValue(DEFAULT_FREQUENCY);
+  const opacity = useMotionValue(1.0);
 
-  const volume = useTrackVolume(audioTrack as TrackReference, {
-    fftSize: 512,
-    smoothingTimeConstant: 0.55,
-  });
+  // Keep animation handles so we can cancel in-flight animations
+  const ctrlsRef = useRef<AnimationPlaybackControls[]>([]);
+
+  const cancelAll = () => {
+    for (const c of ctrlsRef.current) c.stop();
+    ctrlsRef.current = [];
+  };
+
+  // Map Jait-specific states to canonical ones for the switch
+  const canonical = state === 'connected' || state === 'reconnecting'
+    ? 'connecting'
+    : state === 'error'
+      ? 'disconnected'
+      : state;
 
   useEffect(() => {
-    switch (state) {
+    cancelAll();
+    const ctrls: AnimationPlaybackControls[] = [];
+
+    switch (canonical) {
       case 'disconnected':
-        setSpeed(DEFAULT_SPEED);
-        animateAmplitude(0, DEFAULT_TRANSITION);
-        animateFrequency(0, DEFAULT_TRANSITION);
-        animateOpacity(1.0, DEFAULT_TRANSITION);
-        return;
+        speed.set(DEFAULT_SPEED);
+        ctrls.push(animate(amplitude, 0, DEFAULT_TRANSITION));
+        ctrls.push(animate(frequency, 0, DEFAULT_TRANSITION));
+        ctrls.push(animate(opacity, 1.0, DEFAULT_TRANSITION));
+        break;
       case 'listening':
-        setSpeed(DEFAULT_SPEED);
-        animateAmplitude(DEFAULT_AMPLITUDE, DEFAULT_TRANSITION);
-        animateFrequency(DEFAULT_FREQUENCY, DEFAULT_TRANSITION);
-        animateOpacity([1.0, 0.3], {
+        speed.set(DEFAULT_SPEED);
+        ctrls.push(animate(amplitude, DEFAULT_AMPLITUDE, DEFAULT_TRANSITION));
+        ctrls.push(animate(frequency, DEFAULT_FREQUENCY, DEFAULT_TRANSITION));
+        ctrls.push(animate(opacity, [1.0, 0.3], {
           duration: 0.75,
           repeat: Infinity,
           repeatType: 'mirror',
-        });
-        return;
+        }));
+        break;
       case 'thinking':
       case 'connecting':
       case 'initializing':
-        setSpeed(DEFAULT_SPEED * 4);
-        animateAmplitude(DEFAULT_AMPLITUDE / 4, DEFAULT_TRANSITION);
-        animateFrequency(DEFAULT_FREQUENCY * 4, DEFAULT_TRANSITION);
-        animateOpacity([1.0, 0.3], {
+        speed.set(DEFAULT_SPEED * 4);
+        ctrls.push(animate(amplitude, DEFAULT_AMPLITUDE / 2, DEFAULT_TRANSITION));
+        ctrls.push(animate(frequency, DEFAULT_FREQUENCY * 3, DEFAULT_TRANSITION));
+        ctrls.push(animate(opacity, [1.0, 0.3], {
           duration: 0.4,
           repeat: Infinity,
           repeatType: 'mirror',
-        });
-        return;
+        }));
+        break;
       case 'speaking':
       default:
-        setSpeed(DEFAULT_SPEED * 2);
-        animateAmplitude(DEFAULT_AMPLITUDE, DEFAULT_TRANSITION);
-        animateFrequency(DEFAULT_FREQUENCY, DEFAULT_TRANSITION);
-        animateOpacity(1.0, DEFAULT_TRANSITION);
-        return;
+        speed.set(DEFAULT_SPEED * 2);
+        // Continuously oscillate amplitude & frequency to simulate speech volume.
+        // This runs entirely inside motion's scheduler — zero React re-renders.
+        ctrls.push(animate(amplitude, [0.04, 0.18, 0.08, 0.22, 0.06, 0.16], {
+          duration: 2.4,
+          repeat: Infinity,
+          repeatType: 'mirror',
+          ease: 'easeInOut',
+        }));
+        ctrls.push(animate(frequency, [16, 52, 28, 60, 20, 44], {
+          duration: 2.8,
+          repeat: Infinity,
+          repeatType: 'mirror',
+          ease: 'easeInOut',
+        }));
+        ctrls.push(animate(opacity, 1.0, DEFAULT_TRANSITION));
+        break;
     }
-  }, [state, setSpeed, animateAmplitude, animateFrequency, animateOpacity]);
 
-  useEffect(() => {
-    if (state === 'speaking') {
-      animateAmplitude(0.015 + 0.4 * volume, { duration: 0 });
-      animateFrequency(20 + 60 * volume, { duration: 0 });
-    }
-  }, [state, volume, animateAmplitude, animateFrequency]);
+    ctrlsRef.current = ctrls;
+    return cancelAll;
+  }, [canonical, speed, amplitude, frequency, opacity]);
 
-  return {
-    speed,
-    amplitude,
-    frequency,
-    opacity,
-  };
+  return { speed, amplitude, frequency, opacity };
 }

@@ -24,6 +24,8 @@ export interface VoiceToolDeps {
   toolRegistry?: ToolRegistry;
   providerRegistry?: ProviderRegistry;
   toolExecutor?: (name: string, input: unknown, ctx: ToolContext) => Promise<ToolResult>;
+  /** Per-connection user API keys (from user settings). */
+  userApiKeys?: Record<string, string>;
 }
 
 /** OpenAI function-calling tool schema */
@@ -237,31 +239,57 @@ const searchWeb: VoiceTool = {
   schema: {
     type: "function",
     name: "search_web",
-    description: "Search the web for current information, news, or facts. Use for any factual question about current events, recent news, or anything that changes over time.",
+    description: "Search the web for current information, news, or facts. You MUST provide a non-empty 'query' string.",
     parameters: {
       type: "object",
       properties: {
-        query: { type: "string", description: "The search query" },
+        query: { type: "string", description: "The search query — must be a descriptive, non-empty string" },
       },
       required: ["query"],
     },
   },
   execute: async (args, deps) => {
-    const query = String(args["query"] ?? "");
-    if (!query) return "No search query provided.";
+    const raw = args["query"] ?? args["q"] ?? args["search"] ?? "";
+    const query = String(raw).trim();
+    if (!query) {
+      console.warn("[voice] search_web called with empty query, raw args:", JSON.stringify(args));
+      return "Search failed: no query provided. Please specify what to search for.";
+    }
     if (!deps.toolExecutor) return "Tool executor not available.";
     try {
-      const result = await deps.toolExecutor("web.search", { query }, {
-        sessionId: "voice-assistant",
-        actionId: `va-${Date.now()}`,
-        workspaceRoot: "",
-        requestedBy: "voice-assistant",
-        apiKeys: { openai: deps.config.openaiApiKey },
-      });
+      const mergedKeys: Record<string, string> = { ...deps.userApiKeys };
+      if (deps.config.openaiApiKey && !mergedKeys.OPENAI_API_KEY) {
+        mergedKeys.OPENAI_API_KEY = deps.config.openaiApiKey;
+      }
+      const result = await Promise.race([
+        deps.toolExecutor("web.search", { query }, {
+          sessionId: "voice-assistant",
+          actionId: `va-${Date.now()}`,
+          workspaceRoot: "",
+          requestedBy: "voice-assistant",
+          apiKeys: mergedKeys,
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("TIMEOUT")), 15_000),
+        ),
+      ]);
       return result.ok ? String(result.data ?? result.message).slice(0, 3000) : `Search failed: ${result.message}`;
     } catch (e) {
+      if (String(e).includes("TIMEOUT")) return "Search timed out after 15 seconds. Try a simpler query.";
       return `Web search failed: ${e}`;
     }
+  },
+};
+
+const stopVoice: VoiceTool = {
+  schema: {
+    type: "function",
+    name: "stop_voice",
+    description: "Stop/end the voice assistant session. Use when the user says goodbye, asks you to stop, or says they're done talking.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  execute: async () => {
+    return "__STOP_VOICE__";
   },
 };
 
@@ -305,6 +333,7 @@ const ALL_TOOLS: VoiceTool[] = [
   sendToThread,
   searchWeb,
   getWeather,
+  stopVoice,
 ];
 
 const toolMap = new Map<string, VoiceTool>(ALL_TOOLS.map((t) => [t.schema.name, t]));

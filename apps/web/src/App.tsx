@@ -42,6 +42,7 @@ import {
   Boxes,
   Mic,
   MicOff,
+  PhoneOff,
 } from 'lucide-react'
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
@@ -101,7 +102,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { useConfiguredTheme } from '@/hooks/use-configured-theme'
 import { useWakeWord } from '@/hooks/useWakeWord'
 import { useVoiceAssistant } from '@/hooks/useVoiceAssistant'
-import { VoiceAssistantOverlay } from '@/components/voice-assistant/VoiceAssistantOverlay'
+import { AgentAudioVisualizerWave } from '@/components/agent-audio-visualizer-wave'
 import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-store'
 
 import { Badge } from '@/components/ui/badge'
@@ -4374,11 +4375,7 @@ function App() {
   const voiceAssistant = useVoiceAssistant({
     authToken: token,
     onError: (err) => {
-      // Keep the overlay open so the user sees the error state inside the Aura UI
-      toast.error(`Voice: ${err}`, { duration: 4000 })
-    },
-    onConnected: () => {
-      toast.success('Voice assistant connected', { duration: 2000 })
+      console.warn('[voice] error:', err)
     },
     onDisconnected: () => {
       setVoiceOverlayOpen(false)
@@ -4400,7 +4397,6 @@ function App() {
     },
     onWakeWordDetected: () => {
       // Just the wake word — start voice session immediately
-      toast('Connecting to Jait...', { duration: 2000 })
       startVoiceSession()
     },
   })
@@ -4522,9 +4518,32 @@ function App() {
                 paddingRight: desktopPlatform === 'win32' ? 140 : undefined,
               } as React.CSSProperties : undefined}
             >
-          {/* Left: Logo — always visible */}
-          <div className="flex items-center shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          {/* Left: Logo + mobile mic */}
+          <div className="flex items-center gap-1 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <JaitIcon size={20} className="shrink-0" />
+            {wakeWord.isSupported && (
+              <button
+                className={`md:hidden flex items-center justify-center h-8 w-8 rounded-lg shrink-0 transition-colors ${
+                  voiceOverlayOpen
+                    ? 'text-green-400 bg-green-500/10'
+                    : wakeWordEnabled
+                      ? wakeWord.isListening
+                        ? 'text-green-400 bg-green-500/10'
+                        : 'text-blue-400 bg-blue-500/10'
+                      : 'text-muted-foreground hover:bg-accent'
+                }`}
+                onClick={voiceOverlayOpen ? () => { voiceAssistant.disconnect(); setVoiceOverlayOpen(false) } : toggleWakeWord}
+                aria-label={voiceOverlayOpen ? 'Disconnect voice' : wakeWordEnabled ? 'Disable wake word' : 'Enable wake word'}
+              >
+                {voiceOverlayOpen ? (
+                  <Mic className="h-4 w-4 animate-pulse" />
+                ) : wakeWordEnabled ? (
+                  <Mic className={`h-4 w-4 ${wakeWord.isListening ? 'animate-pulse' : ''}`} />
+                ) : (
+                  <MicOff className="h-4 w-4" />
+                )}
+              </button>
+            )}
           </div>
 
           {/* Nav — hidden on mobile, visible on md+ */}
@@ -4589,12 +4608,44 @@ function App() {
             )}
           </nav>
 
-          {/* ViewModeSelector — absolutely centered in header */}
-          {currentView === 'chat' && (
+          {/* Center: ViewModeSelector OR voice controls when voice active */}
+          {voiceOverlayOpen ? (
+            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 backdrop-blur-sm px-1.5 py-1" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+              {/* Mute toggle */}
+              <button
+                onClick={voiceAssistant.toggleMic}
+                className={`flex items-center justify-center h-7 w-7 rounded-full transition-colors ${
+                  voiceAssistant.micActive
+                    ? 'bg-muted hover:bg-muted/80 text-foreground'
+                    : 'bg-destructive/15 text-destructive hover:bg-destructive/25'
+                }`}
+                aria-label={voiceAssistant.micActive ? 'Mute' : 'Unmute'}
+              >
+                {voiceAssistant.micActive ? <Mic className="h-3.5 w-3.5" /> : <MicOff className="h-3.5 w-3.5" />}
+              </button>
+
+              {/* Wave visualizer */}
+              <AgentAudioVisualizerWave
+                state={voiceAssistant.assistantSpeaking ? 'speaking' : voiceAssistant.status}
+                size="sm"
+                lineWidth={2}
+                className="!aspect-auto !h-7 w-24 sm:w-36"
+              />
+
+              {/* Hang up */}
+              <button
+                onClick={() => { voiceAssistant.disconnect(); setVoiceOverlayOpen(false) }}
+                className="flex items-center justify-center h-7 w-7 rounded-full bg-destructive text-destructive-foreground hover:bg-destructive/90 transition-colors"
+                aria-label="End call"
+              >
+                <PhoneOff className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ) : currentView === 'chat' ? (
             <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
             </div>
-          )}
+          ) : null}
 
           {/* Spacer */}
           <div className="flex-1 min-w-0" />
@@ -6506,13 +6557,7 @@ function App() {
         />
       </div>
 
-      {/* Voice-assistant fullscreen overlay */}
-      {voiceOverlayOpen && (
-        <VoiceAssistantOverlay
-          session={voiceAssistant}
-          onClose={() => setVoiceOverlayOpen(false)}
-        />
-      )}
+      {/* Voice overlay removed — voice controls are now inline in the header */}
     </TooltipProvider>
   )
 }

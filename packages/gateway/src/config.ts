@@ -96,7 +96,7 @@ export function loadConfig(): AppConfig {
     hookSecret: process.env["HOOK_SECRET"] ?? "jait-hook-secret",
     heartbeatCron: process.env["HEARTBEAT_CRON"] ?? "* * * * *",
     whisperUrl: process.env["WHISPER_URL"] ?? "http://localhost:8178",
-    realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-4o-mini-realtime-preview",
+    realtimeModel: process.env["OPENAI_REALTIME_MODEL"] ?? "gpt-4o-realtime-preview",
     realtimeVoice: process.env["OPENAI_REALTIME_VOICE"] ?? "alloy",
   };
 }

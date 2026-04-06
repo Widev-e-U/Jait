@@ -1,4 +1,4 @@
-import { useEffect, useRef, useMemo } from 'react'
+import { useEffect, useRef, useMemo, memo } from 'react'
 import type { VoiceAssistantState } from '@jait/shared'
 import { ReactShaderToy } from '@/components/react-shader-toy'
 import { cn } from '@/lib/utils'
@@ -71,7 +71,7 @@ vec2 turb(vec2 pos, float t, float it) {
   return pos;
 }
 
-const float ITERATIONS = 36.0;
+const float ITERATIONS = 20.0;
 
 void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   vec2 uv = fragCoord / iResolution.xy;
@@ -247,7 +247,7 @@ interface AuraVisualizerProps {
   className?: string
 }
 
-export function AuraVisualizer({
+export const AuraVisualizer = memo(function AuraVisualizer({
   status,
   assistantSpeaking,
   color = DEFAULT_COLOR,
@@ -260,14 +260,14 @@ export function AuraVisualizer({
   return (
     <div
       className={cn('aspect-square', className)}
-      style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden' }}
+      style={{ width: size, height: size, borderRadius: '50%', overflow: 'hidden', willChange: 'contents' }}
     >
       <ReactShaderToy
         fs={shaderSource}
-        devicePixelRatio={globalThis.devicePixelRatio ?? 1}
+        devicePixelRatio={Math.min(globalThis.devicePixelRatio ?? 1, 1.5)}
         uniforms={uniforms}
         style={{ width: '100%', height: '100%' }}
       />
     </div>
   )
-}
+})

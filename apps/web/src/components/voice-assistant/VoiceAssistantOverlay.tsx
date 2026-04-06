@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { X } from 'lucide-react'
 import type { UseVoiceAssistantReturn } from '@/hooks/useVoiceAssistant'
-import { AuraVisualizer } from './AuraVisualizer'
+import { GridVisualizer } from './GridVisualizer'
 import { VoiceControlBar } from './VoiceControlBar'
 
 interface VoiceAssistantOverlayProps {
@@ -31,9 +31,12 @@ export function VoiceAssistantOverlay({ session, onClose }: VoiceAssistantOverla
     return () => window.removeEventListener('keydown', handleKey)
   }, [handleDisconnect])
 
-  // Auto-scroll transcript
+  // Auto-scroll transcript (debounced to avoid layout thrash)
   useEffect(() => {
-    transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    const id = requestAnimationFrame(() => {
+      transcriptEndRef.current?.scrollIntoView({ behavior: 'smooth' })
+    })
+    return () => cancelAnimationFrame(id)
   }, [userTranscript, assistantTranscript])
 
   const isConnecting = status === 'connecting'
@@ -51,7 +54,7 @@ export function VoiceAssistantOverlay({ session, onClose }: VoiceAssistantOverla
     : 'Microphone muted'
 
   return (
-    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background/95 backdrop-blur-xl">
+    <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-background">
       {/* Close button */}
       <button
         onClick={handleDisconnect}
@@ -70,12 +73,15 @@ export function VoiceAssistantOverlay({ session, onClose }: VoiceAssistantOverla
           {statusLabel}
         </div>
 
-        {/* Aura visualizer */}
-        <div className="relative mb-8">
-          <AuraVisualizer
+        {/* Grid visualizer */}
+        <div className="relative mb-8 w-full max-w-[480px]">
+          <GridVisualizer
             status={status}
             assistantSpeaking={assistantSpeaking}
-            size={260}
+            rows={15}
+            cols={15}
+            radius={60}
+            size="xl"
           />
           {/* Pulsing ring during connecting */}
           {(isConnecting || isReconnecting) && (
@@ -85,7 +91,7 @@ export function VoiceAssistantOverlay({ session, onClose }: VoiceAssistantOverla
 
         {/* Transcript area */}
         {(assistantTranscript || userTranscript) && (
-          <div className="w-full max-h-40 overflow-y-auto rounded-xl bg-card/60 backdrop-blur-md border border-border/40 p-4 mb-6 space-y-2 scrollbar-thin">
+          <div className="w-full max-h-40 overflow-y-auto rounded-xl bg-card border border-border/40 p-4 mb-6 space-y-2 scrollbar-thin">
             {userTranscript && (
               <div className="flex justify-end">
                 <p className="text-sm bg-primary/15 text-primary rounded-xl rounded-tr-sm px-3 py-1.5 max-w-[85%]">

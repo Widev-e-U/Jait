@@ -1,13 +1,11 @@
 'use client';
 
-import { useMemo, type ComponentProps } from 'react';
+import { useEffect, useMemo, useRef, type ComponentProps } from 'react';
 import { type VariantProps, cva } from 'class-variance-authority';
-import { type AgentState, type TrackReferenceOrPlaceholder } from '@livekit/components-react';
 
 import { ReactShaderToy } from '@/components/react-shader-toy';
-import { useAgentAudioVisualizerWave } from '@/hooks/use-agent-audio-visualizer-wave';
+import { useAgentAudioVisualizerWave, type WaveAgentState } from '@/hooks/use-agent-audio-visualizer-wave';
 import { cn } from '@/lib/utils';
-import { LocalAudioTrack, RemoteAudioTrack } from 'livekit-client';
 
 const DEFAULT_COLOR = '#1FD5F9';
 
@@ -102,7 +100,7 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
   
   // Find minimum distance to the wave by sampling nearby points
   // This gives us consistent line width without high-frequency artifacts
-  const int NUM_SAMPLES = 50; // Must be const for GLSL loop
+  const int NUM_SAMPLES = 24; // Must be const for GLSL loop
   float minDist = 1000.0;
   float sampleRange = 0.02; // Range to search for closest point
   
@@ -148,89 +146,43 @@ void mainImage(out vec4 fragColor, in vec2 fragCoord) {
 }`;
 
 interface WaveShaderProps {
-  /**
-   * Class name
-   * @default ''
-   */
   className?: string;
-  /**
-   * Speed of the oscilloscope
-   * @default 10
-   */
-  speed?: number;
-  /**
-   * Amplitude of the oscilloscope
-   * @default 0.02
-   */
-  amplitude?: number;
-  /**
-   * Frequency of the oscilloscope
-   * @default 20.0
-   */
-  frequency?: number;
-  /**
-   * Color of the oscilloscope in hexidecimal format.
-   * @default '#1FD5F9'
-   */
   color?: `#${string}`;
-  /**
-   * Hue shift amount applied toward the outside of the wave. Center remains at the base color.
-   * @default 0.05
-   */
   colorShift?: number;
-  /**
-   * Mix of the oscilloscope
-   * @default 1.0
-   */
-  mix?: number;
-  /**
-   * Line width of the oscilloscope in pixels
-   * @default 2.0
-   */
   lineWidth?: number;
-  /**
-   * Blur of the oscilloscope in pixels
-   * @default 0.5
-   */
   blur?: number;
+  /** Stable uniform ref — mutated in-place by the parent, read each GL frame. */
+  uniformsRef: React.RefObject<Record<string, { type: string; value: number | number[] }>>;
 }
 
 function WaveShader({
-  speed = 10,
   color = '#1FD5F9',
   colorShift = 0.05,
-  mix = 1.0,
-  amplitude = 0.02,
-  frequency = 20.0,
   lineWidth = 2.0,
   blur = 0.5,
+  uniformsRef,
   ref,
   className,
   ...props
 }: WaveShaderProps & ComponentProps<'div'>) {
   const rgbColor = useMemo(() => hexToRgb(color), [color]);
 
+  // Keep static uniforms in sync without re-creating the object
+  useEffect(() => {
+    const u = uniformsRef.current;
+    if (!u) return;
+    u.uLineWidth.value = lineWidth;
+    u.uSmoothing.value = blur;
+    u.uColor.value = rgbColor ?? [0, 0.7, 1];
+    u.uColorShift.value = colorShift;
+  }, [uniformsRef, rgbColor, colorShift, lineWidth, blur]);
+
   return (
     <div ref={ref} className={className} {...props}>
       <ReactShaderToy
         fs={shaderSource}
-        devicePixelRatio={globalThis.devicePixelRatio ?? 1}
-        uniforms={{
-          uSpeed: { type: '1f', value: speed },
-          uAmplitude: { type: '1f', value: amplitude },
-          uFrequency: { type: '1f', value: frequency },
-          uMix: { type: '1f', value: mix },
-          uLineWidth: { type: '1f', value: lineWidth },
-          uSmoothing: { type: '1f', value: blur },
-          uColor: { type: '3fv', value: rgbColor },
-          uColorShift: { type: '1f', value: colorShift },
-        }}
-        onError={(error) => {
-          console.error('Shader error:', error);
-        }}
-        onWarning={(warning) => {
-          console.warn('Shader warning:', warning);
-        }}
+        devicePixelRatio={Math.min(globalThis.devicePixelRatio ?? 1, 1.5)}
+        uniforms={uniformsRef.current}
         style={{ width: '100%', height: '100%' }}
       />
     </div>
@@ -264,7 +216,7 @@ export interface AgentAudioVisualizerWaveProps {
    * The agent state.
    * @defaultValue 'speaking'
    */
-  state?: AgentState;
+  state?: WaveAgentState;
   /**
    * The color of the wave in hexidecimal format.
    * @defaultValue '#1FD5F9'
@@ -285,10 +237,6 @@ export interface AgentAudioVisualizerWaveProps {
    * @defaultValue 0.5
    */
   blur?: number;
-  /**
-   * The audio track to visualize. Can be a local/remote audio track or a track reference.
-   */
-  audioTrack?: LocalAudioTrack | RemoteAudioTrack | TrackReferenceOrPlaceholder;
   /**
    * Additional CSS class names to apply to the container.
    */
@@ -321,7 +269,6 @@ export function AgentAudioVisualizerWave({
   colorShift = 0.05,
   lineWidth,
   blur,
-  audioTrack,
   className,
   ref,
   ...props
@@ -343,21 +290,42 @@ export function AgentAudioVisualizerWave({
 
   const { speed, amplitude, frequency, opacity } = useAgentAudioVisualizerWave({
     state,
-    audioTrack,
   });
+
+  // Stable uniform object — never re-created, just mutated.
+  // ReactShaderToy reads .value from this ref each GL frame.
+  const uniformsRef = useRef({
+    uSpeed: { type: '1f' as const, value: speed.get() },
+    uAmplitude: { type: '1f' as const, value: amplitude.get() },
+    uFrequency: { type: '1f' as const, value: frequency.get() },
+    uMix: { type: '1f' as const, value: opacity.get() },
+    uLineWidth: { type: '1f' as const, value: _lineWidth },
+    uSmoothing: { type: '1f' as const, value: 0.5 },
+    uColor: { type: '3fv' as const, value: [0, 0.7, 1] as number[] },
+    uColorShift: { type: '1f' as const, value: colorShift },
+  });
+
+  // Subscribe to motion values and push directly into the uniform ref.
+  // These subscriptions fire outside of React's render cycle.
+  useEffect(() => {
+    const unsubs = [
+      speed.on('change', (v) => { uniformsRef.current.uSpeed.value = v; }),
+      amplitude.on('change', (v) => { uniformsRef.current.uAmplitude.value = v; }),
+      frequency.on('change', (v) => { uniformsRef.current.uFrequency.value = v; }),
+      opacity.on('change', (v) => { uniformsRef.current.uMix.value = v; }),
+    ];
+    return () => { for (const u of unsubs) u(); };
+  }, [speed, amplitude, frequency, opacity]);
 
   return (
     <WaveShader
       ref={ref}
       data-lk-state={state}
-      speed={speed}
       color={color}
       colorShift={colorShift}
-      mix={opacity}
-      amplitude={amplitude}
-      frequency={frequency}
       lineWidth={_lineWidth}
       blur={blur}
+      uniformsRef={uniformsRef}
       className={cn(
         AgentAudioVisualizerWaveVariants({ size }),
         'mask-[linear-gradient(90deg,transparent_0%,black_20%,black_80%,transparent_100%)]',

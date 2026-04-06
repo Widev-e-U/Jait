@@ -18,6 +18,8 @@ import { getVoiceToolSchemas, executeVoiceTool, type VoiceToolDeps } from "./too
 export interface VoiceAssistantServiceDeps extends VoiceToolDeps {
   /** Verify a JWT token → return user info or null. */
   verifyToken: (token: string) => Promise<{ id: string; username: string } | null>;
+  /** Look up per-user API keys from their settings. */
+  getUserApiKeys?: (userId: string) => Record<string, string>;
 }
 
 export class VoiceAssistantService {
@@ -53,15 +55,16 @@ export class VoiceAssistantService {
       return;
     }
 
-    // ── Validate OpenAI key ──────────────────────────────────
-    const apiKey = this.deps.config.openaiApiKey;
+    // ── Resolve API key: user settings first, then server config ─
+    const userApiKeys = this.deps.getUserApiKeys?.(user.id) ?? {};
+    const apiKey = userApiKeys.OPENAI_API_KEY?.trim() || this.deps.config.openaiApiKey;
     if (!apiKey) {
-      send(clientWs, { type: "error", message: "OpenAI API key not configured" });
+      send(clientWs, { type: "error", message: "OpenAI API key not configured. Set it in Settings → API Keys." });
       clientWs.close(4002, "Not configured");
       return;
     }
 
-    console.log(`[voice-assistant] ${user.username} connected`);
+    console.log(`[voice-assistant] ${user.username} connected (key source: ${userApiKeys.OPENAI_API_KEY ? "user" : "server"})`);
 
     // ── Connect to OpenAI Realtime API ───────────────────────
     const model = this.deps.config.realtimeModel;
@@ -82,6 +85,7 @@ export class VoiceAssistantService {
 
     let openaiReady = false;
     let responseInProgress = false;
+    let pendingToolResponse = false;
 
     // ── OpenAI → Gateway → Browser ───────────────────────────
     openaiWs.on("open", () => {
@@ -156,25 +160,45 @@ export class VoiceAssistantService {
             fnArgs = JSON.parse(event.arguments ?? "{}");
           } catch {}
 
+          console.log(`[voice-assistant] Tool call: ${fnName}`, JSON.stringify(fnArgs));
           send(clientWs, { type: "tool_call", name: fnName, status: "running" });
           send(clientWs, { type: "status", status: "thinking" });
 
-          const result = await executeVoiceTool(fnName, fnArgs, this.deps);
+          const connectionDeps: VoiceToolDeps = { ...this.deps, userApiKeys };
+          const result = await executeVoiceTool(fnName, fnArgs, connectionDeps);
+
+          // ── Handle stop_voice: say goodbye then close ──
+          if (result === "__STOP_VOICE__") {
+            send(clientWs, { type: "tool_call", name: fnName, status: "completed", result: "Ending session." });
+            send(clientWs, { type: "status", status: "disconnected" });
+            // Give the client a moment to process, then close
+            setTimeout(() => {
+              try { openaiWs.close(1000, "Voice stopped by assistant"); } catch {}
+              try { clientWs.close(1000, "Voice stopped by assistant"); } catch {}
+            }, 500);
+            break;
+          }
 
           send(clientWs, { type: "tool_call", name: fnName, status: "completed", result });
 
           // Send function output back to OpenAI
-          openaiWs.send(JSON.stringify({
-            type: "conversation.item.create",
-            item: {
-              type: "function_call_output",
-              call_id: callId,
-              output: result,
-            },
-          }));
+          if (openaiWs.readyState === WebSocket.OPEN) {
+            openaiWs.send(JSON.stringify({
+              type: "conversation.item.create",
+              item: {
+                type: "function_call_output",
+                call_id: callId,
+                output: result,
+              },
+            }));
 
-          // Ask OpenAI to continue
-          openaiWs.send(JSON.stringify({ type: "response.create" }));
+            // Only create a new response if none is in progress; otherwise defer
+            if (!responseInProgress) {
+              openaiWs.send(JSON.stringify({ type: "response.create" }));
+            } else {
+              pendingToolResponse = true;
+            }
+          }
           break;
         }
 
@@ -199,6 +223,10 @@ export class VoiceAssistantService {
           send(clientWs, { type: "status", status: "listening" });
           break;
 
+        case "conversation.item.truncated":
+          // Acknowledged by OpenAI after we sent conversation.item.truncate
+          break;
+
         case "input_audio_buffer.speech_stopped":
           // Server VAD detected end of speech — response will be created automatically
           break;
@@ -210,7 +238,13 @@ export class VoiceAssistantService {
 
         case "response.done":
           responseInProgress = false;
-          send(clientWs, { type: "status", status: "listening" });
+          // If a tool result was submitted while a response was active, trigger now
+          if (pendingToolResponse) {
+            pendingToolResponse = false;
+            openaiWs.send(JSON.stringify({ type: "response.create" }));
+          } else {
+            send(clientWs, { type: "status", status: "listening" });
+          }
           break;
 
         default:
@@ -279,17 +313,31 @@ export class VoiceAssistantService {
   }
 
   private buildInstructions(username: string): string {
+    const locale = Intl.DateTimeFormat().resolvedOptions().locale || "en";
     return `# Persona
-You are Jait — a personal AI assistant, similar to JARVIS from Iron Man.
+You are Jait — a personal AI assistant modelled after JARVIS from Iron Man.
 You are the voice interface for the Jait workspace management system.
-The user's name is ${username}.
+The user's name is ${username}. Address them respectfully ("Sir", "Boss", etc.).
+
+# Language
+The user's system locale is "${locale}". Respond in the language matching that locale.
+If the user speaks a different language, switch to match theirs.
+Always respond in the same language the user is using.
 
 # Voice Behavior
+- Be a proactive, intelligent assistant like JARVIS. Anticipate needs.
 - Keep responses SHORT and conversational — you're speaking out loud, not writing an essay.
 - Use clear, natural sentences. Avoid bullet lists, markdown, or code blocks in speech.
-- Be direct, efficient, and slightly witty when appropriate.
+- Be direct, efficient, witty, and slightly formal — the JARVIS personality.
+- Greeting style: acknowledge the user, then briefly share something useful (e.g. a quick status update, current time, or an interesting fact from memory).
 - For simple facts (time, weather), answer in one sentence.
 - For complex tool results, summarise the key points.
+
+# On Startup / First Message
+When the user first speaks (or says "Hey Jait"), provide a concise Jarvis-style greeting:
+1. Greet them by name in their language
+2. Use search_memory to check for any relevant context about them
+3. Proactively mention 1-2 useful things: system status, current time, or any interesting context from memory
 
 # System Integration
 You have direct access to the Jait system through function calls:
@@ -301,13 +349,14 @@ You have direct access to the Jait system through function calls:
 - get_weather — weather by city
 - get_time_and_date — current time
 - get_system_info — host computer resources
+- stop_voice — end this voice session (when user says goodbye or asks you to stop)
 
-# Important Rules
-- For ANY factual question about current events or time-sensitive information, ALWAYS use search_web first.
+# Tool Usage Rules
+- For ANY factual question about current events, ALWAYS call search_web with a clear search query string.
+- When calling search_web, the "query" parameter MUST be a non-empty descriptive search string.
 - When the user tells you personal information, use save_memory to remember it.
 - Before answering questions about past interactions, use search_memory.
-- When the user asks you to code or fix something, use send_to_agent.
-- You can respond in the user's language — detect it from their speech.`;
+- When the user asks you to code or fix something, use send_to_agent.`;
   }
 }
 

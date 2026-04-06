@@ -1,4 +1,4 @@
-// @ts-nocheck
+// @ts-nocheck — vendored shadcn component
 import React, { useEffect, useRef, type ComponentPropsWithoutRef } from 'react';
 
 const PRECISIONS = ['lowp', 'mediump', 'highp'];
@@ -144,10 +144,10 @@ const uniformTypeToGLSLType = (t: string) => {
 const LinearFilter = 9729;
 const NearestFilter = 9728;
 const LinearMipMapLinearFilter = 9987;
-const NearestMipMapLinearFilter = 9986;
-const LinearMipMapNearestFilter = 9985;
-const NearestMipMapNearestFilter = 9984;
-const MirroredRepeatWrapping = 33648;
+const _NearestMipMapLinearFilter = 9986;
+const _LinearMipMapNearestFilter = 9985;
+const _NearestMipMapNearestFilter = 9984;
+const _MirroredRepeatWrapping = 33648;
 const ClampToEdgeWrapping = 33071;
 const RepeatWrapping = 10497;
 

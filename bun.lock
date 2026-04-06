@@ -57,7 +57,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.141",
+      "version": "0.1.148",
       "dependencies": {
         "@capacitor/filesystem": "^6.0.0",
         "@chenglou/pretext": "^0.0.4",
@@ -146,7 +146,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.277",
+      "version": "0.1.285",
       "bin": {
         "jait": "./bin/jait.mjs",
       },

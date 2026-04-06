@@ -567,6 +567,7 @@ async function main() {
     toolRegistry,
     providerRegistry,
     toolExecutor: async (name, input, ctx) => toolExecutor(name, input, ctx),
+    getUserApiKeys: (userId) => userService.getSettings(userId).apiKeys,
   });
 
   const server = await createServer(config, {
