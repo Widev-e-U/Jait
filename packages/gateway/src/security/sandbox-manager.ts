@@ -9,6 +9,8 @@ import { resolve } from "node:path";
  * We probe for `docker` first then fall back to `podman`.
  */
 let _containerBinary: string | null = null;
+const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:chrome-toolbar-v1";
+
 function containerBinary(): string {
   if (_containerBinary) return _containerBinary;
   for (const bin of ["docker", "podman"]) {
@@ -141,7 +143,7 @@ export class SandboxManager {
       "-p",
       `${vncPort}:5900`,
       ...(typeof cdpPort === "number" ? ["-p", `${cdpPort}:9223`] : []),
-      "jait/sandbox-browser:latest",
+      SANDBOX_BROWSER_IMAGE,
     ];
 
     let result = await this.runProcess(cmd, 30_000);
@@ -194,7 +196,7 @@ export class SandboxManager {
   }
 
   private async ensureBrowserSandboxImage(): Promise<void> {
-    const inspect = await this.runProcess([containerBinary(), "image", "inspect", "jait/sandbox-browser:latest"], 15_000);
+    const inspect = await this.runProcess([containerBinary(), "image", "inspect", SANDBOX_BROWSER_IMAGE], 15_000);
     if (inspect.exitCode === 0) return;
     await buildBrowserSandboxImage();
   }
@@ -266,7 +268,7 @@ async function runDockerProcess(cmd: string[], timeoutMs: number): Promise<Proce
 
 async function buildBrowserSandboxImage(): Promise<void> {
   const result = await runProcessWithInput(
-    [containerBinary(), "build", "-t", "jait/sandbox-browser:latest", "-f", "-", "."],
+    [containerBinary(), "build", "-t", SANDBOX_BROWSER_IMAGE, "-f", "-", "."],
     10 * 60_000,
     SANDBOX_BROWSER_DOCKERFILE,
   );
@@ -470,7 +472,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
-chromium --no-sandbox --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --kiosk --start-fullscreen --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 about:blank &
+chromium --no-sandbox --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 about:blank &
 
 (
   while true; do

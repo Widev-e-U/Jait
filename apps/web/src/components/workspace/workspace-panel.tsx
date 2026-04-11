@@ -3291,15 +3291,46 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           ? normalizedFilePath.slice(normalizedRoot.length + 1)
           : normalizedFilePath
 
-      const entry = workingTreeDiffEntries.find((diff) => {
+      const findDiffEntry = (diffs: FileDiffEntry[]) => diffs.find((diff) => {
         const normalizedDiffPath = normalizePath(diff.path)
         return normalizedDiffPath === normalizedFilePath
           || normalizedDiffPath === relativeFilePath
           || normalizedFilePath.endsWith(`/${normalizedDiffPath}`)
           || normalizedDiffPath.endsWith(`/${relativeFilePath}`)
       })
+
+      let entry = findDiffEntry(workingTreeDiffEntries)
+      if (!entry) {
+        const freshDiffs = await gitApi.fileDiffs(remoteRoot).catch(() => [] as FileDiffEntry[])
+        if (freshDiffs.length > 0) {
+          setWorkingTreeDiffEntries(freshDiffs)
+          entry = findDiffEntry(freshDiffs)
+        }
+      }
+
+      const showDiffTab = (tab: EditorTab, diffEntry: FileDiffEntry | null) => {
+        setScDiffFile(diffEntry)
+        setOpenTabs(prev => {
+          const existingIndex = prev.findIndex((candidate) => candidate.id === tabId)
+          if (existingIndex === -1) return [...prev, tab]
+          const existing = prev[existingIndex]
+          const next = [...prev]
+          next[existingIndex] = {
+            ...existing,
+            ...tab,
+            version: (existing.version ?? 0) + 1,
+          }
+          return next
+        })
+        setActiveTabId(tabId)
+        setActiveNativePath(null)
+        setPreviewContent(null)
+        setPreviewPath(tab.path)
+        setPreviewLanguage(tab.language ?? 'plaintext')
+        if (!showEditorProp && onToggleEditor) onToggleEditor()
+      }
+
       if (entry) {
-        setScDiffFile(entry)
         const fileName = filePath.split('/').pop() ?? filePath
         const newTab: EditorTab = {
           id: tabId,
@@ -3312,19 +3343,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           modifiedContent: entry.modified,
           diffEntry: entry,
         }
-        setOpenTabs(prev => {
-          const existingIndex = prev.findIndex((tab) => tab.id === tabId)
-          if (existingIndex === -1) return [...prev, newTab]
-          const existing = prev[existingIndex]
-          const next = [...prev]
-          next[existingIndex] = {
-            ...existing,
-            ...newTab,
-            version: (existing.version ?? 0) + 1,
-          }
-          return next
-        })
-        setActiveTabId(tabId)
+        showDiffTab(newTab, entry)
       } else {
         // Fallback so source-control clicks still open a comparable view even
         // if the diff API returns the path in an unexpected form.
@@ -3350,23 +3369,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           originalContent: content,
           modifiedContent: content,
         }
-        setOpenTabs(prev => {
-          const existingIndex = prev.findIndex((tab) => tab.id === tabId)
-          if (existingIndex === -1) return [...prev, newTab]
-          const existing = prev[existingIndex]
-          const next = [...prev]
-          next[existingIndex] = {
-            ...existing,
-            ...newTab,
-            version: (existing.version ?? 0) + 1,
-          }
-          return next
-        })
-        setActiveTabId(tabId)
+        showDiffTab(newTab, null)
       }
     } catch { /* ignore */ }
     setScDiffLoading(false)
-  }, [remoteRoot, surfaceId, workingTreeDiffEntries])
+  }, [onToggleEditor, remoteRoot, showEditorProp, surfaceId, workingTreeDiffEntries])
 
   const handleOpenReviewDiff = useCallback(async ({
     path,
@@ -3433,7 +3440,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setPreviewPanelError(null)
     setPreviewPanelWarning(null)
     setPreviewFrameLoading(Boolean(linkedBrowserSessionId))
-    setPreviewSidePanelOpen(true)
     setPreviewSideTab('controls')
     syncPreviewTab((existing) => ({
       id: 'preview',

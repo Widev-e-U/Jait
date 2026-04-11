@@ -60,6 +60,7 @@ export function NoVncSessionView({
   overlay,
   onLoad,
 }: NoVncSessionViewProps) {
+  const [reloadNonce, setReloadNonce] = useState(0)
   const src = resolveNoVncSessionUrl(source, {
     viewerUrl,
     websocketUrl,
@@ -83,8 +84,21 @@ export function NoVncSessionView({
   }
 
   return (
-    <ZoomPanWrapper overlay={overlay}>
+    <ZoomPanWrapper
+      overlay={overlay}
+      controls={(
+        <button
+          type="button"
+          className="rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
+          onClick={() => setReloadNonce((current) => current + 1)}
+          title="Reload VNC preview"
+        >
+          Refresh
+        </button>
+      )}
+    >
       <iframe
+        key={`${src}:${reloadNonce}`}
         src={src}
         title={title}
         className={className}
@@ -101,7 +115,7 @@ export function NoVncSessionView({
 const MIN_ZOOM = 0.25
 const MAX_ZOOM = 5
 
-function ZoomPanWrapper({ children, overlay }: { children: ReactNode; overlay?: ReactNode }) {
+function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; overlay?: ReactNode; controls?: ReactNode }) {
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
@@ -314,6 +328,11 @@ function ZoomPanWrapper({ children, overlay }: { children: ReactNode; overlay?: 
       {overlay ? (
         <div className="absolute left-2 top-2 z-20 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
           {overlay}
+        </div>
+      ) : null}
+      {controls ? (
+        <div className="absolute right-2 top-2 z-20">
+          {controls}
         </div>
       ) : null}
       {/* Floating controls — always accessible */}

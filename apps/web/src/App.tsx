@@ -4460,8 +4460,26 @@ function App() {
   }, [stopVoiceVisualizer])
 
   const limitReached = error === 'limit_reached'
-  const hasMessages = messages.length > 0 || isLoadingHistory
   const requiresAuthGate = !authLoading && !isAuthenticated
+  const developerChatHydrating =
+    viewMode === 'developer'
+    && currentView === 'chat'
+    && !requiresAuthGate
+    && (
+      authLoading
+      || workspacesLoading
+      || (
+        !!activeSessionId
+        && (
+          isLoadingHistory
+          || loadingChatMode
+          || loadingProviderRuntimeMode
+          || loadingCliModels
+          || loadingChatView
+        )
+      )
+    )
+  const hasMessages = messages.length > 0 || isLoadingHistory
   const mobileActiveWorkspaceTarget = useMemo(
     () => getMobileWorkspaceActiveTarget({
       showWorkspace,
@@ -5791,6 +5809,29 @@ function App() {
                   </div>
                 )}
               </div>
+            ) : developerChatHydrating ? (
+              <div
+                className="flex flex-col min-h-0 min-w-0 overflow-hidden"
+                style={{
+                  flex: chatCollapsed ? '0 0 0px' : '1 1 0%',
+                  width: chatCollapsed ? 0 : undefined,
+                  minWidth: chatCollapsed ? 0 : undefined,
+                  visibility: chatCollapsed ? 'hidden' : undefined,
+                }}
+              >
+                {!chatCollapsed && (
+                  <Conversation
+                    key={activeSessionId ?? 'developer-loading'}
+                    className="min-h-0 flex-1 border-b"
+                    compact={showDesktopWorkspace}
+                    loading
+                    loadingLabel="Loading chat"
+                    messageContents={[]}
+                  >
+                    {null}
+                  </Conversation>
+                )}
+              </div>
             ) : !hasMessages ? (
               <div
                 className={`flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'}`}
@@ -5893,7 +5934,7 @@ function App() {
                   className="min-h-0 flex-1 border-b"
                   compact={showDesktopWorkspace}
                   loading={isLoadingHistory}
-                  loadingLabel="Loading chats"
+                  loadingLabel="Loading chat"
                   messageContents={messages.map((msg) => msg.content)}
                 >
                   {messages.map((msg, idx) => (
