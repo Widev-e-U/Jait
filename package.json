@@ -26,7 +26,7 @@
     "skills/*"
   ],
   "scripts": {
-    "build": "bun run --filter '*' build",
+    "build": "bun run --filter '!@jait/web' build",
     "dev": "bun run --filter '*' dev",
     "test": "vitest run",
     "test:watch": "vitest",

@@ -1551,6 +1551,7 @@ function App() {
   } = useChat(activeSessionId, token, onLoginRequired, activeWorkspace?.surfaceId ?? null)
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
   const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
+  const [sourceControlRefreshSignal, setSourceControlRefreshSignal] = useState(0)
   const managerQueueProcessingRef = useRef(new Set<string>())
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals(token)
   const { provider, model } = useModelInfo()
@@ -1676,11 +1677,27 @@ function App() {
   }, [messageQueue.length])
 
   const chatCompletionSignal = completionCount + remoteMessageCompleteCount
+  const sourceControlCompletionCountRef = useRef(completionCount)
+  const sourceControlRemoteCompletionCountRef = useRef(remoteMessageCompleteCount)
+
+  useEffect(() => {
+    if (completionCount === sourceControlCompletionCountRef.current) return
+    sourceControlCompletionCountRef.current = completionCount
+    setSourceControlRefreshSignal((prev) => prev + 1)
+  }, [completionCount])
+
+  useEffect(() => {
+    if (remoteMessageCompleteCount === sourceControlRemoteCompletionCountRef.current) return
+    const shouldRefresh = remoteMessageCompleteCount > sourceControlRemoteCompletionCountRef.current
+    sourceControlRemoteCompletionCountRef.current = remoteMessageCompleteCount
+    if (shouldRefresh) setSourceControlRefreshSignal((prev) => prev + 1)
+  }, [remoteMessageCompleteCount])
 
   useEffect(() => {
     if (chatNotificationSessionRef.current === activeSessionId) return
     chatNotificationSessionRef.current = activeSessionId
     setRemoteMessageCompleteCount(0)
+    sourceControlRemoteCompletionCountRef.current = 0
     chatQueueSeenRef.current = false
     suppressNextChatNotificationRef.current = false
     lastChatNotificationSignalRef.current = chatCompletionSignal
@@ -1744,6 +1761,8 @@ function App() {
         if (completedThread.status === 'interrupted') {
           continue
         }
+
+        setSourceControlRefreshSignal((prev) => prev + 1)
 
         const title = queueFinished ? 'Queued thread finished' : 'Thread finished'
         const body = completedThread.status === 'completed'
@@ -5370,6 +5389,7 @@ function App() {
                       onToggleEditor={toggleWorkspaceEditor}
                       changedPaths={changedPaths}
                       fsWatcherVersion={fsWatcherVersion}
+                      sourceControlRefreshSignal={sourceControlRefreshSignal}
                       savedTabsState={workspaceTabsState}
                       stateReady={workspaceStateReady}
                       previewRequest={workspacePreviewRequest}
@@ -5508,6 +5528,7 @@ function App() {
                   treeTab={mobileTreeTab}
                   onTreeTabChange={setMobileTreeTab}
                   changedPaths={changedPaths}
+                  sourceControlRefreshSignal={sourceControlRefreshSignal}
                   isMobile
                   savedTabsState={workspaceTabsState}
                   stateReady={workspaceStateReady}

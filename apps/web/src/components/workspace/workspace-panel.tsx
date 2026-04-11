@@ -80,6 +80,8 @@ interface WorkspacePanelProps {
   changedPaths?: string[]
   /** Incremented by the server's native file watcher to signal external FS changes */
   fsWatcherVersion?: number
+  /** Incremented when an agent turn completes and Source Control should refresh */
+  sourceControlRefreshSignal?: number
   /** Persisted editor tab state for this session/workspace */
   savedTabsState?: WorkspaceTabsState | null
   /** True once the app shell has finished applying the initial WS-pushed state.
@@ -1113,6 +1115,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onTreeTabChange,
   changedPaths,
   fsWatcherVersion,
+  sourceControlRefreshSignal,
   savedTabsState,
   stateReady,
   onTabsStateChange,
@@ -1744,6 +1747,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   useEffect(() => {
     if (remoteRoot) fetchGitStatus()
   }, [remoteRoot, fsWatcherVersion, fetchGitStatus])
+
+  const prevSourceControlRefreshSignalRef = useRef(sourceControlRefreshSignal ?? 0)
+  useEffect(() => {
+    if (sourceControlRefreshSignal == null) return
+    if (sourceControlRefreshSignal === prevSourceControlRefreshSignalRef.current) return
+    prevSourceControlRefreshSignalRef.current = sourceControlRefreshSignal
+    if (remoteRoot) void fetchGitStatus()
+  }, [sourceControlRefreshSignal, remoteRoot, fetchGitStatus])
 
   useEffect(() => {
     if (!remoteRoot || gitAutoFetchMode === false) return
