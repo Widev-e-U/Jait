@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveBrowserRuntimeMode } from "./browser.js";
+import { resolveBrowserRuntimeMode, selectInitialBrowserPage } from "./browser.js";
 
 const originalPlatform = process.platform;
 const originalBunVersion = process.versions.bun;
@@ -64,5 +64,32 @@ describe("resolveBrowserRuntimeMode", () => {
     setBunVersion("1.2.0");
 
     expect(resolveBrowserRuntimeMode()).toBe("in-process");
+  });
+});
+
+describe("selectInitialBrowserPage", () => {
+  it("reuses an existing about:blank bootstrap page", async () => {
+    const blankPage = { url: () => "about:blank" };
+    const appPage = { url: () => "http://127.0.0.1:8000/" };
+    const newPage = vi.fn().mockResolvedValue({ url: () => "about:blank" });
+
+    await expect(selectInitialBrowserPage({
+      pages: () => [blankPage, appPage],
+      newPage,
+    })).resolves.toBe(blankPage);
+
+    expect(newPage).not.toHaveBeenCalled();
+  });
+
+  it("opens a page when there is no reusable blank page", async () => {
+    const createdPage = { url: () => "about:blank" };
+    const newPage = vi.fn().mockResolvedValue(createdPage);
+
+    await expect(selectInitialBrowserPage({
+      pages: () => [{ url: () => "http://127.0.0.1:8000/" }],
+      newPage,
+    })).resolves.toBe(createdPage);
+
+    expect(newPage).toHaveBeenCalledOnce();
   });
 });

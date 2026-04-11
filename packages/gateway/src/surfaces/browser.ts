@@ -163,33 +163,26 @@ export interface BrowserSurfaceOptions {
   driverFactory?: (input: SurfaceStartInput) => Promise<BrowserDriver>;
 }
 
+type PlaywrightPage = {
+  goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
+  click: (selector: string) => Promise<void>;
+  fill: (selector: string, text: string) => Promise<void>;
+  evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
+  waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
+  screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
+  on?: (event: string, handler: (...args: any[]) => void) => void;
+  url?: () => string;
+};
+
+type PlaywrightContext = {
+  newPage: () => Promise<PlaywrightPage>;
+  pages?: () => PlaywrightPage[];
+  close: () => Promise<void>;
+};
+
 type PlaywrightBrowser = {
-  contexts?: () => Array<{
-    newPage: () => Promise<{
-      goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
-      click: (selector: string) => Promise<void>;
-      fill: (selector: string, text: string) => Promise<void>;
-      evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
-      waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
-      screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
-      on?: (event: string, handler: (...args: any[]) => void) => void;
-      url?: () => string;
-    }>;
-    close: () => Promise<void>;
-  }>;
-  newContext: (opts: Record<string, unknown>) => Promise<{
-    newPage: () => Promise<{
-      goto: (url: string, opts?: Record<string, unknown>) => Promise<unknown>;
-      click: (selector: string) => Promise<void>;
-      fill: (selector: string, text: string) => Promise<void>;
-      evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
-      waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
-      screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
-      on?: (event: string, handler: (...args: any[]) => void) => void;
-      url?: () => string;
-    }>;
-    close: () => Promise<void>;
-  }>;
+  contexts?: () => PlaywrightContext[];
+  newContext: (opts: Record<string, unknown>) => Promise<PlaywrightContext>;
   close: () => Promise<void>;
 };
 
@@ -459,6 +452,19 @@ export function resolveBrowserRuntimeMode(): BrowserRuntimeMode {
   return "auto";
 }
 
+export async function selectInitialBrowserPage<T extends { url?: () => string }>(
+  context: { pages?: () => T[]; newPage: () => Promise<T> },
+): Promise<T> {
+  const blankPage = context.pages?.().find((candidate) => {
+    try {
+      return candidate.url?.() === "about:blank";
+    } catch {
+      return false;
+    }
+  });
+  return blankPage ?? await context.newPage();
+}
+
 async function connectOrLaunchBrowser(
   chromium: PlaywrightChromium,
   liveViewSession: Awaited<ReturnType<typeof import("../services/live-view-manager.js").startLiveView>> | null,
@@ -550,7 +556,7 @@ async function createInProcessPlaywrightDriver(
         ignoreHTTPSErrors: process.env["BROWSER_IGNORE_HTTPS_ERRORS"] === "true",
       });
     }
-    page = await context.newPage();
+    page = await selectInitialBrowserPage(context);
   } catch (err) {
     await browser.close().catch(() => {});
     throw err;

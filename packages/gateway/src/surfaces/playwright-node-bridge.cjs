@@ -75,6 +75,18 @@ function errorMessage(err) {
   return err instanceof Error ? err.message : String(err);
 }
 
+async function selectInitialPage(context) {
+  const pages = typeof context.pages === "function" ? context.pages() : [];
+  const blankPage = pages.find((candidate) => {
+    try {
+      return typeof candidate.url === "function" && candidate.url() === "about:blank";
+    } catch {
+      return false;
+    }
+  });
+  return blankPage || await context.newPage();
+}
+
 async function launchWithFallback(strategies) {
   const errors = [];
   for (const strategy of strategies) {
@@ -99,7 +111,7 @@ async function main() {
   const context = browser.contexts()[0] || await browser.newContext({
     ignoreHTTPSErrors: process.env.BROWSER_IGNORE_HTTPS_ERRORS === "true",
   });
-  const page = await context.newPage();
+  const page = await selectInitialPage(context);
   const events = [];
 
   page.on("console", (msg) => {
