@@ -5551,6 +5551,7 @@ function App() {
                       key={automation.selectedThread?.id ?? 'manager-empty'}
                       className="min-h-0 flex-1 border-b"
                       loading={automation.loadingActivities}
+                      loadingLabel="Loading activity"
                       messageContents={automationMessages.map((msg) => msg.content)}
                     >
                       {automationMessages.length === 0 && !automation.loadingActivities && (
@@ -5871,6 +5872,7 @@ function App() {
                   className="min-h-0 flex-1 border-b"
                   compact={showDesktopWorkspace}
                   loading={isLoadingHistory}
+                  loadingLabel="Loading chats"
                   messageContents={messages.map((msg) => msg.content)}
                 >
                   {messages.map((msg, idx) => (

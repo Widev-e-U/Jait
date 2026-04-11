@@ -10,6 +10,7 @@ interface ConversationProps {
   className?: string
   compact?: boolean
   loading?: boolean
+  loadingLabel?: string
   /** Raw text per child item for pretext-based virtual item height estimation. */
   messageContents?: string[]
 }
@@ -17,7 +18,7 @@ interface ConversationProps {
 const STICKY_BOTTOM_THRESHOLD_PX = 24
 const DEFAULT_ITEM_HEIGHT = 120
 
-export function Conversation({ children, className, loading, messageContents }: ConversationProps) {
+export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const sizerRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
@@ -186,7 +187,7 @@ export function Conversation({ children, className, loading, messageContents }: 
         <div className="flex h-full items-center justify-center">
           <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-background px-4 py-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
-            <span>Loading conversation</span>
+            <span>{loadingLabel}</span>
           </div>
         </div>
       ) : (

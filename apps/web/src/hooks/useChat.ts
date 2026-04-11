@@ -1509,10 +1509,13 @@ export function useChat(
     })
   }, [])
 
+  const isSwitchingSession = Boolean(sessionId && sessionId !== prevSessionIdRef.current)
+  const isLoadingHistory = state.isLoadingHistory || isSwitchingSession
+
   return {
-    messages: state.messages,
+    messages: isSwitchingSession ? [] : state.messages,
     isLoading: state.isLoading,
-    isLoadingHistory: state.isLoadingHistory,
+    isLoadingHistory,
     remainingPrompts: state.remainingPrompts,
     error: state.error,
     hitMaxRounds: state.hitMaxRounds,
