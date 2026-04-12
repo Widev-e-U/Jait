@@ -27,6 +27,21 @@ function enrichTerminal(raw: TerminalInfo): TerminalInfo {
   return { ...raw, workspaceRoot: (raw.metadata?.cwd as string) ?? raw.workspaceRoot ?? null }
 }
 
+export async function pasteClipboardTextIntoTerminal(
+  clipboard: Pick<Clipboard, 'readText'> | null | undefined,
+  sendInput: (text: string) => void,
+): Promise<boolean> {
+  if (!clipboard?.readText) return false
+  try {
+    const text = await clipboard.readText()
+    if (!text) return false
+    sendInput(text)
+    return true
+  } catch {
+    return false
+  }
+}
+
 export function useTerminals(token?: string | null) {
   const [terminals, setTerminals] = useState<TerminalInfo[]>([])
   const [activeTerminalId, setActiveTerminalId] = useState<string | null>(null)
@@ -263,16 +278,16 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
     }
     const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault()
-      void navigator.clipboard.readText().then((text) => {
-        if (!text) return
+      term.focus()
+      void pasteClipboardTextIntoTerminal(navigator.clipboard, (text) => {
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
         }
-      }).catch(() => {})
+      })
     }
     rootEl.addEventListener('mouseup', handleMouseUp)
     rootEl.addEventListener('keyup', handleKeyUp)
-    rootEl.addEventListener('contextmenu', handleContextMenu)
+    rootEl.addEventListener('contextmenu', handleContextMenu, { capture: true })
 
     return () => {
       disposed = true
@@ -283,7 +298,7 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
       resizeObserver.disconnect()
       rootEl.removeEventListener('mouseup', handleMouseUp)
       rootEl.removeEventListener('keyup', handleKeyUp)
-      rootEl.removeEventListener('contextmenu', handleContextMenu)
+      rootEl.removeEventListener('contextmenu', handleContextMenu, { capture: true })
       closeSocket()
       term.dispose()
       termRef.current = null

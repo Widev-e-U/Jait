@@ -9,7 +9,7 @@ import { resolve } from "node:path";
  * We probe for `docker` first then fall back to `podman`.
  */
 let _containerBinary: string | null = null;
-const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:chrome-toolbar-v1";
+const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:app-window-v1";
 
 function containerBinary(): string {
   if (_containerBinary) return _containerBinary;
@@ -472,7 +472,7 @@ for _ in $(seq 1 50); do
   sleep 0.1
 done
 
-chromium --no-sandbox --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 about:blank &
+chromium --no-sandbox --disable-gpu --disable-software-rasterizer --no-first-run --no-default-browser-check --window-size=1280,720 --window-position=0,0 --remote-debugging-port=9222 --app=about:blank &
 
 (
   while true; do

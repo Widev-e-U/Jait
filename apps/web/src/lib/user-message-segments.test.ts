@@ -134,3 +134,28 @@ describe('Windows backslash path handling', () => {
     expect(restored[0]).toEqual({ type: 'file', path: 'C:\\folder', name: 'folder', kind: 'dir' })
   })
 })
+
+describe('line range references', () => {
+  it('round-trips file and terminal line ranges through clipboard payloads', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'file', path: 'src/app.ts', name: 'app.ts', lineRange: { startLine: 4, endLine: 8 } },
+      { type: 'terminal', terminalId: 'term-123', name: '123', lineRange: { startLine: 1, endLine: 3 }, selectedText: 'one\ntwo\nthree' },
+    ]
+
+    const payload = serializeUserMessageSegmentsForClipboard(segments)
+    expect(payload).not.toBeNull()
+    expect(parseUserMessageClipboardPayload(payload!)).toEqual(segments)
+  })
+
+  it('keeps separate ranges for the same file reference', () => {
+    const segments: UserMessageSegment[] = [
+      { type: 'file', path: 'src/app.ts', name: 'app.ts', lineRange: { startLine: 1, endLine: 2 } },
+      { type: 'file', path: 'src/app.ts', name: 'app.ts', lineRange: { startLine: 5, endLine: 6 } },
+    ]
+
+    expect(userReferencedFilesFromSegments(segments)).toEqual([
+      { path: 'src/app.ts', name: 'app.ts', lineRange: { startLine: 1, endLine: 2 } },
+      { path: 'src/app.ts', name: 'app.ts', lineRange: { startLine: 5, endLine: 6 } },
+    ])
+  })
+})

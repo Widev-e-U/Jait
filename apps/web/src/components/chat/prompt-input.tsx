@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils'
 import { JAIT_TERMINAL_REF_MIME, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 import {
   JAIT_REF_MIME,
+  formatLineRange,
   normalizeUserMessageSegments,
   parseUserMessageClipboardPayload,
   parseUserMessageMarkdown,
@@ -38,6 +39,7 @@ export interface ReferencedFile {
   path: string
   name: string
   kind?: 'file' | 'dir'
+  lineRange?: { startLine: number; endLine: number }
 }
 
 type PromptChipReference =
@@ -124,11 +126,20 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
     chip.setAttribute('data-terminal-id', file.terminalId)
     chip.setAttribute('data-chip-name', file.name)
     if (file.workspaceRoot) chip.setAttribute('data-workspace-root', file.workspaceRoot)
+    if (file.lineRange) {
+      chip.setAttribute('data-line-start', String(file.lineRange.startLine))
+      chip.setAttribute('data-line-end', String(file.lineRange.endLine))
+    }
+    if (file.selectedText) chip.setAttribute('data-selected-text', file.selectedText)
   } else {
     chip.setAttribute('data-segment-type', 'file')
     chip.setAttribute('data-file-path', file.path)
     chip.setAttribute('data-chip-name', file.name)
     if (file.kind) chip.setAttribute('data-kind', file.kind)
+    if (file.lineRange) {
+      chip.setAttribute('data-line-start', String(file.lineRange.startLine))
+      chip.setAttribute('data-line-end', String(file.lineRange.endLine))
+    }
   }
   chip.className =
     'inline-flex items-center gap-1.5 align-middle text-[12px] font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground cursor-default whitespace-nowrap transition-colors'
@@ -149,7 +160,8 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
   // Name label
   const label = document.createElement('span')
   label.className = 'truncate max-w-[180px]'
-  label.textContent = file.name
+  const lineRangeLabel = 'lineRange' in file ? formatLineRange(file.lineRange) : ''
+  label.textContent = lineRangeLabel ? `${file.name}:${lineRangeLabel.replace(/^lines? /, '')}` : file.name
   chip.appendChild(label)
 
   // Remove button
@@ -234,6 +246,7 @@ function getChipFiles(el: HTMLElement): ReferencedFile[] {
       path: chip.getAttribute('data-file-path')!,
       name: chip.getAttribute('data-chip-name') || chip.getAttribute('data-file-path')!.split(/[\\/]/).pop()!,
       ...(kind === 'file' || kind === 'dir' ? { kind } : {}),
+      ...readChipLineRange(chip as HTMLElement),
     })
   })
   return files
@@ -272,6 +285,8 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
           terminalId,
           name: node.getAttribute('data-chip-name') || terminalId,
           ...(workspaceRoot ? { workspaceRoot } : {}),
+          ...readChipLineRange(node),
+          ...(node.getAttribute('data-selected-text') ? { selectedText: node.getAttribute('data-selected-text')! } : {}),
         })
         return
       }
@@ -283,6 +298,7 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
         path,
         name: node.getAttribute('data-chip-name') || path.split(/[\\/]/).pop() || path,
         ...(kind === 'file' || kind === 'dir' ? { kind } : {}),
+        ...readChipLineRange(node),
       })
       return
     }
@@ -297,6 +313,13 @@ function getComposerSegments(el: HTMLElement): UserMessageSegment[] {
 
   for (const child of el.childNodes) visit(child)
   return normalizeUserMessageSegments(segments)
+}
+
+function readChipLineRange(node: HTMLElement): { lineRange: { startLine: number; endLine: number } } | Record<string, never> {
+  const startLine = Number.parseInt(node.getAttribute('data-line-start') ?? '', 10)
+  const endLine = Number.parseInt(node.getAttribute('data-line-end') ?? '', 10)
+  if (!Number.isFinite(startLine) || !Number.isFinite(endLine) || startLine < 1 || endLine < startLine) return {}
+  return { lineRange: { startLine, endLine } }
 }
 
 function hasChipRefs(el: HTMLElement | null): boolean {

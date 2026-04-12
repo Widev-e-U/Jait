@@ -112,7 +112,7 @@ describe("Sprint 13 — Docker Sandboxing", () => {
       cdpUrl: "http://127.0.0.1:9223",
     });
     const imageInspectCmd = commands.find((c) => c.join(" ").includes("image inspect"));
-    expect(imageInspectCmd?.join(" ")).toMatch(/(docker|podman) image inspect jait\/sandbox-browser:chrome-toolbar-v1/);
+    expect(imageInspectCmd?.join(" ")).toMatch(/(docker|podman) image inspect jait\/sandbox-browser:app-window-v1/);
     const runCmd = commands.find((c) => c.join(" ").includes("--add-host"));
     expect(runCmd?.join(" ")).toContain("--add-host host.docker.internal:");
     expect(runCmd?.join(" ")).toContain("-p 9223:9223");

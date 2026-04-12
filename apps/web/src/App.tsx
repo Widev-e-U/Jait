@@ -131,6 +131,7 @@ import {
   type MobileWorkspaceTarget,
 } from '@/lib/mobile-workspace-controls'
 import {
+  formatLineRange,
   type UserMessageSegment,
   type UserTerminalReference,
   userMessageTextFromSegments,
@@ -193,14 +194,11 @@ function appendTranscript(prev: string, transcript: string): string {
 
 function buildFileSelectionReferenceSegments(
   file: ReferencedFile,
-  selection: string,
   startLine: number,
   endLine: number,
 ): UserMessageSegment[] {
-  const lineLabel = startLine === endLine ? `line ${startLine}` : `lines ${startLine}-${endLine}`
   return [
-    { type: 'text', text: `Selected ${lineLabel} from ${file.path}:\n\`\`\`\n${selection.trim()}\n\`\`\`\n` },
-    { type: 'file', path: file.path, name: file.name, ...(file.kind ? { kind: file.kind } : {}) },
+    { type: 'file', path: file.path, name: file.name, ...(file.kind ? { kind: file.kind } : {}), lineRange: { startLine, endLine } },
   ]
 }
 
@@ -208,9 +206,16 @@ function buildTerminalSelectionReferenceSegments(
   terminal: UserTerminalReference,
   selection: string,
 ): UserMessageSegment[] {
+  const lineCount = Math.max(1, selection.split(/\r?\n/).length)
   return [
-    { type: 'text', text: `Selected terminal output from ${terminal.name}:\n\`\`\`\n${selection.trim()}\n\`\`\`\n` },
-    { type: 'terminal', terminalId: terminal.terminalId, name: terminal.name, ...(terminal.workspaceRoot ? { workspaceRoot: terminal.workspaceRoot } : {}) },
+    {
+      type: 'terminal',
+      terminalId: terminal.terminalId,
+      name: terminal.name,
+      ...(terminal.workspaceRoot ? { workspaceRoot: terminal.workspaceRoot } : {}),
+      lineRange: { startLine: 1, endLine: lineCount },
+      selectedText: selection.trim(),
+    },
   ]
 }
 
@@ -3210,7 +3215,7 @@ function App() {
   const handleReferenceFileSelection = useCallback((file: ReferencedFile, selection: string, startLine: number, endLine: number) => {
     const trimmed = selection.trim()
     if (!trimmed) return
-    promptInputRef.current?.insertSegments(buildFileSelectionReferenceSegments(file, trimmed, startLine, endLine))
+    promptInputRef.current?.insertSegments(buildFileSelectionReferenceSegments(file, startLine, endLine))
     promptInputRef.current?.focus()
   }, [])
 
@@ -3495,7 +3500,7 @@ function App() {
     const referencedFiles = normalizedSegments?.length
       ? userReferencedFilesFromSegments(normalizedSegments)
       : chipFiles?.length
-        ? chipFiles.map((file) => ({ path: file.path, name: file.name }))
+        ? chipFiles.map((file) => ({ path: file.path, name: file.name, ...(file.lineRange ? { lineRange: file.lineRange } : {}) }))
         : []
     const referencedWorkspaces = normalizedSegments?.length
       ? userReferencedWorkspacesFromSegments(normalizedSegments)
@@ -3506,27 +3511,34 @@ function App() {
 
     if (!text && referencedFiles.length === 0 && referencedWorkspaces.length === 0 && referencedTerminals.length === 0) return null
 
-    const fileContents: { path: string; content: string }[] = []
+    const fileContents: { path: string; content: string; lineRange?: { startLine: number; endLine: number } }[] = []
     const attachments = new Set<string>()
 
     if (referencedFiles.length) {
       const seen = new Set<string>()
       for (const fileRef of referencedFiles) {
-        if (seen.has(fileRef.path)) continue
-        seen.add(fileRef.path)
+        const seenKey = `${fileRef.path}:${fileRef.lineRange?.startLine ?? ''}:${fileRef.lineRange?.endLine ?? ''}`
+        if (seen.has(seenKey)) continue
+        seen.add(seenKey)
         attachments.add(fileRef.path)
+
+        const applyLineRange = (content: string) => {
+          if (!fileRef.lineRange) return content
+          const lines = content.split('\n')
+          return lines.slice(fileRef.lineRange.startLine - 1, fileRef.lineRange.endLine).join('\n')
+        }
 
         const cached = workspaceFiles.find((file) => file.path === fileRef.path)
         if (cached) {
-          fileContents.push({ path: cached.path, content: cached.content })
+          fileContents.push({ path: cached.path, content: applyLineRange(cached.content), ...(fileRef.lineRange ? { lineRange: fileRef.lineRange } : {}) })
           continue
         }
 
         const referenced = await workspaceRef.current?.readReferencePath(fileRef.path)
         if (referenced?.length) {
           for (const file of referenced) {
-            if (fileContents.some((entry) => entry.path === file.path)) continue
-            fileContents.push({ path: file.path, content: file.content })
+            if (fileContents.some((entry) => entry.path === file.path && entry.lineRange?.startLine === fileRef.lineRange?.startLine && entry.lineRange?.endLine === fileRef.lineRange?.endLine)) continue
+            fileContents.push({ path: file.path, content: applyLineRange(file.content), ...(fileRef.lineRange ? { lineRange: fileRef.lineRange } : {}) })
           }
         }
       }
@@ -3542,13 +3554,16 @@ function App() {
 
     if (referencedTerminals.length > 0) {
       referenceSections.push(`Referenced terminals:\n${referencedTerminals
-        .map((terminal) => `- ${terminal.terminalId}${terminal.workspaceRoot ? ` (workspace: ${terminal.workspaceRoot})` : ''}`)
+        .map((terminal) => [
+          `- ${terminal.terminalId}${terminal.lineRange ? ` (${formatLineRange(terminal.lineRange)} selected)` : ''}${terminal.workspaceRoot ? ` (workspace: ${terminal.workspaceRoot})` : ''}`,
+          terminal.selectedText ? `\`\`\`\n${terminal.selectedText.slice(0, 2000)}\n\`\`\`` : null,
+        ].filter(Boolean).join('\n'))
         .join('\n')}\nUse the terminal ID when you need to run commands in one of these existing terminals.`)
     }
 
     if (fileContents.length > 0) {
       referenceSections.push(`Referenced files:\n${fileContents
-        .map((file) => `- ${file.path}\n\`\`\`\n${file.content.slice(0, 2000)}\n\`\`\``)
+        .map((file) => `- ${file.path}${file.lineRange ? ` (${formatLineRange(file.lineRange)})` : ''}\n\`\`\`\n${file.content.slice(0, 2000)}\n\`\`\``)
         .join('\n')}`)
     }
 

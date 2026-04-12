@@ -38,6 +38,7 @@ import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
 import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
+  formatLineRange,
   normalizeUserMessageSegments,
   parseLegacyReferencedFilesBlock,
   userMessageTextFromSegments,
@@ -913,7 +914,7 @@ function MessageInner({
                                     title={segment.path}
                                   >
                                     <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
-                                    <span className="max-w-[180px] truncate">{segment.name}</span>
+                                    <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
                                   </span>
                                 ) : segment.type === 'workspace' ? (
                                   <span
@@ -931,7 +932,7 @@ function MessageInner({
                                     title={segment.workspaceRoot ? `${segment.terminalId} · ${segment.workspaceRoot}` : segment.terminalId}
                                   >
                                     <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-[9px] font-bold uppercase text-muted-foreground">T</span>
-                                    <span className="max-w-[180px] truncate">{segment.name}</span>
+                                    <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
                                   </span>
                                 ) : null,
                               )

@@ -2,6 +2,7 @@ export interface UserReferencedFile {
   path: string
   name: string
   kind?: 'file' | 'dir'
+  lineRange?: UserLineRange
 }
 
 export interface UserWorkspaceReference {
@@ -13,6 +14,13 @@ export interface UserTerminalReference {
   terminalId: string
   name: string
   workspaceRoot?: string | null
+  lineRange?: UserLineRange
+  selectedText?: string
+}
+
+export interface UserLineRange {
+  startLine: number
+  endLine: number
 }
 
 export interface UserImageAttachment {
@@ -53,6 +61,7 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
         path: segment.path,
         name: segment.name || segment.path.split(/[\\/]/).pop() || segment.path,
         ...(segment.kind ? { kind: segment.kind } : {}),
+        ...(normalizeLineRange(segment.lineRange) ? { lineRange: normalizeLineRange(segment.lineRange)! } : {}),
       })
       continue
     }
@@ -74,6 +83,8 @@ export function normalizeUserMessageSegments(segments: UserMessageSegment[] | nu
         terminalId: segment.terminalId,
         name: segment.name || segment.terminalId,
         ...(segment.workspaceRoot ? { workspaceRoot: segment.workspaceRoot } : {}),
+        ...(normalizeLineRange(segment.lineRange) ? { lineRange: normalizeLineRange(segment.lineRange)! } : {}),
+        ...(segment.selectedText ? { selectedText: segment.selectedText } : {}),
       })
       continue
     }
@@ -102,9 +113,10 @@ export function userReferencedFilesFromSegments(segments: UserMessageSegment[] |
   const seen = new Set<string>()
 
   for (const segment of normalizeUserMessageSegments(segments)) {
-    if (segment.type !== 'file' || seen.has(segment.path)) continue
-    seen.add(segment.path)
-    files.push({ path: segment.path, name: segment.name, ...(segment.kind ? { kind: segment.kind } : {}) })
+    const key = segment.type === 'file' ? referenceKey(segment.path, segment.lineRange) : ''
+    if (segment.type !== 'file' || seen.has(key)) continue
+    seen.add(key)
+    files.push({ path: segment.path, name: segment.name, ...(segment.kind ? { kind: segment.kind } : {}), ...(segment.lineRange ? { lineRange: segment.lineRange } : {}) })
   }
 
   return files
@@ -128,12 +140,15 @@ export function userReferencedTerminalsFromSegments(segments: UserMessageSegment
   const seen = new Set<string>()
 
   for (const segment of normalizeUserMessageSegments(segments)) {
-    if (segment.type !== 'terminal' || seen.has(segment.terminalId)) continue
-    seen.add(segment.terminalId)
+    const key = segment.type === 'terminal' ? referenceKey(segment.terminalId, segment.lineRange) : ''
+    if (segment.type !== 'terminal' || seen.has(key)) continue
+    seen.add(key)
     terminals.push({
       terminalId: segment.terminalId,
       name: segment.name,
       ...(segment.workspaceRoot ? { workspaceRoot: segment.workspaceRoot } : {}),
+      ...(segment.lineRange ? { lineRange: segment.lineRange } : {}),
+      ...(segment.selectedText ? { selectedText: segment.selectedText } : {}),
     })
   }
 
@@ -147,7 +162,7 @@ export function buildFallbackUserMessageSegments(
   const segments: UserMessageSegment[] = []
   if (text) segments.push({ type: 'text', text })
   for (const file of files ?? []) {
-    segments.push({ type: 'file', path: file.path, name: file.name, ...(file.kind ? { kind: file.kind } : {}) })
+    segments.push({ type: 'file', path: file.path, name: file.name, ...(file.kind ? { kind: file.kind } : {}), ...(file.lineRange ? { lineRange: file.lineRange } : {}) })
   }
   return segments
 }
@@ -199,9 +214,9 @@ export function parseLegacyReferencedFilesBlock(content: string): {
 export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegment[] | null | undefined): string {
   return normalizeUserMessageSegments(segments).map((segment) => {
     if (segment.type === 'text') return segment.text
-    if (segment.type === 'file') return `@${segment.path}`
+    if (segment.type === 'file') return `@${segment.path}${formatLineRangeSuffix(segment.lineRange)}`
     if (segment.type === 'workspace') return `[workspace:${segment.path}]`
-    if (segment.type === 'terminal') return `[terminal:${segment.terminalId}]`
+    if (segment.type === 'terminal') return `[terminal:${segment.terminalId}${formatLineRangeSuffix(segment.lineRange)}]`
     return `[image:${segment.name}]`
   }).join('')
 }
@@ -275,6 +290,7 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
         path: record.path,
         name: typeof record.name === 'string' ? record.name : record.path.split(/[\\/]/).pop() ?? record.path,
         ...(record.kind === 'file' || record.kind === 'dir' ? { kind: record.kind } : {}),
+        ...(parseLineRangeRecord(record) ? { lineRange: parseLineRangeRecord(record)! } : {}),
       })
       continue
     }
@@ -292,6 +308,8 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
         terminalId: record.terminalId,
         name: typeof record.name === 'string' ? record.name : record.terminalId,
         ...(typeof record.workspaceRoot === 'string' ? { workspaceRoot: record.workspaceRoot } : {}),
+        ...(parseLineRangeRecord(record) ? { lineRange: parseLineRangeRecord(record)! } : {}),
+        ...(typeof record.selectedText === 'string' ? { selectedText: record.selectedText } : {}),
       })
       continue
     }
@@ -310,4 +328,42 @@ export function parseUserMessageSegments(raw: unknown): UserMessageSegment[] {
     }
   }
   return normalizeUserMessageSegments(parsed)
+}
+
+export function normalizeLineRange(range: UserLineRange | null | undefined): UserLineRange | null {
+  if (!range) return null
+  const startLine = Number.isFinite(range.startLine) ? Math.max(1, Math.floor(range.startLine)) : 0
+  const endLine = Number.isFinite(range.endLine) ? Math.max(startLine, Math.floor(range.endLine)) : 0
+  return startLine > 0 && endLine >= startLine ? { startLine, endLine } : null
+}
+
+export function formatLineRange(range: UserLineRange | null | undefined): string {
+  const normalized = normalizeLineRange(range)
+  if (!normalized) return ''
+  return normalized.startLine === normalized.endLine
+    ? `line ${normalized.startLine}`
+    : `lines ${normalized.startLine}-${normalized.endLine}`
+}
+
+function formatLineRangeSuffix(range: UserLineRange | null | undefined): string {
+  const normalized = normalizeLineRange(range)
+  if (!normalized) return ''
+  return normalized.startLine === normalized.endLine
+    ? `#L${normalized.startLine}`
+    : `#L${normalized.startLine}-L${normalized.endLine}`
+}
+
+function referenceKey(id: string, range: UserLineRange | null | undefined): string {
+  const normalized = normalizeLineRange(range)
+  return normalized ? `${id}:L${normalized.startLine}-L${normalized.endLine}` : id
+}
+
+function parseLineRangeRecord(record: Record<string, unknown>): UserLineRange | null {
+  const candidate = record.lineRange
+  if (!candidate || typeof candidate !== 'object') return null
+  const range = candidate as Record<string, unknown>
+  return normalizeLineRange({
+    startLine: typeof range.startLine === 'number' ? range.startLine : Number.NaN,
+    endLine: typeof range.endLine === 'number' ? range.endLine : Number.NaN,
+  })
 }

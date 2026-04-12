@@ -82,26 +82,31 @@ interface QueuedChatMessage {
   model?: string | null;
   displaySegments?: Array<
     { type: "text"; text: string }
-    | { type: "file"; path: string; name: string }
+    | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
     | { type: "workspace"; path: string; name: string }
-    | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string }
+    | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
     | { type: "image"; name: string; mimeType: string; data: string }
   >;
 }
 
+interface UserDisplayLineRange {
+  startLine: number;
+  endLine: number;
+}
+
 function parseUserDisplaySegments(raw: unknown): Array<
   { type: "text"; text: string }
-  | { type: "file"; path: string; name: string }
+  | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
   | { type: "workspace"; path: string; name: string }
-  | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string }
+  | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
   | { type: "image"; name: string; mimeType: string; data: string }
 > | undefined {
   if (!Array.isArray(raw)) return undefined;
   const segments: Array<
     { type: "text"; text: string }
-    | { type: "file"; path: string; name: string }
+    | { type: "file"; path: string; name: string; lineRange?: UserDisplayLineRange }
     | { type: "workspace"; path: string; name: string }
-    | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string }
+    | { type: "terminal"; terminalId: string; name: string; workspaceRoot?: string; lineRange?: UserDisplayLineRange; selectedText?: string }
     | { type: "image"; name: string; mimeType: string; data: string }
   > = [];
   for (const entry of raw) {
@@ -116,6 +121,7 @@ function parseUserDisplaySegments(raw: unknown): Array<
         type: "file",
         path: record.path,
         name: typeof record.name === "string" ? record.name : record.path.split("/").pop() ?? record.path,
+        ...(parseDisplayLineRange(record) ? { lineRange: parseDisplayLineRange(record)! } : {}),
       });
       continue;
     }
@@ -133,6 +139,8 @@ function parseUserDisplaySegments(raw: unknown): Array<
         terminalId: record.terminalId,
         name: typeof record.name === "string" ? record.name : record.terminalId,
         ...(typeof record.workspaceRoot === "string" ? { workspaceRoot: record.workspaceRoot } : {}),
+        ...(parseDisplayLineRange(record) ? { lineRange: parseDisplayLineRange(record)! } : {}),
+        ...(typeof record.selectedText === "string" ? { selectedText: record.selectedText } : {}),
       });
       continue;
     }
@@ -151,6 +159,16 @@ function parseUserDisplaySegments(raw: unknown): Array<
     }
   }
   return segments.length > 0 ? segments : undefined;
+}
+
+function parseDisplayLineRange(record: Record<string, unknown>): UserDisplayLineRange | null {
+  const candidate = record["lineRange"];
+  if (!candidate || typeof candidate !== "object") return null;
+  const range = candidate as Record<string, unknown>;
+  const startLine = typeof range["startLine"] === "number" ? Math.floor(range["startLine"]) : 0;
+  const endLine = typeof range["endLine"] === "number" ? Math.floor(range["endLine"]) : 0;
+  if (startLine < 1 || endLine < startLine) return null;
+  return { startLine, endLine };
 }
 
 function parseQueuedChatMessages(raw: unknown): QueuedChatMessage[] {
