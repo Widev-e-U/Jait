@@ -4,10 +4,10 @@ import { getIconForFile, getIconForFolder, DEFAULT_FILE, DEFAULT_FOLDER } from '
 import { Button } from '@/components/ui/button'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
+import { StyleSelector } from '@/components/chat/style-selector'
 import { SendTargetSelector } from '@/components/chat/send-target-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
-import { ProviderSelector } from '@/components/chat/provider-selector'
-import { CliModelSelector } from '@/components/chat/cli-model-selector'
+import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
 import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
@@ -23,12 +23,14 @@ import {
   parseUserMessageClipboardPayload,
   parseUserMessageMarkdown,
   serializeUserMessageSegmentsForClipboard,
+  serializeUserMessageSegmentsToMarkdown,
   type UserMessageSegment,
   type UserTerminalReference,
   type UserWorkspaceReference,
 } from '@/lib/user-message-segments'
 import { getPromptDraftSignature, shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
+import type { ResponseStyle } from '@jait/shared'
 
 const ICON_CDN = 'https://cdn.jsdelivr.net/gh/vscode-icons/vscode-icons@12.9.0/icons/'
 
@@ -76,6 +78,8 @@ interface PromptInputProps {
   onSendTargetChange?: (target: SendTarget) => void
   provider?: ProviderId
   onProviderChange?: (provider: ProviderId) => void
+  responseStyle?: ResponseStyle
+  onResponseStyleChange?: (style: ResponseStyle) => void
   providerRuntimeMode?: RuntimeMode
   onProviderRuntimeModeChange?: (mode: RuntimeMode) => void
   /** Model override for CLI providers (codex / claude-code). */
@@ -107,9 +111,22 @@ interface PromptInputProps {
 
 /** Build a non-editable inline chip DOM node for a file reference. */
 function getChipRefKey(ref: PromptChipReference): string {
+  const lineRange = 'lineRange' in ref ? ref.lineRange : undefined
+  const rangeKey = lineRange ? `:L${lineRange.startLine}-L${lineRange.endLine}` : ''
   if ('type' in ref && ref.type === 'workspace') return `workspace:${ref.path}`
-  if ('type' in ref && ref.type === 'terminal') return `terminal:${ref.terminalId}`
-  return `file:${ref.path}`
+  if ('type' in ref && ref.type === 'terminal') {
+    const selectionKey = ref.selectedText ? `:${hashString(ref.selectedText)}` : ''
+    return `terminal:${ref.terminalId}${rangeKey}${selectionKey}`
+  }
+  return `file:${ref.path}${rangeKey}`
+}
+
+function hashString(value: string): string {
+  let hash = 5381
+  for (let i = 0; i < value.length; i++) {
+    hash = ((hash << 5) + hash) ^ value.charCodeAt(i)
+  }
+  return (hash >>> 0).toString(36)
 }
 
 function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) => void): HTMLSpanElement {
@@ -366,14 +383,24 @@ function buildEditableContent(
   }
 
   for (const segment of normalized) {
-    if (segment.type === 'text') {
-      el.appendChild(document.createTextNode(segment.text))
-    } else if (segment.type === 'file') {
-      el.appendChild(createChipNode(segment, onRemove))
-    } else {
-      el.appendChild(document.createTextNode(`[image:${segment.name}]`))
-    }
+    appendSegmentNode(el, segment, onRemove)
   }
+}
+
+function appendSegmentNode(
+  parent: Node,
+  segment: UserMessageSegment,
+  onRemove: (refKey: string) => void,
+) {
+  if (segment.type === 'text') {
+    parent.appendChild(document.createTextNode(segment.text))
+    return
+  }
+  if (segment.type === 'file' || segment.type === 'workspace' || segment.type === 'terminal') {
+    parent.appendChild(createChipNode(segment, onRemove))
+    return
+  }
+  parent.appendChild(document.createTextNode(`[image:${segment.name}]`))
 }
 
 function insertSegmentsAtCursor(
@@ -384,13 +411,7 @@ function insertSegmentsAtCursor(
   const selection = window.getSelection()
   if (!selection || selection.rangeCount === 0) {
     for (const segment of segments) {
-      if (segment.type === 'text') {
-        el.appendChild(document.createTextNode(segment.text))
-      } else if (segment.type === 'file') {
-        el.appendChild(createChipNode(segment, onRemove))
-      } else {
-        el.appendChild(document.createTextNode(`[image:${segment.name}]`))
-      }
+      appendSegmentNode(el, segment, onRemove)
     }
     moveCursorToEnd(el)
     return
@@ -401,13 +422,7 @@ function insertSegmentsAtCursor(
 
   const fragment = document.createDocumentFragment()
   for (const segment of segments) {
-    if (segment.type === 'text') {
-      fragment.appendChild(document.createTextNode(segment.text))
-    } else if (segment.type === 'file') {
-      fragment.appendChild(createChipNode(segment, onRemove))
-    } else {
-      fragment.appendChild(document.createTextNode(`[image:${segment.name}]`))
-    }
+    appendSegmentNode(fragment, segment, onRemove)
   }
 
   const lastNode = fragment.lastChild
@@ -462,11 +477,8 @@ function appendSegmentNodes(
       continue
     }
     if (segment.type === 'image') continue
-    const ref: PromptChipReference = segment.type === 'file'
-      ? { path: segment.path, name: segment.name, ...(segment.kind ? { kind: segment.kind } : {}) }
-      : segment
-    if (el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(ref))}"]`)) continue
-    el.appendChild(createChipNode(ref, onRemoveChip))
+    if (el.querySelector(`[data-chip-ref="${CSS.escape(getChipRefKey(segment))}"]`)) continue
+    el.appendChild(createChipNode(segment, onRemoveChip))
     el.appendChild(document.createTextNode(' '))
   }
 }
@@ -545,6 +557,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onSendTargetChange,
   provider,
   onProviderChange,
+  responseStyle,
+  onResponseStyleChange,
   providerRuntimeMode,
   onProviderRuntimeModeChange,
   cliModel,
@@ -605,12 +619,12 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const composerDisabled = Boolean(disabled)
   const controlsLocked = Boolean(controlsDisabled ?? disabled ?? false)
   const selectorsDisabled = controlsLocked
-  const showProviderSelector = Boolean(provider && onProviderChange)
+  const showProviderModelSelector = Boolean(provider && onProviderChange && onCliModelChange)
+  const showResponseStyleSelector = Boolean(responseStyle && onResponseStyleChange && sendTarget !== 'thread')
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
-  const showCliModelSelector = Boolean(provider && onCliModelChange)
   const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
   const showSendTargetSelector = Boolean(sendTarget && onSendTargetChange)
-  const hasFooterControls = showSendTargetSelector || showProviderSelector || showProviderRuntimeSelector || showCliModelSelector || showModeSelector || Boolean(footerLeadingContent)
+  const hasFooterControls = showSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
 
   useEffect(() => {
     const el = rootRef.current
@@ -1216,11 +1230,20 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             terminalId,
             name: node.getAttribute('data-chip-name') || terminalId,
             ...(workspaceRoot ? { workspaceRoot } : {}),
+            ...readChipLineRange(node),
+            ...(node.getAttribute('data-selected-text') ? { selectedText: node.getAttribute('data-selected-text')! } : {}),
           })
           return
         }
         const path = node.getAttribute('data-file-path')!
-        segments.push({ type: 'file', path, name: node.getAttribute('data-chip-name') || path.split('/').pop() || path })
+        const kind = node.getAttribute('data-kind')
+        segments.push({
+          type: 'file',
+          path,
+          name: node.getAttribute('data-chip-name') || path.split(/[\\/]/).pop() || path,
+          ...(kind === 'file' || kind === 'dir' ? { kind } : {}),
+          ...readChipLineRange(node),
+        })
         return
       }
       if (node.tagName === 'BR') {
@@ -1233,14 +1256,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
     if (segments.some(s => s.type === 'file' || s.type === 'workspace' || s.type === 'terminal')) {
       e.preventDefault()
-      const plainText = segments.map((s) => {
-        if (s.type === 'file') return `@${s.path}`
-        if (s.type === 'workspace') return `[workspace:${s.path}]`
-        if (s.type === 'terminal') return `[terminal:${s.terminalId}]`
-        if (s.type === 'image') return `[image:${s.name}]`
-        return s.text
-      }).join('')
-      e.clipboardData.setData('text/plain', plainText)
+      e.clipboardData.setData('text/plain', serializeUserMessageSegmentsToMarkdown(segments))
       const structured = serializeUserMessageSegmentsForClipboard(segments)
       if (structured) e.clipboardData.setData(JAIT_REF_MIME, structured)
     }
@@ -1501,12 +1517,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 <SendTargetSelector target={sendTarget!} onChange={onSendTargetChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
               )}
               {footerLeadingContent}
-              {showProviderSelector && (
-                <ProviderSelector
+              {showProviderModelSelector && (
+                <ProviderModelSelector
                   provider={provider!}
-                  onChange={onProviderChange!}
+                  model={cliModel ?? null}
+                  onProviderChange={onProviderChange!}
+                  onModelChange={onCliModelChange!}
                   disabled={selectorsDisabled}
-                  iconOnly={compactFooterControls}
+                  compact={compactFooterControls}
                   repoRuntime={repoRuntime}
                   onMoveToGateway={onMoveToGateway}
                   sessionInfo={sessionInfo}
@@ -1522,8 +1540,13 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   compact={compactFooterControls}
                 />
               )}
-              {showCliModelSelector && (
-                <CliModelSelector provider={provider!} model={cliModel ?? null} onChange={onCliModelChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
+              {showResponseStyleSelector && (
+                <StyleSelector
+                  value={responseStyle!}
+                  onChange={onResponseStyleChange!}
+                  disabled={selectorsDisabled}
+                  compact={compactFooterControls}
+                />
               )}
               {showModeSelector && (
                 <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />

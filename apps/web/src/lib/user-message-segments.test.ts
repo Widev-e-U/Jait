@@ -158,4 +158,13 @@ describe('line range references', () => {
       { path: 'src/app.ts', name: 'app.ts', lineRange: { startLine: 5, endLine: 6 } },
     ])
   })
+
+  it('parses line ranges from fallback markdown references', () => {
+    expect(parseUserMessageMarkdown('check @src/app.ts#L4-L8 and [terminal:term-123#L1-L3]')).toEqual([
+      { type: 'text', text: 'check ' },
+      { type: 'file', path: 'src/app.ts', name: 'app.ts', lineRange: { startLine: 4, endLine: 8 } },
+      { type: 'text', text: ' and ' },
+      { type: 'terminal', terminalId: 'term-123', name: 'term-123', lineRange: { startLine: 1, endLine: 3 } },
+    ])
+  })
 })

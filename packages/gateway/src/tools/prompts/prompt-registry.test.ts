@@ -46,4 +46,17 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("<location>C:/skills/word-docx/SKILL.md</location>");
     expect(prompt).toContain("Use the file.read tool to load a skill's content");
   });
+
+  it("injects response style instructions when requested", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      responseStyle: "caveman",
+    });
+
+    expect(prompt).toContain("<responseStyle>");
+    expect(prompt).toContain("Write in concise caveman style.");
+    expect(prompt).toContain("If the topic is risky, subtle, or confusing, fall back to normal precise prose.");
+  });
 });

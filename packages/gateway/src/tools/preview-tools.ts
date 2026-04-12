@@ -231,6 +231,7 @@ interface PreviewRestartInput {
 
 export function createPreviewRestartTool(
   previewService?: PreviewService,
+  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewRestartInput> {
   return {
     name: "preview.restart",
@@ -246,6 +247,11 @@ export function createPreviewRestartTool(
 
       const session = await previewService.restart(sessionId);
       if (!session) return { ok: false, message: "No active preview session to restart" };
+      browserCollaborationService?.syncPreviewSession(session, {
+        userId: context.userId,
+        workspaceRoot: session.workspaceRoot ?? context.workspaceRoot,
+        mode: session.target ? "shared" : "isolated",
+      });
 
       return {
         ok: session.status === "ready",

@@ -8,6 +8,8 @@
 
 import type { ChatMode } from "../chat-modes.js";
 
+export type ResponseStyle = "normal" | "simple" | "caveman" | "caveman-ultra";
+
 // ── Jait tool references ─────────────────────────────────────────────
 
 export const JAIT_TOOLS = {
@@ -138,5 +140,36 @@ export function getModeInstructions(mode: ChatMode): string {
       return getPlanModeInstructions();
     default:
       return "";
+  }
+}
+
+export function isResponseStyle(value: unknown): value is ResponseStyle {
+  return value === "normal" || value === "simple" || value === "caveman" || value === "caveman-ultra";
+}
+
+export function getResponseStyleInstructions(style: ResponseStyle | null | undefined): string | null {
+  switch (style) {
+    case "simple":
+      return `Write in a simple, direct style.
+Use normal grammar and plain language.
+Remove filler, hedging, and pleasantries unless they materially help.
+Keep technical meaning exact.
+Do not rewrite code, commands, file paths, or exact error text.
+If the topic is risky, subtle, or confusing, prefer clarity over brevity.`;
+    case "caveman":
+      return `Write in concise caveman style.
+Short phrases okay. Fragments okay.
+Keep technical substance exact.
+No filler, no hedging, no pleasantries unless needed for clarity.
+Do not rewrite code, commands, file paths, or exact error text.
+If the topic is risky, subtle, or confusing, fall back to normal precise prose.`;
+    case "caveman-ultra":
+      return `Write in maximum-compression caveman style.
+Use the fewest words that still preserve exact meaning.
+Abbreviate only when the meaning stays obvious.
+Do not rewrite code, commands, file paths, or exact error text.
+If the topic is risky, subtle, or confusing, fall back to normal precise prose.`;
+    default:
+      return null;
   }
 }

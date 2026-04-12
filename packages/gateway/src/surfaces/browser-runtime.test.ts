@@ -92,4 +92,17 @@ describe("selectInitialBrowserPage", () => {
 
     expect(newPage).toHaveBeenCalledOnce();
   });
+
+  it("ignores closed pages when reusing a bootstrap page", async () => {
+    const closedBlankPage = { isClosed: () => true, url: () => "about:blank" };
+    const openBlankPage = { isClosed: () => false, url: () => "about:blank" };
+    const newPage = vi.fn().mockResolvedValue({ url: () => "about:blank" });
+
+    await expect(selectInitialBrowserPage({
+      pages: () => [closedBlankPage, openBlankPage],
+      newPage,
+    })).resolves.toBe(openBlankPage);
+
+    expect(newPage).not.toHaveBeenCalled();
+  });
 });

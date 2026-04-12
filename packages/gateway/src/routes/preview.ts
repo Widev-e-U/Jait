@@ -119,6 +119,11 @@ export function registerPreviewRoutes(
     if (!session) {
       return reply.status(404).send({ error: "Preview session not found" });
     }
+    deps.browserCollaborationService?.syncPreviewSession(session, {
+      userId: authUser.id,
+      workspaceRoot: session.workspaceRoot,
+      mode: session.target ? "shared" : "isolated",
+    });
     return { session };
   });
 

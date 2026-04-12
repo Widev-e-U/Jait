@@ -17,6 +17,9 @@
     <title>noVNC</title>
 
     <style>
+        :root {
+            color-scheme: dark;
+        }
 
         body {
             margin: 0;
@@ -38,14 +41,61 @@
             overflow: hidden;
         }
 
+        #mobile_keyboard_button {
+            position: fixed;
+            right: max(16px, env(safe-area-inset-right));
+            bottom: max(16px, env(safe-area-inset-bottom));
+            z-index: 20;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            min-width: 52px;
+            min-height: 52px;
+            padding: 0 14px;
+            border: 0;
+            border-radius: 999px;
+            background: rgba(24, 24, 27, 0.9);
+            color: #fff;
+            font: 600 16px/1 system-ui, sans-serif;
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        #mobile_keyboard_button.visible {
+            display: inline-flex;
+        }
+
+        #mobile_keyboard_button.active {
+            background: rgba(37, 99, 235, 0.95);
+        }
+
+        #mobile_keyboard_input {
+            width: 1px;
+            height: 1px;
+            position: fixed;
+            left: -100px;
+            bottom: 0;
+            opacity: 0;
+            border: 0;
+            padding: 0;
+            z-index: -1;
+        }
+
     </style>
 
     <script type="module" crossorigin="anonymous">
         // RFB holds the API to connect and communicate with a VNC server
         import RFB from './core/rfb.js';
+        import Keyboard from './core/input/keyboard.js';
+        import KeyTable from './core/input/keysym.js';
+        import keysyms from './core/input/keysymdef.js';
+        import { isTouchDevice } from './core/util/browser.js';
 
         let rfb;
         let desktopName;
+        let touchKeyboard;
+        let lastKeyboardInput = null;
+        const defaultKeyboardInputLen = 100;
 
         // When this function is called we have
         // successfully connected to a server
@@ -86,6 +136,129 @@
         // Show a status text in the top bar
         function status(text) {
             document.getElementById('status').textContent = text;
+        }
+
+        function keyboardInputElement() {
+            return document.getElementById('mobile_keyboard_input');
+        }
+
+        function keyboardButtonElement() {
+            return document.getElementById('mobile_keyboard_button');
+        }
+
+        function keyboardInputReset() {
+            const input = keyboardInputElement();
+            input.value = new Array(defaultKeyboardInputLen).join('_');
+            lastKeyboardInput = input.value;
+        }
+
+        function showVirtualKeyboard() {
+            if (!isTouchDevice) return;
+            const input = keyboardInputElement();
+            if (document.activeElement === input) return;
+            input.focus();
+            try {
+                const len = input.value.length;
+                input.setSelectionRange(len, len);
+            } catch {
+                // ignore selection APIs on browsers that don't support them
+            }
+        }
+
+        function hideVirtualKeyboard() {
+            const input = keyboardInputElement();
+            if (document.activeElement === input) input.blur();
+        }
+
+        function toggleVirtualKeyboard() {
+            if (document.activeElement === keyboardInputElement()) {
+                hideVirtualKeyboard();
+            } else {
+                showVirtualKeyboard();
+            }
+        }
+
+        function onVirtualKeyboardFocus() {
+            keyboardButtonElement().classList.add('active');
+            if (rfb) rfb.focusOnClick = false;
+        }
+
+        function onVirtualKeyboardBlur() {
+            keyboardButtonElement().classList.remove('active');
+            if (rfb) rfb.focusOnClick = true;
+        }
+
+        function onVirtualKeyboardInput(event) {
+            if (!rfb) return;
+
+            const newValue = event.target.value;
+            if (!lastKeyboardInput) keyboardInputReset();
+            const oldValue = lastKeyboardInput;
+
+            let newLen;
+            try {
+                newLen = Math.max(event.target.selectionStart, newValue.length);
+            } catch {
+                newLen = newValue.length;
+            }
+
+            const oldLen = oldValue.length;
+            let inputs = newLen - oldLen;
+            let backspaces = inputs < 0 ? -inputs : 0;
+
+            for (let i = 0; i < Math.min(oldLen, newLen); i += 1) {
+                if (newValue.charAt(i) !== oldValue.charAt(i)) {
+                    inputs = newLen - i;
+                    backspaces = oldLen - i;
+                    break;
+                }
+            }
+
+            for (let i = 0; i < backspaces; i += 1) {
+                rfb.sendKey(KeyTable.XK_BackSpace, 'Backspace');
+            }
+            for (let i = newLen - inputs; i < newLen; i += 1) {
+                rfb.sendKey(keysyms.lookup(newValue.charCodeAt(i)));
+            }
+
+            if (newLen > 2 * defaultKeyboardInputLen) {
+                keyboardInputReset();
+            } else if (newLen < 1) {
+                keyboardInputReset();
+                event.target.blur();
+                setTimeout(() => event.target.focus(), 0);
+            } else {
+                lastKeyboardInput = newValue;
+            }
+        }
+
+        function setupTouchKeyboard() {
+            if (!isTouchDevice) return;
+
+            const button = keyboardButtonElement();
+            const input = keyboardInputElement();
+            button.classList.add('visible');
+            button.addEventListener('click', toggleVirtualKeyboard);
+
+            touchKeyboard = new Keyboard(input);
+            touchKeyboard.onkeyevent = (keysym, code, down) => {
+                if (!rfb) return;
+                rfb.sendKey(keysym, code, down);
+            };
+            touchKeyboard.grab();
+
+            input.addEventListener('focus', onVirtualKeyboardFocus);
+            input.addEventListener('blur', onVirtualKeyboardBlur);
+            input.addEventListener('input', onVirtualKeyboardInput);
+            keyboardInputReset();
+
+            // Keep the OS keyboard open while interacting with the remote page
+            // after the user explicitly enabled typing.
+            document.getElementById('screen').addEventListener('touchstart', () => {
+                if (document.activeElement === input) {
+                    setTimeout(() => input.focus(), 0);
+                }
+            }, { passive: true });
         }
 
         // This function extracts the value of one variable from the
@@ -149,6 +322,8 @@
         // Set parameters that can be changed on an active connection
         rfb.viewOnly = readQueryVariable('view_only', false);
         rfb.scaleViewport = readQueryVariable('scale', false);
+
+        setupTouchKeyboard();
     </script>
 </head>
 
@@ -160,5 +335,7 @@
     <div id="screen">
         <!-- This is where the remote screen will appear -->
     </div>
+    <button id="mobile_keyboard_button" type="button" aria-label="Toggle keyboard">⌨</button>
+    <input id="mobile_keyboard_input" type="text" inputmode="text" autocapitalize="off" autocomplete="off" spellcheck="false" />
 </body>
 </html>

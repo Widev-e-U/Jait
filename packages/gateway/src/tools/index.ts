@@ -360,7 +360,7 @@ export function createToolRegistry(
   tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService, deps.browserCollaborationService));
   tools.register(createPreviewStartTool(deps.ws, deps.sessionState, deps.previewService, deps.browserCollaborationService));
   tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService, deps.browserCollaborationService));
-  tools.register(createPreviewRestartTool(deps.previewService));
+  tools.register(createPreviewRestartTool(deps.previewService, deps.browserCollaborationService));
   tools.register(createPreviewStatusTool(deps.previewService));
   tools.register(createPreviewLogsTool(deps.previewService, deps.browserCollaborationService));
   tools.register(createPreviewInspectTool(deps.previewService, deps.browserCollaborationService));

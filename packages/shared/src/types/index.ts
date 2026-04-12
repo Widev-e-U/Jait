@@ -16,6 +16,7 @@ export type {
   UICommandPayload,
   UIStateKey,
   UIStateUpdate,
+  ResponseStyle,
   DevPreviewPanelState,
   WorkspaceUIState,
   WorkspaceOpenData,

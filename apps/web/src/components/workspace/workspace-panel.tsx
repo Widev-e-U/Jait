@@ -666,6 +666,11 @@ export interface WorkspaceTabsState {
   activePreview?: boolean
 }
 
+function getPersistablePreviewTarget(target?: string | null): string | null {
+  const trimmed = target?.trim() || ''
+  return trimmed && trimmed !== '__preview__' ? trimmed : null
+}
+
 interface MobileTreeDragState {
   node: LazyNode
   pointerId: number
@@ -1665,7 +1670,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     const activePath = activeTab && activeTab.type === 'file' && activeTab.id.startsWith('file:')
       ? activeTab.path
       : null
+    const previewTab = openTabs.find((tab) => tab.type === 'preview') ?? null
     const activePreview = activeTabId === 'preview'
+      && Boolean(getPersistablePreviewTarget(previewTab?.previewTarget) || previewTab?.browserSessionId?.trim())
     const nextState: WorkspaceTabsState = { remoteRoot, tabs: fileTabs, activePath, activePreview }
     const serialized = JSON.stringify(nextState)
     if (serialized === lastPersistedTabsRef.current) return
@@ -1678,7 +1685,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (!onPreviewOpenChange) return
     const previewTab = openTabs.find((tab) => tab.type === 'preview') ?? null
     const nextOpen = previewTab !== null
-    const nextTarget = previewTab?.previewTarget ?? previewTab?.path ?? null
+    const nextTarget = getPersistablePreviewTarget(previewTab?.previewTarget)
     const nextBrowserSessionId = previewTab?.browserSessionId ?? null
     const key = `${nextOpen}:${nextTarget ?? ''}:${nextBrowserSessionId ?? ''}`
     if (key === lastNotifiedPreviewRef.current) return

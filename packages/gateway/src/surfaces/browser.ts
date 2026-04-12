@@ -170,6 +170,7 @@ type PlaywrightPage = {
   evaluate: <T>(fn: (...args: any[]) => T, ...args: any[]) => Promise<T>;
   waitForSelector: (selector: string, opts?: Record<string, unknown>) => Promise<unknown>;
   screenshot: (opts?: Record<string, unknown>) => Promise<unknown>;
+  isClosed?: () => boolean;
   on?: (event: string, handler: (...args: any[]) => void) => void;
   url?: () => string;
 };
@@ -452,10 +453,11 @@ export function resolveBrowserRuntimeMode(): BrowserRuntimeMode {
   return "auto";
 }
 
-export async function selectInitialBrowserPage<T extends { url?: () => string }>(
+export async function selectInitialBrowserPage<T extends { isClosed?: () => boolean; url?: () => string }>(
   context: { pages?: () => T[]; newPage: () => Promise<T> },
 ): Promise<T> {
-  const blankPage = context.pages?.().find((candidate) => {
+  const pages = context.pages?.().filter((candidate) => !isBrowserPageClosed(candidate)) ?? [];
+  const blankPage = pages.find((candidate) => {
     try {
       return candidate.url?.() === "about:blank";
     } catch {
@@ -463,6 +465,14 @@ export async function selectInitialBrowserPage<T extends { url?: () => string }>
     }
   });
   return blankPage ?? await context.newPage();
+}
+
+function isBrowserPageClosed(page: { isClosed?: () => boolean } | null | undefined): boolean {
+  try {
+    return page?.isClosed?.() === true;
+  } catch {
+    return true;
+  }
 }
 
 async function connectOrLaunchBrowser(
@@ -566,43 +576,79 @@ async function createInProcessPlaywrightDriver(
     throw new Error("Failed to create Playwright browser context.");
   }
   const activeContext = context;
-  const activePage = page;
+  let activePage = page;
   const events: BrowserRuntimeEvent[] = [];
 
-  activePage.on?.("console", (msg: any) => {
-    const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
-    const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
-    pushBrowserRuntimeEvent(events, { type: "console", level, text });
-  });
-  activePage.on?.("pageerror", (err: Error) => {
-    pushBrowserRuntimeEvent(events, {
-      type: "pageerror",
-      level: "error",
-      text: err?.message ?? String(err),
+  const instrumentedPages = new WeakSet<object>();
+  const attachPageEvents = (targetPage: PlaywrightPage): void => {
+    if (instrumentedPages.has(targetPage as object)) return;
+    instrumentedPages.add(targetPage as object);
+    targetPage.on?.("console", (msg: any) => {
+      const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
+      const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
+      pushBrowserRuntimeEvent(events, { type: "console", level, text });
     });
-  });
-  activePage.on?.("requestfailed", (request: any) => {
-    pushBrowserRuntimeEvent(events, {
-      type: "requestfailed",
-      level: "error",
-      text: request?.failure?.()?.errorText ?? "Request failed",
-      url: rewriteContainerBrowserUrlToPublic(request?.url?.(), liveViewSession),
-      method: request?.method?.(),
+    targetPage.on?.("pageerror", (err: Error) => {
+      pushBrowserRuntimeEvent(events, {
+        type: "pageerror",
+        level: "error",
+        text: err?.message ?? String(err),
+      });
     });
-  });
-  activePage.on?.("response", (response: any) => {
-    const status = typeof response?.status === "function" ? response.status() : undefined;
-    if (typeof status !== "number") return;
-    const request = response.request?.();
-    pushBrowserRuntimeEvent(events, {
-      type: "response",
-      level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
-      text: `HTTP ${status}`,
-      url: rewriteContainerBrowserUrlToPublic(response.url?.(), liveViewSession),
-      method: request?.method?.(),
-      status,
+    targetPage.on?.("requestfailed", (request: any) => {
+      pushBrowserRuntimeEvent(events, {
+        type: "requestfailed",
+        level: "error",
+        text: request?.failure?.()?.errorText ?? "Request failed",
+        url: rewriteContainerBrowserUrlToPublic(request?.url?.(), liveViewSession),
+        method: request?.method?.(),
+      });
     });
-  });
+    targetPage.on?.("response", (response: any) => {
+      const status = typeof response?.status === "function" ? response.status() : undefined;
+      if (typeof status !== "number") return;
+      const request = response.request?.();
+      pushBrowserRuntimeEvent(events, {
+        type: "response",
+        level: status >= 500 ? "error" : status >= 400 ? "warn" : "info",
+        text: `HTTP ${status}`,
+        url: rewriteContainerBrowserUrlToPublic(response.url?.(), liveViewSession),
+        method: request?.method?.(),
+        status,
+      });
+    });
+    targetPage.on?.("close", () => {
+      if (targetPage !== activePage) return;
+      const openPages = activeContext.pages?.().filter((candidate) => !isBrowserPageClosed(candidate)) ?? [];
+      if (openPages.length > 0) {
+        activePage = openPages[0]!;
+        attachPageEvents(activePage);
+        return;
+      }
+      activeContext.newPage()
+        .then((nextPage) => {
+          activePage = nextPage;
+          attachPageEvents(nextPage);
+        })
+        .catch((err: unknown) => {
+          pushBrowserRuntimeEvent(events, {
+            type: "pageerror",
+            level: "error",
+            text: `Failed to reopen browser page after close: ${extractErrorMessage(err)}`,
+          });
+        });
+    });
+  };
+  const ensureActivePage = async (): Promise<PlaywrightPage> => {
+    if (!isBrowserPageClosed(activePage)) {
+      attachPageEvents(activePage);
+      return activePage;
+    }
+    activePage = await selectInitialBrowserPage(activeContext);
+    attachPageEvents(activePage);
+    return activePage;
+  };
+  attachPageEvents(activePage);
 
   /**
    * Race a Playwright page operation against an AbortSignal.
@@ -631,20 +677,24 @@ async function createInProcessPlaywrightDriver(
 
   const driver: BrowserDriver = {
     async navigate(url: string, signal?: AbortSignal) {
+      const page = await ensureActivePage();
       await withSignal(
-        activePage.goto(rewritePublicUrlForContainerBrowser(url, liveViewSession), { waitUntil: "domcontentloaded", timeout: 30_000 }),
+        page.goto(rewritePublicUrlForContainerBrowser(url, liveViewSession), { waitUntil: "domcontentloaded", timeout: 30_000 }),
         signal,
       );
     },
     async click(selector: string, signal?: AbortSignal) {
-      await withSignal(activePage.click(selector), signal);
+      const page = await ensureActivePage();
+      await withSignal(page.click(selector), signal);
     },
     async typeText(selector: string, text: string, signal?: AbortSignal) {
-      await withSignal(activePage.fill(selector, text), signal);
+      const page = await ensureActivePage();
+      await withSignal(page.fill(selector, text), signal);
     },
     async scroll(x: number, y: number, signal?: AbortSignal) {
+      const page = await ensureActivePage();
       await withSignal(
-        activePage.evaluate(
+        page.evaluate(
           ([targetX, targetY]: [number, number]) => window.scrollTo(targetX, targetY),
           [x, y],
         ),
@@ -652,7 +702,8 @@ async function createInProcessPlaywrightDriver(
       );
     },
     async select(selector: string, value: string, signal?: AbortSignal) {
-      const selectPage = activePage as {
+      const page = await ensureActivePage();
+      const selectPage = page as {
         selectOption?: (s: string, v: string) => Promise<unknown>;
       };
       if (!selectPage.selectOption) {
@@ -661,18 +712,21 @@ async function createInProcessPlaywrightDriver(
       await withSignal(selectPage.selectOption(selector, value), signal);
     },
     async waitFor(selector: string, timeoutMs: number, signal?: AbortSignal) {
-      await withSignal(activePage.waitForSelector(selector, { timeout: timeoutMs }), signal);
+      const page = await ensureActivePage();
+      await withSignal(page.waitForSelector(selector, { timeout: timeoutMs }), signal);
     },
     async screenshot(path?: string, signal?: AbortSignal) {
+      const page = await ensureActivePage();
       const outPath = path
         ? resolve(path)
         : resolve(process.cwd(), "artifacts", `browser-${Date.now()}.png`);
       await mkdir(dirname(outPath), { recursive: true });
-      await withSignal(activePage.screenshot({ path: outPath, fullPage: true }), signal);
+      await withSignal(page.screenshot({ path: outPath, fullPage: true }), signal);
       return outPath;
     },
     async snapshot(signal?: AbortSignal) {
-      const snapshot = await withSignal(activePage.evaluate(() => {
+      const page = await ensureActivePage();
+      const snapshot = await withSignal(page.evaluate(() => {
         const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
         const bodyText = normalize(document.body?.innerText ?? "").slice(0, 12_000);
         const title = document.title || "(untitled)";
@@ -829,7 +883,8 @@ async function createInProcessPlaywrightDriver(
       };
     },
     async diagnose(selector: string, signal?: AbortSignal) {
-      return withSignal(activePage.evaluate((targetSelector: string) => {
+      const page = await ensureActivePage();
+      return withSignal(page.evaluate((targetSelector: string) => {
         const normalize = (value: string) => value.replace(/\s+/g, " ").trim();
         const esc = (raw: string) => {
           if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);
@@ -919,7 +974,8 @@ async function createInProcessPlaywrightDriver(
       }, selector) as Promise<BrowserTargetDiagnostics>, signal);
     },
     async getMetrics(signal?: AbortSignal) {
-      const metrics = await withSignal(activePage.evaluate(() => {
+      const page = await ensureActivePage();
+      const metrics = await withSignal(page.evaluate(() => {
         const perf = performance as any;
         const navEntries = perf.getEntriesByType("navigation") as any[];
         const nav = navEntries.length > 0 ? navEntries[0] : null;

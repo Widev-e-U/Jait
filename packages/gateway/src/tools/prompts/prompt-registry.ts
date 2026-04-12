@@ -12,7 +12,7 @@
  */
 
 import type { ChatMode } from "../chat-modes.js";
-import { JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS } from "./shared-sections.js";
+import { getResponseStyleInstructions, type ResponseStyle, JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS } from "./shared-sections.js";
 
 // ── Interfaces ───────────────────────────────────────────────────────
 
@@ -83,6 +83,8 @@ export interface PromptContext {
   workspaceRoot?: string;
   /** Enabled skills to inject into the system prompt */
   skills?: Skill[];
+  /** Optional response style override for this session */
+  responseStyle?: ResponseStyle;
 }
 
 export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?: PromptContext): string {
@@ -101,6 +103,11 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
   // Inject available skills
   if (ctx?.skills && ctx.skills.length > 0) {
     prompt += formatSkillsForPrompt(ctx.skills);
+  }
+
+  const responseStyleInstructions = getResponseStyleInstructions(ctx?.responseStyle);
+  if (responseStyleInstructions) {
+    prompt += `\n\n<responseStyle>\n${responseStyleInstructions}\n</responseStyle>`;
   }
 
   return prompt;

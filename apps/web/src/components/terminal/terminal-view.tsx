@@ -6,6 +6,7 @@ import '@xterm/xterm/css/xterm.css'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 import { shouldAcceptTerminalOutput, type TerminalOutputPayload } from './terminal-stream'
 import { buildTerminalDragPayload, JAIT_TERMINAL_REF_MIME } from '@/lib/jait-dnd'
+import { useResolvedTheme } from '@/hooks/use-resolved-theme'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
@@ -27,6 +28,28 @@ function enrichTerminal(raw: TerminalInfo): TerminalInfo {
   return { ...raw, workspaceRoot: (raw.metadata?.cwd as string) ?? raw.workspaceRoot ?? null }
 }
 
+function getCssVarColor(styles: CSSStyleDeclaration, name: string, fallback: string): string {
+  const value = styles.getPropertyValue(name).trim()
+  return value ? `hsl(${value})` : fallback
+}
+
+function getTerminalTheme(): {
+  background: string
+  foreground: string
+  cursor: string
+  cursorAccent: string
+  selectionBackground: string
+} {
+  const styles = getComputedStyle(document.documentElement)
+  return {
+    background: getCssVarColor(styles, '--background', '#0a0a0a'),
+    foreground: getCssVarColor(styles, '--foreground', '#e4e4e7'),
+    cursor: getCssVarColor(styles, '--foreground', '#e4e4e7'),
+    cursorAccent: getCssVarColor(styles, '--background', '#0a0a0a'),
+    selectionBackground: getCssVarColor(styles, '--primary', '#2563eb'),
+  }
+}
+
 export async function pasteClipboardTextIntoTerminal(
   clipboard: Pick<Clipboard, 'readText'> | null | undefined,
   sendInput: (text: string) => void,
@@ -40,6 +63,25 @@ export async function pasteClipboardTextIntoTerminal(
   } catch {
     return false
   }
+}
+
+export async function handleTerminalContextMenuAction(
+  clipboard: Pick<Clipboard, 'readText' | 'writeText'> | null | undefined,
+  selection: string,
+  sendInput: (text: string) => void,
+): Promise<'copied' | 'pasted' | 'noop'> {
+  const trimmedSelection = selection.trim()
+  if (trimmedSelection) {
+    if (!clipboard?.writeText) return 'noop'
+    try {
+      await clipboard.writeText(trimmedSelection)
+      return 'copied'
+    } catch {
+      return 'noop'
+    }
+  }
+
+  return await pasteClipboardTextIntoTerminal(clipboard, sendInput) ? 'pasted' : 'noop'
 }
 
 export function useTerminals(token?: string | null) {
@@ -107,7 +149,7 @@ interface TerminalViewProps {
   className?: string
   token?: string | null
   workspaceRoot?: string | null
-  onReferenceSelection?: (terminalId: string, selection: string, workspaceRoot?: string | null) => void
+  onReferenceSelection?: (terminalId: string, selection: string, workspaceRoot?: string | null, startLine?: number, endLine?: number) => void
 }
 
 export function TerminalView({ terminalId, className, token, workspaceRoot, onReferenceSelection }: TerminalViewProps) {
@@ -116,24 +158,16 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const lastSelectionKeyRef = useRef<string | null>(null)
+  const resolvedTheme = useResolvedTheme()
 
   useEffect(() => {
     if (!containerRef.current) return
-
-    // Resolve the app's background color so xterm blends with the page
-    const bgHsl = getComputedStyle(document.documentElement).getPropertyValue('--background').trim()
-    const bgColor = bgHsl ? `hsl(${bgHsl})` : '#0a0a0a'
 
     const term = new Terminal({
       cursorBlink: true,
       fontSize: 13,
       fontFamily: "'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace",
-      theme: {
-        background: bgColor,
-        foreground: '#e4e4e7',
-        cursor: '#e4e4e7',
-        selectionBackground: '#27272a',
-      },
+      theme: getTerminalTheme(),
       allowProposedApi: true,
     })
 
@@ -153,7 +187,8 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
       const selectionKey = `${terminalId}:${selection}`
       if (lastSelectionKeyRef.current === selectionKey) return
       lastSelectionKeyRef.current = selectionKey
-      onReferenceSelection?.(terminalId, selection, workspaceRoot)
+      const range = term.getSelectionPosition()
+      onReferenceSelection?.(terminalId, selection, workspaceRoot, range?.start.y, range?.end.y)
     }
 
     // Initial fit + focus so the terminal can receive keyboard input
@@ -278,8 +313,9 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
     }
     const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault()
-      term.focus()
-      void pasteClipboardTextIntoTerminal(navigator.clipboard, (text) => {
+      const selection = term.getSelection()
+      void handleTerminalContextMenuAction(navigator.clipboard, selection, (text) => {
+        term.focus()
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
         }
@@ -306,6 +342,12 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
       wsRef.current = null
     }
   }, [terminalId, token, workspaceRoot, onReferenceSelection])
+
+  useEffect(() => {
+    const term = termRef.current
+    if (!term) return
+    term.options.theme = getTerminalTheme()
+  }, [resolvedTheme])
 
   return (
     <div className={`w-full overflow-hidden ${className ?? ''}`} onClick={() => termRef.current?.focus()}>

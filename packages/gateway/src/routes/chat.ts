@@ -42,6 +42,7 @@ import {
   isValidChatMode,
 } from "../tools/chat-modes.js";
 import { buildSystemPrompt, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
+import { getResponseStyleInstructions, isResponseStyle, type ResponseStyle } from "../tools/prompts/shared-sections.js";
 import type { SkillRegistry } from "../skills/index.js";
 import { formatSkillsForPrompt } from "../skills/index.js";
 
@@ -980,6 +981,7 @@ export function registerChatRoutes(
           ? (body["session_id"] as string)
           : randomUUID();
     const chatMode: ChatMode = isValidChatMode(body["mode"]) ? body["mode"] : "agent";
+    const responseStyle: ResponseStyle = isResponseStyle(body["responseStyle"]) ? body["responseStyle"] : "normal";
     let requestProvider = typeof body["provider"] === "string"
       ? (body["provider"] as ProviderId)
       : undefined;
@@ -1063,7 +1065,11 @@ export function registerChatRoutes(
     const wsRoot = surfaceRegistry
       ? resolveWorkspaceRoot(surfaceRegistry, sessionId, workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)
       : ((workspaceRecord?.rootPath ?? sessionRecord?.workspacePath)?.trim() || process.cwd());
-    const promptCtx: PromptContext = { workspaceRoot: wsRoot, skills: skillRegistry?.listEnabled() };
+    const promptCtx: PromptContext = {
+      workspaceRoot: wsRoot,
+      skills: skillRegistry?.listEnabled(),
+      responseStyle,
+    };
 
     if (!sessionHistory.has(sessionId)) {
       sessionHistory.set(sessionId, [
@@ -1457,7 +1463,11 @@ export function registerChatRoutes(
         });
 
         // ── Prepend skills context on the first turn of a new CLI session ──
+        const responseStyleBlock = getResponseStyleInstructions(responseStyle);
         let cliContent = content;
+        if (responseStyleBlock) {
+          cliContent = `<responseStyle>\n${responseStyleBlock}\n</responseStyle>\n\n${cliContent}`;
+        }
         if (isNewCliSession && skillRegistry) {
           const enabledSkills = skillRegistry.listEnabled();
           const skillsBlock = formatSkillsForPrompt(enabledSkills);
@@ -1485,6 +1495,9 @@ export function registerChatRoutes(
           console.log(`[chat/cli] Recovered with new ${requestProvider}/${runtimeMode} session ${providerSessionId}`);
           // Fresh session — re-inject skills context
           let recoveryContent = content;
+          if (responseStyleBlock) {
+            recoveryContent = `<responseStyle>\n${responseStyleBlock}\n</responseStyle>\n\n${recoveryContent}`;
+          }
           if (skillRegistry) {
             const enabledSkills = skillRegistry.listEnabled();
             const skillsBlock = formatSkillsForPrompt(enabledSkills);

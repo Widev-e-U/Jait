@@ -76,7 +76,9 @@ function errorMessage(err) {
 }
 
 async function selectInitialPage(context) {
-  const pages = typeof context.pages === "function" ? context.pages() : [];
+  const pages = typeof context.pages === "function"
+    ? context.pages().filter((candidate) => !isPageClosed(candidate))
+    : [];
   const blankPage = pages.find((candidate) => {
     try {
       return typeof candidate.url === "function" && candidate.url() === "about:blank";
@@ -85,6 +87,14 @@ async function selectInitialPage(context) {
     }
   });
   return blankPage || await context.newPage();
+}
+
+function isPageClosed(page) {
+  try {
+    return typeof page?.isClosed === "function" && page.isClosed();
+  } catch {
+    return true;
+  }
 }
 
 async function launchWithFallback(strategies) {
@@ -111,72 +121,110 @@ async function main() {
   const context = browser.contexts()[0] || await browser.newContext({
     ignoreHTTPSErrors: process.env.BROWSER_IGNORE_HTTPS_ERRORS === "true",
   });
-  const page = await selectInitialPage(context);
+  let page = await selectInitialPage(context);
   const events = [];
 
-  page.on("console", (msg) => {
-    const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
-    const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
-    pushRuntimeEvent(events, { type: "console", level, text });
-  });
-  page.on("pageerror", (err) => {
-    pushRuntimeEvent(events, {
-      type: "pageerror",
-      level: "error",
-      text: err?.message ?? String(err),
+  const instrumentedPages = new WeakSet();
+  const attachPageEvents = (targetPage) => {
+    if (!targetPage || instrumentedPages.has(targetPage)) return;
+    instrumentedPages.add(targetPage);
+    targetPage.on?.("console", (msg) => {
+      const level = typeof msg?.type === "function" ? msg.type() : String(msg?.type ?? "log");
+      const text = typeof msg?.text === "function" ? msg.text() : String(msg?.text ?? "");
+      pushRuntimeEvent(events, { type: "console", level, text });
     });
-  });
-  page.on("requestfailed", (request) => {
-    pushRuntimeEvent(events, {
-      type: "requestfailed",
-      level: "error",
-      text: request?.failure?.()?.errorText ?? "Request failed",
-      url: request?.url?.(),
-      method: request?.method?.(),
+    targetPage.on?.("pageerror", (err) => {
+      pushRuntimeEvent(events, {
+        type: "pageerror",
+        level: "error",
+        text: err?.message ?? String(err),
+      });
     });
-  });
-  page.on("response", (response) => {
-    const status = typeof response?.status === "function" ? response.status() : undefined;
-    if (typeof status !== "number" || status < 400) return;
-    const request = response.request?.();
-    pushRuntimeEvent(events, {
-      type: "response",
-      level: status >= 500 ? "error" : "warn",
-      text: `HTTP ${status}`,
-      url: response.url?.(),
-      method: request?.method?.(),
-      status,
+    targetPage.on?.("requestfailed", (request) => {
+      pushRuntimeEvent(events, {
+        type: "requestfailed",
+        level: "error",
+        text: request?.failure?.()?.errorText ?? "Request failed",
+        url: request?.url?.(),
+        method: request?.method?.(),
+      });
     });
-  });
+    targetPage.on?.("response", (response) => {
+      const status = typeof response?.status === "function" ? response.status() : undefined;
+      if (typeof status !== "number" || status < 400) return;
+      const request = response.request?.();
+      pushRuntimeEvent(events, {
+        type: "response",
+        level: status >= 500 ? "error" : "warn",
+        text: `HTTP ${status}`,
+        url: response.url?.(),
+        method: request?.method?.(),
+        status,
+      });
+    });
+    targetPage.on?.("close", () => {
+      if (targetPage !== page) return;
+      const openPages = typeof context.pages === "function"
+        ? context.pages().filter((candidate) => !isPageClosed(candidate))
+        : [];
+      if (openPages.length > 0) {
+        page = openPages[0];
+        attachPageEvents(page);
+        return;
+      }
+      context.newPage()
+        .then((nextPage) => {
+          page = nextPage;
+          attachPageEvents(nextPage);
+        })
+        .catch((err) => {
+          pushRuntimeEvent(events, {
+            type: "pageerror",
+            level: "error",
+            text: `Failed to reopen browser page after close: ${errorMessage(err)}`,
+          });
+        });
+    });
+  };
+  const ensurePage = async () => {
+    if (page && !isPageClosed(page)) {
+      attachPageEvents(page);
+      return page;
+    }
+    page = await selectInitialPage(context);
+    attachPageEvents(page);
+    return page;
+  };
+  attachPageEvents(page);
 
   const rl = createInterface({ input: process.stdin, crlfDelay: Infinity });
 
   const handlers = {
     navigate: async (params) => {
-      await page.goto(String(params.url || ""), { waitUntil: "domcontentloaded", timeout: 30000 });
+      await (await ensurePage()).goto(String(params.url || ""), { waitUntil: "domcontentloaded", timeout: 30000 });
       return null;
     },
     click: async (params) => {
-      await page.click(String(params.selector || ""));
+      await (await ensurePage()).click(String(params.selector || ""));
       return null;
     },
     typeText: async (params) => {
-      await page.fill(String(params.selector || ""), String(params.text || ""));
+      await (await ensurePage()).fill(String(params.selector || ""), String(params.text || ""));
       return null;
     },
     scroll: async (params) => {
       const x = Number(params.x || 0);
       const y = Number(params.y || 0);
-      await page.evaluate(([targetX, targetY]) => window.scrollTo(targetX, targetY), [x, y]);
+      await (await ensurePage()).evaluate(([targetX, targetY]) => window.scrollTo(targetX, targetY), [x, y]);
       return null;
     },
     select: async (params) => {
-      await page.selectOption(String(params.selector || ""), String(params.value || ""));
+      await (await ensurePage()).selectOption(String(params.selector || ""), String(params.value || ""));
       return null;
     },
     waitFor: async (params) => {
       const timeout = Number(params.timeoutMs || 10000);
-      await page.waitForSelector(String(params.selector || ""), { timeout });
+      await (await ensurePage()).waitForSelector(String(params.selector || ""), { timeout });
       return null;
     },
     screenshot: async (params) => {
@@ -184,10 +232,10 @@ async function main() {
         ? resolve(String(params.path))
         : resolve(process.cwd(), "artifacts", `browser-${Date.now()}.png`);
       await mkdir(dirname(outPath), { recursive: true });
-      await page.screenshot({ path: outPath, fullPage: true });
+      await (await ensurePage()).screenshot({ path: outPath, fullPage: true });
       return outPath;
     },
-    snapshot: async () => page.evaluate(() => {
+    snapshot: async () => (await ensurePage()).evaluate(() => {
       const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
       const bodyText = normalize(document.body?.innerText ?? "").slice(0, 12000);
       const title = document.title || "(untitled)";
@@ -336,7 +384,7 @@ async function main() {
         },
       };
     }),
-    getMetrics: async () => page.evaluate(() => {
+    getMetrics: async () => (await ensurePage()).evaluate(() => {
       const navEntries = performance.getEntriesByType("navigation");
       const nav = navEntries.length > 0 ? navEntries[0] : null;
       const paintEntries = performance.getEntriesByType("paint");
@@ -417,7 +465,7 @@ async function main() {
           : null,
       };
     }),
-    diagnose: async (params) => page.evaluate((targetSelector) => {
+    diagnose: async (params) => (await ensurePage()).evaluate((targetSelector) => {
       const normalize = (value) => String(value || "").replace(/\s+/g, " ").trim();
       const esc = (raw) => {
         if (typeof CSS !== "undefined" && typeof CSS.escape === "function") return CSS.escape(raw);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { buildNoVncViewerUrl, isNoVncViewerUrl, isWebSocketUrl, type NoVncResizeMode, type NoVncSessionOptions } from '@/lib/no-vnc'
+import { getApiUrl } from '@/lib/gateway-url'
 
 export interface NoVncSessionViewProps extends NoVncSessionOptions {
   source?: string | null
@@ -13,12 +14,17 @@ export function resolveNoVncSessionUrl(source: string | null | undefined, option
   const trimmed = source?.trim()
   if (!trimmed) return null
   if (isWebSocketUrl(trimmed)) {
-    return buildNoVncViewerUrl({ ...options, websocketUrl: trimmed })
+    return resolveGatewayRelativeUrl(buildNoVncViewerUrl({ ...options, websocketUrl: trimmed }))
   }
   if (isNoVncViewerUrl(trimmed)) {
-    return appendNoVncScaleParams(trimmed, options)
+    return appendNoVncScaleParams(resolveGatewayRelativeUrl(trimmed), options)
   }
   return trimmed
+}
+
+function resolveGatewayRelativeUrl(url: string): string {
+  if (!url.startsWith('/')) return url
+  return `${getApiUrl()}${url}`
 }
 
 /** Append scaling hash-params to an existing noVNC viewer URL so
@@ -60,7 +66,6 @@ export function NoVncSessionView({
   overlay,
   onLoad,
 }: NoVncSessionViewProps) {
-  const [reloadNonce, setReloadNonce] = useState(0)
   const src = resolveNoVncSessionUrl(source, {
     viewerUrl,
     websocketUrl,
@@ -84,21 +89,9 @@ export function NoVncSessionView({
   }
 
   return (
-    <ZoomPanWrapper
-      overlay={overlay}
-      controls={(
-        <button
-          type="button"
-          className="rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow backdrop-blur-sm transition-colors hover:bg-background hover:text-foreground"
-          onClick={() => setReloadNonce((current) => current + 1)}
-          title="Reload VNC preview"
-        >
-          Refresh
-        </button>
-      )}
-    >
+    <ZoomPanWrapper overlay={overlay}>
       <iframe
-        key={`${src}:${reloadNonce}`}
+        key={src}
         src={src}
         title={title}
         className={className}
@@ -319,7 +312,7 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
       />
       {/* Navigating hint — tells the user they need to click to interact */}
       {navigating && !isDragging ? (
-        <div className="pointer-events-none absolute inset-x-0 top-3 z-20 flex justify-center">
+        <div className="pointer-events-none absolute bottom-2 left-2 z-20">
           <span className="rounded-full bg-background/80 px-3 py-1 text-[11px] text-muted-foreground shadow backdrop-blur-sm">
             Scroll to zoom · Middle-drag to pan · Click to interact
           </span>

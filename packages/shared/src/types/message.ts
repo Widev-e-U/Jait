@@ -149,12 +149,15 @@ export type UIStateKey =
   | "screen-share.panel"
   | "terminal.panel"
   | "chat.mode"
+  | "chat.responseStyle"
   | "chat.providerRuntimeMode"
   | "chat.cliModels"
   | "chat.view"
   | "todo_list"
   | "changed_files"
   | "queued_messages";
+
+export type ResponseStyle = "normal" | "simple" | "caveman" | "caveman-ultra";
 
 /** Payload sent inside a `ui.state` client→server WS message */
 export interface UIStateUpdate {

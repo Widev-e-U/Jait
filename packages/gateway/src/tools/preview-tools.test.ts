@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { createBrowserSessionListTool, createBrowserSessionReturnControlTool } from "./browser-collaboration-tools.js";
-import { createPreviewInspectTool, createPreviewOpenTool } from "./preview-tools.js";
+import { createPreviewInspectTool, createPreviewOpenTool, createPreviewRestartTool } from "./preview-tools.js";
 import type { ToolContext } from "./contracts.js";
 
 describe("createPreviewOpenTool", () => {
@@ -286,6 +286,48 @@ describe("createPreviewInspectTool", () => {
       page: null,
       snapshot: null,
     });
+  });
+});
+
+describe("createPreviewRestartTool", () => {
+  it("syncs the browser collaboration record after restart", async () => {
+    const syncPreviewSession = vi.fn();
+    const restartedSession = {
+      id: "preview-session-1",
+      sessionId: "session-1",
+      workspaceRoot: "/workspace/app",
+      target: "http://127.0.0.1:5173/",
+      status: "ready",
+      url: "/noVNC/vnc_lite.html?path=api/live-view/38345/websockify",
+      mode: "url",
+      logs: [],
+      browserEvents: [],
+    };
+    const previewService = {
+      restart: vi.fn().mockResolvedValue(restartedSession),
+    };
+    const tool = createPreviewRestartTool(
+      previewService as any,
+      { syncPreviewSession } as any,
+    );
+
+    const result = await tool.execute({}, {
+      sessionId: "session-1",
+      actionId: "action-1",
+      workspaceRoot: "/workspace/app",
+      requestedBy: "assistant",
+      userId: "user-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect(syncPreviewSession).toHaveBeenCalledWith(
+      restartedSession,
+      {
+        userId: "user-1",
+        workspaceRoot: "/workspace/app",
+        mode: "shared",
+      },
+    );
   });
 });
 

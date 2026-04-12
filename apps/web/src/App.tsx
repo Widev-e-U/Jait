@@ -97,7 +97,7 @@ import { emitPreviewSession } from '@/lib/preview-events'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
-import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, WorkspaceUIState } from '@jait/shared'
+import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, WorkspaceUIState, ResponseStyle } from '@jait/shared'
 import { toast } from 'sonner'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { useConfiguredTheme } from '@/hooks/use-configured-theme'
@@ -192,6 +192,11 @@ function appendTranscript(prev: string, transcript: string): string {
   return normalizedPrev ? `${normalizedPrev} ${normalizedTranscript}` : normalizedTranscript
 }
 
+function getPersistablePreviewTarget(target?: string | null): string | null {
+  const trimmed = target?.trim() || ''
+  return trimmed && trimmed !== '__preview__' ? trimmed : null
+}
+
 function buildFileSelectionReferenceSegments(
   file: ReferencedFile,
   startLine: number,
@@ -205,15 +210,20 @@ function buildFileSelectionReferenceSegments(
 function buildTerminalSelectionReferenceSegments(
   terminal: UserTerminalReference,
   selection: string,
+  startLine?: number,
+  endLine?: number,
 ): UserMessageSegment[] {
   const lineCount = Math.max(1, selection.split(/\r?\n/).length)
+  const lineRange = startLine && endLine && endLine >= startLine
+    ? { startLine, endLine }
+    : { startLine: 1, endLine: lineCount }
   return [
     {
       type: 'terminal',
       terminalId: terminal.terminalId,
       name: terminal.name,
       ...(terminal.workspaceRoot ? { workspaceRoot: terminal.workspaceRoot } : {}),
-      lineRange: { startLine: 1, endLine: lineCount },
+      lineRange,
       selectedText: selection.trim(),
     },
   ]
@@ -250,9 +260,14 @@ type SavedQueuedMessage = QueuedChatMessage & {
   mode?: ChatMode
   provider?: string
   runtimeMode?: RuntimeMode
+  responseStyle?: ResponseStyle
   model?: string | null
   referencedFiles?: { path: string; name: string }[]
   displaySegments?: UserMessageSegment[]
+}
+
+function isResponseStyle(value: unknown): value is ResponseStyle {
+  return value === 'normal' || value === 'simple' || value === 'caveman' || value === 'caveman-ultra'
 }
 
 const suggestions = [
@@ -942,6 +957,7 @@ function App() {
   const floatingResizeCleanupRef = useRef<(() => void) | null>(null)
   const [approveAllInSession, setApproveAllInSession] = useState(false)
   const [chatMode, setChatMode] = useState<ChatMode>('agent')
+  const [chatResponseStyle, setChatResponseStyle] = useState<ResponseStyle>('normal')
   const [sendTarget, setSendTarget] = useState<SendTarget>('agent')
   const [chatProvider, setChatProvider] = useState<ProviderId>('jait')
   const [chatProviderRuntimeMode, setChatProviderRuntimeMode] = useState<RuntimeMode>('full-access')
@@ -1847,6 +1863,9 @@ function App() {
   const [, setSavedChatMode, loadingChatMode] = useSessionState<ChatMode>(
     activeSessionId, 'chat.mode', token,
   )
+  const [, setSavedChatResponseStyle, loadingChatResponseStyle] = useSessionState<ResponseStyle>(
+    activeSessionId, 'chat.responseStyle', token,
+  )
   const [, setSavedProviderRuntimeMode, loadingProviderRuntimeMode] = useSessionState<RuntimeMode>(
     activeSessionId, 'chat.providerRuntimeMode', token,
   )
@@ -1925,10 +1944,11 @@ function App() {
     // Apply dev preview
     const dp = ui.preview
     if (dp) {
-      const nextTarget = dp.target?.trim() || null
+      const nextTarget = getPersistablePreviewTarget(dp.target)
       if (nextTarget) setDevPreviewTarget(nextTarget)
-      setDevPreviewBrowserSessionId(dp.browserSessionId?.trim() || null)
-      if (dp.open && ui.panel?.open === true) {
+      const nextBrowserSessionId = dp.browserSessionId?.trim() || null
+      setDevPreviewBrowserSessionId(nextBrowserSessionId)
+      if (dp.open && ui.panel?.open === true && (nextTarget || nextBrowserSessionId)) {
         routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null, dp.browserSessionId ?? null)
       }
     }
@@ -2001,6 +2021,13 @@ function App() {
       case 'chat.mode':
         if (value === 'ask' || value === 'agent' || value === 'plan') {
           setChatMode(value)
+        }
+        break
+      case 'chat.responseStyle':
+        if (isResponseStyle(value)) {
+          setChatResponseStyle(value)
+        } else if (value === null) {
+          setChatResponseStyle('normal')
         }
         break
       case 'chat.providerRuntimeMode':
@@ -2081,6 +2108,13 @@ function App() {
     const cm = state['chat.mode']
     if (cm === 'ask' || cm === 'agent' || cm === 'plan') {
       setChatMode(cm)
+    }
+
+    const crs = state['chat.responseStyle']
+    if (isResponseStyle(crs)) {
+      setChatResponseStyle(crs)
+    } else {
+      setChatResponseStyle('normal')
     }
 
     const cprm = state['chat.providerRuntimeMode']
@@ -2340,6 +2374,16 @@ function App() {
     sendUIState('chat.mode', chatMode, activeSessionId)
   }, [chatMode, setSavedChatMode, sendUIState, activeSessionId, loadingChatMode, token, consumeSuppressedUiSync])
 
+  const prevChatResponseStylePayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeSessionId && token && loadingChatResponseStyle) return
+    if (chatResponseStyle === prevChatResponseStylePayloadRef.current) return
+    prevChatResponseStylePayloadRef.current = chatResponseStyle
+    setSavedChatResponseStyle(chatResponseStyle)
+    if (consumeSuppressedUiSync('chat.responseStyle')) return
+    sendUIState('chat.responseStyle', chatResponseStyle, activeSessionId)
+  }, [chatResponseStyle, setSavedChatResponseStyle, sendUIState, activeSessionId, loadingChatResponseStyle, token, consumeSuppressedUiSync])
+
   const prevProviderRuntimeModePayloadRef = useRef<string | null>(null)
   useEffect(() => {
     if (activeSessionId && token && loadingProviderRuntimeMode) return
@@ -2392,6 +2436,10 @@ function App() {
 
   const handleChatProviderChange = useCallback((provider: ProviderId) => {
     setChatProvider(provider)
+  }, [])
+
+  const handleChatResponseStyleChange = useCallback((style: ResponseStyle) => {
+    setChatResponseStyle(style)
   }, [])
 
   const handleChatProviderRuntimeModeChange = useCallback((runtimeMode: RuntimeMode) => {
@@ -2486,7 +2534,8 @@ function App() {
   const prevPreviewSyncRef = useRef<string>('')
   const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null; browserSessionId?: string | null }) => {
     const nextBrowserSessionId = state.browserSessionId?.trim() || null
-    const resolvedDisplayTarget = state.target?.trim() || resolveBrowserSessionPreviewTarget(nextBrowserSessionId) || null
+    const persistedTarget = getPersistablePreviewTarget(state.target)
+    const resolvedDisplayTarget = persistedTarget || resolveBrowserSessionPreviewTarget(nextBrowserSessionId) || null
     const displayState: DevPreviewPanelState['displayState'] = !state.open
       ? 'hidden'
       : (resolvedDisplayTarget || nextBrowserSessionId)
@@ -2510,7 +2559,7 @@ function App() {
       ) return prev
       return nextPreviewState
     })
-    if (state.open) {
+    if (state.open && (resolvedDisplayTarget || nextBrowserSessionId)) {
       const nextState: DevPreviewPanelState = {
         open: true,
         target: resolvedDisplayTarget ?? devPreviewTarget ?? null,
@@ -3219,7 +3268,7 @@ function App() {
     promptInputRef.current?.focus()
   }, [])
 
-  const handleReferenceTerminalSelection = useCallback((terminalId: string, selection: string, workspaceRoot?: string | null) => {
+  const handleReferenceTerminalSelection = useCallback((terminalId: string, selection: string, workspaceRoot?: string | null, startLine?: number, endLine?: number) => {
     const trimmed = selection.trim()
     if (!trimmed) return
     const name = terminalId.replace(/^term-/, '').slice(0, 8) || terminalId
@@ -3227,7 +3276,7 @@ function App() {
       terminalId,
       name,
       ...(workspaceRoot ? { workspaceRoot } : {}),
-    }, trimmed))
+    }, trimmed, startLine, endLine))
     promptInputRef.current?.focus()
   }, [])
 
@@ -3594,6 +3643,7 @@ function App() {
       mode: chatMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      responseStyle: chatResponseStyle,
       model: cliModel ?? undefined,
       referencedFiles: prepared.referencedFiles,
       displaySegments: nextDisplaySegments,
@@ -3601,7 +3651,7 @@ function App() {
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [chatMode, chatProvider, chatProviderRuntimeMode, cliModel, enqueueMessage, inputValue, preparePromptSubmission])
+  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatResponseStyle, cliModel, enqueueMessage, inputValue, preparePromptSubmission])
 
   const ensureSessionTitle = useCallback(async (sessionId: string, prompt: string) => {
     if (!shouldAutoTitleSession(activeSessionRecord?.name)) return
@@ -3649,6 +3699,7 @@ function App() {
         mode: chatMode,
         provider: chatProvider,
         runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+        responseStyle: chatResponseStyle,
         model: cliModel ?? undefined,
         referencedFiles: prepared?.referencedFiles,
         displaySegments: nextDisplaySegments,
@@ -3665,6 +3716,7 @@ function App() {
       mode: chatMode,
       provider: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+      responseStyle: chatResponseStyle,
       model: cliModel ?? undefined,
       onLoginRequired: () => setShowLoginDialog(true),
       attachments: fileAttachments,
@@ -3713,11 +3765,12 @@ function App() {
     void Promise.resolve(sendMessage(nextItem.content, {
       token,
       sessionId: activeSessionId,
-      mode: nextItem.mode,
-      provider: nextItem.provider,
-      runtimeMode: nextItem.runtimeMode,
-      model: nextItem.model,
-      onLoginRequired: () => setShowLoginDialog(true),
+        mode: nextItem.mode,
+        provider: nextItem.provider,
+        runtimeMode: nextItem.runtimeMode,
+        responseStyle: nextItem.responseStyle,
+        model: nextItem.model,
+        onLoginRequired: () => setShowLoginDialog(true),
       ...(nextItem.attachments?.length ? { attachments: nextItem.attachments } : {}),
       ...(nextItem.displayContent ? { displayContent: nextItem.displayContent } : {}),
       ...(nextItem.referencedFiles?.length ? { referencedFiles: nextItem.referencedFiles } : {}),
@@ -3729,6 +3782,7 @@ function App() {
         mode: nextItem.mode,
         provider: nextItem.provider,
         runtimeMode: nextItem.runtimeMode,
+        responseStyle: nextItem.responseStyle,
         model: nextItem.model,
         referencedFiles: nextItem.referencedFiles,
         displaySegments: nextItem.displaySegments,
@@ -5890,6 +5944,8 @@ function App() {
                     onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                     mode={chatMode}
                     onModeChange={setChatMode}
+                    responseStyle={chatResponseStyle}
+                    onResponseStyleChange={handleChatResponseStyleChange}
                     sendTarget={sendTarget}
                     onSendTargetChange={setSendTarget}
                     provider={chatProvider}
@@ -6059,6 +6115,8 @@ function App() {
                       onVoiceStop={() => { void stopRecordingAndTranscribe() }}
                       mode={chatMode}
                       onModeChange={setChatMode}
+                      responseStyle={chatResponseStyle}
+                      onResponseStyleChange={handleChatResponseStyleChange}
                       sendTarget={sendTarget}
                       onSendTargetChange={setSendTarget}
                       provider={chatProvider}

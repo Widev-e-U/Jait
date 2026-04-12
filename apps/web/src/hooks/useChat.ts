@@ -7,6 +7,7 @@ import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getToolFilePath } from '@/lib/tool-call-body'
 import type { RuntimeMode } from '@/lib/agents-api'
+import type { ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
   parseUserMessageSegments,
@@ -155,6 +156,7 @@ interface SendMessageOptions {
   /** CLI provider to use for this message (jait, codex, claude-code) */
   provider?: string
   runtimeMode?: RuntimeMode
+  responseStyle?: ResponseStyle
   /** Model override for CLI providers */
   model?: string | null
   /** Clean display text for user message (without file contents appended) */
@@ -172,6 +174,7 @@ interface SendMessageOptions {
 interface QueuedChatMessage extends QueuedMessage {
   provider?: string
   runtimeMode?: RuntimeMode
+  responseStyle?: ResponseStyle
   model?: string | null
   mode?: ChatMode
   referencedFiles?: { path: string; name: string }[]
@@ -691,6 +694,7 @@ export function useChat(
         ...(options.mode && options.mode !== 'agent' ? { mode: options.mode } : {}),
         ...(options.provider && options.provider !== 'jait' ? { provider: options.provider } : {}),
         ...(options.provider && options.provider !== 'jait' && options.runtimeMode ? { runtimeMode: options.runtimeMode } : {}),
+        ...(options.responseStyle && options.responseStyle !== 'normal' ? { responseStyle: options.responseStyle } : {}),
         ...(options.model ? { model: options.model } : {}),
         ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
         ...(options.attachments?.length ? { attachments: options.attachments.map((a) => ({ name: a.name, mimeType: a.mimeType, data: a.data })) } : {}),

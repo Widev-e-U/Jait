@@ -65,7 +65,7 @@ export function ReadOnlyDiffView({
     scrollBeyondLastLine: false,
     renderOverviewRuler: true,
     ignoreTrimWhitespace: false,
-    ...(options ?? {}),
+    ...options,
   }), [options, renderSideBySide])
 
   const syncChanges = useCallback(() => {
@@ -133,7 +133,7 @@ export function ReadOnlyDiffView({
   useEffect(() => {
     const editor = editorRef.current
     const monaco = monacoRef.current
-    if (!editor || !monaco) return
+    if (!isReady || !editor || !monaco) return
 
     const previous = explicitModelsRef.current
     const originalUri = monaco.Uri.parse(`${modelPathBase}.original`)
@@ -161,7 +161,7 @@ export function ReadOnlyDiffView({
         explicitModelsRef.current = { original: null, modified: null }
       }
     }
-  }, [language, modelPathBase, modified, original, syncChanges])
+  }, [isReady, language, modelPathBase, modified, original, syncChanges])
 
   useEffect(() => {
     const monaco = monacoRef.current

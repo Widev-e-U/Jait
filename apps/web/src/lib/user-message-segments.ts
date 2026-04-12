@@ -222,10 +222,10 @@ export function serializeUserMessageSegmentsToMarkdown(segments: UserMessageSegm
 }
 
 export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[] {
-  if (!markdown.includes('@')) return []
+  if (!markdown.includes('@') && !markdown.includes('[terminal:') && !markdown.includes('[workspace:')) return []
 
   const segments: UserMessageSegment[] = []
-  const pattern = /(^|[\s(])@([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)(?=$|[\s),:;!?])/g
+  const pattern = /(^|[\s(])(?:@([A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)*)(#L\d+(?:-L\d+)?)?|\[terminal:([A-Za-z0-9._:-]+)(#L\d+(?:-L\d+)?)?\]|\[workspace:([^\]]+)\])/g
   let lastIndex = 0
 
   for (const match of markdown.matchAll(pattern)) {
@@ -234,13 +234,23 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
     const full = match[0] ?? ''
     const prefix = match[1] ?? ''
     const path = match[2]?.trim()
+    const fileLineRange = parseLineRangeSuffix(match[3])
+    const terminalId = match[4]?.trim()
+    const terminalLineRange = parseLineRangeSuffix(match[5])
+    const workspacePath = match[6]?.trim()
     const pathStart = index + prefix.length
     if (pathStart > lastIndex) {
       segments.push({ type: 'text', text: markdown.slice(lastIndex, pathStart) })
     }
     if (path) {
-      segments.push({ type: 'file', path, name: path.split('/').pop() || path })
-      lastIndex = pathStart + 1 + path.length
+      segments.push({ type: 'file', path, name: path.split('/').pop() || path, ...(fileLineRange ? { lineRange: fileLineRange } : {}) })
+      lastIndex = pathStart + 1 + path.length + (match[3]?.length ?? 0)
+    } else if (terminalId) {
+      segments.push({ type: 'terminal', terminalId, name: terminalId, ...(terminalLineRange ? { lineRange: terminalLineRange } : {}) })
+      lastIndex = index + full.length
+    } else if (workspacePath) {
+      segments.push({ type: 'workspace', path: workspacePath, name: workspacePath.split(/[\\/]/).pop() || workspacePath })
+      lastIndex = index + full.length
     } else {
       segments.push({ type: 'text', text: full })
       lastIndex = index + full.length
@@ -252,7 +262,7 @@ export function parseUserMessageMarkdown(markdown: string): UserMessageSegment[]
   }
 
   const normalized = normalizeUserMessageSegments(segments)
-  return normalized.some((segment) => segment.type === 'file') ? normalized : []
+  return normalized.some((segment) => segment.type === 'file' || segment.type === 'workspace' || segment.type === 'terminal') ? normalized : []
 }
 
 export function serializeUserMessageSegmentsForClipboard(segments: UserMessageSegment[] | null | undefined): string | null {
@@ -366,4 +376,13 @@ function parseLineRangeRecord(record: Record<string, unknown>): UserLineRange | 
     startLine: typeof range.startLine === 'number' ? range.startLine : Number.NaN,
     endLine: typeof range.endLine === 'number' ? range.endLine : Number.NaN,
   })
+}
+
+function parseLineRangeSuffix(suffix: string | null | undefined): UserLineRange | null {
+  if (!suffix) return null
+  const match = suffix.match(/^#L(\d+)(?:-L(\d+))?$/)
+  if (!match) return null
+  const startLine = Number.parseInt(match[1] ?? '', 10)
+  const endLine = match[2] ? Number.parseInt(match[2], 10) : startLine
+  return normalizeLineRange({ startLine, endLine })
 }
