@@ -1,4 +1,5 @@
 import { Bot, GitBranch } from 'lucide-react'
+import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
 
 export type SendTarget = 'agent' | 'thread'
@@ -32,6 +33,8 @@ const TARGETS: Array<{
 ]
 
 export function SendTargetSelector({ target, onChange, disabled, className, compact = false }: SendTargetSelectorProps) {
+  const isMobile = useIsMobile()
+  const iconOnly = compact || isMobile
   const activeIndex = TARGETS.findIndex((entry) => entry.value === target)
   const safeActiveIndex = activeIndex >= 0 ? activeIndex : 0
 
@@ -68,11 +71,11 @@ export function SendTargetSelector({ target, onChange, disabled, className, comp
               'relative z-10 flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium',
               'transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-              compact ? 'w-9' : 'min-w-[5.25rem]',
+              iconOnly ? 'w-9' : 'min-w-[5.25rem]',
             )}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />
-            {!compact && <span>{entry.label}</span>}
+            {!iconOnly && <span>{entry.label}</span>}
           </button>
         )
       })}
