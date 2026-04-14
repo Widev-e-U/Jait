@@ -6003,12 +6003,6 @@ function App() {
                             showTitle={false}
                             triggerLabel="History"
                           />
-                          <button
-                            onClick={handleStartNewChat}
-                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                          >
-                            New chat
-                          </button>
                         </div>
                         <SendTargetSelector
                           target={sendTarget}
@@ -6016,7 +6010,14 @@ function App() {
                           disabled={isLoading}
                           className="justify-self-center"
                         />
-                        <div />
+                        <div className="flex shrink-0 items-center justify-self-end gap-2">
+                          <button
+                            onClick={handleStartNewChat}
+                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                          >
+                            New chat
+                          </button>
+                        </div>
                       </div>
                     </div>
                   )}
@@ -6193,14 +6194,6 @@ function App() {
                               triggerLabel="History"
                             />
                           )}
-                          {viewMode === 'developer' && (
-                            <button
-                              onClick={handleStartNewChat}
-                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                            >
-                              New chat
-                            </button>
-                          )}
                           {approveAllInSession && (
                             <>
                               <span className="text-[11px] text-green-600 dark:text-green-400 truncate">
@@ -6225,6 +6218,14 @@ function App() {
                           )}
                         </div>
                         <div className="flex shrink-0 items-center justify-self-end gap-2">
+                          {viewMode === 'developer' && (
+                            <button
+                              onClick={handleStartNewChat}
+                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                            >
+                              New chat
+                            </button>
+                          )}
                           {(viewMode as string) === 'manager' && (
                             <button
                               onClick={() => automation.setSelectedThreadId(null)}
