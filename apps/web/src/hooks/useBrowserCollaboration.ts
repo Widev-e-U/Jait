@@ -2,6 +2,14 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { toast } from 'sonner'
 import { browserCollaborationApi, type BrowserIntervention, type BrowserSession } from '@/lib/browser-collaboration-api'
 
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    const message = error.message.trim()
+    if (message) return message
+  }
+  return 'Failed to refresh browser collaboration state'
+}
+
 export function useBrowserCollaboration(token?: string | null, enabled = true) {
   const [sessions, setSessions] = useState<BrowserSession[]>([])
   const [interventions, setInterventions] = useState<BrowserIntervention[]>([])
@@ -23,8 +31,9 @@ export function useBrowserCollaboration(token?: string | null, enabled = true) {
       setSessions(sessionRes.sessions)
       setInterventions(interventionRes.interventions)
     } catch (error) {
-      const message = error instanceof Error ? error.message : 'Failed to refresh browser collaboration state'
-      toast.error(message)
+      if (wsConnectedRef.current) {
+        toast.error(getErrorMessage(error))
+      }
     } finally {
       setLoading(false)
     }

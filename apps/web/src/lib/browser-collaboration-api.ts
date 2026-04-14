@@ -56,8 +56,13 @@ function headers(token?: string | null, withJsonBody = false): HeadersInit {
 
 async function parseJson<T>(res: Response): Promise<T> {
   if (!res.ok) {
-    const error = await res.json().catch(() => ({ error: res.statusText }))
-    throw new Error((error as { error?: string; detail?: string }).error ?? (error as { detail?: string }).detail ?? res.statusText)
+    const fallbackMessage = (res.statusText || '').trim() || `Request failed (HTTP ${res.status})`
+    const error = await res.json().catch(() => ({ error: fallbackMessage }))
+    throw new Error(
+      (error as { error?: string; detail?: string }).error?.trim()
+      || (error as { detail?: string }).detail?.trim()
+      || fallbackMessage,
+    )
   }
   return await res.json() as T
 }

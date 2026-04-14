@@ -4101,6 +4101,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     else if (showTreeProp && treeTabProp === 'git') setMobileTab('git')
     else if (showEditorProp && !showTreeProp) setMobileTab('editor')
   }, [isMobile, treeTabProp, showTreeProp, showEditorProp])
+  useEffect(() => {
+    if (!isMobile) return
+    if (!showEditorProp) return
+    if (activeTab?.type !== 'diff') return
+    setMobileTab('editor')
+  }, [activeTab?.id, activeTab?.type, isMobile, showEditorProp])
   const stagedFiles = gitStatus?.index.files ?? []
   const workingTreeFiles = useMemo(() => {
     const statusFiles = gitStatus?.workingTree.files ?? []

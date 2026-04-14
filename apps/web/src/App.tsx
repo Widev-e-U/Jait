@@ -197,6 +197,12 @@ function getPersistablePreviewTarget(target?: string | null): string | null {
   return trimmed && trimmed !== '__preview__' ? trimmed : null
 }
 
+function getNonEmptyMessage(value: unknown, fallback: string): string {
+  if (typeof value !== 'string') return fallback
+  const trimmed = value.trim()
+  return trimmed || fallback
+}
+
 function buildFileSelectionReferenceSegments(
   file: ReferencedFile,
   startLine: number,
@@ -1403,7 +1409,7 @@ function App() {
         toast.success(`Updated to v${updateInfo.latestVersion}. Gateway is restarting...`)
       } else {
         const data = await res.json().catch(() => ({}))
-        toast.error((data as any).error ?? 'Update failed')
+        toast.error(getNonEmptyMessage((data as any).error, 'Update failed'))
       }
     } catch { toast.error('Update request failed') }
     setUpdateApplying(false)
@@ -3788,7 +3794,7 @@ function App() {
         displaySegments: nextItem.displaySegments,
         attachments: nextItem.attachments,
       })
-      toast.error(err instanceof Error ? err.message : 'Failed to send queued message')
+      toast.error(getNonEmptyMessage(err instanceof Error ? err.message : null, 'Failed to send queued message'))
     }).finally(() => {
       chatQueueProcessingRef.current = false
     })
@@ -6143,9 +6149,9 @@ function App() {
                       sessionInfo={sessionInfo}
                       workspaceNodeId={activeWorkspace?.nodeId}
                     />
-                    <div className="flex items-center justify-between gap-2 px-1">
-                      <div className="flex items-center gap-2 min-w-0">
-                        {viewMode === 'developer' && (
+                    <div className="px-1">
+                      {isMobile && viewMode === 'developer' && (
+                        <div className="mb-1.5 flex items-center justify-start">
                           <SessionSwitcher
                             sessions={activeWorkspaceSessions}
                             activeSessionId={activeSessionId}
@@ -6156,42 +6162,60 @@ function App() {
                             showTitle={false}
                             triggerLabel="History"
                           />
-                        )}
-                        <button onClick={() => {
-                          clearMessages()
-                          if (!activeWorkspaceId) {
-                            promptForWorkspaceSelection()
-                            return
-                          }
-                          void createSession()
-                        }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                          New chat
-                        </button>
-                        {(viewMode as string) === 'manager' && (
-                          <button
-                            onClick={() => automation.setSelectedThreadId(null)}
-                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                          >
-                            New thread
-                          </button>
-                        )}
-                        {approveAllInSession && (
-                          <>
-                            <span className="text-[11px] text-green-600 dark:text-green-400 truncate">
-                              Approved all commands for this session
-                            </span>
+                        </div>
+                      )}
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex min-w-0 items-center gap-2">
+                          {!isMobile && viewMode === 'developer' && (
+                            <SessionSwitcher
+                              sessions={activeWorkspaceSessions}
+                              activeSessionId={activeSessionId}
+                              workspaceTitle={activeWorkspaceRecord?.title ?? null}
+                              onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                              onNewSession={() => { void createSession() }}
+                              onOpenChange={handleSessionSwitcherOpen}
+                              showTitle={false}
+                              triggerLabel="History"
+                            />
+                          )}
+                          {approveAllInSession && (
+                            <>
+                              <span className="text-[11px] text-green-600 dark:text-green-400 truncate">
+                                Approved all commands for this session
+                              </span>
+                              <button
+                                onClick={handleClearApproveAll}
+                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                              >
+                                Clear approve all
+                              </button>
+                            </>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {(viewMode as string) === 'manager' && (
                             <button
-                              onClick={handleClearApproveAll}
+                              onClick={() => automation.setSelectedThreadId(null)}
                               className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
                             >
-                              Clear approve all
+                              New thread
                             </button>
-                          </>
-                        )}
+                          )}
+                          <button onClick={() => {
+                            clearMessages()
+                            if (!activeWorkspaceId) {
+                              promptForWorkspaceSelection()
+                              return
+                            }
+                            void createSession()
+                          }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
+                            New chat
+                          </button>
+                          {remainingPrompts !== null && (
+                            <span className="text-[11px] text-muted-foreground shrink-0">{remainingPrompts} remaining</span>
+                          )}
+                        </div>
                       </div>
-                      {remainingPrompts !== null && (
-                        <span className="text-[11px] text-muted-foreground shrink-0">{remainingPrompts} remaining</span>
-                      )}
                     </div>
                   </div>
                 </div>

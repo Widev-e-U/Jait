@@ -14,11 +14,30 @@ function hashCode(s: string): number {
   return h
 }
 
+export function normalizeSystemNotification(input: SystemNotificationInput): (SystemNotificationInput & {
+  title: string
+  body: string
+}) | null {
+  const rawTitle = input.title.trim()
+  const rawBody = input.body.trim()
+  if (!rawTitle && !rawBody) return null
+  const title = rawTitle || rawBody
+  const body = rawTitle ? rawBody : ''
+  return {
+    ...input,
+    title,
+    body,
+  }
+}
+
 export async function triggerSystemNotification(input: SystemNotificationInput): Promise<void> {
+  const normalized = normalizeSystemNotification(input)
+  if (!normalized) return
+
   const notif = {
     level: 'info' as const,
     includeToast: true,
-    ...input,
+    ...normalized,
   }
   const capacitorLocalNotifications = (window.Capacitor as {
     Plugins?: {
