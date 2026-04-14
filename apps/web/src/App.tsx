@@ -5991,28 +5991,32 @@ function App() {
                   />
                   {viewMode === 'developer' && (
                     <div className="overflow-x-auto px-1">
-                      <div className="flex min-w-max items-center gap-2 whitespace-nowrap">
-                        <SessionSwitcher
-                          sessions={activeWorkspaceSessions}
-                          activeSessionId={activeSessionId}
-                          workspaceTitle={activeWorkspaceRecord?.title ?? null}
-                          onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
-                          onNewSession={() => { void createSession() }}
-                          onOpenChange={handleSessionSwitcherOpen}
-                          showTitle={false}
-                          triggerLabel="History"
-                        />
-                        <button
-                          onClick={handleStartNewChat}
-                          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                        >
-                          New chat
-                        </button>
+                      <div className="grid min-w-max grid-cols-[1fr_auto_1fr] items-center gap-2 whitespace-nowrap">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <SessionSwitcher
+                            sessions={activeWorkspaceSessions}
+                            activeSessionId={activeSessionId}
+                            workspaceTitle={activeWorkspaceRecord?.title ?? null}
+                            onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                            onNewSession={() => { void createSession() }}
+                            onOpenChange={handleSessionSwitcherOpen}
+                            showTitle={false}
+                            triggerLabel="History"
+                          />
+                          <button
+                            onClick={handleStartNewChat}
+                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                          >
+                            New chat
+                          </button>
+                        </div>
                         <SendTargetSelector
                           target={sendTarget}
                           onChange={setSendTarget}
                           disabled={isLoading}
+                          className="justify-self-center"
                         />
+                        <div />
                       </div>
                     </div>
                   )}
@@ -6175,7 +6179,7 @@ function App() {
                       workspaceNodeId={activeWorkspace?.nodeId}
                     />
                     <div className="overflow-x-auto px-1">
-                      <div className="flex min-w-max items-center justify-between gap-3 whitespace-nowrap">
+                      <div className="grid min-w-max grid-cols-[1fr_auto_1fr] items-center gap-3 whitespace-nowrap">
                         <div className="flex min-w-0 items-center gap-2">
                           {viewMode === 'developer' && (
                             <SessionSwitcher
@@ -6188,6 +6192,14 @@ function App() {
                               showTitle={false}
                               triggerLabel="History"
                             />
+                          )}
+                          {viewMode === 'developer' && (
+                            <button
+                              onClick={handleStartNewChat}
+                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                            >
+                              New chat
+                            </button>
                           )}
                           {approveAllInSession && (
                             <>
@@ -6203,15 +6215,7 @@ function App() {
                             </>
                           )}
                         </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          {viewMode === 'developer' && (
-                            <button
-                              onClick={handleStartNewChat}
-                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                            >
-                              New chat
-                            </button>
-                          )}
+                        <div className="justify-self-center">
                           {viewMode === 'developer' && (
                             <SendTargetSelector
                               target={sendTarget}
@@ -6219,6 +6223,8 @@ function App() {
                               disabled={isLoading}
                             />
                           )}
+                        </div>
+                        <div className="flex shrink-0 items-center justify-self-end gap-2">
                           {(viewMode as string) === 'manager' && (
                             <button
                               onClick={() => automation.setSelectedThreadId(null)}
