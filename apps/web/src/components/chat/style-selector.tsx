@@ -1,4 +1,4 @@
-import { Check, ChevronDown, Feather, MessageSquareText, Zap } from 'lucide-react'
+import { Check, ChevronDown, Dumbbell, Feather, MessageSquareText } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -37,13 +37,13 @@ const STYLES: Array<{
   {
     value: 'caveman',
     label: 'Caveman',
-    icon: Zap,
+    icon: Dumbbell,
     description: 'Terse fragments, minimal filler, exact technical meaning.',
   },
   {
     value: 'caveman-ultra',
     label: 'Caveman Ultra',
-    icon: Zap,
+    icon: Dumbbell,
     description: 'Maximum compression. Use when shortness matters most.',
   },
 ]

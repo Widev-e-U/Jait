@@ -1514,6 +1514,14 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         {hasFooterControls && (
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
+              {showResponseStyleSelector && (
+                <StyleSelector
+                  value={responseStyle!}
+                  onChange={onResponseStyleChange!}
+                  disabled={selectorsDisabled}
+                  compact={compactFooterControls}
+                />
+              )}
               {footerLeadingContent}
               {showProviderModelSelector && (
                 <ProviderModelSelector
@@ -1534,14 +1542,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   provider={provider!}
                   value={providerRuntimeMode!}
                   onChange={onProviderRuntimeModeChange!}
-                  disabled={selectorsDisabled}
-                  compact={compactFooterControls}
-                />
-              )}
-              {showResponseStyleSelector && (
-                <StyleSelector
-                  value={responseStyle!}
-                  onChange={onResponseStyleChange!}
                   disabled={selectorsDisabled}
                   compact={compactFooterControls}
                 />
