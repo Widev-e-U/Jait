@@ -193,6 +193,20 @@ function appendTranscript(prev: string, transcript: string): string {
   return normalizedPrev ? `${normalizedPrev} ${normalizedTranscript}` : normalizedTranscript
 }
 
+function summarizeForVoice(text: string, maxLength = 220): string {
+  const normalized = text
+    .replace(/```[\s\S]*?```/g, ' code omitted ')
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/[#>*_~-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+  if (!normalized) return ''
+  const firstSentence = normalized.match(/[^.!?]+[.!?]/)?.[0]?.trim() ?? normalized
+  if (firstSentence.length <= maxLength) return firstSentence
+  return `${firstSentence.slice(0, maxLength - 1).trimEnd()}…`
+}
+
 function getPersistablePreviewTarget(target?: string | null): string | null {
   const trimmed = target?.trim() || ''
   return trimmed && trimmed !== '__preview__' ? trimmed : null
@@ -1761,6 +1775,34 @@ function App() {
   }, [activeSessionId, chatCompletionSignal, isLoading, isLoadingHistory, messageQueue.length])
 
   useEffect(() => {
+    const announceThreadResult = async (completedThread: AgentThread) => {
+      try {
+        const activities = await agentsApi.getActivities(completedThread.id, 40)
+        const lastAssistantActivity = [...activities].reverse().find((activity) => {
+          if (activity.kind !== 'message') return false
+          const payload = (activity.payload ?? {}) as Record<string, unknown>
+          return payload.role === 'assistant' && (typeof payload.content === 'string' || typeof activity.summary === 'string')
+        })
+
+        const payload = (lastAssistantActivity?.payload ?? {}) as Record<string, unknown>
+        const assistantText = typeof payload.content === 'string'
+          ? payload.content
+          : (lastAssistantActivity?.summary ?? '')
+        const summary = summarizeForVoice(assistantText)
+        const spokenUpdate = summary
+          ? `${completedThread.title} finished. ${summary}`
+          : completedThread.status === 'completed'
+            ? `${completedThread.title} finished successfully.`
+            : `${completedThread.title} finished with status ${completedThread.status}.`
+        voiceAssistant.announce(spokenUpdate)
+      } catch {
+        const fallback = completedThread.status === 'completed'
+          ? `${completedThread.title} finished successfully.`
+          : `${completedThread.title} finished with status ${completedThread.status}.`
+        voiceAssistant.announce(fallback)
+      }
+    }
+
     const nextStatuses: Record<string, ThreadStatus> = {}
     const activeThreadIds = new Set<string>()
 
@@ -1804,6 +1846,10 @@ function App() {
           level: completedThread.status === 'completed' ? 'success' : 'warning',
           includeToast: false,
         })
+
+        if (voiceOverlayOpen) {
+          void announceThreadResult(completedThread)
+        }
       }
     }
 
@@ -1814,7 +1860,7 @@ function App() {
     }
 
     previousThreadStatusesRef.current = nextStatuses
-  }, [automation.threads, managerMessageQueues])
+  }, [automation.threads, managerMessageQueues, voiceAssistant, voiceOverlayOpen])
 
   const handleCancelRequest = useCallback(() => {
     suppressNextChatNotificationRef.current = true

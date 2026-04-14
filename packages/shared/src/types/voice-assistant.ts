@@ -37,6 +37,8 @@ export const VOICE_ASSISTANT_INITIAL_STATE: VoiceAssistantState = {
 export type VoiceClientMessage =
   | { type: "audio"; data: string }          // base64 PCM16 24kHz mono
   | { type: "commit" }                        // force commit current audio buffer
+  | { type: "interrupt" }                     // user barged in — cancel assistant speech
+  | { type: "announce"; text: string }        // ask current voice session to report an update
   | { type: "stop" };                         // end session
 
 /** Messages the gateway sends to the browser. */

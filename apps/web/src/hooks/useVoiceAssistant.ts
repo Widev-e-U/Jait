@@ -123,6 +123,7 @@ export interface UseVoiceAssistantReturn extends VoiceAssistantState {
   connect: () => Promise<void>
   disconnect: () => void
   toggleMic: () => void
+  announce: (text: string) => void
 }
 
 export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAssistantReturn {
@@ -166,6 +167,23 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
   const updateStatus = useCallback((status: VoiceAssistantState['status']) => {
     setState(prev => ({ ...prev, status }))
     onStatusChangeRef.current?.(status)
+  }, [])
+
+  const sendInterrupt = useCallback(() => {
+    const ws = wsRef.current
+    if (!ws || ws.readyState !== WebSocket.OPEN) return
+    try {
+      ws.send(JSON.stringify({ type: 'interrupt' }))
+    } catch {}
+  }, [])
+
+  const announce = useCallback((text: string) => {
+    const normalized = text.trim()
+    const ws = wsRef.current
+    if (!normalized || !ws || ws.readyState !== WebSocket.OPEN) return
+    try {
+      ws.send(JSON.stringify({ type: 'announce', text: normalized }))
+    } catch {}
   }, [])
 
   // ── Instant local playback cutoff (no server round-trip) ───
@@ -480,6 +498,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
         if (consecutiveFrames >= FRAMES_NEEDED) {
           // User is speaking — kill playback immediately
           cutPlaybackNow()
+          sendInterrupt()
           setState(prev => prev.assistantSpeaking ? { ...prev, assistantSpeaking: false } : prev)
           return // stop the loop
         }
@@ -493,7 +512,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
       cancelAnimationFrame(speechDetectRafRef.current)
       speechDetectRafRef.current = 0
     }
-  }, [state.assistantSpeaking, state.micActive, cutPlaybackNow])
+  }, [state.assistantSpeaking, state.micActive, cutPlaybackNow, sendInterrupt])
 
   // Cleanup on unmount
   useEffect(() => {
@@ -510,5 +529,6 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
     connect,
     disconnect,
     toggleMic,
+    announce,
   }
 }

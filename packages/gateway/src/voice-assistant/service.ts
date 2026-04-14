@@ -15,6 +15,11 @@ import type { Duplex } from "node:stream";
 import type { VoiceClientMessage, VoiceServerMessage } from "@jait/shared";
 import { getVoiceToolSchemas, executeVoiceTool, type VoiceToolDeps } from "./tools.js";
 
+type RuntimeVoiceClientMessage =
+  | VoiceClientMessage
+  | { type: "interrupt" }
+  | { type: "announce"; text: string };
+
 export interface VoiceAssistantServiceDeps extends VoiceToolDeps {
   /** Verify a JWT token → return user info or null. */
   verifyToken: (token: string) => Promise<{ id: string; username: string } | null>;
@@ -86,6 +91,26 @@ export class VoiceAssistantService {
     let openaiReady = false;
     let responseInProgress = false;
     let pendingToolResponse = false;
+    let suppressAssistantAudio = false;
+    const pendingAnnouncements: string[] = [];
+
+    const flushNextAnnouncement = () => {
+      if (responseInProgress) return;
+      const nextAnnouncement = pendingAnnouncements.shift();
+      if (!nextAnnouncement) return;
+      openaiWs.send(JSON.stringify({
+        type: "conversation.item.create",
+        item: {
+          type: "message",
+          role: "user",
+          content: [{
+            type: "input_text",
+            text: `System update. Speak this update to the user in one short sentence: ${nextAnnouncement}`,
+          }],
+        },
+      }));
+      openaiWs.send(JSON.stringify({ type: "response.create" }));
+    };
 
     // ── OpenAI → Gateway → Browser ───────────────────────────
     openaiWs.on("open", () => {
@@ -125,6 +150,7 @@ export class VoiceAssistantService {
         case "response.audio.delta":
         case "response.output_audio.delta":
           responseInProgress = true;
+          if (suppressAssistantAudio) break;
           send(clientWs, { type: "audio", data: event.delta });
           send(clientWs, { type: "status", status: "speaking" });
           break;
@@ -132,6 +158,7 @@ export class VoiceAssistantService {
         case "response.audio.done":
         case "response.output_audio.done":
           responseInProgress = false;
+          suppressAssistantAudio = false;
           send(clientWs, { type: "audio.done" });
           send(clientWs, { type: "status", status: "listening" });
           break;
@@ -216,6 +243,7 @@ export class VoiceAssistantService {
         case "input_audio_buffer.speech_started":
           // User started speaking — cancel only if assistant is actively responding
           if (responseInProgress) {
+            suppressAssistantAudio = true;
             openaiWs.send(JSON.stringify({ type: "response.cancel" }));
             send(clientWs, { type: "audio.interrupt" });
             responseInProgress = false;
@@ -233,15 +261,20 @@ export class VoiceAssistantService {
 
         case "response.cancelled":
           responseInProgress = false;
+          suppressAssistantAudio = false;
+          flushNextAnnouncement();
           send(clientWs, { type: "status", status: "listening" });
           break;
 
         case "response.done":
           responseInProgress = false;
+          suppressAssistantAudio = false;
           // If a tool result was submitted while a response was active, trigger now
           if (pendingToolResponse) {
             pendingToolResponse = false;
             openaiWs.send(JSON.stringify({ type: "response.create" }));
+          } else if (pendingAnnouncements.length > 0) {
+            flushNextAnnouncement();
           } else {
             send(clientWs, { type: "status", status: "listening" });
           }
@@ -269,7 +302,7 @@ export class VoiceAssistantService {
     clientWs.on("message", (raw) => {
       if (!openaiReady) return;
 
-      let msg: VoiceClientMessage;
+      let msg: RuntimeVoiceClientMessage;
       try {
         msg = JSON.parse(typeof raw === "string" ? raw : raw.toString());
       } catch {
@@ -291,6 +324,26 @@ export class VoiceAssistantService {
         case "commit":
           openaiWs.send(JSON.stringify({ type: "input_audio_buffer.commit" }));
           break;
+
+        case "interrupt":
+          if (responseInProgress) {
+            suppressAssistantAudio = true;
+            openaiWs.send(JSON.stringify({ type: "response.cancel" }));
+            send(clientWs, { type: "audio.interrupt" });
+            responseInProgress = false;
+          }
+          send(clientWs, { type: "status", status: "listening" });
+          break;
+
+        case "announce": {
+          const text = typeof msg.text === "string" ? msg.text.trim() : "";
+          if (!text) break;
+          pendingAnnouncements.push(text);
+          if (!responseInProgress) {
+            flushNextAnnouncement();
+          }
+          break;
+        }
 
         case "stop":
           openaiWs.send(JSON.stringify({ type: "input_audio_buffer.clear" }));
