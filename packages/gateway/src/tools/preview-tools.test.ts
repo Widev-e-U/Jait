@@ -179,6 +179,73 @@ describe("createPreviewOpenTool", () => {
       },
     );
   });
+
+  it("does not open the preview panel when preview start fails", async () => {
+    const sendUICommand = vi.fn();
+    const broadcast = vi.fn();
+    const set = vi.fn();
+    const syncPreviewSession = vi.fn();
+    const previewService = {
+      start: vi.fn().mockResolvedValue({
+        id: "preview-session-error",
+        sessionId: "session-error",
+        status: "error",
+        url: null,
+        target: "3000",
+        mode: "local",
+        lastError: "Preview server did not become ready",
+        logs: [],
+        browserEvents: [],
+      }),
+    };
+    const tool = createPreviewOpenTool(
+      { sendUICommand, broadcast } as any,
+      { set } as any,
+      previewService as any,
+      { syncPreviewSession } as any,
+    );
+
+    const result = await tool.execute({ target: "3000" }, {
+      sessionId: "session-error",
+      actionId: "action-error",
+      workspaceRoot: "/workspace/error",
+      requestedBy: "assistant",
+      userId: "user-error",
+    });
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("Preview failed: Preview server did not become ready");
+    expect(sendUICommand).not.toHaveBeenCalled();
+    expect(syncPreviewSession).not.toHaveBeenCalled();
+    expect(broadcast).toHaveBeenCalledWith(
+      "session-error",
+      expect.objectContaining({
+        type: "ui.state-sync",
+        sessionId: "session-error",
+        payload: {
+          key: "dev-preview.panel",
+          value: {
+            open: false,
+            target: null,
+            workspaceRoot: "/workspace/error",
+            displayState: "hidden",
+            displayTarget: null,
+            storageScope: "unknown",
+          },
+        },
+      }),
+    );
+    expect(set).toHaveBeenCalledWith("session-error", {
+      "dev-preview.panel": {
+        open: false,
+        target: null,
+        workspaceRoot: "/workspace/error",
+        displayState: "hidden",
+        displayTarget: null,
+        storageScope: "unknown",
+      },
+    });
+  });
 });
 
 describe("createPreviewInspectTool", () => {

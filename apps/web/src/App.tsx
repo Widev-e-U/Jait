@@ -96,6 +96,7 @@ import { useBrowserCollaboration } from '@/hooks/useBrowserCollaboration'
 import { emitPreviewSession } from '@/lib/preview-events'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
+import { SendTargetSelector } from '@/components/chat/send-target-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
 import type { WorkspaceOpenData, TerminalFocusData, FsChangesPayload, ArchitectureUpdateData, DevPreviewPanelState, WorkspaceUIState, ResponseStyle } from '@jait/shared'
 import { toast } from 'sonner'
@@ -5963,6 +5964,7 @@ function App() {
                     onResponseStyleChange={handleChatResponseStyleChange}
                     sendTarget={sendTarget}
                     onSendTargetChange={setSendTarget}
+                    showSendTargetSelector={false}
                     provider={chatProvider}
                     onProviderChange={handleChatProviderChange}
                     providerRuntimeMode={chatProviderRuntimeMode}
@@ -6006,6 +6008,11 @@ function App() {
                         >
                           New chat
                         </button>
+                        <SendTargetSelector
+                          target={sendTarget}
+                          onChange={setSendTarget}
+                          disabled={isLoading}
+                        />
                       </div>
                     </div>
                   )}
@@ -6142,6 +6149,7 @@ function App() {
                       onResponseStyleChange={handleChatResponseStyleChange}
                       sendTarget={sendTarget}
                       onSendTargetChange={setSendTarget}
+                      showSendTargetSelector={false}
                       provider={chatProvider}
                       onProviderChange={handleChatProviderChange}
                       providerRuntimeMode={chatProviderRuntimeMode}
@@ -6203,6 +6211,13 @@ function App() {
                             >
                               New chat
                             </button>
+                          )}
+                          {viewMode === 'developer' && (
+                            <SendTargetSelector
+                              target={sendTarget}
+                              onChange={setSendTarget}
+                              disabled={isLoading}
+                            />
                           )}
                           {(viewMode as string) === 'manager' && (
                             <button
