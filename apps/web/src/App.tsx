@@ -5979,7 +5979,7 @@ function App() {
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
                   {viewMode === 'developer' && (
-                    <div className="flex items-center justify-start px-1">
+                    <div className="overflow-x-auto px-1">
                       <SessionSwitcher
                         sessions={activeWorkspaceSessions}
                         activeSessionId={activeSessionId}
@@ -6149,24 +6149,10 @@ function App() {
                       sessionInfo={sessionInfo}
                       workspaceNodeId={activeWorkspace?.nodeId}
                     />
-                    <div className="px-1">
-                      {isMobile && viewMode === 'developer' && (
-                        <div className="mb-1.5 flex items-center justify-start">
-                          <SessionSwitcher
-                            sessions={activeWorkspaceSessions}
-                            activeSessionId={activeSessionId}
-                            workspaceTitle={activeWorkspaceRecord?.title ?? null}
-                            onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
-                            onNewSession={() => { void createSession() }}
-                            onOpenChange={handleSessionSwitcherOpen}
-                            showTitle={false}
-                            triggerLabel="History"
-                          />
-                        </div>
-                      )}
-                      <div className="flex items-center justify-between gap-2">
+                    <div className="overflow-x-auto px-1">
+                      <div className="flex min-w-max items-center justify-between gap-3 whitespace-nowrap">
                         <div className="flex min-w-0 items-center gap-2">
-                          {!isMobile && viewMode === 'developer' && (
+                          {viewMode === 'developer' && (
                             <SessionSwitcher
                               sessions={activeWorkspaceSessions}
                               activeSessionId={activeSessionId}
@@ -6201,16 +6187,6 @@ function App() {
                               New thread
                             </button>
                           )}
-                          <button onClick={() => {
-                            clearMessages()
-                            if (!activeWorkspaceId) {
-                              promptForWorkspaceSelection()
-                              return
-                            }
-                            void createSession()
-                          }} className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0">
-                            New chat
-                          </button>
                           {remainingPrompts !== null && (
                             <span className="text-[11px] text-muted-foreground shrink-0">{remainingPrompts} remaining</span>
                           )}
