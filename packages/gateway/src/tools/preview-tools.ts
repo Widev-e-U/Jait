@@ -109,41 +109,61 @@ export function createPreviewStartTool(
         port: typeof input.port === "number" ? input.port : undefined,
         frameworkHint: input.frameworkHint?.trim() || undefined,
       });
-      // Persist the original user-facing target (e.g. "http://127.0.0.1:3000/")
-      // rather than the ephemeral noVNC container URL. The live noVNC URL is
-      // delivered via the managed preview session's remoteBrowser field and
-      // changes whenever the sandbox container is recreated.
-      const stableTarget = preview.target ?? target ?? null;
-      browserCollaborationService?.syncPreviewSession(preview, {
-        userId: context.userId,
-        workspaceRoot: workspaceRoot || undefined,
-        mode: target ? "shared" : "isolated",
-      });
-
-      const panelState: DevPreviewPanelState = {
-        open: true,
-        target: stableTarget,
-        workspaceRoot: workspaceRoot || null,
-        displayState: preview.status === "ready" ? "connected" : "blank",
-        displayTarget: stableTarget,
-        storageScope: "isolated-browser-session",
-      };
-      if (ws) {
-        ws.sendUICommand(
-          {
-            command: "dev-preview.open",
-            data: { target: panelState.target, workspaceRoot: panelState.workspaceRoot },
-          },
-          sessionId,
-        );
-        ws.broadcast(sessionId, {
-          type: "ui.state-sync",
-          sessionId,
-          timestamp: new Date().toISOString(),
-          payload: { key: "dev-preview.panel", value: panelState },
+      if (preview.status === "ready") {
+        // Persist the original user-facing target (e.g. "http://127.0.0.1:3000/")
+        // rather than the ephemeral noVNC container URL. The live noVNC URL is
+        // delivered via the managed preview session's remoteBrowser field and
+        // changes whenever the sandbox container is recreated.
+        const stableTarget = preview.target ?? target ?? null;
+        browserCollaborationService?.syncPreviewSession(preview, {
+          userId: context.userId,
+          workspaceRoot: workspaceRoot || undefined,
+          mode: target ? "shared" : "isolated",
         });
+
+        const panelState: DevPreviewPanelState = {
+          open: true,
+          target: stableTarget,
+          workspaceRoot: workspaceRoot || null,
+          displayState: "connected",
+          displayTarget: stableTarget,
+          storageScope: "isolated-browser-session",
+        };
+        if (ws) {
+          ws.sendUICommand(
+            {
+              command: "dev-preview.open",
+              data: { target: panelState.target, workspaceRoot: panelState.workspaceRoot },
+            },
+            sessionId,
+          );
+          ws.broadcast(sessionId, {
+            type: "ui.state-sync",
+            sessionId,
+            timestamp: new Date().toISOString(),
+            payload: { key: "dev-preview.panel", value: panelState },
+          });
+        }
+        sessionState?.set(sessionId, { "dev-preview.panel": panelState });
+      } else {
+        const panelState: DevPreviewPanelState = {
+          open: false,
+          target: null,
+          workspaceRoot: workspaceRoot || null,
+          displayState: "hidden",
+          displayTarget: null,
+          storageScope: "unknown",
+        };
+        if (ws) {
+          ws.broadcast(sessionId, {
+            type: "ui.state-sync",
+            sessionId,
+            timestamp: new Date().toISOString(),
+            payload: { key: "dev-preview.panel", value: panelState },
+          });
+        }
+        sessionState?.set(sessionId, { "dev-preview.panel": panelState });
       }
-      sessionState?.set(sessionId, { "dev-preview.panel": panelState });
 
       return {
         ok: preview.status === "ready",

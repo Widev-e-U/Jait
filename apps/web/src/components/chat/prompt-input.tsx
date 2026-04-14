@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
 import { StyleSelector } from '@/components/chat/style-selector'
-import { SendTargetSelector } from '@/components/chat/send-target-selector'
 import type { SendTarget } from '@/components/chat/send-target-selector'
 import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
 import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
@@ -76,6 +75,7 @@ interface PromptInputProps {
   onModeChange?: (mode: ChatMode) => void
   sendTarget?: SendTarget
   onSendTargetChange?: (target: SendTarget) => void
+  showSendTargetSelector?: boolean
   provider?: ProviderId
   onProviderChange?: (provider: ProviderId) => void
   responseStyle?: ResponseStyle
@@ -555,6 +555,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onModeChange,
   sendTarget,
   onSendTargetChange,
+  showSendTargetSelector = true,
   provider,
   onProviderChange,
   responseStyle,
@@ -623,8 +624,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const showResponseStyleSelector = Boolean(responseStyle && onResponseStyleChange && sendTarget !== 'thread')
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
   const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
-  const showSendTargetSelector = Boolean(sendTarget && onSendTargetChange)
-  const hasFooterControls = showSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
+  const shouldShowSendTargetSelector = showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
+  const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
 
   useEffect(() => {
     const el = rootRef.current
@@ -1513,9 +1514,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         {hasFooterControls && (
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
-              {showSendTargetSelector && (
-                <SendTargetSelector target={sendTarget!} onChange={onSendTargetChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
-              )}
               {footerLeadingContent}
               {showProviderModelSelector && (
                 <ProviderModelSelector
