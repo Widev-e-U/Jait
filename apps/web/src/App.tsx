@@ -1774,6 +1774,19 @@ function App() {
     })
   }, [activeSessionId, chatCompletionSignal, isLoading, isLoadingHistory, messageQueue.length])
 
+  // ── Voice-assistant session (OpenAI Realtime via gateway) ───
+  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false)
+
+  const voiceAssistant = useVoiceAssistant({
+    authToken: token,
+    onError: (err) => {
+      console.warn('[voice] error:', err)
+    },
+    onDisconnected: () => {
+      setVoiceOverlayOpen(false)
+    },
+  })
+
   useEffect(() => {
     const announceThreadResult = async (completedThread: AgentThread) => {
       try {
@@ -4550,19 +4563,6 @@ function App() {
       return next
     })
   }, [])
-
-  // ── Voice-assistant session (OpenAI Realtime via gateway) ───
-  const [voiceOverlayOpen, setVoiceOverlayOpen] = useState(false)
-
-  const voiceAssistant = useVoiceAssistant({
-    authToken: token,
-    onError: (err) => {
-      console.warn('[voice] error:', err)
-    },
-    onDisconnected: () => {
-      setVoiceOverlayOpen(false)
-    },
-  })
 
   const startVoiceSession = useCallback(() => {
     setVoiceOverlayOpen(true)
