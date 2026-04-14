@@ -4149,6 +4149,15 @@ function App() {
     setShowLoginDialog(true)
   }
 
+  const handleStartNewChat = useCallback(() => {
+    clearMessages()
+    if (!activeWorkspaceId) {
+      promptForWorkspaceSelection()
+      return
+    }
+    void createSession()
+  }, [activeWorkspaceId, clearMessages, createSession, promptForWorkspaceSelection])
+
   const handleSaveApiKeys = async (next: Record<string, string>) => {
     const sanitized = Object.fromEntries(
       Object.entries(next)
@@ -5980,16 +5989,24 @@ function App() {
                   />
                   {viewMode === 'developer' && (
                     <div className="overflow-x-auto px-1">
-                      <SessionSwitcher
-                        sessions={activeWorkspaceSessions}
-                        activeSessionId={activeSessionId}
-                        workspaceTitle={activeWorkspaceRecord?.title ?? null}
-                        onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
-                        onNewSession={() => { void createSession() }}
-                        onOpenChange={handleSessionSwitcherOpen}
-                        showTitle={false}
-                        triggerLabel="History"
-                      />
+                      <div className="flex min-w-max items-center gap-2 whitespace-nowrap">
+                        <SessionSwitcher
+                          sessions={activeWorkspaceSessions}
+                          activeSessionId={activeSessionId}
+                          workspaceTitle={activeWorkspaceRecord?.title ?? null}
+                          onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                          onNewSession={() => { void createSession() }}
+                          onOpenChange={handleSessionSwitcherOpen}
+                          showTitle={false}
+                          triggerLabel="History"
+                        />
+                        <button
+                          onClick={handleStartNewChat}
+                          className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                        >
+                          New chat
+                        </button>
+                      </div>
                     </div>
                   )}
                 </div>
@@ -6179,6 +6196,14 @@ function App() {
                           )}
                         </div>
                         <div className="flex shrink-0 items-center gap-2">
+                          {viewMode === 'developer' && (
+                            <button
+                              onClick={handleStartNewChat}
+                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                            >
+                              New chat
+                            </button>
+                          )}
                           {(viewMode as string) === 'manager' && (
                             <button
                               onClick={() => automation.setSelectedThreadId(null)}
