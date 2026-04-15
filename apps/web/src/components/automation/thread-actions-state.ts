@@ -13,7 +13,7 @@ export function shouldShowThreadChangesButton(
   const isTerminalPr = prState === 'merged' || prState === 'closed'
   if (!isTerminalPr) return true
 
-  return Boolean(threadBranch && gitStatus.branch === threadBranch)
+  return Boolean(threadBranch)
 }
 
 export function shouldRenderThreadActions({

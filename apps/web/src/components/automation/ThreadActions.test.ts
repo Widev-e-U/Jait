@@ -20,13 +20,16 @@ function gitStatus(overrides: Partial<GitStatusResult> = {}): GitStatusResult {
 }
 
 describe('shouldShowThreadChangesButton', () => {
+  it('keeps terminal PR changes visible while the thread branch is recorded', () => {
+    expect(shouldShowThreadChangesButton(gitStatus({ branch: 'main' }), 'jait/feature', 'merged')).toBe(true)
+    expect(shouldShowThreadChangesButton(gitStatus({ branch: 'main' }), 'jait/feature', 'closed')).toBe(true)
+  })
+
   it('hides terminal PR changes when the thread branch is gone', () => {
-    expect(shouldShowThreadChangesButton(gitStatus({ branch: 'main' }), 'jait/feature', 'merged')).toBe(false)
-    expect(shouldShowThreadChangesButton(gitStatus({ branch: 'main' }), 'jait/feature', 'closed')).toBe(false)
     expect(shouldShowThreadChangesButton(gitStatus({ branch: 'main' }), null, 'merged')).toBe(false)
   })
 
-  it('keeps terminal PR changes visible while still on the thread branch', () => {
+  it('keeps terminal PR changes visible while currently on the thread branch', () => {
     expect(shouldShowThreadChangesButton(gitStatus(), 'jait/feature', 'merged')).toBe(true)
   })
 

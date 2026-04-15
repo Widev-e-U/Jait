@@ -82,7 +82,7 @@ export function ThreadActions({
 
     const loadStatus = async () => {
       try {
-        const status = await gitApi.status(cwd)
+        const status = await gitApi.status(cwd, branch ?? undefined)
         if (!cancelled) setGitStatus(status)
       } catch {
         if (!cancelled) setGitStatus(null)
