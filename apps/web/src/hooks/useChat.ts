@@ -7,6 +7,7 @@ import { pushSSEDebugEvent } from '@/components/debug/sse-debug-panel'
 import { getApiUrl } from '@/lib/gateway-url'
 import { getToolFilePath } from '@/lib/tool-call-body'
 import type { RuntimeMode } from '@/lib/agents-api'
+import { mergeSnapshotMessagesWithOptimisticUsers } from '@/lib/optimistic-chat-messages'
 import type { ResponseStyle } from '@jait/shared'
 import {
   parseLegacyReferencedFilesBlock,
@@ -73,6 +74,8 @@ export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
   content: string
+  /** Local-only user message awaiting confirmation from a server snapshot. */
+  optimistic?: boolean
   /** Clean display text for user messages (without appended file contents) */
   displayContent?: string
   /** File references attached by the user (shown as chips in the bubble) */
@@ -394,7 +397,7 @@ export function useChat(
                 if (lastMsg?.role === 'assistant') assistantId = lastMsg.id
                 setState(prev => ({
                   ...prev,
-                  messages: msgs,
+                  messages: mergeSnapshotMessagesWithOptimisticUsers(msgs, prev.messages),
                   isLoadingHistory: false,
                   isLoading: snapshotStreaming,
                   error: null,
@@ -651,6 +654,7 @@ export function useChat(
       id: createOptimisticMessageId('user'),
       role: 'user',
       content,
+      optimistic: true,
       ...(options.displayContent ? { displayContent: options.displayContent } : {}),
       ...(options.referencedFiles?.length ? { referencedFiles: options.referencedFiles } : {}),
       ...(options.displaySegments?.length ? { displaySegments: options.displaySegments } : {}),
