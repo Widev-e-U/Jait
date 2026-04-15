@@ -54,6 +54,7 @@ import { WorkspaceService } from "./services/workspaces.js";
 import { AssistantProfileService } from "./services/assistant-profiles.js";
 import { BrowserCollaborationService } from "./services/browser-collaboration.js";
 import { PluginManager } from "./plugins/manager.js";
+import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
 
 async function main() {
   const config = loadConfig();
@@ -110,6 +111,7 @@ async function main() {
 
   // WebSocket control plane (created early so consent callbacks can reference it)
   const ws = new WsControlPlane(config);
+  const threadReviewSync = new ThreadReviewSyncService({ threadService, ws });
 
   // Notification service — broadcasts to all connected clients
   const notifications = new NotificationService(ws);
@@ -459,6 +461,7 @@ async function main() {
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
   scheduler.start(30_000);
+  threadReviewSync.start();
 
   // Seed built-in "Network Scan" job if it doesn't already exist
   {
@@ -866,6 +869,7 @@ async function main() {
       await previewService.stopAll();
       await surfaceRegistry.stopAll("shutdown");
       scheduler.stop();
+      threadReviewSync.stop();
       ws.stop();
       await server.close();
       sqlite.close();
