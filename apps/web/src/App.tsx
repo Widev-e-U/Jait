@@ -5502,26 +5502,46 @@ function App() {
                   <div className={isMobile ? 'flex min-w-0 basis-full items-start gap-1.5' : 'flex min-w-0 items-center gap-2 shrink-0'}>
                     <div className="flex min-w-0 flex-1 items-start gap-2">
                       <ManagerStatusDot status={automation.selectedThread.status} />
-                      <div className={`min-w-0 ${isMobile ? 'flex-1' : 'flex items-center gap-2'}`}>
-                        {isTitlePending(automation.selectedThread.title) ? (
-                          <TitleSkeleton className="text-[11px] h-3.5 w-28" />
-                        ) : (
-                          <span className={`text-[10px] text-muted-foreground truncate sm:text-[11px] ${isMobile ? 'block leading-tight' : 'max-w-[200px]'}`}>
-                            {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
-                          </span>
-                        )}
-                        <ThreadKindBadge kind={automation.selectedThread.kind} />
-                        {(automation.selectedRepo || (isMobile && automation.selectedThread.branch)) && (
-                          <span className={`text-[10px] text-muted-foreground truncate ${isMobile ? 'mt-0.5 block leading-tight' : 'max-w-[160px]'}`}>
-                            {automation.selectedRepo
-                              ? `${automation.selectedRepo.name} · ${automation.selectedRepo.defaultBranch}`
-                              : ''}
-                            {isMobile && automation.selectedThread.branch
-                              ? `${automation.selectedRepo ? ' · ' : ''}${automation.selectedThread.branch}`
-                              : ''}
-                          </span>
-                        )}
-                      </div>
+                      {isMobile ? (
+                        <div className="min-w-0 flex-1">
+                          {isTitlePending(automation.selectedThread.title) ? (
+                            <TitleSkeleton className="text-[11px] h-3.5 w-28" />
+                          ) : (
+                            <span className="block truncate text-[10px] leading-tight text-muted-foreground sm:text-[11px]">
+                              {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
+                            </span>
+                          )}
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] leading-tight text-muted-foreground">
+                            {automation.selectedRepo && (
+                              <span className="min-w-0 truncate">
+                                {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
+                              </span>
+                            )}
+                            <ThreadKindBadge kind={automation.selectedThread.kind} />
+                            {automation.selectedThread.branch && (
+                              <span className="shrink min-w-0 truncate font-mono">
+                                {automation.selectedThread.branch}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="min-w-0 flex items-center gap-2">
+                          {isTitlePending(automation.selectedThread.title) ? (
+                            <TitleSkeleton className="text-[11px] h-3.5 w-28" />
+                          ) : (
+                            <span className="max-w-[200px] truncate text-[10px] text-muted-foreground sm:text-[11px]">
+                              {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
+                            </span>
+                          )}
+                          <ThreadKindBadge kind={automation.selectedThread.kind} />
+                          {automation.selectedRepo && (
+                            <span className="max-w-[160px] truncate text-[10px] text-muted-foreground">
+                              {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
                       {!isMobile && automation.selectedThread.branch && (
@@ -5974,7 +5994,9 @@ function App() {
                             onCliModelChange={handleCliModelChange}
                             repoRuntime={selectedRepoRuntime}
                             onMoveToGateway={handleMoveRepoToGateway}
-                            footerLeadingContent={(
+                          />
+                          <div className="overflow-x-auto px-1 pt-1">
+                            <div className="flex min-w-max items-center gap-2 whitespace-nowrap">
                               <ManagerRepoPicker
                                 repositories={automation.repositories}
                                 selectedRepo={automation.selectedRepo}
@@ -5983,8 +6005,8 @@ function App() {
                                 onSelect={automation.setSelectedRepoId}
                                 onAddRepository={() => automation.setFolderPickerOpen(true)}
                               />
-                            )}
-                          />
+                            </div>
+                          </div>
                           {selectedRepoRuntime && (
                             <ManagerRepoRuntimeMeta runtime={selectedRepoRuntime} className="mt-1 px-1" />
                           )}
