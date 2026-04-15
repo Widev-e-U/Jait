@@ -139,7 +139,7 @@ export function ThreadActions({
         deletions: gitStatus.index.deletions + gitStatus.workingTree.deletions,
       }
     : null
-  const showChangesButton = gitStatus?.hasWorkingTreeChanges === true
+  const showChangesButton = shouldShowThreadChangesButton(gitStatus, branch, effectivePrState)
   const buttonLabel = creatingPr && !existingPrLink
     ? 'Creating PR...'
     : existingPrLink
