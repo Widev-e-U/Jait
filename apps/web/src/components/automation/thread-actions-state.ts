@@ -15,3 +15,28 @@ export function shouldShowThreadChangesButton(
 
   return Boolean(threadBranch && gitStatus.branch === threadBranch)
 }
+
+export function shouldRenderThreadActions({
+  hasRepository,
+  threadKind,
+  threadStatus,
+  threadBranch,
+  prUrl,
+  prState,
+}: {
+  hasRepository: boolean
+  threadKind: 'delivery' | 'delegation'
+  threadStatus: string
+  threadBranch?: string | null
+  prUrl?: string | null
+  prState: ThreadPrState
+}): boolean {
+  if (!hasRepository || threadKind !== 'delivery') return false
+  return Boolean(
+    threadBranch ||
+    threadStatus === 'completed' ||
+    prUrl ||
+    prState === 'creating' ||
+    prState === 'open',
+  )
+}

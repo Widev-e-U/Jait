@@ -70,6 +70,7 @@ import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { ThreadActions } from '@/components/automation/ThreadActions'
+import { shouldRenderThreadActions } from '@/components/automation/thread-actions-state'
 import { StrategyModal } from '@/components/automation/StrategyModal'
 import { PlanModal } from '@/components/automation/PlanModal'
 import { activitiesToMessages } from '@/lib/activity-to-messages'
@@ -665,10 +666,14 @@ function ManagerThreadListItem({
   onDelete,
 }: ManagerThreadListItemProps) {
   const [deleting, setDeleting] = useState(false)
-  const showThreadActions =
-    thread.kind === 'delivery' &&
-    repo != null &&
-    (thread.status === 'completed' || Boolean(thread.prUrl) || prState === 'creating' || prState === 'open')
+  const showThreadActions = shouldRenderThreadActions({
+    hasRepository: repo != null,
+    threadKind: thread.kind,
+    threadStatus: thread.status,
+    threadBranch: thread.branch,
+    prUrl: thread.prUrl,
+    prState,
+  })
   const stopThreadVisible = canStopThread(thread)
 
   return (
