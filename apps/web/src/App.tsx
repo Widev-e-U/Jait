@@ -357,13 +357,20 @@ function ManagerStatusDot({ status }: { status: string }) {
   return <Icon className={`h-3 w-3 shrink-0 ${color}`} />
 }
 
-function ThreadPrBadge({ prState }: { prState: 'creating' | 'open' | 'closed' | 'merged' | null | undefined }) {
+type ThreadPrState = 'creating' | 'open' | 'closed' | 'merged' | null | undefined
+
+function getVisibleThreadPrState(thread: Pick<AgentThread, 'prState' | 'prUrl'>, polledPrState?: ThreadPrState): ThreadPrState {
+  const prState = polledPrState !== undefined ? polledPrState : thread.prState
+  return prState ?? (thread.prUrl ? 'open' : null)
+}
+
+function ThreadPrBadge({ prState }: { prState: ThreadPrState }) {
   if (!prState) return null
   const label =
     prState === 'creating'
       ? 'PR creating'
       : prState === 'open'
-      ? 'PR created'
+      ? 'PR open'
       : prState === 'merged'
         ? 'PR merged'
         : 'PR closed'
@@ -638,7 +645,7 @@ interface ManagerThreadListItemProps {
   thread: AgentThread
   repo: AutomationRepository | null
   repoName: string
-  prState: 'creating' | 'open' | 'closed' | 'merged' | null | undefined
+  prState: ThreadPrState
   ghAvailable: boolean
   onOpen: () => void
   onStop: () => void
@@ -656,7 +663,10 @@ function ManagerThreadListItem({
   onDelete,
 }: ManagerThreadListItemProps) {
   const [deleting, setDeleting] = useState(false)
-  const showThreadActions = thread.kind === 'delivery' && repo != null && (thread.status === 'completed' || Boolean(thread.prUrl))
+  const showThreadActions =
+    thread.kind === 'delivery' &&
+    repo != null &&
+    (thread.status === 'completed' || Boolean(thread.prUrl) || prState === 'creating' || prState === 'open')
   const stopThreadVisible = canStopThread(thread)
 
   return (
@@ -779,7 +789,7 @@ function ManagerThreadListItem({
 interface ManagerActiveThreadsMenuProps {
   threads: AgentThread[]
   getRepositoryForThread: (thread: Pick<AgentThread, 'title' | 'workingDirectory'>) => AutomationRepository | null
-  threadPrStates: Record<string, 'creating' | 'open' | 'closed' | 'merged' | null>
+  threadPrStates: Record<string, Exclude<ThreadPrState, undefined>>
   ghAvailable: boolean
   onOpenThread: (threadId: string) => void
   onStopThread: (threadId: string) => void
@@ -826,6 +836,10 @@ function ManagerActiveThreadsMenu({
           {threads.map((thread) => {
             const repo = getRepositoryForThread(thread)
             const repoName = repo?.name ?? inferThreadRepositoryName(thread) ?? 'Unknown repo'
+            const prState = getVisibleThreadPrState(
+              thread,
+              thread.id in threadPrStates ? threadPrStates[thread.id] : undefined,
+            )
 
             return (
               <div
@@ -866,7 +880,7 @@ function ManagerActiveThreadsMenu({
                         {thread.executionNodeName}
                       </Badge>
                     )}
-                    <ThreadPrBadge prState={thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState} />
+                    <ThreadPrBadge prState={prState} />
                   </div>
                 </button>
                 <div className="flex items-center gap-1 self-start">
@@ -884,7 +898,7 @@ function ManagerActiveThreadsMenu({
                         threadStatus={thread.status}
                         threadKind={thread.kind}
                         prUrl={thread.prUrl}
-                        prState={(thread.id in threadPrStates ? threadPrStates[thread.id] : thread.prState) as 'creating' | 'open' | 'closed' | 'merged' | null | undefined}
+                        prState={prState}
                         ghAvailable={ghAvailable}
                         showStatusBadge={false}
                       />
@@ -5939,13 +5953,17 @@ function App() {
                               {managerThreads.map((thread) => {
                                 const threadRepo = automation.getRepositoryForThread(thread)
                                 const repoName = threadRepo?.name ?? inferThreadRepositoryName(thread) ?? 'Unknown repo'
+                                const prState = getVisibleThreadPrState(
+                                  thread,
+                                  thread.id in automation.threadPrStates ? automation.threadPrStates[thread.id] : undefined,
+                                )
                                 return (
                                   <ManagerThreadListItem
                                     key={thread.id}
                                     thread={thread}
                                     repo={threadRepo}
                                     repoName={repoName}
-                                    prState={thread.id in automation.threadPrStates ? automation.threadPrStates[thread.id] : thread.prState}
+                                    prState={prState}
                                     ghAvailable={automation.ghAvailable}
                                     onOpen={() => automation.setSelectedThreadId(thread.id)}
                                     onStop={() => { void automation.handleStop(thread.id) }}

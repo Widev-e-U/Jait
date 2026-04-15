@@ -144,6 +144,9 @@ export function useAutomation(enabled = true) {
     () => threads.find((t) => t.id === selectedThreadId) ?? null,
     [threads, selectedThreadId],
   )
+  const selectedThreadPrState = selectedThread
+    ? (selectedThread.id in threadPrStates ? threadPrStates[selectedThread.id] : selectedThread.prState)
+    : null
   const getRepositoryForThread = useCallback(
     (thread: Pick<AgentThread, 'title' | 'workingDirectory'>) =>
       repositories.find((repository) => threadBelongsToRepository(thread, repository)) ?? null,
@@ -155,8 +158,13 @@ export function useAutomation(enabled = true) {
       selectedThread != null &&
       selectedThread.kind === 'delivery' &&
       selectedRepo != null &&
-      (selectedThread.status === 'completed' || Boolean(selectedThread.prUrl)),
-    [selectedThread, selectedRepo],
+      (
+        selectedThread.status === 'completed' ||
+        Boolean(selectedThread.prUrl) ||
+        selectedThreadPrState === 'creating' ||
+        selectedThreadPrState === 'open'
+      ),
+    [selectedThread, selectedRepo, selectedThreadPrState],
   )
 
   // ── Auto-select first repo ────────────────────────────────────
