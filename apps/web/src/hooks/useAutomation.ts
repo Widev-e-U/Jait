@@ -18,12 +18,12 @@ import {
   type ProviderInfo,
   type ProviderId,
   type RuntimeMode,
-  type AutomationRepo,
 } from '@/lib/agents-api'
 import {
   buildRepositoryFallbackUnavailableMessage,
   getRepositoryRuntimeInfo,
   inferSharedRepositories,
+  mapDbRepoToAutomationRepository,
   threadBelongsToRepository,
   type AutomationRepository,
 } from '@/lib/automation-repositories'
@@ -68,19 +68,6 @@ function mergeActivities(
     byId.set(activity.id, activity)
   }
   return sortActivities([...byId.values()])
-}
-
-/** Convert DB repo row to frontend AutomationRepository */
-function dbRepoToLocal(repo: AutomationRepo, localDeviceId: string): RepositoryConnection {
-  return {
-    id: repo.id,
-    name: repo.name,
-    defaultBranch: repo.defaultBranch,
-    localPath: repo.localPath,
-    deviceId: repo.deviceId,
-    githubUrl: repo.githubUrl,
-    source: (!repo.deviceId || repo.deviceId === localDeviceId) ? 'local' : 'shared',
-  }
 }
 
 function mapNodeStatesToRemoteProviders(nodes: NodeState[]): RemoteProviderInfo[] {
@@ -203,14 +190,14 @@ export function useAutomation(enabled = true) {
       setProviders(provResult.providers)
       setRemoteProviders(nodeRegistry.length > 0 ? mapNodeStatesToRemoteProviders(nodeRegistry) : provResult.remoteProviders)
       setProvidersLoaded(true)
-      setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
+      setLocalRepositories(repos.map(mapDbRepoToAutomationRepository))
       setError(null)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to fetch data')
     } finally {
       setLoading(false)
     }
-  }, [localDeviceId, threadListLimit])
+  }, [threadListLimit])
 
   /** Lightweight refresh of just providers + repos (used when FsNodes connect/disconnect). */
   const refreshProviders = useCallback(async () => {
@@ -222,9 +209,9 @@ export function useAutomation(enabled = true) {
       ])
       setProviders(provResult.providers)
       setRemoteProviders(nodeRegistry.length > 0 ? mapNodeStatesToRemoteProviders(nodeRegistry) : provResult.remoteProviders)
-      setLocalRepositories(repos.map(r => dbRepoToLocal(r, localDeviceId)))
+      setLocalRepositories(repos.map(mapDbRepoToAutomationRepository))
     } catch { /* best-effort */ }
-  }, [localDeviceId, nodeRegistry])
+  }, [nodeRegistry])
 
   const getRuntimeInfoForRepository = useCallback(
     (repository: RepositoryConnection) => getRepositoryRuntimeInfo(repository, {
@@ -328,7 +315,7 @@ export function useAutomation(enabled = true) {
         if (repo) {
           setLocalRepositories(prev => {
             if (prev.some(r => r.id === repo.id)) return prev
-            return [dbRepoToLocal(repo, localDeviceId), ...prev]
+            return [mapDbRepoToAutomationRepository(repo), ...prev]
           })
         }
         break
@@ -337,7 +324,7 @@ export function useAutomation(enabled = true) {
         const repo = payload.repo as AutomationRepo | undefined
         if (repo) {
           setLocalRepositories(prev =>
-            prev.map(r => r.id === repo.id ? dbRepoToLocal(repo, localDeviceId) : r),
+            prev.map(r => r.id === repo.id ? mapDbRepoToAutomationRepository(repo) : r),
           )
         }
         break

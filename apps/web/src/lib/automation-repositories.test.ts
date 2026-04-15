@@ -4,6 +4,7 @@ import {
   getRepositoryRuntimeInfo,
   inferSharedRepositories,
   inferThreadRepositoryName,
+  mapDbRepoToAutomationRepository,
   threadBelongsToRepository,
   type AutomationRepository,
 } from './automation-repositories'
@@ -34,6 +35,27 @@ function makeThread(overrides: Partial<AgentThread>): AgentThread {
 }
 
 describe('automation repositories', () => {
+  it('keeps persisted offline device repos as local entries', () => {
+    expect(mapDbRepoToAutomationRepository({
+      id: 'repo-offline',
+      name: 'Offline Repo',
+      defaultBranch: 'main',
+      localPath: '/offline/repo',
+      deviceId: 'desktop-2',
+      githubUrl: null,
+      forgeUrl: null,
+    })).toEqual({
+      id: 'repo-offline',
+      name: 'Offline Repo',
+      defaultBranch: 'main',
+      localPath: '/offline/repo',
+      deviceId: 'desktop-2',
+      githubUrl: null,
+      forgeUrl: null,
+      source: 'local',
+    })
+  })
+
   it('infers a shared repository from a worktree thread', () => {
     const thread = makeThread({
       title: '[Jait] Fix mobile thread sync',
