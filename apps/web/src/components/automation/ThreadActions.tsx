@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { shouldShowThreadChangesButton } from './thread-actions-state'
 
 interface ThreadActionsProps {
   /** Thread id to persist PR metadata after creation/open. */
@@ -134,6 +135,7 @@ export function ThreadActions({
         deletions: gitStatus.index.deletions + gitStatus.workingTree.deletions,
       }
     : null
+  const showChangesButton = shouldShowThreadChangesButton(gitStatus, branch, prState)
   const buttonLabel = creatingPr && !existingPrLink
     ? 'Creating PR...'
     : existingPrLink
@@ -227,7 +229,7 @@ export function ThreadActions({
         onReady={handleGhReady}
       />
       <div className="inline-flex items-center gap-1">
-        {changeTotals && (
+        {showChangesButton && changeTotals && (
           <Button
             variant="ghost"
             size="sm"
