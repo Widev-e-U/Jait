@@ -1,8 +1,8 @@
 import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Eye, GitPullRequest, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
-import { gitApi, type PrCheck } from '@/lib/git-api'
+import { GitPullRequest, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
+import { gitApi, type GitStatusResult, type PrCheck } from '@/lib/git-api'
 import { agentsApi, type ThreadKind, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
@@ -34,6 +34,15 @@ interface ThreadActionsProps {
   showStatusBadge?: boolean
 }
 
+function DiffCountLabel({ insertions, deletions }: { insertions: number; deletions: number }) {
+  return (
+    <span className="inline-flex items-center gap-1 font-medium tabular-nums">
+      <span className="text-green-600 dark:text-green-400">+{insertions}</span>
+      <span className="text-red-600 dark:text-red-400">-{deletions}</span>
+    </span>
+  )
+}
+
 export function ThreadActions({
   threadId,
   cwd,
@@ -50,6 +59,7 @@ export function ThreadActions({
   const [busy, setBusy] = useState(false)
   const [diffOpen, setDiffOpen] = useState(false)
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
+  const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
   const pendingPrAction = useRef(false)
   const skipGhCheck = useRef(false)
   const creatingPr = prState === 'creating'
@@ -66,6 +76,24 @@ export function ThreadActions({
       return null
     })
   }, [prUrl])
+
+  useEffect(() => {
+    let cancelled = false
+
+    const loadStatus = async () => {
+      try {
+        const status = await gitApi.status(cwd)
+        if (!cancelled) setGitStatus(status)
+      } catch {
+        if (!cancelled) setGitStatus(null)
+      }
+    }
+
+    loadStatus()
+    return () => {
+      cancelled = true
+    }
+  }, [cwd, threadStatus, prUrl, prState])
 
   // ── CI checks polling ──────────────────────────────────────────────
   type ChecksStatus = 'pending' | 'passing' | 'failing' | null
@@ -100,6 +128,12 @@ export function ThreadActions({
   }, [branch, cwd, prUrl, prState])
 
   const existingPrLink = prLink ?? (prUrl ? { url: prUrl, kind: 'created' as const } : null)
+  const changeTotals = gitStatus
+    ? {
+        insertions: gitStatus.index.insertions + gitStatus.workingTree.insertions,
+        deletions: gitStatus.index.deletions + gitStatus.workingTree.deletions,
+      }
+    : null
   const buttonLabel = creatingPr && !existingPrLink
     ? 'Creating PR...'
     : existingPrLink
@@ -193,17 +227,19 @@ export function ThreadActions({
         onReady={handleGhReady}
       />
       <div className="inline-flex items-center gap-1">
-        <Button
-          variant="ghost"
-          size="sm"
-          className={`h-5 text-[10px] gap-1 ${isMobile ? 'px-1.5' : ''}`}
-          onClick={() => setDiffOpen(true)}
-          title="Changes"
-          aria-label="Changes"
-        >
-          <Eye className="h-3 w-3" />
-          {!isMobile && 'Changes'}
-        </Button>
+        {changeTotals && (
+          <Button
+            variant="ghost"
+            size="sm"
+            className={`h-5 text-[10px] gap-1 ${isMobile ? 'px-1.5' : ''}`}
+            onClick={() => setDiffOpen(true)}
+            title="View changes"
+            aria-label={`View changes: +${changeTotals.insertions} -${changeTotals.deletions}`}
+          >
+            <DiffCountLabel insertions={changeTotals.insertions} deletions={changeTotals.deletions} />
+            {!isMobile && 'Changes'}
+          </Button>
+        )}
         <Button
           variant="ghost"
           size="sm"

@@ -16,7 +16,6 @@ import {
   GitFork,
   Loader2,
   ArrowDownToLine,
-  Eye,
 } from 'lucide-react'
 import {
   gitApi,
@@ -60,6 +59,15 @@ function QuickActionIcon({ quickAction }: { quickAction: GitQuickAction }) {
     return <GitFork className="h-3.5 w-3.5" />
   }
   return <GitCommit className="h-3.5 w-3.5" />
+}
+
+function DiffCountLabel({ insertions, deletions }: { insertions: number; deletions: number }) {
+  return (
+    <span className="inline-flex items-center gap-1 font-medium tabular-nums">
+      <span className="text-green-600 dark:text-green-400">+{insertions}</span>
+      <span className="text-red-600 dark:text-red-400">-{deletions}</span>
+    </span>
+  )
 }
 
 // ── Main component ───────────────────────────────────────────────────
@@ -119,6 +127,13 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
 
   const menuItems = useMemo(() => buildMenuItems(gitStatus, isBusy), [gitStatus, isBusy])
   const quickAction = useMemo(() => resolveQuickAction(gitStatus, isBusy, isDefaultBranch), [gitStatus, isBusy, isDefaultBranch])
+  const changeTotals = useMemo(() => {
+    if (!gitStatus) return { insertions: 0, deletions: 0 }
+    return {
+      insertions: gitStatus.index.insertions + gitStatus.workingTree.insertions,
+      deletions: gitStatus.index.deletions + gitStatus.workingTree.deletions,
+    }
+  }, [gitStatus])
 
   // ── Actions ────────────────────────────────────────────────────
 
@@ -274,9 +289,10 @@ export function GitActionsControl({ cwd, refreshTrigger }: GitActionsControlProp
           size="sm"
           className="text-xs gap-1"
           onClick={() => setDiffOpen(true)}
+          title="View changes"
+          aria-label={`View changes: +${changeTotals.insertions} -${changeTotals.deletions}`}
         >
-          <Eye className="h-3.5 w-3.5" />
-          View changes
+          <DiffCountLabel insertions={changeTotals.insertions} deletions={changeTotals.deletions} />
         </Button>
       )}
 
