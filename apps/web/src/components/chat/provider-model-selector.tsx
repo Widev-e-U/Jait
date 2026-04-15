@@ -283,9 +283,9 @@ export function ProviderModelSelector({
         <button
           type="button"
           className={cn(
-            'flex h-8 items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-muted-foreground',
+            'flex h-8 items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-xs font-medium text-muted-foreground',
             'hover:text-foreground hover:bg-muted/60 transition-colors',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+            'focus-visible:outline-none focus-visible:border-ring/60 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50',
             'disabled:pointer-events-none disabled:opacity-50',
             className,
           )}
