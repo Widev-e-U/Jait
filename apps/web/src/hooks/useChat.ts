@@ -777,11 +777,15 @@ export function useChat(
         }))
       }
 
-      const updateMessage = (updates: Partial<ChatMessage>) => {
+      const updateMessage = (updates: Partial<ChatMessage>, options?: { immediate?: boolean }) => {
         if (isStale()) return
         pendingMessageUpdates = {
           ...(pendingMessageUpdates ?? {}),
           ...updates,
+        }
+        if (options?.immediate) {
+          flushPendingMessageUpdates()
+          return
         }
         if (pendingMessageFrame !== null) return
         pendingMessageFrame = window.requestAnimationFrame(() => {
@@ -837,7 +841,7 @@ export function useChat(
                 })
                 appendToolSegment(callId)
               }
-              updateMessage({ toolCalls: [...toolCalls], segments: [...segments] })
+              updateMessage({ toolCalls: [...toolCalls], segments: [...segments] }, { immediate: true })
             } else if (data.type === 'tool_start') {
               const callId = data.call_id as string
               const idx = toolCalls.findIndex(tc => tc.callId === callId)
@@ -860,7 +864,7 @@ export function useChat(
                 })
                 appendToolSegment(callId)
               }
-              updateMessage({ toolCalls: [...toolCalls], segments: [...segments] })
+              updateMessage({ toolCalls: [...toolCalls], segments: [...segments] }, { immediate: true })
             } else if (data.type === 'tool_output') {
               const idx = toolCalls.findIndex(tc => tc.callId === (data.call_id as string))
               if (idx !== -1) {
@@ -868,7 +872,7 @@ export function useChat(
                   ...toolCalls[idx],
                   streamingOutput: (toolCalls[idx].streamingOutput ?? '') + (data.content as string),
                 }
-                updateMessage({ toolCalls: [...toolCalls] })
+                updateMessage({ toolCalls: [...toolCalls] }, { immediate: true })
               }
             } else if (data.type === 'tool_result') {
               const idx = toolCalls.findIndex(tc => tc.callId === (data.call_id as string))
@@ -879,7 +883,7 @@ export function useChat(
                   result: { ok: data.ok as boolean, message: data.message as string, data: data.data as unknown },
                   completedAt: Date.now(),
                 }
-                updateMessage({ toolCalls: [...toolCalls] })
+                updateMessage({ toolCalls: [...toolCalls] }, { immediate: true })
 
                 // Auto-track file edits in changedFiles
                 if (data.ok) {
