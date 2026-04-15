@@ -27,15 +27,15 @@ import {
   threadBelongsToRepository,
   type AutomationRepository,
 } from '@/lib/automation-repositories'
-import { gitApi, type GitStatusPr } from '@/lib/git-api'
+import { gitApi } from '@/lib/git-api'
 import { generateDeviceId } from '@/lib/device-id'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+import { resolveThreadPrStateFromPoll, type ThreadPrState } from '@/lib/thread-pr-state'
 
 // ── Types ────────────────────────────────────────────────────────────
 
 export type RepositoryConnection = AutomationRepository
 
-export type ThreadPrState = GitStatusPr['state'] | 'creating' | null
 const THREAD_LIST_LIMIT = 10
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -512,7 +512,7 @@ export function useAutomation(enabled = true) {
             statusCwd,
             thread.branch ?? undefined,
           )
-          const prState: ThreadPrState = status.pr?.state ?? (thread.prState === 'creating' ? 'creating' : null)
+          const prState = resolveThreadPrStateFromPoll(status.pr, thread.prState)
 
           // Sync discovered PR metadata back to the thread DB so it
           // persists across sessions and shows in ThreadActions / sidebar.
