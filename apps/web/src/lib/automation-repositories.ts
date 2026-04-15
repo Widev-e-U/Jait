@@ -1,4 +1,4 @@
-import type { AgentThread, ProviderId, ProviderInfo, RemoteProviderInfo } from './agents-api'
+import type { AgentThread, AutomationRepo, ProviderId, ProviderInfo, RemoteProviderInfo } from './agents-api'
 
 export type AutomationRepositorySource = 'local' | 'shared'
 
@@ -21,6 +21,19 @@ export interface RepositoryRuntimeInfo {
   online: boolean
   loading: boolean
   availableProviders: ProviderId[]
+}
+
+export function mapDbRepoToAutomationRepository(repo: AutomationRepo): AutomationRepository {
+  return {
+    id: repo.id,
+    name: repo.name,
+    defaultBranch: repo.defaultBranch,
+    localPath: repo.localPath,
+    deviceId: repo.deviceId,
+    forgeUrl: repo.forgeUrl,
+    githubUrl: repo.githubUrl,
+    source: 'local',
+  }
 }
 
 function normalizePath(path: string): string {
