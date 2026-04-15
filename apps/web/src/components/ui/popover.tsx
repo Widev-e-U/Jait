@@ -27,14 +27,8 @@ function PopoverContent({
   ref,
   children,
   ...props
-}: Omit<React.HTMLAttributes<HTMLDivElement>, 'children'> & {
+}: Omit<React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>, 'children'> & {
   children?: React.ReactNode
-  align?: 'start' | 'center' | 'end'
-  side?: 'top' | 'right' | 'bottom' | 'left'
-  sideOffset?: number
-  forceMount?: true
-  onOpenAutoFocus?: (event: Event) => void
-  onCloseAutoFocus?: (event: Event) => void
   ref?: React.Ref<HTMLDivElement>
 }) {
   return (
