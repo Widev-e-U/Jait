@@ -141,8 +141,36 @@ describe("chat route OpenRouter backend selection", () => {
 
     expect(response.statusCode).toBe(200);
     expect(response.headers["content-type"]).toContain("text/event-stream");
+    expect(response.body).toContain('"type":"context_flow"');
     expect(response.body).toContain('"type":"token","content":"ok"');
     expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    const messagesResponse = await app.inject({
+      method: "GET",
+      url: `/api/sessions/${session.id}/messages`,
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(messagesResponse.statusCode).toBe(200);
+    const messagesBody = messagesResponse.json() as {
+      messages: Array<{
+        role: string;
+        content: string;
+        contextFlow?: {
+          provider: string;
+          model: string;
+          rounds: Array<{ model: string; messages: Array<{ role: string; content: string }> }>;
+        };
+      }>;
+    };
+    const assistantMessage = messagesBody.messages.find((msg) => msg.role === "assistant");
+    expect(assistantMessage?.contextFlow).toMatchObject({
+      provider: "jait",
+      model: "xiaomi/mimo-v2-pro",
+    });
+    expect(assistantMessage?.contextFlow?.rounds[0]?.messages.at(-1)).toMatchObject({
+      role: "user",
+      content: "reply ok",
+    });
 
     await app.close();
   });

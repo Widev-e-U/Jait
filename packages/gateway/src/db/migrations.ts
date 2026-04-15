@@ -679,4 +679,13 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 026: Persist outbound LLM context snapshots ─────────────────
+  {
+    id: 26,
+    name: "messages_context_flow_column",
+    run(db) {
+      try { db.exec(`ALTER TABLE messages ADD COLUMN context_flow TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];

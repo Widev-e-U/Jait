@@ -4,7 +4,7 @@ import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
-import { Check, Copy, Pencil, RotateCcw, X } from 'lucide-react'
+import { Check, Copy, Eye, Pencil, RotateCcw, X } from 'lucide-react'
 import {
   CodeBlock,
   CodeBlockActions,
@@ -21,12 +21,19 @@ import {
 } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from './tool-call-card'
-import type { MessageSegment } from '@/hooks/useChat'
+import type { LlmContextFlow, MessageSegment } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
 import type { SendTarget } from './send-target-selector'
@@ -61,6 +68,7 @@ interface MessageProps {
   messageFromEnd?: number
   role: 'user' | 'assistant'
   content: string
+  contextFlow?: LlmContextFlow
   /** Clean display text (without appended file contents). Falls back to parsing content. */
   displayContent?: string
   /** Files the user referenced via @ chips — rendered as inline badges. */
@@ -416,6 +424,7 @@ function MessageInner({
   messageFromEnd,
   role,
   content,
+  contextFlow,
   displayContent: displayContentProp,
   referencedFiles: referencedFilesProp,
   displaySegments: displaySegmentsProp,
@@ -465,6 +474,7 @@ function MessageInner({
   const [isEditing, setIsEditing] = useState(false)
   const [showEditComposer, setShowEditComposer] = useState(false)
   const [isSavingEdit, setIsSavingEdit] = useState(false)
+  const [contextOpen, setContextOpen] = useState(false)
   const [editDraft, setEditDraft] = useState('')
   const [editSegments, setEditSegments] = useState<UserMessageSegment[]>([])
   const [optimisticUserDisplayText, setOptimisticUserDisplayText] = useState<string | null>(null)
@@ -484,6 +494,10 @@ function MessageInner({
       ))
     return fromSegments.length > 0 ? fromSegments : (attachmentsProp ?? [])
   }, [attachmentsProp, isUser, optimisticUserDisplaySegments, userDisplaySegments])
+  const contextFlowText = useMemo(() => {
+    if (!contextFlow) return ''
+    return JSON.stringify(contextFlow, null, 2)
+  }, [contextFlow])
   const copyTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
   const editPromptInputRef = useRef<PromptInputHandle | null>(null)
@@ -718,6 +732,20 @@ function MessageInner({
               <RotateCcw className={cn('h-3.5 w-3.5', isRetrying && 'animate-spin')} />
             </MessageAction>
           ) : null}
+          {!isUser && contextFlow ? (
+            <MessageAction
+              onClick={(e) => {
+                e.preventDefault()
+                e.stopPropagation()
+                setContextOpen(true)
+              }}
+              aria-label="View LLM context"
+              tooltip="View LLM context"
+              className="h-6 w-6"
+            >
+              <Eye className="h-3.5 w-3.5" />
+            </MessageAction>
+          ) : null}
           <MessageAction
             onClick={copyToClipboard}
             aria-label={copied ? 'Copied' : 'Copy message'}
@@ -734,6 +762,7 @@ function MessageInner({
   const assistantActions = !isUser ? renderActions() : null
 
   return (
+    <>
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn('min-w-0 max-w-[85%] space-y-2', isUser && 'order-1')}>
         {!isUser && thinking && (
@@ -996,6 +1025,29 @@ function MessageInner({
         )}
       </div>
     </AIMessage>
+    <Dialog open={contextOpen} onOpenChange={setContextOpen}>
+      <DialogContent className="max-h-[85vh] max-w-4xl grid-rows-[auto_minmax(0,1fr)] p-0">
+        <DialogHeader className="border-b px-5 py-4">
+          <DialogTitle>LLM Context Flow</DialogTitle>
+          <DialogDescription>
+            {contextFlow
+              ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} / ${contextFlow.rounds.length} request${contextFlow.rounds.length === 1 ? '' : 's'}`
+              : 'No context snapshot is available for this message.'}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="min-h-0 overflow-auto px-5 pb-5">
+          {contextFlow?.note ? (
+            <p className="mb-3 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              {contextFlow.note}
+            </p>
+          ) : null}
+          <pre className="whitespace-pre-wrap break-words rounded-md border border-border/70 bg-muted/35 p-3 text-xs leading-relaxed text-foreground [overflow-wrap:anywhere]">
+            {contextFlowText || 'No context snapshot is available for this message.'}
+          </pre>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 
