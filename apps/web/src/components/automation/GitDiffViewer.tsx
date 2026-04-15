@@ -62,7 +62,7 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
       if (!cancelled) setLoading(false)
     })
     return () => { cancelled = true }
-  }, [cwd])
+  }, [baseBranch, cwd])
 
   useEffect(() => {
     const update = () => setIsNarrow(window.innerWidth < 960)

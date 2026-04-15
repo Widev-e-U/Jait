@@ -2,7 +2,7 @@ import { useState, useCallback, useEffect, useRef } from 'react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { GitPullRequest, Loader2, CheckCircle2, XCircle, Clock } from 'lucide-react'
-import { gitApi, type GitStatusResult, type PrCheck } from '@/lib/git-api'
+import { gitApi, type GitDiffStatsResult, type GitStatusResult, type PrCheck } from '@/lib/git-api'
 import { agentsApi, type ThreadKind, type ThreadStatus } from '@/lib/agents-api'
 import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
@@ -61,6 +61,7 @@ export function ThreadActions({
   const [diffOpen, setDiffOpen] = useState(false)
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
+  const [changeTotals, setChangeTotals] = useState<Pick<GitDiffStatsResult, 'insertions' | 'deletions'> | null>(null)
   const pendingPrAction = useRef(false)
   const skipGhCheck = useRef(false)
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
@@ -83,9 +84,27 @@ export function ThreadActions({
     const loadStatus = async () => {
       try {
         const status = await gitApi.status(cwd, branch ?? undefined)
-        if (!cancelled) setGitStatus(status)
+        const diffStats = branch
+          ? await gitApi.diffStats(cwd, baseBranch).catch(() => null)
+          : null
+        if (cancelled) return
+        setGitStatus(status)
+        setChangeTotals(
+          diffStats
+            ? {
+                insertions: diffStats.insertions,
+                deletions: diffStats.deletions,
+              }
+            : {
+                insertions: status.index.insertions + status.workingTree.insertions,
+                deletions: status.index.deletions + status.workingTree.deletions,
+              },
+        )
       } catch {
-        if (!cancelled) setGitStatus(null)
+        if (!cancelled) {
+          setGitStatus(null)
+          setChangeTotals(null)
+        }
       }
     }
 
@@ -93,7 +112,7 @@ export function ThreadActions({
     return () => {
       cancelled = true
     }
-  }, [cwd, threadStatus, prUrl, prState])
+  }, [baseBranch, branch, cwd, threadStatus, prUrl, prState])
 
   // ── CI checks polling ──────────────────────────────────────────────
   type ChecksStatus = 'pending' | 'passing' | 'failing' | null
@@ -133,12 +152,6 @@ export function ThreadActions({
     (gitStatus?.pr?.url ? { url: gitStatus.pr.url, kind: 'created' as const } : null)
   const effectivePrState = prState === 'creating' && existingPrLink?.kind === 'created' ? 'open' : prState
   const creatingPr = effectivePrState === 'creating'
-  const changeTotals = gitStatus
-    ? {
-        insertions: gitStatus.index.insertions + gitStatus.workingTree.insertions,
-        deletions: gitStatus.index.deletions + gitStatus.workingTree.deletions,
-      }
-    : null
   const showChangesButton = shouldShowThreadChangesButton(gitStatus, branch, effectivePrState)
   const buttonLabel = creatingPr && !existingPrLink
     ? 'Creating PR...'
