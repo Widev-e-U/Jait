@@ -2667,18 +2667,11 @@ function App() {
     sendUIState('screen-share.panel', null, activeSessionId)
   }, [setSavedScreenShare, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
-  const closeDevPreviewPanel = useCallback(async () => {
-    if (token && activeSessionId) {
-      await fetch(`${getApiUrl()}/api/preview/stop`, {
-        method: 'POST',
-        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ sessionId: activeSessionId }),
-      }).catch(() => {})
-    }
+  const closeDevPreviewPanel = useCallback(() => {
     closeWorkspacePreview()
     setDevPreviewBrowserSessionId(null)
     setSavedDevPreview(null)
-  }, [token, activeSessionId, closeWorkspacePreview, setSavedDevPreview])
+  }, [closeWorkspacePreview, setSavedDevPreview])
 
   const prevPreviewSyncRef = useRef<string>('')
   const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null; browserSessionId?: string | null }) => {

@@ -3532,9 +3532,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [activeTabId])
 
   const handleClosePreviewTarget = useCallback(() => {
-    if (managedPreviewSession) {
-      void stopManagedPreviewSession(false)
-    }
     setPreviewSidePanelOpen(false)
     setOpenTabs((prev) => {
       const previewIndex = prev.findIndex((tab) => tab.type === 'preview')
@@ -3576,7 +3573,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       return next
     })
     onPreviewOpenChange?.({ open: false, target: null, browserSessionId: null })
-  }, [activeTabId, managedPreviewSession, onPreviewOpenChange, stopManagedPreviewSession])
+  }, [activeTabId, onPreviewOpenChange])
 
   const handleRefreshPreviewTarget = useCallback(() => {
     setPreviewFrameLoading(true)
@@ -3906,8 +3903,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   /* ---- Tab management ---- */
   const handleCloseTab = useCallback((tabId: string, options?: CloseTabOptions) => {
     const closingTab = openTabs.find((tab) => tab.id === tabId) ?? null
-    if (closingTab?.type === 'preview' && managedPreviewSession && !options?.preserveManagedPreview) {
-      void stopManagedPreviewSession(false)
+    if (closingTab?.type === 'preview' && !options?.preserveManagedPreview) {
       setPreviewSidePanelOpen(false)
     }
     setOpenTabs(prev => {
@@ -3944,7 +3940,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       }
       return next
     })
-  }, [activeTabId, managedPreviewSession, openTabs, stopManagedPreviewSession])
+  }, [activeTabId, openTabs])
 
   const handleDetachTab = useCallback(async (tabId: string) => {
     const tab = openTabs.find((entry) => entry.id === tabId) ?? null
@@ -4198,7 +4194,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     <div className="flex items-center gap-1.5">
       <Button
         size="sm"
-        className={cn(mobile ? 'h-8 rounded-md px-2.5 text-xs' : 'h-8 rounded-r-none px-2 text-xs')}
+        className={cn(mobile ? 'h-8 rounded-md px-2.5 text-xs' : 'h-6 gap-1 rounded-r-none px-1.5 text-[11px]')}
         onClick={() => {
           if (primaryGitAction === 'sync') {
             void handleGitSync()
@@ -4224,8 +4220,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             variant={mobile ? 'secondary' : 'default'}
             size="sm"
             className={cn(
-              'px-2',
-              mobile ? 'h-8 rounded-md' : 'h-8 rounded-l-none border-l border-primary-foreground/20',
+              mobile ? 'h-8 rounded-md px-2' : 'h-6 rounded-l-none border-l border-primary-foreground/20 px-1.5',
             )}
             disabled={gitActionBusy}
             title="More commit actions"

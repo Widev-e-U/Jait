@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
+import { Info } from 'lucide-react'
 import { buildNoVncViewerUrl, isNoVncViewerUrl, isWebSocketUrl, type NoVncResizeMode, type NoVncSessionOptions } from '@/lib/no-vnc'
 import { getApiUrl } from '@/lib/gateway-url'
 
@@ -112,6 +113,7 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
   const [zoom, setZoom] = useState(1)
   const [pan, setPan] = useState({ x: 0, y: 0 })
   const [isDragging, setIsDragging] = useState(false)
+  const [isHintExpanded, setIsHintExpanded] = useState(false)
   // "navigating" = overlay is active → scroll zooms, middle-drag pans.
   // "interacting" = overlay is transparent → clicks/scrolls go to iframe.
   const [navigating, setNavigating] = useState(true)
@@ -277,6 +279,9 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
   const toggleMode = useCallback(() => {
     setNavigating(n => !n)
   }, [])
+  const toggleHint = useCallback(() => {
+    setIsHintExpanded(expanded => !expanded)
+  }, [])
 
   return (
     <div
@@ -310,19 +315,30 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
         onPointerUp={handlePointerUp}
         onDoubleClick={handleDoubleClick}
       />
-      {/* Navigating hint — tells the user they need to click to interact */}
-      {navigating && !isDragging ? (
-        <div className="pointer-events-none absolute bottom-2 left-2 z-20">
-          <span className="rounded-full bg-background/80 px-3 py-1 text-[11px] text-muted-foreground shadow backdrop-blur-sm">
-            Scroll to zoom · Middle-drag to pan · Click to interact
-          </span>
+      <div className="absolute left-2 top-2 z-20 flex items-start gap-2">
+        <div className="pointer-events-auto flex items-start gap-2">
+          <button
+            type="button"
+            className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow backdrop-blur-sm transition-colors hover:bg-background"
+            onClick={toggleHint}
+            aria-expanded={isHintExpanded}
+            aria-label={isHintExpanded ? 'Hide pan and zoom help' : 'Show pan and zoom help'}
+            title={isHintExpanded ? 'Hide pan and zoom help' : 'Show pan and zoom help'}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+          {isHintExpanded ? (
+            <div className="max-w-[260px] rounded-xl bg-background/90 px-3 py-2 text-[11px] text-muted-foreground shadow backdrop-blur-sm">
+              Scroll to zoom. Middle-drag to pan. Click the preview to interact.
+            </div>
+          ) : null}
         </div>
-      ) : null}
-      {overlay ? (
-        <div className="absolute left-2 top-2 z-20 rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
-          {overlay}
-        </div>
-      ) : null}
+        {overlay ? (
+          <div className="rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
+            {overlay}
+          </div>
+        ) : null}
+      </div>
       {controls ? (
         <div className="absolute right-2 top-2 z-20">
           {controls}
