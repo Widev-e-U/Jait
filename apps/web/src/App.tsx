@@ -5771,6 +5771,7 @@ function App() {
                           messageFromEnd={automationMessages.length - 1 - idx}
                           role={msg.role}
                           content={msg.content}
+                          contextFlow={msg.contextFlow}
                           toolCalls={msg.toolCalls}
                           segments={msg.segments}
                           isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
@@ -6133,6 +6134,7 @@ function App() {
                       messageFromEnd={messages.length - 1 - idx}
                       role={msg.role}
                       content={msg.content}
+                      contextFlow={msg.contextFlow}
                       displayContent={msg.displayContent}
                       referencedFiles={msg.referencedFiles}
                       displaySegments={msg.displaySegments}

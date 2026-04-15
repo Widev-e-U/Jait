@@ -47,6 +47,16 @@ export interface OpenAIToolSchema {
   function: { name: string; description: string; parameters: unknown };
 }
 
+/** Snapshot of an outbound model request, with credentials removed. */
+export interface LlmContextFlowRound {
+  round: number;
+  createdAt: string;
+  model: string;
+  messages: ReturnType<typeof serializeMessages>;
+  tools?: OpenAIToolSchema[];
+  tool_choice?: "auto";
+}
+
 /** LLM connection config */
 export interface LLMConfig {
   openaiApiKey: string;
@@ -166,6 +176,8 @@ export interface AgentLoopOptions {
   log?: Logger;
   /** Event callback — called for every stream event */
   onEvent?: (event: AgentLoopEvent) => void;
+  /** Called immediately before each outbound LLM request. */
+  onContext?: (round: LlmContextFlowRound) => void;
   /** Persistence callback — called when a final assistant message should be saved */
   onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string, segments?: string) => void;
 }
@@ -780,6 +792,7 @@ export async function runAgentLoop(
     disabledTools,
     mode = "agent",
     onEvent,
+    onContext,
     onPersist,
     log = console,
   } = options;
@@ -863,6 +876,13 @@ export async function runAgentLoop(
       reqBody.tools = activeSchemas;
       reqBody.tool_choice = "auto";
     }
+    onContext?.({
+      round: round + 1,
+      createdAt: new Date().toISOString(),
+      model: llm.openaiModel,
+      messages: reqBody.messages as ReturnType<typeof serializeMessages>,
+      ...(hasTools ? { tools: activeSchemas, tool_choice: "auto" } : {}),
+    });
 
     let contentText = "";
     let toolCalls: OpenAIToolCall[] = [];

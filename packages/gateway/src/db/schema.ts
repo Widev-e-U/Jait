@@ -186,6 +186,7 @@ export const messages = sqliteTable(
     content: text("content").notNull(),
     toolCalls: text("tool_calls"), // JSON array of executed tool calls (nullable)
     segments: text("segments"), // JSON array of MessageSegment for interleaved rendering (nullable)
+    contextFlow: text("context_flow"), // JSON snapshot of outbound LLM context for this assistant response
     createdAt: text("created_at").notNull(),
   },
   (table) => [

@@ -70,6 +70,22 @@ export type MessageSegment =
   | { type: 'text'; content: string }
   | { type: 'toolGroup'; callIds: string[] }
 
+export interface LlmContextFlowRound {
+  round: number
+  createdAt: string
+  model: string
+  messages: Array<Record<string, unknown>>
+  tools?: unknown[]
+  tool_choice?: 'auto'
+}
+
+export interface LlmContextFlow {
+  provider: string
+  model?: string
+  rounds: LlmContextFlowRound[]
+  note?: string
+}
+
 export interface ChatMessage {
   id: string
   role: 'user' | 'assistant'
@@ -87,6 +103,8 @@ export interface ChatMessage {
   thinking?: string
   thinkingDuration?: number
   toolCalls?: ToolCallInfo[]
+  /** Outbound model request snapshots that produced this response. */
+  contextFlow?: LlmContextFlow
   /**
    * Ordered interleaving of text and tool-call groups.
    * Present on messages built from a live stream; absent on
@@ -327,6 +345,7 @@ export function useChat(
                   id: string;
                   role: 'user' | 'assistant';
                   content: string;
+                  contextFlow?: LlmContextFlow;
                   segments?: unknown[];
                   toolCalls?: Array<{
                     callId: string;
@@ -344,7 +363,7 @@ export function useChat(
                 }>
                 const snapshotStreaming = data.streaming as boolean
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
-                  const msg: ChatMessage = { id: m.id, role: m.role, content: m.content }
+                  const msg: ChatMessage = { id: m.id, role: m.role, content: m.content, contextFlow: m.contextFlow }
                   if (m.role === 'user' && m.segments && m.segments.length > 0) {
                     msg.displaySegments = parseUserMessageSegments(m.segments)
                     msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
@@ -556,6 +575,22 @@ export function useChat(
                 setTodoList(items)
               } else if (data.type === 'context_usage') {
                 setContextUsage(data as unknown as ContextUsage)
+              } else if (data.type === 'context_flow' && assistantId) {
+                setState(prev => ({
+                  ...prev,
+                  messages: prev.messages.map(m =>
+                    m.id === assistantId
+                      ? {
+                          ...m,
+                          contextFlow: {
+                            provider: String(data.provider ?? 'jait'),
+                            model: typeof data.model === 'string' ? data.model : undefined,
+                            rounds: Array.isArray(data.rounds) ? data.rounds as LlmContextFlowRound[] : [],
+                          },
+                        }
+                      : m
+                  ),
+                }))
               } else if (data.type === 'provider_fallback') {
                 // Provider was unavailable, gateway fell back to jait
                 setSessionInfo({
@@ -928,6 +963,14 @@ export function useChat(
               setTodoList(items)
             } else if (data.type === 'context_usage') {
               setContextUsage(data as unknown as ContextUsage)
+            } else if (data.type === 'context_flow') {
+              updateMessage({
+                contextFlow: {
+                  provider: String(data.provider ?? 'jait'),
+                  model: typeof data.model === 'string' ? data.model : undefined,
+                  rounds: Array.isArray(data.rounds) ? data.rounds as LlmContextFlowRound[] : [],
+                },
+              }, { immediate: true })
             } else if (data.type === 'provider_fallback') {
               // Provider was unavailable, gateway fell back to jait
               setSessionInfo({

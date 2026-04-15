@@ -33,6 +33,7 @@ import {
   SteeringController,
   type AgentLoopEvent,
   type ExecutedToolCall,
+  type LlmContextFlowRound,
   type OpenAIToolCall,
 } from "../tools/agent-loop.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
@@ -57,6 +58,15 @@ interface ChatMessage {
   uiToolCalls?: PersistedToolCall[];
   /** Persisted segments for interleaved rendering */
   segments?: unknown[];
+  /** Outbound LLM request snapshots that produced this visible response */
+  contextFlow?: LlmContextFlow;
+}
+
+interface LlmContextFlow {
+  provider: string;
+  model?: string;
+  rounds: LlmContextFlowRound[];
+  note?: string;
 }
 
 /** Serialized tool call info for DB persistence */
@@ -396,7 +406,7 @@ const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
 const DEFAULT_UI_MESSAGE_LIMIT = 120;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
-type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown; segments?: unknown };
+type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown; segments?: unknown; contextFlow?: LlmContextFlow };
 type VisibleHistoryMsg = UIMsg & { historyIndex: number };
 
 function parseToolArguments(raw: string): unknown {
@@ -567,6 +577,7 @@ function buildVisibleHistoryEntries(
       content: m.content,
       toolCalls: uiToolCalls,
       segments: m.segments,
+      contextFlow: m.contextFlow,
       historyIndex: i,
     });
     visibleIndex++;
@@ -579,12 +590,13 @@ function buildVisibleHistoryMessages(
   history: ChatMessage[],
   options?: { includePendingAssistantToolCalls?: boolean },
 ): UIMsg[] {
-  const msgs = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls, segments }) => ({
+  const msgs = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls, segments, contextFlow }) => ({
     id,
     role,
     content,
     toolCalls,
     segments,
+    contextFlow,
   }));
 
   // If there is a live streaming accumulator for this session, inject a
@@ -606,6 +618,7 @@ function buildVisibleHistoryMessages(
         content: acc.content,
         toolCalls: acc.toolCalls.length > 0 ? mapPersistedToolCallsForUI(acc.toolCalls) : undefined,
         segments: acc.segments.length > 0 ? acc.segments : undefined,
+        contextFlow: undefined,
       });
     }
   }
@@ -643,7 +656,7 @@ const MAX_TOOL_ROUNDS = 15;
 let _dbRef: JaitDB | undefined;
 let _appRef: FastifyInstance | undefined;
 
-function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string): void {
+function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string): void {
   if (!_dbRef) return;
   try {
     _dbRef.insert(messagesTable)
@@ -654,6 +667,7 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
         content,
         toolCalls: toolCalls ?? null,
         segments: segments ?? null,
+        contextFlow: contextFlow ?? null,
         createdAt: new Date().toISOString(),
       })
       .run();
@@ -859,6 +873,7 @@ export function registerChatRoutes(
         ...rows.map((r) => {
           let uiToolCalls: PersistedToolCall[] | undefined;
           let segments: unknown[] | undefined;
+          let contextFlow: LlmContextFlow | undefined;
           if (r.toolCalls) {
             try {
               const parsed = JSON.parse(r.toolCalls) as unknown;
@@ -877,18 +892,27 @@ export function registerChatRoutes(
               }
             } catch { /* ignore */ }
           }
+          if (r.contextFlow) {
+            try {
+              const parsed = JSON.parse(r.contextFlow) as unknown;
+              if (parsed && typeof parsed === "object" && Array.isArray((parsed as { rounds?: unknown }).rounds)) {
+                contextFlow = parsed as LlmContextFlow;
+              }
+            } catch { /* ignore */ }
+          }
           return {
             role: r.role as ChatMessage["role"],
             content: r.content,
             uiToolCalls,
             segments,
+            contextFlow,
           };
         }),
       ]);
     }
   }
 
-  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string): void {
+  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string): void {
     if (!db) return;
     try {
       db.insert(messagesTable)
@@ -899,6 +923,7 @@ export function registerChatRoutes(
           content,
           toolCalls: toolCalls ?? null,
           segments: segments ?? null,
+          contextFlow: contextFlow ?? null,
           createdAt: new Date().toISOString(),
         })
         .run();
@@ -1122,6 +1147,7 @@ export function registerChatRoutes(
     let fullContent = "";
     let partialToolCalls: PersistedToolCall[] = [];
     let resultSegmentsJson: string | undefined;
+    let contextFlowJson: string | undefined;
     let hitMaxRounds = false;
     activeStreams.add(sessionId);
     // Reset streaming accumulator for this turn so reload snapshots start fresh
@@ -1478,6 +1504,21 @@ export function registerChatRoutes(
 
         // Send the turn — with recovery if the cached session died between messages
         try {
+          const sentAt = new Date().toISOString();
+          const cliContextFlow = {
+            provider: requestProvider,
+            ...(typeof body["model"] === "string" ? { model: body["model"] } : {}),
+            note: "CLI providers keep their own session context. This captures the exact turn text Jait sent to the CLI provider.",
+            rounds: [{
+              round: 1,
+              createdAt: sentAt,
+              model: typeof body["model"] === "string" ? body["model"] : requestProvider,
+              messages: [{ role: "user", content: cliContent }],
+            }],
+          } satisfies LlmContextFlow;
+          contextFlowJson = JSON.stringify(cliContextFlow);
+          safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
+          emitToSubscribers(sessionId, { type: "context_flow", ...cliContextFlow } as unknown as StreamEvent);
           await cliProvider.sendTurn(providerSessionId, cliContent);
         } catch (sendErr) {
           // Session likely died (process exited) — start a fresh one
@@ -1505,6 +1546,21 @@ export function registerChatRoutes(
               recoveryContent = `${skillsBlock}\n\n${content}`;
             }
           }
+          const sentAt = new Date().toISOString();
+          const cliContextFlow = {
+            provider: requestProvider,
+            ...(typeof body["model"] === "string" ? { model: body["model"] } : {}),
+            note: "CLI providers keep their own session context. This captures the exact recovery turn text Jait sent to the CLI provider.",
+            rounds: [{
+              round: 1,
+              createdAt: sentAt,
+              model: typeof body["model"] === "string" ? body["model"] : requestProvider,
+              messages: [{ role: "user", content: recoveryContent }],
+            }],
+          } satisfies LlmContextFlow;
+          contextFlowJson = JSON.stringify(cliContextFlow);
+          safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
+          emitToSubscribers(sessionId, { type: "context_flow", ...cliContextFlow } as unknown as StreamEvent);
           await cliProvider.sendTurn(providerSessionId, recoveryContent);
         }
 
@@ -1547,8 +1603,13 @@ export function registerChatRoutes(
         resultSegmentsJson = cliSegJson;
 
         // Persist assistant message with tool calls and segments
-        history.push({ role: "assistant", content: fullContent, uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined });
-        persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson);
+        history.push({
+          role: "assistant",
+          content: fullContent,
+          uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined,
+          contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
+        });
+        persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson);
 
         // Session stays alive for the next turn — do NOT stop it.
         // It will be cleaned up on session error, provider switch, or server shutdown.
@@ -1621,6 +1682,7 @@ export function registerChatRoutes(
             }
           }
         };
+        const contextRounds: LlmContextFlowRound[] = [];
         const result = await runAgentLoop(
           {
             llm: llmRuntime,
@@ -1642,7 +1704,23 @@ export function registerChatRoutes(
             disabledTools,
             mode: chatMode,
             onEvent,
-            onPersist: (sid, role, content, tc, seg) => persistMessage(sid, role, content, tc, seg),
+            onContext: (round) => {
+              contextRounds.push(round);
+              contextFlowJson = JSON.stringify({
+                provider: "jait",
+                model: llmRuntime.openaiModel,
+                rounds: contextRounds,
+              } satisfies LlmContextFlow);
+              const event = {
+                type: "context_flow",
+                provider: "jait",
+                model: llmRuntime.openaiModel,
+                rounds: contextRounds,
+              };
+              emitToSubscribers(sessionId, event as unknown as StreamEvent);
+              safeWrite(`data: ${JSON.stringify(event)}\n\n`);
+            },
+            onPersist: (sid, role, content, tc, seg) => persistMessage(sid, role, content, tc, seg, contextFlowJson),
             log: app.log,
           },
           executeTool,
@@ -1652,6 +1730,12 @@ export function registerChatRoutes(
         partialToolCalls = result.executedToolCalls as unknown as PersistedToolCall[];
         resultSegmentsJson = result.segments.length > 0 ? JSON.stringify(result.segments) : undefined;
         hitMaxRounds = result.hitMaxRounds;
+        if (contextFlowJson) {
+          const lastAssistant = [...history].reverse().find((msg) => msg.role === "assistant" && !msg.contextFlow);
+          if (lastAssistant) {
+            lastAssistant.contextFlow = JSON.parse(contextFlowJson) as LlmContextFlow;
+          }
+        }
         // Track executed tool calls for retry API
         sessionExecutedToolCalls.set(sessionId, result.executedToolCalls);
         // Store plan if plan mode produced one
@@ -1674,7 +1758,7 @@ export function registerChatRoutes(
       // Save partial content for real (non-cancel) errors
       if (!wasCancelled && (fullContent || partialToolCalls.length > 0)) {
         const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
-        persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson);
+        persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
       }
 
       const errMsg = wasCancelled
@@ -1692,7 +1776,7 @@ export function registerChatRoutes(
     // between these two steps loads the cancelled tool calls from the DB.
     if (streamAbort.signal.aborted && partialToolCalls.length > 0) {
       const tcJson = JSON.stringify(partialToolCalls);
-      persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson);
+      persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
     }
 
     activeStreams.delete(sessionId);
