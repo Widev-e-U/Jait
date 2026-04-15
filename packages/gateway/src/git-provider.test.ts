@@ -72,3 +72,34 @@ describe("discardChanges", () => {
     }
   });
 });
+
+describe("diffStats", () => {
+  it("returns branch-scoped totals for committed thread changes", { timeout: 15_000 }, async () => {
+    const root = mkdtempSync(join(tmpdir(), "jait-git-diff-stats-"));
+    try {
+      execSync("git init -b main", { cwd: root, stdio: "ignore" });
+      execSync('git config user.email "test@example.com"', { cwd: root, stdio: "ignore" });
+      execSync('git config user.name "Test User"', { cwd: root, stdio: "ignore" });
+      execSync("git config core.autocrlf false", { cwd: root, stdio: "ignore" });
+
+      writeFileSync(join(root, "file.txt"), "base\n");
+      execSync("git add file.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "init"', { cwd: root, stdio: "ignore" });
+
+      execSync("git checkout -b feature/thread", { cwd: root, stdio: "ignore" });
+      writeFileSync(join(root, "file.txt"), "base\nextra\n");
+      execSync("git add file.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "thread change"', { cwd: root, stdio: "ignore" });
+
+      const git = new GitService();
+      await expect(git.diffStats(root, "main")).resolves.toEqual({
+        files: 1,
+        insertions: 1,
+        deletions: 0,
+        hasChanges: true,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+});

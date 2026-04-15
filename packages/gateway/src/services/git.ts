@@ -95,6 +95,13 @@ export interface GitDiffResult {
   hasChanges: boolean;
 }
 
+export interface GitDiffStatsResult {
+  files: number;
+  insertions: number;
+  deletions: number;
+  hasChanges: boolean;
+}
+
 function normalizeStatusChar(char: string): string {
   if (char === "?") return "?";
   if (char === "A") return "A";
@@ -1718,6 +1725,49 @@ export class GitService {
       diff: diffText,
       files,
       hasChanges: files.length > 0,
+    };
+  }
+
+  async diffStats(cwd: string, baseBranch?: string): Promise<GitDiffStatsResult> {
+    const isGit = await this.isRepo(cwd);
+    if (!isGit) {
+      return { files: 0, insertions: 0, deletions: 0, hasChanges: false };
+    }
+
+    const filePaths = new Set<string>();
+    let insertions = 0;
+    let deletions = 0;
+
+    const collectNumstat = async (args: string): Promise<void> => {
+      const numstat = await gitExec(cwd, args).catch(() => "");
+      for (const line of numstat.split("\n").filter(Boolean)) {
+        const [ins, del, filePath] = line.split("\t");
+        if (!filePath) continue;
+        filePaths.add(filePath);
+        insertions += ins === "-" ? 0 : parseInt(ins ?? "0", 10);
+        deletions += del === "-" ? 0 : parseInt(del ?? "0", 10);
+      }
+    };
+
+    if (baseBranch) {
+      await collectNumstat(`diff --numstat ${baseBranch}`);
+    } else {
+      await collectNumstat("diff --cached --numstat");
+      await collectNumstat("diff --numstat");
+    }
+
+    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+    for (const line of porcelain.split("\n").filter(Boolean)) {
+      if (!line.startsWith("??")) continue;
+      const filePath = line.slice(3).trim();
+      if (filePath) filePaths.add(filePath);
+    }
+
+    return {
+      files: filePaths.size,
+      insertions,
+      deletions,
+      hasChanges: filePaths.size > 0,
     };
   }
 

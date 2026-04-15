@@ -605,6 +605,62 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     }
   });
 
+  /** Summary stats for current changes or branch-scoped thread changes */
+  app.post("/api/git/diff-stats", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+    const body = request.body as { cwd?: string; baseBranch?: string };
+    if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
+    try {
+      const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
+      if (remoteNodeId && ws) {
+        const gitProxy = async (args: string) => {
+          const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 30_000);
+          return trimCommandOutput(r.stdout);
+        };
+
+        const filePaths = new Set<string>();
+        let insertions = 0;
+        let deletions = 0;
+        const collectNumstat = async (args: string) => {
+          const numstat = await gitProxy(args).catch(() => "");
+          for (const line of numstat.split("\n").filter(Boolean)) {
+            const [ins, del, filePath] = line.split("\t");
+            if (!filePath) continue;
+            filePaths.add(filePath);
+            insertions += ins === "-" ? 0 : parseInt(ins ?? "0", 10);
+            deletions += del === "-" ? 0 : parseInt(del ?? "0", 10);
+          }
+        };
+
+        if (body.baseBranch) {
+          await collectNumstat(`diff --numstat ${body.baseBranch}`);
+        } else {
+          await collectNumstat("diff --cached --numstat");
+          await collectNumstat("diff --numstat");
+        }
+
+        const porcelain = await gitProxy("status --porcelain").catch(() => "");
+        for (const line of porcelain.split("\n").filter(Boolean)) {
+          if (!line.startsWith("??")) continue;
+          const filePath = line.slice(3).trim();
+          if (filePath) filePaths.add(filePath);
+        }
+
+        return {
+          files: filePaths.size,
+          insertions,
+          deletions,
+          hasChanges: filePaths.size > 0,
+        };
+      }
+
+      return await git.diffStats(body.cwd, body.baseBranch || undefined);
+    } catch (err) {
+      return reply.status(500).send({ error: err instanceof Error ? err.message : "Diff stats failed" });
+    }
+  });
+
   /** Per-file original/modified content for Monaco diff editor */
   app.post("/api/git/file-diffs", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
