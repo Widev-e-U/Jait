@@ -109,7 +109,6 @@ import { AgentAudioVisualizerWave } from '@/components/agent-audio-visualizer-wa
 import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-store'
 
 import { Badge } from '@/components/ui/badge'
-import { BrowserCollaborationPanel } from '@/components/browser/browser-collaboration-panel'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import {
   clampFloatingScreenSharePosition,
@@ -6968,15 +6967,6 @@ function App() {
           </div>
         )}
 
-        <BrowserCollaborationPanel
-          sessions={browserCollaboration.sessions}
-          interventions={browserCollaboration.interventions}
-          loading={browserCollaboration.loading}
-          previewState={workspacePreviewState.open ? workspacePreviewState : savedDevPreview}
-          onRefresh={browserCollaboration.refresh}
-          onOpenLiveSession={routePreviewToWorkspace}
-          onResolveIntervention={browserCollaboration.resolveIntervention}
-        />
       </div>
 
       {/* Voice overlay removed — voice controls are now inline in the header */}
