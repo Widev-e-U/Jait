@@ -119,6 +119,8 @@ export interface ArchitectureUpdateData {
   requestId?: string;
   /** Workspace the diagram belongs to */
   workspaceRoot?: string;
+  /** Absolute path to the persisted Mermaid file, when available */
+  filePath?: string;
 }
 
 // ── Filesystem change events (server → client) ──────────────────────

@@ -33,12 +33,17 @@ describe("architecture.generate", () => {
   it("succeeds when the client confirms the render", async () => {
     const sendUICommand = vi.fn();
     const waitForArchitectureRenderResult = vi.fn().mockResolvedValue({ ok: true });
-    const save = vi.fn().mockReturnValue({ updatedAt: "2026-03-21T00:00:00.000Z" });
+    const getFilePath = vi.fn().mockReturnValue("/workspace/app/architecture.mmd");
+    const save = vi.fn().mockResolvedValue({
+      updatedAt: "2026-03-21T00:00:00.000Z",
+      filePath: "/workspace/app/architecture.mmd",
+    });
 
     const tool = createArchitectureTool({
       sendUICommand,
       waitForArchitectureRenderResult,
     } as any, {
+      getFilePath,
       save,
     } as any);
 
@@ -48,11 +53,24 @@ describe("architecture.generate", () => {
     );
 
     expect(result.ok).toBe(true);
+    expect(getFilePath).toHaveBeenCalledWith("/workspace/app");
+    expect(sendUICommand).toHaveBeenCalledWith(
+      {
+        command: "architecture.update",
+        data: {
+          diagram: "flowchart LR\nA[ok]-->B[ok]",
+          requestId: expect.any(String),
+          workspaceRoot: "/workspace/app",
+          filePath: "/workspace/app/architecture.mmd",
+        },
+      },
+      "session-1",
+    );
     expect(save).toHaveBeenCalledWith({
       workspaceRoot: "/workspace/app",
       diagram: "flowchart LR\nA[ok]-->B[ok]",
       userId: "user-1",
     });
-    expect(result.message).toContain("Architecture diagram sent");
+    expect(result.message).toContain("saved to architecture.mmd");
   });
 });

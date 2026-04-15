@@ -23,6 +23,7 @@ export function registerArchitectureRoutes(
       diagram: diagram ? {
         workspaceRoot: diagram.workspaceRoot,
         diagram: diagram.diagram,
+        filePath: diagram.filePath,
         updatedAt: diagram.updatedAt,
       } : null,
     };
@@ -42,7 +43,7 @@ export function registerArchitectureRoutes(
       return reply.status(400).send({ error: "diagram is required" });
     }
 
-    const saved = diagrams.save({
+    const saved = await diagrams.save({
       workspaceRoot,
       diagram,
       userId: authUser.id,
@@ -51,6 +52,7 @@ export function registerArchitectureRoutes(
       diagram: {
         workspaceRoot: saved.workspaceRoot,
         diagram: saved.diagram,
+        filePath: saved.filePath,
         updatedAt: saved.updatedAt,
       },
     };

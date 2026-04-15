@@ -958,6 +958,7 @@ function App() {
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
   const [showArchitecture, setShowArchitecture] = useState(false)
   const [architectureDiagram, setArchitectureDiagram] = useState<string | null>(null)
+  const [architectureFilePath, setArchitectureFilePath] = useState<string | null>(null)
   const [architectureGenerating, setArchitectureGenerating] = useState(false)
   const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
   const architectureRenderRequestIdRef = useRef<string | null>(null)
@@ -1711,6 +1712,8 @@ function App() {
   const threadQueueSeenRef = useRef<Record<string, boolean>>({})
   const pendingThreadCompletionRef = useRef<Record<string, AgentThread>>({})
   const previousThreadStatusesRef = useRef<Record<string, ThreadStatus>>({})
+  const voiceAssistantRef = useRef<ReturnType<typeof useVoiceAssistant> | null>(null)
+  const voiceOverlayOpenRef = useRef(false)
 
   useEffect(() => {
     if (messageQueue.length > 0) {
@@ -1786,6 +1789,8 @@ function App() {
       setVoiceOverlayOpen(false)
     },
   })
+  voiceAssistantRef.current = voiceAssistant
+  voiceOverlayOpenRef.current = voiceOverlayOpen
 
   useEffect(() => {
     const announceThreadResult = async (completedThread: AgentThread) => {
@@ -1807,12 +1812,12 @@ function App() {
           : completedThread.status === 'completed'
             ? `${completedThread.title} finished successfully.`
             : `${completedThread.title} finished with status ${completedThread.status}.`
-        voiceAssistant.announce(spokenUpdate)
+        voiceAssistantRef.current?.announce(spokenUpdate)
       } catch {
         const fallback = completedThread.status === 'completed'
           ? `${completedThread.title} finished successfully.`
           : `${completedThread.title} finished with status ${completedThread.status}.`
-        voiceAssistant.announce(fallback)
+        voiceAssistantRef.current?.announce(fallback)
       }
     }
 
@@ -1860,7 +1865,7 @@ function App() {
           includeToast: false,
         })
 
-        if (voiceOverlayOpen) {
+        if (voiceOverlayOpenRef.current) {
           void announceThreadResult(completedThread)
         }
       }
@@ -1873,7 +1878,7 @@ function App() {
     }
 
     previousThreadStatusesRef.current = nextStatuses
-  }, [automation.threads, managerMessageQueues, voiceAssistant, voiceOverlayOpen])
+  }, [automation.threads, managerMessageQueues])
 
   const handleCancelRequest = useCallback(() => {
     suppressNextChatNotificationRef.current = true
@@ -2260,6 +2265,20 @@ function App() {
     }
   }, [setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync, isMobile])
 
+  const loadArchitectureDiagramForWorkspace = useCallback((workspaceRoot: string, signal?: AbortSignal) => {
+    return fetch(`${API_URL}/api/architecture?workspaceRoot=${encodeURIComponent(workspaceRoot)}`, {
+      headers: { Authorization: `Bearer ${token}` },
+      signal,
+    })
+      .then(async (response) => {
+        if (!response.ok) return null
+        const data = await response.json() as {
+          diagram: { workspaceRoot: string; diagram: string; updatedAt: string; filePath?: string | null } | null
+        }
+        return data.diagram
+      })
+  }, [token])
+
   const { sendUIState, sendArchitectureRenderResult } = useUICommands({
     sessionId: activeSessionId,
     token,
@@ -2268,9 +2287,23 @@ function App() {
     onMessageComplete: handleMessageComplete,
     onThreadEvent: automation.handleThreadEvent,
     onConnectionStateChange: handleUiConnectionStateChange,
-    onFsChanges: useCallback((_payload: FsChangesPayload) => {
+    onFsChanges: useCallback((payload: FsChangesPayload) => {
       setFsWatcherVersion(v => v + 1)
-    }, []),
+      const workspaceRoot = activeWorkspaceRef.current?.workspaceRoot?.trim() || null
+      if (!workspaceRoot || loadedArchitectureWorkspaceRef.current !== workspaceRoot) return
+      const architectureFileName = architectureFilePath?.split(/[\\/]/).pop() ?? 'architecture.mmd'
+      const architectureChanged = payload.changes.some((change) => change.path === architectureFileName)
+      if (!architectureChanged) return
+      void loadArchitectureDiagramForWorkspace(workspaceRoot)
+        .then((saved) => {
+          setArchitectureDiagram(saved?.diagram ?? null)
+          setArchitectureFilePath(saved?.filePath ?? null)
+        })
+        .catch(() => {
+          setArchitectureDiagram(null)
+          setArchitectureFilePath(null)
+        })
+    }, [architectureFilePath, loadArchitectureDiagramForWorkspace]),
     listeners: {
       'workspace.open': useCallback((data: WorkspaceOpenData) => {
         setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
@@ -2318,6 +2351,7 @@ function App() {
         if (data.diagram) {
           architectureRenderRequestIdRef.current = data.requestId ?? null
           setArchitectureDiagram(data.diagram)
+          setArchitectureFilePath(data.filePath ?? null)
           setArchitectureGenerating(false)
           setShowArchitecture(true)
           if (data.workspaceRoot?.trim()) {
@@ -2348,36 +2382,35 @@ function App() {
     if (!workspaceRoot || !token) {
       loadedArchitectureWorkspaceRef.current = null
       setArchitectureDiagram(null)
+      setArchitectureFilePath(null)
       setArchitectureGenerating(false)
       return
     }
     if (loadedArchitectureWorkspaceRef.current === workspaceRoot) return
     loadedArchitectureWorkspaceRef.current = workspaceRoot
     setArchitectureDiagram(null)
+    setArchitectureFilePath(null)
     let cancelled = false
+    const controller = new AbortController()
 
-    void fetch(`${API_URL}/api/architecture?workspaceRoot=${encodeURIComponent(workspaceRoot)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    })
-      .then(async (response) => {
-        if (!response.ok) return null
-        const data = await response.json() as {
-          diagram: { workspaceRoot: string; diagram: string; updatedAt: string } | null
-        }
-        return data.diagram
-      })
+    void loadArchitectureDiagramForWorkspace(workspaceRoot, controller.signal)
       .then((saved) => {
         if (cancelled) return
         setArchitectureDiagram(saved?.diagram ?? null)
+        setArchitectureFilePath(saved?.filePath ?? null)
       })
       .catch(() => {
-        if (!cancelled) setArchitectureDiagram(null)
+        if (!cancelled) {
+          setArchitectureDiagram(null)
+          setArchitectureFilePath(null)
+        }
       })
 
     return () => {
       cancelled = true
+      controller.abort()
     }
-  }, [activeWorkspace?.workspaceRoot, token])
+  }, [activeWorkspace?.workspaceRoot, loadArchitectureDiagramForWorkspace, token])
 
   const prevWorkspacePanelPayloadRef = useRef<string | null>(null)
   useEffect(() => {

@@ -46,13 +46,16 @@ export function createArchitectureTool(
       }
 
       const requestId = nanoid();
+      const filePath = typeof diagrams?.getFilePath === "function"
+        ? diagrams.getFilePath(workspaceRoot)
+        : undefined;
 
       // Push the diagram to the frontend via WS
       if (ws) {
         ws.sendUICommand(
           {
             command: "architecture.update",
-            data: { diagram, requestId, workspaceRoot },
+            data: { diagram, requestId, workspaceRoot, filePath },
           },
           context.sessionId,
         );
@@ -75,7 +78,7 @@ export function createArchitectureTool(
         }
       }
 
-      const saved = diagrams?.save({
+      const saved = await diagrams?.save({
         workspaceRoot,
         diagram,
         userId: context.userId,
@@ -83,8 +86,14 @@ export function createArchitectureTool(
 
       return {
         ok: true,
-        message: "Architecture diagram sent to the editor.",
-        data: { requestId, diagramLength: diagram.length, workspaceRoot, updatedAt: saved?.updatedAt ?? null },
+        message: "Architecture diagram saved to architecture.mmd and sent to the editor.",
+        data: {
+          requestId,
+          diagramLength: diagram.length,
+          workspaceRoot,
+          filePath: saved?.filePath ?? filePath ?? null,
+          updatedAt: saved?.updatedAt ?? null,
+        },
       };
     },
   };
