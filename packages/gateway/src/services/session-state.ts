@@ -46,6 +46,24 @@ export class SessionStateService {
     return result;
   }
 
+  getByKey(key: string): Array<{ sessionId: string; value: unknown }> {
+    const rows = this.db
+      .select()
+      .from(sessionState)
+      .where(eq(sessionState.key, key))
+      .all();
+
+    return rows.map((row) => {
+      let value: unknown = null;
+      try {
+        value = row.value ? JSON.parse(row.value) : null;
+      } catch {
+        value = row.value;
+      }
+      return { sessionId: row.sessionId, value };
+    });
+  }
+
   /**
    * Upsert one or more state entries for a session.
    * Send `null` as a value to delete that key.

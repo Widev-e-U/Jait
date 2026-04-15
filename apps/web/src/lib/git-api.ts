@@ -84,6 +84,13 @@ export interface GitDiffResult {
   hasChanges: boolean
 }
 
+export interface GitDiffStatsResult {
+  files: number
+  insertions: number
+  deletions: number
+  hasChanges: boolean
+}
+
 export interface FileDiffEntry {
   path: string
   /** Original (HEAD) content, empty for new files */
@@ -258,6 +265,10 @@ export const gitApi = {
 
   diff(cwd: string): Promise<GitDiffResult> {
     return gitPost<GitDiffResult>('diff', { cwd })
+  },
+
+  diffStats(cwd: string, baseBranch?: string): Promise<GitDiffStatsResult> {
+    return gitPost<GitDiffStatsResult>('diff-stats', { cwd, ...(baseBranch ? { baseBranch } : {}) })
   },
 
   fileDiffs(cwd: string, baseBranch?: string): Promise<FileDiffEntry[]> {

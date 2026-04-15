@@ -63,7 +63,6 @@ export function ThreadActions({
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
   const pendingPrAction = useRef(false)
   const skipGhCheck = useRef(false)
-  const creatingPr = prState === 'creating'
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
     prUrl ? { url: prUrl, kind: 'created' } : null,
   )
@@ -128,14 +127,19 @@ export function ThreadActions({
     return () => { if (checksTimerRef.current) { clearInterval(checksTimerRef.current); checksTimerRef.current = null } }
   }, [branch, cwd, prUrl, prState])
 
-  const existingPrLink = prLink ?? (prUrl ? { url: prUrl, kind: 'created' as const } : null)
+  const existingPrLink =
+    prLink ??
+    (prUrl ? { url: prUrl, kind: 'created' as const } : null) ??
+    (gitStatus?.pr?.url ? { url: gitStatus.pr.url, kind: 'created' as const } : null)
+  const effectivePrState = prState === 'creating' && existingPrLink?.kind === 'created' ? 'open' : prState
+  const creatingPr = effectivePrState === 'creating'
   const changeTotals = gitStatus
     ? {
         insertions: gitStatus.index.insertions + gitStatus.workingTree.insertions,
         deletions: gitStatus.index.deletions + gitStatus.workingTree.deletions,
       }
     : null
-  const showChangesButton = shouldShowThreadChangesButton(gitStatus, branch, prState)
+  const showChangesButton = gitStatus?.hasWorkingTreeChanges === true
   const buttonLabel = creatingPr && !existingPrLink
     ? 'Creating PR...'
     : existingPrLink
@@ -262,29 +266,29 @@ export function ThreadActions({
           <Badge
             variant="outline"
             className={`h-5 px-1.5 text-[10px] font-medium ${
-              prState === 'merged'
+              effectivePrState === 'merged'
                 ? 'border-purple-500/40 text-purple-700 bg-purple-500/10 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/40'
-                : prState === 'closed'
+                : effectivePrState === 'closed'
                   ? 'border-red-500/40 text-red-700 bg-red-500/10 dark:text-red-300 dark:bg-red-500/20 dark:border-red-400/40'
-                  : prState === 'creating'
+                  : effectivePrState === 'creating'
                     ? 'border-amber-500/40 text-amber-700 bg-amber-500/10 dark:text-amber-300 dark:bg-amber-500/20 dark:border-amber-400/40'
                   : existingPrLink.kind === 'created'
                     ? 'border-green-500/40 text-green-700 dark:text-green-300 dark:border-green-400/40'
                     : 'border-amber-500/40 text-amber-700 dark:text-amber-300 dark:border-amber-400/40'
             }`}
           >
-            {prState === 'merged'
+            {effectivePrState === 'merged'
               ? 'PR merged'
-              : prState === 'closed'
+              : effectivePrState === 'closed'
                 ? 'PR closed'
-                : prState === 'creating'
+                : effectivePrState === 'creating'
                   ? 'PR creating'
                 : existingPrLink.kind === 'created'
                   ? 'PR open'
                   : 'PR ready to open'}
           </Badge>
         )}
-        {showStatusBadge && existingPrLink?.kind === 'created' && prState === 'open' && checksStatus && (
+        {showStatusBadge && existingPrLink?.kind === 'created' && effectivePrState === 'open' && checksStatus && (
           <Badge
             variant="outline"
             className={`h-5 px-1.5 text-[10px] font-medium inline-flex items-center gap-0.5 ${
