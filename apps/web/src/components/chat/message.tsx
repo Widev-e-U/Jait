@@ -21,18 +21,12 @@ import {
 } from '@/components/ai-elements/message'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
 import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from './tool-call-card'
+import { LlmContextFlowDialog } from './llm-context-flow-dialog'
 import type { LlmContextFlow, MessageSegment } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
@@ -494,10 +488,6 @@ function MessageInner({
       ))
     return fromSegments.length > 0 ? fromSegments : (attachmentsProp ?? [])
   }, [attachmentsProp, isUser, optimisticUserDisplaySegments, userDisplaySegments])
-  const contextFlowText = useMemo(() => {
-    if (!contextFlow) return ''
-    return JSON.stringify(contextFlow, null, 2)
-  }, [contextFlow])
   const copyTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
   const editPromptInputRef = useRef<PromptInputHandle | null>(null)
@@ -1025,28 +1015,12 @@ function MessageInner({
         )}
       </div>
     </AIMessage>
-    <Dialog open={contextOpen} onOpenChange={setContextOpen}>
-      <DialogContent className="max-h-[85vh] max-w-4xl grid-rows-[auto_minmax(0,1fr)] p-0">
-        <DialogHeader className="border-b px-5 py-4">
-          <DialogTitle>LLM Context Flow</DialogTitle>
-          <DialogDescription>
-            {contextFlow
-              ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} / ${contextFlow.rounds.length} request${contextFlow.rounds.length === 1 ? '' : 's'}`
-              : 'No context snapshot is available for this message.'}
-          </DialogDescription>
-        </DialogHeader>
-        <div className="min-h-0 overflow-auto px-5 pb-5">
-          {contextFlow?.note ? (
-            <p className="mb-3 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
-              {contextFlow.note}
-            </p>
-          ) : null}
-          <pre className="whitespace-pre-wrap break-words rounded-md border border-border/70 bg-muted/35 p-3 text-xs leading-relaxed text-foreground [overflow-wrap:anywhere]">
-            {contextFlowText || 'No context snapshot is available for this message.'}
-          </pre>
-        </div>
-      </DialogContent>
-    </Dialog>
+    <LlmContextFlowDialog
+      open={contextOpen}
+      onOpenChange={setContextOpen}
+      contextFlow={contextFlow}
+      responseContent={content}
+    />
     </>
   )
 }
