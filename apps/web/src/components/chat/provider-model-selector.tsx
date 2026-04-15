@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
+import { useIsMobile } from '@/hooks/useIsMobile'
 
 const JaitIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
@@ -98,6 +99,7 @@ export function ProviderModelSelector({
   sessionInfo,
   workspaceNodeId,
 }: ProviderModelSelectorProps) {
+  const isMobile = useIsMobile()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
@@ -309,7 +311,17 @@ export function ProviderModelSelector({
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" side="top" className="w-[22rem] p-0">
+      <PopoverContent
+        align="start"
+        side="top"
+        collisionPadding={8}
+        className="flex w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
+        style={{
+          maxHeight: isMobile
+            ? 'min(32rem, calc(var(--radix-popover-content-available-height, 100dvh) - 0.75rem))'
+            : 'min(32rem, var(--radix-popover-content-available-height, 80dvh))',
+        }}
+      >
         <div className="border-b px-3 py-2">
           <div className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
         </div>
@@ -329,7 +341,7 @@ export function ProviderModelSelector({
             Device is offline — only Jait (gateway) is available
           </div>
         )}
-        <div className="max-h-56 overflow-y-auto p-1">
+        <div className="min-h-0 max-h-56 overflow-y-auto p-1">
           {providerEntries.map((entry) => {
             const Icon = entry.icon
             const active = entry.value === provider
@@ -410,7 +422,7 @@ export function ProviderModelSelector({
                 />
               </div>
             </div>
-            <div className="max-h-72 overflow-y-auto p-1">
+            <div className="min-h-0 flex-1 overflow-y-auto p-1">
               {recentModels.length > 0 && (
                 <>
                   <div className="flex items-center gap-1.5 px-2 py-1.5">

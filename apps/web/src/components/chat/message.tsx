@@ -35,6 +35,7 @@ import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import type { SessionInfo } from '@/hooks/useChat'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
+import type { ResponseStyle } from '@jait/shared'
 import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
@@ -100,6 +101,8 @@ interface MessageProps {
     onSendTargetChange?: (target: SendTarget) => void
     provider?: ProviderId
     onProviderChange?: (provider: ProviderId) => void
+    responseStyle?: ResponseStyle
+    onResponseStyleChange?: (style: ResponseStyle) => void
     providerRuntimeMode?: RuntimeMode
     onProviderRuntimeModeChange?: (mode: RuntimeMode) => void
     cliModel?: string | null
@@ -858,6 +861,8 @@ function MessageInner({
                           onSendTargetChange={editComposer?.onSendTargetChange}
                           provider={editComposer?.provider}
                           onProviderChange={editComposer?.onProviderChange}
+                          responseStyle={editComposer?.responseStyle}
+                          onResponseStyleChange={editComposer?.onResponseStyleChange}
                           providerRuntimeMode={editComposer?.providerRuntimeMode}
                           onProviderRuntimeModeChange={editComposer?.onProviderRuntimeModeChange}
                           cliModel={editComposer?.cliModel}

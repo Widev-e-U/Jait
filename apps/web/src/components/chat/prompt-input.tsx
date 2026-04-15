@@ -621,7 +621,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const controlsLocked = Boolean(controlsDisabled ?? disabled ?? false)
   const selectorsDisabled = controlsLocked
   const showProviderModelSelector = Boolean(provider && onProviderChange && onCliModelChange)
-  const showResponseStyleSelector = Boolean(responseStyle && onResponseStyleChange && sendTarget !== 'thread')
+  const showResponseStyleSelector = Boolean(responseStyle && onResponseStyleChange)
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
   const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
   const shouldShowSendTargetSelector = showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
@@ -1514,6 +1514,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         {hasFooterControls && (
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
+              {footerLeadingContent}
               {showResponseStyleSelector && (
                 <StyleSelector
                   value={responseStyle!}
@@ -1522,7 +1523,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                   compact={compactFooterControls}
                 />
               )}
-              {footerLeadingContent}
               {showProviderModelSelector && (
                 <ProviderModelSelector
                   provider={provider!}

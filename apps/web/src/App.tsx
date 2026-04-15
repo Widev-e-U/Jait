@@ -4670,6 +4670,8 @@ function App() {
     onSendTargetChange: setSendTarget,
     provider: chatProvider,
     onProviderChange: handleChatProviderChange,
+    responseStyle: chatResponseStyle,
+    onResponseStyleChange: handleChatResponseStyleChange,
     providerRuntimeMode: chatProviderRuntimeMode,
     onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
     cliModel,
@@ -4685,6 +4687,7 @@ function App() {
   }), [
     handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop,
     chatMode, setChatMode, sendTarget, setSendTarget, chatProvider, handleChatProviderChange,
+    chatResponseStyle, handleChatResponseStyleChange,
     chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
     selectedRepoRuntime, handleMoveRepoToGateway, editComposerFooter,
     availableFilesForMention, handleSearchFiles, showWorkspace, sessionInfo, activeWorkspace?.nodeId,
