@@ -5955,9 +5955,11 @@ function App() {
                               })}
                               {automation.hasMoreThreads && (
                                 <button
-                                  className="px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground sm:px-4 sm:py-2"
+                                  className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-70 sm:px-4 sm:py-2"
+                                  disabled={automation.loading}
                                   onClick={automation.showMoreThreads}
                                 >
+                                  {automation.loading ? <SpinnerIcon className="h-3 w-3 animate-spin" /> : null}
                                   Show more threads
                                 </button>
                               )}

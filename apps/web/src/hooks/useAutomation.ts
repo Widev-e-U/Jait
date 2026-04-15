@@ -848,6 +848,7 @@ export function useAutomation(enabled = true) {
   )
 
   const showMoreThreads = useCallback(() => {
+    setLoading(true)
     setThreadListLimit((prev) => prev + THREAD_LIST_LIMIT)
   }, [])
 
