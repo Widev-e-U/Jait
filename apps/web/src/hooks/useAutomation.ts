@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth-token'
+import { persistSelectedRepoId, readPersistedSelectedRepoId } from '@/lib/automation-selection-storage'
 import type { NodeRegistrySnapshot, NodeState, ThreadRegistrySnapshot } from '@jait/shared'
 import {
   type RemoteProviderInfo,
@@ -103,7 +104,7 @@ export function useAutomation(enabled = true) {
 
   // Repositories (DB-backed)
   const [localRepositories, setLocalRepositories] = useState<RepositoryConnection[]>([])
-  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(null)
+  const [selectedRepoId, setSelectedRepoId] = useState<string | null>(() => readPersistedSelectedRepoId())
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
 
   // Threads
@@ -178,6 +179,11 @@ export function useAutomation(enabled = true) {
       setSelectedRepoId(repositories[0]?.id ?? null)
     }
   }, [repositories, selectedRepoId, enabled])
+
+  useEffect(() => {
+    if (!enabled) return
+    persistSelectedRepoId(selectedRepoId)
+  }, [enabled, selectedRepoId])
 
   useEffect(() => {
     if (!enabled || !selectedThread) return
