@@ -157,7 +157,8 @@ export type UIStateKey =
   | "chat.view"
   | "todo_list"
   | "changed_files"
-  | "queued_messages";
+  | "queued_messages"
+  | "queued_thread_messages";
 
 export type ResponseStyle = "normal" | "simple" | "caveman" | "caveman-ultra";
 

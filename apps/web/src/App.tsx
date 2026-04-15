@@ -287,6 +287,8 @@ type SavedQueuedMessage = QueuedChatMessage & {
   displaySegments?: UserMessageSegment[]
 }
 
+type SavedQueuedThreadMessages = Record<string, ManagerQueuedMessage[]>
+
 function isResponseStyle(value: unknown): value is ResponseStyle {
   return value === 'normal' || value === 'simple' || value === 'caveman' || value === 'caveman-ultra'
 }
@@ -1963,6 +1965,9 @@ function App() {
   const [, setSavedQueuedMessages] = useSessionState<SavedQueuedMessage[]>(
     activeSessionId, 'queued_messages', token,
   )
+  const [, setSavedQueuedThreadMessages] = useSessionState<SavedQueuedThreadMessages>(
+    activeSessionId, 'queued_thread_messages', token,
+  )
   const [workspaceTabsState, setWorkspaceTabsState] = useState<WorkspaceTabsState | null>(null)
   const [workspaceStateReady, setWorkspaceStateReady] = useState(false)
 
@@ -2159,6 +2164,14 @@ function App() {
         }
         break
       }
+      case 'queued_thread_messages': {
+        if (value && typeof value === 'object' && !Array.isArray(value)) {
+          setManagerMessageQueues(value as SavedQueuedThreadMessages)
+        } else if (value === null) {
+          setManagerMessageQueues({})
+        }
+        break
+      }
     }
   }, [setTodoList, addChangedFile, setChangedFiles, setMessageQueueState, routePreviewToWorkspace, closeWorkspacePreview, isMobile, suppressNextUiSync, activeWorkspace?.nodeId, activeWorkspace?.surfaceId, activeWorkspace?.workspaceRoot])
 
@@ -2241,6 +2254,13 @@ function App() {
       setMessageQueueState(qm as SavedQueuedMessage[])
     } else {
       setMessageQueueState([])
+    }
+
+    const qtm = state['queued_thread_messages']
+    if (qtm && typeof qtm === 'object' && !Array.isArray(qtm)) {
+      setManagerMessageQueues(qtm as SavedQueuedThreadMessages)
+    } else {
+      setManagerMessageQueues({})
     }
 
     // ── Workspace-scoped state (bundled inside _workspace envelope) ──
@@ -2527,6 +2547,17 @@ function App() {
     if (consumeSuppressedUiSync('queued_messages')) return
     sendUIState('queued_messages', payload, activeSessionId)
   }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId, consumeSuppressedUiSync])
+
+  const prevThreadQueuePayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    const payload = Object.keys(managerMessageQueues).length > 0 ? managerMessageQueues : null
+    const serialized = `${activeSessionId ?? ''}:${JSON.stringify(payload)}`
+    if (serialized === prevThreadQueuePayloadRef.current) return
+    prevThreadQueuePayloadRef.current = serialized
+    setSavedQueuedThreadMessages(payload)
+    if (consumeSuppressedUiSync('queued_thread_messages')) return
+    sendUIState('queued_thread_messages', payload, activeSessionId)
+  }, [managerMessageQueues, setSavedQueuedThreadMessages, sendUIState, activeSessionId, consumeSuppressedUiSync])
 
   // Register broadcast callback: when file decisions change, sync to other clients
   useEffect(() => {
@@ -3780,7 +3811,7 @@ function App() {
     displaySegments?: UserMessageSegment[],
   ) => {
     if (viewMode === 'manager' || sendTarget === 'thread') {
-      return handleThreadSubmit(chipFiles, displaySegments)
+      return handleThreadSubmit(chipFiles, fileAttachments, displaySegments)
     }
     const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
@@ -3842,9 +3873,35 @@ function App() {
   }
 
   /** Submit to an automation thread from either developer or manager mode. */
-  const handleThreadSubmit = async (chipFiles?: ReferencedFile[], displaySegments?: UserMessageSegment[]) => {
+  const handleThreadSubmit = async (
+    chipFiles?: ReferencedFile[],
+    fileAttachments?: ChatAttachment[],
+    displaySegments?: UserMessageSegment[],
+  ) => {
     const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared || threadComposerDisabled) return
+    const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
+    const selectedThreadQueueLength = automation.selectedThread
+      ? managerMessageQueues[automation.selectedThread.id]?.length ?? 0
+      : 0
+    if (automation.selectedThread && (automation.selectedThread.status === 'running' || selectedThreadQueueLength > 0)) {
+      enqueueManagerMessage(automation.selectedThread.id, {
+        id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+        content: prepared.displayContent || prepared.promptWithReferences,
+        displayContent: prepared.displayContent || prepared.promptWithReferences,
+        fullContent: prepared.promptWithReferences,
+        referencedFiles: prepared.referencedFiles,
+        displaySegments: nextDisplaySegments,
+        attachments: prepared.attachments,
+        providerId: chatProvider,
+        runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
+        model: cliModel ?? undefined,
+        queuedAt: Date.now(),
+      })
+      setInputValue('')
+      setInputSegments(undefined)
+      return
+    }
     setInputValue('')
     setInputSegments(undefined)
     await automation.handleSend(
@@ -3855,7 +3912,7 @@ function App() {
       {
         displayContent: prepared.displayContent || prepared.promptWithReferences,
         referencedFiles: prepared.referencedFiles,
-        displaySegments: prepared.displaySegments,
+        displaySegments: nextDisplaySegments,
         attachments: prepared.attachments,
       },
     )
@@ -4015,6 +4072,7 @@ function App() {
         titlePrefix: `[${repo.name}] `,
         ...(item.displayContent ? { displayContent: item.displayContent } : {}),
         ...(item.referencedFiles ? { referencedFiles: item.referencedFiles } : {}),
+        ...(item.displaySegments ? { displaySegments: item.displaySegments } : {}),
         ...(item.attachments ? { attachments: item.attachments } : {}),
       })
     })()
@@ -4022,20 +4080,21 @@ function App() {
 
   const handleManagerQueue = useCallback(async (
     chipFiles?: ReferencedFile[],
-    _attachments?: ChatAttachment[],
+    fileAttachments?: ChatAttachment[],
     displaySegments?: UserMessageSegment[],
   ) => {
     const thread = automation.selectedThread
     if (!thread) return
     const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
     if (!prepared) return
+    const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
     enqueueManagerMessage(thread.id, {
       id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       content: prepared.displayContent || prepared.promptWithReferences,
       displayContent: prepared.displayContent || prepared.promptWithReferences,
       fullContent: prepared.promptWithReferences,
       referencedFiles: prepared.referencedFiles,
-      displaySegments: prepared.displaySegments,
+      displaySegments: nextDisplaySegments,
       attachments: prepared.attachments,
       providerId: chatProvider,
       runtimeMode: chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
@@ -4047,6 +4106,8 @@ function App() {
   }, [automation.selectedThread, chatProvider, chatProviderRuntimeMode, cliModel, enqueueManagerMessage, inputValue, preparePromptSubmission])
 
   useEffect(() => {
+    if (activeSessionId) return
+
     for (const [threadId, queue] of Object.entries(managerMessageQueues)) {
       if (queue.length === 0 || managerQueueProcessingRef.current.has(threadId)) continue
 
@@ -4084,6 +4145,7 @@ function App() {
         {
           displayContent: nextItem.displayContent ?? nextItem.content,
           referencedFiles: nextItem.referencedFiles,
+          displaySegments: nextItem.displaySegments,
           attachments: nextItem.attachments,
         },
       ).catch((err) => {
@@ -4097,6 +4159,7 @@ function App() {
       })
     }
   }, [
+    activeSessionId,
     automation.handleSendToThread,
     automation.setError,
     automation.threads,
@@ -4310,7 +4373,8 @@ function App() {
 
     if (viewMode === 'manager' || sendTarget === 'thread') {
       const thread = automation.selectedThread
-      if (thread?.status === 'running') {
+      const selectedThreadQueueLength = thread ? managerMessageQueues[thread.id]?.length ?? 0 : 0
+      if (thread && (thread.status === 'running' || selectedThreadQueueLength > 0)) {
         enqueueManagerMessage(thread.id, {
           id: `mq-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
           content: normalizedTranscript,
@@ -4369,7 +4433,7 @@ function App() {
       model: cliModel ?? undefined,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, activeWorkspaceId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, messageQueue.length, promptForWorkspaceSelection, sendMessage, sendTarget, token, viewMode])
+  }, [activeSessionId, activeWorkspaceId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, managerMessageQueues, messageQueue.length, promptForWorkspaceSelection, sendMessage, sendTarget, token, viewMode])
 
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)

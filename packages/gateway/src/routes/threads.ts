@@ -24,7 +24,7 @@ import type { AppConfig } from "../config.js";
 import type { ThreadService } from "../services/threads.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { WsControlPlane } from "../ws.js";
-import { requireAuth } from "../security/http-auth.js";
+import { requireAuth, signAuthToken } from "../security/http-auth.js";
 import type { ProviderEvent, ProviderId } from "../providers/contracts.js";
 import { RemoteCliProvider } from "../providers/remote-cli-provider.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
@@ -152,6 +152,83 @@ export interface ThreadRouteDeps {
   };
 }
 
+interface QueuedThreadMessage {
+  id?: string;
+  content: string;
+  fullContent?: string;
+  displayContent?: string;
+  referencedFiles?: unknown[];
+  displaySegments?: unknown[];
+  attachments?: string[];
+  providerId?: ProviderId;
+  runtimeMode?: "full-access" | "supervised";
+  model?: string | null;
+  queuedAt?: number;
+}
+
+type QueuedThreadMessagesState = Record<string, QueuedThreadMessage[]>;
+
+const QUEUED_THREAD_MESSAGES_KEY = "queued_thread_messages";
+
+function parseQueuedThreadMessagesState(raw: unknown): QueuedThreadMessagesState {
+  if (!raw || typeof raw !== "object" || Array.isArray(raw)) return {};
+
+  const next: QueuedThreadMessagesState = {};
+  for (const [threadId, queue] of Object.entries(raw as Record<string, unknown>)) {
+    if (!threadId || !Array.isArray(queue)) continue;
+
+    const parsedQueue: QueuedThreadMessage[] = [];
+    for (const entry of queue) {
+      if (!entry || typeof entry !== "object" || Array.isArray(entry)) continue;
+      const record = entry as Record<string, unknown>;
+      const content = typeof record["fullContent"] === "string"
+        ? record["fullContent"]
+        : typeof record["content"] === "string"
+          ? record["content"]
+          : "";
+      if (!content.trim()) continue;
+
+      parsedQueue.push({
+        id: typeof record["id"] === "string" ? record["id"] : undefined,
+        content: typeof record["content"] === "string" ? record["content"] : content,
+        fullContent: content,
+        displayContent: typeof record["displayContent"] === "string" ? record["displayContent"] : undefined,
+        referencedFiles: Array.isArray(record["referencedFiles"]) ? record["referencedFiles"] : undefined,
+        displaySegments: Array.isArray(record["displaySegments"]) ? record["displaySegments"] : undefined,
+        attachments: Array.isArray(record["attachments"])
+          ? record["attachments"].filter((attachment): attachment is string => typeof attachment === "string")
+          : undefined,
+        providerId:
+          record["providerId"] === "jait" ||
+          record["providerId"] === "codex" ||
+          record["providerId"] === "claude-code" ||
+          record["providerId"] === "gemini" ||
+          record["providerId"] === "opencode" ||
+          record["providerId"] === "copilot"
+            ? record["providerId"]
+            : undefined,
+        runtimeMode: record["runtimeMode"] === "supervised" || record["runtimeMode"] === "full-access"
+          ? record["runtimeMode"]
+          : undefined,
+        model: typeof record["model"] === "string" ? record["model"] : null,
+        queuedAt: typeof record["queuedAt"] === "number" ? record["queuedAt"] : undefined,
+      });
+    }
+
+    if (parsedQueue.length > 0) next[threadId] = parsedQueue;
+  }
+
+  return next;
+}
+
+function normalizeQueuedThreadMessagesState(state: QueuedThreadMessagesState): QueuedThreadMessagesState | null {
+  const next: QueuedThreadMessagesState = {};
+  for (const [threadId, queue] of Object.entries(state)) {
+    if (queue.length > 0) next[threadId] = queue;
+  }
+  return Object.keys(next).length > 0 ? next : null;
+}
+
 export function registerThreadRoutes(
   app: FastifyInstance,
   config: AppConfig,
@@ -163,6 +240,7 @@ export function registerThreadRoutes(
 
   // Track active onEvent unsubscribe functions per thread so we can clean up
   const threadUnsubs = new Map<string, () => void>();
+  const drainingQueuedThreadSessions = new Set<string>();
   const threadResumeUnsubs = new Map<string, () => void>();
   const pendingInterventionMessages = new Map<string, string[]>();
 
@@ -237,6 +315,141 @@ export function registerThreadRoutes(
       threadResumeUnsubs.delete(threadId);
     }
     pendingInterventionMessages.delete(threadId);
+  }
+
+  function broadcastQueuedThreadMessagesState(sessionId: string, value: QueuedThreadMessagesState | null): void {
+    if (!ws) return;
+    ws.broadcast(sessionId, {
+      type: "ui.state-sync",
+      sessionId,
+      timestamp: new Date().toISOString(),
+      payload: { key: QUEUED_THREAD_MESSAGES_KEY, value },
+    });
+  }
+
+  function persistQueuedThreadMessagesState(sessionId: string, value: QueuedThreadMessagesState | null): void {
+    deps.sessionState?.set(sessionId, { [QUEUED_THREAD_MESSAGES_KEY]: value });
+    broadcastQueuedThreadMessagesState(sessionId, value);
+  }
+
+  async function drainQueuedThreadMessages(sessionId?: string): Promise<void> {
+    if (!deps.sessionState || !deps.userService) return;
+
+    if (!sessionId) {
+      for (const entry of deps.sessionState.getByKey(QUEUED_THREAD_MESSAGES_KEY)) {
+        await drainQueuedThreadMessages(entry.sessionId);
+      }
+      return;
+    }
+
+    if (drainingQueuedThreadSessions.has(sessionId)) return;
+    drainingQueuedThreadSessions.add(sessionId);
+    try {
+      while (true) {
+        const state = parseQueuedThreadMessagesState(
+          deps.sessionState.get(sessionId, [QUEUED_THREAD_MESSAGES_KEY])[QUEUED_THREAD_MESSAGES_KEY],
+        );
+
+        let selected:
+          | {
+              threadId: string;
+              message: QueuedThreadMessage;
+              queue: QueuedThreadMessage[];
+              useSendRoute: boolean;
+              userId: string;
+            }
+          | null = null;
+        let changed = false;
+
+        for (const [threadId, queue] of Object.entries(state)) {
+          if (queue.length === 0) {
+            delete state[threadId];
+            changed = true;
+            continue;
+          }
+
+          const thread = threadService.getById(threadId);
+          if (!thread) {
+            delete state[threadId];
+            changed = true;
+            continue;
+          }
+          if (thread.status === "running") continue;
+          if (!thread.userId) continue;
+
+          const [message] = queue;
+          if (!message) continue;
+          selected = {
+            threadId,
+            message,
+            queue,
+            useSendRoute: Boolean(thread.providerSessionId),
+            userId: thread.userId,
+          };
+          break;
+        }
+
+        if (!selected) {
+          if (changed) persistQueuedThreadMessagesState(sessionId, normalizeQueuedThreadMessagesState(state));
+          return;
+        }
+
+        const [, ...restQueue] = selected.queue;
+        if (restQueue.length > 0) state[selected.threadId] = restQueue;
+        else delete state[selected.threadId];
+        persistQueuedThreadMessagesState(sessionId, normalizeQueuedThreadMessagesState(state));
+
+        const user = deps.userService.findById(selected.userId);
+        if (!user) {
+          state[selected.threadId] = [selected.message, ...(state[selected.threadId] ?? [])];
+          persistQueuedThreadMessagesState(sessionId, normalizeQueuedThreadMessagesState(state));
+          return;
+        }
+
+        const token = await signAuthToken({ id: user.id, username: user.username }, config.jwtSecret);
+        const content = selected.message.fullContent ?? selected.message.content;
+        const payload = {
+          message: content,
+          displayContent: selected.message.displayContent ?? selected.message.content,
+          ...(selected.message.referencedFiles ? { referencedFiles: selected.message.referencedFiles } : {}),
+          ...(selected.message.displaySegments ? { displaySegments: selected.message.displaySegments } : {}),
+          ...(selected.message.attachments ? { attachments: selected.message.attachments } : {}),
+        };
+
+        const response = await app.inject({
+          method: "POST",
+          url: selected.useSendRoute
+            ? `/api/threads/${selected.threadId}/send`
+            : `/api/threads/${selected.threadId}/start`,
+          headers: { authorization: `Bearer ${token}` },
+          payload,
+        });
+
+        if (response.statusCode >= 400) {
+          const latestState = parseQueuedThreadMessagesState(
+            deps.sessionState.get(sessionId, [QUEUED_THREAD_MESSAGES_KEY])[QUEUED_THREAD_MESSAGES_KEY],
+          );
+          latestState[selected.threadId] = [selected.message, ...(latestState[selected.threadId] ?? [])];
+          persistQueuedThreadMessagesState(sessionId, normalizeQueuedThreadMessagesState(latestState));
+          app.log.warn(
+            { sessionId, threadId: selected.threadId, statusCode: response.statusCode },
+            "Failed to process queued thread message",
+          );
+          return;
+        }
+      }
+    } finally {
+      drainingQueuedThreadSessions.delete(sessionId);
+    }
+  }
+
+  const appWithThreadQueueDrain = app as FastifyInstance & {
+    drainQueuedThreadMessages?: (sessionId?: string) => Promise<void>;
+  };
+  if (!appWithThreadQueueDrain.drainQueuedThreadMessages) {
+    app.decorate("drainQueuedThreadMessages", drainQueuedThreadMessages);
+  } else {
+    appWithThreadQueueDrain.drainQueuedThreadMessages = drainQueuedThreadMessages;
   }
 
   function registerThreadResume(
@@ -314,6 +527,7 @@ export function registerThreadRoutes(
       if (event.type === "session.completed") {
         threadService.markCompleted(threadId);
         broadcastThreadStatus(threadId, "completed");
+        void drainQueuedThreadMessages();
         const unsubscribe = threadUnsubs.get(threadId);
         if (unsubscribe) {
           unsubscribe();
@@ -342,6 +556,7 @@ export function registerThreadRoutes(
             if (resumed) return;
             threadService.update(threadId, { status: "completed", error: null, completedAt: new Date().toISOString() });
             broadcastThreadStatus(threadId, "completed");
+            void drainQueuedThreadMessages();
           })
           .catch((error) => {
             threadService.markError(threadId, error instanceof Error ? error.message : String(error));

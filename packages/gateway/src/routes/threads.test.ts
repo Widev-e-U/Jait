@@ -441,6 +441,74 @@ describe("thread routes", () => {
     sqlite.close();
   });
 
+  it("drains persisted queued thread messages after the current turn completes", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const sessionState = new SessionStateService(db);
+    const users = new UserService(db);
+    const user = users.createUser("queued-thread-user", "secret");
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("codex");
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      sessionState,
+      userService: users,
+    });
+
+    const sessionId = "session-with-thread-queue";
+    const headers = await authHeader(config.jwtSecret, user.id);
+    const createResponse = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: { title: "Queued thread", providerId: "codex", sessionId },
+    });
+    const thread = createResponse.json() as { id: string };
+
+    const startResponse = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "first message", titleTask: "" },
+    });
+    expect(startResponse.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+
+    sessionState.set(sessionId, {
+      queued_thread_messages: {
+        [thread.id]: [
+          {
+            id: "queued-1",
+            content: "second message",
+            fullContent: "second message",
+            displayContent: "second message",
+            providerId: "codex",
+            queuedAt: Date.now(),
+          },
+        ],
+      },
+    });
+
+    provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 2);
+    expect(provider.sendTurn).toHaveBeenNthCalledWith(2, "mock-session-1", "second message", undefined);
+    expect(sessionState.get(sessionId, ["queued_thread_messages"])["queued_thread_messages"]).toBeUndefined();
+    expect(threadService.getActivities(thread.id).some((activity) => (
+      activity.kind === "message" && activity.summary.includes("second message")
+    ))).toBe(true);
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("lists threads with a bounded page and hasMore", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
