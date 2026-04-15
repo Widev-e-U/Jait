@@ -143,6 +143,8 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
   // Audio playback
   const playbackContextRef = useRef<AudioContext | null>(null)
   const nextPlayTimeRef = useRef(0)
+  const activePlaybackSourcesRef = useRef(new Set<AudioBufferSourceNode>())
+  const ignoreAudioUntilRef = useRef(0)
 
   // Client-side speech detection for instant interruption
   const analyserRef = useRef<AnalyserNode | null>(null)
@@ -188,8 +190,15 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
   // ── Instant local playback cutoff (no server round-trip) ───
   const cutPlaybackNow = useCallback(() => {
+    ignoreAudioUntilRef.current = Date.now() + 500
+    for (const source of activePlaybackSourcesRef.current) {
+      try { source.stop(0) } catch {}
+      try { source.disconnect() } catch {}
+    }
+    activePlaybackSourcesRef.current.clear()
     const ctx = playbackContextRef.current
     if (ctx && ctx.state !== 'closed') {
+      try { void ctx.suspend() } catch {}
       void ctx.close().catch(() => {})
     }
     playbackContextRef.current = null
@@ -220,6 +229,11 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
   // ── Stop audio playback ─────────────────────────────────────
   const stopPlayback = useCallback(() => {
+    for (const source of activePlaybackSourcesRef.current) {
+      try { source.stop(0) } catch {}
+      try { source.disconnect() } catch {}
+    }
+    activePlaybackSourcesRef.current.clear()
     const ctx = playbackContextRef.current
     playbackContextRef.current = null
     nextPlayTimeRef.current = 0
@@ -242,6 +256,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
   // ── Play received PCM16 audio ───────────────────────────────
   const playAudioChunk = useCallback((base64: string) => {
+    if (Date.now() < ignoreAudioUntilRef.current) return
     if (!playbackContextRef.current) {
       playbackContextRef.current = new AudioContext({ sampleRate: SAMPLE_RATE })
     }
@@ -255,6 +270,11 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
     const source = ctx.createBufferSource()
     source.buffer = buffer
     source.connect(ctx.destination)
+    activePlaybackSourcesRef.current.add(source)
+    source.onended = () => {
+      activePlaybackSourcesRef.current.delete(source)
+      try { source.disconnect() } catch {}
+    }
 
     const now = ctx.currentTime
     if (nextPlayTimeRef.current < now) nextPlayTimeRef.current = now
@@ -309,6 +329,7 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
             break
 
           case 'audio.done':
+            ignoreAudioUntilRef.current = 0
             setState(prev => prev.assistantSpeaking ? { ...prev, assistantSpeaking: false } : prev)
             break
 
@@ -340,6 +361,9 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
             break
 
           case 'status':
+            if (msg.status === 'thinking' || msg.status === 'listening') {
+              ignoreAudioUntilRef.current = 0
+            }
             updateStatus(msg.status)
             break
 
@@ -480,8 +504,8 @@ export function useVoiceAssistant(options: UseVoiceAssistantOptions): UseVoiceAs
 
     const buf = new Uint8Array(analyser.frequencyBinCount)
     let consecutiveFrames = 0
-    const THRESHOLD = 20   // RMS amplitude 0-128; lower since raw mic has no echo cancellation
-    const FRAMES_NEEDED = 2 // ~33ms at 60fps — fast reaction
+    const THRESHOLD = 14   // React sooner to actual speech while still filtering light noise
+    const FRAMES_NEEDED = 1 // Trigger on the first clear speech frame
 
     const detect = () => {
       analyser.getByteTimeDomainData(buf)

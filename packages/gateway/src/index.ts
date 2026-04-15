@@ -563,7 +563,9 @@ async function main() {
   const voiceAssistantService = new VoiceAssistantService({
     config,
     verifyToken: (token) => verifyAuthToken(token, config.jwtSecret),
+    userService,
     sessionService,
+    sessionState,
     threadService,
     workspaceService,
     memoryService: memory,

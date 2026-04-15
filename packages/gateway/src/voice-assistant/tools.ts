@@ -6,18 +6,25 @@
  */
 
 import type { SessionService } from "../services/sessions.js";
+import type { SessionStateService } from "../services/session-state.js";
 import type { ThreadService } from "../services/threads.js";
+import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
+import type { UserService } from "../services/users.js";
 import type { WorkspaceService } from "../services/workspaces.js";
 import type { MemoryService } from "../memory/contracts.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
+import type { CliProviderAdapter, ProviderEvent, ProviderId, RuntimeMode } from "../providers/contracts.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import type { AppConfig } from "../config.js";
 import { hostname, platform, cpus, totalmem, freemem } from "node:os";
 
 export interface VoiceToolDeps {
   config: AppConfig;
+  userId?: string;
+  userService?: UserService;
   sessionService?: SessionService;
+  sessionState?: SessionStateService;
   threadService?: ThreadService;
   workspaceService?: WorkspaceService;
   memoryService?: MemoryService;
@@ -79,6 +86,128 @@ const getSystemInfo: VoiceTool = {
     });
   },
 };
+
+const PROVIDER_IDS: ProviderId[] = ["jait", "codex", "claude-code", "gemini", "opencode", "copilot"];
+const DEFAULT_AGENT_TIMEOUT_MS = 45_000;
+
+function normalizeProviderId(value: unknown): ProviderId | null {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toLowerCase();
+  return PROVIDER_IDS.includes(normalized as ProviderId) ? normalized as ProviderId : null;
+}
+
+function resolveVoiceAgentProvider(
+  deps: VoiceToolDeps,
+  requestedProvider: unknown,
+): { providerId?: ProviderId; model?: string; runtimeMode: RuntimeMode; error?: string } {
+  const requested = normalizeProviderId(requestedProvider);
+  if (requested) {
+    if (!deps.providerRegistry?.get(requested)) {
+      return { runtimeMode: "full-access", error: `Provider '${requested}' is not registered on this gateway.` };
+    }
+    return { providerId: requested, runtimeMode: "full-access" };
+  }
+
+  const defaults = resolveThreadSelectionDefaults({
+    userId: deps.userId,
+    sessionId: "voice-assistant",
+    userService: deps.userService,
+    sessionState: deps.sessionState,
+  });
+  const defaultProvider = normalizeProviderId(defaults.providerId);
+  if (defaultProvider && deps.providerRegistry?.get(defaultProvider)) {
+    return {
+      providerId: defaultProvider,
+      model: defaults.model,
+      runtimeMode: defaults.runtimeMode ?? "full-access",
+    };
+  }
+
+  for (const providerId of PROVIDER_IDS) {
+    if (deps.providerRegistry?.get(providerId)) {
+      return { providerId, runtimeMode: defaults.runtimeMode ?? "full-access" };
+    }
+  }
+
+  return { runtimeMode: "full-access", error: "No regular agent provider is registered on this gateway." };
+}
+
+function formatAgentQuestion(question: string): string {
+  return [
+    "You are answering a voice assistant that is helping the user in Jait.",
+    "Answer the user's question directly and clearly.",
+    "Prefer plain text that works well for text-to-speech.",
+    "Keep the answer concise, but include the key explanation the voice assistant is missing.",
+    "If important context is missing, say exactly what is missing.",
+    "",
+    `User question: ${question.trim()}`,
+  ].join("\n");
+}
+
+function clampVoiceTimeout(value: unknown): number {
+  const parsed = typeof value === "number" ? value : Number.parseInt(String(value ?? ""), 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) return DEFAULT_AGENT_TIMEOUT_MS;
+  return Math.min(Math.max(Math.floor(parsed), 5_000), 120_000);
+}
+
+async function waitForDelegatedAgentAnswer(
+  provider: CliProviderAdapter,
+  sessionId: string,
+  timeoutMs: number,
+): Promise<string> {
+  return await new Promise<string>((resolve, reject) => {
+    let settled = false;
+    let tokenBuffer = "";
+    let latestAssistantMessage = "";
+
+    const timer = setTimeout(() => {
+      finish(() => reject(new Error(`Timed out after ${timeoutMs}ms waiting for the agent response.`)));
+    }, timeoutMs);
+
+    const unsubscribe = provider.onEvent((event: ProviderEvent) => {
+      if (event.sessionId !== sessionId || settled) return;
+
+      if (event.type === "token") {
+        tokenBuffer += event.content;
+        return;
+      }
+
+      if (event.type === "message" && event.role === "assistant") {
+        latestAssistantMessage = event.content.trim();
+        return;
+      }
+
+      if (event.type === "tool.approval-required") {
+        finish(() => reject(new Error(`Agent requires approval for tool '${event.tool}', so the voice handoff could not finish automatically.`)));
+        return;
+      }
+
+      if (event.type === "session.error") {
+        finish(() => reject(new Error(event.error)));
+        return;
+      }
+
+      if (event.type === "turn.completed" || event.type === "session.completed") {
+        const content = latestAssistantMessage || tokenBuffer.trim();
+        finish(() => {
+          if (!content) {
+            reject(new Error("The agent completed without returning a usable answer."));
+            return;
+          }
+          resolve(content);
+        });
+      }
+    });
+
+    const finish = (callback: () => void) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      unsubscribe();
+      callback();
+    };
+  });
+}
 
 const systemStatus: VoiceTool = {
   schema: {
@@ -196,6 +325,118 @@ const saveMemory: VoiceTool = {
       return "Saved to memory.";
     } catch {
       return "Failed to save memory.";
+    }
+  },
+};
+
+const askAgentAboutRequest: VoiceTool = {
+  schema: {
+    type: "function",
+    name: "ask_agent_about_request",
+    description:
+      "Ask a regular coding agent to explain or answer something more deeply than the voice assistant can on its own. " +
+      "Use this when the user is asking what something is, how it works, or wants a more informed answer from the actual agent.",
+    parameters: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The exact question the normal agent should answer." },
+        provider: {
+          type: "string",
+          description: "Optional provider override for the temporary helper agent.",
+          enum: PROVIDER_IDS,
+        },
+        workingDirectory: {
+          type: "string",
+          description: "Optional working directory if the answer should be grounded in a specific workspace.",
+        },
+        timeoutMs: {
+          type: "number",
+          description: "Optional timeout in milliseconds for waiting on the agent answer. Defaults to 45000.",
+        },
+      },
+      required: ["question"],
+    },
+  },
+  execute: async (args, deps) => {
+    if (!deps.threadService || !deps.providerRegistry) return "Agent handoff is not available.";
+
+    const question = String(args["question"] ?? "").trim();
+    if (!question) return "No question provided.";
+
+    const providerResolution = resolveVoiceAgentProvider(deps, args["provider"]);
+    if (!providerResolution.providerId) {
+      return providerResolution.error ?? "No regular agent provider is available.";
+    }
+
+    const provider = deps.providerRegistry.get(providerResolution.providerId);
+    if (!provider) return `Provider '${providerResolution.providerId}' is not available.`;
+
+    const available = await provider.checkAvailability();
+    if (!available) {
+      return `Provider '${providerResolution.providerId}' is not available: ${provider.info.unavailableReason ?? "unknown reason"}`;
+    }
+
+    const workingDirectory = typeof args["workingDirectory"] === "string" && args["workingDirectory"].trim()
+      ? args["workingDirectory"].trim()
+      : process.cwd();
+    const timeoutMs = clampVoiceTimeout(args["timeoutMs"]);
+
+    const thread = deps.threadService.create({
+      userId: deps.userId,
+      sessionId: "voice-assistant",
+      title: `Voice helper: ${question.slice(0, 60)}`,
+      providerId: providerResolution.providerId,
+      model: providerResolution.model,
+      runtimeMode: providerResolution.runtimeMode,
+      kind: "delegation",
+      workingDirectory,
+    });
+
+    let sessionId: string | null = null;
+    try {
+      const session = await provider.startSession({
+        threadId: thread.id,
+        workingDirectory,
+        mode: providerResolution.runtimeMode,
+        model: providerResolution.model,
+        mcpServers: [
+          deps.providerRegistry.buildJaitMcpServerRef(
+            { host: deps.config.host, port: deps.config.port },
+            undefined,
+            { sessionId: thread.id, workspaceRoot: workingDirectory },
+          ),
+        ],
+      });
+      sessionId = session.id;
+      deps.threadService.markRunning(thread.id, session.id);
+      deps.threadService.addActivity(thread.id, "message", question.slice(0, 500), {
+        role: "user",
+        content: question,
+      });
+
+      const answerPromise = waitForDelegatedAgentAnswer(provider, session.id, timeoutMs);
+      await provider.sendTurn(session.id, formatAgentQuestion(question));
+      const answer = await answerPromise;
+
+      deps.threadService.addActivity(thread.id, "message", answer.slice(0, 500), {
+        role: "assistant",
+        content: answer,
+      });
+      deps.threadService.markCompletedAndClearSession(thread.id);
+      return answer.slice(0, 4000);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      deps.threadService.markError(thread.id, message);
+      return `Agent handoff failed: ${message}`;
+    } finally {
+      if (sessionId) {
+        try {
+          await provider.stopSession(sessionId);
+        } catch {
+          // Best effort cleanup for a temporary helper session.
+        }
+      }
+      deps.threadService.delete(thread.id);
     }
   },
 };
@@ -330,6 +571,7 @@ const ALL_TOOLS: VoiceTool[] = [
   listThreads,
   searchMemory,
   saveMemory,
+  askAgentAboutRequest,
   sendToThread,
   searchWeb,
   getWeather,

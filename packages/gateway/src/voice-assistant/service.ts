@@ -191,7 +191,7 @@ export class VoiceAssistantService {
           send(clientWs, { type: "tool_call", name: fnName, status: "running" });
           send(clientWs, { type: "status", status: "thinking" });
 
-          const connectionDeps: VoiceToolDeps = { ...this.deps, userApiKeys };
+          const connectionDeps: VoiceToolDeps = { ...this.deps, userApiKeys, userId: user.id };
           const result = await executeVoiceTool(fnName, fnArgs, connectionDeps);
 
           // ── Handle stop_voice: say goodbye then close ──
@@ -396,6 +396,7 @@ When the user first speaks (or says "Hey Jait"), provide a concise Jarvis-style 
 You have direct access to the Jait system through function calls:
 - jait_system_status — check what's active
 - list_sessions, list_workspaces, list_threads — see what's open
+- ask_agent_about_request — ask a normal Jait agent for a better-informed explanation or answer
 - send_to_agent — delegate coding tasks to CLI agents
 - search_memory, save_memory — recall and store information
 - search_web — look up current events, news, facts
@@ -409,6 +410,9 @@ You have direct access to the Jait system through function calls:
 - When calling search_web, the "query" parameter MUST be a non-empty descriptive search string.
 - When the user tells you personal information, use save_memory to remember it.
 - Before answering questions about past interactions, use search_memory.
+- When the user asks what something is, how something works, why something happened, what a tool/result means, or asks for a deeper explanation about Jait, code, threads, tools, providers, sessions, errors, or workspace state, prefer ask_agent_about_request instead of guessing.
+- Use ask_agent_about_request whenever the normal agent is likely to know materially more than you do.
+- After ask_agent_about_request returns, speak a short natural summary of the answer instead of reading raw structured output.
 - When the user asks you to code or fix something, use send_to_agent.`;
   }
 }
