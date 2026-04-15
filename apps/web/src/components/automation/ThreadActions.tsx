@@ -8,6 +8,7 @@ import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { shouldShowThreadChangesButton } from './thread-actions-state'
 
 interface ThreadActionsProps {
   /** Thread id to persist PR metadata after creation/open. */
