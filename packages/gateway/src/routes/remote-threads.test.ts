@@ -59,8 +59,8 @@ function createMockWsControlPlane() {
   const providerOpCalls: Array<{ op: string; params: Record<string, unknown> }> = [];
   const fsOpCalls: Array<{ op: string; params: Record<string, unknown> }> = [];
 
-  // State: which provider thread ID was returned
-  let currentProviderThreadId = "remote-thread-123";
+  // State: provider thread IDs returned by start-session.
+  let providerThreadCounter = 0;
 
   const mock = {
     // ── FsNode queries ─────────────────────────────────────────────
@@ -124,9 +124,10 @@ function createMockWsControlPlane() {
           return [] as T;
 
         case "start-session":
+          providerThreadCounter += 1;
           return {
             ok: true,
-            providerThreadId: currentProviderThreadId,
+            providerThreadId: `remote-thread-${providerThreadCounter}`,
           } as T;
 
         case "send-turn":
@@ -472,6 +473,67 @@ describe("remote provider e2e flow", () => {
 
     const threadAfter = threadService.getById(thread.id);
     expect(threadAfter?.status).toBe("completed");
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("shows follow-up messages immediately after stopping and ignores stale session events", async () => {
+    const createRes = await app.inject({
+      method: "POST",
+      url: "/api/threads",
+      headers,
+      payload: {
+        title: "Stopped thread",
+        providerId: "codex",
+        workingDirectory: REMOTE_CWD,
+      },
+    });
+
+    expect(createRes.statusCode).toBe(201);
+    const thread = createRes.json() as { id: string };
+
+    const firstStartRes = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "first task", titleTask: "first task" },
+    });
+    expect(firstStartRes.statusCode).toBe(200);
+    const firstStarted = firstStartRes.json() as { providerSessionId: string };
+
+    const firstActivities = threadService.getActivities(thread.id);
+    expect(firstActivities.some((activity) => activity.kind === "message" && activity.summary.includes("first task"))).toBe(true);
+
+    const stopRes = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/stop`,
+      headers,
+    });
+    expect(stopRes.statusCode).toBe(200);
+    expect(threadService.getById(thread.id)?.status).toBe("interrupted");
+
+    mockWs.fireRemoteEvents(firstStarted.providerSessionId, [
+      { method: "turn/completed" },
+      { method: "session/completed" },
+    ]);
+    await new Promise((r) => setTimeout(r, 50));
+    expect(threadService.getById(thread.id)?.status).toBe("interrupted");
+
+    const secondStartRes = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "second task", titleTask: "second task" },
+    });
+    expect(secondStartRes.statusCode).toBe(200);
+    const secondStarted = secondStartRes.json() as { providerSessionId: string; status: string };
+    expect(secondStarted.status).toBe("running");
+    expect(secondStarted.providerSessionId).not.toBe(firstStarted.providerSessionId);
+
+    const secondActivities = threadService.getActivities(thread.id);
+    expect(secondActivities.some((activity) => activity.kind === "message" && activity.summary.includes("second task"))).toBe(true);
+    expect(secondActivities.filter((activity) => activity.kind === "message")).toHaveLength(2);
 
     await app.close();
     sqlite.close();

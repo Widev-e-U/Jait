@@ -291,6 +291,11 @@ export function registerThreadRoutes(
         return;
       }
 
+      const currentThread = threadService.getById(threadId);
+      if (!currentThread || currentThread.providerSessionId !== providerSessionId) {
+        return;
+      }
+
       if ((options?.suppressTitleTurnEvents?.() ?? 0) > 0) {
         if (event.type === "turn.completed") {
           options?.decrementSuppressedTurn?.();
@@ -837,6 +842,17 @@ export function registerThreadRoutes(
       const titlePrefix = typeof body["titlePrefix"] === "string" ? body["titlePrefix"] : "";
       const titleTask = typeof body["titleTask"] === "string" ? body["titleTask"] : displayContent ?? message ?? "";
 
+      if (message) {
+        const userActivity = threadService.addActivity(id, "message", (displayContent ?? message).slice(0, 500), {
+          role: "user",
+          content: displayContent ?? message,
+          fullContent: message,
+          referencedFiles,
+          displaySegments,
+        });
+        broadcastThreadEvent(id, "activity", { activity: userActivity });
+      }
+
       // ── Return response immediately — run title + coding turn in background ──
       // The session is alive and marked running. The frontend gets a fast
       // response; title generation and the coding turn happen asynchronously
@@ -874,6 +890,11 @@ export function registerThreadRoutes(
 
           // ── Send the actual coding turn ────────────────────────
           if (message) {
+            const activeThread = threadService.getById(id);
+            if (!activeThread || activeThread.providerSessionId !== session.id || activeThread.status !== "running") {
+              return;
+            }
+
             let repoStrategy: string | null = null;
             if (repoService && workingDirectory) {
               const matchingRepo = repoService.list(authUser.id).find((r) =>
@@ -890,15 +911,6 @@ export function registerThreadRoutes(
               branch: thread.branch,
             });
 
-            const userActivity = threadService.addActivity(id, "message", (displayContent ?? message).slice(0, 500), {
-              role: "user",
-              content: displayContent ?? message,
-              fullContent: message,
-              referencedFiles,
-              displaySegments,
-            });
-            broadcastThreadEvent(id, "activity", { activity: userActivity });
-
             // Prepend skills context on the first turn of a new CLI session
             let turnMessage = fullMessage;
             if (deps.skillRegistry) {
@@ -908,6 +920,10 @@ export function registerThreadRoutes(
             await provider.sendTurn(session.id, turnMessage, attachments);
           }
         } catch (err) {
+          const activeThread = threadService.getById(id);
+          if (!activeThread || activeThread.providerSessionId !== session.id) {
+            return;
+          }
           const errorMsg = err instanceof Error ? err.message : String(err);
           threadService.markError(id, errorMsg);
           unregisterThreadResume(id);
@@ -1017,6 +1033,12 @@ export function registerThreadRoutes(
         } catch { /* best effort */ }
       }
       remoteProviders.delete(id);
+    }
+
+    const unsubscribe = threadUnsubs.get(id);
+    if (unsubscribe) {
+      unsubscribe();
+      threadUnsubs.delete(id);
     }
 
     threadService.markInterrupted(id);
