@@ -5893,6 +5893,8 @@ function App() {
                           voiceLevels={voiceLevels}
                           voiceTranscribing={voiceTranscribing}
                           onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                          responseStyle={chatResponseStyle}
+                          onResponseStyleChange={handleChatResponseStyleChange}
                           provider={chatProvider}
                           onProviderChange={handleChatProviderChange}
                           providerRuntimeMode={chatProviderRuntimeMode}
@@ -5962,6 +5964,8 @@ function App() {
                           voiceLevels={voiceLevels}
                           voiceTranscribing={voiceTranscribing}
                           onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                          responseStyle={chatResponseStyle}
+                          onResponseStyleChange={handleChatResponseStyleChange}
                           provider={chatProvider}
                           onProviderChange={handleChatProviderChange}
                             providerRuntimeMode={chatProviderRuntimeMode}
