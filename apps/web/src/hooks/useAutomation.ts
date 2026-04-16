@@ -11,7 +11,7 @@ import { getAuthToken } from '@/lib/auth-token'
 import {
   persistSelectedRepoId,
   readPersistedSelectedRepoId,
-  resolvePersistedSelectedRepoId,
+  resolveSelectedRepoIdForRepositories,
 } from '@/lib/automation-selection-storage'
 import type { NodeRegistrySnapshot, NodeState, ThreadRegistrySnapshot } from '@jait/shared'
 import {
@@ -164,17 +164,9 @@ export function useAutomation(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return
-    const persistedRepoId = resolvePersistedSelectedRepoId(repositories)
-    if ((!selectedRepoId || repositories.every((r) => r.id !== selectedRepoId)) && persistedRepoId) {
-      setSelectedRepoId(persistedRepoId)
-      return
-    }
-    if (!selectedRepoId && repositories.length > 0) {
-      setSelectedRepoId(repositories[0].id)
-      return
-    }
-    if (selectedRepoId && repositories.every((r) => r.id !== selectedRepoId)) {
-      setSelectedRepoId(repositories[0]?.id ?? null)
+    const nextSelectedRepoId = resolveSelectedRepoIdForRepositories(repositories, selectedRepoId)
+    if (nextSelectedRepoId !== selectedRepoId) {
+      setSelectedRepoId(nextSelectedRepoId)
     }
   }, [repositories, selectedRepoId, enabled])
 

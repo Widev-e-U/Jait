@@ -73,3 +73,28 @@ export function resolvePersistedSelectedRepoId<T extends { id: string, localPath
 
   return null
 }
+
+export function resolveSelectedRepoIdForRepositories<T extends { id: string, localPath: string }>(
+  repositories: T[],
+  currentSelectedRepoId: string | null,
+  persisted = readPersistedSelectedRepo(),
+): string | null {
+  if (repositories.length === 0) {
+    return currentSelectedRepoId
+  }
+
+  const persistedRepoId = resolvePersistedSelectedRepoId(repositories, persisted)
+  if ((!currentSelectedRepoId || repositories.every((repo) => repo.id !== currentSelectedRepoId)) && persistedRepoId) {
+    return persistedRepoId
+  }
+
+  if (!currentSelectedRepoId) {
+    return repositories[0].id
+  }
+
+  if (repositories.every((repo) => repo.id !== currentSelectedRepoId)) {
+    return repositories[0]?.id ?? null
+  }
+
+  return currentSelectedRepoId
+}

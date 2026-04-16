@@ -6016,11 +6016,11 @@ function App() {
                                 onSelect={automation.setSelectedRepoId}
                                 onAddRepository={() => automation.setFolderPickerOpen(true)}
                               />
+                              {selectedRepoRuntime && (
+                                <ManagerRepoRuntimeMeta runtime={selectedRepoRuntime} />
+                              )}
                             </div>
                           </div>
-                          {selectedRepoRuntime && (
-                            <ManagerRepoRuntimeMeta runtime={selectedRepoRuntime} className="mt-1 px-1" />
-                          )}
                         </div>
                       </div>
                       {/* Thread list header + threads */}
