@@ -80,12 +80,13 @@ export function ThreadActions({
 
   useEffect(() => {
     let cancelled = false
+    const useRecordedBranchDiff = Boolean(branch && (prState === 'merged' || prState === 'closed'))
 
     const loadStatus = async () => {
       try {
         const status = await gitApi.status(cwd, branch ?? undefined)
         const diffStats = branch
-          ? await gitApi.diffStats(cwd, baseBranch).catch(() => null)
+          ? await gitApi.diffStats(cwd, baseBranch, useRecordedBranchDiff ? branch : undefined).catch(() => null)
           : null
         if (cancelled) return
         setGitStatus(status)

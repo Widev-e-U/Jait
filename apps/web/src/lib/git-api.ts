@@ -267,8 +267,12 @@ export const gitApi = {
     return gitPost<GitDiffResult>('diff', { cwd })
   },
 
-  diffStats(cwd: string, baseBranch?: string): Promise<GitDiffStatsResult> {
-    return gitPost<GitDiffStatsResult>('diff-stats', { cwd, ...(baseBranch ? { baseBranch } : {}) })
+  diffStats(cwd: string, baseBranch?: string, branch?: string): Promise<GitDiffStatsResult> {
+    return gitPost<GitDiffStatsResult>('diff-stats', {
+      cwd,
+      ...(baseBranch ? { baseBranch } : {}),
+      ...(branch ? { branch } : {}),
+    })
   },
 
   fileDiffs(cwd: string, baseBranch?: string): Promise<FileDiffEntry[]> {

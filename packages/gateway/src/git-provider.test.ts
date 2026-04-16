@@ -102,4 +102,47 @@ describe("diffStats", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("can target a recorded branch even after checking out another branch", { timeout: 15_000 }, async () => {
+    const root = mkdtempSync(join(tmpdir(), "jait-git-diff-stats-branch-"));
+    try {
+      execSync("git init -b main", { cwd: root, stdio: "ignore" });
+      execSync('git config user.email "test@example.com"', { cwd: root, stdio: "ignore" });
+      execSync('git config user.name "Test User"', { cwd: root, stdio: "ignore" });
+      execSync("git config core.autocrlf false", { cwd: root, stdio: "ignore" });
+
+      writeFileSync(join(root, "file.txt"), "base\n");
+      execSync("git add file.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "init"', { cwd: root, stdio: "ignore" });
+
+      execSync("git checkout -b feature/one", { cwd: root, stdio: "ignore" });
+      writeFileSync(join(root, "file.txt"), "base\none\n");
+      execSync("git add file.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "feature one"', { cwd: root, stdio: "ignore" });
+
+      execSync("git checkout main", { cwd: root, stdio: "ignore" });
+      execSync("git checkout -b feature/two", { cwd: root, stdio: "ignore" });
+      writeFileSync(join(root, "file.txt"), "base\ntwo\nthree\n");
+      execSync("git add file.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "feature two"', { cwd: root, stdio: "ignore" });
+
+      execSync("git checkout main", { cwd: root, stdio: "ignore" });
+
+      const git = new GitService();
+      await expect(git.diffStats(root, "main", "feature/one")).resolves.toEqual({
+        files: 1,
+        insertions: 1,
+        deletions: 0,
+        hasChanges: true,
+      });
+      await expect(git.diffStats(root, "main", "feature/two")).resolves.toEqual({
+        files: 1,
+        insertions: 2,
+        deletions: 0,
+        hasChanges: true,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
