@@ -1,6 +1,6 @@
 {
   "name": "@jait/shared",
-  "version": "0.1.44",
+  "version": "0.1.45",
   "description": "Shared schemas, constants, and domain types for Jait",
   "author": "JakobWl",
   "type": "module",

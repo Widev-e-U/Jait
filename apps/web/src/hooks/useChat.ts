@@ -47,6 +47,16 @@ function isTransientConnectionError(error: unknown): boolean {
   )
 }
 
+export function shouldResumeChatSession(params: {
+  sessionId: string | null
+  isLoading: boolean
+  isLoadingHistory: boolean
+  messageCount: number
+}): boolean {
+  if (!params.sessionId || params.isLoadingHistory) return false
+  return params.isLoading || params.messageCount === 0
+}
+
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
   if (!segments?.length) return undefined
   const attachments = segments.flatMap((segment) => (
@@ -238,11 +248,13 @@ export function useChat(
   const directStreamSessionRef = useRef<string | null>(null)
   const requestVersionRef = useRef(0)
   const restartInFlightRef = useRef(false)
+  const preserveMessagesOnNextResumeRef = useRef(false)
   const [refreshTrigger, setRefreshTrigger] = useState(0)
 
   const resumeSessionStream = useCallback(() => {
     if (!sessionId) return
     if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
+    preserveMessagesOnNextResumeRef.current = true
     prevSessionIdRef.current = null
     setRefreshTrigger(n => n + 1)
   }, [sessionId])
@@ -250,6 +262,8 @@ export function useChat(
   // When sessionId changes, load history / resume active stream via SSE
   useEffect(() => {
     if (sessionId === prevSessionIdRef.current) return
+    const preserveExistingMessages = preserveMessagesOnNextResumeRef.current
+    preserveMessagesOnNextResumeRef.current = false
     requestVersionRef.current += 1
     prevSessionIdRef.current = sessionId
 
@@ -269,7 +283,13 @@ export function useChat(
     }
 
     let cancelled = false
-    setState(prev => ({ ...prev, messages: [], isLoading: false, isLoadingHistory: true, error: null }))
+    setState(prev => ({
+      ...prev,
+      messages: preserveExistingMessages ? prev.messages : [],
+      isLoading: false,
+      isLoadingHistory: true,
+      error: null,
+    }))
     setContextUsage(null)
 
     // Connect to the stream-resume SSE endpoint.
@@ -656,7 +676,15 @@ export function useChat(
         }
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return
-        if (!cancelled) setState(prev => ({ ...prev, isLoadingHistory: false }))
+        if (!cancelled) {
+          setState(prev => ({
+            ...prev,
+            isLoadingHistory: false,
+            error: preserveExistingMessages && isTransientConnectionError(err)
+              ? TRANSIENT_CONNECTION_MESSAGE
+              : prev.error,
+          }))
+        }
       }
     })()
 
@@ -1182,7 +1210,12 @@ export function useChat(
 
   useEffect(() => {
     const resumeActiveStreamIfNeeded = () => {
-      if (!sessionId || state.isLoadingHistory || !state.isLoading) return
+      if (!shouldResumeChatSession({
+        sessionId,
+        isLoading: state.isLoading,
+        isLoadingHistory: state.isLoadingHistory,
+        messageCount: state.messages.length,
+      })) return
       if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
       resumeSessionStream()
     }
@@ -1201,7 +1234,12 @@ export function useChat(
     if (typeof window === 'undefined') return
 
     const resumeActiveStreamIfNeeded = () => {
-      if (!sessionId || state.isLoadingHistory || !state.isLoading) return
+      if (!shouldResumeChatSession({
+        sessionId,
+        isLoading: state.isLoading,
+        isLoadingHistory: state.isLoadingHistory,
+        messageCount: state.messages.length,
+      })) return
       if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
       resumeSessionStream()
     }
@@ -1218,7 +1256,7 @@ export function useChat(
       window.removeEventListener('pageshow', handleResume)
       window.removeEventListener('online', handleResume)
     }
-  }, [state.isLoading, state.isLoadingHistory, resumeSessionStream, sessionId])
+  }, [state.isLoading, state.isLoadingHistory, state.messages.length, resumeSessionStream, sessionId])
 
   // --- File change callbacks ---
   // Ref for broadcasting changed files to other clients

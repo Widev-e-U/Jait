@@ -323,6 +323,7 @@ export function ThreadActions({
         <GitDiffViewer
           cwd={cwd}
           baseBranch={branch ? baseBranch : undefined}
+          branch={effectivePrState === 'merged' || effectivePrState === 'closed' ? branch ?? undefined : undefined}
           onClose={() => setDiffOpen(false)}
         />
       )}

@@ -1778,12 +1778,19 @@ export class GitService {
    * render a Monaco diff editor.
    *
    * @param baseBranch — when given, diff working tree against that branch
-   *   (shows all thread changes: committed + uncommitted). When omitted,
-   *   only uncommitted working-tree changes are returned (original = HEAD).
+   *   (shows all thread changes: committed + uncommitted).
+   * @param branch — when given with baseBranch, diff baseBranch..branch
+   *   using both refs directly (used for merged/closed thread history).
+   *   When omitted entirely, only uncommitted working-tree changes are
+   *   returned (original = HEAD).
    */
-  async fileDiffs(cwd: string, baseBranch?: string): Promise<FileDiffEntry[]> {
+  async fileDiffs(cwd: string, baseBranch?: string, branch?: string): Promise<FileDiffEntry[]> {
     const isGit = await this.isRepo(cwd);
     if (!isGit) return [];
+
+    if (baseBranch && branch) {
+      return this.fileDiffsBetweenRefs(cwd, baseBranch, branch);
+    }
 
     if (baseBranch) {
       return this.fileDiffsBranch(cwd, baseBranch);
@@ -1888,6 +1895,52 @@ export class GitService {
       let modified = "";
       try { modified = await readFile(join(cwd, fp), "utf-8"); } catch { /* skip */ }
       entries.push({ path: fp, original: "", modified, status: "?" });
+    }
+
+    return entries;
+  }
+
+  /**
+   * Diff two refs directly (used after a PR is merged/closed, when the
+   * working tree no longer matches the thread branch history).
+   */
+  private async fileDiffsBetweenRefs(cwd: string, baseBranch: string, branch: string): Promise<FileDiffEntry[]> {
+    const nameStatus = await gitExec(cwd, `diff --name-status ${baseBranch} ${branch}`).catch(() => "");
+    const lines = nameStatus.split("\n").filter(Boolean);
+    const entries: FileDiffEntry[] = [];
+    const seen = new Set<string>();
+
+    for (const line of lines) {
+      const parts = line.split("\t");
+      const statusCode = parts[0]?.trim() ?? "M";
+      let filePath = parts[parts.length - 1]?.trim() ?? "";
+
+      let status = "M";
+      if (statusCode.startsWith("A")) status = "A";
+      else if (statusCode.startsWith("D")) status = "D";
+      else if (statusCode.startsWith("R")) {
+        status = "R";
+        filePath = parts[2]?.trim() ?? filePath;
+      }
+
+      if (!filePath || seen.has(filePath)) continue;
+      seen.add(filePath);
+
+      let original = "";
+      if (status !== "A") {
+        try {
+          original = await gitExec(cwd, `show ${baseBranch}:${JSON.stringify(gitRevisionPath(filePath))}`);
+        } catch { original = ""; }
+      }
+
+      let modified = "";
+      if (status !== "D") {
+        try {
+          modified = await gitExec(cwd, `show ${branch}:${JSON.stringify(gitRevisionPath(filePath))}`);
+        } catch { modified = ""; }
+      }
+
+      entries.push({ path: filePath, original, modified, status });
     }
 
     return entries;

@@ -275,8 +275,12 @@ export const gitApi = {
     })
   },
 
-  fileDiffs(cwd: string, baseBranch?: string): Promise<FileDiffEntry[]> {
-    return gitPost<{ files: FileDiffEntry[] }>('file-diffs', { cwd, ...(baseBranch ? { baseBranch } : {}) }).then(r => r.files)
+  fileDiffs(cwd: string, baseBranch?: string, branch?: string): Promise<FileDiffEntry[]> {
+    return gitPost<{ files: FileDiffEntry[] }>('file-diffs', {
+      cwd,
+      ...(baseBranch ? { baseBranch } : {}),
+      ...(branch ? { branch } : {}),
+    }).then(r => r.files)
   },
 
   createWorktree(

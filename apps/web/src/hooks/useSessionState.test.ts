@@ -31,4 +31,19 @@ describe('createSessionStatePersistRequestInit', () => {
     const request = new Request('http://localhost/session-state', init)
     await expect(request.text()).resolves.toBe(JSON.stringify({ 'chat.mode': 'agent' }))
   })
+
+  it('serializes object payloads for DB-backed session state', async () => {
+    const init = createSessionStatePersistRequestInit('token-123', 'manager.selectedRepo', {
+      repoId: 'repo-123',
+      localPath: '/work/repo',
+    })
+
+    const request = new Request('http://localhost/session-state', init)
+    await expect(request.text()).resolves.toBe(JSON.stringify({
+      'manager.selectedRepo': {
+        repoId: 'repo-123',
+        localPath: '/work/repo',
+      },
+    }))
+  })
 })

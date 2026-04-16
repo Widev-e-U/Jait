@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   SELECTED_REPO_STORAGE_KEY,
+  normalizePersistedSelectedRepo,
   persistSelectedRepoId,
   readPersistedSelectedRepo,
   readPersistedSelectedRepoId,
@@ -45,6 +46,24 @@ describe('automation selection storage', () => {
     expect(readPersistedSelectedRepo()).toEqual({
       repoId: 'repo-123',
       localPath: '/work/repo',
+    })
+  })
+
+  it('normalizes persisted selection values from session state payloads', () => {
+    expect(normalizePersistedSelectedRepo({
+      repoId: ' repo-123 ',
+      localPath: ' /work/repo ',
+    })).toEqual({
+      repoId: 'repo-123',
+      localPath: '/work/repo',
+    })
+
+    expect(normalizePersistedSelectedRepo({
+      repoId: '   ',
+      localPath: 123,
+    })).toEqual({
+      repoId: null,
+      localPath: null,
     })
   })
 

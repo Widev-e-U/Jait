@@ -5,23 +5,33 @@ export interface PersistedSelectedRepo {
   localPath: string | null
 }
 
+export function normalizePersistedSelectedRepo(value: unknown): PersistedSelectedRepo {
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    const parsed = value as { repoId?: unknown, localPath?: unknown }
+    return {
+      repoId: typeof parsed.repoId === 'string' && parsed.repoId.trim() ? parsed.repoId.trim() : null,
+      localPath: typeof parsed.localPath === 'string' && parsed.localPath.trim() ? parsed.localPath.trim() : null,
+    }
+  }
+
+  if (typeof value === 'string') {
+    return {
+      repoId: value.trim() || null,
+      localPath: null,
+    }
+  }
+
+  return { repoId: null, localPath: null }
+}
+
 function parsePersistedSelectedRepo(raw: string): PersistedSelectedRepo {
   try {
-    const parsed = JSON.parse(raw) as { repoId?: unknown, localPath?: unknown }
-    if (parsed && typeof parsed === 'object') {
-      return {
-        repoId: typeof parsed.repoId === 'string' && parsed.repoId.trim() ? parsed.repoId.trim() : null,
-        localPath: typeof parsed.localPath === 'string' && parsed.localPath.trim() ? parsed.localPath.trim() : null,
-      }
-    }
+    return normalizePersistedSelectedRepo(JSON.parse(raw))
   } catch {
     // Support the legacy raw-string repo id format.
   }
 
-  return {
-    repoId: raw.trim() || null,
-    localPath: null,
-  }
+  return normalizePersistedSelectedRepo(raw)
 }
 
 export function readPersistedSelectedRepo(): PersistedSelectedRepo {

@@ -17,6 +17,8 @@ interface GitDiffViewerProps {
   cwd: string
   /** When provided, diffs are scoped to changes since this branch (thread-scoped). */
   baseBranch?: string
+  /** When provided with baseBranch, diffs compare baseBranch..branch instead of working tree. */
+  branch?: string
   onClose: () => void
 }
 
@@ -44,7 +46,7 @@ function statusLabel(status: string): string {
   }
 }
 
-export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) {
+export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewerProps) {
   const [files, setFiles] = useState<FileDiffEntry[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedIndex, setSelectedIndex] = useState(0)
@@ -52,7 +54,7 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
   useEffect(() => {
     let cancelled = false
     setLoading(true)
-    gitApi.fileDiffs(cwd, baseBranch).then(result => {
+    gitApi.fileDiffs(cwd, baseBranch, branch).then(result => {
       if (cancelled) return
       setFiles(result)
       setSelectedIndex(0)
@@ -62,7 +64,7 @@ export function GitDiffViewer({ cwd, baseBranch, onClose }: GitDiffViewerProps) 
       if (!cancelled) setLoading(false)
     })
     return () => { cancelled = true }
-  }, [baseBranch, cwd])
+  }, [baseBranch, branch, cwd])
 
   useEffect(() => {
     const update = () => setIsNarrow(window.innerWidth < 960)

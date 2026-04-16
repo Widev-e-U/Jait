@@ -107,6 +107,11 @@ import { useWakeWord } from '@/hooks/useWakeWord'
 import { useVoiceAssistant } from '@/hooks/useVoiceAssistant'
 import { AgentAudioVisualizerWave } from '@/components/agent-audio-visualizer-wave'
 import { getActiveVsCodeTheme, setActiveVsCodeTheme } from '@/lib/vscode-theme-store'
+import {
+  normalizePersistedSelectedRepo,
+  resolvePersistedSelectedRepoId,
+  type PersistedSelectedRepo,
+} from '@/lib/automation-selection-storage'
 
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
@@ -1974,13 +1979,99 @@ function App() {
   const [, setSavedQueuedThreadMessages] = useSessionState<SavedQueuedThreadMessages>(
     activeSessionId, 'queued_thread_messages', token,
   )
+  const [savedManagerSelectedRepo, setSavedManagerSelectedRepo, loadingManagerSelectedRepo] = useSessionState<PersistedSelectedRepo>(
+    activeSessionId, 'manager.selectedRepo', token,
+  )
   const [workspaceTabsState, setWorkspaceTabsState] = useState<WorkspaceTabsState | null>(null)
   const [workspaceStateReady, setWorkspaceStateReady] = useState(false)
+  const [managerRepoStateReady, setManagerRepoStateReady] = useState(false)
+
+  const normalizedSavedManagerSelectedRepo = useMemo(
+    () => normalizePersistedSelectedRepo(savedManagerSelectedRepo),
+    [savedManagerSelectedRepo],
+  )
 
   useEffect(() => {
     setWorkspaceTabsState(null)
     setWorkspaceStateReady(false)
   }, [activeWorkspaceId])
+
+  useEffect(() => {
+    setManagerRepoStateReady(false)
+  }, [activeSessionId])
+
+  useEffect(() => {
+    if (!activeSessionId) {
+      setManagerRepoStateReady(false)
+      return
+    }
+    if (loadingManagerSelectedRepo) return
+
+    const persisted = normalizedSavedManagerSelectedRepo
+    if (!persisted.repoId && !persisted.localPath) {
+      setManagerRepoStateReady(true)
+      return
+    }
+
+    const resolvedRepoId = resolvePersistedSelectedRepoId(automation.repositories, persisted)
+    if (!resolvedRepoId) {
+      if (automation.repositories.length === 0) return
+      setManagerRepoStateReady(true)
+      return
+    }
+
+    if (automation.selectedRepoId !== resolvedRepoId) {
+      automation.setSelectedRepoId(resolvedRepoId)
+      return
+    }
+
+    setManagerRepoStateReady(true)
+  }, [
+    activeSessionId,
+    automation.repositories,
+    automation.selectedRepoId,
+    automation.setSelectedRepoId,
+    loadingManagerSelectedRepo,
+    normalizedSavedManagerSelectedRepo,
+  ])
+
+  const managerRepoPersistInitRef = useRef(false)
+  const prevManagerRepoPayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    managerRepoPersistInitRef.current = false
+    prevManagerRepoPayloadRef.current = null
+  }, [activeSessionId])
+
+  useEffect(() => {
+    if (!activeSessionId || !token || loadingManagerSelectedRepo || !managerRepoStateReady) return
+
+    const payload: PersistedSelectedRepo | null = automation.selectedRepo
+      ? {
+          repoId: automation.selectedRepo.id,
+          localPath: automation.selectedRepo.localPath,
+        }
+      : null
+    const serialized = JSON.stringify(payload)
+
+    if (!managerRepoPersistInitRef.current) {
+      managerRepoPersistInitRef.current = true
+      prevManagerRepoPayloadRef.current = serialized
+      if (serialized === JSON.stringify(normalizedSavedManagerSelectedRepo)) return
+    } else if (serialized === prevManagerRepoPayloadRef.current) {
+      return
+    }
+
+    prevManagerRepoPayloadRef.current = serialized
+    setSavedManagerSelectedRepo(payload)
+  }, [
+    activeSessionId,
+    automation.selectedRepo,
+    loadingManagerSelectedRepo,
+    managerRepoStateReady,
+    normalizedSavedManagerSelectedRepo,
+    setSavedManagerSelectedRepo,
+    token,
+  ])
 
   useEffect(() => {
     setWorkspacePreviewRequest(null)

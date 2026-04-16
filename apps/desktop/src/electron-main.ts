@@ -1291,6 +1291,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       // Compound operation: return per-file original/modified content for Monaco diff
       const cwd = resolve(params.cwd as string);
       const baseBranch = params.baseBranch as string | undefined;
+      const branch = params.branch as string | undefined;
       const { exec: execAsync } = await import("node:child_process");
       const { promisify } = await import("node:util");
       const execP = promisify(execAsync);
@@ -1309,7 +1310,33 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const entries: Array<{ path: string; original: string; modified: string; status: string }> = [];
       const seen = new Set<string>();
 
-      if (baseBranch) {
+      if (baseBranch && branch) {
+        const nameStatus = await gitExecLocal(`diff --name-status ${baseBranch} ${branch}`).catch(() => "");
+        for (const line of nameStatus.split("\n").filter(Boolean)) {
+          const parts = line.split("\t");
+          const statusCode = parts[0]?.trim() ?? "M";
+          let filePath = parts[parts.length - 1]?.trim() ?? "";
+          let status = "M";
+          if (statusCode.startsWith("A")) status = "A";
+          else if (statusCode.startsWith("D")) status = "D";
+          else if (statusCode.startsWith("R")) {
+            status = "R";
+            filePath = parts[2]?.trim() ?? filePath;
+          }
+          if (!filePath || seen.has(filePath)) continue;
+          seen.add(filePath);
+
+          let original = "";
+          if (status !== "A") {
+            try { original = await gitExecLocal(`show ${baseBranch}:${JSON.stringify(filePath)}`); } catch { /* new file */ }
+          }
+          let modified = "";
+          if (status !== "D") {
+            try { modified = await gitExecLocal(`show ${branch}:${JSON.stringify(filePath)}`); } catch { /* deleted */ }
+          }
+          entries.push({ path: filePath, original, modified, status });
+        }
+      } else if (baseBranch) {
         // Diff working tree against base branch (committed + uncommitted changes)
         const nameStatus = await gitExecLocal(`diff --name-status ${baseBranch}`).catch(() => "");
         for (const line of nameStatus.split("\n").filter(Boolean)) {
@@ -1364,16 +1391,18 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         }
       }
 
-      // Include untracked files not already listed
-      const porcelainAll = await gitExecLocal("status --porcelain").catch(() => "");
-      for (const pl of porcelainAll.split("\n").filter(Boolean)) {
-        if (!pl.startsWith("??")) continue;
-        const fp = pl.slice(3).trim();
-        if (!fp || seen.has(fp)) continue;
-        seen.add(fp);
-        let modified = "";
-        try { modified = await readFile(join(cwd, fp), "utf-8"); } catch { /* */ }
-        entries.push({ path: fp, original: "", modified, status: "?" });
+      if (!(baseBranch && branch)) {
+        // Include untracked files only when diffing against the working tree.
+        const porcelainAll = await gitExecLocal("status --porcelain").catch(() => "");
+        for (const pl of porcelainAll.split("\n").filter(Boolean)) {
+          if (!pl.startsWith("??")) continue;
+          const fp = pl.slice(3).trim();
+          if (!fp || seen.has(fp)) continue;
+          seen.add(fp);
+          let modified = "";
+          try { modified = await readFile(join(cwd, fp), "utf-8"); } catch { /* */ }
+          entries.push({ path: fp, original: "", modified, status: "?" });
+        }
       }
 
       return entries;
