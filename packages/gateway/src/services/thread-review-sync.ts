@@ -88,7 +88,8 @@ export class ThreadReviewSyncService {
       const metadataChanged =
         (pr.url ?? null) !== (thread.prUrl ?? null)
         || (pr.number ?? null) !== (thread.prNumber ?? null)
-        || (pr.title ?? null) !== (thread.prTitle ?? null);
+        || (pr.title ?? null) !== (thread.prTitle ?? null)
+        || (pr.baseBranch ?? null) !== (thread.prBaseBranch ?? null);
       const stateChanged = nextState !== (thread.prState ?? null);
 
       if (!metadataChanged && !stateChanged) return;
@@ -97,6 +98,7 @@ export class ThreadReviewSyncService {
         prUrl: pr.url ?? thread.prUrl ?? null,
         prNumber: pr.number ?? thread.prNumber ?? null,
         prTitle: pr.title ?? thread.prTitle ?? null,
+        prBaseBranch: pr.baseBranch ?? thread.prBaseBranch ?? null,
         prState: nextState,
       });
 

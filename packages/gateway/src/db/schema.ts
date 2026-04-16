@@ -259,6 +259,7 @@ export const agentThreads = sqliteTable(
     prUrl: text("pr_url"),
     prNumber: integer("pr_number"),
     prTitle: text("pr_title"),
+    prBaseBranch: text("pr_base_branch"),
     prState: text("pr_state"), // open | closed | merged
     executionNodeId: text("execution_node_id"),   // Id of the FsNode executing this thread
     executionNodeName: text("execution_node_name"), // Human-readable node name

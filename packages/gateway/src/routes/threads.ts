@@ -268,6 +268,7 @@ export function registerThreadRoutes(
         prUrl: thread.prUrl,
         prNumber: thread.prNumber,
         prTitle: thread.prTitle,
+        prBaseBranch: thread.prBaseBranch,
         prState: normalizeThreadPrState(thread.prState),
         executionNodeId: thread.executionNodeId ?? null,
         executionNodeName: thread.executionNodeName ?? null,
@@ -752,6 +753,12 @@ export function registerThreadRoutes(
         : body["prState"] === null
           ? null
           : undefined;
+    const prBaseBranch =
+      typeof body["prBaseBranch"] === "string"
+        ? body["prBaseBranch"]
+        : body["prBaseBranch"] === null
+          ? null
+          : undefined;
     let providerId: ProviderId | undefined;
     if (body["providerId"] !== undefined) {
       const requestedProviderId = body["providerId"] as ProviderId;
@@ -777,6 +784,7 @@ export function registerThreadRoutes(
       prUrl: typeof body["prUrl"] === "string" ? body["prUrl"] : body["prUrl"] === null ? null : undefined,
       prNumber: typeof body["prNumber"] === "number" ? body["prNumber"] : body["prNumber"] === null ? null : undefined,
       prTitle: typeof body["prTitle"] === "string" ? body["prTitle"] : body["prTitle"] === null ? null : undefined,
+      prBaseBranch,
       prState,
     });
     if (
@@ -1504,6 +1512,7 @@ export function registerThreadRoutes(
         prUrl: result.pr.url ?? undefined,
         prNumber: result.pr.number ?? undefined,
         prTitle: result.pr.title ?? undefined,
+        prBaseBranch: result.pr.baseBranch ?? baseBranch ?? undefined,
         prState:
           result.pr.status === "created" || result.pr.status === "opened_existing"
             ? "open"

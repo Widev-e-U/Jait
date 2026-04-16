@@ -109,6 +109,7 @@ export function verifySchema(sqlite: SqliteDatabase) {
       pr_url: "TEXT",
       pr_number: "INTEGER",
       pr_title: "TEXT",
+      pr_base_branch: "TEXT",
       pr_state: "TEXT",
       execution_node_id: "TEXT",
       execution_node_name: "TEXT",
