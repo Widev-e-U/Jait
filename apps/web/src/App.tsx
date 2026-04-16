@@ -751,7 +751,7 @@ function ManagerThreadListItem({
               threadId={thread.id}
               cwd={thread.workingDirectory ?? repo.localPath}
               branch={thread.branch}
-              baseBranch={repo.defaultBranch}
+              baseBranch={thread.prBaseBranch ?? repo.defaultBranch}
               threadTitle={thread.title}
               threadStatus={thread.status}
               threadKind={thread.kind}
@@ -901,7 +901,7 @@ function ManagerActiveThreadsMenu({
                         threadId={thread.id}
                         cwd={thread.workingDirectory ?? repo.localPath}
                         branch={thread.branch}
-                        baseBranch={repo.defaultBranch}
+                        baseBranch={thread.prBaseBranch ?? repo.defaultBranch}
                         threadTitle={thread.title}
                         threadStatus={thread.status}
                         threadKind={thread.kind}

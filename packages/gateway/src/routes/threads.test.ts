@@ -652,6 +652,7 @@ describe("thread routes", () => {
     expect(updated?.prUrl).toBe(prUrl);
     expect(updated?.prNumber).toBe(42);
     expect(updated?.prTitle).toBe("feat: implement feature");
+    expect(updated?.prBaseBranch).toBe("main");
     expect(updated?.prState).toBe("open");
 
     await app.close();
@@ -820,6 +821,7 @@ describe("thread routes", () => {
 
     const response = await responsePromise;
     expect(response.statusCode).toBe(200);
+    expect(threadService.getById(thread.id)?.prBaseBranch).toBe("main");
     expect(threadService.getById(thread.id)?.prState).toBe("open");
 
     await app.close();

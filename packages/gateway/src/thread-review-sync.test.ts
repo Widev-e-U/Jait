@@ -63,6 +63,7 @@ describe("ThreadReviewSyncService", () => {
 
       const updated = threadService.getById(thread.id);
       expect(updated?.prState).toBe("merged");
+      expect(updated?.prBaseBranch).toBe("main");
       expect(updated?.providerSessionId).toBeNull();
       expect(updated?.workingDirectory).toBeNull();
       expect(updated?.branch).toBeNull();

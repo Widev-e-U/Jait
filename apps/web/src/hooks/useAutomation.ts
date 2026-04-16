@@ -526,13 +526,15 @@ export function useAutomation(enabled = true) {
           if (status.ghAvailable && status.pr && (
             thread.prUrl !== status.pr.url ||
             thread.prState !== status.pr.state ||
-            thread.prNumber !== status.pr.number
+            thread.prNumber !== status.pr.number ||
+            thread.prBaseBranch !== (status.pr.baseBranch ?? null)
           )) {
             try {
               await agentsApi.updateThread(thread.id, {
                 prUrl: status.pr.url,
                 prNumber: status.pr.number,
                 prTitle: status.pr.title ?? null,
+                prBaseBranch: status.pr.baseBranch ?? null,
                 prState: status.pr.state,
               })
             } catch { /* best-effort sync */ }

@@ -687,5 +687,12 @@ export const migrations: Migration[] = [
       try { db.exec(`ALTER TABLE messages ADD COLUMN context_flow TEXT`); } catch { /* exists */ }
     },
   },
+  {
+    id: 27,
+    name: "agent_threads_pr_base_branch",
+    run(db) {
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN pr_base_branch TEXT`); } catch { /* exists */ }
+    },
+  },
 
 ];

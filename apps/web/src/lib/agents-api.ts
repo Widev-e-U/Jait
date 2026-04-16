@@ -33,6 +33,7 @@ export interface AgentThread {
   prUrl: string | null
   prNumber: number | null
   prTitle: string | null
+  prBaseBranch: string | null
   prState: 'creating' | 'open' | 'closed' | 'merged' | null
   executionNodeId: string | null
   executionNodeName: string | null
@@ -87,6 +88,7 @@ export interface UpdateThreadRequest {
   prUrl?: string | null
   prNumber?: number | null
   prTitle?: string | null
+  prBaseBranch?: string | null
   prState?: 'creating' | 'open' | 'closed' | 'merged' | null
 }
 

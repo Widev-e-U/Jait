@@ -26,6 +26,7 @@ function makeThread(overrides: Partial<AgentThread>): AgentThread {
     prUrl: null,
     prNumber: null,
     prTitle: null,
+    prBaseBranch: null,
     prState: null,
     createdAt: '2026-03-08T20:00:00.000Z',
     updatedAt: '2026-03-08T20:00:00.000Z',
