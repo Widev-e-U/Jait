@@ -1291,10 +1291,22 @@ export class GitService {
    * No-ops silently when the path is not a worktree or doesn't exist.
    */
   async cleanupWorktree(worktreePath: string, branch?: string | null): Promise<void> {
+    return this.cleanupWorktreeWithOptions(worktreePath, {
+      branch,
+      preserveBranch: false,
+    });
+  }
+
+  async cleanupWorktreeWithOptions(
+    worktreePath: string,
+    options?: { branch?: string | null; preserveBranch?: boolean },
+  ): Promise<void> {
     if (!worktreePath || !existsSync(worktreePath)) return;
     // Only act on paths that live inside the managed worktrees directory
     const worktreeMarker = join(".jait", "worktrees");
     if (!worktreePath.includes(worktreeMarker)) return;
+    const branch = options?.branch ?? null;
+    const preserveBranch = options?.preserveBranch === true;
 
     let mainRoot: string | undefined;
     try {
@@ -1309,7 +1321,7 @@ export class GitService {
     }
 
     // Delete the branch from the main repo after the worktree is gone
-    if (branch && mainRoot) {
+    if (branch && mainRoot && !preserveBranch) {
       await this.deleteBranch(mainRoot, branch);
     }
   }
@@ -1955,13 +1967,17 @@ export async function cleanupWorktreeRemoteAware(
   worktreePath: string,
   ws?: { proxyFsOp<T = unknown>(nodeId: string, op: string, params: Record<string, unknown>, timeout: number): Promise<T>; getFsNodes(): { id: string; isGateway?: boolean; platform?: string }[] },
   branch?: string | null,
+  options?: { preserveBranch?: boolean },
 ): Promise<void> {
   if (!worktreePath) return;
 
   // If path exists locally, use local cleanup
   if (existsSync(worktreePath)) {
     const svc = new GitService();
-    await svc.cleanupWorktree(worktreePath, branch);
+    await svc.cleanupWorktreeWithOptions(worktreePath, {
+      branch,
+      preserveBranch: options?.preserveBranch === true,
+    });
     return;
   }
 

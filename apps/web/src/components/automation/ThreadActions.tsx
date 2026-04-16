@@ -61,7 +61,7 @@ export function ThreadActions({
   const [diffOpen, setDiffOpen] = useState(false)
   const [ghSetupOpen, setGhSetupOpen] = useState(false)
   const [gitStatus, setGitStatus] = useState<GitStatusResult | null>(null)
-  const [changeTotals, setChangeTotals] = useState<Pick<GitDiffStatsResult, 'insertions' | 'deletions'> | null>(null)
+  const [changeTotals, setChangeTotals] = useState<Pick<GitDiffStatsResult, 'insertions' | 'deletions' | 'hasChanges'> | null>(null)
   const pendingPrAction = useRef(false)
   const skipGhCheck = useRef(false)
   const [prLink, setPrLink] = useState<{ url: string; kind: 'created' | 'create' } | null>(
@@ -84,23 +84,31 @@ export function ThreadActions({
 
     const loadStatus = async () => {
       try {
-        const status = await gitApi.status(cwd, branch ?? undefined)
+        const status = await gitApi.status(cwd, useRecordedBranchDiff ? undefined : branch ?? undefined)
         const diffStats = branch
           ? await gitApi.diffStats(cwd, baseBranch, useRecordedBranchDiff ? branch : undefined).catch(() => null)
           : null
         if (cancelled) return
         setGitStatus(status)
-        setChangeTotals(
-          diffStats
-            ? {
-                insertions: diffStats.insertions,
-                deletions: diffStats.deletions,
-              }
-            : {
-                insertions: status.index.insertions + status.workingTree.insertions,
-                deletions: status.index.deletions + status.workingTree.deletions,
-              },
-        )
+        if (diffStats) {
+          setChangeTotals({
+            insertions: diffStats.insertions,
+            deletions: diffStats.deletions,
+            hasChanges: diffStats.hasChanges,
+          })
+          return
+        }
+
+        if (branch) {
+          setChangeTotals(null)
+          return
+        }
+
+        setChangeTotals({
+          insertions: status.index.insertions + status.workingTree.insertions,
+          deletions: status.index.deletions + status.workingTree.deletions,
+          hasChanges: status.hasWorkingTreeChanges,
+        })
       } catch {
         if (!cancelled) {
           setGitStatus(null)
@@ -152,8 +160,11 @@ export function ThreadActions({
     (prUrl ? { url: prUrl, kind: 'created' as const } : null) ??
     (gitStatus?.pr?.url ? { url: gitStatus.pr.url, kind: 'created' as const } : null)
   const effectivePrState = prState === 'creating' && existingPrLink?.kind === 'created' ? 'open' : prState
+  const useRecordedBranchDiff = Boolean(branch && (effectivePrState === 'merged' || effectivePrState === 'closed'))
   const creatingPr = effectivePrState === 'creating'
-  const showChangesButton = shouldShowThreadChangesButton(gitStatus, branch, effectivePrState)
+  const showChangesButton = useRecordedBranchDiff
+    ? Boolean(changeTotals?.hasChanges)
+    : shouldShowThreadChangesButton(gitStatus, branch, effectivePrState)
   const buttonLabel = creatingPr && !existingPrLink
     ? 'Creating PR...'
     : existingPrLink

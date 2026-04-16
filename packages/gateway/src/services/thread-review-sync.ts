@@ -121,9 +121,10 @@ export class ThreadReviewSyncService {
           updated = this.deps.threadService.update(thread.id, {
             providerSessionId: null,
             workingDirectory: null,
-            branch: null,
           }) ?? updated;
-          void cleanupWorktreeRemoteAware(thread.workingDirectory!, this.deps.ws, thread.branch).catch(() => {});
+          void cleanupWorktreeRemoteAware(thread.workingDirectory!, this.deps.ws, thread.branch, {
+            preserveBranch: true,
+          }).catch(() => {});
         }
       }
 
