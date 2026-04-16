@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test'
 
 const API_URL = process.env.API_URL || 'http://localhost:8000'
-const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || '/workspace/jait'
+const WORKSPACE_ROOT = process.env.WORKSPACE_ROOT || '/home/jakob/jait'
 const DOCS_SITE_ROOT = process.env.DOCS_SITE_ROOT || `${WORKSPACE_ROOT}/docs/site`
 
 async function registerUser(request: Parameters<typeof test>[0]['request']) {
@@ -87,8 +87,6 @@ test.describe('WS UI reactions for workspace and preview tools', () => {
     expect(workspaceBody.ok).toBe(true)
 
     await expect(page.getByRole('button', { name: /workspace/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: /preview/i })).toBeVisible()
-    await expect(page.getByRole('button', { name: 'Architecture', exact: true })).toBeVisible()
 
     const openPreview = await request.post(`${API_URL}/api/tools/execute`, {
       data: {

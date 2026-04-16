@@ -4754,6 +4754,16 @@ function App() {
   // ── Memoised edit-composer bag (prevents every Message from re-rendering) ──
   const handleVoiceStop = useCallback(() => { void stopRecordingAndTranscribe() }, [stopRecordingAndTranscribe])
   const handleFolderPickerOpen = useCallback(() => { automation.setFolderPickerOpen(true) }, [automation.setFolderPickerOpen])
+  const developerThreadToolbarRepoPicker = sendTarget === 'thread' ? (
+    <ManagerRepoPicker
+      repositories={automation.repositories}
+      selectedRepo={automation.selectedRepo}
+      disabled={automation.creating}
+      getRuntimeInfo={automation.getRuntimeInfoForRepository}
+      onSelect={automation.setSelectedRepoId}
+      onAddRepository={handleFolderPickerOpen}
+    />
+  ) : null
   const editComposerFooter = useMemo(() => {
     if (sendTarget !== 'thread') return undefined
     return (
@@ -6165,16 +6175,6 @@ function App() {
                     onCliModelChange={handleCliModelChange}
                     repoRuntime={sendTarget === 'thread' ? selectedRepoRuntime : null}
                     onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
-                    footerLeadingContent={sendTarget === 'thread' ? (
-                      <ManagerRepoPicker
-                        repositories={automation.repositories}
-                        selectedRepo={automation.selectedRepo}
-                        disabled={automation.creating}
-                        getRuntimeInfo={automation.getRuntimeInfoForRepository}
-                        onSelect={automation.setSelectedRepoId}
-                        onAddRepository={() => automation.setFolderPickerOpen(true)}
-                      />
-                    ) : undefined}
                     availableFiles={availableFilesForMention}
                     onSearchFiles={handleSearchFiles}
                     workspaceOpen={showWorkspace}
@@ -6185,16 +6185,20 @@ function App() {
                     <div className="overflow-x-auto px-1">
                       <div className="grid min-w-max grid-cols-[1fr_auto_1fr] items-center gap-2 whitespace-nowrap">
                         <div className="flex min-w-0 items-center gap-2">
-                          <SessionSwitcher
-                            sessions={activeWorkspaceSessions}
-                            activeSessionId={activeSessionId}
-                            workspaceTitle={activeWorkspaceRecord?.title ?? null}
-                            onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
-                            onNewSession={() => { void createSession() }}
-                            onOpenChange={handleSessionSwitcherOpen}
-                            showTitle={false}
-                            triggerLabel="History"
-                          />
+                          {sendTarget === 'thread' ? (
+                            developerThreadToolbarRepoPicker
+                          ) : (
+                            <SessionSwitcher
+                              sessions={activeWorkspaceSessions}
+                              activeSessionId={activeSessionId}
+                              workspaceTitle={activeWorkspaceRecord?.title ?? null}
+                              onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                              onNewSession={() => { void createSession() }}
+                              onOpenChange={handleSessionSwitcherOpen}
+                              showTitle={false}
+                              triggerLabel="History"
+                            />
+                          )}
                         </div>
                         <SendTargetSelector
                           target={sendTarget}
@@ -6203,12 +6207,14 @@ function App() {
                           className="justify-self-center"
                         />
                         <div className="flex shrink-0 items-center justify-self-end gap-2">
-                          <button
-                            onClick={handleStartNewChat}
-                            className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                          >
-                            New chat
-                          </button>
+                          {sendTarget !== 'thread' && (
+                            <button
+                              onClick={handleStartNewChat}
+                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                            >
+                              New chat
+                            </button>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -6356,16 +6362,6 @@ function App() {
                       onCliModelChange={handleCliModelChange}
                       repoRuntime={sendTarget === 'thread' ? selectedRepoRuntime : null}
                       onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
-                      footerLeadingContent={sendTarget === 'thread' ? (
-                        <ManagerRepoPicker
-                          repositories={automation.repositories}
-                          selectedRepo={automation.selectedRepo}
-                          disabled={automation.creating}
-                          getRuntimeInfo={automation.getRuntimeInfoForRepository}
-                          onSelect={automation.setSelectedRepoId}
-                          onAddRepository={() => automation.setFolderPickerOpen(true)}
-                        />
-                      ) : undefined}
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}
                       workspaceOpen={showWorkspace}
@@ -6375,7 +6371,9 @@ function App() {
                     <div className="overflow-x-auto px-1">
                       <div className="grid min-w-max grid-cols-[1fr_auto_1fr] items-center gap-3 whitespace-nowrap">
                         <div className="flex min-w-0 items-center gap-2">
-                          {viewMode === 'developer' && (
+                          {viewMode === 'developer' && sendTarget === 'thread' ? (
+                            developerThreadToolbarRepoPicker
+                          ) : viewMode === 'developer' ? (
                             <SessionSwitcher
                               sessions={activeWorkspaceSessions}
                               activeSessionId={activeSessionId}
@@ -6386,7 +6384,7 @@ function App() {
                               showTitle={false}
                               triggerLabel="History"
                             />
-                          )}
+                          ) : null}
                           {approveAllInSession && (
                             <>
                               <span className="text-[11px] text-green-600 dark:text-green-400 truncate">
@@ -6411,7 +6409,7 @@ function App() {
                           )}
                         </div>
                         <div className="flex shrink-0 items-center justify-self-end gap-2">
-                          {viewMode === 'developer' && (
+                          {viewMode === 'developer' && sendTarget !== 'thread' && (
                             <button
                               onClick={handleStartNewChat}
                               className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"

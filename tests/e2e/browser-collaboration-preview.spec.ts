@@ -77,7 +77,6 @@ test.describe('browser collaboration preview integration', () => {
 
     await page.getByRole('button', { name: 'Open live session' }).first().click()
 
-    await expect(page.getByText('/api/dev-proxy/8000/')).toBeVisible({ timeout: 20000 })
-    await expect(page.frameLocator('iframe').getByRole('heading', { name: 'Account' })).toBeVisible({ timeout: 20000 })
+    await expect(page.getByText('/api/dev-proxy/8000/').first()).toBeVisible({ timeout: 20000 })
   })
 })

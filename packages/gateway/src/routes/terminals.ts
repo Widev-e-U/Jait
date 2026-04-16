@@ -21,9 +21,35 @@ function stripAnsi(s: string): string {
   return s.replace(/\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~]|\].*?(?:\x07|\x1B\\))/g, "");
 }
 
-// OSC 633 sequence patterns (same as terminal-tools.ts)
-const OSC_DONE_RE = /\x1b\]633;D;(-?\d*)(?:\x07|\x1b\\)/;
-const OSC_PROMPT_END_RE = /\x1b\]633;B(?:\x07|\x1b\\)/;
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+function isPowerShellShell(shell: string): boolean {
+  return /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(shell);
+}
+
+function hasShellPrompt(rawOutput: string, powershell: boolean): boolean {
+  const cleaned = stripAnsi(rawOutput).replace(/\r/g, "");
+  const lines = cleaned
+    .split("\n")
+    .map((line) => line.replace(/^[^\x07]*\x07/, "").trim())
+    .filter(Boolean);
+  const lastLine = lines[lines.length - 1] ?? "";
+  if (powershell) return /^PS .+?>/.test(lastLine);
+  return /^[^@\n]+@[^:]+:.*[$#]$/.test(lastLine);
+}
+
+function inferFallbackExitCode(rawOutput: string): number {
+  const cleaned = stripAnsi(rawOutput).replace(/\r/g, "");
+  if (/command not found|not recognized as (?:an internal|the name of a cmdlet)|No such file or directory/i.test(cleaned)) {
+    return 127;
+  }
+  if (/permission denied|access is denied/i.test(cleaned)) {
+    return 126;
+  }
+  return 0;
+}
 
 export function registerTerminalRoutes(
   app: FastifyInstance,
@@ -169,17 +195,16 @@ export function registerTerminalRoutes(
     try {
       // Ensure shell integration is ready before executing
       await surface.waitForPrompt();
+      const shell = String(surface.snapshot().metadata?.shell ?? "");
+      const powershell = isPowerShellShell(shell);
+      const marker = `__JAIT_EXIT__${Date.now()}_${Math.random().toString(36).slice(2)}__`;
+      const markerRe = new RegExp(`${escapeRegExp(marker)}(-?\\d+)`, "g");
 
-      // Execute command using OSC 633 shell integration
+      // Execute command inside the interactive shell and append a unique
+      // sentinel so completion does not depend on shell integration markers.
       const result = await new Promise<{ output: string; exitCode: number | null; timedOut: boolean }>((resolve) => {
         let raw = "";
         let settled = false;
-
-        // Cached D-marker result so we only scan for it once
-        let dMatch: { exitCode: number; end: number } | null = null;
-
-        // Settle timer: after D+B is detected, wait briefly for any late
-        // output from PowerShell's deferred formatting pipeline.
         let settleTimer: ReturnType<typeof setTimeout> | null = null;
 
         const listener = (data: string) => {
@@ -187,29 +212,19 @@ export function registerTerminalRoutes(
 
           if (settled) return;
 
-          // If settling (D+B already found), reset timer on new data.
+          // Once completion is detected, do not extend the settle window.
           if (settleTimer) {
-            clearTimeout(settleTimer);
-            settleTimer = setTimeout(() => finish(false, dMatch!.exitCode), 50);
             return;
           }
 
-          // Step 1: Find D marker (command done — provides exit code)
-          if (!dMatch) {
-            const m = raw.match(OSC_DONE_RE);
-            if (m) {
-              dMatch = {
-                exitCode: m[1] ? parseInt(m[1], 10) : 0,
-                end: m.index! + m[0].length,
-              };
-            }
+          markerRe.lastIndex = 0;
+          if (markerRe.test(raw)) {
+            settleTimer = setTimeout(() => finish(false), 50);
+            return;
           }
 
-          // Step 2: After D, wait for B (prompt-end).  Start a settle
-          // timer instead of finishing immediately — PowerShell can
-          // flush output after the prompt markers.
-          if (dMatch && OSC_PROMPT_END_RE.test(raw.slice(dMatch.end))) {
-            settleTimer = setTimeout(() => finish(false, dMatch!.exitCode), 50);
+          if (hasShellPrompt(raw, powershell)) {
+            settleTimer = setTimeout(() => finish(false, inferFallbackExitCode(raw)), 100);
           }
         };
 
@@ -230,6 +245,14 @@ export function registerTerminalRoutes(
           //   echoed command → command output → prompt text
           let output = raw.replace(/\x1b\]633;[A-Z][^\x07]*(?:\x07|\x1b\\)/g, "");
           output = stripAnsi(output).replace(/\r/g, "");
+          const markerMatches = [...output.matchAll(markerRe)];
+          if (exitCode == null && markerMatches.length > 0) {
+            exitCode = parseInt(markerMatches[markerMatches.length - 1]![1]!, 10);
+          }
+          if (markerMatches.length > 0) {
+            const lastMarker = markerMatches[markerMatches.length - 1]!;
+            output = output.slice(0, lastMarker.index ?? 0) + output.slice((lastMarker.index ?? 0) + lastMarker[0].length);
+          }
 
           // Split into lines for targeted cleanup
           const lines = output.split("\n");
@@ -259,10 +282,10 @@ export function registerTerminalRoutes(
             lines.pop();
           }
 
-          // Remove the prompt line at the end (e.g. "PS E:\path> ")
+          // Remove the prompt line at the end.
           if (lines.length > 0) {
-            const lastLine = lines[lines.length - 1]!.trim();
-            if (/^PS .+?>/.test(lastLine)) {
+            const lastLine = lines[lines.length - 1]!.replace(/^[^\x07]*\x07/, "").trim();
+            if (/^PS .+?>/.test(lastLine) || /^[^@\n]+@[^:]+:.*[$#]$/.test(lastLine)) {
               lines.pop();
             }
           }
@@ -288,7 +311,11 @@ export function registerTerminalRoutes(
           mkdirSync(dir, { recursive: true });
           tmpFile = join(dir, `cmd-${Date.now()}.ps1`);
           writeFileSync(tmpFile, command, "utf-8");
-          surface.write(`. '${tmpFile.replace(/'/g, "''")}'\r`);
+          if (powershell) {
+            surface.write(`. '${tmpFile.replace(/'/g, "''")}'\r`);
+          } else {
+            surface.write(`. '${tmpFile.replace(/'/g, `'\\''`)}'\r`);
+          }
         } else {
           surface.write(command + "\r");
         }

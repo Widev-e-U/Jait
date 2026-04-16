@@ -102,9 +102,9 @@ test.describe('Create Agent Task Job', () => {
     await authenticatedPage.fill('input#name', 'Test Daily Summary')
     
     await authenticatedPage.getByTestId('provider-select').click()
-    await authenticatedPage.getByText('Ollama', { exact: true }).click()
+    await authenticatedPage.getByRole('option', { name: /Ollama/ }).click()
     await authenticatedPage.getByTestId('model-select').click()
-    await authenticatedPage.getByText('local-model', { exact: true }).click()
+    await authenticatedPage.getByRole('option', { name: /local-model/ }).click()
     
     // Fill in prompt
     await authenticatedPage.fill('textarea#prompt', 'Summarize the daily activities')
@@ -194,8 +194,9 @@ test.describe('Job Card Actions', () => {
     await authenticatedPage.getByTestId(`job-history-${job.id}`).click()
     
     // Should see history dialog
-    await expect(authenticatedPage.getByTestId('job-history-dialog')).toBeVisible()
-    await expect(authenticatedPage.getByText(job.name, { exact: true })).toBeVisible()
+    const historyDialog = authenticatedPage.getByTestId('job-history-dialog')
+    await expect(historyDialog).toBeVisible()
+    await expect(historyDialog.getByText(job.name, { exact: true })).toBeVisible()
   })
 
   test('should open edit dialog', async ({ authenticatedPage, apiToken }) => {
@@ -220,13 +221,11 @@ test.describe('Job Card Actions', () => {
     const jobCard = authenticatedPage.getByTestId(`job-card-${job.id}`)
     await expect(jobCard).toBeVisible()
     
-    // Setup dialog handler for confirmation
-    authenticatedPage.on('dialog', dialog => dialog.accept())
-    
     await authenticatedPage.getByTestId(`job-delete-${job.id}`).click()
+    await authenticatedPage.getByRole('button', { name: 'Delete' }).click()
     
     // Job should be removed from the list
-    await expect(authenticatedPage.getByTestId(`job-card-${job.id}`)).not.toBeVisible({ timeout: 5000 })
+    await expect(authenticatedPage.getByTestId(`job-card-${job.id}`)).not.toBeVisible({ timeout: 10000 })
   })
 })
 
@@ -283,7 +282,8 @@ test.describe('Job History Dialog', () => {
 })
 
 test.describe('Responsive Layout', () => {
-  test('should display properly on mobile', async ({ authenticatedPage }) => {
+  test('should display properly on mobile', async ({ authenticatedPage }, testInfo) => {
+    test.skip(!testInfo.project.name.startsWith('mobile'), 'Responsive assertions run in the mobile matrix.')
     // Set mobile viewport
     await authenticatedPage.setViewportSize({ width: 375, height: 667 })
     

@@ -15,7 +15,7 @@ async function registerAndLogin(request: any) {
 }
 
 test.describe("Chat streaming auth flow", () => {
-  test("requires auth and supports authenticated stream resume for a user session", async ({ request }) => {
+  test("requires auth and supports authenticated stream resume for a user session", async ({ request, playwright }) => {
     // Guard 1: chat endpoint is protected
     const unauthChat = await request.post(`${API_URL}/api/chat`, {
       data: { content: "hello", sessionId: `chat-unauth-${Date.now()}` },
@@ -36,8 +36,10 @@ test.describe("Chat streaming auth flow", () => {
     expect(sessionId).toBeTruthy();
 
     // Guard 2: stream endpoint is protected
-    const unauthStream = await request.get(`${API_URL}/api/sessions/${sessionId}/stream`);
+    const anonymous = await playwright.request.newContext();
+    const unauthStream = await anonymous.get(`${API_URL}/api/sessions/${sessionId}/stream`);
     expect(unauthStream.status()).toBe(401);
+    await anonymous.dispose();
 
     const stream = await request.get(`${API_URL}/api/sessions/${sessionId}/stream`, { headers });
     expect(stream.ok()).toBeTruthy();

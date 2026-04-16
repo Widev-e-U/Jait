@@ -18,6 +18,7 @@ import {
   type RemoteProviderInfo,
   agentsApi,
   type AgentThread,
+  type AutomationRepo,
   type ThreadActivity,
   type ThreadMessageMetadata,
   type ProviderInfo,
@@ -628,7 +629,7 @@ export function useAutomation(enabled = true) {
           githubUrl,
         })
         // Optimistically add; WS event will deduplicate
-        const repo = dbRepoToLocal(created, localDeviceId)
+        const repo = mapDbRepoToAutomationRepository(created)
         setLocalRepositories((prev) => {
           if (prev.some(r => r.id === repo.id)) return prev
           return [repo, ...prev]

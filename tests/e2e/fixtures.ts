@@ -61,8 +61,13 @@ export async function authenticatePage(page: Page, token: string): Promise<void>
 
 async function loginThroughUi(page: Page, identity: TestAuthIdentity): Promise<void> {
   const dialog = page.getByRole('dialog', { name: 'Account' })
-  if (!(await dialog.isVisible().catch(() => false))) {
-    await page.getByRole('button', { name: 'Sign in' }).click()
+  const dialogVisible = await dialog.isVisible().catch(() => false)
+  if (!dialogVisible) {
+    const signInButton = page.getByRole('button', { name: 'Sign in' })
+    if (!(await signInButton.isVisible().catch(() => false))) {
+      return
+    }
+    await signInButton.click()
   }
 
   await page.getByRole('textbox', { name: 'Username' }).fill(identity.username)
@@ -118,7 +123,9 @@ export const test = base.extend<JobsFixtures>({
     try {
       await authenticatePage(page, apiToken)
       await page.waitForTimeout(300)
-      if (await page.getByRole('button', { name: 'Sign in' }).isVisible().catch(() => false)) {
+      const accountDialogVisible = await page.getByRole('dialog', { name: 'Account' }).isVisible().catch(() => false)
+      const signInVisible = await page.getByRole('button', { name: 'Sign in' }).isVisible().catch(() => false)
+      if (accountDialogVisible || signInVisible) {
         await loginThroughUi(page, authIdentity)
       }
       await use(page)

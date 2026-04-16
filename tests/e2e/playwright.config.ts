@@ -4,8 +4,10 @@ import { defineConfig, devices } from '@playwright/test'
  * Playwright configuration for Jait E2E tests
  * @see https://playwright.dev/docs/test-configuration
  */
-const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3000'
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:3100'
 const shouldStartLocalStack = !process.env.FRONTEND_URL
+const includeFullBrowserMatrix = process.env.PLAYWRIGHT_ALL_BROWSERS === '1'
+const includeMobileMatrix = process.env.PLAYWRIGHT_MOBILE === '1'
 
 export default defineConfig({
   testDir: '.',
@@ -19,8 +21,8 @@ export default defineConfig({
   /* Retry on CI only */
   retries: process.env.CI ? 2 : 0,
 
-  /* Opt out of parallel tests on CI */
-  workers: process.env.CI ? 1 : undefined,
+  /* Keep local runs stable against a single shared dev stack. */
+  workers: process.env.PLAYWRIGHT_WORKERS ? Number(process.env.PLAYWRIGHT_WORKERS) : 1,
 
   /* Reporter to use */
   reporter: [
@@ -57,24 +59,30 @@ export default defineConfig({
       dependencies: ['setup'],
     },
 
-    {
-      name: 'firefox',
-      use: { ...devices['Desktop Firefox'] },
-      dependencies: ['setup'],
-    },
+    ...(includeFullBrowserMatrix
+      ? [
+          {
+            name: 'firefox',
+            use: { ...devices['Desktop Firefox'] },
+            dependencies: ['setup'],
+          },
+          {
+            name: 'webkit',
+            use: { ...devices['Desktop Safari'] },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
 
-    {
-      name: 'webkit',
-      use: { ...devices['Desktop Safari'] },
-      dependencies: ['setup'],
-    },
-
-    /* Test against mobile viewports */
-    {
-      name: 'mobile-chrome',
-      use: { ...devices['Pixel 5'] },
-      dependencies: ['setup'],
-    },
+    ...(includeMobileMatrix
+      ? [
+          {
+            name: 'mobile-chrome',
+            use: { ...devices['Pixel 5'] },
+            dependencies: ['setup'],
+          },
+        ]
+      : []),
   ],
 
   /* Run the gateway-owned dev stack before starting tests */

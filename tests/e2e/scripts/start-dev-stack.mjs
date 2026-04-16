@@ -1,5 +1,4 @@
 import { spawn } from 'node:child_process'
-import net from 'node:net'
 import { dirname, resolve } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -9,9 +8,10 @@ const repoRoot = resolve(scriptDir, '../../..')
 const gatewayDir = resolve(repoRoot, 'packages/gateway')
 const webDir = resolve(repoRoot, 'apps/web')
 
-const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000'
+const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3100'
 const gatewayUrl = process.env.API_URL || 'http://localhost:8000'
 const useLocalGateway = !process.env.API_URL
+const frontendPort = String(new URL(frontendUrl).port || (new URL(frontendUrl).protocol === 'https:' ? 443 : 80))
 
 const children = []
 let shuttingDown = false
@@ -58,29 +58,13 @@ async function waitForUrl(url, label) {
   throw new Error(`Timed out waiting for ${label} at ${url}${lastError ? `: ${lastError instanceof Error ? lastError.message : String(lastError)}` : ''}`)
 }
 
-async function isPortOpen(url) {
-  const parsed = new URL(url)
-  const port = Number(parsed.port || (parsed.protocol === 'https:' ? 443 : 80))
-  const hosts = parsed.hostname === 'localhost'
-    ? ['127.0.0.1', '::1', parsed.hostname]
-    : [parsed.hostname]
-
-  for (const host of hosts) {
-    const open = await new Promise((resolveResult) => {
-      const socket = net.createConnection({ host, port })
-      const done = (value) => {
-        socket.removeAllListeners()
-        socket.destroy()
-        resolveResult(value)
-      }
-      socket.once('connect', () => done(true))
-      socket.once('error', () => done(false))
-      socket.setTimeout(2_000, () => done(false))
-    })
-    if (open) return true
+async function isUrlReady(url) {
+  try {
+    const response = await fetch(url, { signal: AbortSignal.timeout(5_000) })
+    return response.ok || response.status === 404
+  } catch {
+    return false
   }
-
-  return false
 }
 
 async function shutdown(exitCode = 0) {
@@ -117,9 +101,9 @@ process.on('SIGINT', () => { void shutdown(0) })
 process.on('SIGTERM', () => { void shutdown(0) })
 
 try {
-  const frontendReady = await isPortOpen(frontendUrl)
+  const frontendReady = await isUrlReady(frontendUrl)
   const gatewayHealthUrl = `${gatewayUrl}/health`
-  const gatewayReady = !useLocalGateway || await isPortOpen(gatewayHealthUrl)
+  const gatewayReady = !useLocalGateway || await isUrlReady(gatewayHealthUrl)
 
   if (useLocalGateway && !gatewayReady) {
     spawnServer('gateway', 'bun', ['run', 'dev'], gatewayDir)
@@ -129,7 +113,7 @@ try {
   if (!frontendReady) {
     spawnServer('web', 'bun', ['run', 'dev'], webDir, {
       JAIT_GATEWAY_URL: gatewayUrl,
-      PORT: '3000',
+      PORT: frontendPort,
     })
     await waitForUrl(frontendUrl, 'frontend')
   }
