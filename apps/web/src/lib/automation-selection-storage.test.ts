@@ -6,6 +6,7 @@ import {
   readPersistedSelectedRepo,
   readPersistedSelectedRepoId,
   resolvePersistedSelectedRepoId,
+  resolveSelectedRepoIdForRepositories,
 } from './automation-selection-storage'
 
 const localStorageMap = new Map<string, string>()
@@ -93,5 +94,24 @@ describe('automation selection storage', () => {
       repoId: 'repo-2',
       localPath: '/work/two',
     })).toBe('repo-9')
+  })
+
+  it('keeps the current selection while repositories are still loading', () => {
+    expect(resolveSelectedRepoIdForRepositories(
+      [],
+      'repo-2',
+      { repoId: 'repo-2', localPath: '/work/two' },
+    )).toBe('repo-2')
+  })
+
+  it('restores the persisted selection once repositories are available', () => {
+    expect(resolveSelectedRepoIdForRepositories(
+      [
+        { id: 'repo-1', localPath: '/work/one' },
+        { id: 'repo-9', localPath: '/work/two' },
+      ],
+      'repo-2',
+      { repoId: 'repo-2', localPath: '/work/two' },
+    )).toBe('repo-9')
   })
 })
