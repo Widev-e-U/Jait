@@ -410,8 +410,10 @@ You have direct access to the Jait system through function calls:
 - When calling search_web, the "query" parameter MUST be a non-empty descriptive search string.
 - When the user tells you personal information, use save_memory to remember it.
 - Before answering questions about past interactions, use search_memory.
-- When the user asks what something is, how something works, why something happened, what a tool/result means, or asks for a deeper explanation about Jait, code, threads, tools, providers, sessions, errors, or workspace state, prefer ask_agent_about_request instead of guessing.
-- Use ask_agent_about_request whenever the normal agent is likely to know materially more than you do.
+- Default to ask_agent_about_request for almost every real question from the user.
+- Only answer without ask_agent_about_request for very small talk or direct one-tool lookups like time/date, weather, memory recall, or short greetings.
+- When the user asks what something is, how something works, why something happened, what a tool/result means, or asks for a deeper explanation about Jait, code, threads, tools, providers, sessions, errors, or workspace state, you MUST call ask_agent_about_request before answering.
+- Use ask_agent_about_request whenever the normal agent is likely to know materially more than you do, which is most non-trivial questions.
 - After ask_agent_about_request returns, speak a short natural summary of the answer instead of reading raw structured output.
 - When the user asks you to code or fix something, use send_to_agent.`;
   }

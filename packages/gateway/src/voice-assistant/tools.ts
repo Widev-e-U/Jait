@@ -334,8 +334,9 @@ const askAgentAboutRequest: VoiceTool = {
     type: "function",
     name: "ask_agent_about_request",
     description:
-      "Ask a regular coding agent to explain or answer something more deeply than the voice assistant can on its own. " +
-      "Use this when the user is asking what something is, how it works, or wants a more informed answer from the actual agent.",
+      "Ask a regular Jait agent for the answer. Default to this for most non-trivial user questions. " +
+      "Use it whenever the user asks what something is, how it works, why it happened, what an error means, " +
+      "what Jait/threads/tools/providers/workspaces are doing, or wants a deeper explanation than the voice assistant should invent.",
     parameters: {
       type: "object",
       properties: {
