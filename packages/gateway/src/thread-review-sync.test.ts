@@ -66,7 +66,7 @@ describe("ThreadReviewSyncService", () => {
       expect(updated?.prBaseBranch).toBe("main");
       expect(updated?.providerSessionId).toBeNull();
       expect(updated?.workingDirectory).toBeNull();
-      expect(updated?.branch).toBeNull();
+      expect(updated?.branch).toBe("feature/test-branch");
 
       const activities = threadService.getActivities(thread.id, 10);
       expect(activities.some((activity) => activity.summary.includes("Pull request merged"))).toBe(true);

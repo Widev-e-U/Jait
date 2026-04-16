@@ -814,8 +814,9 @@ export function registerThreadRoutes(
         broadcastThreadEvent(id, "activity", { activity });
       }
 
-      // When the PR is merged (or closed), tear down the session,
-      // worktree, and branch so re-entering the thread starts fresh.
+      // When the PR is merged (or closed), tear down the live session/worktree
+      // so re-entering the thread starts fresh, but keep the branch metadata
+      // for historical diff viewing against the base branch.
       if (prState === "merged" || prState === "closed") {
         threadService.clearSession(id);
         const unsub = threadUnsubs.get(id);
@@ -825,10 +826,12 @@ export function registerThreadRoutes(
 
         // Clean up worktree + branch (best effort, don't block the response)
         if (existing.workingDirectory) {
-          cleanupWorktreeRemoteAware(existing.workingDirectory, ws, existing.branch).catch(() => {});
+          cleanupWorktreeRemoteAware(existing.workingDirectory, ws, existing.branch, {
+            preserveBranch: true,
+          }).catch(() => {});
         }
-        // Clear the working directory and branch so the next /start creates new ones
-        threadService.update(id, { workingDirectory: null, branch: null });
+        // Clear only the working directory so the next /start creates a new worktree.
+        threadService.update(id, { workingDirectory: null });
       }
     }
 

@@ -1997,18 +1997,29 @@ function App() {
   }, [activeWorkspaceId])
 
   useEffect(() => {
+    managerRepoRestoreAppliedRef.current = false
     setManagerRepoStateReady(false)
   }, [activeSessionId])
 
+  const managerRepoRestoreAppliedRef = useRef(false)
+
   useEffect(() => {
     if (!activeSessionId) {
+      managerRepoRestoreAppliedRef.current = false
       setManagerRepoStateReady(false)
       return
     }
     if (loadingManagerSelectedRepo) return
+    if (managerRepoRestoreAppliedRef.current) {
+      if (!managerRepoStateReady) {
+        setManagerRepoStateReady(true)
+      }
+      return
+    }
 
     const persisted = normalizedSavedManagerSelectedRepo
     if (!persisted.repoId && !persisted.localPath) {
+      managerRepoRestoreAppliedRef.current = true
       setManagerRepoStateReady(true)
       return
     }
@@ -2016,6 +2027,7 @@ function App() {
     const resolvedRepoId = resolvePersistedSelectedRepoId(automation.repositories, persisted)
     if (!resolvedRepoId) {
       if (automation.repositories.length === 0) return
+      managerRepoRestoreAppliedRef.current = true
       setManagerRepoStateReady(true)
       return
     }
@@ -2025,6 +2037,7 @@ function App() {
       return
     }
 
+    managerRepoRestoreAppliedRef.current = true
     setManagerRepoStateReady(true)
   }, [
     activeSessionId,
@@ -2032,6 +2045,7 @@ function App() {
     automation.selectedRepoId,
     automation.setSelectedRepoId,
     loadingManagerSelectedRepo,
+    managerRepoStateReady,
     normalizedSavedManagerSelectedRepo,
   ])
 
@@ -3585,17 +3599,26 @@ function App() {
       const name = filePath.split(/[\/\\]/).pop() ?? filePath
       const language = workspaceLanguageForPath(name)
 
+      const ensureWorkspaceDiffHostReady = async () => {
+        if (!showWorkspace) {
+          showWorkspaceRef.current = true
+          setShowWorkspace(true)
+        }
+        showWorkspaceEditorPanel()
+        if (workspaceRef.current) return true
+        await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+        return workspaceRef.current != null
+      }
+
       const openReviewDiff = async (path: string, originalContent: string | null | undefined, modifiedContent: string) => {
+        const ready = await ensureWorkspaceDiffHostReady()
+        if (!ready) return
         await workspaceRef.current?.openReviewDiff({
           path,
           originalContent: originalContent ?? '',
           modifiedContent,
           language,
         })
-        if (!showWorkspace) {
-          showWorkspaceRef.current = true
-          setShowWorkspace(true)
-        }
         showWorkspaceEditorPanel()
       }
 

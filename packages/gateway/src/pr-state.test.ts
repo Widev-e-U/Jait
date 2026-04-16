@@ -217,7 +217,12 @@ describe("PR state persistence", () => {
       const createRes = await inject({
         method: "POST",
         url: "/api/threads",
-        payload: { title: "Merge Test", providerId: "codex", workingDirectory: process.cwd() },
+        payload: {
+          title: "Merge Test",
+          providerId: "codex",
+          workingDirectory: process.cwd(),
+          branch: "jait/test-branch",
+        },
       });
       const thread = JSON.parse(createRes.body) as { id: string };
       threadService.markCompleted(thread.id);
@@ -243,6 +248,8 @@ describe("PR state persistence", () => {
       expect(merged?.prState).toBe("merged");
       // clearSession should have been called — providerSessionId should be null
       expect(merged?.providerSessionId).toBeNull();
+      expect(merged?.workingDirectory).toBeNull();
+      expect(merged?.branch).toBe("jait/test-branch");
     } finally {
       await app.close();
       sqlite.close();
