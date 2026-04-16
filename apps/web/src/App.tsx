@@ -664,6 +664,7 @@ function ManagerThreadListItem({
   onStop,
   onDelete,
 }: ManagerThreadListItemProps) {
+  const isMobile = useIsMobile()
   const [deleting, setDeleting] = useState(false)
   const showThreadActions = shouldRenderThreadActions({
     hasRepository: repo != null,
@@ -674,6 +675,7 @@ function ManagerThreadListItem({
     prState,
   })
   const stopThreadVisible = canStopThread(thread)
+  const showKindBadge = thread.kind === 'delegation' || !isMobile
 
   return (
     <div
@@ -703,8 +705,8 @@ function ManagerThreadListItem({
           </div>
         </div>
         <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[calc(0.75rem+6px)] text-[11px] leading-tight text-muted-foreground sm:flex-nowrap sm:gap-x-1 sm:gap-y-0 sm:text-xs">
-          <span className="min-w-0 basis-full truncate sm:basis-auto">{repoName}</span>
-          <ThreadKindBadge kind={thread.kind} />
+          <span className="min-w-0 truncate">{repoName}</span>
+          {showKindBadge && <ThreadKindBadge kind={thread.kind} />}
           {thread.kind === 'delegation' && (
             <span className="shrink-0 text-amber-700 dark:text-amber-300">Helper thread</span>
           )}
