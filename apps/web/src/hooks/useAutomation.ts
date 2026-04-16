@@ -8,7 +8,11 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth-token'
-import { persistSelectedRepoId, readPersistedSelectedRepoId } from '@/lib/automation-selection-storage'
+import {
+  persistSelectedRepoId,
+  readPersistedSelectedRepoId,
+  resolvePersistedSelectedRepoId,
+} from '@/lib/automation-selection-storage'
 import type { NodeRegistrySnapshot, NodeState, ThreadRegistrySnapshot } from '@jait/shared'
 import {
   type RemoteProviderInfo,
@@ -159,8 +163,14 @@ export function useAutomation(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return
+    const persistedRepoId = resolvePersistedSelectedRepoId(repositories)
+    if ((!selectedRepoId || repositories.every((r) => r.id !== selectedRepoId)) && persistedRepoId) {
+      setSelectedRepoId(persistedRepoId)
+      return
+    }
     if (!selectedRepoId && repositories.length > 0) {
       setSelectedRepoId(repositories[0].id)
+      return
     }
     if (selectedRepoId && repositories.every((r) => r.id !== selectedRepoId)) {
       setSelectedRepoId(repositories[0]?.id ?? null)
@@ -169,8 +179,8 @@ export function useAutomation(enabled = true) {
 
   useEffect(() => {
     if (!enabled) return
-    persistSelectedRepoId(selectedRepoId)
-  }, [enabled, selectedRepoId])
+    persistSelectedRepoId(selectedRepoId, selectedRepo?.localPath ?? null)
+  }, [enabled, selectedRepoId, selectedRepo])
 
   useEffect(() => {
     if (!enabled || !selectedThread) return
