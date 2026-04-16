@@ -1728,7 +1728,7 @@ export class GitService {
     };
   }
 
-  async diffStats(cwd: string, baseBranch?: string): Promise<GitDiffStatsResult> {
+  async diffStats(cwd: string, baseBranch?: string, branch?: string): Promise<GitDiffStatsResult> {
     const isGit = await this.isRepo(cwd);
     if (!isGit) {
       return { files: 0, insertions: 0, deletions: 0, hasChanges: false };
@@ -1749,8 +1749,10 @@ export class GitService {
       }
     };
 
-    if (baseBranch) {
-      await collectNumstat(`diff --numstat ${baseBranch}`);
+    if (baseBranch && branch) {
+      await collectNumstat(`diff --numstat ${JSON.stringify(baseBranch)} ${JSON.stringify(branch)}`);
+    } else if (baseBranch) {
+      await collectNumstat(`diff --numstat ${JSON.stringify(baseBranch)}`);
     } else {
       await collectNumstat("diff --cached --numstat");
       await collectNumstat("diff --numstat");

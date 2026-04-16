@@ -609,7 +609,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
   app.post("/api/git/diff-stats", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
-    const body = request.body as { cwd?: string; baseBranch?: string };
+    const body = request.body as { cwd?: string; baseBranch?: string; branch?: string };
     if (!body.cwd) return reply.status(400).send({ error: "Missing cwd" });
     try {
       const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
@@ -633,8 +633,10 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
           }
         };
 
-        if (body.baseBranch) {
-          await collectNumstat(`diff --numstat ${body.baseBranch}`);
+        if (body.baseBranch && body.branch) {
+          await collectNumstat(`diff --numstat ${JSON.stringify(body.baseBranch)} ${JSON.stringify(body.branch)}`);
+        } else if (body.baseBranch) {
+          await collectNumstat(`diff --numstat ${JSON.stringify(body.baseBranch)}`);
         } else {
           await collectNumstat("diff --cached --numstat");
           await collectNumstat("diff --numstat");
@@ -655,7 +657,7 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         };
       }
 
-      return await git.diffStats(body.cwd, body.baseBranch || undefined);
+      return await git.diffStats(body.cwd, body.baseBranch || undefined, body.branch || undefined);
     } catch (err) {
       return reply.status(500).send({ error: err instanceof Error ? err.message : "Diff stats failed" });
     }
