@@ -55,6 +55,12 @@ export { createVoiceSpeakTool } from "./voice-tools.js";
 export { createAgentSpawnTool } from "./agent-tools.js";
 export { createThreadControlTool } from "./thread-tools.js";
 export { createNetworkScanTool, getLatestNetworkScan, setLatestNetworkScan } from "./network-tools.js";
+export {
+  createSshRunTool,
+  createSshSessionStartTool,
+  createSshSessionRunTool,
+  createSshSessionCloseTool,
+} from "./ssh-tools.js";
 export { createRedeployTool } from "./redeploy-tools.js";
 export { createMaintenanceRunTool } from "./maintenance-tools.js";
 export { createArchitectureTool } from "./architecture-tools.js";
@@ -169,6 +175,12 @@ import { createVoiceSpeakTool } from "./voice-tools.js";
 import { createAgentSpawnTool } from "./agent-tools.js";
 import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
+import {
+  createSshRunTool,
+  createSshSessionStartTool,
+  createSshSessionRunTool,
+  createSshSessionCloseTool,
+} from "./ssh-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
 import { createMaintenanceRunTool } from "./maintenance-tools.js";
 import { createArchitectureTool } from "./architecture-tools.js";
@@ -191,6 +203,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { PreviewService } from "../services/preview.js";
 import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
+import type { SecretInputService } from "../services/secret-input.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -226,6 +239,7 @@ export interface ToolRegistryDeps {
   previewService?: PreviewService;
   architectureDiagramService?: ArchitectureDiagramService;
   browserCollaborationService?: BrowserCollaborationService;
+  secretInputService?: SecretInputService;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -375,6 +389,10 @@ export function createToolRegistry(
 
   // Network tools
   tools.register(createNetworkScanTool());
+  tools.register(createSshRunTool(deps.secretInputService));
+  tools.register(createSshSessionStartTool(deps.secretInputService));
+  tools.register(createSshSessionRunTool());
+  tools.register(createSshSessionCloseTool());
 
   // Architecture tools
   tools.register(createArchitectureTool(deps.ws, deps.architectureDiagramService));

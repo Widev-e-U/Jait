@@ -114,7 +114,7 @@ import {
 } from '@/lib/automation-selection-storage'
 
 import { Badge } from '@/components/ui/badge'
-import { getApiUrl, getStoredGatewayUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
+import { getApiUrl, getStoredGatewayUrl, getWsUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
 import {
   clampFloatingScreenSharePosition,
   clampFloatingScreenShareSize,
@@ -147,8 +147,143 @@ import {
 } from '@/lib/user-message-segments'
 
 const API_URL = getApiUrl()
+const WS_URL = getWsUrl()
 const VOICE_LEVEL_BAR_COUNT = 28
 const VOICE_LEVEL_FLOOR = 0.05
+
+interface SecretInputRequest {
+  id: string
+  sessionId: string
+  title: string
+  prompt: string
+  requestedBy: string | null
+  expiresAt: string
+  status: 'pending' | 'submitted' | 'cancelled' | 'timeout'
+}
+
+function SecretInputPrompt({ token, sessionId }: { token: string | null; sessionId: string | null }) {
+  const [requests, setRequests] = useState<SecretInputRequest[]>([])
+  const [value, setValue] = useState('')
+  const [submitting, setSubmitting] = useState(false)
+  const activeRequest = requests[0] ?? null
+
+  const authHeaders = useCallback((contentType = false) => {
+    const headers: Record<string, string> = {}
+    if (token) headers.Authorization = `Bearer ${token}`
+    if (contentType) headers['Content-Type'] = 'application/json'
+    return headers
+  }, [token])
+
+  const refresh = useCallback(async () => {
+    if (!token) return
+    try {
+      const suffix = sessionId ? `?sessionId=${encodeURIComponent(sessionId)}` : ''
+      const res = await fetch(`${API_URL}/api/secrets/requests${suffix}`, {
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      if (!res.ok) return
+      const data = await res.json() as { requests: SecretInputRequest[] }
+      setRequests(data.requests)
+    } catch {
+      // gateway down or reconnecting
+    }
+  }, [authHeaders, sessionId, token])
+
+  useEffect(() => {
+    if (!token) return
+    void refresh()
+    const ws = new WebSocket(`${WS_URL}?token=${encodeURIComponent(token)}`)
+    ws.onmessage = (event) => {
+      try {
+        const msg = JSON.parse(event.data) as { type: string; sessionId?: string; payload?: unknown }
+        if (msg.type === 'secret.requested') {
+          const request = msg.payload as SecretInputRequest
+          if (!sessionId || request.sessionId === sessionId) {
+            setRequests((prev) => [request, ...prev.filter((item) => item.id !== request.id)])
+          }
+        }
+        if (msg.type === 'secret.resolved') {
+          const resolved = msg.payload as { id?: string }
+          if (resolved.id) {
+            setRequests((prev) => prev.filter((item) => item.id !== resolved.id))
+            setValue('')
+          }
+        }
+      } catch {
+        // ignore malformed events
+      }
+    }
+    return () => ws.close()
+  }, [refresh, sessionId, token])
+
+  const submitSecret = useCallback(async () => {
+    if (!activeRequest || !value) return
+    setSubmitting(true)
+    try {
+      const res = await fetch(`${API_URL}/api/secrets/requests/${activeRequest.id}/submit`, {
+        method: 'POST',
+        headers: authHeaders(true),
+        credentials: 'include',
+        body: JSON.stringify({ value }),
+      })
+      if (!res.ok) throw new Error('Failed to submit secret')
+      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
+      setValue('')
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Failed to submit secret')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [activeRequest, authHeaders, value])
+
+  const cancelSecret = useCallback(async () => {
+    if (!activeRequest) return
+    setSubmitting(true)
+    try {
+      await fetch(`${API_URL}/api/secrets/requests/${activeRequest.id}/cancel`, {
+        method: 'POST',
+        headers: authHeaders(),
+        credentials: 'include',
+      })
+      setRequests((prev) => prev.filter((item) => item.id !== activeRequest.id))
+      setValue('')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [activeRequest, authHeaders])
+
+  return (
+    <Dialog open={Boolean(activeRequest)} onOpenChange={(open) => { if (!open) void cancelSecret() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{activeRequest?.title ?? 'Secret required'}</DialogTitle>
+          <DialogDescription>
+            {activeRequest?.prompt ?? 'Enter the secret to continue.'} The value goes directly to the local gateway and is not sent to the model.
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-3">
+          <Label htmlFor="secret-input">Password</Label>
+          <Input
+            id="secret-input"
+            type="password"
+            autoComplete="current-password"
+            value={value}
+            onChange={(event) => setValue(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === 'Enter') void submitSecret()
+            }}
+            autoFocus
+          />
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => void cancelSecret()} disabled={submitting}>Cancel</Button>
+            <Button onClick={() => void submitSecret()} disabled={submitting || !value}>Submit</Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
+  )
+}
 
 function shouldAutoTitleSession(name: string | null | undefined) {
   const normalized = name?.trim() ?? ''
@@ -6422,6 +6557,7 @@ function App() {
                       sessionId={activeSessionId}
                       onApproveAllEnabled={() => setApproveAllInSession(true)}
                     />
+                    <SecretInputPrompt token={token} sessionId={activeSessionId} />
                     {pendingPlan && (
                       <PlanReview
                         plan={pendingPlan}

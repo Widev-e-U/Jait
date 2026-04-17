@@ -14,7 +14,7 @@ export interface ToolCall {
     result?: unknown;
     status: "pending" | "approved" | "executing" | "completed" | "failed" | "rejected";
 }
-export type WsEventType = "session.created" | "session.closed" | "node.registry" | "node.updated" | "node.disconnected" | "message.delta" | "message.complete" | "tool.call" | "tool.result" | "consent.required" | "consent.resolved" | "surface.connected" | "surface.disconnected" | "surface.registry" | "surface.updated" | "ui.command" | "ui.state-sync" | "ui.full-state" | "thread.created" | "thread.updated" | "thread.deleted" | "thread.status" | "thread.activity" | "browser.updated" | "browser.session" | "browser.intervention" | "repo.created" | "repo.updated" | "repo.deleted" | "plan.created" | "plan.updated" | "plan.deleted" | "notification" | "fs.changes" | "error";
+export type WsEventType = "session.created" | "session.closed" | "node.registry" | "node.updated" | "node.disconnected" | "message.delta" | "message.complete" | "tool.call" | "tool.result" | "consent.required" | "consent.resolved" | "secret.requested" | "secret.resolved" | "surface.connected" | "surface.disconnected" | "surface.registry" | "surface.updated" | "ui.command" | "ui.state-sync" | "ui.full-state" | "thread.created" | "thread.updated" | "thread.deleted" | "thread.status" | "thread.activity" | "browser.updated" | "browser.session" | "browser.intervention" | "repo.created" | "repo.updated" | "repo.deleted" | "plan.created" | "plan.updated" | "plan.deleted" | "notification" | "fs.changes" | "error";
 export interface WsEvent<T = unknown> {
     type: WsEventType;
     sessionId: string;

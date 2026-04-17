@@ -44,6 +44,7 @@ import { registerUpdateRoutes } from "./routes/update.js";
 import { registerPreviewRoutes } from "./routes/preview.js";
 import { registerArchitectureRoutes } from "./routes/architecture.js";
 import { registerBrowserCollaborationRoutes } from "./routes/browser-collaboration.js";
+import { registerSecretRoutes } from "./routes/secrets.js";
 import { registerPluginRoutes } from "./routes/plugins.js";
 import { registerSkillRoutes } from "./routes/skills.js";
 import { registerStoreRoutes } from "./routes/store.js";
@@ -76,6 +77,7 @@ import { getSchemaVersion } from "./db/connection.js";
 import type { WorkspaceService } from "./services/workspaces.js";
 import type { AssistantProfileService } from "./services/assistant-profiles.js";
 import type { BrowserCollaborationService } from "./services/browser-collaboration.js";
+import type { SecretInputService } from "./services/secret-input.js";
 
 export interface ServerDeps {
   db?: JaitDB;
@@ -120,6 +122,7 @@ export interface ServerDeps {
   previewService?: import("./services/preview.js").PreviewService;
   architectureDiagramService?: import("./services/architecture-diagrams.js").ArchitectureDiagramService;
   browserCollaborationService?: BrowserCollaborationService;
+  secretInputService?: SecretInputService;
   pluginManager?: import("./plugins/manager.js").PluginManager;
   skillRegistry?: import("./skills/index.js").SkillRegistry;
   clawhubClient?: import("./clawhub/client.js").ClawHubClient;
@@ -192,6 +195,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       activeProfileName: deps.activeToolProfileName,
       permissions: deps.toolPermissions,
     });
+  }
+  if (deps.secretInputService) {
+    registerSecretRoutes(app, config, deps.secretInputService);
   }
   if (deps.voiceService && deps.consentManager) {
     registerVoiceRoutes(app, deps.voiceService, deps.consentManager, config, deps.userService);

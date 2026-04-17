@@ -31,6 +31,8 @@ export type WsEventType =
   | "tool.result"
   | "consent.required"
   | "consent.resolved"
+  | "secret.requested"
+  | "secret.resolved"
   | "surface.connected"
   | "surface.disconnected"
   | "surface.registry"

@@ -26,6 +26,7 @@ import { ConsentManager } from "./security/consent-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
+import { SecretInputService } from "./services/secret-input.js";
 import { UserService } from "./services/users.js";
 import { DeviceRegistry } from "./services/device-registry.js";
 import { VoiceService } from "./voice/service.js";
@@ -356,6 +357,27 @@ async function main() {
 
   // Consent & Trust — Sprint 4
   const trustEngine = new TrustEngine(db);
+  const secretInputService = new SecretInputService({
+    defaultTimeoutMs: 120_000,
+    onRequest: (request) => {
+      ws.broadcastAll({
+        type: "secret.requested",
+        sessionId: request.sessionId,
+        timestamp: new Date().toISOString(),
+        payload: request,
+      });
+      console.log(`Secret requested: ${request.title} (${request.id})`);
+    },
+    onResolved: (request) => {
+      ws.broadcastAll({
+        type: "secret.resolved",
+        sessionId: request.sessionId,
+        timestamp: new Date().toISOString(),
+        payload: { id: request.id, sessionId: request.sessionId, status: request.status },
+      });
+      console.log(`Secret request ${request.status}: ${request.id}`);
+    },
+  });
   const activeToolProfileName = "coding" as const;
   const consentManager = new ConsentManager({
     defaultTimeoutMs: 120_000,
@@ -457,6 +479,7 @@ async function main() {
     previewService,
     architectureDiagramService,
     browserCollaborationService,
+    secretInputService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
 
@@ -614,6 +637,7 @@ async function main() {
     previewService,
     architectureDiagramService,
     browserCollaborationService,
+    secretInputService,
     pluginManager,
     skillRegistry,
     clawhubClient,
