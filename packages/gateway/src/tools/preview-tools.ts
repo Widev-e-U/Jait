@@ -2,16 +2,13 @@ import type { WsControlPlane } from "../ws.js";
 import type { SessionStateService } from "../services/session-state.js";
 import type { ToolDefinition } from "./contracts.js";
 import type { PreviewService } from "../services/preview.js";
-import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
 
 interface DevPreviewPanelState {
   open: boolean;
   target?: string | null;
   workspaceRoot?: string | null;
-  browserSessionId?: string | null;
   displayState?: "hidden" | "blank" | "connected";
   displayTarget?: string | null;
-  storageScope?: "shared-browser" | "isolated-browser-session" | "unknown";
 }
 
 // ── preview.start (was preview.open) ─────────────────────────────────
@@ -28,39 +25,10 @@ function resolvePreviewSessionId(context: { sessionId?: string }): string {
   return context.sessionId?.trim() || "";
 }
 
-function resolvePreviewBrowserSession(
-  browserCollaborationService: BrowserCollaborationService | undefined,
-  sessionId: string,
-) {
-  return browserCollaborationService?.getSessionByPreviewSessionId(sessionId) ?? null;
-}
-
-function redactPreviewCapture<T extends {
-  browserEvents: unknown[];
-  logs: unknown[];
-  screenshot: string | null;
-  metrics?: unknown;
-  page?: unknown;
-  snapshot?: string | null;
-}>(result: T): T & { captureSuppressed: true; suppressionReason: string } {
-  return {
-    ...result,
-    browserEvents: [],
-    logs: [],
-    screenshot: null,
-    metrics: null,
-    page: null,
-    snapshot: null,
-    captureSuppressed: true,
-    suppressionReason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
-  };
-}
-
 export function createPreviewStartTool(
   ws?: WsControlPlane,
   sessionState?: SessionStateService,
   previewService?: PreviewService,
-  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewStartInput> {
   return {
     name: "preview.start",
@@ -115,11 +83,6 @@ export function createPreviewStartTool(
         // delivered via the managed preview session's remoteBrowser field and
         // changes whenever the sandbox container is recreated.
         const stableTarget = preview.target ?? target ?? null;
-        browserCollaborationService?.syncPreviewSession(preview, {
-          userId: context.userId,
-          workspaceRoot: workspaceRoot || undefined,
-          mode: target ? "shared" : "isolated",
-        });
 
         const panelState: DevPreviewPanelState = {
           open: true,
@@ -127,7 +90,6 @@ export function createPreviewStartTool(
           workspaceRoot: workspaceRoot || null,
           displayState: "connected",
           displayTarget: stableTarget,
-          storageScope: "isolated-browser-session",
         };
         if (ws) {
           ws.sendUICommand(
@@ -152,7 +114,6 @@ export function createPreviewStartTool(
           workspaceRoot: workspaceRoot || null,
           displayState: "hidden",
           displayTarget: null,
-          storageScope: "unknown",
         };
         if (ws) {
           ws.broadcast(sessionId, {
@@ -182,9 +143,8 @@ export function createPreviewOpenTool(
   ws?: WsControlPlane,
   sessionState?: SessionStateService,
   previewService?: PreviewService,
-  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewStartInput> {
-  const tool = createPreviewStartTool(ws, sessionState, previewService, browserCollaborationService);
+  const tool = createPreviewStartTool(ws, sessionState, previewService);
   return { ...tool, name: "preview.open" };
 }
 
@@ -198,7 +158,6 @@ export function createPreviewStopTool(
   ws?: WsControlPlane,
   sessionState?: SessionStateService,
   previewService?: PreviewService,
-  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewStopInput> {
   return {
     name: "preview.stop",
@@ -214,7 +173,6 @@ export function createPreviewStopTool(
 
       const stopped = await previewService.stop(sessionId);
       if (!stopped) return { ok: false, message: "No active preview session found" };
-      browserCollaborationService?.closePreviewSession(sessionId);
 
       const panelState: DevPreviewPanelState = {
         open: false,
@@ -222,7 +180,6 @@ export function createPreviewStopTool(
         workspaceRoot: null,
         displayState: "hidden",
         displayTarget: null,
-        storageScope: "unknown",
       };
       if (ws) {
         ws.sendUICommand(
@@ -251,7 +208,6 @@ interface PreviewRestartInput {
 
 export function createPreviewRestartTool(
   previewService?: PreviewService,
-  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewRestartInput> {
   return {
     name: "preview.restart",
@@ -267,11 +223,6 @@ export function createPreviewRestartTool(
 
       const session = await previewService.restart(sessionId);
       if (!session) return { ok: false, message: "No active preview session to restart" };
-      browserCollaborationService?.syncPreviewSession(session, {
-        userId: context.userId,
-        workspaceRoot: session.workspaceRoot ?? context.workspaceRoot,
-        mode: session.target ? "shared" : "isolated",
-      });
 
       return {
         ok: session.status === "ready",
@@ -340,7 +291,6 @@ interface PreviewLogsInput {
 
 export function createPreviewLogsTool(
   previewService?: PreviewService,
-  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewLogsInput> {
   return {
     name: "preview.logs",
@@ -369,21 +319,6 @@ export function createPreviewLogsTool(
 
       const session = await previewService.refreshSessionCapture(sessionId);
       if (!session) return { ok: false, message: "No active preview session" };
-      const browserSession = resolvePreviewBrowserSession(browserCollaborationService, sessionId);
-      if (browserSession?.secretSafe) {
-        return {
-          ok: true,
-          message: "Preview logs are suppressed because the linked browser session is marked secret-safe",
-          data: {
-            logs: [],
-            console: [],
-            errors: [],
-            lastLogId: 0,
-            captureSuppressed: true,
-            suppressionReason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
-          },
-        };
-      }
 
       let logs = previewService.getLogs(sessionId, input.sinceId ?? 0);
       if (input.stream && input.stream !== "all") {
@@ -419,7 +354,6 @@ interface PreviewInspectInput {
 
 export function createPreviewInspectTool(
   previewService?: PreviewService,
-  browserCollaborationService?: BrowserCollaborationService,
 ): ToolDefinition<PreviewInspectInput> {
   return {
     name: "preview.inspect",
@@ -443,7 +377,6 @@ export function createPreviewInspectTool(
 
       const result = await previewService.inspect(sessionId);
       if (!result) return { ok: false, message: "No active preview session" };
-      const browserSession = resolvePreviewBrowserSession(browserCollaborationService, sessionId);
 
       // Strip screenshot if not requested
       if (!input.screenshot) {
@@ -451,18 +384,15 @@ export function createPreviewInspectTool(
       }
       const session = previewService.get(sessionId);
       const browserId = session?.browserId ?? null;
-      const data = browserSession?.secretSafe ? redactPreviewCapture(result) : result;
 
-      const errorCount = data.browserEvents.filter((e) =>
+      const errorCount = result.browserEvents.filter((e) =>
         e.type === "pageerror" || e.type === "requestfailed" || (e.type === "response" && (e.status ?? 0) >= 400),
       ).length;
 
       return {
         ok: true,
-        message: browserSession?.secretSafe
-          ? `Preview ${data.status} at ${data.url ?? "unknown"} — capture suppressed because the linked browser session is marked secret-safe`
-          : `Preview ${data.status} at ${data.url ?? "unknown"} — ${data.browserEvents.length} events, ${errorCount} errors${data.metrics ? ", metrics included" : ""}${data.screenshot ? ", screenshot included" : ""}`,
-        data: { browserId, ...data },
+        message: `Preview ${result.status} at ${result.url ?? "unknown"} — ${result.browserEvents.length} events, ${errorCount} errors${result.metrics ? ", metrics included" : ""}${result.screenshot ? ", screenshot included" : ""}`,
+        data: { browserId, ...result },
       };
     },
   };

@@ -1,5 +1,4 @@
 import { describe, expect, it, vi } from "vitest";
-import { createBrowserSessionListTool, createBrowserSessionReturnControlTool } from "./browser-collaboration-tools.js";
 import { createPreviewInspectTool, createPreviewOpenTool, createPreviewRestartTool } from "./preview-tools.js";
 import type { ToolContext } from "./contracts.js";
 
@@ -60,7 +59,6 @@ describe("createPreviewOpenTool", () => {
             workspaceRoot: "/workspace/app",
             displayState: "connected",
             displayTarget: "3000",
-            storageScope: "isolated-browser-session",
           },
         },
       }),
@@ -72,7 +70,6 @@ describe("createPreviewOpenTool", () => {
         workspaceRoot: "/workspace/app",
         displayState: "connected",
         displayTarget: "3000",
-        storageScope: "isolated-browser-session",
       },
     });
   });
@@ -129,7 +126,6 @@ describe("createPreviewOpenTool", () => {
         workspaceRoot: "/workspace/mcp",
         displayState: "connected",
         displayTarget: "8765",
-        storageScope: "isolated-browser-session",
       },
     });
   });
@@ -138,7 +134,6 @@ describe("createPreviewOpenTool", () => {
     const sendUICommand = vi.fn();
     const broadcast = vi.fn();
     const set = vi.fn();
-    const syncPreviewSession = vi.fn();
     const previewService = {
       start: vi.fn().mockResolvedValue({
         id: "preview-session-999",
@@ -152,7 +147,6 @@ describe("createPreviewOpenTool", () => {
       { sendUICommand, broadcast } as any,
       { set } as any,
       previewService as any,
-      { syncPreviewSession } as any,
     );
 
     const context: ToolContext = {
@@ -166,25 +160,12 @@ describe("createPreviewOpenTool", () => {
     const result = await tool.execute({ workspaceRoot: "/workspace/live" }, context);
 
     expect(result.ok).toBe(true);
-    expect(syncPreviewSession).toHaveBeenCalledWith(
-      expect.objectContaining({
-        sessionId: "session-999",
-        mode: "local",
-        url: "/api/dev-proxy/4173/",
-      }),
-      {
-        userId: "user-999",
-        workspaceRoot: "/workspace/live",
-        mode: "isolated",
-      },
-    );
   });
 
   it("does not open the preview panel when preview start fails", async () => {
     const sendUICommand = vi.fn();
     const broadcast = vi.fn();
     const set = vi.fn();
-    const syncPreviewSession = vi.fn();
     const previewService = {
       start: vi.fn().mockResolvedValue({
         id: "preview-session-error",
@@ -202,7 +183,6 @@ describe("createPreviewOpenTool", () => {
       { sendUICommand, broadcast } as any,
       { set } as any,
       previewService as any,
-      { syncPreviewSession } as any,
     );
 
     const result = await tool.execute({ target: "3000" }, {
@@ -216,7 +196,6 @@ describe("createPreviewOpenTool", () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain("Preview failed: Preview server did not become ready");
     expect(sendUICommand).not.toHaveBeenCalled();
-    expect(syncPreviewSession).not.toHaveBeenCalled();
     expect(broadcast).toHaveBeenCalledWith(
       "session-error",
       expect.objectContaining({
@@ -230,7 +209,6 @@ describe("createPreviewOpenTool", () => {
             workspaceRoot: "/workspace/error",
             displayState: "hidden",
             displayTarget: null,
-            storageScope: "unknown",
           },
         },
       }),
@@ -242,7 +220,6 @@ describe("createPreviewOpenTool", () => {
         workspaceRoot: "/workspace/error",
         displayState: "hidden",
         displayTarget: null,
-        storageScope: "unknown",
       },
     });
   });
@@ -315,50 +292,10 @@ describe("createPreviewInspectTool", () => {
       screenshot: "base64-image",
     });
   });
-
-  it("suppresses preview inspection capture when the linked browser session is secret-safe", async () => {
-    const previewService = {
-      get: vi.fn().mockReturnValue({ browserId: "preview-browser-session-1" }),
-      inspect: vi.fn().mockResolvedValue({
-        status: "ready",
-        url: "/api/dev-proxy/4173/",
-        logs: [{ id: 1, stream: "stdout", text: "token=123", timestamp: "2026-03-27T00:00:00.000Z" }],
-        browserEvents: [{ type: "console", text: "secret" }],
-        screenshot: "base64-image",
-        page: { title: "Secret page" },
-        snapshot: "Title: Secret page",
-      }),
-    };
-    const tool = createPreviewInspectTool(
-      previewService as any,
-      {
-        getSessionByPreviewSessionId: vi.fn().mockReturnValue({ id: "bs_secret", secretSafe: true }),
-      } as any,
-    );
-
-    const result = await tool.execute({ screenshot: true }, {
-      sessionId: "session-1",
-      actionId: "action-1",
-      workspaceRoot: "/workspace/app",
-      requestedBy: "assistant",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(result.message).toContain("capture suppressed");
-    expect(result.data).toMatchObject({
-      captureSuppressed: true,
-      screenshot: null,
-      browserEvents: [],
-      logs: [],
-      page: null,
-      snapshot: null,
-    });
-  });
 });
 
 describe("createPreviewRestartTool", () => {
-  it("syncs the browser collaboration record after restart", async () => {
-    const syncPreviewSession = vi.fn();
+  it("restarts the preview session", async () => {
     const restartedSession = {
       id: "preview-session-1",
       sessionId: "session-1",
@@ -375,7 +312,6 @@ describe("createPreviewRestartTool", () => {
     };
     const tool = createPreviewRestartTool(
       previewService as any,
-      { syncPreviewSession } as any,
     );
 
     const result = await tool.execute({}, {
@@ -387,62 +323,5 @@ describe("createPreviewRestartTool", () => {
     });
 
     expect(result.ok).toBe(true);
-    expect(syncPreviewSession).toHaveBeenCalledWith(
-      restartedSession,
-      {
-        userId: "user-1",
-        workspaceRoot: "/workspace/app",
-        mode: "shared",
-      },
-    );
-  });
-});
-
-describe("browser collaboration tool scoping", () => {
-  it("lists only the linked preview browser session for the active chat session", async () => {
-    const previewSession = {
-      id: "bs_preview_only",
-      browserId: "preview-browser-session-1",
-      previewSessionId: "session-1",
-      createdBy: "user-1",
-    };
-    const collaboration = {
-      getSessionByPreviewSessionId: vi.fn().mockReturnValue(previewSession),
-      listSessions: vi.fn(),
-    };
-    const tool = createBrowserSessionListTool(collaboration as any);
-
-    const result = await tool.execute({}, {
-      sessionId: "session-1",
-      actionId: "action-1",
-      requestedBy: "assistant",
-      userId: "user-1",
-    });
-
-    expect(result.ok).toBe(true);
-    expect(collaboration.listSessions).not.toHaveBeenCalled();
-    expect(result.data).toEqual({ sessions: [previewSession] });
-  });
-
-  it("rejects control changes for non-preview browser sessions when a preview session is linked", async () => {
-    const collaboration = {
-      getSessionByPreviewSessionId: vi.fn().mockReturnValue({
-        id: "bs_preview_only",
-        browserId: "preview-browser-session-1",
-        previewSessionId: "session-1",
-        createdBy: "user-1",
-      }),
-      returnControl: vi.fn(),
-    };
-    const tool = createBrowserSessionReturnControlTool(collaboration as any);
-
-    await expect(tool.execute({ browserSessionId: "bs_sidecar" }, {
-      sessionId: "session-1",
-      actionId: "action-1",
-      requestedBy: "assistant",
-      userId: "user-1",
-    })).rejects.toThrow(/locked to its visible preview browser session/i);
-
-    expect(collaboration.returnControl).not.toHaveBeenCalled();
   });
 });

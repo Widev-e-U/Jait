@@ -53,6 +53,11 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'todo':            { icon: ListTodo,  label: 'Todo',        color: 'text-orange-500' },
   'jait':            { icon: Zap,       label: 'Jait',        color: 'text-indigo-500' },
   'mcp-tool':        { icon: Server,    label: 'MCP Tool',   color: 'text-purple-500' },
+  // ── SSH tools ───────────────────────────────────────────
+  'ssh.run':           { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
+  'ssh.session.start': { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
+  'ssh.session.run':   { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
+  'ssh.session.close': { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   // ── Legacy / standard tools ─────────────────────────────
   'terminal.run':    { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
   'terminal.stream': { icon: Terminal,  label: 'Terminal',    color: 'text-yellow-500' },
@@ -92,6 +97,28 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
 function getToolMeta(tool: string) {
   const normalized = normalizeTool(tool)
   return toolMeta[normalized] ?? { icon: Terminal, label: normalized, color: 'text-muted-foreground' }
+}
+
+/**
+ * Derive a friendly display label from an MCP inner tool name.
+ * Falls back to a cleaned-up version of the raw name.
+ */
+function getMcpDisplayLabel(innerName: string | null): { label: string; icon: typeof Terminal; color: string } | null {
+  if (!innerName) return null
+  const n = innerName.toLowerCase().replace(/^mcp__/, '').replace(/__/g, '.')
+  if (n.startsWith('ssh')) return { label: 'SSH', icon: Terminal, color: 'text-yellow-500' }
+  if (n.startsWith('git')) return { label: 'Git', icon: Terminal, color: 'text-orange-500' }
+  if (n.startsWith('docker') || n.startsWith('container')) return { label: 'Docker', icon: Server, color: 'text-blue-500' }
+  if (n.startsWith('github')) return { label: 'GitHub', icon: Globe, color: 'text-purple-500' }
+  if (n.startsWith('postgres') || n.startsWith('mysql') || n.startsWith('sqlite') || n.startsWith('db') || n.startsWith('sql')) return { label: 'Database', icon: Server, color: 'text-emerald-500' }
+  if (n.startsWith('fs') || n.startsWith('file') || n.startsWith('read') || n.startsWith('write')) return { label: 'File', icon: FileText, color: 'text-blue-500' }
+  if (n.startsWith('browser') || n.startsWith('web') || n.startsWith('http') || n.startsWith('fetch')) return { label: 'Web', icon: Globe, color: 'text-cyan-500' }
+  if (n.startsWith('shell') || n.startsWith('exec') || n.startsWith('bash') || n.startsWith('terminal') || n.startsWith('command')) return { label: 'Terminal', icon: Terminal, color: 'text-yellow-500' }
+  if (n.startsWith('memory') || n.startsWith('knowledge')) return { label: 'Memory', icon: FileText, color: 'text-amber-500' }
+  // Use the first segment (server name) as a fallback label
+  const firstSegment = n.split('.')[0] ?? n
+  const pretty = firstSegment.replace(/[._-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()).trim()
+  return pretty ? { label: pretty, icon: Server, color: 'text-purple-500' } : null
 }
 
 /** Convert an unknown tool arg to a display string, never returning [object Object] */
@@ -223,6 +250,7 @@ function getCollapsedToolCategory(tool: string): string {
   if (normalized === 'todo') return 'todo'
   if (normalized === 'jait') return 'jait'
   if (normalized === 'mcp-tool') return 'mcp tool'
+  if (normalized.startsWith('ssh.')) return 'ssh'
 
   return normalized.replace(/[._-]+/g, ' ').trim() || 'tool'
 }
@@ -1201,8 +1229,10 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
     : undefined
   const normalizedArgs = normalizeToolArgs(normalizedTool, call.args, resultData)
   const mcpLabel = normalizedTool === 'mcp-tool' ? getMcpToolLabel(normalizedArgs, resultData) : null
+  const mcpMeta = mcpLabel ? getMcpDisplayLabel(mcpLabel.title) : null
   const meta = getToolMeta(normalizedTool)
-  const Icon = meta.icon
+  const Icon = mcpMeta?.icon ?? meta.icon
+  const effectiveColor = mcpMeta?.color ?? meta.color
   const summary = getCallSummary(normalizedTool, normalizedArgs, resultData, call.result?.message)
   const editDiffCount = getEditDiffCountLabel(normalizedTool, normalizedArgs)
   const finalOutput = formatOutput(call.result, normalizedTool)
@@ -1311,7 +1341,7 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
         statusColor,
         (call.status === 'running' || call.status === 'pending') && 'animate-spin'
       )} />
-      <Icon className={cn('h-4 w-4 shrink-0', meta.color)} />
+      <Icon className={cn('h-4 w-4 shrink-0', effectiveColor)} />
       <span className="text-sm font-medium text-muted-foreground truncate flex-1">
         {isPending ? (
           <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
@@ -1331,7 +1361,7 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
           </span>
         ) : mcpLabel && (mcpLabel.title || mcpLabel.details) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
-            <span>{meta.label}:</span>
+            <span>{getMcpDisplayLabel(mcpLabel.title)?.label ?? meta.label}:</span>
             <span className="min-w-0 truncate">
               {mcpLabel.title ? <code className="text-xs font-mono">{mcpLabel.title}</code> : null}
               {mcpLabel.title && mcpLabel.details ? <span className="text-muted-foreground"> • </span> : null}

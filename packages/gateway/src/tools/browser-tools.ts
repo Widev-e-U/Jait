@@ -2,7 +2,26 @@ import type { SurfaceRegistry } from "../surfaces/registry.js";
 import { BrowserSurface, type BrowserPageSnapshot, type BrowserTargetDiagnostics } from "../surfaces/browser.js";
 import { SSRFGuard } from "../security/ssrf-guard.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
-import type { BrowserCollaborationService, BrowserSessionRecord } from "../services/browser-collaboration.js";
+// BrowserCollaborationService was removed — keep stub types so existing signatures compile.
+// All collaboration parameters are always `undefined` at runtime now.
+type BrowserCollaborationService = {
+  getSessionByPreviewSessionId(id: string): BrowserSessionRecord | null;
+  getSessionByBrowserId(id: string): BrowserSessionRecord | null;
+  assertAgentControl(id?: string): void;
+};
+type BrowserSessionRecord = {
+  id: string;
+  browserId?: string;
+  controller: string;
+  secretSafe?: boolean;
+  previewUrl?: string;
+  targetUrl?: string;
+  workspaceRoot?: string;
+  name?: string;
+  origin?: string;
+  mode?: string;
+  status?: string;
+};
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 
 interface BrowserNavigateInput {

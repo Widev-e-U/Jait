@@ -93,7 +93,6 @@ import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useWorkspaceState } from '@/hooks/useWorkspaceState'
 import { useAutomation } from '@/hooks/useAutomation'
-import { useBrowserCollaboration } from '@/hooks/useBrowserCollaboration'
 import { emitPreviewSession } from '@/lib/preview-events'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
@@ -165,6 +164,7 @@ function SecretInputPrompt({ token, sessionId }: { token: string | null; session
   const [requests, setRequests] = useState<SecretInputRequest[]>([])
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
+  const [showPassword, setShowPassword] = useState(false)
   const activeRequest = requests[0] ?? null
 
   const authHeaders = useCallback((contentType = false) => {
@@ -253,35 +253,49 @@ function SecretInputPrompt({ token, sessionId }: { token: string | null; session
     }
   }, [activeRequest, authHeaders])
 
+  if (!activeRequest) return null
+
   return (
-    <Dialog open={Boolean(activeRequest)} onOpenChange={(open) => { if (!open) void cancelSecret() }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{activeRequest?.title ?? 'Secret required'}</DialogTitle>
-          <DialogDescription>
-            {activeRequest?.prompt ?? 'Enter the secret to continue.'} The value goes directly to the local gateway and is not sent to the model.
-          </DialogDescription>
-        </DialogHeader>
-        <div className="space-y-3">
-          <Label htmlFor="secret-input">Password</Label>
+    <div className="rounded-lg border bg-card p-4 space-y-3">
+      <div className="space-y-1">
+        <p className="text-sm font-medium">{activeRequest.title ?? 'Secret required'}</p>
+        <p className="text-xs text-muted-foreground">
+          {activeRequest.prompt ?? 'Enter the secret to continue.'} The value goes directly to the local gateway and is not sent to the model.
+        </p>
+      </div>
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1">
           <Input
             id="secret-input"
-            type="password"
+            type={showPassword ? 'text' : 'password'}
             autoComplete="current-password"
+            placeholder="Password"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={(event) => {
               if (event.key === 'Enter') void submitSecret()
             }}
+            className="pr-9"
             autoFocus
           />
-          <div className="flex justify-end gap-2">
-            <Button variant="outline" onClick={() => void cancelSecret()} disabled={submitting}>Cancel</Button>
-            <Button onClick={() => void submitSecret()} disabled={submitting || !value}>Submit</Button>
-          </div>
+          <button
+            type="button"
+            tabIndex={-1}
+            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+            onMouseDown={(e) => e.preventDefault()}
+            onClick={() => setShowPassword((prev) => !prev)}
+          >
+            {showPassword ? (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+            )}
+          </button>
         </div>
-      </DialogContent>
-    </Dialog>
+        <Button variant="outline" size="sm" onClick={() => void cancelSecret()} disabled={submitting}>Cancel</Button>
+        <Button size="sm" onClick={() => void submitSecret()} disabled={submitting || !value}>Submit</Button>
+      </div>
+    </div>
   )
 }
 
@@ -1097,18 +1111,14 @@ function App() {
   const handleWorkspaceCollapsedChange = useCallback((collapsed: boolean) => {
     if (collapsed) closeWorkspacePanelRef.current?.()
   }, [])
-  const browserCollaborationSessionsRef = useRef<ReturnType<typeof useBrowserCollaboration>['sessions']>([])
   const suppressWorkspaceAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
-  const [devPreviewBrowserSessionId, setDevPreviewBrowserSessionId] = useState<string | null>(null)
-  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; browserSessionId?: string | null; key: number } | null>(null)
+  const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
   const [workspacePreviewState, setWorkspacePreviewState] = useState<DevPreviewPanelState>({
     open: false,
     target: null,
-    browserSessionId: null,
     displayState: 'hidden',
     displayTarget: null,
-    storageScope: 'unknown',
   })
   const [showScreenShare, setShowScreenShare] = useState(false)
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
@@ -1294,27 +1304,17 @@ function App() {
   const closeWorkspacePreview = useCallback(() => {
     workspaceRef.current?.closePreviewTarget()
   }, [])
-  const resolveBrowserSessionPreviewTarget = useCallback((browserSessionId?: string | null) => {
-    const trimmedId = browserSessionId?.trim()
-    if (!trimmedId) return null
-    const session = browserCollaborationSessionsRef.current.find((item) => item.id === trimmedId)
-    return session?.previewUrl?.trim() || session?.targetUrl?.trim() || null
-  }, [])
-  const routePreviewToWorkspace = useCallback((target?: string | null, workspaceRoot?: string | null, browserSessionId?: string | null) => {
-    const trimmed = target?.trim() || resolveBrowserSessionPreviewTarget(browserSessionId) || null
-    const nextBrowserSessionId = browserSessionId?.trim() || null
+  const routePreviewToWorkspace = useCallback((target?: string | null, workspaceRoot?: string | null) => {
+    const trimmed = target?.trim() || null
     const nextPreviewState: DevPreviewPanelState = {
       open: true,
       target: trimmed,
       workspaceRoot: workspaceRoot?.trim() || activeWorkspace?.workspaceRoot || null,
-      browserSessionId: nextBrowserSessionId,
-      displayState: (trimmed || nextBrowserSessionId) ? 'connected' : 'blank',
+      displayState: trimmed ? 'connected' : 'blank',
       displayTarget: trimmed,
-      storageScope: 'isolated-browser-session',
     }
     setViewMode('developer')
     setDevPreviewTarget(trimmed)
-    setDevPreviewBrowserSessionId(nextBrowserSessionId)
     setWorkspacePreviewState(nextPreviewState)
     if (workspaceRoot?.trim()) {
       setActiveWorkspace((prev) => {
@@ -1327,9 +1327,9 @@ function App() {
       setShowWorkspace(true)
     }
     showWorkspaceEditorPanel()
-    setWorkspacePreviewRequest({ target: trimmed, browserSessionId: nextBrowserSessionId, key: Date.now() })
+    setWorkspacePreviewRequest({ target: trimmed, key: Date.now() })
     return true
-  }, [activeWorkspace?.workspaceRoot, resolveBrowserSessionPreviewTarget, showWorkspace, showWorkspaceEditorPanel])
+  }, [activeWorkspace?.workspaceRoot, showWorkspace, showWorkspaceEditorPanel])
 
   const getFloatingViewport = useCallback(() => ({
     width: window.innerWidth,
@@ -1539,8 +1539,6 @@ function App() {
     updateSettings,
     clearSessionArchive,
   } = useAuth()
-  const browserCollaboration = useBrowserCollaboration(token, isAuthenticated)
-  browserCollaborationSessionsRef.current = browserCollaboration.sessions
 
   // ── Update check/apply handlers ────────────────────────────────
   const handleCheckUpdate = useCallback(async () => {
@@ -1594,7 +1592,6 @@ function App() {
   }, [token, updateInfo])
 
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
-    browserCollaboration.setWsConnected(connected)
     if (!connected) {
       if (pendingGatewayRestartVersionRef.current) {
         gatewayRestartSawDisconnectRef.current = true
@@ -1612,7 +1609,7 @@ function App() {
       toast.success(`Gateway restarted on v${version}.`)
       void handleCheckUpdate()
     }
-  }, [handleCheckUpdate, browserCollaboration])
+  }, [handleCheckUpdate])
 
   // Auto-check for updates on mount (once authenticated)
   useEffect(() => {
@@ -2285,10 +2282,8 @@ function App() {
     if (dp) {
       const nextTarget = getPersistablePreviewTarget(dp.target)
       if (nextTarget) setDevPreviewTarget(nextTarget)
-      const nextBrowserSessionId = dp.browserSessionId?.trim() || null
-      setDevPreviewBrowserSessionId(nextBrowserSessionId)
-      if (dp.open && ui.panel?.open === true && (nextTarget || nextBrowserSessionId)) {
-        routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null, dp.browserSessionId ?? null)
+      if (dp.open && ui.panel?.open === true && nextTarget) {
+        routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
       }
     }
 
@@ -2649,7 +2644,6 @@ function App() {
         }
       }, [openArchitectureInWorkspace]),
     },
-    onBrowserCollaborationEvent: browserCollaboration.handleWsEvent,
     onPreviewSessionEvent: emitPreviewSession,
   })
 
@@ -2918,49 +2912,41 @@ function App() {
 
   const closeDevPreviewPanel = useCallback(() => {
     closeWorkspacePreview()
-    setDevPreviewBrowserSessionId(null)
     setSavedDevPreview(null)
   }, [closeWorkspacePreview, setSavedDevPreview])
 
   const prevPreviewSyncRef = useRef<string>('')
-  const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null; browserSessionId?: string | null }) => {
-    const nextBrowserSessionId = state.browserSessionId?.trim() || null
+  const handleWorkspacePreviewOpenChange = useCallback((state: { open: boolean; target: string | null }) => {
     const persistedTarget = getPersistablePreviewTarget(state.target)
-    const resolvedDisplayTarget = persistedTarget || resolveBrowserSessionPreviewTarget(nextBrowserSessionId) || null
     const displayState: DevPreviewPanelState['displayState'] = !state.open
       ? 'hidden'
-      : (resolvedDisplayTarget || nextBrowserSessionId)
+      : persistedTarget
         ? 'connected'
         : 'blank'
     const nextPreviewState: DevPreviewPanelState = {
       open: state.open,
-      target: resolvedDisplayTarget,
-      browserSessionId: nextBrowserSessionId,
+      target: persistedTarget,
       displayState,
-      displayTarget: displayState === 'connected' ? resolvedDisplayTarget : null,
-      storageScope: state.open ? 'isolated-browser-session' : 'unknown',
+      displayTarget: displayState === 'connected' ? persistedTarget : null,
     }
     setWorkspacePreviewState((prev) => {
       if (
         prev.open === nextPreviewState.open
         && prev.target === nextPreviewState.target
-        && prev.browserSessionId === nextPreviewState.browserSessionId
         && prev.displayState === nextPreviewState.displayState
         && prev.displayTarget === nextPreviewState.displayTarget
       ) return prev
       return nextPreviewState
     })
-    if (state.open && (resolvedDisplayTarget || nextBrowserSessionId)) {
+    if (state.open && persistedTarget) {
       const nextState: DevPreviewPanelState = {
         open: true,
-        target: resolvedDisplayTarget ?? devPreviewTarget ?? null,
+        target: persistedTarget ?? devPreviewTarget ?? null,
         workspaceRoot: activeWorkspace?.workspaceRoot ?? null,
-        browserSessionId: nextBrowserSessionId || devPreviewBrowserSessionId,
         displayState,
-        displayTarget: displayState === 'connected' ? (resolvedDisplayTarget ?? devPreviewTarget ?? null) : null,
-        storageScope: 'isolated-browser-session',
+        displayTarget: displayState === 'connected' ? (persistedTarget ?? devPreviewTarget ?? null) : null,
       }
-      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}:${nextState.browserSessionId ?? ''}:${nextState.displayState ?? ''}:${nextState.displayTarget ?? ''}:${nextState.storageScope ?? ''}`
+      const key = `${nextState.open}:${nextState.target ?? ''}:${nextState.workspaceRoot ?? ''}:${nextState.displayState ?? ''}:${nextState.displayTarget ?? ''}`
       if (key === prevPreviewSyncRef.current) return
       prevPreviewSyncRef.current = key
       setSavedDevPreview(nextState)
@@ -2968,9 +2954,8 @@ function App() {
     }
     if (prevPreviewSyncRef.current === '') return
     prevPreviewSyncRef.current = ''
-    setDevPreviewBrowserSessionId(null)
     setSavedDevPreview(null)
-  }, [activeWorkspace?.workspaceRoot, devPreviewBrowserSessionId, devPreviewTarget, resolveBrowserSessionPreviewTarget, setSavedDevPreview])
+  }, [activeWorkspace?.workspaceRoot, devPreviewTarget, setSavedDevPreview])
 
   const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
@@ -3053,10 +3038,9 @@ function App() {
     setCurrentView('chat')
     const nextTarget = target?.trim() || devPreviewTarget?.trim() || null
     setDevPreviewTarget(nextTarget)
-    setDevPreviewBrowserSessionId(null)
-    const state = { open: true, target: nextTarget, workspaceRoot: activeWorkspace?.workspaceRoot ?? null, browserSessionId: null }
+    const state = { open: true, target: nextTarget, workspaceRoot: activeWorkspace?.workspaceRoot ?? null }
     setSavedDevPreview(state)
-    routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null, null)
+    routePreviewToWorkspace(nextTarget, activeWorkspace?.workspaceRoot ?? null)
   }, [setSavedDevPreview, devPreviewTarget, routePreviewToWorkspace, activeWorkspace?.workspaceRoot])
 
   // Helper: create a filesystem surface on the gateway so ALL clients
@@ -5931,13 +5915,6 @@ function App() {
                       previewToken={token}
                       previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
                       previewInitialTarget={devPreviewTarget}
-                      previewBrowserSessionId={devPreviewBrowserSessionId}
-                      browserSessions={browserCollaboration.sessions}
-                      browserInterventions={browserCollaboration.interventions}
-                      onTakeBrowserControl={browserCollaboration.takeControl}
-                      onReturnBrowserControl={browserCollaboration.returnControl}
-                      onResumeBrowserSession={browserCollaboration.resume}
-                      onResolveBrowserIntervention={browserCollaboration.resolveIntervention}
                       architectureDiagram={architectureDiagram}
                       architectureGenerating={architectureGenerating}
                       architectureRequest={architectureRequest}
@@ -6071,13 +6048,6 @@ function App() {
                   previewToken={token}
                   previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
                   previewInitialTarget={devPreviewTarget}
-                  previewBrowserSessionId={devPreviewBrowserSessionId}
-                  browserSessions={browserCollaboration.sessions}
-                  browserInterventions={browserCollaboration.interventions}
-                  onTakeBrowserControl={browserCollaboration.takeControl}
-                  onReturnBrowserControl={browserCollaboration.returnControl}
-                  onResumeBrowserSession={browserCollaboration.resume}
-                  onResolveBrowserIntervention={browserCollaboration.resolveIntervention}
                   architectureDiagram={architectureDiagram}
                   architectureGenerating={architectureGenerating}
                   architectureRequest={architectureRequest}

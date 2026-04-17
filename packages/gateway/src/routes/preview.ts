@@ -2,43 +2,25 @@ import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
 import type { PreviewService } from "../services/preview.js";
-import type { BrowserCollaborationService } from "../services/browser-collaboration.js";
 
 export function registerPreviewRoutes(
   app: FastifyInstance,
   config: AppConfig,
-  deps: { previewService: PreviewService; browserCollaborationService?: BrowserCollaborationService },
+  deps: { previewService: PreviewService },
 ): void {
-  const getBrowserSession = (sessionId: string) =>
-    deps.browserCollaborationService?.getSessionByPreviewSessionId(sessionId) ?? null;
 
   app.get("/api/preview/session/:sessionId", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
-    const browserSession = getBrowserSession(sessionId);
     const session = await deps.previewService.refreshSessionCapture(sessionId);
-    if (browserSession?.secretSafe && session) {
-      return {
-        session: { ...session, browserEvents: [], logs: [], metrics: null },
-        browserSession,
-      };
-    }
-    return { session, browserSession };
+    return { session };
   });
 
   app.get("/api/preview/screenshot/:sessionId", async (request, reply) => {
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
-    const browserSession = getBrowserSession(sessionId);
-    if (browserSession?.secretSafe) {
-      return {
-        screenshot: null,
-        suppressed: true,
-        reason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
-      };
-    }
     const screenshot = await deps.previewService.screenshot(sessionId);
     return { screenshot };
   });
@@ -47,14 +29,6 @@ export function registerPreviewRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
-    const browserSession = getBrowserSession(sessionId);
-    if (browserSession?.secretSafe) {
-      return {
-        logs: [],
-        suppressed: true,
-        reason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
-      };
-    }
     const query = request.query as { sinceId?: string };
     const sinceId = query.sinceId ? Number.parseInt(query.sinceId, 10) : 0;
     const logs = deps.previewService.getLogs(sessionId, sinceId);
@@ -65,14 +39,6 @@ export function registerPreviewRoutes(
     const authUser = await requireAuth(request, reply, config.jwtSecret);
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
-    const browserSession = getBrowserSession(sessionId);
-    if (browserSession?.secretSafe) {
-      return {
-        inspect: null,
-        suppressed: true,
-        reason: "Preview capture is suppressed while the linked browser session is marked secret-safe.",
-      };
-    }
     const query = request.query as { selector?: string };
     const inspect = await deps.previewService.inspect(sessionId, typeof query.selector === "string" ? query.selector : undefined);
     return { inspect };
@@ -100,11 +66,6 @@ export function registerPreviewRoutes(
       port: typeof body.port === "number" ? body.port : null,
       frameworkHint: body.frameworkHint ?? null,
     });
-    deps.browserCollaborationService?.syncPreviewSession(session, {
-      userId: authUser.id,
-      workspaceRoot: body.workspaceRoot ?? null,
-      mode: body.target ? "shared" : "isolated",
-    });
     return { session };
   });
 
@@ -119,11 +80,6 @@ export function registerPreviewRoutes(
     if (!session) {
       return reply.status(404).send({ error: "Preview session not found" });
     }
-    deps.browserCollaborationService?.syncPreviewSession(session, {
-      userId: authUser.id,
-      workspaceRoot: session.workspaceRoot,
-      mode: session.target ? "shared" : "isolated",
-    });
     return { session };
   });
 
@@ -135,7 +91,6 @@ export function registerPreviewRoutes(
       return reply.status(400).send({ error: "sessionId is required" });
     }
     const stopped = await deps.previewService.stop(body.sessionId);
-    if (stopped) deps.browserCollaborationService?.closePreviewSession(body.sessionId);
     return { ok: stopped };
   });
 }

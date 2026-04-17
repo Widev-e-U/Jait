@@ -175,10 +175,8 @@ export interface DevPreviewPanelState {
   open: boolean;
   target?: string | null;
   workspaceRoot?: string | null;
-  browserSessionId?: string | null;
   displayState?: "hidden" | "blank" | "connected";
   displayTarget?: string | null;
-  storageScope?: "shared-browser" | "isolated-browser-session" | "unknown";
 }
 
 /**

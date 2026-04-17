@@ -95,7 +95,6 @@ export type FullStateHandler = (state: Record<string, unknown>) => void
  * `payload` is the event payload (e.g. { threadId, thread }).
  */
 export type ThreadEventHandler = (eventType: string, payload: Record<string, unknown>) => void
-export type BrowserCollaborationEventHandler = (eventType: string, payload: Record<string, unknown>) => void
 export type UICommandsConnectionStateHandler = (state: { connected: boolean; reconnected: boolean }) => void
 
 interface UseUICommandsOptions {
@@ -113,8 +112,6 @@ interface UseUICommandsOptions {
   onMessageComplete?: () => void
   /** Called when the gateway broadcasts a thread lifecycle event. */
   onThreadEvent?: ThreadEventHandler
-  /** Called when the gateway broadcasts browser collaboration state changes. */
-  onBrowserCollaborationEvent?: BrowserCollaborationEventHandler
   /** Called when the gateway broadcasts preview session state changes. */
   onPreviewSessionEvent?: (session: Record<string, unknown>) => void
   /** Called when the gateway pushes native filesystem change events. */
@@ -146,7 +143,6 @@ export function useUICommands(opts: UseUICommandsOptions) {
     onFullState,
     onMessageComplete,
     onThreadEvent,
-    onBrowserCollaborationEvent,
     onFsChanges,
     onConnectionStateChange,
     onPreviewSessionEvent,
@@ -161,8 +157,6 @@ export function useUICommands(opts: UseUICommandsOptions) {
   onMessageCompleteRef.current = onMessageComplete
   const onThreadEventRef = useRef(onThreadEvent)
   onThreadEventRef.current = onThreadEvent
-  const onBrowserCollaborationEventRef = useRef(onBrowserCollaborationEvent)
-  onBrowserCollaborationEventRef.current = onBrowserCollaborationEvent
   const onPreviewSessionEventRef = useRef(onPreviewSessionEvent)
   onPreviewSessionEventRef.current = onPreviewSessionEvent
   const onFsChangesRef = useRef(onFsChanges)
@@ -270,8 +264,6 @@ export function useUICommands(opts: UseUICommandsOptions) {
       ) {
         // Thread, repo, plan, filesystem-node and node-registry events — forward to automation hook
         onThreadEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
-      } else if (msg.type.startsWith('browser.')) {
-        onBrowserCollaborationEventRef.current?.(msg.type, msg.payload as Record<string, unknown>)
       } else if (msg.type === 'preview.session') {
         const session = (msg.payload as Record<string, unknown>)?.session as Record<string, unknown> | undefined
         if (session) onPreviewSessionEventRef.current?.(session)

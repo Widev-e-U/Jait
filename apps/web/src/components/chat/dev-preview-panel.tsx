@@ -8,7 +8,9 @@ import { PreviewMetricsPanel, type PreviewPerformanceMetrics } from '@/component
 import { getApiUrl } from '@/lib/gateway-url'
 import { isSamePreviewSession } from '@/lib/preview-session'
 import { subscribePreviewSession } from '@/lib/preview-events'
-import type { BrowserSession } from '@/lib/browser-collaboration-api'
+
+// BrowserSession was removed — keep a minimal type alias for residual references
+type BrowserSession = { id: string; controller: string; previewUrl?: string; targetUrl?: string; origin?: string; secretSafe?: boolean }
 
 interface DevPreviewPanelProps {
   onClose: () => void
