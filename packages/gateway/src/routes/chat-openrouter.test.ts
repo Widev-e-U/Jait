@@ -57,7 +57,7 @@ describe("chat route OpenRouter backend selection", () => {
 
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       expect(String(input)).toBe("https://openrouter.ai/api/v1/chat/completions");
-      expect((init?.headers as Record<string, string>)["Authorization"]).toBe("Bearer openrouter-test-key");
+      expect((init?.headers as Record<string, string> | undefined)?.["Authorization"]).toBe("Bearer openrouter-test-key");
 
       const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ role: string; content: string }> };
       expect(body.model).toBe("openai/gpt-4o");
@@ -110,7 +110,7 @@ describe("chat route OpenRouter backend selection", () => {
 
     const fetchMock = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
       expect(String(input)).toBe("https://openrouter.ai/api/v1/chat/completions");
-      expect((init?.headers as Record<string, string>)["Authorization"]).toBe("Bearer openrouter-test-key");
+      expect((init?.headers as Record<string, string> | undefined)?.["Authorization"]).toBe("Bearer openrouter-test-key");
 
       const body = JSON.parse(String(init?.body)) as { model: string; messages: Array<{ role: string; content: string }> };
       expect(body.model).toBe("xiaomi/mimo-v2-pro");
@@ -167,6 +167,10 @@ describe("chat route OpenRouter backend selection", () => {
       provider: "jait",
       model: "xiaomi/mimo-v2-pro",
     });
+    expect(assistantMessage?.contextFlow?.rounds[0]?.messages[0]).toMatchObject({
+      role: "system",
+    });
+    expect(String(assistantMessage?.contextFlow?.rounds[0]?.messages[0]?.content ?? "")).toContain("Your name is Jait");
     expect(assistantMessage?.contextFlow?.rounds[0]?.messages.at(-1)).toMatchObject({
       role: "user",
       content: "reply ok",

@@ -8,7 +8,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 import { PathGuard } from "../security/path-guard.js";
 
 export type ArchitectureDiagramRow = typeof architectureDiagrams.$inferSelect;
-export const DEFAULT_ARCHITECTURE_DIAGRAM_FILE = "architecture.mmd";
+export const DEFAULT_ARCHITECTURE_DIAGRAM_FILE = ".jait/architecture.mmd";
 
 export interface ArchitectureDiagramRecord extends ArchitectureDiagramRow {
   filePath: string;

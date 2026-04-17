@@ -40,6 +40,7 @@ function authHeaders(token?: string | null): Record<string, string> {
 
 export function useWorkspaces(token?: string | null, onLoginRequired?: () => void) {
   const [workspaces, setWorkspaces] = useState<WorkspaceRecord[]>([])
+  const [personalSessions, setPersonalSessions] = useState<WorkspaceSession[]>([])
   const [archivedSessionsByWorkspace, setArchivedSessionsByWorkspace] = useState<Record<string, WorkspaceSession[]>>({})
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null)
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null)
@@ -55,6 +56,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
   const fetchWorkspaces = useCallback(async () => {
     if (!token) {
       setWorkspaces([])
+      setPersonalSessions([])
       setArchivedSessionsByWorkspace({})
       setActiveWorkspaceId(null)
       setActiveSessionId(null)
@@ -66,15 +68,17 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
 
     setLoading(true)
     try {
-      const [workspacesRes, lastActiveRes] = await Promise.all([
+      const [workspacesRes, sessionsRes, lastActiveRes] = await Promise.all([
         fetch(`${API_URL}/api/workspaces?status=active&limit=${visibleLimit}`, { headers: authHeaders(token) }),
+        fetch(`${API_URL}/api/sessions?status=active&limit=100`, { headers: authHeaders(token) }),
         fetch(`${API_URL}/api/workspaces/last-active`, { headers: authHeaders(token) }),
       ])
-      if (workspacesRes.status === 401 || lastActiveRes.status === 401) {
+      if (workspacesRes.status === 401 || sessionsRes.status === 401 || lastActiveRes.status === 401) {
         onLoginRequired?.()
       }
 
       let nextWorkspaces: WorkspaceRecord[] = []
+      let nextPersonalSessions: WorkspaceSession[] = []
       if (workspacesRes.ok) {
         const data = await workspacesRes.json() as { workspaces: WorkspaceRecord[]; hasMore?: boolean }
         nextWorkspaces = data.workspaces
@@ -84,18 +88,25 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
         ))
         setHasMoreWorkspaces(Boolean(data.hasMore))
       }
+      if (sessionsRes.ok) {
+        const data = await sessionsRes.json() as { sessions: WorkspaceSession[] }
+        nextPersonalSessions = data.sessions.filter((session) => !session.workspaceId)
+        setPersonalSessions(nextPersonalSessions)
+      }
 
       if (lastActiveRes.ok) {
         const data = await lastActiveRes.json() as { workspace: WorkspaceRecord | null; session: WorkspaceSession | null }
         setActiveWorkspaceId((prevWorkspaceId) => {
           if (prevWorkspaceId && nextWorkspaces.some((workspace) => workspace.id === prevWorkspaceId)) return prevWorkspaceId
+          if (data.session && !data.session.workspaceId) return null
           return data.workspace?.id ?? nextWorkspaces[0]?.id ?? null
         })
         setActiveSessionId((prevSessionId) => {
           if (prevSessionId && nextWorkspaces.some((workspace) => workspace.sessions.some((session) => session.id === prevSessionId))) {
             return prevSessionId
           }
-          return data.session?.id ?? nextWorkspaces[0]?.sessions[0]?.id ?? null
+          if (prevSessionId && nextPersonalSessions.some((session) => session.id === prevSessionId)) return prevSessionId
+          return data.session?.id ?? nextPersonalSessions[0]?.id ?? nextWorkspaces[0]?.sessions[0]?.id ?? null
         })
       }
     } catch (err) {
@@ -148,14 +159,13 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
       return null
     }
 
-    let targetWorkspaceId = workspaceIdOverride ?? activeWorkspaceId
-    if (!targetWorkspaceId) {
-      return null
-    }
-    if (!targetWorkspaceId) return null
+    const targetWorkspaceId = workspaceIdOverride === undefined ? activeWorkspaceId : workspaceIdOverride
 
     try {
-      const res = await fetch(`${API_URL}/api/workspaces/${targetWorkspaceId}/sessions`, {
+      const url = targetWorkspaceId
+        ? `${API_URL}/api/workspaces/${targetWorkspaceId}/sessions`
+        : `${API_URL}/api/sessions`
+      const res = await fetch(url, {
         method: 'POST',
         headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
         body: JSON.stringify({ name }),
@@ -166,19 +176,23 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
       }
       if (!res.ok) return null
       const session = await res.json() as WorkspaceSession
-      setWorkspaces((prev) => prev.map((workspace) => (
-        workspace.id === targetWorkspaceId
-          ? { ...workspace, lastActiveAt: session.lastActiveAt, sessions: [session, ...workspace.sessions] }
-          : workspace
-      )))
-      setActiveWorkspaceId(targetWorkspaceId)
+      if (targetWorkspaceId) {
+        setWorkspaces((prev) => prev.map((workspace) => (
+          workspace.id === targetWorkspaceId
+            ? { ...workspace, lastActiveAt: session.lastActiveAt, sessions: [session, ...workspace.sessions] }
+            : workspace
+        )))
+      } else {
+        setPersonalSessions((prev) => [session, ...prev.filter((entry) => entry.id !== session.id)])
+      }
+      setActiveWorkspaceId(targetWorkspaceId ?? null)
       setActiveSessionId(session.id)
       return session
     } catch (err) {
       console.error('Failed to create session:', err)
       return null
     }
-  }, [activeWorkspaceId, createWorkspace, onLoginRequired, token])
+  }, [activeWorkspaceId, onLoginRequired, token])
 
   const persistSelection = useCallback((workspaceId: string, sessionId?: string | null) => {
     if (!token) return
@@ -201,10 +215,10 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     })
   }, [persistSelection, workspaces])
 
-  const switchSession = useCallback((workspaceId: string, sessionId: string) => {
+  const switchSession = useCallback((workspaceId: string | null, sessionId: string) => {
     setActiveWorkspaceId(workspaceId)
     setActiveSessionId(sessionId)
-    persistSelection(workspaceId, sessionId)
+    if (workspaceId) persistSelection(workspaceId, sessionId)
   }, [persistSelection])
 
   const archiveSession = useCallback(async (sessionId: string) => {
@@ -395,6 +409,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
         ...workspace,
         sessions: workspace.sessions.map((entry) => entry.id === sessionId ? { ...entry, name: session.name } : entry),
       })))
+      setPersonalSessions((prev) => prev.map((entry) => entry.id === sessionId ? { ...entry, name: session.name } : entry))
       setArchivedSessionsByWorkspace((prev) => Object.fromEntries(
         Object.entries(prev).map(([workspaceId, sessions]) => [
           workspaceId,
@@ -422,6 +437,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
 
   return {
     workspaces,
+    personalSessions,
     archivedSessionsByWorkspace,
     activeWorkspace,
     activeWorkspaceId,

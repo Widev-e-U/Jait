@@ -33,6 +33,8 @@ export interface VoiceToolDeps {
   toolExecutor?: (name: string, input: unknown, ctx: ToolContext) => Promise<ToolResult>;
   /** Per-connection user API keys (from user settings). */
   userApiKeys?: Record<string, string>;
+  /** Client IP from the voice WebSocket request, used only for coarse location lookup. */
+  clientIp?: string;
 }
 
 /** OpenAI function-calling tool schema */
@@ -86,6 +88,68 @@ const getSystemInfo: VoiceTool = {
     });
   },
 };
+
+interface ResolvedLocation {
+  label: string;
+  city?: string;
+  region?: string;
+  country?: string;
+  latitude?: number;
+  longitude?: number;
+  source: string;
+}
+
+function parseConfiguredLocation(value: string): ResolvedLocation {
+  const label = value.trim();
+  return { label, city: label, source: "configured" };
+}
+
+function locationFromGeoJson(data: Record<string, unknown>): ResolvedLocation | null {
+  const city = String(data["city"] ?? "").trim();
+  const region = String(data["region"] ?? data["regionName"] ?? "").trim();
+  const country = String(data["country_name"] ?? data["country"] ?? "").trim();
+  const latitude = Number(data["latitude"] ?? data["lat"]);
+  const longitude = Number(data["longitude"] ?? data["lon"]);
+  const parts = [city, region, country].filter(Boolean);
+  if (parts.length === 0) return null;
+  return {
+    label: parts.join(", "),
+    city: city || undefined,
+    region: region || undefined,
+    country: country || undefined,
+    latitude: Number.isFinite(latitude) ? latitude : undefined,
+    longitude: Number.isFinite(longitude) ? longitude : undefined,
+    source: "ip",
+  };
+}
+
+async function resolveLocation(deps: VoiceToolDeps): Promise<ResolvedLocation | null> {
+  const configured =
+    deps.userApiKeys?.["JAIT_LOCATION"] ??
+    deps.userApiKeys?.["LOCATION"] ??
+    process.env["JAIT_LOCATION"] ??
+    process.env["LOCATION"];
+  if (configured?.trim()) return parseConfiguredLocation(configured);
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5_000);
+  try {
+    const ip = deps.clientIp && !deps.clientIp.startsWith("127.") && deps.clientIp !== "::1"
+      ? deps.clientIp.replace(/^::ffff:/, "")
+      : "";
+    const url = ip
+      ? `https://ipapi.co/${encodeURIComponent(ip)}/json/`
+      : "https://ipapi.co/json/";
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) return null;
+    const data = await res.json() as Record<string, unknown>;
+    return locationFromGeoJson(data);
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
 
 const PROVIDER_IDS: ProviderId[] = ["jait", "codex", "claude-code", "gemini", "opencode", "copilot"];
 const DEFAULT_AGENT_TIMEOUT_MS = 45_000;
@@ -535,22 +599,45 @@ const stopVoice: VoiceTool = {
   },
 };
 
+const getLocation: VoiceTool = {
+  schema: {
+    type: "function",
+    name: "get_location",
+    description:
+      "Get the user's approximate current location for local questions and weather. " +
+      "Use when the user asks where they are, asks for local info, or asks weather without naming a city.",
+    parameters: { type: "object", properties: {}, required: [] },
+  },
+  execute: async (_args, deps) => {
+    const location = await resolveLocation(deps);
+    if (!location) {
+      return "Location unavailable. Set JAIT_LOCATION in settings or environment, or provide a city.";
+    }
+    return JSON.stringify(location);
+  },
+};
+
 const getWeather: VoiceTool = {
   schema: {
     type: "function",
     name: "get_weather",
-    description: "Get current weather for a city. Use when the user asks about the weather.",
+    description:
+      "Get current weather. If the user names a city, pass it. If not, call this with no city and it will use get_location-style lookup.",
     parameters: {
       type: "object",
       properties: {
-        city: { type: "string", description: "City name" },
+        city: { type: "string", description: "Optional city name. Leave empty to use the user's approximate current location." },
       },
-      required: ["city"],
+      required: [],
     },
   },
-  execute: async (args) => {
-    const city = String(args["city"] ?? "");
-    if (!city) return "No city provided.";
+  execute: async (args, deps) => {
+    let city = String(args["city"] ?? "").trim();
+    if (!city) {
+      const location = await resolveLocation(deps);
+      city = location?.city || location?.label || "";
+    }
+    if (!city) return "Weather location unavailable. Provide a city or set JAIT_LOCATION.";
     try {
       const res = await fetch(`https://wttr.in/${encodeURIComponent(city)}?format=3`);
       if (!res.ok) return `Could not fetch weather for ${city}.`;
@@ -575,6 +662,7 @@ const ALL_TOOLS: VoiceTool[] = [
   askAgentAboutRequest,
   sendToThread,
   searchWeb,
+  getLocation,
   getWeather,
   stopVoice,
 ];

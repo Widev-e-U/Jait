@@ -26,7 +26,7 @@ describe("ArchitectureDiagramService", () => {
     workspaceRoot = await mkdtemp(join(tmpdir(), "jait-architecture-"));
   });
 
-  it("writes diagrams to architecture.mmd in the workspace root", async () => {
+  it("writes diagrams to .jait/architecture.mmd in the workspace", async () => {
     const saved = await service.save({
       userId: "user-1",
       workspaceRoot,

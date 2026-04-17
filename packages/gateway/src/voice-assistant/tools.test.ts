@@ -1,5 +1,5 @@
 import { EventEmitter } from "node:events";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { loadConfig } from "../config.js";
 import { openDatabase, migrateDatabase } from "../db/index.js";
 import type {
@@ -14,6 +14,8 @@ import { SessionStateService } from "../services/session-state.js";
 import { ThreadService } from "../services/threads.js";
 import { UserService } from "../services/users.js";
 import { executeVoiceTool, getVoiceToolSchemas } from "./tools.js";
+
+const originalFetch = globalThis.fetch;
 
 class MockVoiceThreadProvider implements CliProviderAdapter {
   readonly id = "codex" as const;
@@ -72,8 +74,45 @@ class MockVoiceThreadProvider implements CliProviderAdapter {
 }
 
 describe("voice assistant tools", () => {
+  afterEach(() => {
+    delete process.env["JAIT_LOCATION"];
+    globalThis.fetch = originalFetch;
+  });
+
   it("exposes the agent handoff tool schema", () => {
     expect(getVoiceToolSchemas().some((tool) => tool.name === "ask_agent_about_request")).toBe(true);
+  });
+
+  it("exposes location and weather tool schemas", () => {
+    const schemas = getVoiceToolSchemas();
+    expect(schemas.some((tool) => tool.name === "get_location")).toBe(true);
+    expect(schemas.some((tool) => tool.name === "get_weather")).toBe(true);
+  });
+
+  it("returns configured location without network lookup", async () => {
+    process.env["JAIT_LOCATION"] = "Berlin, Germany";
+
+    const result = await executeVoiceTool("get_location", {}, { config: loadConfig() });
+
+    expect(JSON.parse(result)).toEqual({
+      label: "Berlin, Germany",
+      city: "Berlin, Germany",
+      source: "configured",
+    });
+  });
+
+  it("uses configured location when weather city is omitted", async () => {
+    process.env["JAIT_LOCATION"] = "Berlin";
+    const fetchMock = vi.fn(async (input: string | URL | Request) => {
+      expect(String(input)).toBe("https://wttr.in/Berlin?format=3");
+      return new Response("Berlin: 8 C, light rain", { status: 200 });
+    });
+    globalThis.fetch = fetchMock as typeof fetch;
+
+    const result = await executeVoiceTool("get_weather", {}, { config: loadConfig() });
+
+    expect(result).toBe("Berlin: 8 C, light rain");
+    expect(fetchMock).toHaveBeenCalledTimes(1);
   });
 
   it("asks a regular agent and cleans up the temporary thread", async () => {

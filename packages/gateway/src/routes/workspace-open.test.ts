@@ -203,6 +203,28 @@ describe("POST /api/workspace/open", () => {
     await expect(readFile(writableTestFile, "utf-8")).resolves.toBe("after");
   });
 
+  it("should attach a workspace when opening a directory from a workspace-less session", async () => {
+    const user = users.createUser(`open-user-${Date.now()}`, "password123");
+    const session = sessions.create({ userId: user.id, name: "No workspace yet" });
+    expect(session.workspaceId).toBeNull();
+
+    const openRes = await fetch(`${address}/api/workspace/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: writableTestRoot, sessionId: session.id }),
+    });
+
+    expect(openRes.ok).toBe(true);
+    const data = (await openRes.json()) as { workspaceId: string | null; workspaceRoot: string };
+    expect(data.workspaceId).toBeTruthy();
+    expect(data.workspaceRoot).toBe(writableTestRoot);
+
+    const updatedSession = sessions.getById(session.id, user.id);
+    expect(updatedSession?.workspaceId).toBe(data.workspaceId);
+    expect(updatedSession?.workspacePath).toBe(writableTestRoot);
+    expect(data.workspaceId ? workspaces.getById(data.workspaceId, user.id)?.rootPath : null).toBe(writableTestRoot);
+  });
+
   it("should return filename and content search results via GET /api/workspace/search", async () => {
     const searchFile = join(writableTestRoot, "nested", "unique-search-target.ts");
     const searchSessionId = `test-session-search-${Date.now()}`;

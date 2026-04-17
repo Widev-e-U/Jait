@@ -1,20 +1,24 @@
 import { useMemo } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2 } from 'lucide-react'
+import { Folder, FolderOpen, FolderInput, MessageSquare, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
-import type { WorkspaceRecord } from '@/hooks/useWorkspaces'
+import type { WorkspaceRecord, WorkspaceSession } from '@/hooks/useWorkspaces'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
 import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 
 interface SessionSelectorProps {
   workspaces: WorkspaceRecord[]
+  personalSessions?: WorkspaceSession[]
   activeWorkspaceId: string | null
+  activeSessionId?: string | null
   loading?: boolean
   hasMoreWorkspaces?: boolean
   showFewerWorkspaces?: boolean
   onSelectWorkspace: (workspaceId: string) => void
+  onSelectPersonalSession?: (sessionId: string) => void
+  onNewPersonalSession?: () => void
   onCreateWorkspace: () => void
   onRemoveWorkspace: (workspaceId: string) => void
   onChangeDirectory: (workspaceId: string) => void
@@ -55,11 +59,15 @@ function NodeIcon({ platform }: { platform: string }) {
 
 export function SessionSelector({
   workspaces,
+  personalSessions = [],
   activeWorkspaceId,
+  activeSessionId,
   loading = false,
   hasMoreWorkspaces = false,
   showFewerWorkspaces = false,
   onSelectWorkspace,
+  onSelectPersonalSession,
+  onNewPersonalSession,
   onCreateWorkspace,
   onRemoveWorkspace,
   onChangeDirectory,
@@ -96,16 +104,52 @@ export function SessionSelector({
             <div className="flex items-center justify-center py-8">
               <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
             </div>
-          ) : workspaces.length === 0 ? (
-            <p className="text-xs text-muted-foreground text-center py-4">
-              No workspaces yet.
-              <br />
-              <button onClick={onCreateWorkspace} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
-                Choose workspace folder
-              </button>
-            </p>
           ) : (
             <>
+              <div className="rounded-md border border-border/60 bg-background/40">
+                <div
+                  className={`group flex items-start gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
+                    activeWorkspaceId === null ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
+                  }`}
+                  onClick={() => {
+                    if (activeWorkspaceId === null) return
+                    const target = personalSessions.find((session) => session.id === activeSessionId) ?? personalSessions[0]
+                    if (target) onSelectPersonalSession?.(target.id)
+                    else onNewPersonalSession?.()
+                  }}
+                >
+                  <MessageSquare className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${activeWorkspaceId === null ? 'text-primary' : 'text-muted-foreground'}`} />
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate text-xs font-medium">Personal chat</div>
+                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                      <span className="truncate min-w-0">No workspace</span>
+                      <span className="shrink-0">·</span>
+                      <span className="shrink-0">{personalSessions.length} chats</span>
+                    </div>
+                    {activeWorkspaceId === null && sessionInfo && (
+                      <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-blue-500">
+                        <span className="truncate">{sessionInfo.provider}</span>
+                        <span className="shrink-0 text-muted-foreground">·</span>
+                        <Monitor className="h-2.5 w-2.5 shrink-0" />
+                        <span className="truncate">
+                          {sessionInfo.isRemote && sessionInfo.remoteNode
+                            ? sessionInfo.remoteNode.nodeName
+                            : 'Gateway'}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {workspaces.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-4">
+                  No workspaces yet.
+                  <br />
+                  <button onClick={onCreateWorkspace} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
+                    Choose workspace folder
+                  </button>
+                </p>
+              )}
               {workspaces.map((workspace) => {
                 const isActiveWorkspace = workspace.id === activeWorkspaceId
                 const remoteNode = workspace.nodeId && workspace.nodeId !== 'gateway'

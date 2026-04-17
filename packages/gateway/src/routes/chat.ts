@@ -1198,7 +1198,7 @@ export function registerChatRoutes(
 
         if (!pathExistsLocally && ws) {
           // Match path platform to connected FsNodes
-          const isWindowsPath = /^[A-Za-z]:[\\\/]/.test(cliWsRoot);
+          const isWindowsPath = /^[A-Za-z]:[\\/]/.test(cliWsRoot);
           const expectedPlatform = isWindowsPath ? "windows" : null;
           for (const node of ws.getFsNodes()) {
             if (node.isGateway) continue;
@@ -1439,7 +1439,7 @@ export function registerChatRoutes(
               // Emit file_changed for successful external file mutations.
               const mutationPath = getExternalFileMutationPath(tc?.tool ?? event.tool, tc?.args ?? {});
               if (event.ok && mutationPath) {
-                  const editName = mutationPath.split(/[\/\\]/).pop() ?? mutationPath;
+                  const editName = mutationPath.split(/[/\\]/).pop() ?? mutationPath;
                   safeWrite(`data: ${JSON.stringify({ type: "file_changed", path: mutationPath, name: editName })}\n\n`);
                   // Broadcast to other session clients
                   if (ws) {
@@ -1498,22 +1498,35 @@ export function registerChatRoutes(
           const enabledSkills = skillRegistry.listEnabled();
           const skillsBlock = formatSkillsForPrompt(enabledSkills);
           if (skillsBlock) {
-            cliContent = `${skillsBlock}\n\n${content}`;
+            cliContent = `${skillsBlock}\n\n${cliContent}`;
           }
         }
 
         // Send the turn — with recovery if the cached session died between messages
         try {
           const sentAt = new Date().toISOString();
+          const setupMessage = {
+            role: "system",
+            content: [
+              "CLI provider session setup captured by Jait.",
+              `provider=${requestProvider}`,
+              `runtimeMode=${runtimeMode}`,
+              `workingDirectory=${cliWsRoot}`,
+              `session=${isNewCliSession ? "new" : "reused"}`,
+              `remote=${isRemote}`,
+              `mcpServers=${JSON.stringify(mcpServers)}`,
+              "Provider-native hidden system prompts are owned by the CLI provider and are not visible to Jait.",
+            ].join("\n"),
+          };
           const cliContextFlow = {
             provider: requestProvider,
             ...(typeof body["model"] === "string" ? { model: body["model"] } : {}),
-            note: "CLI providers keep their own session context. This captures the exact turn text Jait sent to the CLI provider.",
+            note: "CLI providers keep their own session context. This captures the exact setup metadata and turn text Jait sent to the CLI provider.",
             rounds: [{
               round: 1,
               createdAt: sentAt,
               model: typeof body["model"] === "string" ? body["model"] : requestProvider,
-              messages: [{ role: "user", content: cliContent }],
+              messages: [setupMessage, { role: "user", content: cliContent }],
             }],
           } satisfies LlmContextFlow;
           contextFlowJson = JSON.stringify(cliContextFlow);
@@ -1543,19 +1556,32 @@ export function registerChatRoutes(
             const enabledSkills = skillRegistry.listEnabled();
             const skillsBlock = formatSkillsForPrompt(enabledSkills);
             if (skillsBlock) {
-              recoveryContent = `${skillsBlock}\n\n${content}`;
+              recoveryContent = `${skillsBlock}\n\n${recoveryContent}`;
             }
           }
           const sentAt = new Date().toISOString();
+          const setupMessage = {
+            role: "system",
+            content: [
+              "CLI provider recovery session setup captured by Jait.",
+              `provider=${requestProvider}`,
+              `runtimeMode=${runtimeMode}`,
+              `workingDirectory=${cliWsRoot}`,
+              "session=new",
+              `remote=${isRemote}`,
+              `mcpServers=${JSON.stringify(mcpServers)}`,
+              "Provider-native hidden system prompts are owned by the CLI provider and are not visible to Jait.",
+            ].join("\n"),
+          };
           const cliContextFlow = {
             provider: requestProvider,
             ...(typeof body["model"] === "string" ? { model: body["model"] } : {}),
-            note: "CLI providers keep their own session context. This captures the exact recovery turn text Jait sent to the CLI provider.",
+            note: "CLI providers keep their own session context. This captures the exact recovery setup metadata and turn text Jait sent to the CLI provider.",
             rounds: [{
               round: 1,
               createdAt: sentAt,
               model: typeof body["model"] === "string" ? body["model"] : requestProvider,
-              messages: [{ role: "user", content: recoveryContent }],
+              messages: [setupMessage, { role: "user", content: recoveryContent }],
             }],
           } satisfies LlmContextFlow;
           contextFlowJson = JSON.stringify(cliContextFlow);

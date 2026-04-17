@@ -1497,6 +1497,7 @@ function App() {
 
   const {
     workspaces,
+    personalSessions,
     archivedSessionsByWorkspace,
     activeWorkspaceId,
     activeSessionId,
@@ -1542,18 +1543,20 @@ function App() {
   const activeWorkspaceRecordRef = useRef(activeWorkspaceRecord)
   activeWorkspaceRecordRef.current = activeWorkspaceRecord
   const activeSessionRecord = useMemo(
-    () => activeWorkspaceRecord?.sessions.find((session) => session.id === activeSessionId) ?? null,
-    [activeSessionId, activeWorkspaceRecord],
+    () => activeWorkspaceRecord?.sessions.find((session) => session.id === activeSessionId)
+      ?? personalSessions.find((session) => session.id === activeSessionId)
+      ?? null,
+    [activeSessionId, activeWorkspaceRecord, personalSessions],
   )
   const activeWorkspaceSessions = useMemo(() => {
-    if (!activeWorkspaceRecord) return []
+    if (!activeWorkspaceRecord) return personalSessions
     const active = activeWorkspaceRecord.sessions
     const archived = archivedSessionsByWorkspace[activeWorkspaceRecord.id] ?? []
     const seen = new Set<string>()
     return [...active, ...archived]
       .filter((s) => { if (seen.has(s.id)) return false; seen.add(s.id); return true })
       .sort((a, b) => new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime())
-  }, [activeWorkspaceRecord, archivedSessionsByWorkspace])
+  }, [activeWorkspaceRecord, archivedSessionsByWorkspace, personalSessions])
   const waitForWorkspaceHydration = useCallback(async () => {
     const deadline = Date.now() + 1500
     while (Date.now() < deadline) {
@@ -2436,8 +2439,13 @@ function App() {
       setFsWatcherVersion(v => v + 1)
       const workspaceRoot = activeWorkspaceRef.current?.workspaceRoot?.trim() || null
       if (!workspaceRoot || loadedArchitectureWorkspaceRef.current !== workspaceRoot) return
-      const architectureFileName = architectureFilePath?.split(/[\\/]/).pop() ?? 'architecture.mmd'
-      const architectureChanged = payload.changes.some((change) => change.path === architectureFileName)
+      const architectureRelativePath = architectureFilePath?.startsWith(workspaceRoot)
+        ? architectureFilePath.slice(workspaceRoot.length).replace(/^[/\\]+/, '').replace(/\\/g, '/')
+        : '.jait/architecture.mmd'
+      const architectureChanged = payload.changes.some((change) => {
+        const changedPath = change.path.replace(/\\/g, '/')
+        return changedPath === architectureRelativePath || changedPath === 'architecture.mmd'
+      })
       if (!architectureChanged) return
       void loadArchitectureDiagramForWorkspace(workspaceRoot)
         .then((saved) => {
@@ -2987,12 +2995,6 @@ function App() {
       void fetchArchivedSessions(activeWorkspaceId)
     }
   }, [activeWorkspaceId, archivedSessionsByWorkspace, fetchArchivedSessions])
-
-  const promptForWorkspaceSelection = useCallback(() => {
-    setWorkspacePickerMode('workspace')
-    setFolderPickerOpen(true)
-    toast('Select a workspace directory first.')
-  }, [])
 
   const handleWorkspaceFolderSelected = useCallback(async (
     path: string,
@@ -3596,7 +3598,7 @@ function App() {
       const surfaceQuery = activeWorkspace?.surfaceId && targetWorkspaceRoot === activeWorkspace.workspaceRoot
         ? `&surfaceId=${encodeURIComponent(activeWorkspace.surfaceId)}`
         : ''
-      const name = filePath.split(/[\/\\]/).pop() ?? filePath
+      const name = filePath.split(/[/\\]/).pop() ?? filePath
       const language = workspaceLanguageForPath(name)
 
       const ensureWorkspaceDiffHostReady = async () => {
@@ -3939,10 +3941,6 @@ function App() {
 
     let sid = activeSessionId
     if (!sid) {
-      if (!activeWorkspaceId) {
-        promptForWorkspaceSelection()
-        return
-      }
       const session = await createSession(undefined, generatedTitle)
       sid = session?.id ?? null
     }
@@ -4298,10 +4296,6 @@ function App() {
     }
     let sid = activeSessionId
     if (!sid) {
-      if (!activeWorkspaceId) {
-        promptForWorkspaceSelection()
-        return
-      }
       const session = await createSession()
       sid = session?.id ?? null
     }
@@ -4382,11 +4376,6 @@ function App() {
       setRegisterPassword('')
       setRegisterPasswordConfirm('')
       setCurrentView('chat')
-      // First-time user: auto-open workspace picker so they set up immediately
-      requestAnimationFrame(() => {
-        setWorkspacePickerMode('workspace')
-        setFolderPickerOpen(true)
-      })
     } catch (err) {
       setAuthError(err instanceof Error ? err.message : 'Registration failed')
     } finally {
@@ -4434,12 +4423,14 @@ function App() {
 
   const handleStartNewChat = useCallback(() => {
     clearMessages()
-    if (!activeWorkspaceId) {
-      promptForWorkspaceSelection()
-      return
-    }
     void createSession()
-  }, [activeWorkspaceId, clearMessages, createSession, promptForWorkspaceSelection])
+  }, [clearMessages, createSession])
+
+  const handleGoToPersonalChat = useCallback(async () => {
+    const session = personalSessions[0] ?? await createSession(null)
+    if (!session) return
+    switchSession(null, session.id)
+  }, [createSession, personalSessions, switchSession])
 
   const handleSaveApiKeys = async (next: Record<string, string>) => {
     const sanitized = Object.fromEntries(
@@ -4515,10 +4506,6 @@ function App() {
 
     let sid = activeSessionId
     if (!sid) {
-      if (!activeWorkspaceId) {
-        promptForWorkspaceSelection()
-        return
-      }
       const session = await createSession(undefined, generatedTitle)
       sid = session?.id ?? null
     }
@@ -4546,7 +4533,7 @@ function App() {
       model: cliModel ?? undefined,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, activeWorkspaceId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, managerMessageQueues, messageQueue.length, promptForWorkspaceSelection, sendMessage, sendTarget, token, viewMode])
+  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, managerMessageQueues, messageQueue.length, sendMessage, sendTarget, token, viewMode])
 
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
@@ -5753,11 +5740,15 @@ function App() {
                 <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-64 border-r shrink-0'}`}>
                   <SessionSelector
                     workspaces={workspaces}
+                    personalSessions={personalSessions}
                     activeWorkspaceId={activeWorkspaceId}
+                    activeSessionId={activeSessionId}
                     loading={workspacesLoading}
                     hasMoreWorkspaces={hasMoreWorkspaces}
                     showFewerWorkspaces={workspaces.length > workspaceListLimit}
                     onSelectWorkspace={handleSwitchWorkspace}
+                    onSelectPersonalSession={(sessionId) => switchSession(null, sessionId)}
+                    onNewPersonalSession={() => { void createSession(null) }}
                     onCreateWorkspace={handleCreateWorkspace}
                     onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
                     onChangeDirectory={handleChangeDirectory}
@@ -6305,8 +6296,8 @@ function App() {
                             <SessionSwitcher
                               sessions={activeWorkspaceSessions}
                               activeSessionId={activeSessionId}
-                              workspaceTitle={activeWorkspaceRecord?.title ?? null}
-                              onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                              workspaceTitle={activeWorkspaceRecord?.title ?? 'Personal chat'}
+                              onSelectSession={(sessionId) => { switchSession(activeWorkspaceId, sessionId) }}
                               onNewSession={() => { void createSession() }}
                               onOpenChange={handleSessionSwitcherOpen}
                               showTitle={false}
@@ -6322,12 +6313,22 @@ function App() {
                         />
                         <div className="flex shrink-0 items-center justify-self-end gap-2">
                           {sendTarget !== 'thread' && (
-                            <button
-                              onClick={handleStartNewChat}
-                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                            >
-                              New chat
-                            </button>
+                            <>
+                              {activeWorkspaceId && (
+                                <button
+                                  onClick={() => { void handleGoToPersonalChat() }}
+                                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                >
+                                  Personal chat
+                                </button>
+                              )}
+                              <button
+                                onClick={handleStartNewChat}
+                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                              >
+                                New chat
+                              </button>
+                            </>
                           )}
                         </div>
                       </div>
@@ -6491,8 +6492,8 @@ function App() {
                             <SessionSwitcher
                               sessions={activeWorkspaceSessions}
                               activeSessionId={activeSessionId}
-                              workspaceTitle={activeWorkspaceRecord?.title ?? null}
-                              onSelectSession={(sessionId) => { if (activeWorkspaceId) switchSession(activeWorkspaceId, sessionId) }}
+                              workspaceTitle={activeWorkspaceRecord?.title ?? 'Personal chat'}
+                              onSelectSession={(sessionId) => { switchSession(activeWorkspaceId, sessionId) }}
                               onNewSession={() => { void createSession() }}
                               onOpenChange={handleSessionSwitcherOpen}
                               showTitle={false}
@@ -6524,12 +6525,22 @@ function App() {
                         </div>
                         <div className="flex shrink-0 items-center justify-self-end gap-2">
                           {viewMode === 'developer' && sendTarget !== 'thread' && (
-                            <button
-                              onClick={handleStartNewChat}
-                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                            >
-                              New chat
-                            </button>
+                            <>
+                              {activeWorkspaceId && (
+                                <button
+                                  onClick={() => { void handleGoToPersonalChat() }}
+                                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                >
+                                  Personal chat
+                                </button>
+                              )}
+                              <button
+                                onClick={handleStartNewChat}
+                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                              >
+                                New chat
+                              </button>
+                            </>
                           )}
                           {(viewMode as string) === 'manager' && (
                             <button

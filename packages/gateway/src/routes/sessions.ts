@@ -48,11 +48,11 @@ export function registerSessionRoutes(
       if (!workspace) {
         return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
       }
-    } else if (workspaceService) {
+    } else if (workspaceService && typeof body["workspacePath"] === "string" && body["workspacePath"].trim().length > 0) {
       const workspace = workspaceService.getOrCreateForRoot({
         userId: authUser.id,
         title: typeof body["workspaceTitle"] === "string" ? body["workspaceTitle"] : undefined,
-        rootPath: typeof body["workspacePath"] === "string" ? body["workspacePath"] : null,
+        rootPath: body["workspacePath"],
         nodeId: typeof body["nodeId"] === "string" ? body["nodeId"] : "gateway",
       });
       workspaceId = workspace.id;

@@ -257,18 +257,27 @@ export function registerWorkspaceRoutes(
     }
 
     const session = sessionService?.getById(sessionId);
-    if (session?.workspaceId && workspaceState) {
-      workspaceState.set(session.workspaceId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId, nodeId } });
-    }
-
+    let workspaceId = session?.workspaceId ?? null;
     try {
-      sessionService?.update(sessionId, { workspacePath });
-      if (session?.workspaceId) {
-        workspaceService?.touch(session.workspaceId);
+      if (!workspaceId && session?.userId && workspaceService) {
+        const workspace = workspaceService.getOrCreateForRoot({
+          userId: session.userId,
+          rootPath: workspacePath,
+          nodeId,
+        });
+        workspaceId = workspace.id;
+        sessionService?.update(sessionId, { workspaceId, workspacePath });
+      } else {
+        sessionService?.update(sessionId, { workspacePath });
       }
+      if (workspaceId) workspaceService?.touch(workspaceId);
     } catch { /* best effort */ }
 
-    return { surfaceId, workspaceRoot: workspacePath, nodeId };
+    if (workspaceId && workspaceState) {
+      workspaceState.set(workspaceId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId, nodeId } });
+    }
+
+    return { surfaceId, workspaceRoot: workspacePath, nodeId, workspaceId };
   });
 
   // GET /api/workspace/list?path=&surfaceId= — list directory entries

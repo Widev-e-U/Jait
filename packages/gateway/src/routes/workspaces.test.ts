@@ -53,7 +53,7 @@ describe("workspace routes", () => {
     sqlite.close();
   });
 
-  it("creates a default workspace when creating a session and groups more sessions under an explicit workspace", async () => {
+  it("creates workspace-less sessions and groups explicit workspace sessions", async () => {
     const user = userService.createUser("workspace-user", "password123");
     const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
 
@@ -65,7 +65,7 @@ describe("workspace routes", () => {
     });
     expect(createSessionRes.statusCode).toBe(201);
     const createdSession = JSON.parse(createSessionRes.body) as { workspaceId: string | null };
-    expect(createdSession.workspaceId).toBeTruthy();
+    expect(createdSession.workspaceId).toBeNull();
 
     const createWorkspaceRes = await app.inject({
       method: "POST",
@@ -94,10 +94,21 @@ describe("workspace routes", () => {
     const body = JSON.parse(listRes.body) as {
       workspaces: Array<{ id: string; sessions: Array<{ name: string; workspaceId: string | null }> }>;
     };
-    expect(body.workspaces.length).toBe(2);
+    expect(body.workspaces.length).toBe(1);
     const repoWorkspace = body.workspaces.find((entry) => entry.id === workspace.id);
     expect(repoWorkspace?.sessions.map((session) => session.name)).toEqual(["Fix tests"]);
     expect(repoWorkspace?.sessions[0]?.workspaceId).toBe(workspace.id);
+
+    const sessionsRes = await app.inject({
+      method: "GET",
+      url: "/api/sessions?status=active",
+      headers,
+    });
+    expect(sessionsRes.statusCode).toBe(200);
+    const sessionsBody = JSON.parse(sessionsRes.body) as {
+      sessions: Array<{ name: string; workspaceId: string | null }>;
+    };
+    expect(sessionsBody.sessions.some((session) => session.name === "Chat one" && session.workspaceId === null)).toBe(true);
   });
 
   it("returns last-active workspace and supports workspace-scoped state", async () => {
