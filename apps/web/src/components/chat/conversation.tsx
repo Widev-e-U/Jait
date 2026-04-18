@@ -196,7 +196,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           onScroll={updateBottomState}
           className="h-full overflow-y-auto"
         >
-          <div ref={innerRef} className="mx-auto max-w-3xl px-4 pt-16 pb-6 sm:py-6 sm:px-5">
+          <div ref={innerRef} className="mx-auto max-w-3xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
             <div
               ref={sizerRef}
               style={{

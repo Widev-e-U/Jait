@@ -5189,11 +5189,11 @@ function App() {
         {!requiresAuthGate && (
           <>
             <header
-              className={`relative flex items-center gap-1 shrink-0 ${
+              className={
                 isMobile
-                  ? 'fixed top-2 left-2 right-2 z-40 pointer-events-none'
-                  : `border-b bg-background px-2 sm:gap-2 sm:px-5 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
-              }`}
+                  ? 'fixed top-2 left-2 right-2 z-40 flex items-center gap-1 pointer-events-none h-10'
+                  : `relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
+              }
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
@@ -6067,15 +6067,15 @@ function App() {
         )}
 
         {currentView === 'jobs' ? (
-          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
+          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
             <JobsPage />
           </div>
         ) : currentView === 'network' ? (
-          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
+          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
             <NetworkPanel token={token} sessionId={activeSessionId ?? 'default'} />
           </div>
         ) : currentView === 'settings' ? (
-          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
+          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
             <SettingsPage
               username={user?.username ?? ''}
               token={token}
@@ -6472,7 +6472,7 @@ function App() {
                       </div>
                     )}
                     {/* Main content */}
-                    <div className={`flex-1 flex flex-col min-w-0 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
+                    <div className={`flex-1 flex flex-col min-w-0 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
                       {/* Title + composer */}
                       <div className="relative z-10 flex flex-col items-center px-3 pb-1.5 pt-3 sm:px-4 sm:pb-2 sm:pt-4">
                         <div className="w-full max-w-3xl">
@@ -6623,7 +6623,7 @@ function App() {
               </div>
             ) : !hasMessages ? (
               <div
-                className={`flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'} ${isMobile ? 'pt-14' : ''}`}
+                className={`flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'} ${isMobile ? 'pt-12' : ''}`}
                 style={{
                   flex: chatCollapsed ? '0 0 0px' : undefined,
                   width: chatCollapsed ? 0 : undefined,
