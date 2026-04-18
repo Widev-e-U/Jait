@@ -27,7 +27,11 @@ function PopoverContent({
   ref,
   children,
   ...props
-}: Omit<React.ComponentPropsWithoutRef<typeof PopoverPrimitive.Content>, 'children'> & {
+}: React.HTMLAttributes<HTMLDivElement> & {
+  align?: 'start' | 'center' | 'end'
+  side?: 'top' | 'right' | 'bottom' | 'left'
+  sideOffset?: number
+  collisionPadding?: number | Partial<Record<'top' | 'right' | 'bottom' | 'left', number>>
   children?: React.ReactNode
   ref?: React.Ref<HTMLDivElement>
 }) {
