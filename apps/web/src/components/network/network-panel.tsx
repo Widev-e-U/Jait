@@ -271,7 +271,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
             {'isRouter' in node && node.isRouter && (
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Role</span>
-                <Badge variant="secondary" className="text-[10px]">Router</Badge>
+                <Badge variant="secondary" className="text-2xs">Router</Badge>
               </div>
             )}
 
@@ -279,7 +279,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
             {'version' in node && node.version && (
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Version</span>
-                <Badge variant="secondary" className="font-mono text-[10px]">v{node.version}</Badge>
+                <Badge variant="secondary" className="font-mono text-2xs">v{node.version}</Badge>
               </div>
             )}
 
@@ -305,7 +305,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
                 <span className="text-muted-foreground block mb-1.5">Providers</span>
                 <div className="flex flex-wrap gap-1">
                   {node.providers.map(p => (
-                    <Badge key={p} variant="outline" className="text-[10px]">
+                    <Badge key={p} variant="outline" className="text-2xs">
                       <Terminal className="h-2.5 w-2.5 mr-1" />{p}
                     </Badge>
                   ))}
@@ -319,7 +319,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
                 <span className="text-muted-foreground block mb-1.5">Open Ports</span>
                 <div className="flex flex-wrap gap-1">
                   {node.openPorts.map(p => (
-                    <Badge key={p} variant="outline" className="text-[10px] font-mono">{p}</Badge>
+                    <Badge key={p} variant="outline" className="text-2xs font-mono">{p}</Badge>
                   ))}
                 </div>
               </div>
@@ -340,7 +340,7 @@ function NodeDetail({ node, onClose, onDeploy }: { node: TopologyNode | null; on
             {'agentStatus' in node && (
               <div className="flex items-center justify-between">
                 <span className="text-muted-foreground">Agent</span>
-                <Badge variant={node.agentStatus === 'running' ? 'default' : 'secondary'} className="text-[10px]">
+                <Badge variant={node.agentStatus === 'running' ? 'default' : 'secondary'} className="text-2xs">
                   {node.agentStatus}
                 </Badge>
               </div>
@@ -465,7 +465,7 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
         <Rocket className="h-4 w-4 text-primary" />
         <div className="flex-1 min-w-0">
           <div className="text-sm font-medium truncate">Deploy to {ip}</div>
-          <div className="text-[10px] text-muted-foreground">
+          <div className="text-2xs text-muted-foreground">
             {status === 'ready' && 'Ready'}
             {status === 'starting' && 'Preparing terminal...'}
             {status === 'running' && 'Interactive session ready'}
@@ -490,7 +490,7 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
               onKeyDown={(e) => e.key === 'Enter' && setStarted(true)}
             />
           </div>
-          <div className="text-[10px] text-muted-foreground">
+          <div className="text-2xs text-muted-foreground">
             Starts a real terminal inside this side panel. If SSH or sudo needs a password, it will prompt here directly.
           </div>
           <Button className="w-full" onClick={() => setStarted(true)}>
@@ -501,7 +501,7 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
       ) : (
         <>
           {/* Log output */}
-          <div ref={logRef} className="shrink-0 overflow-y-auto border-b p-3 font-mono text-[11px] leading-5 space-y-0.5 max-h-32">
+          <div ref={logRef} className="shrink-0 overflow-y-auto border-b p-3 font-mono text-xs leading-5 space-y-0.5 max-h-32">
             {logs.map((line, i) => (
               <div key={i} className={cn(
                 line.startsWith('✓') ? 'text-green-500' :
@@ -516,7 +516,7 @@ function DeployView({ ip, token, sessionId, onClose }: { ip: string | null; toke
           </div>
           {terminalId && status === 'running' && (
             <div className="flex min-h-0 flex-1 flex-col">
-              <div className="flex items-center justify-between border-b px-3 py-2 text-[10px] text-muted-foreground">
+              <div className="flex items-center justify-between border-b px-3 py-2 text-2xs text-muted-foreground">
                 <span>Interactive deploy session</span>
                 <span className="truncate">Terminal: {terminalId}</span>
               </div>
@@ -834,12 +834,12 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
           <Wifi className="h-4 w-4 text-primary" />
           <h2 className="text-sm font-semibold">Network</h2>
           {deviceCount > 0 && (
-            <Badge variant="secondary" className="w-[4.75rem] justify-center px-1 text-[10px] tabular-nums">
+            <Badge variant="secondary" className="w-[4.75rem] justify-center px-1 text-2xs tabular-nums">
               {deviceCount} {deviceCount === 1 ? 'node' : 'nodes'}
             </Badge>
           )}
           {topology?.scannedAt && (
-            <span className="text-[10px] text-muted-foreground hidden sm:inline">
+            <span className="text-2xs text-muted-foreground hidden sm:inline">
               Last scan: {new Date(topology.scannedAt).toLocaleTimeString()}
             </span>
           )}
@@ -880,7 +880,7 @@ export function NetworkPanel({ token, sessionId }: NetworkPanelProps) {
       )}
 
       {/* Legend */}
-      <div className="flex items-center gap-4 px-4 py-2 border-b text-[10px] text-muted-foreground shrink-0 flex-wrap">
+      <div className="flex items-center gap-4 px-4 py-2 border-b text-2xs text-muted-foreground shrink-0 flex-wrap">
         <span className="flex items-center gap-1.5">
           <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: NODE_COLORS.gateway }} />
           Gateway

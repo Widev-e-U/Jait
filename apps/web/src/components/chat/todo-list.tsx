@@ -30,7 +30,7 @@ export function TodoList({ items, className }: TodoListProps) {
             style={{ width: `${pct}%` }}
           />
         </div>
-        <span className="text-[10px] text-muted-foreground tabular-nums">
+        <span className="text-2xs text-muted-foreground tabular-nums">
           {completed}/{total}
         </span>
       </div>

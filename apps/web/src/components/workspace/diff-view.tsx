@@ -262,7 +262,7 @@ export function DiffView({
             {fileName}
           </span>
           {hunks.length > 0 && (
-            <span className="text-[10px] text-muted-foreground shrink-0">
+            <span className="text-2xs text-muted-foreground shrink-0">
               {hunks.length} change{hunks.length !== 1 ? 's' : ''}
               {undecidedCount > 0 && (
                 <span className="text-amber-500 ml-1">{undecidedCount} pending</span>
@@ -275,7 +275,7 @@ export function DiffView({
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-[11px]"
+            className="h-7 px-2 text-xs"
             onClick={acceptAll}
             disabled={undecidedCount === 0}
           >
@@ -285,7 +285,7 @@ export function DiffView({
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 px-2 text-[11px]"
+            className="h-7 px-2 text-xs"
             onClick={rejectAll}
             disabled={undecidedCount === 0}
           >
@@ -339,7 +339,7 @@ export function DiffView({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 px-2 text-[11px] text-green-600 hover:bg-green-500/10 hover:text-green-500"
+                    className="h-7 px-2 text-xs text-green-600 hover:bg-green-500/10 hover:text-green-500"
                     onClick={() => setHunkState(hunkIndex, 'accepted')}
                   >
                     <Check className="mr-1 h-3 w-3" />
@@ -348,7 +348,7 @@ export function DiffView({
                   <Button
                     size="sm"
                     variant="ghost"
-                    className="h-7 px-2 text-[11px] text-red-600 hover:bg-red-500/10 hover:text-red-500"
+                    className="h-7 px-2 text-xs text-red-600 hover:bg-red-500/10 hover:text-red-500"
                     onClick={() => setHunkState(hunkIndex, 'rejected')}
                   >
                     <Undo2 className="mr-1 h-3 w-3" />
@@ -373,7 +373,7 @@ export function DiffView({
             >
               <ChevronUp className="h-5 w-5" />
             </Button>
-            <span className="text-[10px] text-center text-muted-foreground font-medium tabular-nums">
+            <span className="text-2xs text-center text-muted-foreground font-medium tabular-nums">
               {activeIndex + 1}/{hunks.length}
             </span>
             <Button
@@ -420,7 +420,7 @@ export function DiffView({
               <Button
                 size="sm"
                 variant="outline"
-                className="h-7 px-2 text-[11px] text-amber-500 border-amber-500/30 hover:bg-amber-500/10 ml-1"
+                className="h-7 px-2 text-xs text-amber-500 border-amber-500/30 hover:bg-amber-500/10 ml-1"
                 onClick={goNextUndecided}
               >
                 Next pending

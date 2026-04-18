@@ -197,10 +197,8 @@ function HighlightedCode({
   return <code className={cn(className, 'whitespace-pre')} dangerouslySetInnerHTML={{ __html: highlightedHtml }} />
 }
 
-function proseClassName(compact?: boolean) {
-  return compact
-    ? 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-sm prose-p:leading-normal'
-    : 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-base prose-p:leading-relaxed'
+function proseClassName(_compact?: boolean) {
+  return 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-base prose-p:leading-relaxed'
 }
 
 function getFileLinkLabel(path: string): string {
@@ -227,7 +225,7 @@ function WorkspacePathLink({
     <a
       href={href}
       className={cn(
-        'not-prose inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle text-[12px] font-medium leading-none text-foreground no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'not-prose inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle text-xs font-medium leading-none text-foreground no-underline transition-colors hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
       )}
       title={target.path}
       onClick={(event) => {
@@ -238,7 +236,7 @@ function WorkspacePathLink({
       <FileIcon filename={fileName} className="h-3.5 w-3.5 shrink-0" />
       <span className="max-w-[220px] truncate">{fileName}</span>
       {location ? (
-        <span className="shrink-0 rounded bg-background/80 px-1 py-0.5 text-[10px] text-muted-foreground">
+        <span className="shrink-0 rounded bg-background/80 px-1 py-0.5 text-2xs text-muted-foreground">
           {location}
         </span>
       ) : null}
@@ -278,7 +276,7 @@ function buildMarkdownComponents(
       return (
         <code
           className={cn(
-            'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1.5 align-middle font-mono text-[12px] font-medium leading-[1.2] text-foreground',
+            'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1.5 align-middle font-mono text-xs font-medium leading-[1.2] text-foreground',
             'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
           )}
           {...props}
@@ -920,7 +918,7 @@ function MessageInner({
                       className={cn(
                         'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
                         canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
-                        compact ? 'text-sm leading-normal' : 'text-base leading-relaxed',
+                        'text-base leading-relaxed',
                       )}
                       onClick={handleUserBubbleClick}
                       title={canEdit && !isEditing ? 'Click to edit message' : undefined}
@@ -934,7 +932,7 @@ function MessageInner({
                                 ) : segment.type === 'file' ? (
                                   <span
                                     key={`${segment.path}-${index}`}
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
                                     title={segment.path}
                                   >
                                     <FileIcon filename={segment.name} className="h-3.5 w-3.5 shrink-0" />
@@ -943,7 +941,7 @@ function MessageInner({
                                 ) : segment.type === 'workspace' ? (
                                   <span
                                     key={`${segment.path}-${index}`}
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
                                     title={segment.path}
                                   >
                                     <FolderIcon name={segment.name} className="h-3.5 w-3.5 shrink-0" />
@@ -952,10 +950,10 @@ function MessageInner({
                                 ) : segment.type === 'terminal' ? (
                                   <span
                                     key={`${segment.terminalId}-${index}`}
-                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground align-middle select-none"
+                                    className="mx-[2px] inline-flex items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground align-middle select-none"
                                     title={segment.workspaceRoot ? `${segment.terminalId} · ${segment.workspaceRoot}` : segment.terminalId}
                                   >
-                                    <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-[9px] font-bold uppercase text-muted-foreground">T</span>
+                                    <span className="inline-flex h-3.5 w-3.5 items-center justify-center rounded-sm bg-muted-foreground/15 text-2xs font-bold uppercase text-muted-foreground">T</span>
                                     <span className="max-w-[180px] truncate">{segment.lineRange ? `${segment.name}:${formatLineRange(segment.lineRange).replace(/^lines? /, '')}` : segment.name}</span>
                                   </span>
                                 ) : null,
@@ -975,7 +973,7 @@ function MessageInner({
                                   className="block overflow-hidden rounded-lg border border-primary/10 bg-background/65"
                                 >
                                   <img src={src} alt={attachment.name} className="max-h-72 w-full object-cover" />
-                                  <div className="truncate border-t border-border/60 px-2 py-1 text-[11px] text-muted-foreground">
+                                  <div className="truncate border-t border-border/60 px-2 py-1 text-xs text-muted-foreground">
                                     {attachment.name}
                                   </div>
                                 </a>

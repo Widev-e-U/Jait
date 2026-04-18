@@ -194,7 +194,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     }
   }, [activeWorkspaceId, onLoginRequired, token])
 
-  const persistSelection = useCallback((workspaceId: string, sessionId?: string | null) => {
+  const persistSelection = useCallback((workspaceId: string | null, sessionId?: string | null) => {
     if (!token) return
     fetch(`${API_URL}/api/workspaces/select`, {
       method: 'POST',
@@ -218,7 +218,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
   const switchSession = useCallback((workspaceId: string | null, sessionId: string) => {
     setActiveWorkspaceId(workspaceId)
     setActiveSessionId(sessionId)
-    if (workspaceId) persistSelection(workspaceId, sessionId)
+    persistSelection(workspaceId, sessionId)
   }, [persistSelection])
 
   const archiveSession = useCallback(async (sessionId: string) => {

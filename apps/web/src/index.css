@@ -45,37 +45,68 @@
 
   .dark {
     color-scheme: dark;
-    --background: 0 0% 12.5%;
-    --foreground: 0 0% 95%;
-    --card: 0 0% 14.5%;
-    --card-foreground: 0 0% 95%;
-    --popover: 0 0% 14.5%;
-    --popover-foreground: 0 0% 95%;
-    --primary: 217 91% 60%;
-    --primary-foreground: 0 0% 100%;
-    --secondary: 0 0% 18%;
-    --secondary-foreground: 0 0% 95%;
-    --muted: 0 0% 18%;
-    --muted-foreground: 0 0% 60%;
-    --accent: 0 0% 18%;
-    --accent-foreground: 0 0% 95%;
-    --destructive: 0 62.8% 30.6%;
-    --destructive-foreground: 0 0% 95%;
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
-    --ring: 217 91% 60%;
-    --scrollbar-track: 0 0% 17%;
-    --scrollbar-thumb: 0 0% 36%;
-    --scrollbar-thumb-hover: 0 0% 48%;
-    --toast-bg: 0 0% 18% / 0.97;
-    --toast-border: 0 0% 27% / 0.94;
-    --toast-shadow: 0 24px 60px -30px hsl(0 0% 0% / 0.68), 0 12px 28px -20px hsl(0 0% 0% / 0.5);
-    --toast-success-accent: 142 45% 54%;
-    --toast-info-accent: 214 90% 67%;
-    --toast-warning-accent: 38 92% 58%;
-    --toast-error-accent: 0 72% 64%;
 
-    /* Context indicator category colors — brighter for dark bg */
+    /*
+     * ── Dark-theme global config ───────────────────────────────────
+     * Tweak --dark-hue / --dark-sat to shift the whole palette's tint.
+     * Lightness steps (L0→L5) control the surface staircase; widen
+     * or narrow them to taste.  Every semantic token below references
+     * these primitives, so one change propagates everywhere.
+     *
+     *  Layer       Lightness   Used for
+     *  ─────────── ────────── ─────────────────────────────
+     *  L0  base       5%      page background
+     *  L1  raised    10%      cards, popovers
+     *  L2  surface   15%      secondary, muted, accent fills
+     *  L3  overlay   20%      elevated overlays, hover fills
+     *  L4  border    24%      borders, inputs
+     *  L5  subtle    32%      subtle dividers, scrollbar thumb
+     */
+    --dark-hue: 220;
+    --dark-sat: 12%;
+
+    /* ── Surface primitives ──────────────────────────────────────── */
+    --background:          var(--dark-hue) var(--dark-sat) 5%;
+    --foreground:          210 20% 96%;
+    --card:                var(--dark-hue) var(--dark-sat) 10%;
+    --card-foreground:     210 20% 96%;
+    --popover:             var(--dark-hue) var(--dark-sat) 10%;
+    --popover-foreground:  210 20% 96%;
+
+    /* ── Brand / interactive ─────────────────────────────────────── */
+    --primary:             217 91% 60%;
+    --primary-foreground:  0 0% 100%;
+    --destructive:         0 63% 32%;
+    --destructive-foreground: 0 0% 96%;
+    --ring:                217 91% 60%;
+
+    /* ── Neutral fills ───────────────────────────────────────────── */
+    --secondary:           var(--dark-hue) var(--dark-sat) 15%;
+    --secondary-foreground: 210 20% 96%;
+    --muted:               var(--dark-hue) var(--dark-sat) 15%;
+    --muted-foreground:    215 12% 52%;
+    --accent:              var(--dark-hue) var(--dark-sat) 18%;
+    --accent-foreground:   210 20% 96%;
+
+    /* ── Edges ───────────────────────────────────────────────────── */
+    --border:              var(--dark-hue) var(--dark-sat) 24%;
+    --input:               var(--dark-hue) var(--dark-sat) 24%;
+
+    /* ── Scrollbar ───────────────────────────────────────────────── */
+    --scrollbar-track:     var(--dark-hue) var(--dark-sat) 8%;
+    --scrollbar-thumb:     var(--dark-hue) var(--dark-sat) 32%;
+    --scrollbar-thumb-hover: var(--dark-hue) 10% 44%;
+
+    /* ── Toasts ──────────────────────────────────────────────────── */
+    --toast-bg:            var(--dark-hue) var(--dark-sat) 12% / 0.97;
+    --toast-border:        var(--dark-hue) var(--dark-sat) 28% / 0.94;
+    --toast-shadow: 0 24px 60px -30px hsl(0 0% 0% / 0.72), 0 12px 28px -20px hsl(0 0% 0% / 0.54);
+    --toast-success-accent: 142 50% 50%;
+    --toast-info-accent:   214 90% 67%;
+    --toast-warning-accent: 38 92% 58%;
+    --toast-error-accent:  0 72% 60%;
+
+    /* ── Context indicator category colors — brighter for dark bg ─ */
     --ctx-system: #818cf8;
     --ctx-history: #60a5fa;
     --ctx-tool-results: #fbbf24;
@@ -241,16 +272,11 @@
   }
 
   .ui-caption {
-    font-size: 0.6875rem;
-    line-height: 1rem;
-    @apply text-muted-foreground;
+    @apply text-2xs text-muted-foreground;
   }
 
   .ui-eyebrow {
-    font-size: 0.6875rem;
-    line-height: 1rem;
-    letter-spacing: 0.08em;
-    @apply font-medium uppercase text-muted-foreground;
+    @apply text-2xs font-medium uppercase tracking-wider text-muted-foreground;
   }
 
   .ui-pill {

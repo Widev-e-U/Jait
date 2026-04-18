@@ -154,14 +154,14 @@ function InstalledSkills({ token }: { token: string | null }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{skill.name}</span>
-                <Badge variant={badge.variant} className="text-[10px]">
+                <Badge variant={badge.variant} className="text-2xs">
                   {badge.label}
                 </Badge>
               </div>
               <p className="mt-0.5 text-sm text-muted-foreground line-clamp-2">
                 {skill.description}
               </p>
-              <p className="mt-0.5 text-[10px] text-muted-foreground/60 font-mono truncate">
+              <p className="mt-0.5 text-2xs text-muted-foreground/60 font-mono truncate">
                 {skill.filePath}
               </p>
             </div>
@@ -376,7 +376,7 @@ function SkillMarketplace({ token }: { token: string | null }) {
               {isInstalled ? (
                 <Badge
                   variant="secondary"
-                  className="flex items-center gap-1 text-[10px]"
+                  className="flex items-center gap-1 text-2xs"
                 >
                   <Check className="h-3 w-3" />
                   Installed

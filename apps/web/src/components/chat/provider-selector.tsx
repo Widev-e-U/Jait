@@ -161,7 +161,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
           <CurrentIcon className="h-4 w-4" />
           {!iconOnly && <span>{current.label}</span>}
           {!iconOnly && locationLabel && (
-            <span className="flex items-center gap-0.5 text-[10px] text-blue-500">
+            <span className="flex items-center gap-0.5 text-2xs text-blue-500">
               <Monitor className="h-3 w-3" />
               {locationLabel}
             </span>
@@ -266,13 +266,13 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
                 <div className="text-sm font-medium flex items-center gap-1.5">
                   {p.label}
                   {isAvailable && nodeLabel && (
-                    <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                    <span className="text-2xs text-muted-foreground flex items-center gap-0.5">
                       <Monitor className="h-3 w-3" />
                       {nodeLabel}
                     </span>
                   )}
                   {!isAvailable && (
-                    <span className="text-[10px] text-destructive/80 flex items-center gap-0.5">
+                    <span className="text-2xs text-destructive/80 flex items-center gap-0.5">
                       <AlertTriangle className="h-3 w-3" />
                       {reason ? summariseReason(reason) : 'unavailable'}
                     </span>

@@ -126,7 +126,7 @@ export function PreviewMetricsPanel({ metrics }: { metrics?: PreviewPerformanceM
         <div className="mt-1 break-all text-muted-foreground">
           <code>{metrics.url}</code>
         </div>
-        <div className="mt-1 text-[11px] text-muted-foreground">Sampled {new Date(metrics.sampledAt).toLocaleTimeString()}</div>
+        <div className="mt-1 text-xs text-muted-foreground">Sampled {new Date(metrics.sampledAt).toLocaleTimeString()}</div>
       </div>
       <div className="grid gap-2 md:grid-cols-3">
         <div className="rounded border p-2">
@@ -225,7 +225,7 @@ export function WorkspacePreviewInspectPanel({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="mt-2 h-7 px-2 text-[11px]"
+                className="mt-2 h-7 px-2 text-xs"
                 onClick={() => onInsertElementReference(inspectState.page!.activeElement!)}
               >
                 Insert Into Chat
@@ -290,7 +290,7 @@ export function WorkspacePreviewInspectPanel({
                 type="button"
                 variant="outline"
                 size="sm"
-                className="mt-2 h-7 px-2 text-[11px]"
+                className="mt-2 h-7 px-2 text-xs"
                 onClick={() => onInsertElementReference(inspectState.target!)}
               >
                 Insert Into Chat
@@ -311,7 +311,7 @@ export function WorkspacePreviewInspectPanel({
                   {element.selector ? <div className="mt-1 break-all"><code>{element.selector}</code></div> : null}
                   {element.placeholder ? <div className="mt-1">Placeholder: {element.placeholder}</div> : null}
                   {element.value ? <div className="mt-1">Value: {element.value}</div> : null}
-                  <div className="mt-1 text-[10px]">
+                  <div className="mt-1 text-2xs">
                     {element.disabled ? 'Disabled' : 'Enabled'}
                     {element.active ? ' · Active' : ''}
                   </div>
@@ -320,7 +320,7 @@ export function WorkspacePreviewInspectPanel({
                       type="button"
                       variant="outline"
                       size="sm"
-                      className="mt-2 h-7 px-2 text-[11px]"
+                      className="mt-2 h-7 px-2 text-xs"
                       onClick={() => onInsertElementReference(element)}
                     >
                       Insert Into Chat

@@ -177,7 +177,7 @@ export function ForgeSetupDialog({ open, onOpenChange, cwd, remoteUrl, onReady }
                 onKeyDown={(e) => { if (e.key === 'Enter') void handleAuth() }}
                 autoFocus
               />
-              <p className="text-[10px] text-muted-foreground">
+              <p className="text-2xs text-muted-foreground">
                 {help.createUrl ? (
                   <a href={help.createUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
                     {help.createLabel}
@@ -185,12 +185,12 @@ export function ForgeSetupDialog({ open, onOpenChange, cwd, remoteUrl, onReady }
                 ) : (
                   <span>{help.createLabel}</span>
                 )}
-                {' '}with <code className="text-[10px]">{help.scopes}</code> permissions.
+                {' '}with <code className="text-2xs">{help.scopes}</code> permissions.
               </p>
             </div>
             {step === 'not-installed' && help.cliName && help.cliUrl && (
-              <p className="text-[10px] text-muted-foreground">
-                Optionally install the <code className="text-[10px]">{help.cliName}</code> CLI:{' '}
+              <p className="text-2xs text-muted-foreground">
+                Optionally install the <code className="text-2xs">{help.cliName}</code> CLI:{' '}
                 <a href={help.cliUrl} target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">
                   {help.cliUrl}
                 </a>

@@ -407,19 +407,19 @@ export function DevPreviewPanel({
           <span className="text-sm font-medium">Managed Preview</span>
           {managedSession ? (
             <>
-              <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="rounded bg-muted px-2 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                 {managedSession.status}
               </span>
-              <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="rounded bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                 {managedSession.mode}
               </span>
               {managedBrowserSession?.origin ? (
-                <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+                <span className="rounded bg-muted px-1.5 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                   {managedBrowserSession.origin}
                 </span>
               ) : null}
               {managedBrowserSession?.secretSafe ? (
-                <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-[10px] uppercase tracking-wide text-destructive">
+                <span className="rounded bg-destructive/10 px-1.5 py-0.5 text-2xs uppercase tracking-wide text-destructive">
                   secret-safe
                 </span>
               ) : null}
@@ -438,22 +438,22 @@ export function DevPreviewPanel({
                 type="button"
                 variant="ghost"
                 size="sm"
-                className="h-7 px-2 text-[11px]"
+                className="h-7 px-2 text-xs"
                 onClick={() => { void handleScreenshot() }}
                 disabled={isBusy || managedBrowserSession?.secretSafe}
               >
                 <Camera className="mr-1 h-3 w-3" />
                 Screenshot
               </Button>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={handleRestart} disabled={isBusy}>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleRestart} disabled={isBusy}>
                 <RefreshCw className="mr-1 h-3 w-3" />
                 Restart
               </Button>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={() => setActiveTab('console')}>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={() => setActiveTab('console')}>
                 <MessageSquare className="mr-1 h-3 w-3" />
                 Console
               </Button>
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]" onClick={handleStop} disabled={isBusy}>
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs" onClick={handleStop} disabled={isBusy}>
                 <Square className="mr-1 h-3 w-3" />
                 Stop
               </Button>
@@ -461,7 +461,7 @@ export function DevPreviewPanel({
           ) : null}
           {previewOpenTarget ? (
             <a href={previewOpenTarget} target="_blank" rel="noreferrer" className="inline-flex">
-              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-[11px]">
+              <Button type="button" variant="ghost" size="sm" className="h-7 px-2 text-xs">
                 <ExternalLink className="mr-1 h-3 w-3" />
                 Open
               </Button>
@@ -501,34 +501,34 @@ export function DevPreviewPanel({
           </Button>
         </div>
         {workspaceRoot ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Workspace: <code>{workspaceRoot}</code>
           </p>
         ) : null}
         {managedBrowserSession ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Browser session: <code>{managedBrowserSession.id}</code> · controller <code>{managedBrowserSession.controller}</code>
           </p>
         ) : null}
         {managedSession?.remoteBrowser ? (
-          <p className="text-[11px] text-muted-foreground">
+          <p className="text-xs text-muted-foreground">
             Live view: <code>{managedSession.remoteBrowser.novncUrl}</code>
           </p>
         ) : null}
         {secretSafeWarning ? (
-          <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-700">
+          <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs text-amber-700">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{secretSafeWarning}</span>
           </div>
         ) : null}
         {panelError ? (
-          <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-[11px] text-destructive">
+          <div className="flex items-center gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1 text-xs text-destructive">
             <AlertCircle className="h-3.5 w-3.5" />
             {panelError}
           </div>
         ) : null}
         {panelWarning ? (
-          <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-[11px] text-amber-700">
+          <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1 text-xs text-amber-700">
             <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
             <span>{panelWarning}</span>
           </div>
@@ -536,7 +536,7 @@ export function DevPreviewPanel({
       </div>
 
       <div className="border-b px-3 py-1.5">
-        <div className="flex items-center gap-1 text-[11px]">
+        <div className="flex items-center gap-1 text-xs">
           <Button type="button" variant={activeTab === 'preview' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('preview')}>Preview</Button>
           <Button type="button" variant={activeTab === 'logs' ? 'secondary' : 'ghost'} size="sm" className="h-7 px-2" onClick={() => setActiveTab('logs')}>
             <TerminalSquare className="mr-1 h-3 w-3" />
@@ -565,7 +565,7 @@ export function DevPreviewPanel({
           screenshotUrl ? (
             <div className="relative h-full">
               <img src={screenshotUrl} alt="Preview screenshot" className="h-full w-full object-contain bg-white" />
-              <Button type="button" variant="secondary" size="sm" className="absolute top-2 right-2 h-7 px-2 text-[11px]" onClick={() => setScreenshotUrl(null)}>
+              <Button type="button" variant="secondary" size="sm" className="absolute top-2 right-2 h-7 px-2 text-xs" onClick={() => setScreenshotUrl(null)}>
                 Back to live
               </Button>
             </div>
@@ -598,7 +598,7 @@ export function DevPreviewPanel({
             </div>
           )
         ) : activeTab === 'logs' ? (
-          <div className="h-full overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
+          <div className="h-full overflow-auto bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
             {managedSession?.logs.length ? managedSession.logs.map((entry) => (
               <div key={entry.id} className="mb-1 whitespace-pre-wrap break-words">
                 <span className={entry.stream === 'stderr' ? 'text-red-400' : entry.stream === 'system' ? 'text-sky-300' : 'text-zinc-100'}>
@@ -612,7 +612,7 @@ export function DevPreviewPanel({
             <div ref={logsEndRef} />
           </div>
         ) : activeTab === 'console' ? (
-          <div className="h-full overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
+          <div className="h-full overflow-auto bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
             {consoleEvents.length > 0 ? consoleEvents.map((event) => (
               <div key={event.id} className="mb-1 whitespace-pre-wrap break-words">
                 <span className={
@@ -631,7 +631,7 @@ export function DevPreviewPanel({
             <div ref={consoleEndRef} />
           </div>
         ) : activeTab === 'network' ? (
-          <div className="h-full overflow-auto bg-zinc-950 font-mono text-[11px] text-zinc-100">
+          <div className="h-full overflow-auto bg-zinc-950 font-mono text-xs text-zinc-100">
             {networkEvents.length > 0 ? networkEvents.map((event) => {
               const isError = event.type === 'requestfailed' || (event.status ?? 0) >= 500
               const isWarn = !isError && (event.status ?? 0) >= 400
@@ -653,11 +653,11 @@ export function DevPreviewPanel({
             <div ref={networkEndRef} />
           </div>
         ) : activeTab === 'metrics' ? (
-          <div className="h-full overflow-auto px-3 py-2 text-[12px]">
+          <div className="h-full overflow-auto px-3 py-2 text-xs">
             <PreviewMetricsPanel metrics={managedSession?.metrics} />
           </div>
         ) : (
-          <div className="h-full overflow-auto px-3 py-2 text-[12px]">
+          <div className="h-full overflow-auto px-3 py-2 text-xs">
             {issueEvents.length > 0 ? issueEvents.map((event) => (
               <div key={event.id} className="mb-2 rounded border bg-background px-2 py-1.5">
                 <div className="font-medium">
@@ -666,7 +666,7 @@ export function DevPreviewPanel({
                   {event.level ? ` · ${event.level}` : ''}
                 </div>
                 {event.text ? <div className="mt-0.5 whitespace-pre-wrap break-words text-muted-foreground">{event.text}</div> : null}
-                {event.url ? <div className="mt-0.5 break-all text-[11px] text-muted-foreground">{event.method ? `${event.method} ` : ''}{event.url}</div> : null}
+                {event.url ? <div className="mt-0.5 break-all text-xs text-muted-foreground">{event.method ? `${event.method} ` : ''}{event.url}</div> : null}
               </div>
             )) : (
               <div className="flex h-full items-center justify-center text-sm text-muted-foreground">

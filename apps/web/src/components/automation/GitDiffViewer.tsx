@@ -125,7 +125,7 @@ export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewe
             {/* File list sidebar */}
             <div className={cn('border-r flex flex-col shrink-0 bg-muted/20', isNarrow ? 'w-full border-r-0 border-b max-h-40' : 'w-56')}>
               <div className="px-3 py-2 border-b">
-                <span className="text-[11px] font-medium text-muted-foreground uppercase tracking-wider">Files</span>
+                <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">Files</span>
               </div>
               <div className="flex-1 overflow-y-auto">
                 {files.map((f, i) => (
@@ -152,7 +152,7 @@ export function GitDiffViewer({ cwd, baseBranch, branch, onClose }: GitDiffViewe
                 <StatusIcon status={selected?.status ?? 'M'} />
                 <span className="text-xs font-mono text-muted-foreground truncate">{selected?.path}</span>
                 <span className={cn(
-                  'text-[10px] px-1.5 py-0.5 rounded font-medium',
+                  'text-2xs px-1.5 py-0.5 rounded font-medium',
                   selected?.status === 'A' || selected?.status === '?' ? 'bg-green-500/10 text-green-500' :
                   selected?.status === 'D' ? 'bg-red-500/10 text-red-500' :
                   'bg-yellow-500/10 text-yellow-500',

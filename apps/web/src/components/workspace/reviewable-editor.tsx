@@ -158,7 +158,7 @@ export function ReviewableEditor({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 px-2 text-[11px] text-green-600 hover:bg-green-500/10 hover:text-green-500"
+                  className="h-7 px-2 text-xs text-green-600 hover:bg-green-500/10 hover:text-green-500"
                   onClick={() => setHunkState(hunkIndex, 'accepted')}
                 >
                   <Check className="mr-1 h-3 w-3" />
@@ -167,7 +167,7 @@ export function ReviewableEditor({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-7 px-2 text-[11px] text-red-600 hover:bg-red-500/10 hover:text-red-500"
+                  className="h-7 px-2 text-xs text-red-600 hover:bg-red-500/10 hover:text-red-500"
                   onClick={() => setHunkState(hunkIndex, 'rejected')}
                 >
                   <Undo2 className="mr-1 h-3 w-3" />

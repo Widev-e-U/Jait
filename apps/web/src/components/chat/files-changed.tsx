@@ -64,7 +64,7 @@ export function FilesChanged({
             Files changed ({files.length})
           </span>
           {undecided > 0 && (
-            <span className="shrink-0 text-[10px] text-amber-500 dark:text-amber-400">
+            <span className="shrink-0 text-2xs text-amber-500 dark:text-amber-400">
               {undecided} pending
             </span>
           )}
@@ -74,7 +74,7 @@ export function FilesChanged({
             <Button
               size={compactActions ? 'icon' : 'sm'}
               variant="ghost"
-              className={cn('h-6 shrink-0 text-[11px]', compactActions ? 'w-6 p-0' : 'px-2')}
+              className={cn('h-6 shrink-0 text-xs', compactActions ? 'w-6 p-0' : 'px-2')}
               onClick={onAcceptAll}
               title="Keep all"
               aria-label="Keep all"
@@ -85,7 +85,7 @@ export function FilesChanged({
             <Button
               size={compactActions ? 'icon' : 'sm'}
               variant="ghost"
-              className={cn('h-6 shrink-0 text-[11px]', compactActions ? 'w-6 p-0' : 'px-2')}
+              className={cn('h-6 shrink-0 text-xs', compactActions ? 'w-6 p-0' : 'px-2')}
               onClick={onRejectAll}
               title="Undo all"
               aria-label="Undo all"
@@ -150,10 +150,10 @@ export function FilesChanged({
               </div>
             )}
             {file.state === 'accepted' && (
-              <span className="text-[10px] text-green-600 dark:text-green-400 shrink-0">Kept</span>
+              <span className="text-2xs text-green-600 dark:text-green-400 shrink-0">Kept</span>
             )}
             {file.state === 'rejected' && (
-              <span className="text-[10px] text-red-500 shrink-0">Undone</span>
+              <span className="text-2xs text-red-500 shrink-0">Undone</span>
             )}
           </div>
         ))}

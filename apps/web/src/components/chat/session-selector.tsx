@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Folder, FolderOpen, FolderInput, MessageSquare, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2 } from 'lucide-react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -59,15 +59,11 @@ function NodeIcon({ platform }: { platform: string }) {
 
 export function SessionSelector({
   workspaces,
-  personalSessions = [],
   activeWorkspaceId,
-  activeSessionId,
   loading = false,
   hasMoreWorkspaces = false,
   showFewerWorkspaces = false,
   onSelectWorkspace,
-  onSelectPersonalSession,
-  onNewPersonalSession,
   onCreateWorkspace,
   onRemoveWorkspace,
   onChangeDirectory,
@@ -85,7 +81,7 @@ export function SessionSelector({
   return (
     <div className="flex flex-col h-full">
       <div className="flex h-[35px] shrink-0 items-center justify-between px-3 border-b">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+        <span className="text-xs font-medium text-muted-foreground">
           Workspaces
         </span>
         <Tooltip>
@@ -106,41 +102,6 @@ export function SessionSelector({
             </div>
           ) : (
             <>
-              <div className="rounded-md border border-border/60 bg-background/40">
-                <div
-                  className={`group flex items-start gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
-                    activeWorkspaceId === null ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
-                  }`}
-                  onClick={() => {
-                    if (activeWorkspaceId === null) return
-                    const target = personalSessions.find((session) => session.id === activeSessionId) ?? personalSessions[0]
-                    if (target) onSelectPersonalSession?.(target.id)
-                    else onNewPersonalSession?.()
-                  }}
-                >
-                  <MessageSquare className={`mt-0.5 h-3.5 w-3.5 shrink-0 ${activeWorkspaceId === null ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <div className="min-w-0 flex-1">
-                    <div className="truncate text-xs font-medium">Personal chat</div>
-                    <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
-                      <span className="truncate min-w-0">No workspace</span>
-                      <span className="shrink-0">·</span>
-                      <span className="shrink-0">{personalSessions.length} chats</span>
-                    </div>
-                    {activeWorkspaceId === null && sessionInfo && (
-                      <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-blue-500">
-                        <span className="truncate">{sessionInfo.provider}</span>
-                        <span className="shrink-0 text-muted-foreground">·</span>
-                        <Monitor className="h-2.5 w-2.5 shrink-0" />
-                        <span className="truncate">
-                          {sessionInfo.isRemote && sessionInfo.remoteNode
-                            ? sessionInfo.remoteNode.nodeName
-                            : 'Gateway'}
-                        </span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
               {workspaces.length === 0 && (
                 <p className="text-xs text-muted-foreground text-center py-4">
                   No workspaces yet.
@@ -187,19 +148,19 @@ export function SessionSelector({
                         <div className="truncate text-xs font-medium">
                           {workspace.title || 'Untitled Workspace'}
                         </div>
-                        <div className="flex items-center gap-1 text-[10px] text-muted-foreground">
+                        <div className="flex items-center gap-1 text-2xs text-muted-foreground">
                           <span className="truncate min-w-0">{workspace.rootPath || 'No folder linked'}</span>
                           <span className="shrink-0">·</span>
                           <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
                         </div>
                         {offline && (
-                          <div className="mt-0.5 flex items-center gap-1 text-[10px] text-orange-500">
+                          <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
                             <WifiOff className="h-2.5 w-2.5" />
                             <span>Node offline</span>
                           </div>
                         )}
                         {remoteNode && !offline && (
-                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px]">
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
                             <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
                               <NodeIcon platform={remoteNode.platform} />
                               <span className="truncate max-w-[80px]">{remoteNode.name}</span>
@@ -207,7 +168,7 @@ export function SessionSelector({
                           </div>
                         )}
                         {isActiveWorkspace && sessionInfo && (
-                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-[10px] text-blue-500">
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-blue-500">
                             <span className="truncate">{sessionInfo.provider}</span>
                             <span className="shrink-0 text-muted-foreground">·</span>
                             <Monitor className="h-2.5 w-2.5 shrink-0" />

@@ -233,12 +233,12 @@ export function ToolSettings({ token }: ToolSettingsProps) {
                           <span className="font-mono text-sm font-medium">{tool.name}</span>
                           <Badge
                             variant={tierInfo.variant}
-                            className="text-[10px] px-1.5 py-0"
+                            className="text-2xs px-1.5 py-0"
                           >
                             {tierInfo.label}
                           </Badge>
                           {tool.source === 'mcp' && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                            <Badge variant="outline" className="text-2xs px-1.5 py-0">
                               MCP
                             </Badge>
                           )}

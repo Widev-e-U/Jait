@@ -38,7 +38,7 @@ function StatusBadge({ status }: { status: QueueItemStatus }) {
   const { icon: Icon, label, color } = config[status]
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${color}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${color}`}>
       <Icon className={`h-3 w-3 ${status === 'running' ? 'animate-spin' : ''}`} />
       {label}
     </span>
@@ -90,7 +90,7 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
               {visibleQueue.length} pending {visibleQueue.length === 1 ? 'request' : 'requests'}
             </span>
             {policy && (
-              <span className="text-[11px] text-muted-foreground">
+              <span className="text-xs text-muted-foreground">
                 Profile: <span className="font-medium text-foreground">{policy.activeProfileName ?? 'custom'}</span>
                 {' '}• {policy.toolCount} configured tools • unknown tools require dangerous consent
               </span>
@@ -101,7 +101,7 @@ export function ConsentQueue({ className = '', compact = false, sessionId, onApp
           <button
             onClick={handleApproveAllInSession}
             disabled={approvingAll}
-            className="text-[11px] text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="text-xs text-green-600 hover:text-green-500 dark:text-green-400 dark:hover:text-green-300 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {approvingAll ? 'Approving...' : 'Approve all in this session'}
           </button>

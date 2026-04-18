@@ -9,7 +9,7 @@ import type { SurfaceRegistry } from "../surfaces/index.js";
 import type { ToolRegistry } from "../tools/registry.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { AuditWriter } from "../services/audit.js";
-import { TerminalSurface } from "../surfaces/terminal.js";
+import { TerminalSurface, availableShells } from "../surfaces/terminal.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
@@ -70,14 +70,24 @@ export function registerTerminalRoutes(
     const workspaceRoot = typeof body["workspaceRoot"] === "string" ? body["workspaceRoot"] : process.cwd();
     const cols = typeof body["cols"] === "number" ? body["cols"] : 120;
     const rows = typeof body["rows"] === "number" ? body["rows"] : 30;
+    const shell = typeof body["shell"] === "string" ? body["shell"] : undefined;
 
     const termId = `term-${uuidv7()}`;
 
     try {
-      const surface = await surfaceRegistry.startSurface("terminal", termId, {
-        sessionId,
-        workspaceRoot,
-      }) as TerminalSurface;
+      let surface: TerminalSurface;
+      if (shell) {
+        // Create terminal with a specific shell, bypassing the default factory
+        surface = new TerminalSurface(termId, { shell });
+        surfaceRegistry.registerInstance(termId, surface);
+        await surface.start({ sessionId, workspaceRoot });
+        surfaceRegistry.onSurfaceStarted?.(termId, surface);
+      } else {
+        surface = await surfaceRegistry.startSurface("terminal", termId, {
+          sessionId,
+          workspaceRoot,
+        }) as TerminalSurface;
+      }
 
       // onOutput is auto-wired by surfaceRegistry.onSurfaceStarted
       if (cols && rows) surface.resize(cols, rows);
@@ -107,6 +117,11 @@ export function registerTerminalRoutes(
       .filter((s) => s.type === "terminal")
       .map((s) => s.snapshot());
     return { terminals };
+  });
+
+  // GET /api/terminals/shells — list available shells on this host
+  app.get("/api/terminals/shells", async () => {
+    return { shells: availableShells() };
   });
 
   // GET /api/terminals/:id — get terminal info

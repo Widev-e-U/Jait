@@ -159,7 +159,7 @@ function createChipNode(file: PromptChipReference, onRemove?: (refKey: string) =
     }
   }
   chip.className =
-    'inline-flex items-center gap-1.5 align-middle text-[12px] font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground cursor-default whitespace-nowrap transition-colors'
+    'inline-flex items-center gap-1.5 align-middle text-xs font-medium leading-none mx-[2px] rounded-md border border-border/70 bg-muted/45 pl-2 pr-1 py-1 text-foreground cursor-default whitespace-nowrap transition-colors'
 
   // Icon (file or folder)
   const icon = document.createElement('span')

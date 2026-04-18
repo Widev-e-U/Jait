@@ -104,7 +104,7 @@ export function JobCard({
         <div className="flex flex-col gap-1 text-sm text-muted-foreground md:flex-row md:items-center md:gap-2">
           <Clock className="h-4 w-4" />
           <span className="break-all font-mono">{job.cron_expression}</span>
-          <span className="text-xs md:text-[11px]">({describeCron(job.cron_expression)})</span>
+          <span className="text-xs md:text-xs">({describeCron(job.cron_expression)})</span>
         </div>
 
         {/* Next run */}

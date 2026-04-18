@@ -63,6 +63,11 @@ export class SurfaceRegistry {
     return this.surfaces.delete(id);
   }
 
+  /** Register an externally created surface instance (used for custom-shell terminals, etc.) */
+  registerInstance(id: string, surface: Surface): void {
+    this.surfaces.set(id, surface);
+  }
+
   /** Stop all surfaces (used during shutdown) */
   async stopAll(reason = "shutdown"): Promise<void> {
     const ids = [...this.surfaces.keys()];

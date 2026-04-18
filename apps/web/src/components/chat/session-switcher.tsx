@@ -84,7 +84,7 @@ export function SessionSwitcher({
           <div className="flex items-center justify-between border-b px-3 py-2">
             <div>
               <div className="text-sm font-medium">Sessions</div>
-              <div className="text-[11px] text-muted-foreground">
+              <div className="text-xs text-muted-foreground">
                 {workspaceTitle || 'Current workspace'}
               </div>
             </div>
@@ -133,13 +133,13 @@ export function SessionSwitcher({
                             {session.name || 'Untitled'}
                           </span>
                           {session.status === 'archived' && (
-                            <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-[9px] text-muted-foreground">
+                            <span className="inline-flex items-center gap-1 rounded-full border px-1.5 py-0 text-2xs text-muted-foreground">
                               <Archive className="h-2.5 w-2.5" />
                               Archived
                             </span>
                           )}
                         </div>
-                        <div className="text-[10px] text-muted-foreground">
+                        <div className="text-2xs text-muted-foreground">
                           {formatTime(session.lastActiveAt)}
                         </div>
                       </div>

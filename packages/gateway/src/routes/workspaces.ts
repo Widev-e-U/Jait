@@ -60,14 +60,13 @@ export function registerWorkspaceEntityRoutes(
     const body = (request.body as Record<string, unknown>) ?? {};
     const workspaceId = typeof body["workspaceId"] === "string" ? body["workspaceId"] : null;
     const sessionId = typeof body["sessionId"] === "string" ? body["sessionId"] : null;
-    if (!workspaceId) {
-      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "workspaceId is required" });
+    if (workspaceId) {
+      const workspace = workspaceService.getById(workspaceId, authUser.id);
+      if (!workspace) {
+        return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
+      }
+      workspaceService.touch(workspaceId);
     }
-    const workspace = workspaceService.getById(workspaceId, authUser.id);
-    if (!workspace) {
-      return reply.status(404).send({ error: "NOT_FOUND", details: "Workspace not found" });
-    }
-    workspaceService.touch(workspaceId);
     if (sessionId) {
       sessionService.touch(sessionId);
     }

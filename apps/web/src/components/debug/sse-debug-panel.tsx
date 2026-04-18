@@ -115,8 +115,8 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between px-3 py-1.5 border-b border-zinc-700/60 shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider">SSE Debug</span>
-          <span className="text-[10px] text-zinc-500">{filtered.length}/{events.length}</span>
+          <span className="text-xs font-semibold text-zinc-400 uppercase tracking-wider">SSE Debug</span>
+          <span className="text-2xs text-zinc-500">{filtered.length}/{events.length}</span>
         </div>
         <div className="flex items-center gap-1">
           <input
@@ -124,7 +124,7 @@ export function SSEDebugPanel({ onClose }: SSEDebugPanelProps) {
             placeholder="Filter..."
             value={filter}
             onChange={e => setFilter(e.target.value)}
-            className="h-5 w-28 px-1.5 text-[10px] rounded bg-zinc-800 border border-zinc-700 text-zinc-300 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
+            className="h-5 w-28 px-1.5 text-2xs rounded bg-zinc-800 border border-zinc-700 text-zinc-300 placeholder-zinc-500 focus:outline-none focus:border-blue-500"
           />
           <Button variant="ghost" size="icon" className="h-5 w-5" onClick={handleCopy} title="Copy all events">
             {copied ? <Check className="h-3 w-3 text-green-400" /> : <Copy className="h-3 w-3" />}

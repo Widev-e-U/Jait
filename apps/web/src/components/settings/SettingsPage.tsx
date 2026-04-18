@@ -279,12 +279,12 @@ export function SettingsPage({
     const envHasValue = !!envSet[field]
 
     if (userHasValue) {
-      return <Badge variant="default" className="text-[10px] px-1.5 py-0">user</Badge>
+      return <Badge variant="default" className="text-2xs px-1.5 py-0">user</Badge>
     }
     if (envHasValue) {
-      return <Badge variant="success" className="text-[10px] px-1.5 py-0">.env</Badge>
+      return <Badge variant="success" className="text-2xs px-1.5 py-0">.env</Badge>
     }
-    return <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">empty</Badge>
+    return <Badge variant="outline" className="text-2xs px-1.5 py-0 text-muted-foreground">empty</Badge>
   }
 
   const searchQuery = search.trim().toLowerCase()
@@ -420,7 +420,7 @@ export function SettingsPage({
                         <div className="min-w-0">
                           <div className="flex items-center gap-2">
                             <p className="truncate text-sm font-medium">{theme.name}</p>
-                            <Badge variant={isActive ? 'default' : 'outline'} className="h-5 px-1.5 text-[10px]">
+                            <Badge variant={isActive ? 'default' : 'outline'} className="h-5 px-1.5 text-2xs">
                               {isActive ? 'active' : theme.colorMode}
                             </Badge>
                           </div>
@@ -547,7 +547,7 @@ export function SettingsPage({
                 </p>
               </div>
               <p className="text-xs text-muted-foreground">
-                Current gateway: <code className="rounded bg-muted px-1 py-0.5 text-[11px]">{getApiUrl()}</code>
+                Current gateway: <code className="rounded bg-muted px-1 py-0.5 text-xs">{getApiUrl()}</code>
               </p>
             </Card>
           )}
@@ -676,8 +676,8 @@ export function SettingsPage({
                 <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
                   <p className="text-xs text-muted-foreground">
                     Uses a local Faster Whisper server for free, offline transcription.
-                    Start the server with <code className="rounded bg-muted px-1 py-0.5 text-[10px]">python whisper-server/server.py</code> from the gateway package.
-                    Optionally set <code className="rounded bg-muted px-1 py-0.5 text-[10px]">WHISPER_URL</code> in API keys below (defaults to <code className="rounded bg-muted px-1 py-0.5 text-[10px]">http://localhost:8178</code>).
+                    Start the server with <code className="rounded bg-muted px-1 py-0.5 text-2xs">python whisper-server/server.py</code> from the gateway package.
+                    Optionally set <code className="rounded bg-muted px-1 py-0.5 text-2xs">WHISPER_URL</code> in API keys below (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">http://localhost:8178</code>).
                   </p>
                 </div>
               )}
@@ -685,7 +685,7 @@ export function SettingsPage({
                 <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
                   <p className="text-xs text-muted-foreground">
                     Configure your Home Assistant Wyoming/Whisper STT integration.
-                    Set these values in the API keys section below: <code className="rounded bg-muted px-1 py-0.5 text-[10px]">HA_URL</code>, <code className="rounded bg-muted px-1 py-0.5 text-[10px]">HA_TOKEN</code>, and optionally <code className="rounded bg-muted px-1 py-0.5 text-[10px]">HA_STT_ENTITY</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-[10px]">stt.faster_whisper</code>).
+                    Set these values in the API keys section below: <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_URL</code>, <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_TOKEN</code>, and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_STT_ENTITY</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">stt.faster_whisper</code>).
                   </p>
                 </div>
               )}

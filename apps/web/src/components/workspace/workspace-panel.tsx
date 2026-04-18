@@ -382,7 +382,7 @@ function GitStatusBadge({ status, className = '' }: { status: string; className?
   const label = status === '?' ? 'U' : status
   return (
     <span
-      className={`text-[9px] font-bold leading-none shrink-0 ${STATUS_COLORS[status] ?? 'text-muted-foreground'} ${className}`}
+      className={`text-2xs font-bold leading-none shrink-0 ${STATUS_COLORS[status] ?? 'text-muted-foreground'} ${className}`}
       title={STATUS_LABELS[status] ?? status}
     >
       {label}
@@ -2047,13 +2047,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <Settings2 className="h-4 w-4 text-muted-foreground shrink-0" />
             <span className="text-sm font-medium truncate">Preview Controls</span>
             {managedPreviewSession && (
-              <span className="rounded bg-muted px-2 py-0.5 text-[10px] uppercase tracking-wide text-muted-foreground">
+              <span className="rounded bg-muted px-2 py-0.5 text-2xs uppercase tracking-wide text-muted-foreground">
                 {managedPreviewSession.status}
               </span>
             )}
           </div>
           {activePreviewTab?.label ? (
-            <div className="truncate text-[11px] text-muted-foreground" title={activePreviewTab.label}>
+            <div className="truncate text-xs text-muted-foreground" title={activePreviewTab.label}>
               {activePreviewTab.label}
             </div>
           ) : null}
@@ -2068,7 +2068,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         </button>
       </div>
 
-      <div className="flex items-center gap-1 border-b px-2 py-1.5 text-[11px]">
+      <div className="flex items-center gap-1 border-b px-2 py-1.5 text-xs">
         {(['controls', 'inspect', 'logs', 'console', 'issues', 'metrics'] as const).map((tab) => (
           <button
             key={tab}
@@ -2123,17 +2123,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={handleRefreshPreviewTarget}>
+            <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={handleRefreshPreviewTarget}>
               <RefreshCw className="mr-1 h-3 w-3" />
               Refresh
             </Button>
             {managedPreviewSession && (
               <>
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => { void handleRestartManagedPreview() }} disabled={previewBusy}>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => { void handleRestartManagedPreview() }} disabled={previewBusy}>
                   <RefreshCw className="mr-1 h-3 w-3" />
                   Restart
                 </Button>
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => { void handleStopManagedPreview() }} disabled={previewBusy}>
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => { void handleStopManagedPreview() }} disabled={previewBusy}>
                   <Square className="mr-1 h-3 w-3" />
                   Stop
                 </Button>
@@ -2141,7 +2141,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
             {previewExternalUrl && (
               <a href={previewExternalUrl} target="_blank" rel="noreferrer" className="inline-flex">
-                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]">
+                <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs">
                   <ExternalLink className="mr-1 h-3 w-3" />
                   Open
                 </Button>
@@ -2150,36 +2150,36 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
 
           {previewWorkspaceRoot ? (
-            <div className="rounded border bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
+            <div className="rounded border bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
               Workspace: <code>{previewWorkspaceRoot}</code>
             </div>
           ) : null}
           {managedPreviewSession?.remoteBrowser ? (
-            <div className="rounded border bg-muted/30 px-2 py-1.5 text-[11px] text-muted-foreground">
+            <div className="rounded border bg-muted/30 px-2 py-1.5 text-xs text-muted-foreground">
               Live view: <code>{managedPreviewSession.remoteBrowser.novncUrl}</code>
             </div>
           ) : null}
           {managedPreviewSession?.lastError ? (
-            <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-destructive">
+            <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{managedPreviewSession.lastError}</span>
             </div>
           ) : null}
           {previewPanelError ? (
-            <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-[11px] text-destructive">
+            <div className="flex items-start gap-2 rounded border border-destructive/30 bg-destructive/5 px-2 py-1.5 text-xs text-destructive">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{previewPanelError}</span>
             </div>
           ) : null}
           {previewPanelWarning ? (
-            <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-[11px] text-amber-700">
+            <div className="flex items-start gap-2 rounded border border-amber-500/30 bg-amber-500/5 px-2 py-1.5 text-xs text-amber-700">
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{previewPanelWarning}</span>
             </div>
           ) : null}
         </div>
       ) : previewSideTab === 'inspect' ? (
-        <div className="flex-1 space-y-3 overflow-auto p-3 text-[11px]">
+        <div className="flex-1 space-y-3 overflow-auto p-3 text-xs">
           <div className="flex gap-2">
             <Input
               value={previewInspectSelector}
@@ -2191,7 +2191,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               type="button"
               variant="ghost"
               size="sm"
-              className="h-8 px-2 text-[11px]"
+              className="h-8 px-2 text-xs"
               onClick={() => { void fetchPreviewInspection(previewInspectSelector) }}
               disabled={previewInspectLoading}
             >
@@ -2207,7 +2207,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           />
         </div>
       ) : previewSideTab === 'logs' ? (
-        <div className="flex-1 overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
+        <div className="flex-1 overflow-auto bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
           {managedPreviewSession?.logs.length ? managedPreviewSession.logs.map((entry) => (
             <div key={entry.id} className="mb-1 whitespace-pre-wrap break-words">
               <span className={entry.stream === 'stderr' ? 'text-red-400' : entry.stream === 'system' ? 'text-sky-300' : 'text-zinc-100'}>
@@ -2221,7 +2221,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           <div ref={previewLogsEndRef} />
         </div>
       ) : previewSideTab === 'console' ? (
-        <div className="flex-1 overflow-auto bg-zinc-950 px-3 py-2 font-mono text-[11px] text-zinc-100">
+        <div className="flex-1 overflow-auto bg-zinc-950 px-3 py-2 font-mono text-xs text-zinc-100">
           {previewConsoleEvents.length ? previewConsoleEvents.map((event) => (
             <div key={event.id} className="mb-1 whitespace-pre-wrap break-words">
               <span className={
@@ -2240,11 +2240,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           <div ref={previewConsoleEndRef} />
         </div>
       ) : previewSideTab === 'metrics' ? (
-        <div className="flex-1 overflow-auto p-3 text-[11px]">
+        <div className="flex-1 overflow-auto p-3 text-xs">
           <PreviewMetricsPanel metrics={managedPreviewSession?.metrics} />
         </div>
       ) : (
-        <div className="flex-1 overflow-auto p-3 text-[12px]">
+        <div className="flex-1 overflow-auto p-3 text-xs">
           {previewIssueEvents.length ? previewIssueEvents.map((event) => (
             <div key={event.id} className="mb-2 rounded border bg-background px-2 py-1.5">
               <div className="font-medium">
@@ -2253,7 +2253,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 {event.level ? ` · ${event.level}` : ''}
               </div>
               {event.text ? <div className="mt-0.5 whitespace-pre-wrap break-words text-muted-foreground">{event.text}</div> : null}
-              {event.url ? <div className="mt-0.5 break-all text-[11px] text-muted-foreground">{event.method ? `${event.method} ` : ''}{event.url}</div> : null}
+              {event.url ? <div className="mt-0.5 break-all text-xs text-muted-foreground">{event.method ? `${event.method} ` : ''}{event.url}</div> : null}
             </div>
           )) : (
             <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -2869,7 +2869,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       mobileTreeDragRef.current = null
       setMobileTreeDrag(null)
       handleTreeContextMenu(node, rowRect.right - 8, rowRect.top + 12)
-    }, 420)
+    }, 350)
   }, [clearMobileTreeGestureTimers, handleTreeContextMenu, isMobile, remoteRoot])
 
   useEffect(() => {
@@ -2897,7 +2897,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       const deltaY = event.clientY - current.startY
       const distance = Math.hypot(deltaX, deltaY)
       if (!current.ready) {
-        if (distance > 6) {
+        if (distance > 12) {
           clearMobileTreeGestureTimers()
           releasePointerCaptureIfHeld(mobileTreePointerCaptureRef.current, event.pointerId)
           mobileTreePointerCaptureRef.current = null
@@ -2906,7 +2906,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         }
         return
       }
-      const active = current.active || distance >= 4
+      const active = current.active || distance >= 10
       if (active && mobileTreeMenuTimerRef.current !== null) {
         window.clearTimeout(mobileTreeMenuTimerRef.current)
         mobileTreeMenuTimerRef.current = null
@@ -4036,7 +4036,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     <div className="flex items-center gap-1.5">
       <Button
         size="sm"
-        className={cn(mobile ? 'h-8 rounded-md px-2.5 text-xs' : 'h-6 gap-1 rounded-r-none px-1.5 text-[11px]')}
+        className={cn(mobile ? 'h-8 rounded-md px-2.5 text-xs' : 'h-6 gap-1 rounded-r-none px-1.5 text-xs')}
         onClick={() => {
           if (primaryGitAction === 'sync') {
             void handleGitSync()
@@ -4240,10 +4240,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             {renderSourceControlFolderActions(node.path, folderFilePaths, actions, mobile)}
           </div>
           {discardConfirm?.kind === 'folder' && discardConfirm.path === node.path && (
-            <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+            <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs">
               <span className="flex-1 text-red-500">Discard changes in {node.name}?</span>
-              <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardFolder(discardConfirm.paths)} disabled={gitActionBusy}>Discard</Button>
-              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+              <Button size="sm" variant="destructive" className="h-5 px-1.5 text-2xs" onClick={() => void handleDiscardFolder(discardConfirm.paths)} disabled={gitActionBusy}>Discard</Button>
+              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-2xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
             </div>
           )}
           {expanded ? renderSourceControlTreeNodes(node.children, actions, mobile, depth + 1) : null}
@@ -4271,24 +4271,24 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           title={`${node.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
         >
           <div className="flex min-w-0 items-center gap-1.5">
-            <GitStatusBadge status={fileStatus} className={mobile ? 'text-[10px]' : undefined} />
+            <GitStatusBadge status={fileStatus} className={mobile ? 'text-2xs' : undefined} />
             <FileIcon filename={fileName} className={`${mobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
           </div>
           <div className="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
             <span className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>{fileName}</span>
-            {dirPath ? <span className="truncate text-[10px] text-muted-foreground">{dirPath}</span> : null}
+            {dirPath ? <span className="truncate text-2xs text-muted-foreground">{dirPath}</span> : null}
           </div>
-          <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
+          <span className="w-16 shrink-0 text-right text-2xs text-muted-foreground">
             {node.entry.insertions > 0 && <span className="text-green-500">+{node.entry.insertions}</span>}
             {node.entry.deletions > 0 && <span className="ml-0.5 text-red-500">-{node.entry.deletions}</span>}
           </span>
           {renderSourceControlFileActions(node.path, actions, mobile)}
         </button>
         {discardConfirm?.kind === 'file' && discardConfirm.path === node.path && (
-          <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+          <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs">
             <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
-            <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardFile(node.path)} disabled={gitActionBusy}>Discard</Button>
-            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+            <Button size="sm" variant="destructive" className="h-5 px-1.5 text-2xs" onClick={() => void handleDiscardFile(node.path)} disabled={gitActionBusy}>Discard</Button>
+            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-2xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
           </div>
         )}
       </div>
@@ -4314,7 +4314,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     return (
       <div className="mt-1">
-        <div className="group flex items-center justify-between gap-2 px-2 py-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+        <div className="group flex items-center justify-between gap-2 px-2 py-1 text-2xs font-medium uppercase tracking-wider text-muted-foreground">
           <div>
             {title} ({files.length})
             <span className="ml-1 normal-case tracking-normal">
@@ -4379,10 +4379,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
         </div>
         {discardConfirm?.kind === 'all' && changedFileCount > 0 && (
-          <div className="mx-2 mb-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+          <div className="mx-2 mb-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs">
             <span className="flex-1 text-red-500">Discard all changes?</span>
-            <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
-            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+            <Button size="sm" variant="destructive" className="h-5 px-1.5 text-2xs" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
+            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-2xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
           </div>
         )}
         <div className="mt-1 space-y-1">
@@ -4413,26 +4413,26 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     title={`${f.path} — ${STATUS_LABELS[fileStatus] ?? fileStatus}`}
                   >
                     <div className="flex min-w-0 items-center gap-1.5">
-                      <GitStatusBadge status={fileStatus} className={mobile ? 'text-[10px]' : undefined} />
+                      <GitStatusBadge status={fileStatus} className={mobile ? 'text-2xs' : undefined} />
                       <FileIcon filename={fileName} className={`${mobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
                     </div>
                     <div className="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
                       <span className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
                         {fileName}
                       </span>
-                      {dirPath ? <span className="truncate text-[10px] text-muted-foreground">{dirPath}</span> : null}
+                      {dirPath ? <span className="truncate text-2xs text-muted-foreground">{dirPath}</span> : null}
                     </div>
-                    <span className="w-16 shrink-0 text-right text-[10px] text-muted-foreground">
+                    <span className="w-16 shrink-0 text-right text-2xs text-muted-foreground">
                       {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
                       {f.deletions > 0 && <span className="ml-0.5 text-red-500">-{f.deletions}</span>}
                     </span>
                     {renderSourceControlFileActions(f.path, actions, mobile)}
                   </div>
                   {discardConfirm?.kind === 'file' && discardConfirm.path === f.path && (
-                    <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-[10px]">
+                    <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs">
                       <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
-                      <Button size="sm" variant="destructive" className="h-5 px-1.5 text-[10px]" onClick={() => void handleDiscardFile(f.path)} disabled={gitActionBusy}>Discard</Button>
-                      <Button size="sm" variant="ghost" className="h-5 px-1.5 text-[10px]" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+                      <Button size="sm" variant="destructive" className="h-5 px-1.5 text-2xs" onClick={() => void handleDiscardFile(f.path)} disabled={gitActionBusy}>Discard</Button>
+                      <Button size="sm" variant="ghost" className="h-5 px-1.5 text-2xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
                     </div>
                   )}
                 </div>
@@ -4485,53 +4485,26 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
     return (
       <div className="flex flex-col h-full min-h-0">
-        {/* Tab bar — always available on mobile so editor tabs remain reachable */}
-        {(showTreeProp || showEditorProp) && (
+        {/* Tab bar — only show when editor tabs are available */}
+        {showEditorProp && (
         <div data-testid="mobile-workspace-tabbar" className="flex items-center h-[35px] border-b bg-muted/30 shrink-0 px-1 gap-0.5">
-          {showTreeProp && (
-            <>
-              <button
-                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-                  effectiveMobileTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
-                }`}
-                onClick={() => selectMobileTab('files')}
-              >
-                <FolderOpen className="h-3 w-3" />
-                Files
-              </button>
-              <button
-                className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
-                  effectiveMobileTab === 'git' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
-                }`}
-                onClick={() => selectMobileTab('git')}
-              >
-                <GitBranch className="h-3 w-3" />
-                Changes
-                {changedFileCount > 0 && (
-                  <span className="text-[9px] bg-primary/20 text-primary rounded-full px-1.5 leading-tight font-bold">
-                    {changedFileCount}
-                  </span>
-                )}
-              </button>
-            </>
-          )}
           {showEditorProp && (
           openTabs.length > 0 ? (
             <DropdownMenu onOpenChange={(open) => { if (open) selectMobileTab('editor') }}>
               <DropdownMenuTrigger asChild>
                 <button
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors min-w-0 ${
+                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors min-w-0 ${
                     effectiveMobileTab === 'editor' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
                   }`}
                 >
                   <span className="shrink-0">Editor</span>
                   {openTabs.length > 1 && (
-                    <span className="rounded-full bg-primary/15 px-1.5 text-[9px] font-bold leading-tight text-primary">
+                    <span className="rounded-full bg-primary/15 px-1.5 text-2xs font-bold leading-tight text-primary">
                       {openTabs.length}
                     </span>
                   )}
                   {(activeTab ?? editorFile) && (
-                    <span className="truncate text-[10px] text-muted-foreground max-w-[120px]">
+                    <span className="truncate text-2xs text-muted-foreground max-w-[120px]">
                       {'\u2014'} {activeTab ? getEditorTabTitle(activeTab) : editorFile?.path.split('/').pop()}
                     </span>
                   )}
@@ -4556,7 +4529,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       )}
                     >
                       {tab.type === 'diff' && tab.diffMode === 'git' && tab.diffEntry ? (
-                        <GitStatusBadge status={tab.diffEntry.status} className="text-[9px]" />
+                        <GitStatusBadge status={tab.diffEntry.status} className="text-2xs" />
                       ) : tab.type === 'architecture' ? (
                         <Boxes className="h-3.5 w-3.5 shrink-0" />
                       ) : tab.type === 'preview' ? (
@@ -4566,7 +4539,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       )}
                       <span className="min-w-0 flex-1 truncate">{getEditorTabTitle(tab)}</span>
                       {isActive && (
-                        <span className="text-[10px] font-medium text-muted-foreground/90">Current</span>
+                        <span className="text-2xs font-medium text-muted-foreground/90">Current</span>
                       )}
                     </DropdownMenuItem>
                   )
@@ -4584,14 +4557,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             </DropdownMenu>
           ) : (
             <button
-              className={`flex items-center gap-1 px-2.5 py-1 rounded text-[11px] font-medium transition-colors ${
+              className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors ${
                 effectiveMobileTab === 'editor' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
               }`}
               onClick={() => selectMobileTab('editor')}
             >
               Editor
               {editorFile && (
-                <span className="text-[10px] text-muted-foreground truncate max-w-[120px]">
+                <span className="text-2xs text-muted-foreground truncate max-w-[120px]">
                   {'\u2014'} {editorFile.path.split('/').pop()}
                 </span>
               )}
@@ -4604,7 +4577,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <button
                 type="button"
                 onClick={handleRefreshPreviewTarget}
-                className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
+                className="flex items-center text-xs text-muted-foreground hover:text-foreground px-1.5 shrink-0"
                 title="Refresh preview"
               >
                 <RefreshCw className="h-3 w-3" />
@@ -4612,7 +4585,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               <button
                 type="button"
                 onClick={() => setPreviewSidePanelOpen((prev) => !prev)}
-                className="flex items-center text-[11px] text-muted-foreground hover:text-foreground px-1.5 shrink-0"
+                className="flex items-center text-xs text-muted-foreground hover:text-foreground px-1.5 shrink-0"
                 title="Preview controls"
               >
                 <Settings2 className="h-3 w-3" />
@@ -4631,7 +4604,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             {onToggleTree && (
               <button
                 onClick={onToggleTree}
-                className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted"
+                className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted"
               >
                 <EyeOff className="h-3 w-3" />
               </button>
@@ -4655,7 +4628,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             )}
             <button
               onClick={() => setFileSearchMode(m => m === 'files' ? 'content' : 'files')}
-              className={`px-1.5 h-6 rounded text-[10px] font-medium shrink-0 ${fileSearchMode === 'content' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+              className={`px-1.5 h-6 rounded text-2xs font-medium shrink-0 ${fileSearchMode === 'content' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
               title={fileSearchMode === 'files' ? 'Switch to content search' : 'Switch to filename search'}
             >
               {fileSearchMode === 'files' ? 'Name' : 'Content'}
@@ -4760,7 +4733,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               {hasExtFiles && (
                 <>
                   {hasNativeTree && (
-                    <div className="text-[11px] uppercase tracking-wider text-muted-foreground px-2 pt-3 pb-1 font-medium">
+                    <div className="text-xs uppercase tracking-wider text-muted-foreground px-2 pt-3 pb-1 font-medium">
                       Dropped files
                     </div>
                   )}
@@ -4796,14 +4769,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           <div className="flex-1 flex flex-col min-h-0">
             <div className="flex items-center gap-1.5 h-7 px-2 border-b bg-muted/10 shrink-0">
               {gitStatus?.branch && (
-                <span className="text-[11px] text-muted-foreground truncate flex-1">
+                <span className="text-xs text-muted-foreground truncate flex-1">
                   <GitBranch className="h-3 w-3 inline mr-0.5 -mt-px" />
                   {gitStatus.branch}
                 </span>
               )}
               {remoteRoot && (
                 <select
-                  className="h-6 rounded border bg-background px-1.5 text-[10px] text-muted-foreground"
+                  className="h-6 rounded border bg-background px-1.5 text-2xs text-muted-foreground"
                   value={String(gitAutoFetchMode)}
                   onChange={(e) => handleGitAutoFetchModeChange(e.target.value)}
                   title={`${describeGitAutoFetchMode(gitAutoFetchMode)}. Interval: ${gitAutoFetchPeriodSeconds}s`}
@@ -4828,7 +4801,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   title={`Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}`}
                 >
                   <Download className="h-3.5 w-3.5" />
-                  <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground">
+                  <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-semibold leading-[14px] text-primary-foreground">
                     {gitStatus.behindCount}
                   </span>
                 </button>
@@ -4841,7 +4814,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   title={`Push ${gitStatus.aheadCount} commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
                 >
                   <Upload className="h-3.5 w-3.5" />
-                  <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground">
+                  <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-semibold leading-[14px] text-primary-foreground">
                     {gitStatus.aheadCount}
                   </span>
                 </button>
@@ -4891,7 +4864,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )}
               {gitStatus && changedFileCount > 0 && (
                 <div className="p-1">
-                  <div className="text-[11px] text-muted-foreground px-2 py-1.5 font-medium">
+                  <div className="text-xs text-muted-foreground px-2 py-1.5 font-medium">
                     Source Control ({changedFileCount})
                     <span className="ml-1">
                       <span className="text-green-500">+{gitStatus.index.insertions + gitStatus.workingTree.insertions}</span>
@@ -4964,11 +4937,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   Loading...
                 </div>
               ) : activeTab?.type === 'file' && activeTab.content ? (
-                <pre className="text-[11px] leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
+                <pre className="text-xs leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
                   <code>{activeTab.content}</code>
                 </pre>
               ) : editorFile ? (
-                <pre className="text-[11px] leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
+                <pre className="text-xs leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
                   <code>{editorFile.content}</code>
                 </pre>
               ) : (
@@ -4978,6 +4951,163 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               )}
             </div>
           </div>
+        )}
+
+        {/* Mobile file tree context menu — positioned dropdown at click point */}
+        {fileContextMenu && (
+          <div className="fixed inset-0 z-50" onPointerDown={() => setFileContextMenu(null)}>
+            <div
+              ref={fileContextMenuRef}
+              className="ui-panel-surface absolute max-h-[70vh] w-48 overflow-auto rounded-lg border p-1 shadow-lg"
+              style={fileContextMenuPosition ? { left: fileContextMenuPosition.left, top: fileContextMenuPosition.top } : { opacity: 0, left: fileContextMenu.x, top: fileContextMenu.y }}
+              onPointerDown={(e) => e.stopPropagation()}
+            >
+              <div className="px-2 py-1.5 text-xs font-medium text-muted-foreground truncate">
+                {fileContextMenu.node.name}
+              </div>
+              <button
+                className="ui-menu-item"
+                onClick={() => {
+                  void handleContextNativeNode(fileContextMenu.node)
+                  setFileContextMenu(null)
+                }}
+              >
+                <Plus className="h-3 w-3" />
+                Add to Chat
+              </button>
+              {fileContextMenu.node.kind === 'file' && (
+                <button
+                  className="ui-menu-item"
+                  onClick={() => {
+                    const node = fileContextMenu.node as LazyFile
+                    handleSelectNativeFile(node)
+                    setFileContextMenu(null)
+                  }}
+                >
+                  Open
+                </button>
+              )}
+              <div className="my-1 h-px bg-border" />
+              <button
+                className="ui-menu-item"
+                onClick={() => {
+                  const parentDir = fileContextMenu.node.kind === 'dir'
+                    ? fileContextMenu.node.path
+                    : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
+                  setNewItemTarget({ parentDir, kind: 'file' })
+                  setNewItemValue('')
+                  setFileContextMenu(null)
+                }}
+              >
+                <FilePlus className="h-3 w-3" />
+                New File
+              </button>
+              <button
+                className="ui-menu-item"
+                onClick={() => {
+                  const parentDir = fileContextMenu.node.kind === 'dir'
+                    ? fileContextMenu.node.path
+                    : fileContextMenu.node.path.includes('/') ? fileContextMenu.node.path.slice(0, fileContextMenu.node.path.lastIndexOf('/')) : remoteRoot ?? ''
+                  setNewItemTarget({ parentDir, kind: 'dir' })
+                  setNewItemValue('')
+                  setFileContextMenu(null)
+                }}
+              >
+                <FolderPlus className="h-3 w-3" />
+                New Folder
+              </button>
+              <div className="my-1 h-px bg-border" />
+              <button
+                className="ui-menu-item"
+                onClick={() => {
+                  setRenameTarget({ path: fileContextMenu.node.path, name: fileContextMenu.node.name, kind: fileContextMenu.node.kind === 'dir' ? 'dir' : 'file' })
+                  setRenameValue(fileContextMenu.node.name)
+                  setFileContextMenu(null)
+                }}
+              >
+                <Edit3 className="h-3 w-3" />
+                Rename
+              </button>
+              <button
+                className="ui-menu-item text-red-500 hover:text-red-600"
+                onClick={() => {
+                  void handleDeleteNode(fileContextMenu.node)
+                  setFileContextMenu(null)
+                }}
+              >
+                <Trash2 className="h-3 w-3" />
+                Delete
+              </button>
+              <div className="my-1 h-px bg-border" />
+              <button
+                className="ui-menu-item"
+                onClick={() => {
+                  handleCopyPath(fileContextMenu.node)
+                  setFileContextMenu(null)
+                }}
+              >
+                <Copy className="h-3 w-3" />
+                Copy Path
+              </button>
+              <button
+                className="ui-menu-item"
+                onClick={() => {
+                  handleCopyRelativePath(fileContextMenu.node)
+                  setFileContextMenu(null)
+                }}
+              >
+                <Copy className="h-3 w-3" />
+                Copy Relative Path
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Inline rename input (mobile) */}
+        {renameTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onPointerDown={() => setRenameTarget(null)}>
+          <div className="ui-panel-surface min-w-[280px] max-w-[calc(100vw-2rem)] p-4" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="mb-2 text-sm font-medium">Rename &ldquo;{renameTarget.name}&rdquo;</div>
+            <Input
+              className="h-10 text-sm"
+              autoFocus
+              value={renameValue}
+              onChange={(e) => setRenameValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleRenameConfirm()
+                if (e.key === 'Escape') setRenameTarget(null)
+              }}
+            />
+            <div className="mt-3 flex justify-end gap-1.5">
+              <Button variant="ghost" size="sm" className="h-8 rounded-md px-3 text-xs" onClick={() => setRenameTarget(null)}>Cancel</Button>
+              <Button size="sm" className="h-8 rounded-md px-3 text-xs" onClick={() => void handleRenameConfirm()}>Rename</Button>
+            </div>
+          </div>
+        </div>
+        )}
+
+        {/* New file/folder input (mobile) */}
+        {newItemTarget && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30" onPointerDown={() => setNewItemTarget(null)}>
+          <div className="ui-panel-surface min-w-[280px] max-w-[calc(100vw-2rem)] p-4" onPointerDown={(e) => e.stopPropagation()}>
+            <div className="mb-2 text-sm font-medium">New {newItemTarget.kind === 'dir' ? 'Folder' : 'File'}</div>
+            <Input
+              className="h-10 text-sm"
+              autoFocus
+              placeholder={newItemTarget.kind === 'dir' ? 'folder-name' : 'filename.ext'}
+              value={newItemValue}
+              onChange={(e) => setNewItemValue(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') void handleNewItemConfirm()
+                if (e.key === 'Escape') setNewItemTarget(null)
+              }}
+            />
+            <div className="mt-3 flex justify-end gap-1.5">
+              <Button variant="ghost" size="sm" className="h-8 rounded-md px-3 text-xs" onClick={() => setNewItemTarget(null)}>Cancel</Button>
+              <Button size="sm" className="h-8 rounded-md px-3 text-xs" onClick={() => void handleNewItemConfirm()}>Create</Button>
+            </div>
+          </div>
+        </div>
         )}
       </div>
     )
@@ -5012,7 +5142,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         {/* Tab bar: Files | Source Control */}
         <div className="flex items-center h-[35px] border-b bg-muted/20 shrink-0 px-1 gap-0.5 overflow-hidden">
           <button
-            className={`flex h-7 items-center gap-1 px-2 rounded text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+            className={`flex h-7 items-center gap-1 px-2 rounded text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
               treeTab === 'files' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => { setTreeTab('files'); setScDiffFile(null) }}
@@ -5021,7 +5151,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             Files
           </button>
           <button
-            className={`flex h-7 items-center gap-1 px-2 rounded text-[11px] font-medium transition-colors whitespace-nowrap shrink-0 ${
+            className={`flex h-7 items-center gap-1 px-2 rounded text-xs font-medium transition-colors whitespace-nowrap shrink-0 ${
               treeTab === 'git' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'
             }`}
             onClick={() => { setTreeTab('git'); setScDiffFile(null) }}
@@ -5029,7 +5159,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <GitBranch className="h-3 w-3 shrink-0" />
             Source Control
             {changedFileCount > 0 && (
-              <span className="ml-0.5 text-[9px] bg-primary/20 text-primary rounded-full px-1.5 leading-tight font-bold">
+              <span className="ml-0.5 text-2xs bg-primary/20 text-primary rounded-full px-1.5 leading-tight font-bold">
                 {changedFileCount}
               </span>
             )}
@@ -5037,7 +5167,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           <div className="flex-1" />
           <button
             onClick={() => tree.collapse()}
-            className="flex h-7 items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1 hover:bg-muted"
+            className="flex h-7 items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1 hover:bg-muted"
           >
             <EyeOff className="h-3 w-3" />
           </button>
@@ -5063,7 +5193,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           )}
           <button
             onClick={() => setFileSearchMode(m => m === 'files' ? 'content' : 'files')}
-            className={`px-1.5 h-5 rounded text-[9px] font-medium shrink-0 ${fileSearchMode === 'content' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
+            className={`px-1.5 h-5 rounded text-2xs font-medium shrink-0 ${fileSearchMode === 'content' ? 'bg-primary/20 text-primary' : 'text-muted-foreground hover:bg-muted'}`}
             title={fileSearchMode === 'files' ? 'Switch to content search' : 'Switch to filename search'}
           >
             {fileSearchMode === 'files' ? 'Name' : 'Content'}
@@ -5180,7 +5310,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             {hasExtFiles && (
               <>
                 {hasNativeTree && (
-                  <div className="text-[10px] uppercase tracking-wider text-muted-foreground px-2 pt-3 pb-1 font-medium">
+                  <div className="text-2xs uppercase tracking-wider text-muted-foreground px-2 pt-3 pb-1 font-medium">
                     Dropped files
                   </div>
                 )}
@@ -5211,7 +5341,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
             {!hasNativeTree && !hasExtFiles && (
               <div className="p-3 flex flex-col items-center gap-2">
-                <p className="text-[11px] text-muted-foreground">No files loaded yet. The workspace opens automatically when the agent works with files.</p>
+                <p className="text-xs text-muted-foreground">No files loaded yet. The workspace opens automatically when the agent works with files.</p>
               </div>
             )}
           </div>
@@ -5260,7 +5390,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 title={`Pull ${gitStatus.behindCount} commit${gitStatus.behindCount > 1 ? 's' : ''}`}
               >
                 <Download className="h-3 w-3" />
-                <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground">
+                <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-semibold leading-[14px] text-primary-foreground">
                   {gitStatus.behindCount}
                 </span>
               </button>
@@ -5273,7 +5403,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 title={`Push ${gitStatus.aheadCount} commit${gitStatus.aheadCount > 1 ? 's' : ''}`}
               >
                 <Upload className="h-3 w-3" />
-                <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-[9px] font-semibold leading-[14px] text-primary-foreground">
+                <span className="absolute -right-1 -top-1 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-semibold leading-[14px] text-primary-foreground">
                   {gitStatus.aheadCount}
                 </span>
               </button>
@@ -5382,7 +5512,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           {!effectiveShowTree && (showTreeProp || onToggleTree) && (
             <button
               onClick={() => { if (tree.collapsed) tree.restore(); else if (onToggleTree) onToggleTree() }}
-              className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 ml-1"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 ml-1"
               title="Show Files"
             >
               <FolderTree className="h-3 w-3" />
@@ -5458,7 +5588,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     <div className="absolute inset-0 border border-primary/60 pointer-events-none" />
                   )}
                   {gitStatus4tab ? (
-                    <GitStatusBadge status={gitStatus4tab} className="text-[9px]" />
+                    <GitStatusBadge status={gitStatus4tab} className="text-2xs" />
                   ) : tab.type === 'architecture' ? (
                     <Boxes className="h-3.5 w-3.5 shrink-0" />
                   ) : tab.type === 'preview' ? (
@@ -5466,7 +5596,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   ) : (
                     <FileIcon filename={tab.path} className="h-3.5 w-3.5 shrink-0" />
                   )}
-                  {tab.isDirty && <span className="shrink-0 text-[10px] leading-none text-primary">*</span>}
+                  {tab.isDirty && <span className="shrink-0 text-2xs leading-none text-primary">*</span>}
                   <span className="truncate max-w-[220px]">
                     {getEditorTabTitle(tab)}
                   </span>
@@ -5488,7 +5618,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               {canMaximizeActiveTab && (
                 <button
                   onClick={() => setTabMaximized((prev) => !prev)}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
                   title={tabMaximized ? 'Restore tab size' : 'Maximize active tab'}
                 >
                   {tabMaximized ? <Minimize2 className="h-3 w-3" /> : <Expand className="h-3 w-3" />}
@@ -5497,7 +5627,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               {activeTabEditable && (
                 <button
                   onClick={() => { if (activeTabId) void handleSaveTab(activeTabId) }}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
                   title={activeTab?.isSaving ? 'Saving...' : 'Save file (Ctrl/Cmd+S)'}
                   disabled={activeTab?.isSaving}
                 >
@@ -5508,14 +5638,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                 <>
                   <button
                     onClick={handleRefreshPreviewTarget}
-                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
                     title="Refresh preview"
                   >
                     <RefreshCw className="h-3 w-3" />
                   </button>
                   <button
                     onClick={() => setPreviewSidePanelOpen((prev) => !prev)}
-                    className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
                     title="Preview controls"
                   >
                     <Settings2 className="h-3 w-3" />
@@ -5525,7 +5655,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               {onToggleEditor && !panel.collapsed && !panel.maxCollapsed && (
                 <button
                   onClick={onToggleEditor}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 mx-1"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0 mx-1"
                 >
                   <EyeOff className="h-3 w-3" />
                 </button>
@@ -5533,7 +5663,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               {panel.maxCollapsed && (
                 <button
                   onClick={panel.restore}
-                  className="flex items-center gap-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
+                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1.5 py-0.5 hover:bg-muted shrink-0"
                   title="Show Chat"
                 >
                   <MessageSquare className="h-3 w-3" />
@@ -5543,7 +5673,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           )}
         </div>
         {activeTabEditable && activeTab?.saveError && (
-          <div className="border-b bg-destructive/5 px-3 py-1 text-[11px] text-destructive shrink-0">
+          <div className="border-b bg-destructive/5 px-3 py-1 text-xs text-destructive shrink-0">
             {activeTab.saveError}
           </div>
         )}

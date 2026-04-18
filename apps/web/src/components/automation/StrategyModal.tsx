@@ -132,7 +132,7 @@ export function StrategyModal({ open, onOpenChange, repoId, repoName }: Strategy
             <span className="text-muted-foreground">—</span>
             <span className="font-normal text-muted-foreground">{repoName}</span>
             {isDirty && (
-              <span className="ml-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-[10px] text-amber-600 dark:text-amber-400">
+              <span className="ml-1 rounded bg-amber-500/10 px-1.5 py-0.5 text-2xs text-amber-600 dark:text-amber-400">
                 unsaved
               </span>
             )}

@@ -7,7 +7,7 @@ const gatewayTarget = process.env.JAIT_GATEWAY_URL ?? 'http://localhost:8000'
 
 export default defineConfig({
   plugins: [react()],
-  base: './',
+  base: '/',
   build: {
     sourcemap: true,
   },

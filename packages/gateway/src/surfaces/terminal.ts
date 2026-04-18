@@ -105,6 +105,32 @@ function defaultShell(): string {
   return process.env["SHELL"] ?? "/bin/bash";
 }
 
+const ALLOWED_SHELLS: Record<string, string[]> = {
+  win32: ["pwsh.exe", "powershell.exe", "cmd.exe"],
+  linux: ["/bin/bash", "/bin/zsh", "/bin/sh"],
+  darwin: ["/bin/zsh", "/bin/bash", "/bin/sh"],
+};
+
+export function availableShells(): { shell: string; label: string }[] {
+  const plat = platform();
+  const candidates = ALLOWED_SHELLS[plat] ?? ALLOWED_SHELLS.linux!;
+  const shells: { shell: string; label: string }[] = [];
+  for (const shell of candidates!) {
+    try {
+      if (plat === "win32") {
+        execSync(`where ${shell}`, { stdio: "ignore", timeout: 3000, windowsHide: true });
+      } else {
+        execSync(`which ${shell}`, { stdio: "ignore", timeout: 3000 });
+      }
+      const name = shell.replace(/\.exe$/, "").split("/").pop() ?? shell;
+      shells.push({ shell, label: name });
+    } catch {
+      // not available
+    }
+  }
+  return shells;
+}
+
 /** Detect which integration script to source based on the shell binary */
 function shellIntegrationScript(shell: string): { path: string; type: "pwsh" | "bash" | "zsh" } | null {
   const name = shell.toLowerCase().replace(/\.exe$/, "");

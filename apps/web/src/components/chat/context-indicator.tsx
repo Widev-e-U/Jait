@@ -111,7 +111,7 @@ export function ContextIndicator({ usage }: ContextIndicatorProps) {
               />
             ))}
           </svg>
-          <span className="text-[10px] tabular-nums text-muted-foreground">{pct}%</span>
+          <span className="text-2xs tabular-nums text-muted-foreground">{pct}%</span>
         </button>
       </TooltipTrigger>
       <TooltipContent
@@ -134,7 +134,7 @@ export function ContextIndicator({ usage }: ContextIndicatorProps) {
           </div>
           <div className="space-y-0.5">
             {categories.map(cat => (
-              <div key={cat.label} className="flex items-center justify-between text-[11px]">
+              <div key={cat.label} className="flex items-center justify-between text-xs">
                 <div className="flex items-center gap-1.5">
                   <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: cat.color }} />
                   <span className="text-muted-foreground">{cat.label}</span>
@@ -144,7 +144,7 @@ export function ContextIndicator({ usage }: ContextIndicatorProps) {
             ))}
           </div>
           {usage.pruned && (
-            <div className="text-[10px] text-amber-500 pt-0.5 border-t border-border">
+            <div className="text-2xs text-amber-500 pt-0.5 border-t border-border">
               Old messages pruned to fit context
             </div>
           )}

@@ -187,7 +187,7 @@ function InstalledPlugins({ token }: { token: string | null }) {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 <span className="font-medium">{plugin.displayName}</span>
-                <Badge variant={badge.variant} className="text-[10px]">
+                <Badge variant={badge.variant} className="text-2xs">
                   {badge.label}
                 </Badge>
                 <span className="text-xs text-muted-foreground">v{plugin.version}</span>
@@ -201,7 +201,7 @@ function InstalledPlugins({ token }: { token: string | null }) {
               {plugin.error && (
                 <p className="mt-1 text-xs text-destructive">{plugin.error}</p>
               )}
-              <p className="mt-0.5 text-[10px] text-muted-foreground/60 font-mono">{plugin.id}</p>
+              <p className="mt-0.5 text-2xs text-muted-foreground/60 font-mono">{plugin.id}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2">
               <Switch
@@ -321,7 +321,7 @@ function PluginMarketplace({ token }: { token: string | null }) {
                 {pkg.version && (
                   <span className="text-xs text-muted-foreground">v{pkg.version}</span>
                 )}
-                <Badge variant="outline" className="text-[10px]">
+                <Badge variant="outline" className="text-2xs">
                   {typ}
                 </Badge>
               </div>

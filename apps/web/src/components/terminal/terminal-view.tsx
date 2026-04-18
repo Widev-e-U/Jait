@@ -1,4 +1,4 @@
-import { useEffect, useRef, useCallback, useState } from 'react'
+import { useEffect, useRef, useCallback, useState, forwardRef, useImperativeHandle } from 'react'
 import { Terminal } from '@xterm/xterm'
 import { FitAddon } from '@xterm/addon-fit'
 import { WebLinksAddon } from '@xterm/addon-web-links'
@@ -7,6 +7,7 @@ import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 import { shouldAcceptTerminalOutput, type TerminalOutputPayload } from './terminal-stream'
 import { buildTerminalDragPayload, JAIT_TERMINAL_REF_MIME } from '@/lib/jait-dnd'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
+import { ChevronDown } from 'lucide-react'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
@@ -105,7 +106,7 @@ export function useTerminals(token?: string | null) {
 
   const creatingRef = useRef(false)
   const createTerminal = useCallback(
-    async (sessionId: string, workspaceRoot?: string) => {
+    async (sessionId: string, workspaceRoot?: string, shell?: string) => {
       if (creatingRef.current) return terminals[0] ?? ({ id: '', type: 'terminal', state: 'idle', sessionId, workspaceRoot: workspaceRoot ?? null, metadata: {} } as TerminalInfo)
       creatingRef.current = true
       try {
@@ -115,7 +116,7 @@ export function useTerminals(token?: string | null) {
             'Content-Type': 'application/json',
             ...authHeaders(token),
           },
-          body: JSON.stringify({ sessionId, workspaceRoot }),
+          body: JSON.stringify({ sessionId, workspaceRoot, ...(shell ? { shell } : {}) }),
         })
         const info = enrichTerminal((await res.json()) as TerminalInfo)
         setTerminals((prev) => [...prev, info])
@@ -144,6 +145,34 @@ export function useTerminals(token?: string | null) {
   return { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh }
 }
 
+export interface ShellOption {
+  shell: string
+  label: string
+}
+
+export function useAvailableShells(token?: string | null) {
+  const [shells, setShells] = useState<ShellOption[]>([])
+  const fetchedRef = useRef(false)
+
+  useEffect(() => {
+    if (fetchedRef.current) return
+    fetchedRef.current = true
+    void (async () => {
+      try {
+        const res = await fetch(`${GATEWAY}/api/terminals/shells`, {
+          headers: authHeaders(token),
+        })
+        const data = (await res.json()) as { shells: ShellOption[] }
+        setShells(data.shells ?? [])
+      } catch {
+        // gateway unavailable
+      }
+    })()
+  }, [token])
+
+  return shells
+}
+
 interface TerminalViewProps {
   terminalId: string
   className?: string
@@ -152,13 +181,23 @@ interface TerminalViewProps {
   onReferenceSelection?: (terminalId: string, selection: string, workspaceRoot?: string | null, startLine?: number, endLine?: number) => void
 }
 
-export function TerminalView({ terminalId, className, token, workspaceRoot, onReferenceSelection }: TerminalViewProps) {
+export interface TerminalViewHandle {
+  focus(): void
+}
+
+export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView({ terminalId, className, token, workspaceRoot, onReferenceSelection }, ref) {
   const containerRef = useRef<HTMLDivElement>(null)
   const termRef = useRef<Terminal | null>(null)
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const lastSelectionKeyRef = useRef<string | null>(null)
   const resolvedTheme = useResolvedTheme()
+
+  useImperativeHandle(ref, () => ({
+    focus() {
+      termRef.current?.focus()
+    },
+  }), [])
 
   useEffect(() => {
     if (!containerRef.current) return
@@ -196,6 +235,11 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
       fitAddon.fit()
       term.focus()
     })
+    // Retry focus after layout settles (some browsers need a longer delay)
+    const focusRetryId = setTimeout(() => {
+      fitAddon.fit()
+      term.focus()
+    }, 150)
 
     termRef.current = term
     fitRef.current = fitAddon
@@ -238,7 +282,7 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
 
       ws.onmessage = (e) => {
         try {
-          const msg = JSON.parse(e.data as string) as { payload?: TerminalOutputPayload }
+          const msg = JSON.parse(e.data as string) as { type?: string; payload?: TerminalOutputPayload }
           if (shouldAcceptTerminalOutput(lastSeqByStream, terminalId, msg.payload)) {
             term.write(msg.payload.data ?? '')
           }
@@ -327,6 +371,7 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
 
     return () => {
       disposed = true
+      clearTimeout(focusRetryId)
       clearReconnectTimer()
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange)
@@ -350,23 +395,54 @@ export function TerminalView({ terminalId, className, token, workspaceRoot, onRe
   }, [resolvedTheme])
 
   return (
-    <div className={`w-full overflow-hidden ${className ?? ''}`} onClick={() => termRef.current?.focus()}>
-      <div ref={containerRef} className="h-full w-full" />
+    <div
+      className={`w-full overflow-hidden ${className ?? ''}`}
+      tabIndex={-1}
+      onMouseDown={(e) => {
+        // Only focus terminal if user clicked directly on the terminal area
+        if (e.target === e.currentTarget || containerRef.current?.contains(e.target as Node)) {
+          requestAnimationFrame(() => termRef.current?.focus())
+        }
+      }}
+    >
+      <div ref={containerRef} className="h-full w-full" style={{ minHeight: 0 }} />
     </div>
   )
-}
+})
+
+const TAB_POPOUT_VIEWPORT_MARGIN = 16
 
 interface TerminalTabsProps {
   terminals: TerminalInfo[]
   activeTerminalId: string | null
   onSelect: (id: string) => void
-  onCreate: () => void
+  onCreate: (shell?: string) => void
   onKill: (id: string) => void
+  onDetach?: (id: string) => void
+  availableShells?: ShellOption[]
 }
 
-export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, onKill }: TerminalTabsProps) {
+export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, onKill, onDetach, availableShells }: TerminalTabsProps) {
+  const [showShellMenu, setShowShellMenu] = useState(false)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const [menuPos, setMenuPos] = useState<{ top: number; left: number } | null>(null)
+
+  useEffect(() => {
+    if (!showShellMenu) return
+    const handleClickOutside = (e: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(e.target as Node) &&
+          triggerRef.current && !triggerRef.current.contains(e.target as Node)) {
+        setShowShellMenu(false)
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside)
+    return () => document.removeEventListener('mousedown', handleClickOutside)
+  }, [showShellMenu])
+
+  const hasMultipleShells = availableShells && availableShells.length > 1
   return (
-    <div className="flex items-center gap-1 px-2 h-[35px] border-b bg-background shrink-0 overflow-x-auto">
+    <div className="flex items-center gap-1 px-2 h-9 border-b bg-background shrink-0 overflow-x-auto">
       {terminals.map((t) => (
         <div
           key={t.id}
@@ -384,12 +460,24 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
               )),
             )
           }}
+          onDragEnd={(e) => {
+            if (!onDetach) return
+            const outsideViewport =
+              e.clientX <= TAB_POPOUT_VIEWPORT_MARGIN ||
+              e.clientY <= TAB_POPOUT_VIEWPORT_MARGIN ||
+              e.clientX >= window.innerWidth - TAB_POPOUT_VIEWPORT_MARGIN ||
+              e.clientY >= window.innerHeight - TAB_POPOUT_VIEWPORT_MARGIN
+            const droppedOutsideWindow =
+              e.dataTransfer.dropEffect === 'none' &&
+              (e.clientX === 0 || e.clientY === 0)
+            if (outsideViewport || droppedOutsideWindow) onDetach(t.id)
+          }}
           onClick={() => onSelect(t.id)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(t.id) }}
-          className={`group flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors cursor-pointer ${
+          className={`group flex items-center gap-1.5 h-6 px-2.5 text-xs rounded-sm border transition-colors cursor-pointer ${
             activeTerminalId === t.id
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground hover:bg-background/50'
+              ? 'bg-background text-foreground border-border shadow-sm'
+              : 'text-muted-foreground border-transparent hover:text-foreground hover:bg-background/50 hover:border-border'
           }`}
         >
           <span className={`w-1.5 h-1.5 rounded-full ${t.state === 'running' ? 'bg-green-500' : 'bg-zinc-500'}`} />
@@ -399,18 +487,60 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
               e.stopPropagation()
               onKill(t.id)
             }}
-            className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive ml-0.5"
+            className="text-muted-foreground hover:text-destructive ml-0.5 text-sm leading-none"
+            aria-label="Close terminal"
           >
             ×
           </button>
         </div>
       ))}
-      <button
-        onClick={onCreate}
-        className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
-      >
-        +
-      </button>
+      <div className="flex items-center">
+        <button
+          onClick={() => onCreate()}
+          className="px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          aria-label="New terminal"
+        >
+          +
+        </button>
+        {hasMultipleShells && (
+          <button
+            ref={triggerRef}
+            onClick={() => {
+              if (showShellMenu) {
+                setShowShellMenu(false)
+                return
+              }
+              const rect = triggerRef.current?.getBoundingClientRect()
+              if (rect) setMenuPos({ top: rect.bottom + 4, left: rect.left })
+              setShowShellMenu(true)
+            }}
+            className="px-0.5 py-1 text-muted-foreground hover:text-foreground transition-colors"
+            aria-label="Select shell type"
+          >
+            <ChevronDown className="h-3 w-3" />
+          </button>
+        )}
+      </div>
+      {showShellMenu && hasMultipleShells && menuPos && (
+        <div
+          ref={menuRef}
+          className="fixed z-50 min-w-[120px] rounded-md border bg-popover p-1 shadow-md"
+          style={{ top: menuPos.top, left: menuPos.left }}
+        >
+          {availableShells.map((s) => (
+            <button
+              key={s.shell}
+              onClick={() => {
+                onCreate(s.shell)
+                setShowShellMenu(false)
+              }}
+              className="flex w-full items-center rounded-sm px-2 py-1.5 text-xs hover:bg-accent hover:text-accent-foreground transition-colors"
+            >
+              {s.label}
+            </button>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

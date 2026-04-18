@@ -177,7 +177,7 @@ function RiskBadge({ risk }: { risk: 'low' | 'medium' | 'high' }) {
   const Icon = icons[risk]
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${colors[risk]}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${colors[risk]}`}>
       <Icon className="h-3 w-3" />
       {risk}
     </span>
@@ -193,7 +193,7 @@ function ConsentLevelBadge({ level }: { level: ConsentRequestInfo['policy']['con
   }
 
   return (
-    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-medium ${config[level]}`}>
+    <span className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${config[level]}`}>
       {level}
     </span>
   )
@@ -224,7 +224,7 @@ function TimeRemaining({ expiresAt }: { expiresAt: string }) {
   }, [expiresAt])
 
   return (
-    <span className="inline-flex items-center gap-1 text-[11px] text-muted-foreground">
+    <span className="inline-flex items-center gap-1 text-xs text-muted-foreground">
       <Clock className="h-3 w-3" />
       {remaining}
     </span>
@@ -309,13 +309,13 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
             <ConsentLevelBadge level={request.policy.consentLevel} />
             <TimeRemaining expiresAt={request.expiresAt} />
           </div>
-          <p className="text-[11px] text-muted-foreground truncate">{request.summary}</p>
+          <p className="text-xs text-muted-foreground truncate">{request.summary}</p>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             onClick={handleApprove}
             disabled={deciding}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-green-500/10 text-green-600 dark:text-green-400 hover:bg-green-500/20 disabled:opacity-50 transition-colors"
           >
             <ShieldCheck className="h-3 w-3" />
             Approve
@@ -323,7 +323,7 @@ export function ActionCard({ request, onApprove, onReject, compact = false }: Ac
           <button
             onClick={handleReject}
             disabled={deciding}
-            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-medium bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
+            className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-xs font-medium bg-red-500/10 text-red-600 dark:text-red-400 hover:bg-red-500/20 disabled:opacity-50 transition-colors"
           >
             <ShieldX className="h-3 w-3" />
             Reject

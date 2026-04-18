@@ -94,10 +94,10 @@ export function ActivityItem({ activity }: { activity: ThreadActivity }) {
           <Icon className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">{meta.label}</span>
           {tool && (
-            <code className="rounded bg-muted px-1.5 py-0.5 text-[10px]">{tool}</code>
+            <code className="rounded bg-muted px-1.5 py-0.5 text-2xs">{tool}</code>
           )}
         </span>
-        <span className="text-[10px] text-muted-foreground">{new Date(activity.createdAt).toLocaleTimeString()}</span>
+        <span className="text-2xs text-muted-foreground">{new Date(activity.createdAt).toLocaleTimeString()}</span>
       </div>
       {summary && (
         <pre className="whitespace-pre-wrap break-words text-sm leading-relaxed">{summary}</pre>
@@ -109,8 +109,8 @@ export function ActivityItem({ activity }: { activity: ThreadActivity }) {
       )}
       {payload && (
         <details className="mt-2 rounded-md border bg-muted/30 px-2 py-1">
-          <summary className="cursor-pointer text-[11px] text-muted-foreground">Payload</summary>
-          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-[11px] leading-relaxed">
+          <summary className="cursor-pointer text-xs text-muted-foreground">Payload</summary>
+          <pre className="mt-1 max-h-40 overflow-auto whitespace-pre-wrap break-words text-xs leading-relaxed">
             {JSON.stringify(payload, null, 2)}
           </pre>
         </details>

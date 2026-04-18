@@ -92,14 +92,14 @@ export function DetachedTabView({ detachedTabId }: { detachedTabId: string }) {
         <span className="truncate text-sm font-medium">{payload.title}</span>
         <div className="ml-auto flex items-center gap-1.5">
           {payload.tab.type === 'file' && (
-            <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]" onClick={() => { void handleSave() }} disabled={isSaving}>
+            <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs" onClick={() => { void handleSave() }} disabled={isSaving}>
               {isSaving ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
               Save
             </Button>
           )}
           {payload.tab.type === 'preview' && previewSrc && (
             <a href={previewSrc} target="_blank" rel="noreferrer" className="inline-flex">
-              <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-[11px]">
+              <Button type="button" variant="ghost" size="sm" className="h-8 px-2 text-xs">
                 <ExternalLink className="mr-1 h-3 w-3" />
                 Open
               </Button>

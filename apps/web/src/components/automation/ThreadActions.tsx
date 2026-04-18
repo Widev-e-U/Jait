@@ -262,7 +262,7 @@ export function ThreadActions({
           <Button
             variant="ghost"
             size="sm"
-            className={`h-5 text-[10px] gap-1 ${isMobile ? 'px-1.5' : ''}`}
+            className={`h-5 text-2xs gap-1 ${isMobile ? 'px-1.5' : ''}`}
             onClick={() => setDiffOpen(true)}
             title="View changes"
             aria-label={`View changes: +${changeTotals.insertions} -${changeTotals.deletions}`}
@@ -274,7 +274,7 @@ export function ThreadActions({
         <Button
           variant="ghost"
           size="sm"
-          className={`h-5 text-[10px] gap-1 ${isMobile ? 'px-1.5' : ''}`}
+          className={`h-5 text-2xs gap-1 ${isMobile ? 'px-1.5' : ''}`}
           disabled={isBusy || !canCreatePr}
           onClick={handlePushAndPR}
           title={threadKind !== 'delivery'
@@ -290,7 +290,7 @@ export function ThreadActions({
         {showStatusBadge && existingPrLink && (
           <Badge
             variant="outline"
-            className={`h-5 px-1.5 text-[10px] font-medium ${
+            className={`h-5 px-1.5 text-2xs font-medium ${
               effectivePrState === 'merged'
                 ? 'border-purple-500/40 text-purple-700 bg-purple-500/10 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/40'
                 : effectivePrState === 'closed'
@@ -316,7 +316,7 @@ export function ThreadActions({
         {showStatusBadge && existingPrLink?.kind === 'created' && effectivePrState === 'open' && checksStatus && (
           <Badge
             variant="outline"
-            className={`h-5 px-1.5 text-[10px] font-medium inline-flex items-center gap-0.5 ${
+            className={`h-5 px-1.5 text-2xs font-medium inline-flex items-center gap-0.5 ${
               checksStatus === 'failing'
                 ? 'border-red-500/40 text-red-700 bg-red-500/10 dark:text-red-300 dark:bg-red-500/20 dark:border-red-400/40'
                 : checksStatus === 'pending'

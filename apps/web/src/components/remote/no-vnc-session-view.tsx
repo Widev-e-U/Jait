@@ -328,13 +328,13 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
             <Info className="h-3.5 w-3.5" />
           </button>
           {isHintExpanded ? (
-            <div className="max-w-[260px] rounded-xl bg-background/90 px-3 py-2 text-[11px] text-muted-foreground shadow backdrop-blur-sm">
+            <div className="max-w-[260px] rounded-xl bg-background/90 px-3 py-2 text-xs text-muted-foreground shadow backdrop-blur-sm">
               Scroll to zoom. Middle-drag to pan. Click the preview to interact.
             </div>
           ) : null}
         </div>
         {overlay ? (
-          <div className="rounded bg-background/90 px-2 py-1 text-[11px] text-muted-foreground shadow">
+          <div className="rounded bg-background/90 px-2 py-1 text-xs text-muted-foreground shadow">
             {overlay}
           </div>
         ) : null}
@@ -345,7 +345,7 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
         </div>
       ) : null}
       {/* Floating controls — always accessible */}
-      <div className="absolute bottom-2 right-2 z-20 flex items-center gap-0.5 rounded bg-background/90 px-1.5 py-1 text-[11px] text-muted-foreground shadow">
+      <div className="absolute bottom-2 right-2 z-20 flex items-center gap-0.5 rounded bg-background/90 px-1.5 py-1 text-xs text-muted-foreground shadow">
         <button
           type="button"
           className={`rounded px-1.5 py-0.5 ${navigating ? 'bg-primary/15 text-primary' : 'hover:bg-muted'}`}

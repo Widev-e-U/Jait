@@ -69,11 +69,11 @@ function QueueItemPreview({ item, index }: { item: QueuedMessage; index: number 
       </div>
       <div className="min-w-0 flex-1">
         {index === 0 ? (
-          <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wider text-primary/70">
+          <span className="mb-0.5 block text-2xs font-medium uppercase tracking-wider text-primary/70">
             Next
           </span>
         ) : (
-          <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wider text-muted-foreground">
+          <span className="mb-0.5 block text-2xs font-medium uppercase tracking-wider text-muted-foreground">
             Queued #{index + 1}
           </span>
         )}
@@ -204,12 +204,12 @@ function QueueItem({
       {/* Content: read-only or editable */}
       <div className="flex-1 min-w-0">
         {index === 0 && !editing && (
-          <span className="text-[10px] font-medium uppercase tracking-wider text-primary/70 block mb-0.5">
+          <span className="text-2xs font-medium uppercase tracking-wider text-primary/70 block mb-0.5">
             Next
           </span>
         )}
         {index > 0 && !editing && (
-          <span className="text-[10px] font-medium uppercase tracking-wider text-muted-foreground block mb-0.5">
+          <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground block mb-0.5">
             Queued #{index + 1}
           </span>
         )}
@@ -443,7 +443,7 @@ export function MessageQueue({ items, onRemove, onEdit, onReorder, onSendToParal
   return (
     <div ref={containerRef} className={cn('space-y-1.5', className)}>
       <div className="flex items-center gap-1.5 px-0.5">
-        <span className="text-[11px] font-medium text-muted-foreground">
+        <span className="text-xs font-medium text-muted-foreground">
           {items.length} queued message{items.length !== 1 ? 's' : ''}
         </span>
       </div>

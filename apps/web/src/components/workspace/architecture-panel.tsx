@@ -255,7 +255,6 @@ export function ArchitecturePanel({
     return (
       <div className="h-full flex flex-col items-center justify-center text-muted-foreground gap-4 px-8">
         <div className="flex flex-col items-center gap-2 text-center">
-          <Sparkles className="h-8 w-8 text-primary/60" />
           <h3 className="text-sm font-medium text-foreground">Software Architecture</h3>
           <p className="text-xs max-w-sm">
             Generate a visual architecture diagram of your workspace. The AI will analyze
@@ -279,7 +278,7 @@ export function ArchitecturePanel({
     <div className="h-full flex flex-col">
       {/* Toolbar */}
       <div className="flex items-center gap-1 px-2 h-8 border-b bg-muted/20 shrink-0">
-        <span className="text-[11px] font-medium text-muted-foreground mr-auto">Architecture</span>
+        <span className="text-xs font-medium text-muted-foreground mr-auto">Architecture</span>
         <button
           onClick={() => updateZoom(zoom - 0.25)}
           className="p-1 rounded hover:bg-muted transition-colors"
@@ -287,7 +286,7 @@ export function ArchitecturePanel({
         >
           <ZoomOut className="h-3 w-3" />
         </button>
-        <span className="text-[10px] text-muted-foreground min-w-[3ch] text-center">{Math.round(zoom * 100)}%</span>
+        <span className="text-2xs text-muted-foreground min-w-[3ch] text-center">{Math.round(zoom * 100)}%</span>
         <button
           onClick={() => updateZoom(zoom + 0.25)}
           className="p-1 rounded hover:bg-muted transition-colors"
@@ -355,7 +354,7 @@ export function ArchitecturePanel({
           </div>
         )}
         {isGenerating && diagram && (
-          <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded bg-background/80 border text-[11px] text-muted-foreground">
+          <div className="absolute top-2 right-2 z-10 flex items-center gap-1.5 px-2 py-1 rounded bg-background/80 border text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             Regenerating…
           </div>
@@ -367,7 +366,7 @@ export function ArchitecturePanel({
             {diagram && (
               <details className="mt-2">
                 <summary className="cursor-pointer text-muted-foreground hover:text-foreground">View source</summary>
-                <pre className="mt-1 p-2 bg-muted rounded text-[10px] whitespace-pre-wrap">{diagram}</pre>
+                <pre className="mt-1 p-2 bg-muted rounded text-2xs whitespace-pre-wrap">{diagram}</pre>
               </details>
             )}
           </div>

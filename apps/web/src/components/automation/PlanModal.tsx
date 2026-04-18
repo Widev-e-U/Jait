@@ -38,7 +38,7 @@ const STATUS_CONFIG: Record<PlanTaskStatus, { label: string; color: string; bg: 
 function TaskStatusBadge({ status }: { status: PlanTaskStatus }) {
   const cfg = STATUS_CONFIG[status]
   return (
-    <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-[10px] font-medium ${cfg.color} ${cfg.bg}`}>
+    <span className={`inline-flex items-center rounded-full px-1.5 py-0.5 text-2xs font-medium ${cfg.color} ${cfg.bg}`}>
       {cfg.label}
     </span>
   )
@@ -300,7 +300,7 @@ export function PlanModal({
             <span className="text-muted-foreground">—</span>
             <span className="font-normal text-muted-foreground">{repoName}</span>
             {activePlan && totalCount > 0 && (
-              <span className="ml-auto text-[10px] text-muted-foreground">
+              <span className="ml-auto text-2xs text-muted-foreground">
                 {completedCount}/{totalCount} done
               </span>
             )}
@@ -335,7 +335,7 @@ export function PlanModal({
                       <option key={p.id} value={p.id}>{p.title} ({p.tasks.length} tasks)</option>
                     ))}
                   </select>
-                  <Button variant="ghost" size="sm" className="h-6 px-2 text-[10px]" onClick={handleCreatePlan}>
+                  <Button variant="ghost" size="sm" className="h-6 px-2 text-2xs" onClick={handleCreatePlan}>
                     <Plus className="h-3 w-3" />
                   </Button>
                 </div>
@@ -507,7 +507,7 @@ export function PlanModal({
                                 </p>
                               )}
                               {task.threadId && (
-                                <p className="mt-1 text-[10px] text-muted-foreground">
+                                <p className="mt-1 text-2xs text-muted-foreground">
                                   Thread: <code className="rounded bg-muted px-1">{task.threadId.slice(-8)}</code>
                                 </p>
                               )}

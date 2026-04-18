@@ -176,7 +176,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
                 {tool.description ? (
                   <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{tool.description}</p>
                 ) : null}
-                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/40 p-2 font-mono text-[11px] leading-5">
+                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/40 p-2 font-mono text-xs leading-5">
                   {stringifyExact(tool.raw)}
                 </pre>
               </details>
@@ -198,7 +198,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
             </span>
             <span className="text-xs text-muted-foreground">rendered chat answer</span>
           </div>
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background/70 p-3 font-mono text-[11px] leading-5 text-foreground [overflow-wrap:anywhere]">
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background/70 p-3 font-mono text-xs leading-5 text-foreground [overflow-wrap:anywhere]">
             {row.content || '(empty response)'}
           </pre>
         </div>
@@ -216,7 +216,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
           </span>
           <span className="text-xs text-muted-foreground">round {row.roundNumber} / message {row.index + 1}</span>
         </div>
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/35 p-3 font-mono text-[11px] leading-5 text-foreground [overflow-wrap:anywhere]">
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/35 p-3 font-mono text-xs leading-5 text-foreground [overflow-wrap:anywhere]">
           {row.content || '(empty content)'}
         </pre>
         {row.toolCalls.length > 0 ? (
@@ -226,7 +226,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
                 <summary className="cursor-pointer text-xs font-medium text-amber-800 dark:text-amber-200">
                   Tool call: {call.name} <span className="font-normal text-muted-foreground">({call.id})</span>
                 </summary>
-                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background/70 p-2 font-mono text-[11px] leading-5">
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background/70 p-2 font-mono text-xs leading-5">
                   {call.args || '{}'}
                 </pre>
               </details>
@@ -235,7 +235,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
         ) : null}
         <details className="mt-2">
           <summary className="cursor-pointer text-xs text-muted-foreground">Raw message JSON</summary>
-          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/35 p-2 font-mono text-[11px] leading-5">
+          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/35 p-2 font-mono text-xs leading-5">
             {stringifyExact(row.raw)}
           </pre>
         </details>

@@ -120,7 +120,7 @@ export function VoiceAssistantOverlay({ session, onClose }: VoiceAssistantOverla
           onDisconnect={handleDisconnect}
         />
         <p className="text-center text-xs text-muted-foreground/40 mt-3">
-          Press <kbd className="px-1 py-0.5 rounded bg-muted/30 text-muted-foreground/60 text-[10px] font-mono">Esc</kbd> to end
+          Press <kbd className="px-1 py-0.5 rounded bg-muted/30 text-muted-foreground/60 text-2xs font-mono">Esc</kbd> to end
         </p>
       </div>
     </div>

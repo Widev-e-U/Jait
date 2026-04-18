@@ -279,7 +279,7 @@ export function ReadOnlyDiffView({
           >
             <ChevronUp className="h-5 w-5" />
           </Button>
-          <span className="text-center font-medium tabular-nums text-[10px] text-muted-foreground">
+          <span className="text-center font-medium tabular-nums text-2xs text-muted-foreground">
             {activeIndex + 1}/{changes.length}
           </span>
           <Button

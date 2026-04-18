@@ -7,6 +7,7 @@ import {
   Bug,
   Cast,
   ChevronDown,
+  ChevronUp,
   Code,
   Eye,
   EyeOff,
@@ -40,6 +41,9 @@ import {
   ScrollText,
   ListChecks,
   Boxes,
+  Maximize2,
+  Minimize2,
+  ExternalLink,
   Mic,
   MicOff,
   PhoneOff,
@@ -78,11 +82,14 @@ import { SettingsPage, type UpdateInfo } from '@/components/settings/SettingsPag
 import { NetworkPanel } from '@/components/network'
 import { ScreenSharePanel } from '@/components/screen-share'
 import { useScreenShare } from '@/hooks/useScreenShare'
-import { TerminalTabs, TerminalView, useTerminals } from '@/components/terminal'
+import { TerminalTabs, TerminalView, useTerminals, useAvailableShells } from '@/components/terminal'
+import type { TerminalViewHandle } from '@/components/terminal'
 import { WorkspacePanel, workspaceLanguageForPath, type WorkspaceFile, type WorkspacePanelHandle, type WorkspaceTabsState } from '@/components/workspace'
 import type { PreviewInspectInteractiveElement } from '@/components/workspace/workspace-preview-inspect-panel'
 import { DetachedTabView } from '@/components/workspace/detached-tab-view'
+import { DetachedTerminalView, saveDetachedTerminal } from '@/components/terminal/detached-terminal-view'
 import { FolderPickerDialog } from '@/components/workspace/folder-picker-dialog'
+import { GatewayUnavailable } from '@/components/gateway-unavailable'
 import { createActivityEvent, type ActivityEvent } from '@jait/ui-shared'
 import { ModelIcon, getModelDisplayName, JaitIcon } from '@/components/icons/model-icons'
 import { useAuth, type ThemeMode, type SttProvider, type ChatProvider } from '@/hooks/useAuth'
@@ -539,7 +546,7 @@ function ThreadPrBadge({ prState }: { prState: ThreadPrState }) {
         ? 'bg-purple-500/10 text-purple-700 border-purple-500/20 dark:text-purple-300 dark:bg-purple-500/20 dark:border-purple-400/30'
         : 'bg-red-500/10 text-red-700 border-red-500/20 dark:text-red-300 dark:bg-red-500/20 dark:border-red-400/30'
   return (
-    <Badge variant="outline" className={`h-4 shrink-0 whitespace-nowrap px-1 py-0 text-[9px] ${className}`}>
+    <Badge variant="outline" className={`h-4 shrink-0 whitespace-nowrap px-1 py-0 text-2xs ${className}`}>
       {label}
     </Badge>
   )
@@ -549,7 +556,7 @@ function ThreadKindBadge({ kind }: { kind: 'delivery' | 'delegation' }) {
   return (
     <Badge
       variant="outline"
-      className={`h-4 shrink-0 whitespace-nowrap px-1 py-0 text-[9px] ${
+      className={`h-4 shrink-0 whitespace-nowrap px-1 py-0 text-2xs ${
         kind === 'delegation'
           ? 'border-amber-500/30 bg-amber-500/10 text-amber-700 dark:text-amber-300 dark:border-amber-400/30'
           : 'bg-blue-500/10 text-blue-700 border-blue-500/20 dark:text-blue-300 dark:bg-blue-500/20 dark:border-blue-400/30'
@@ -577,20 +584,20 @@ function ManagerRepoRuntimeMeta({
   )
 
   return (
-    <div className={`flex flex-wrap items-center gap-1 text-[10px] text-muted-foreground ${className}`.trim()}>
+    <div className={`flex flex-wrap items-center gap-1 text-2xs text-muted-foreground ${className}`.trim()}>
       <span>{runtime.locationLabel}</span>
       {runtime.loading ? (
         <SpinnerIcon className="h-3 w-3 animate-spin text-muted-foreground" />
       ) : !runtime.online && (
         <Badge
           variant="outline"
-          className="h-4 border-amber-500/30 bg-amber-500/10 px-1 py-0 text-[9px] text-amber-700 dark:text-amber-300"
+          className="h-4 border-amber-500/30 bg-amber-500/10 px-1 py-0 text-2xs text-amber-700 dark:text-amber-300"
         >
           Offline
         </Badge>
       )}
       {cliProviders.map((provider) => (
-        <Badge key={provider} variant="outline" className="h-4 px-1 py-0 text-[9px]">
+        <Badge key={provider} variant="outline" className="h-4 px-1 py-0 text-2xs">
           {REPO_RUNTIME_PROVIDER_LABELS[provider]}
         </Badge>
       ))}
@@ -637,9 +644,9 @@ function ManagerRepoPicker({
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-2">
                     <span className="truncate">{repo.name}</span>
-                    <span className="text-[10px] text-muted-foreground">{repo.defaultBranch}</span>
+                    <span className="text-2xs text-muted-foreground">{repo.defaultBranch}</span>
                     {repo.source === 'shared' && (
-                      <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
+                      <Badge variant="outline" className="h-4 px-1 py-0 text-2xs">
                         Shared
                       </Badge>
                     )}
@@ -695,7 +702,7 @@ function ManagerRepositoryPanel({
         <Button
           variant="ghost"
           size="sm"
-          className="h-6 gap-1.5 px-2 text-[11px]"
+          className="h-6 gap-1.5 px-2 text-xs"
           onClick={onAddRepository}
         >
           <Plus className="h-3 w-3" />
@@ -742,9 +749,9 @@ function ManagerRepositoryPanel({
                 <div className="min-w-0 flex-1">
                   <div className={isMobile ? 'truncate text-xs font-medium' : 'truncate font-medium'}>{repo.name}</div>
                   <div className="mt-0.5 flex flex-wrap items-center gap-1">
-                    <span className="text-[10px] text-muted-foreground">{repo.defaultBranch}</span>
+                    <span className="text-2xs text-muted-foreground">{repo.defaultBranch}</span>
                     {repo.source === 'shared' && (
-                      <Badge variant="outline" className="h-4 shrink-0 px-1 py-0 text-[9px]">
+                      <Badge variant="outline" className="h-4 shrink-0 px-1 py-0 text-2xs">
                         Shared
                       </Badge>
                     )}
@@ -850,7 +857,7 @@ function ManagerThreadListItem({
       <div className="flex flex-col gap-0.5">
         <div className="flex w-full min-w-0 items-center gap-1.5">
           <ManagerStatusDot status={thread.status} />
-          <div className="flex-1 truncate text-[13px] font-medium sm:text-sm">
+          <div className="flex-1 truncate text-sm font-medium sm:text-sm">
             {isTitlePending(thread.title) ? (
               <TitleSkeleton className="h-3.5 w-28" />
             ) : (
@@ -858,7 +865,7 @@ function ManagerThreadListItem({
             )}
           </div>
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[calc(0.75rem+6px)] text-[11px] leading-tight text-muted-foreground sm:flex-nowrap sm:gap-x-1 sm:gap-y-0 sm:text-xs">
+        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[calc(0.75rem+6px)] text-xs leading-tight text-muted-foreground sm:flex-nowrap sm:gap-x-1 sm:gap-y-0 sm:text-xs">
           <span className="min-w-0 truncate">{repoName}</span>
           {showKindBadge && <ThreadKindBadge kind={thread.kind} />}
           {thread.kind === 'delegation' && (
@@ -980,7 +987,7 @@ function ManagerActiveThreadsMenu({
         >
           <SpinnerIcon className="h-3.5 w-3.5 animate-spin text-blue-500" />
           <span className="hidden sm:inline">Active</span>
-          <Badge variant="secondary" className="h-4 rounded-md px-1 text-[10px]">
+          <Badge variant="secondary" className="h-4 rounded-md px-1 text-2xs">
             {threads.length}
           </Badge>
         </Button>
@@ -1024,20 +1031,20 @@ function ManagerActiveThreadsMenu({
                         : thread.title.replace(/^\[.*?\]\s*/, '')}
                     </span>
                   </div>
-                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-[11px] text-muted-foreground">
+                  <div className="mt-1 flex min-w-0 flex-wrap items-center gap-1 text-xs text-muted-foreground">
                     <span className="truncate">{repoName}</span>
                     {thread.branch && (
-                      <Badge variant="outline" className="h-4 px-1 py-0 font-mono text-[9px]">
+                      <Badge variant="outline" className="h-4 px-1 py-0 font-mono text-2xs">
                         {thread.branch}
                       </Badge>
                     )}
                     {thread.providerId && thread.providerId !== 'jait' && (
-                      <Badge variant="outline" className="h-4 px-1 py-0 text-[9px]">
+                      <Badge variant="outline" className="h-4 px-1 py-0 text-2xs">
                         {thread.providerId}
                       </Badge>
                     )}
                     {thread.executionNodeName && (
-                      <Badge variant="outline" className="h-4 px-1 py-0 text-[9px] text-blue-500 dark:text-blue-400 border-blue-200 dark:border-blue-800">
+                      <Badge variant="outline" className="h-4 px-1 py-0 text-2xs text-blue-500 dark:text-blue-400 border-blue-200 dark:border-blue-800">
                         <Monitor className="inline h-2.5 w-2.5 mr-0.5" />
                         {thread.executionNodeName}
                       </Badge>
@@ -1095,7 +1102,11 @@ function App() {
   const [inputSegments, setInputSegments] = useState<UserMessageSegment[] | undefined>(undefined)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
-  const [currentView, setCurrentView] = useState<AppView>('chat')
+  const [currentView, setCurrentView] = useState<AppView>(() => {
+    const validViews: AppView[] = ['chat', 'jobs', 'network', 'settings']
+    const path = window.location.pathname.replace(/^\/+/, '').split('/')[0] as AppView
+    return validViews.includes(path) ? path : 'chat'
+  })
   const [themeMode, setThemeMode] = useState<ThemeMode>('system')
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
@@ -1103,6 +1114,7 @@ function App() {
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
+  const [showMobileToolbar, setShowMobileToolbar] = useState(true)
   const showWorkspaceRef = useRef(false)
   const [chatCollapsed, setChatCollapsed] = useState(false)
   const workspaceRestoreRef = useRef<(() => void) | null>(null)
@@ -1136,6 +1148,9 @@ function App() {
   const architectureRenderRequestIdRef = useRef<string | null>(null)
   const loadedArchitectureWorkspaceRef = useRef<string | null>(null)
   const [terminalHeight, setTerminalHeight] = useState(240)
+  const [terminalFullscreen, setTerminalFullscreen] = useState(false)
+  const terminalHeightBeforeFullscreenRef = useRef(240)
+  const [terminalColumnWidth, setTerminalColumnWidth] = useState(480)
   const [_chatWidth, _setChatWidth] = useState<number | null>(() => {
     if (typeof window === 'undefined') return null
     const raw = window.localStorage.getItem('jait:chatPanelWidth')
@@ -1182,9 +1197,28 @@ function App() {
     ? new URLSearchParams(window.location.search).get('detachedWorkspaceTab')
     : null
 
-  if (detachedWorkspaceTabId) {
-    return <DetachedTabView detachedTabId={detachedWorkspaceTabId} />
-  }
+  const detachedTerminalId = typeof window !== 'undefined'
+    ? new URLSearchParams(window.location.search).get('detachedTerminal')
+    : null
+
+  // ── Gateway reachability ───────────────────────────────────────
+  const [gatewayReachable, setGatewayReachable] = useState<boolean | null>(null)
+  const gatewayCheckRef = useRef(false)
+
+  const checkGatewayReachable = useCallback(async () => {
+    try {
+      const res = await fetch(`${getApiUrl()}/health`, { signal: AbortSignal.timeout(5000) })
+      setGatewayReachable(res.ok)
+    } catch {
+      setGatewayReachable(false)
+    }
+  }, [])
+
+  useEffect(() => {
+    if (gatewayCheckRef.current) return
+    gatewayCheckRef.current = true
+    void checkGatewayReachable()
+  }, [checkGatewayReachable])
 
   // ── Update state ───────────────────────────────────────────────
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
@@ -1215,6 +1249,37 @@ function App() {
   useEffect(() => {
     showWorkspaceRef.current = showWorkspace
   }, [showWorkspace])
+
+  // ── Sync currentView ↔ URL path ────────────────────────────────
+  // Push to history when view changes (skip on mount to avoid duplicate entry)
+  const isInitialViewRef = useRef(true)
+  useEffect(() => {
+    if (isInitialViewRef.current) {
+      // On mount, replace the URL to match the resolved view (e.g. '/' → '/chat')
+      const target = currentView === 'chat' ? '/' : `/${currentView}`
+      if (window.location.pathname !== target) {
+        window.history.replaceState(null, '', target + window.location.search)
+      }
+      isInitialViewRef.current = false
+      return
+    }
+    const target = currentView === 'chat' ? '/' : `/${currentView}`
+    if (window.location.pathname !== target) {
+      window.history.pushState(null, '', target)
+    }
+  }, [currentView])
+
+  // Handle browser back/forward
+  useEffect(() => {
+    const validViews: AppView[] = ['chat', 'jobs', 'network', 'settings']
+    const onPopState = () => {
+      const path = window.location.pathname.replace(/^\/+/, '').split('/')[0] as AppView
+      const next = validViews.includes(path) ? path : 'chat'
+      setCurrentView(next)
+    }
+    window.addEventListener('popstate', onPopState)
+    return () => window.removeEventListener('popstate', onPopState)
+  }, [])
 
   // ── Deep link: jait:// protocol handler ───────────────────────
   // When a jait:// URL is opened, the browser navigates to /?jait=<full-url>.
@@ -1759,6 +1824,18 @@ function App() {
   const [sourceControlRefreshSignal, setSourceControlRefreshSignal] = useState(0)
   const managerQueueProcessingRef = useRef(new Set<string>())
   const { terminals, activeTerminalId, setActiveTerminalId, createTerminal, killTerminal, refresh } = useTerminals(token)
+  const terminalShells = useAvailableShells(token)
+  const terminalViewRef = useRef<TerminalViewHandle>(null)
+
+  // Focus the terminal whenever the active terminal or panel visibility changes
+  useEffect(() => {
+    if (showTerminal && activeTerminalId) {
+      // Small delay to let the DOM settle after mount/re-render
+      const id = setTimeout(() => terminalViewRef.current?.focus(), 50)
+      return () => clearTimeout(id)
+    }
+  }, [showTerminal, activeTerminalId])
+
   const { provider, model } = useModelInfo()
 
   // ── Screen share (always active so Electron auto-registers) ───────
@@ -2912,6 +2989,9 @@ function App() {
 
   const closeDevPreviewPanel = useCallback(() => {
     closeWorkspacePreview()
+    setDevPreviewTarget(null)
+    setWorkspacePreviewRequest(null)
+    setWorkspacePreviewState({ open: false, target: null, displayState: 'hidden', displayTarget: null })
     setSavedDevPreview(null)
   }, [closeWorkspacePreview, setSavedDevPreview])
 
@@ -2960,11 +3040,6 @@ function App() {
   const previewOpen = savedDevPreview?.open === true || workspacePreviewState.open
 
   const openTerminalPanel = useCallback(() => {
-    if (!isMobile && !showWorkspaceRef.current) {
-      showWorkspaceRef.current = true
-      setShowWorkspace(true)
-      setShowWorkspaceEditor(true)
-    }
     setShowTerminal(true)
     setSavedTerminal({ open: true }, { immediate: isMobile })
     if (consumeSuppressedUiSync('terminal.panel')) return
@@ -2973,6 +3048,7 @@ function App() {
 
   const closeTerminalPanel = useCallback(() => {
     setShowTerminal(false)
+    setTerminalFullscreen(false)
     setSavedTerminal(null, { immediate: isMobile })
     if (consumeSuppressedUiSync('terminal.panel')) return
     sendUIState('terminal.panel', null, activeSessionId)
@@ -3001,7 +3077,10 @@ function App() {
         sendUIState('workspace.panel', nextPanel, activeSessionId)
       }
     }
-    setShowArchitecture(false)
+    // Don't clear showArchitecture or architectureRequest — they should
+    // persist so architecture restores when the editor is reopened
+    // (same behavior as preview). Only explicit close via the header
+    // button should dismiss them.
   }, [activeSessionId, activeWorkspace, applyWorkspaceLayout, isMobile, sendUIState, setSavedWorkspace])
   closeWorkspacePanelRef.current = closeWorkspacePanel
 
@@ -3503,7 +3582,7 @@ function App() {
     isDragging.current = true
     const startY = e.clientY
     const startH = terminalHeight
-    const maxH = window.innerHeight * 0.6
+    const maxH = window.innerHeight * 0.9
     const cleanup = () => {
       isDragging.current = false
       document.removeEventListener('mousemove', onMove)
@@ -3529,6 +3608,29 @@ function App() {
     document.addEventListener('mouseup', onUp)
     window.addEventListener('blur', onWindowBlur)
   }, [terminalHeight])
+
+  const handleTerminalColumnDragStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault()
+    const startX = e.clientX
+    const startW = terminalColumnWidth
+    const maxW = window.innerWidth * 0.7
+    const onMove = (ev: MouseEvent) => {
+      const delta = ev.clientX - startX
+      setTerminalColumnWidth(Math.min(maxW, Math.max(280, startW + delta)))
+    }
+    const cleanup = () => {
+      document.removeEventListener('mousemove', onMove)
+      document.removeEventListener('mouseup', cleanup)
+      window.removeEventListener('blur', cleanup)
+      document.body.style.cursor = ''
+      document.body.style.userSelect = ''
+    }
+    document.body.style.cursor = 'col-resize'
+    document.body.style.userSelect = 'none'
+    document.addEventListener('mousemove', onMove)
+    document.addEventListener('mouseup', cleanup)
+    window.addEventListener('blur', cleanup)
+  }, [terminalColumnWidth])
 
   const activeWorkspaceRoot = activeWorkspace?.workspaceRoot ?? activeWorkspaceRecord?.rootPath ?? null
 
@@ -3673,6 +3775,26 @@ function App() {
       closeTerminalPanel()
     }
   }, [workspaceTerminals, killTerminal, closeTerminalPanel])
+
+  const handleDetachTerminal = useCallback((terminalId: string) => {
+    const t = workspaceTerminals.find(term => term.id === terminalId)
+    const detachedId = `detached-terminal-${terminalId}-${Date.now()}`
+    saveDetachedTerminal({
+      id: detachedId,
+      terminalId,
+      token: token ?? null,
+      label: (t?.metadata?.cwd as string) ?? `Terminal ${terminalId.slice(0, 6)}`,
+      theme: appliedThemeMode === 'dark' ? 'dark' : 'light',
+      workspaceRoot: (t?.workspaceRoot as string) ?? activeWorkspaceRoot ?? null,
+    })
+    const detachedUrl = `${window.location.origin}${window.location.pathname}?detachedTerminal=${encodeURIComponent(detachedId)}`
+    if ((window as any).jaitDesktop?.openWorkspaceWindow) {
+      void (window as any).jaitDesktop.openWorkspaceWindow({ url: detachedUrl, title: 'Terminal' })
+    } else {
+      const popup = window.open(detachedUrl, `jait-detached-terminal-${terminalId}`, 'popup=yes,width=800,height=600,resizable=yes,scrollbars=yes')
+      popup?.focus?.()
+    }
+  }, [workspaceTerminals, token, appliedThemeMode, activeWorkspaceRoot])
 
   const mergeWorkspaceFiles = useCallback((incoming: WorkspaceFile[]) => {
     if (incoming.length === 0) return
@@ -5048,13 +5170,30 @@ function App() {
     })),
   ]
 
+  // ── Early returns for special/detached views (must come after all hooks) ──
+  if (detachedWorkspaceTabId) {
+    return <DetachedTabView detachedTabId={detachedWorkspaceTabId} />
+  }
+
+  if (detachedTerminalId) {
+    return <DetachedTerminalView detachedId={detachedTerminalId} />
+  }
+
+  if (gatewayReachable === false) {
+    return <GatewayUnavailable onRetry={() => { gatewayCheckRef.current = false; setGatewayReachable(null); void checkGatewayReachable() }} />
+  }
+
   return (
     <TooltipProvider>
       <div className="fixed inset-0 flex flex-col overflow-hidden safe-top safe-bottom safe-left safe-right">
         {!requiresAuthGate && (
           <>
             <header
-              className={`relative flex items-center gap-1 border-b bg-background px-2 sm:gap-2 sm:px-5 shrink-0 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`}
+              className={`relative flex items-center gap-1 shrink-0 ${
+                isMobile
+                  ? 'fixed top-2 left-2 right-2 z-40 pointer-events-none'
+                  : `border-b bg-background px-2 sm:gap-2 sm:px-5 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
+              }`}
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
                 paddingLeft: desktopPlatform === 'darwin' ? 70 : undefined,
@@ -5062,7 +5201,7 @@ function App() {
               } as React.CSSProperties : undefined}
             >
           {/* Left: Logo + mobile mic */}
-          <div className="flex items-center gap-1 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          <div className={`flex items-center gap-1 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-2 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             <JaitIcon size={20} className="shrink-0" />
             {wakeWord.isSupported && (
               <button
@@ -5157,7 +5296,7 @@ function App() {
 
           {/* Center: ViewModeSelector OR voice controls when voice active */}
           {voiceOverlayOpen ? (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 backdrop-blur-sm px-1.5 py-1" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 flex items-center gap-1.5 rounded-full border border-border/60 bg-background/80 backdrop-blur-sm px-1.5 py-1 ${isMobile ? 'pointer-events-auto' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               {/* Mute toggle */}
               <button
                 onClick={voiceAssistant.toggleMic}
@@ -5189,7 +5328,7 @@ function App() {
               </button>
             </div>
           ) : currentView === 'chat' ? (
-            <div className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+            <div className={`absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 z-10 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1.5 h-10 flex items-center' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
               <ViewModeSelector mode={viewMode} onChange={setViewMode} compact={isMobile} />
             </div>
           ) : null}
@@ -5198,7 +5337,7 @@ function App() {
           <div className="flex-1 min-w-0" />
 
           {/* Right: Context + Model + Account */}
-          <div className="flex items-center gap-1 sm:gap-1.5 shrink-0" style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
+          <div className={`flex items-center gap-1 sm:gap-1.5 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1 py-0.5 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
             {currentView === 'chat' && activeManagerThreads.length > 0 && (
               <ManagerActiveThreadsMenu
                 threads={activeManagerThreads}
@@ -5324,7 +5463,97 @@ function App() {
               </Tooltip>
             )}
 
-            {/* Mobile overflow menu */}
+            {/* Mobile overflow menu + avatar group */}
+            {isMobile ? (
+              <div className="flex items-center gap-0.5 shrink-0">
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0 rounded-lg">
+                      <EllipsisVertical className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuLabel>Navigate</DropdownMenuLabel>
+                    <DropdownMenuItem onSelect={() => setCurrentView('chat')}>
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Chat
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setCurrentView('jobs')}>
+                      <Calendar className="h-4 w-4 mr-2" />
+                      Jobs
+                    </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setCurrentView('network')}>
+                      <Wifi className="h-4 w-4 mr-2" />
+                      Network
+                    </DropdownMenuItem>
+                    {viewMode === 'developer' && (
+                      <DropdownMenuItem onSelect={() => showScreenShare ? closeScreenSharePanel() : openScreenSharePanel()}>
+                        <Cast className="h-4 w-4 mr-2" />
+                        {showScreenShare ? 'Hide Share' : 'Screen Share'}
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onSelect={() => setCurrentView('settings')}>
+                      <Settings className="h-4 w-4 mr-2" />
+                      Settings
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
+                {isAuthenticated ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <button className="rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-sm font-medium">{userInitial}</AvatarFallback>
+                        </Avatar>
+                      </button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuLabel>{user?.username}</DropdownMenuLabel>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={() => setCurrentView('settings')}>
+                        <Settings className="h-4 w-4 mr-2" />
+                        Settings
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <div className="px-2 py-1.5">
+                        <span className="text-xs font-medium text-muted-foreground">Theme</span>
+                        <div className="flex items-center h-7 w-fit rounded-full border bg-muted/50 p-0.5 mt-1.5">
+                          {([['light', Sun], ['system', Monitor], ['dark', Moon]] as const).map(([mode, Icon]) => (
+                            <Tooltip key={mode}>
+                              <TooltipTrigger asChild>
+                                <button
+                                  onClick={() => { void handleThemeModeChange(mode as ThemeMode) }}
+                                  className={`relative flex items-center justify-center h-6 w-6 rounded-full transition-colors ${
+                                    themeMode === mode
+                                      ? 'bg-background text-foreground shadow-sm'
+                                      : 'text-muted-foreground hover:text-foreground'
+                                  }`}
+                                >
+                                  <Icon className="h-3.5 w-3.5" />
+                                </button>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom">{mode.charAt(0).toUpperCase() + mode.slice(1)}</TooltipContent>
+                            </Tooltip>
+                          ))}
+                        </div>
+                      </div>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem onSelect={handleLogout}>
+                        <LogOut className="h-4 w-4 mr-2" />
+                        Logout
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Button variant="ghost" size="sm" className="h-8 rounded-lg text-xs" onClick={() => setShowLoginDialog(true)}>
+                    Sign in
+                  </Button>
+                )}
+              </div>
+            ) : (
+            <>
+            {/* Desktop: Mobile overflow menu */}
             <div className="md:hidden shrink-0">
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
@@ -5366,7 +5595,7 @@ function App() {
                 <DropdownMenuTrigger asChild>
                   <button className="rounded-full ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2">
                     <Avatar className="h-7 w-7">
-                      <AvatarFallback className="text-[11px]">{userInitial}</AvatarFallback>
+                      <AvatarFallback className="text-xs">{userInitial}</AvatarFallback>
                     </Avatar>
                   </button>
                 </DropdownMenuTrigger>
@@ -5412,6 +5641,8 @@ function App() {
                 Sign in
               </Button>
             )}
+            </>
+            )}
 
             {/* Linux custom window controls (Windows uses native titleBarOverlay, macOS uses traffic lights) */}
             {isElectron && desktopPlatform === 'linux' && (
@@ -5442,15 +5673,35 @@ function App() {
           </div>
             </header>
 
+
+
             {/* Chat-specific toolbar */}
             {currentView === 'chat' && (
               <div
-                className={`flex border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${
+                className={`border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${isMobile ? 'hidden' : 'flex'} ${
                   compactManagerToolbar
                     ? 'min-h-[35px] flex-wrap items-start gap-2 py-1.5'
                     : 'h-11 md:h-[35px] items-center gap-1 overflow-x-auto overflow-y-visible scrollbar-none'
                 }`}
               >
+            {viewMode === 'developer' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={activeWorkspaceId === null ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className={isMobile ? 'h-9 w-9 shrink-0 rounded-md p-0' : 'h-7 shrink-0 rounded-md px-2 text-xs'}
+                    onClick={() => { void handleGoToPersonalChat() }}
+                    aria-label="Personal chat"
+                  >
+                    <MessageSquare className={`h-3 w-3${isMobile ? '' : ' mr-1'}`} />
+                    {!isMobile && 'Personal'}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Switch to personal chat</TooltipContent>
+              </Tooltip>
+            )}
+
             {viewMode === 'developer' && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -5472,25 +5723,43 @@ function App() {
               </Tooltip>
             )}
 
-            {/* Chat workspace / terminal controls */}
-            {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && (
+            {/* Terminal control – always available in developer mode */}
+            {viewMode === 'developer' && !isMobile && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={showTerminal ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-7 shrink-0 rounded-md px-2 text-xs"
+                    onClick={() => { void handleToggleTerminal() }}
+                  >
+                    <TerminalIcon className="h-3 w-3 mr-1" />
+                    Terminal
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
+              </Tooltip>
+            )}
+            {viewMode === 'developer' && isMobile && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'}
+                    size="sm"
+                    className="h-9 w-9 shrink-0 rounded-md p-0"
+                    aria-label="Terminal"
+                    onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }}
+                  >
+                    <TerminalIcon className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="bottom">Terminal</TooltipContent>
+              </Tooltip>
+            )}
+
+            {/* Chat workspace / editor controls */}
+            {activeWorkspaceId && (viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && (
               <>
-                {viewMode === 'developer' && !isMobile && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant={showTerminal ? 'secondary' : 'ghost'}
-                        size="sm"
-                        className="h-7 shrink-0 rounded-md px-2 text-xs"
-                        onClick={() => { void handleToggleTerminal() }}
-                      >
-                        <TerminalIcon className="h-3 w-3 mr-1" />
-                        Terminal
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="bottom">Toggle terminal panel</TooltipContent>
-                  </Tooltip>
-                )}
 
                 <div className={`flex items-center shrink-0 ${isMobile ? 'gap-1' : ''}`}>
                   {isMobile ? (
@@ -5520,7 +5789,7 @@ function App() {
                           >
                             <GitBranch className="h-4 w-4" />
                             {changedFiles.length > 0 && (
-                              <span className="absolute -right-1 -top-1 z-10 min-w-[14px] rounded-full bg-primary px-1 text-[8px] font-bold leading-[14px] text-primary-foreground">
+                              <span className="absolute -right-1 -top-1 z-10 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-bold leading-[14px] text-primary-foreground">
                                 {changedFiles.length > 99 ? '99+' : changedFiles.length}
                               </span>
                             )}
@@ -5542,22 +5811,6 @@ function App() {
                         </TooltipTrigger>
                         <TooltipContent side="bottom">Editor</TooltipContent>
                       </Tooltip>
-                      {viewMode === 'developer' && (
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'}
-                              size="sm"
-                              className="h-9 w-9 rounded-md p-0"
-                              aria-label="Terminal"
-                              onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }}
-                            >
-                              <TerminalIcon className="h-4 w-4" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="bottom">Terminal</TooltipContent>
-                        </Tooltip>
-                      )}
                     </>
                   ) : (
                     <Tooltip>
@@ -5588,11 +5841,7 @@ function App() {
                         aria-label={previewOpen ? 'Close preview' : 'Open preview'}
                         onClick={() => {
                           if (previewOpen) {
-                            if (workspacePreviewState.open) {
-                              workspaceRef.current?.closePreviewTarget()
-                            } else {
-                              closeDevPreviewPanel()
-                            }
+                            closeDevPreviewPanel()
                           } else {
                             const nextTarget = workspacePreviewState.target
                               ?? devPreviewTarget?.trim()
@@ -5627,6 +5876,7 @@ function App() {
                     onClick={() => {
                       if (showArchitecture) {
                         workspaceRef.current?.closeArchitectureTab()
+                        setArchitectureRequest(null)
                         setShowArchitecture(false)
                       } else {
                         setShowArchitecture(true)
@@ -5666,7 +5916,7 @@ function App() {
                   <Button
                     variant="ghost"
                     size="sm"
-                    className="h-6 text-[11px] px-2 shrink-0"
+                    className="h-6 text-xs px-2 shrink-0"
                     onClick={() => {
                       automation.setSelectedThreadId(null)
                       setInputValue('')
@@ -5682,7 +5932,7 @@ function App() {
                       <Button
                         variant={showManagerRepos ? 'secondary' : 'ghost'}
                         size="sm"
-                        className="h-6 text-[11px] px-2 shrink-0"
+                        className="h-6 text-xs px-2 shrink-0"
                         onClick={() => setShowManagerRepos(s => !s)}
                       >
                         {showManagerRepos
@@ -5701,7 +5951,7 @@ function App() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-6 text-[11px] px-2 shrink-0"
+                            className="h-6 text-xs px-2 shrink-0"
                             onClick={() => setStrategyRepo(automation.selectedRepo)}
                           >
                             <ScrollText className="h-3 w-3 mr-1" />
@@ -5715,7 +5965,7 @@ function App() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-6 text-[11px] px-2 shrink-0"
+                            className="h-6 text-xs px-2 shrink-0"
                             onClick={() => setPlanRepo(automation.selectedRepo)}
                           >
                             <ListChecks className="h-3 w-3 mr-1" />
@@ -5736,13 +5986,13 @@ function App() {
                       {isMobile ? (
                         <div className="min-w-0 flex-1">
                           {isTitlePending(automation.selectedThread.title) ? (
-                            <TitleSkeleton className="text-[11px] h-3.5 w-28" />
+                            <TitleSkeleton className="text-xs h-3.5 w-28" />
                           ) : (
-                            <span className="block truncate text-[10px] leading-tight text-muted-foreground sm:text-[11px]">
+                            <span className="block truncate text-2xs leading-tight text-muted-foreground sm:text-xs">
                               {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
                             </span>
                           )}
-                          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-[10px] leading-tight text-muted-foreground">
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1.5 overflow-hidden text-2xs leading-tight text-muted-foreground">
                             {automation.selectedRepo && (
                               <span className="min-w-0 truncate">
                                 {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
@@ -5759,15 +6009,15 @@ function App() {
                       ) : (
                         <div className="min-w-0 flex items-center gap-2">
                           {isTitlePending(automation.selectedThread.title) ? (
-                            <TitleSkeleton className="text-[11px] h-3.5 w-28" />
+                            <TitleSkeleton className="text-xs h-3.5 w-28" />
                           ) : (
-                            <span className="max-w-[200px] truncate text-[10px] text-muted-foreground sm:text-[11px]">
+                            <span className="max-w-[200px] truncate text-2xs text-muted-foreground sm:text-xs">
                               {automation.selectedThread.title.replace(/^\[.*?\]\s*/, '')}
                             </span>
                           )}
                           <ThreadKindBadge kind={automation.selectedThread.kind} />
                           {automation.selectedRepo && (
-                            <span className="max-w-[160px] truncate text-[10px] text-muted-foreground">
+                            <span className="max-w-[160px] truncate text-2xs text-muted-foreground">
                               {automation.selectedRepo.name} · {automation.selectedRepo.defaultBranch}
                             </span>
                           )}
@@ -5776,7 +6026,7 @@ function App() {
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
                       {!isMobile && automation.selectedThread.branch && (
-                        <Badge variant="outline" className="text-[9px] px-1 py-0 font-mono">
+                        <Badge variant="outline" className="text-2xs px-1 py-0 font-mono">
                           {automation.selectedThread.branch}
                         </Badge>
                       )}
@@ -5817,15 +6067,15 @@ function App() {
         )}
 
         {currentView === 'jobs' ? (
-          <div className="flex-1 overflow-y-auto">
+          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
             <JobsPage />
           </div>
         ) : currentView === 'network' ? (
-          <div className="flex-1 overflow-y-auto">
+          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
             <NetworkPanel token={token} sessionId={activeSessionId ?? 'default'} />
           </div>
         ) : currentView === 'settings' ? (
-          <div className="flex-1 overflow-y-auto">
+          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
             <SettingsPage
               username={user?.username ?? ''}
               token={token}
@@ -5853,10 +6103,13 @@ function App() {
             />
           </div>
         ) : (
-          <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col' : ''}`}>
+          <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col relative' : ''}`}>
             <div className={isMobile ? 'contents' : `relative flex min-h-0 ${chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}>
+              {viewMode === 'developer' && showSidebar && isMobile && (
+                <div className="fixed inset-0 z-20" onClick={() => setShowSidebar(false)} />
+              )}
               {viewMode === 'developer' && showSidebar && (
-                <aside className={`overflow-hidden ${isMobile ? 'h-52 border-b shrink-0' : 'w-64 border-r shrink-0'}`}>
+                <aside className={`overflow-hidden ${isMobile ? 'fixed bottom-16 left-4 right-4 z-30 max-h-[50vh] max-w-sm mx-auto rounded-xl border bg-background shadow-2xl' : 'w-64 border-r shrink-0'}`}>
                   <SessionSelector
                     workspaces={workspaces}
                     personalSessions={personalSessions}
@@ -5879,12 +6132,18 @@ function App() {
                 </aside>
               )}
 
-              {((viewMode === 'developer' && currentView === 'chat' && (showDesktopWorkspace || showTerminal))
+              {((viewMode === 'developer' && currentView === 'chat' && !isMobile && (showDesktopWorkspace || showTerminal))
                 || (viewMode === 'manager' && automation.selectedThread && showDesktopWorkspace)) && (
                 <div
-                  className={`flex min-h-0 flex-col ${chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}
-                  style={!showDesktopWorkspace && showTerminal ? { width: 480, maxWidth: '70vw' } : undefined}
+                  className={`relative flex min-h-0 flex-col ${!showDesktopWorkspace && showTerminal ? 'flex-1 min-w-0' : chatCollapsed ? 'flex-1 min-w-0' : 'shrink-0'}`}
+                  style={!showDesktopWorkspace && showTerminal ? { width: terminalColumnWidth, maxWidth: '70vw' } : undefined}
                 >
+                {!showDesktopWorkspace && showTerminal && (
+                  <div
+                    onMouseDown={handleTerminalColumnDragStart}
+                    className="absolute inset-y-0 right-0 w-1.5 cursor-col-resize hover:bg-primary/30 transition-colors z-10"
+                  />
+                )}
                 {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
                   <div className="flex min-h-0 flex-1">
                     <WorkspacePanel
@@ -5934,29 +6193,60 @@ function App() {
                   </div>
                 )}
                 {viewMode === 'developer' && showTerminal && !isMobile && currentView === 'chat' && (
-                  <div className="flex min-h-0 shrink-0 flex-col border-r border-t bg-background" style={{ height: terminalHeight }}>
-                    <div
-                      onMouseDown={handleTerminalDragStart}
-                      className="h-1 cursor-row-resize hover:bg-primary/30 transition-colors shrink-0"
-                    />
-                    <div className="relative">
+                  <div className={`flex min-h-0 flex-col bg-background ${terminalFullscreen ? 'absolute inset-0 z-20 border-r' : `relative border-r border-t ${showDesktopWorkspace ? 'shrink-0' : 'flex-1'}`}`} style={terminalFullscreen || !showDesktopWorkspace ? undefined : { height: terminalHeight }}>
+                    {!terminalFullscreen && (
+                      <div
+                        onMouseDown={handleTerminalDragStart}
+                        className="absolute inset-x-0 top-0 h-1.5 cursor-row-resize hover:bg-primary/30 transition-colors z-10"
+                      />
+                    )}
+                    <div className="relative shrink-0">
                       <TerminalTabs
                         terminals={workspaceTerminals}
                         activeTerminalId={activeTerminalId}
                         onSelect={setActiveTerminalId}
-                        onCreate={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                        onCreate={(shell) => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined, shell)}
                         onKill={handleKillTerminal}
+                        onDetach={handleDetachTerminal}
+                        availableShells={terminalShells}
                       />
-                      <button
-                        onClick={closeTerminalPanel}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                        aria-label="Close terminal"
-                      >
-                        <X className="h-3.5 w-3.5" />
-                      </button>
+                      <div className="absolute right-0 top-0 bottom-0 flex items-center gap-1 pr-2 pl-3 bg-gradient-to-l from-background via-background to-transparent z-10">
+                        {showDesktopWorkspace && (
+                        <button
+                          onClick={() => {
+                            if (terminalFullscreen) {
+                              setTerminalFullscreen(false)
+                              setTerminalHeight(terminalHeightBeforeFullscreenRef.current)
+                            } else {
+                              terminalHeightBeforeFullscreenRef.current = terminalHeight
+                              setTerminalFullscreen(true)
+                            }
+                          }}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label={terminalFullscreen ? 'Exit fullscreen' : 'Fullscreen terminal'}
+                        >
+                          {terminalFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                        </button>
+                        )}
+                        <button
+                          onClick={() => { if (activeTerminalId) handleDetachTerminal(activeTerminalId) }}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label="Open terminal in new window"
+                        >
+                          <ExternalLink className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={closeTerminalPanel}
+                          className="p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                          aria-label="Close terminal"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
                     </div>
                     {activeTerminalId ? (
                       <TerminalView
+                        ref={terminalViewRef}
                         terminalId={activeTerminalId}
                         className="flex-1 min-h-0"
                         token={token}
@@ -5985,19 +6275,21 @@ function App() {
                     terminals={workspaceTerminals}
                     activeTerminalId={activeTerminalId}
                     onSelect={setActiveTerminalId}
-                    onCreate={() => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined)}
+                    onCreate={(shell) => createTerminal(activeSessionId ?? 'default', activeWorkspaceRoot ?? undefined, shell)}
                     onKill={handleKillTerminal}
+                    availableShells={terminalShells}
                   />
                   <button
                     onClick={closeTerminalPanel}
-                    className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                     aria-label="Close terminal"
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="h-4 w-4" />
                   </button>
                 </div>
                 {activeTerminalId ? (
                   <TerminalView
+                    ref={terminalViewRef}
                     terminalId={activeTerminalId}
                     className="flex-1 min-h-0"
                     token={token}
@@ -6153,7 +6445,7 @@ function App() {
                             <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />
                           )}
                           {automation.selectedThread && automation.selectedThread.status !== 'running' && !automation.selectedThread.providerSessionId && (
-                            <span className="text-[11px] text-muted-foreground truncate">
+                            <span className="text-xs text-muted-foreground truncate">
                               Thread finished — start a new one
                             </span>
                           )}
@@ -6180,7 +6472,7 @@ function App() {
                       </div>
                     )}
                     {/* Main content */}
-                    <div className="flex-1 flex flex-col min-w-0 overflow-y-auto">
+                    <div className={`flex-1 flex flex-col min-w-0 overflow-y-auto ${isMobile ? 'pt-14' : ''}`}>
                       {/* Title + composer */}
                       <div className="relative z-10 flex flex-col items-center px-3 pb-1.5 pt-3 sm:px-4 sm:pb-2 sm:pt-4">
                         <div className="w-full max-w-3xl">
@@ -6240,7 +6532,7 @@ function App() {
                           <div className="flex h-[35px] items-center justify-between border-b px-2.5 sm:px-3">
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-medium">Threads</span>
-                              <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-[10px]">
+                              <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-2xs">
                                 {managerThreads.length}
                               </Badge>
                             </div>
@@ -6331,7 +6623,7 @@ function App() {
               </div>
             ) : !hasMessages ? (
               <div
-                className={`flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'}`}
+                className={`flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'} ${isMobile ? 'pt-14' : ''}`}
                 style={{
                   flex: chatCollapsed ? '0 0 0px' : undefined,
                   width: chatCollapsed ? 0 : undefined,
@@ -6419,17 +6711,9 @@ function App() {
                         <div className="flex shrink-0 items-center justify-self-end gap-2">
                           {sendTarget !== 'thread' && (
                             <>
-                              {activeWorkspaceId && (
-                                <button
-                                  onClick={() => { void handleGoToPersonalChat() }}
-                                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                                >
-                                  Personal chat
-                                </button>
-                              )}
                               <button
                                 onClick={handleStartNewChat}
-                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
                               >
                                 New chat
                               </button>
@@ -6499,7 +6783,7 @@ function App() {
                   )}
                 </Conversation>
 
-                <div className={`shrink-0 py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}>
+                <div className={`shrink-0 ${isMobile ? 'pt-2 px-2' : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`} style={isMobile ? { paddingBottom: '0.35rem' } : undefined}>
                   <div className="mx-auto w-full max-w-3xl space-y-1.5">
                     {todoList.length > 0 && (
                       <TodoList items={todoList} />
@@ -6519,7 +6803,7 @@ function App() {
                           <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
                           Continue
                         </button>
-                        <span className="text-[11px] text-muted-foreground">Agent stopped — hit the tool execution limit</span>
+                        <span className="text-xs text-muted-foreground">Agent stopped — hit the tool execution limit</span>
                       </div>
                     )}
                     <ConsentQueue
@@ -6589,8 +6873,8 @@ function App() {
                       sessionInfo={sessionInfo}
                       workspaceNodeId={activeWorkspace?.nodeId}
                     />
-                    <div className="overflow-x-auto px-1">
-                      <div className="grid min-w-max grid-cols-[1fr_auto_1fr] items-center gap-3 whitespace-nowrap">
+                    <div className={`overflow-x-auto ${isMobile ? 'px-0.5' : 'px-1'}`}>
+                      <div className={`grid min-w-max grid-cols-[1fr_auto_1fr] items-center whitespace-nowrap ${isMobile ? 'gap-2' : 'gap-3'}`}>
                         <div className="flex min-w-0 items-center gap-2">
                           {viewMode === 'developer' && sendTarget === 'thread' ? (
                             developerThreadToolbarRepoPicker
@@ -6608,12 +6892,12 @@ function App() {
                           ) : null}
                           {approveAllInSession && (
                             <>
-                              <span className="text-[11px] text-green-600 dark:text-green-400 truncate">
+                              <span className="text-xs text-green-600 dark:text-green-400 truncate">
                                 Approved all commands for this session
                               </span>
                               <button
                                 onClick={handleClearApproveAll}
-                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
                               >
                                 Clear approve all
                               </button>
@@ -6632,17 +6916,9 @@ function App() {
                         <div className="flex shrink-0 items-center justify-self-end gap-2">
                           {viewMode === 'developer' && sendTarget !== 'thread' && (
                             <>
-                              {activeWorkspaceId && (
-                                <button
-                                  onClick={() => { void handleGoToPersonalChat() }}
-                                  className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                                >
-                                  Personal chat
-                                </button>
-                              )}
                               <button
                                 onClick={handleStartNewChat}
-                                className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
                               >
                                 New chat
                               </button>
@@ -6651,13 +6927,13 @@ function App() {
                           {(viewMode as string) === 'manager' && (
                             <button
                               onClick={() => automation.setSelectedThreadId(null)}
-                              className="text-[11px] text-muted-foreground hover:text-foreground transition-colors shrink-0"
+                              className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
                             >
                               New thread
                             </button>
                           )}
                           {remainingPrompts !== null && (
-                            <span className="text-[11px] text-muted-foreground shrink-0">{remainingPrompts} remaining</span>
+                            <span className="text-xs text-muted-foreground shrink-0">{remainingPrompts} remaining</span>
                           )}
                         </div>
                       </div>
@@ -6676,6 +6952,72 @@ function App() {
               <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
                 <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
               </div>
+            )}
+
+            {/* Mobile footer – only on chat view, collapsible */}
+            {isMobile && viewMode === 'developer' && currentView === 'chat' && (
+              <>
+                {/* Pull tab when toolbar is hidden */}
+                {!showMobileToolbar && (
+                  <button
+                    className="fixed bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center h-6 w-12 rounded-full bg-background/60 backdrop-blur border shadow-md transition-all active:scale-95"
+                    onClick={() => setShowMobileToolbar(true)}
+                    aria-label="Show toolbar"
+                  >
+                    <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
+                  </button>
+                )}
+                {/* Floating toolbar */}
+                <div
+                  className={`fixed left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 rounded-2xl border bg-background/70 backdrop-blur-lg shadow-lg px-1.5 py-1 transition-all duration-200 ${
+                    showMobileToolbar ? 'bottom-3 opacity-100' : 'bottom-[-60px] opacity-0 pointer-events-none'
+                  }`}
+                >
+                  {/* Swipe-down handle to collapse */}
+                  <button
+                    className="absolute -top-3 left-1/2 -translate-x-1/2 flex items-center justify-center h-5 w-8 rounded-full bg-muted/60 backdrop-blur border border-border/40 shadow-sm"
+                    onClick={() => setShowMobileToolbar(false)}
+                    aria-label="Hide toolbar"
+                  >
+                    <ChevronDown className="h-3 w-3 text-muted-foreground" />
+                  </button>
+                  <Tooltip><TooltipTrigger asChild>
+                    <Button variant={activeWorkspaceId === null ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-xl p-0" onClick={() => { void handleGoToPersonalChat() }} aria-label="Personal chat">
+                      <MessageSquare className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger><TooltipContent side="top">Personal chat</TooltipContent></Tooltip>
+                  <Tooltip><TooltipTrigger asChild>
+                    <Button variant={showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-xl p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
+                      {showSidebar ? <PanelLeftClose className="h-5 w-5 rotate-90" /> : <PanelLeftOpen className="h-5 w-5 rotate-90" />}
+                    </Button>
+                  </TooltipTrigger><TooltipContent side="top">Workspaces</TooltipContent></Tooltip>
+                  <Tooltip><TooltipTrigger asChild>
+                    <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-xl p-0" onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }} aria-label="Terminal">
+                      <TerminalIcon className="h-5 w-5" />
+                    </Button>
+                  </TooltipTrigger><TooltipContent side="top">Terminal</TooltipContent></Tooltip>
+                  {activeWorkspaceId && (
+                    <>
+                      <Tooltip><TooltipTrigger asChild>
+                        <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'files') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-xl p-0" onClick={() => { void handleMobileWorkspaceTargetAction('files') }} aria-label="Files">
+                          <FolderOpen className="h-5 w-5" />
+                        </Button>
+                      </TooltipTrigger><TooltipContent side="top">Files</TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger asChild>
+                        <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'git') ? 'secondary' : 'ghost'} size="sm" className="relative h-10 w-10 shrink-0 rounded-xl p-0" onClick={() => { void handleMobileWorkspaceTargetAction('git') }} aria-label="Changes">
+                          <GitBranch className="h-5 w-5" />
+                          {changedFiles.length > 0 && <span className="absolute -right-1 -top-1 z-10 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-bold leading-[14px] text-primary-foreground">{changedFiles.length > 99 ? '99+' : changedFiles.length}</span>}
+                        </Button>
+                      </TooltipTrigger><TooltipContent side="top">Changes</TooltipContent></Tooltip>
+                      <Tooltip><TooltipTrigger asChild>
+                        <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'editor') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-xl p-0" onClick={() => { void handleMobileWorkspaceTargetAction('editor') }} aria-label="Editor">
+                          <Code className="h-5 w-5" />
+                        </Button>
+                      </TooltipTrigger><TooltipContent side="top">Editor</TooltipContent></Tooltip>
+                    </>
+                  )}
+                </div>
+              </>
             )}
           </>
         )}

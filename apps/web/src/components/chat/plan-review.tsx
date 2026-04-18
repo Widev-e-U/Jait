@@ -71,7 +71,7 @@ function ActionItem({ action, expanded, onToggle }: {
           <span className="font-mono text-sm font-medium">{action.tool}</span>
           <span className="text-xs text-muted-foreground ml-2">Step {action.order + 1}</span>
         </span>
-        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+        <Badge variant="outline" className="text-2xs px-1.5 py-0">
           {config.label}
         </Badge>
         {expanded ? (
@@ -124,7 +124,7 @@ export function PlanReview({ plan, onApprove, onReject, isExecuting, className }
           <h3 className="text-sm font-medium flex items-center gap-2">
             <ClipboardList className="h-4 w-4" />
             Plan
-            <Badge variant="secondary" className="text-[10px] px-1.5 py-0">
+            <Badge variant="secondary" className="text-2xs px-1.5 py-0">
               {plan.actions.length} step{plan.actions.length !== 1 ? 's' : ''}
             </Badge>
           </h3>

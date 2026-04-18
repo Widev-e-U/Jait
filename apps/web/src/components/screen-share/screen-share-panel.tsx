@@ -86,7 +86,7 @@ function DeviceCard({
         <DeviceIcon platform={device.platform} className="h-4.5 w-4.5" />
       </div>
       <div className="flex-1 min-w-0">
-        <div className="font-medium truncate text-[13px]">
+        <div className="font-medium truncate text-sm">
           {device.name}
           {isLocal && <span className="text-xs text-muted-foreground ml-1">(you)</span>}
         </div>
@@ -114,7 +114,7 @@ function DeviceCard({
         </Button>
       )}
       {isConnected && (
-        <Badge className="bg-green-500/15 text-green-500 border-green-500/30 shrink-0 text-[10px]">
+        <Badge className="bg-green-500/15 text-green-500 border-green-500/30 shrink-0 text-2xs">
           <PlugZap className="h-2.5 w-2.5 mr-0.5" /> live
         </Badge>
       )}
@@ -243,7 +243,7 @@ export function ScreenSharePanel({ screenShare }: ScreenSharePanelProps) {
         <div className="flex flex-col flex-1 min-h-0">
           {/* Control bar */}
           <div className="flex items-center gap-2 px-3 py-2 border-b bg-muted/20 shrink-0">
-            <Badge className="bg-green-500/15 text-green-500 border-green-500/30 text-[10px]">
+            <Badge className="bg-green-500/15 text-green-500 border-green-500/30 text-2xs">
               <Wifi className="h-2.5 w-2.5 mr-1" /> Live
             </Badge>
             <span className="text-xs text-muted-foreground truncate flex-1">
@@ -252,7 +252,7 @@ export function ScreenSharePanel({ screenShare }: ScreenSharePanelProps) {
                 : 'Connected'}
             </span>
             {session && (
-              <span className="text-[10px] text-muted-foreground">
+              <span className="text-2xs text-muted-foreground">
                 {session.transport.routeMode.toUpperCase()} · {session.transport.avgLatencyMs}ms
               </span>
             )}
@@ -297,7 +297,7 @@ export function ScreenSharePanel({ screenShare }: ScreenSharePanelProps) {
               </div>
               {/* Session details */}
               {session && (
-                <div className="flex items-center gap-3 px-3 py-1.5 border-t text-[10px] text-muted-foreground shrink-0">
+                <div className="flex items-center gap-3 px-3 py-1.5 border-t text-2xs text-muted-foreground shrink-0">
                   <span>Session {session.id.slice(0, 8)}</span>
                   <span>·</span>
                   <span>ICE: {session.transport.iceConnectionState}</span>
@@ -375,7 +375,7 @@ export function ScreenSharePanel({ screenShare }: ScreenSharePanelProps) {
           )}
 
           {/* Tip */}
-          <div className="px-2 py-2 rounded-md bg-muted/30 text-[11px] text-muted-foreground">
+          <div className="px-2 py-2 rounded-md bg-muted/30 text-xs text-muted-foreground">
             <strong>Tip:</strong> Ask your agent to connect to a device — e.g. &ldquo;Show me my desktop screen&rdquo;
           </div>
         </div>

@@ -1,2 +1,2 @@
-export { TerminalView, TerminalTabs, useTerminals } from './terminal-view'
-export type { TerminalInfo } from './terminal-view'
+export { TerminalView, TerminalTabs, useTerminals, useAvailableShells } from './terminal-view'
+export type { TerminalInfo, TerminalViewHandle, ShellOption } from './terminal-view'

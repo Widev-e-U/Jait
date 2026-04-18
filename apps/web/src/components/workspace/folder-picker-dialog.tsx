@@ -272,7 +272,7 @@ export function FolderPickerDialog({
           )}
           <button
             onClick={() => setShowManualInput(v => !v)}
-            className="ml-auto px-1.5 py-0.5 rounded hover:bg-accent hover:text-accent-foreground text-[10px]"
+            className="ml-auto px-1.5 py-0.5 rounded hover:bg-accent hover:text-accent-foreground text-2xs"
           >
             {showManualInput ? 'Browse' : 'Enter path'}
           </button>

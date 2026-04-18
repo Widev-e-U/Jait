@@ -727,7 +727,7 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
   return (
     <div className="rounded-lg border border-purple-500/20 bg-purple-500/[0.03] text-xs">
       {(isRunning || rounds != null || toolCalls.length > 0 || durationMs != null) && (
-        <div className="flex items-center justify-end gap-2 border-b border-purple-500/15 px-3 py-2 text-[11px] text-muted-foreground">
+        <div className="flex items-center justify-end gap-2 border-b border-purple-500/15 px-3 py-2 text-xs text-muted-foreground">
           {isRunning && <Loader2 className="h-3 w-3 animate-spin text-purple-500" />}
           {rounds != null && <span>{rounds} round{rounds !== 1 ? 's' : ''}</span>}
           {toolCalls.length > 0 && <span>{toolCalls.length} tool{toolCalls.length !== 1 ? 's' : ''}</span>}
@@ -739,7 +739,7 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
 
       {/* Running indicator when no nested calls yet */}
       {isRunning && nestedCalls.length === 0 && !content && (
-        <div className="px-3 py-2 text-[11px] text-muted-foreground">
+        <div className="px-3 py-2 text-xs text-muted-foreground">
           Agent is working...
         </div>
       )}
@@ -756,8 +756,8 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
       {/* Final output */}
       {content && (
         <div className="border-t border-purple-500/15 px-3 py-2">
-          <div className="mb-1 text-[11px] font-medium text-muted-foreground">Result</div>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-[11px] leading-5">
+          <div className="mb-1 text-xs font-medium text-muted-foreground">Result</div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-xs leading-5">
             {content}
           </pre>
         </div>
@@ -766,8 +766,8 @@ function SubAgentHistoryView({ data, message, status }: { data: Record<string, u
       {/* Fallback to message if no content */}
       {!content && message && (
         <div className="border-t border-purple-500/15 px-3 py-2">
-          <div className="mb-1 text-[11px] font-medium text-muted-foreground">Result</div>
-          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-[11px] leading-5">
+          <div className="mb-1 text-xs font-medium text-muted-foreground">Result</div>
+          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-xs leading-5">
             {message}
           </pre>
         </div>
@@ -797,18 +797,18 @@ function BrowserSnapshotView({ snapshot }: { snapshot: string }) {
       <div>
         <div className="font-semibold text-foreground/90">Browser snapshot</div>
         {title ? <div className="text-muted-foreground">{title}</div> : null}
-        {url ? <div className="font-mono text-[11px] break-all">{url}</div> : null}
+        {url ? <div className="font-mono text-xs break-all">{url}</div> : null}
       </div>
       <div>
-        <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Text</div>
-        <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono text-[11px] leading-5">
+        <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Text</div>
+        <pre className="max-h-40 overflow-auto whitespace-pre-wrap rounded bg-background p-2 font-mono text-xs leading-5">
           {textContent || '(no textual content)'}
         </pre>
       </div>
       <div>
-        <div className="mb-1 text-[11px] uppercase tracking-wide text-muted-foreground">Interactive elements</div>
+        <div className="mb-1 text-xs uppercase tracking-wide text-muted-foreground">Interactive elements</div>
         {elements.length ? (
-          <ul className="max-h-40 space-y-1 overflow-auto rounded bg-background p-2 font-mono text-[11px]">
+          <ul className="max-h-40 space-y-1 overflow-auto rounded bg-background p-2 font-mono text-xs">
             {elements.map((elementLine, index) => (
               <li key={`${elementLine}-${index}`} className="break-all">{elementLine}</li>
             ))}
@@ -829,7 +829,7 @@ function BrowserScreenshotView({ path }: { path: string }) {
 
   return (
     <div className="space-y-2 rounded-md bg-muted/30 p-3 text-xs">
-      <div className="text-[11px] text-muted-foreground">Screenshot path: <span className="font-mono break-all">{trimmedPath}</span></div>
+      <div className="text-xs text-muted-foreground">Screenshot path: <span className="font-mono break-all">{trimmedPath}</span></div>
       <div className="group relative overflow-hidden rounded-md bg-background/90 ring-1 ring-inset ring-border/35">
         <img
           src={src}
@@ -841,7 +841,7 @@ function BrowserScreenshotView({ path }: { path: string }) {
         />
         {loaded && (
           <div className="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 transition-opacity group-hover:opacity-100">
-            <span className="rounded-full bg-black/60 px-3 py-1.5 text-[11px] font-medium text-white">Click to expand</span>
+            <span className="rounded-full bg-black/60 px-3 py-1.5 text-xs font-medium text-white">Click to expand</span>
           </div>
         )}
       </div>
@@ -1186,7 +1186,7 @@ function FileSummaryButton({
   if (!interactive) {
     return (
       <span
-        className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground"
+        className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground"
         title={path}
       >
         {content}
@@ -1198,7 +1198,7 @@ function FileSummaryButton({
     <span
       role="button"
       tabIndex={0}
-      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-[12px] font-medium leading-none text-foreground transition-colors hover:bg-muted cursor-pointer"
+      className="inline-flex max-w-full items-center gap-1.5 rounded-md border border-border/70 bg-muted/45 px-2 py-1 text-xs font-medium leading-none text-foreground transition-colors hover:bg-muted cursor-pointer"
       title={`Open diff for ${path}`}
       onClick={(event) => {
         event.preventDefault()
@@ -1372,18 +1372,18 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
           <span>{meta.label}: <code className="text-xs font-mono">{summary}</code></span>
         )}
       </span>
-      <span className="text-[11px] text-muted-foreground/60 tabular-nums shrink-0">
+      <span className="text-xs text-muted-foreground/60 tabular-nums shrink-0">
         <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
       </span>
       {editDiffCount && (
-        <span className="rounded border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-[10px] font-semibold tabular-nums text-blue-500 shrink-0">
+        <span className="rounded border border-blue-500/25 bg-blue-500/10 px-1.5 py-0.5 text-2xs font-semibold tabular-nums text-blue-500 shrink-0">
           {editDiffCount}
         </span>
       )}
       {terminalOutcomeBadge && (
         <span
           className={cn(
-            'rounded border px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide shrink-0',
+            'rounded border px-1.5 py-0.5 text-2xs font-semibold uppercase tracking-wide shrink-0',
             terminalOutcomeBadge.className,
           )}
         >
@@ -1420,13 +1420,13 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
     childCalls && childCalls.length > 0 ? (
       <div className="rounded-lg border border-purple-500/20 bg-purple-500/[0.03] text-xs">
         {(call.status === 'running' || call.status === 'pending') && childCalls.length > 0 && (
-          <div className="flex items-center justify-end gap-2 border-b border-purple-500/15 px-3 py-2 text-[11px] text-muted-foreground">
+          <div className="flex items-center justify-end gap-2 border-b border-purple-500/15 px-3 py-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin text-purple-500" />
             <span>{childCalls.length} tool{childCalls.length !== 1 ? 's' : ''}</span>
           </div>
         )}
         {(call.status === 'running' || call.status === 'pending') && childCalls.length === 0 && (
-          <div className="px-3 py-2 text-[11px] text-muted-foreground">Agent is working...</div>
+          <div className="px-3 py-2 text-xs text-muted-foreground">Agent is working...</div>
         )}
         <div className="divide-y divide-border/30">
           {childCalls.map((child) => (
@@ -1435,8 +1435,8 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
         </div>
         {call.result?.message && (call.status === 'success' || call.status === 'error') && (
           <div className="border-t border-purple-500/15 px-3 py-2">
-            <div className="mb-1 text-[11px] font-medium text-muted-foreground">Result</div>
-            <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-[11px] leading-5">
+            <div className="mb-1 text-xs font-medium text-muted-foreground">Result</div>
+            <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded bg-background/60 p-2 font-mono text-xs leading-5">
               {call.result.message}
             </pre>
           </div>
@@ -1479,7 +1479,7 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
         <Loader2 className="h-3 w-3 animate-spin" />
         <span>{runningHint}</span>
       </div>
-      <div className="mt-1 text-[11px] opacity-75">
+      <div className="mt-1 text-xs opacity-75">
         Elapsed: <ElapsedLabel startedAt={call.startedAt} completedAt={call.completedAt} now={now} />
       </div>
     </div>
@@ -1784,7 +1784,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
           <span className="text-sm font-medium text-foreground truncate">
             {summarizeCollapsedToolCalls(calls)}
           </span>
-          <div className="flex items-center gap-2 ml-auto text-[11px] text-muted-foreground tabular-nums shrink-0">
+          <div className="flex items-center gap-2 ml-auto text-xs text-muted-foreground tabular-nums shrink-0">
             {!isActive && errorCount > 0 && (
               <span className="text-red-500">{errorCount} failed</span>
             )}

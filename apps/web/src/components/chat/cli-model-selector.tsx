@@ -156,7 +156,7 @@ export function CliModelSelector({ provider, model, onChange, disabled, classNam
             ? <Loader2 className="h-3 w-3 animate-spin" />
             : compact
               ? <Bot className="h-3.5 w-3.5" />
-              : <span className="font-mono text-[11px] truncate max-w-[140px]">{displayLabel}</span>
+              : <span className="font-mono text-xs truncate max-w-[140px]">{displayLabel}</span>
           }
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
@@ -181,7 +181,7 @@ export function CliModelSelector({ provider, model, onChange, disabled, classNam
             <>
               <div className="flex items-center gap-1.5 px-2 py-1.5">
                 <Clock className="h-3 w-3 text-muted-foreground" />
-                <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">Recent</span>
+                <span className="text-2xs uppercase tracking-wider text-muted-foreground font-medium">Recent</span>
               </div>
               {recentModels.map((m) => (
                 <ModelItem key={`recent-${m.id}`} model={m} selected={model === m.id} onSelect={handleSelect} />
@@ -193,7 +193,7 @@ export function CliModelSelector({ provider, model, onChange, disabled, classNam
           {/* All models / filtered results */}
           {!searchLower && recentModels.length > 0 && (
             <div className="px-2 py-1.5">
-              <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">All models</span>
+              <span className="text-2xs uppercase tracking-wider text-muted-foreground font-medium">All models</span>
             </div>
           )}
           {nonRecentFiltered.map((m) => (
@@ -227,11 +227,11 @@ function ModelItem({ model: m, selected, onSelect }: { model: ModelDef; selected
         <div className="text-sm font-medium truncate">
           {m.name}
           {m.isDefault && (
-            <span className="ml-1.5 text-[10px] text-muted-foreground font-normal">(default)</span>
+            <span className="ml-1.5 text-2xs text-muted-foreground font-normal">(default)</span>
           )}
         </div>
         {m.description && (
-          <div className="text-[11px] text-muted-foreground leading-snug truncate">{m.description}</div>
+          <div className="text-xs text-muted-foreground leading-snug truncate">{m.description}</div>
         )}
       </div>
       {selected && <Check className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />}
