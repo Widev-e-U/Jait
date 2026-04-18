@@ -1,1 +1,0 @@
-{"version":3,"file":"voice-assistant.js","sourceRoot":"","sources":["../../src/types/voice-assistant.ts"],"names":[],"mappings":"AAAA,oEAAoE;AAyBpE,MAAM,CAAC,MAAM,6BAA6B,GAAwB;IAChE,MAAM,EAAE,cAAc;IACtB,SAAS,EAAE,KAAK;IAChB,iBAAiB,EAAE,KAAK;IACxB,cAAc,EAAE,EAAE;IAClB,mBAAmB,EAAE,EAAE;CACxB,CAAC"}
