@@ -263,11 +263,11 @@ function SecretInputPrompt({ token, sessionId }: { token: string | null; session
           </DialogDescription>
         </DialogHeader>
         <div className="space-y-3">
-          <Label htmlFor="secret-input">Password</Label>
+          <Label htmlFor="secret-input">Secret</Label>
           <Input
             id="secret-input"
             type="password"
-            autoComplete="current-password"
+            autoComplete="off"
             value={value}
             onChange={(event) => setValue(event.target.value)}
             onKeyDown={(event) => {

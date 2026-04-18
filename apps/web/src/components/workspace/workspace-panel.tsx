@@ -26,6 +26,7 @@ import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-d
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getOpenInterventionsForSession, resolvePreviewBrowserSession } from './workspace-preview-collaboration'
 import { getDesktopWorkspacePanelStyle } from './workspace-panel-layout'
+import { getSourceControlChangeCount } from './source-control-summary'
 import {
   PreviewMetricsPanel,
   type PreviewInspectInteractiveElement,
@@ -3718,27 +3719,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setGitActionBusy(false)
   }, [remoteRoot, gitActionBusy, commitMessage, fetchGitStatus, openTabs])
 
-  const changedFileCount = useMemo(() => {
-    const paths = new Set<string>()
-    for (const file of gitStatus?.index.files ?? []) paths.add(file.path)
-    for (const file of gitStatus?.workingTree.files ?? []) paths.add(file.path)
-    return paths.size
-  }, [gitStatus])
-
-  /* ---- Generate commit message via AI ---- */
-  const handleGenerateCommitMessage = useCallback(async () => {
-    if (!remoteRoot || changedFileCount === 0 || commitMsgGenerating || gitActionBusy) return
-    setCommitMsgGenerating(true)
-    setGitActionError(null)
-    try {
-      const { message } = await gitApi.generateCommitMessage(remoteRoot, provider, cliModel)
-      if (message) setCommitMessage(message)
-    } catch (err) {
-      setGitActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
-    }
-    setCommitMsgGenerating(false)
-  }, [remoteRoot, changedFileCount, commitMsgGenerating, gitActionBusy, provider, cliModel])
-
   /* ---- Git pull ---- */
   const handleGitPull = useCallback(async () => {
     if (!remoteRoot || gitActionBusy) return
@@ -4149,6 +4129,22 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }))),
     [workingTreeFiles],
   )
+  const changedFileCount = useMemo(
+    () => getSourceControlChangeCount(stagedFiles, workingTreeFiles),
+    [stagedFiles, workingTreeFiles],
+  )
+  const handleGenerateCommitMessage = useCallback(async () => {
+    if (!remoteRoot || changedFileCount === 0 || commitMsgGenerating || gitActionBusy) return
+    setCommitMsgGenerating(true)
+    setGitActionError(null)
+    try {
+      const { message } = await gitApi.generateCommitMessage(remoteRoot, provider, cliModel)
+      if (message) setCommitMessage(message)
+    } catch (err) {
+      setGitActionError(err instanceof Error ? err.message : 'Failed to generate commit message')
+    }
+    setCommitMsgGenerating(false)
+  }, [remoteRoot, changedFileCount, commitMsgGenerating, gitActionBusy, provider, cliModel])
   const canGenerateCommitMessage = changedFileCount > 0 && !commitMsgGenerating && !gitActionBusy
   const contextTabIndex = tabContextMenu ? openTabs.findIndex((t) => t.id === tabContextMenu.tabId) : -1
   const canRunPrimaryGitAction = !gitActionBusy && (changedFileCount > 0 || canSyncChanges(gitStatus))
