@@ -1018,7 +1018,7 @@ function ManagerActiveThreadsMenu({
         <Button
           variant="outline"
           size="sm"
-          className="h-8 gap-1.5 rounded-lg px-2 text-xs"
+          className="mr-1 h-8 gap-1.5 rounded-lg px-2 text-xs sm:mr-0"
           title={`${threads.length} active ${threads.length === 1 ? 'thread' : 'threads'}`}
         >
           <SpinnerIcon className="h-3.5 w-3.5 animate-spin text-blue-500" />
