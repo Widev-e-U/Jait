@@ -1510,9 +1510,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </div>
       )}
 
-      <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 pb-2.5 pt-0.5">
+      <div className="flex min-w-0 items-center gap-2 px-3 pb-2.5 pt-0.5">
         {hasFooterControls && (
-          <div className="min-w-0 flex-[999_1_18rem] overflow-x-auto scrollbar-none">
+          <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
               {footerLeadingContent}
               {shouldShowSendTargetSelector && (
@@ -1560,7 +1560,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </div>
           </div>
         )}
-        <div className={cn('ml-auto flex shrink-0 items-center gap-1.5', hasFooterControls && 'pl-1')}>
+        <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterControls ? 'pl-1' : 'ml-auto')}>
           <Button
             type="button"
             size="icon"

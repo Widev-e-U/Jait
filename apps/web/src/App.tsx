@@ -6348,7 +6348,7 @@ function App() {
               )}
             </div>
             {showMobileTerminalFullscreen && (
-              <section className="flex flex-1 min-h-0 flex-col border-b bg-background overflow-hidden">
+              <section className="flex flex-1 min-h-0 flex-col overflow-hidden border-b bg-background pt-16">
                 <div className="relative shrink-0 border-b">
                   <TerminalTabs
                     terminals={workspaceTerminals}
@@ -6388,7 +6388,7 @@ function App() {
               </section>
             )}
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
-              <section className="flex-1 min-h-0 border-b bg-background overflow-hidden">
+              <section className="flex-1 min-h-0 overflow-hidden border-b bg-background pt-16">
                 <WorkspacePanel
                   ref={workspaceRef}
                   autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
@@ -6763,8 +6763,8 @@ function App() {
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
                   {viewMode === 'developer' && (
-                    <div className="px-1">
-                      <div className="flex flex-wrap items-center gap-2">
+                    <div className="overflow-x-auto px-1">
+                      <div className="grid min-w-max grid-cols-[1fr_auto_1fr] items-center gap-3 whitespace-nowrap">
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                           {sendTarget === 'thread' ? (
                             developerThreadToolbarRepoPicker
@@ -6781,14 +6781,14 @@ function App() {
                             />
                           )}
                         </div>
-                        <div className="order-3 flex w-full justify-center sm:order-2 sm:w-auto sm:flex-none">
+                        <div className="justify-self-center">
                           <SendTargetSelector
                             target={sendTarget}
                             onChange={setSendTarget}
                             disabled={isLoading}
                           />
                         </div>
-                        <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
+                        <div className="flex shrink-0 items-center justify-self-end gap-2">
                           {sendTarget !== 'thread' && (
                             <>
                               <button
@@ -6863,7 +6863,7 @@ function App() {
                   )}
                 </Conversation>
 
-                <div className={`shrink-0 ${isMobile ? 'pt-2 px-2' : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`} style={isMobile ? { paddingBottom: '0.35rem' } : undefined}>
+                <div className={`shrink-0 ${isMobile ? 'px-2 pt-2 pb-16' : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`}>
                   <div className="mx-auto w-full max-w-3xl space-y-1.5">
                     {todoList.length > 0 && (
                       <TodoList items={todoList} />
@@ -6952,8 +6952,8 @@ function App() {
                       sessionInfo={sessionInfo}
                       workspaceNodeId={activeWorkspace?.nodeId}
                     />
-                    <div className={isMobile ? 'px-0.5' : 'px-1'}>
-                      <div className="flex flex-wrap items-center gap-2">
+                    <div className={`overflow-x-auto ${isMobile ? 'px-0.5' : 'px-1'}`}>
+                      <div className={`grid min-w-max grid-cols-[1fr_auto_1fr] items-center whitespace-nowrap ${isMobile ? 'gap-2' : 'gap-3'}`}>
                         <div className="flex min-w-0 flex-1 items-center gap-2">
                           {viewMode === 'developer' && sendTarget === 'thread' ? (
                             developerThreadToolbarRepoPicker
@@ -6983,7 +6983,7 @@ function App() {
                             </>
                           )}
                         </div>
-                        <div className="order-3 flex w-full justify-center sm:order-2 sm:w-auto sm:flex-none">
+                        <div className="justify-self-center">
                           {viewMode === 'developer' && (
                             <SendTargetSelector
                               target={sendTarget}
@@ -6992,7 +6992,7 @@ function App() {
                             />
                           )}
                         </div>
-                        <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
+                        <div className="flex shrink-0 items-center justify-self-end gap-2">
                           {viewMode === 'developer' && sendTarget !== 'thread' && (
                             <>
                               <button
