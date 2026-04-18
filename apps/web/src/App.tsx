@@ -74,6 +74,7 @@ import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
 import { ThreadActions } from '@/components/automation/ThreadActions'
+import { ThreadSkillPicker } from '@/components/automation/ThreadSkillPicker'
 import { shouldRenderThreadActions } from '@/components/automation/thread-actions-state'
 import { StrategyModal } from '@/components/automation/StrategyModal'
 import { PlanModal } from '@/components/automation/PlanModal'
@@ -167,12 +168,19 @@ interface SecretInputRequest {
   status: 'pending' | 'submitted' | 'cancelled' | 'timeout'
 }
 
+const INLINE_SECRET_REQUESTERS = new Set(['ssh.run', 'ssh.session.start', 'elevated.run'])
+
 function SecretInputPrompt({ token, sessionId }: { token: string | null; sessionId: string | null }) {
   const [requests, setRequests] = useState<SecretInputRequest[]>([])
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const activeRequest = requests[0] ?? null
+  const renderInline = activeRequest
+    ? INLINE_SECRET_REQUESTERS.has(activeRequest.requestedBy ?? '')
+      || activeRequest.title === 'SSH password'
+      || activeRequest.title === 'Administrator password'
+    : false
 
   const authHeaders = useCallback((contentType = false) => {
     const headers: Record<string, string> = {}
@@ -262,47 +270,75 @@ function SecretInputPrompt({ token, sessionId }: { token: string | null; session
 
   if (!activeRequest) return null
 
-  return (
-    <div className="rounded-lg border bg-card p-4 space-y-3">
+  const content = (
+    <div className="space-y-3">
       <div className="space-y-1">
-        <p className="text-sm font-medium">{activeRequest.title ?? 'Secret required'}</p>
-        <p className="text-xs text-muted-foreground">
+        <p className="text-sm text-muted-foreground">
           {activeRequest.prompt ?? 'Enter the secret to continue.'} The value goes directly to the local gateway and is not sent to the model.
         </p>
       </div>
-      <div className="flex items-center gap-2">
-        <div className="relative flex-1">
-          <Input
-            id="secret-input"
-            type={showPassword ? 'text' : 'password'}
-            autoComplete="current-password"
-            placeholder="Password"
-            value={value}
-            onChange={(event) => setValue(event.target.value)}
-            onKeyDown={(event) => {
-              if (event.key === 'Enter') void submitSecret()
-            }}
-            className="pr-9"
-            autoFocus
-          />
-          <button
-            type="button"
-            tabIndex={-1}
-            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-            onMouseDown={(e) => e.preventDefault()}
-            onClick={() => setShowPassword((prev) => !prev)}
-          >
-            {showPassword ? (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-            )}
-          </button>
-        </div>
-        <Button variant="outline" size="sm" onClick={() => void cancelSecret()} disabled={submitting}>Cancel</Button>
-        <Button size="sm" onClick={() => void submitSecret()} disabled={submitting || !value}>Submit</Button>
+      <div className="relative">
+        <Label htmlFor="secret-input">Secret</Label>
+        <Input
+          id="secret-input"
+          type={showPassword ? 'text' : 'password'}
+          autoComplete="current-password"
+          placeholder="Password"
+          value={value}
+          onChange={(event) => setValue(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter') void submitSecret()
+          }}
+          className="pr-9"
+          autoFocus
+        />
+        <button
+          type="button"
+          tabIndex={-1}
+          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+          onMouseDown={(e) => e.preventDefault()}
+          onClick={() => setShowPassword((prev) => !prev)}
+        >
+          {showPassword ? (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
+          ) : (
+            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
+          )}
+        </button>
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button variant="outline" onClick={() => void cancelSecret()} disabled={submitting}>Cancel</Button>
+        <Button onClick={() => void submitSecret()} disabled={submitting || !value}>Submit</Button>
       </div>
     </div>
+  )
+
+  if (renderInline) {
+    return (
+      <div className="fixed bottom-4 right-4 z-[120] w-[min(28rem,calc(100vw-2rem))] rounded-xl border bg-background p-4 shadow-2xl">
+        <div className="mb-3">
+          <p className="text-sm font-medium">{activeRequest.title}</p>
+          <p className="text-[11px] text-muted-foreground">
+            Inline secret prompt for SSH/elevated flow.
+          </p>
+        </div>
+        {content}
+      </div>
+    )
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) void cancelSecret() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{activeRequest.title}</DialogTitle>
+          <DialogDescription>
+            Enter the secret to continue.
+          </DialogDescription>
+        </DialogHeader>
+        {content}
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -1224,6 +1260,7 @@ function App() {
   const [updateInfo, setUpdateInfo] = useState<UpdateInfo | null>(null)
   const [updateChecking, setUpdateChecking] = useState(false)
   const [updateApplying, setUpdateApplying] = useState(false)
+  const [updateAwaitingRestart, setUpdateAwaitingRestart] = useState(false)
   const pendingGatewayRestartVersionRef = useRef<string | null>(null)
   const gatewayRestartSawDisconnectRef = useRef(false)
   const automationRefreshRef = useRef<() => Promise<void>>(async () => {})
@@ -1647,6 +1684,7 @@ function App() {
       if (res.ok) {
         pendingGatewayRestartVersionRef.current = updateInfo.latestVersion
         gatewayRestartSawDisconnectRef.current = false
+        setUpdateAwaitingRestart(true)
         toast.success(`Updated to v${updateInfo.latestVersion}. Gateway is restarting...`)
       } else {
         const data = await res.json().catch(() => ({}))
@@ -1655,6 +1693,23 @@ function App() {
     } catch { toast.error('Update request failed') }
     setUpdateApplying(false)
   }, [token, updateInfo])
+
+  const hardReloadAfterUpdate = useCallback(() => {
+    const reloadUrl = new URL(window.location.href)
+    reloadUrl.searchParams.set('_jaitUpdate', Date.now().toString())
+
+    void (async () => {
+      try {
+        if ('caches' in window) {
+          const cacheKeys = await caches.keys()
+          await Promise.all(cacheKeys.map((key) => caches.delete(key)))
+        }
+      } catch {
+        // Ignore cache API failures and still reload.
+      }
+      window.location.replace(reloadUrl.toString())
+    })()
+  }, [])
 
   const handleUiConnectionStateChange = useCallback(({ connected, reconnected }: { connected: boolean; reconnected: boolean }) => {
     if (!connected) {
@@ -1671,10 +1726,16 @@ function App() {
       const version = pendingGatewayRestartVersionRef.current
       pendingGatewayRestartVersionRef.current = null
       gatewayRestartSawDisconnectRef.current = false
+      setUpdateAwaitingRestart(false)
+      if (appPlatform === 'web') {
+        toast.success(`Gateway restarted on v${version}. Refreshing...`)
+        hardReloadAfterUpdate()
+        return
+      }
       toast.success(`Gateway restarted on v${version}.`)
       void handleCheckUpdate()
     }
-  }, [handleCheckUpdate])
+  }, [appPlatform, handleCheckUpdate, hardReloadAfterUpdate])
 
   // Auto-check for updates on mount (once authenticated)
   useEffect(() => {
@@ -5433,7 +5494,9 @@ function App() {
                   <Button
                     onClick={async () => {
                       if (appPlatform === 'web') {
-                        setCurrentView('settings')
+                        if (!updateApplying && !updateAwaitingRestart) {
+                          await handleApplyUpdate()
+                        }
                       } else if (appPlatform === 'electron') {
                         const desktop = (window as any).jaitDesktop
                         toast.info('Downloading update...')
@@ -5453,13 +5516,24 @@ function App() {
                     }}
                     variant="outline"
                     size="sm"
+                    disabled={appPlatform === 'web' && (updateApplying || updateAwaitingRestart)}
                     className="h-8 shrink-0 border-amber-500/30 bg-amber-500/10 px-2 text-amber-700 hover:bg-amber-500/15 hover:text-amber-800 dark:text-amber-300"
                   >
-                    <ArrowUpCircle className="h-3.5 w-3.5" />
-                    <span className="hidden sm:inline">v{updateInfo.latestVersion}</span>
+                    {appPlatform === 'web' && (updateApplying || updateAwaitingRestart)
+                      ? <SpinnerIcon className="h-3.5 w-3.5 animate-spin" />
+                      : <ArrowUpCircle className="h-3.5 w-3.5" />}
+                    <span className="hidden sm:inline">
+                      {appPlatform === 'web' && (updateApplying || updateAwaitingRestart)
+                        ? 'Updating...'
+                        : `v${updateInfo.latestVersion}`}
+                    </span>
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="bottom">Update available — v{updateInfo.latestVersion}</TooltipContent>
+                <TooltipContent side="bottom">
+                  {appPlatform === 'web' && (updateApplying || updateAwaitingRestart)
+                    ? 'Updating and refreshing...'
+                    : `Update available — v${updateInfo.latestVersion}`}
+                </TooltipContent>
               </Tooltip>
             )}
 
@@ -6025,6 +6099,11 @@ function App() {
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+                      <ThreadSkillPicker
+                        token={token}
+                        threadId={automation.selectedThread.id}
+                        selectedSkillIds={automation.selectedThread.skillIds}
+                      />
                       {!isMobile && automation.selectedThread.branch && (
                         <Badge variant="outline" className="text-2xs px-1 py-0 font-mono">
                           {automation.selectedThread.branch}
@@ -6684,9 +6763,9 @@ function App() {
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
                   {viewMode === 'developer' && (
-                    <div className="overflow-x-auto px-1">
-                      <div className="grid min-w-max grid-cols-[1fr_auto_1fr] items-center gap-2 whitespace-nowrap">
-                        <div className="flex min-w-0 items-center gap-2">
+                    <div className="px-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
                           {sendTarget === 'thread' ? (
                             developerThreadToolbarRepoPicker
                           ) : (
@@ -6702,13 +6781,14 @@ function App() {
                             />
                           )}
                         </div>
-                        <SendTargetSelector
-                          target={sendTarget}
-                          onChange={setSendTarget}
-                          disabled={isLoading}
-                          className="justify-self-center"
-                        />
-                        <div className="flex shrink-0 items-center justify-self-end gap-2">
+                        <div className="order-3 flex w-full justify-center sm:order-2 sm:w-auto sm:flex-none">
+                          <SendTargetSelector
+                            target={sendTarget}
+                            onChange={setSendTarget}
+                            disabled={isLoading}
+                          />
+                        </div>
+                        <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
                           {sendTarget !== 'thread' && (
                             <>
                               <button
@@ -6811,7 +6891,6 @@ function App() {
                       sessionId={activeSessionId}
                       onApproveAllEnabled={() => setApproveAllInSession(true)}
                     />
-                    <SecretInputPrompt token={token} sessionId={activeSessionId} />
                     {pendingPlan && (
                       <PlanReview
                         plan={pendingPlan}
@@ -6873,9 +6952,9 @@ function App() {
                       sessionInfo={sessionInfo}
                       workspaceNodeId={activeWorkspace?.nodeId}
                     />
-                    <div className={`overflow-x-auto ${isMobile ? 'px-0.5' : 'px-1'}`}>
-                      <div className={`grid min-w-max grid-cols-[1fr_auto_1fr] items-center whitespace-nowrap ${isMobile ? 'gap-2' : 'gap-3'}`}>
-                        <div className="flex min-w-0 items-center gap-2">
+                    <div className={isMobile ? 'px-0.5' : 'px-1'}>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <div className="flex min-w-0 flex-1 items-center gap-2">
                           {viewMode === 'developer' && sendTarget === 'thread' ? (
                             developerThreadToolbarRepoPicker
                           ) : viewMode === 'developer' ? (
@@ -6904,7 +6983,7 @@ function App() {
                             </>
                           )}
                         </div>
-                        <div className="justify-self-center">
+                        <div className="order-3 flex w-full justify-center sm:order-2 sm:w-auto sm:flex-none">
                           {viewMode === 'developer' && (
                             <SendTargetSelector
                               target={sendTarget}
@@ -6913,7 +6992,7 @@ function App() {
                             />
                           )}
                         </div>
-                        <div className="flex shrink-0 items-center justify-self-end gap-2">
+                        <div className="ml-auto flex shrink-0 items-center gap-2 sm:ml-0">
                           {viewMode === 'developer' && sendTarget !== 'thread' && (
                             <>
                               <button
@@ -7432,6 +7511,8 @@ function App() {
           onOpenChange={automation.setFolderPickerOpen}
           onSelect={(path, nodeId) => { void automation.handleFolderSelected(path, nodeId) }}
         />
+
+        <SecretInputPrompt token={token} sessionId={activeSessionId} />
 
         {/* Strategy editor modal */}
         {strategyRepo && (

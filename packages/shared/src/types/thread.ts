@@ -41,6 +41,7 @@ export interface ThreadInfo {
   model: string | null;
   runtimeMode: RuntimeMode;
   kind: ThreadKind;
+  skillIds: string[] | null;
   workingDirectory: string | null;
   branch: string | null;
   status: ThreadStatus;
@@ -93,6 +94,7 @@ export interface CreateThreadParams {
   model?: string;
   runtimeMode?: RuntimeMode;
   kind?: ThreadKind;
+  skillIds?: string[] | null;
   workingDirectory?: string;
   branch?: string;
 }
@@ -102,6 +104,7 @@ export interface UpdateThreadParams {
   model?: string;
   runtimeMode?: RuntimeMode;
   kind?: ThreadKind;
+  skillIds?: string[] | null;
   workingDirectory?: string;
   branch?: string;
   prUrl?: string | null;

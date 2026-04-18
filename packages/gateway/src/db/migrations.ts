@@ -694,5 +694,12 @@ export const migrations: Migration[] = [
       try { db.exec(`ALTER TABLE agent_threads ADD COLUMN pr_base_branch TEXT`); } catch { /* exists */ }
     },
   },
+  {
+    id: 28,
+    name: "agent_threads_skill_ids",
+    run(db) {
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN skill_ids TEXT`); } catch { /* exists */ }
+    },
+  },
 
 ];

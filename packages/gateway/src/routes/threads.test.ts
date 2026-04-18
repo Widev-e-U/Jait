@@ -325,6 +325,66 @@ describe("thread routes", () => {
     sqlite.close();
   });
 
+  it("uses thread-specific pinned skills when provided", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider("codex");
+    providerRegistry.register(provider);
+    const skillRegistry = new SkillRegistry();
+    skillRegistry.add({
+      id: "word-docx",
+      name: "Word / DOCX",
+      description: "Handle DOCX files without formatting drift.",
+      filePath: "C:/skills/word-docx/SKILL.md",
+      source: "user",
+      enabled: true,
+    });
+    skillRegistry.add({
+      id: "browser-research",
+      name: "Browser Research",
+      description: "Use the browser for deep web research.",
+      filePath: "C:/skills/browser-research/SKILL.md",
+      source: "user",
+      enabled: true,
+    });
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+      skillRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "DOCX helper",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+      skillIds: ["word-docx"],
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "Inspect the template", titleTask: "" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+    const turnMessage = provider.sendTurn.mock.calls.at(-1)?.[1] as string;
+    expect(turnMessage).toContain("<name>Word / DOCX</name>");
+    expect(turnMessage).not.toContain("<name>Browser Research</name>");
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("starts and sends turns through claude-code threads", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

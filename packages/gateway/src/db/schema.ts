@@ -251,6 +251,7 @@ export const agentThreads = sqliteTable(
     model: text("model"),
     runtimeMode: text("runtime_mode").notNull().default("full-access"), // "full-access" | "supervised"
     kind: text("kind").notNull().default("delivery"), // delivery | delegation
+    skillIds: text("skill_ids"), // JSON string[] override; null => use global enabled skills
     workingDirectory: text("working_directory"),
     branch: text("branch"), // Git branch name
     status: text("status").notNull().default("running"), // running | completed | error | interrupted

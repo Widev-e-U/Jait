@@ -20,6 +20,9 @@ export interface PlanTask {
   title: string;
   description: string;
   status: PlanTaskStatus;
+  skillCandidate?: boolean;
+  skillTitle?: string;
+  skillRationale?: string;
   threadId?: string;
   dependsOn?: string[];
 }

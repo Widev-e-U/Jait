@@ -47,7 +47,8 @@ export function ViewModeSelector({ mode, onChange, disabled, className, compact 
       role="tablist"
       aria-label="View mode"
       className={cn(
-        'relative inline-grid h-8 grid-cols-2 rounded-lg border border-border/70 bg-muted/40 p-0.5',
+        'relative inline-grid h-8 grid-cols-2 rounded-lg bg-muted/40 p-0.5',
+        compact ? 'border-0' : 'border border-border/70',
         'shadow-sm transition-colors',
         disabled && 'pointer-events-none opacity-50',
         className,

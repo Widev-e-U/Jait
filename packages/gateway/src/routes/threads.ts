@@ -48,6 +48,27 @@ import { interventionRunResumeRegistry } from "../services/intervention-run-resu
 
 const KNOWN_PROVIDER_IDS = new Set<ProviderId>(["jait", "codex", "claude-code", "gemini", "opencode", "copilot"]);
 
+function parseSkillIds(value: unknown): string[] | null | undefined {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+  if (!Array.isArray(value)) return undefined;
+  const skillIds = [...new Set(value.filter((id): id is string => typeof id === "string").map((id) => id.trim()).filter(Boolean))];
+  return skillIds;
+}
+
+function resolveThreadSkills(
+  skillRegistry: SkillRegistry | undefined,
+  threadSkillIds: string[] | null | undefined,
+) {
+  if (!skillRegistry) return [];
+  if (threadSkillIds === undefined || threadSkillIds === null) {
+    return skillRegistry.listEnabled();
+  }
+  return threadSkillIds
+    .map((id) => skillRegistry.get(id))
+    .filter((skill): skill is NonNullable<typeof skill> => Boolean(skill && skill.enabled));
+}
+
 function resolveThreadProviderId(
   userSelectedProvider?: ProviderId | null,
   requestedProvider?: ProviderId | null,
@@ -272,6 +293,7 @@ export function registerThreadRoutes(
         prState: normalizeThreadPrState(thread.prState),
         executionNodeId: thread.executionNodeId ?? null,
         executionNodeName: thread.executionNodeName ?? null,
+        skillIds: thread.skillIds,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
         completedAt: thread.completedAt,
@@ -623,6 +645,16 @@ export function registerThreadRoutes(
       ].join("\n\n");
     }
 
+    fullMessage = [
+      fullMessage,
+      "<skill-evaluation>",
+      "Always evaluate whether the requested work should become a reusable skill.",
+      "A skill is justified when the workflow or instruction pattern will likely repeat across tasks, repositories, or users.",
+      "If it is repo-specific, one-off, or too narrow, treat it as not worth a skill.",
+      "When relevant, call out a short proposed skill name and why it should or should not exist.",
+      "</skill-evaluation>",
+    ].join("\n\n");
+
     return fullMessage;
   }
 
@@ -722,6 +754,7 @@ export function registerThreadRoutes(
             ? "full-access"
             : defaults.runtimeMode ?? "full-access",
       kind: body["kind"] === "delegation" ? "delegation" : "delivery",
+      skillIds: parseSkillIds(body["skillIds"]),
       workingDirectory: typeof body["workingDirectory"] === "string" ? body["workingDirectory"] : undefined,
       branch: typeof body["branch"] === "string" ? body["branch"] : undefined,
     });
@@ -779,6 +812,7 @@ export function registerThreadRoutes(
       model: typeof body["model"] === "string" ? body["model"] : undefined,
       runtimeMode: body["runtimeMode"] === "supervised" ? "supervised" : body["runtimeMode"] === "full-access" ? "full-access" : undefined,
       kind: body["kind"] === "delegation" ? "delegation" : body["kind"] === "delivery" ? "delivery" : undefined,
+      skillIds: parseSkillIds(body["skillIds"]),
       workingDirectory: typeof body["workingDirectory"] === "string" ? body["workingDirectory"] : undefined,
       branch: typeof body["branch"] === "string" ? body["branch"] : undefined,
       prUrl: typeof body["prUrl"] === "string" ? body["prUrl"] : body["prUrl"] === null ? null : undefined,
@@ -1140,7 +1174,7 @@ export function registerThreadRoutes(
             // Prepend skills context on the first turn of a new CLI session
             let turnMessage = fullMessage;
             if (deps.skillRegistry) {
-              const skillsBlock = formatSkillsForPrompt(deps.skillRegistry.listEnabled());
+              const skillsBlock = formatSkillsForPrompt(resolveThreadSkills(deps.skillRegistry, activeThread.skillIds));
               if (skillsBlock) turnMessage = `${skillsBlock}\n\n${fullMessage}`;
             }
             await provider.sendTurn(session.id, turnMessage, attachments);

@@ -262,9 +262,13 @@ export function registerPlanRoutes(
       "that can each be executed as an independent agent thread.",
       "Each task should be small enough to complete in one session (a few files at most).",
       "Tasks can run in parallel unless they have explicit dependencies.",
+      "For every task, explicitly evaluate whether the work should become a reusable skill.",
+      "Mark skillCandidate true only when the solution is reusable across multiple future tasks, repos, or users.",
+      "Mark skillCandidate false for one-off implementation details or repo-specific glue.",
       "",
       "Respond with a JSON array of task objects. Each object must have:",
-      '  { "title": "short title", "description": "detailed instruction for the agent" }',
+      '  { "title": "short title", "description": "detailed instruction for the agent", "skillCandidate": true|false, "skillTitle": "optional proposed skill name", "skillRationale": "short reason" }',
+      'Use null or omit skillTitle when skillCandidate is false.',
       "",
       "Output ONLY the JSON array, no markdown fences, no explanation.",
     ].join("\n");
@@ -356,7 +360,13 @@ export function registerPlanRoutes(
       // Strip markdown fences if the model wrapped the output
       rawJson = rawJson.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "");
 
-      let generated: Array<{ title?: string; description?: string }>;
+      let generated: Array<{
+        title?: string;
+        description?: string;
+        skillCandidate?: boolean;
+        skillTitle?: string | null;
+        skillRationale?: string;
+      }>;
       try {
         generated = JSON.parse(rawJson);
       } catch {
@@ -374,6 +384,9 @@ export function registerPlanRoutes(
           title: t.title ?? "Untitled task",
           description: t.description ?? "",
           status: "proposed" as const,
+          skillCandidate: t.skillCandidate === true,
+          skillTitle: typeof t.skillTitle === "string" && t.skillTitle.trim() ? t.skillTitle.trim() : undefined,
+          skillRationale: typeof t.skillRationale === "string" && t.skillRationale.trim() ? t.skillRationale.trim() : undefined,
         }));
 
       // Merge with existing tasks (append generated ones)

@@ -25,6 +25,7 @@ export interface AgentThread {
   model: string | null
   runtimeMode: RuntimeMode
   kind: ThreadKind
+  skillIds: string[] | null
   workingDirectory: string | null
   branch: string | null
   status: ThreadStatus
@@ -74,6 +75,7 @@ export interface CreateThreadRequest {
   model?: string
   runtimeMode?: RuntimeMode
   kind?: ThreadKind
+  skillIds?: string[] | null
   workingDirectory?: string
   branch?: string
 }
@@ -83,6 +85,7 @@ export interface UpdateThreadRequest {
   model?: string
   runtimeMode?: RuntimeMode
   kind?: ThreadKind
+  skillIds?: string[] | null
   workingDirectory?: string
   branch?: string
   prUrl?: string | null
@@ -178,6 +181,9 @@ export interface PlanTask {
   title: string
   description: string
   status: PlanTaskStatus
+  skillCandidate?: boolean
+  skillTitle?: string
+  skillRationale?: string
   threadId?: string
   dependsOn?: string[]
 }

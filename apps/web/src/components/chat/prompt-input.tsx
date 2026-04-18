@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button'
 import { ModeSelector } from '@/components/chat/mode-selector'
 import type { ChatMode } from '@/components/chat/mode-selector'
 import { StyleSelector } from '@/components/chat/style-selector'
-import type { SendTarget } from '@/components/chat/send-target-selector'
+import { SendTargetSelector, type SendTarget } from '@/components/chat/send-target-selector'
 import { ProviderModelSelector } from '@/components/chat/provider-model-selector'
 import { ProviderRuntimeSelector } from '@/components/chat/provider-runtime-selector'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
@@ -1510,11 +1510,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </div>
       )}
 
-      <div className="flex min-w-0 items-center gap-2 px-3 pb-2.5 pt-0.5">
+      <div className="flex min-w-0 flex-wrap items-center gap-2 px-3 pb-2.5 pt-0.5">
         {hasFooterControls && (
-          <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
+          <div className="min-w-0 flex-[999_1_18rem] overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
               {footerLeadingContent}
+              {shouldShowSendTargetSelector && (
+                <SendTargetSelector
+                  target={sendTarget!}
+                  onChange={onSendTargetChange!}
+                  disabled={selectorsDisabled}
+                  compact={compactFooterControls}
+                />
+              )}
               {showResponseStyleSelector && (
                 <StyleSelector
                   value={responseStyle!}
@@ -1552,7 +1560,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             </div>
           </div>
         )}
-        <div className={cn('flex shrink-0 items-center gap-1.5', hasFooterControls ? 'pl-1' : 'ml-auto')}>
+        <div className={cn('ml-auto flex shrink-0 items-center gap-1.5', hasFooterControls && 'pl-1')}>
           <Button
             type="button"
             size="icon"

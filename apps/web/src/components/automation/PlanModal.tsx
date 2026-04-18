@@ -417,13 +417,20 @@ export function PlanModal({
                                 autoFocus
                               />
                             ) : (
-                              <span
-                                className={`flex-1 truncate text-xs ${
-                                  task.status === 'skipped' ? 'line-through text-muted-foreground' : 'font-medium'
-                                }`}
-                              >
-                                {task.title}
-                              </span>
+                              <div className="flex min-w-0 flex-1 items-center gap-2">
+                                <span
+                                  className={`min-w-0 flex-1 truncate text-xs ${
+                                    task.status === 'skipped' ? 'line-through text-muted-foreground' : 'font-medium'
+                                  }`}
+                                >
+                                  {task.title}
+                                </span>
+                                {task.skillCandidate && (
+                                  <span className="inline-flex shrink-0 items-center rounded-full bg-violet-500/10 px-1.5 py-0.5 text-[10px] font-medium text-violet-600 dark:text-violet-400">
+                                    skill
+                                  </span>
+                                )}
+                              </div>
                             )}
 
                             {/* Actions */}
@@ -510,6 +517,17 @@ export function PlanModal({
                                 <p className="mt-1 text-2xs text-muted-foreground">
                                   Thread: <code className="rounded bg-muted px-1">{task.threadId.slice(-8)}</code>
                                 </p>
+                              )}
+                              {(task.skillCandidate || task.skillRationale || task.skillTitle) && (
+                                <div className="mt-2 rounded-md border border-violet-500/20 bg-violet-500/5 px-2 py-1.5 text-[10px] text-muted-foreground">
+                                  <p>
+                                    Skill eval: {task.skillCandidate ? 'yes' : 'no'}
+                                    {task.skillTitle ? ` · ${task.skillTitle}` : ''}
+                                  </p>
+                                  {task.skillRationale && (
+                                    <p className="mt-1 whitespace-pre-wrap">{task.skillRationale}</p>
+                                  )}
+                                </div>
                               )}
                             </div>
                           )}

@@ -33,6 +33,7 @@ export interface CreateThreadParams {
   model?: string;
   runtimeMode?: RuntimeMode;
   kind?: "delivery" | "delegation";
+  skillIds?: string[] | null;
   workingDirectory?: string;
   branch?: string;
 }
@@ -43,6 +44,7 @@ export interface UpdateThreadParams {
   model?: string;
   runtimeMode?: RuntimeMode;
   kind?: "delivery" | "delegation";
+  skillIds?: string[] | null;
   workingDirectory?: string | null;
   branch?: string | null;
   prUrl?: string | null;
@@ -67,7 +69,37 @@ export interface ThreadActivity {
   createdAt: string;
 }
 
-export type ThreadRow = typeof agentThreads.$inferSelect;
+type ThreadRowRecord = typeof agentThreads.$inferSelect;
+export type ThreadRow = Omit<ThreadRowRecord, "skillIds"> & {
+  skillIds: string[] | null;
+};
+
+function serializeSkillIds(skillIds: string[] | null | undefined): string | null | undefined {
+  if (skillIds === undefined) return undefined;
+  if (skillIds === null) return null;
+  const normalized = [...new Set(skillIds.filter((id) => typeof id === "string").map((id) => id.trim()).filter(Boolean))];
+  return JSON.stringify(normalized);
+}
+
+function parseSkillIds(raw: string | null): string[] | null {
+  if (!raw) return null;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!Array.isArray(parsed)) return null;
+    const normalized = [...new Set(parsed.filter((id): id is string => typeof id === "string").map((id) => id.trim()).filter(Boolean))];
+    return normalized;
+  } catch {
+    return null;
+  }
+}
+
+function hydrateThreadRow(row: ThreadRowRecord | undefined): ThreadRow | undefined {
+  if (!row) return undefined;
+  return {
+    ...row,
+    skillIds: parseSkillIds(row.skillIds),
+  };
+}
 
 // ── Service ──────────────────────────────────────────────────────────
 
@@ -90,6 +122,7 @@ export class ThreadService {
         model: params.model ?? null,
         runtimeMode: params.runtimeMode ?? "full-access",
         kind: params.kind ?? "delivery",
+        skillIds: serializeSkillIds(params.skillIds) ?? null,
         workingDirectory: params.workingDirectory ?? null,
         branch: params.branch ?? null,
         status: "idle",
@@ -101,11 +134,11 @@ export class ThreadService {
   }
 
   getById(id: string): ThreadRow | undefined {
-    return this.db
+    return hydrateThreadRow(this.db
       .select()
       .from(agentThreads)
       .where(eq(agentThreads.id, id))
-      .get();
+      .get());
   }
 
   list(userId?: string, limit?: number): ThreadRow[] {
@@ -118,10 +151,12 @@ export class ThreadService {
       const query = base
         .where(eq(agentThreads.userId, userId))
         .orderBy(desc(agentThreads.updatedAt));
-      return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
+      const rows = normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
+      return rows.map((row) => hydrateThreadRow(row)!);
     }
     const query = base.orderBy(desc(agentThreads.updatedAt));
-    return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
+    const rows = normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
+    return rows.map((row) => hydrateThreadRow(row)!);
   }
 
   listBySession(sessionId: string, limit?: number): ThreadRow[] {
@@ -134,7 +169,8 @@ export class ThreadService {
       .from(agentThreads)
       .where(eq(agentThreads.sessionId, sessionId))
       .orderBy(desc(agentThreads.updatedAt));
-    return normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
+    const rows = normalizedLimit ? query.limit(normalizedLimit).all() : query.all();
+    return rows.map((row) => hydrateThreadRow(row)!);
   }
 
   listRunning(): ThreadRow[] {
@@ -143,14 +179,35 @@ export class ThreadService {
       .from(agentThreads)
       .where(eq(agentThreads.status, "running"))
       .orderBy(desc(agentThreads.updatedAt))
-      .all();
+      .all()
+      .map((row) => hydrateThreadRow(row)!);
   }
 
   update(id: string, params: UpdateThreadParams): ThreadRow | undefined {
     const now = new Date().toISOString();
+    const updates: Partial<typeof agentThreads.$inferInsert> & { updatedAt: string } = { updatedAt: now };
+    if (params.title !== undefined) updates.title = params.title;
+    if (params.providerId !== undefined) updates.providerId = params.providerId;
+    if (params.model !== undefined) updates.model = params.model;
+    if (params.runtimeMode !== undefined) updates.runtimeMode = params.runtimeMode;
+    if (params.kind !== undefined) updates.kind = params.kind;
+    if (params.skillIds !== undefined) updates.skillIds = serializeSkillIds(params.skillIds) ?? null;
+    if (params.workingDirectory !== undefined) updates.workingDirectory = params.workingDirectory;
+    if (params.branch !== undefined) updates.branch = params.branch;
+    if (params.prUrl !== undefined) updates.prUrl = params.prUrl;
+    if (params.prNumber !== undefined) updates.prNumber = params.prNumber;
+    if (params.prTitle !== undefined) updates.prTitle = params.prTitle;
+    if (params.prBaseBranch !== undefined) updates.prBaseBranch = params.prBaseBranch;
+    if (params.prState !== undefined) updates.prState = params.prState;
+    if (params.status !== undefined) updates.status = params.status;
+    if (params.providerSessionId !== undefined) updates.providerSessionId = params.providerSessionId;
+    if (params.error !== undefined) updates.error = params.error;
+    if (params.completedAt !== undefined) updates.completedAt = params.completedAt;
+    if (params.executionNodeId !== undefined) updates.executionNodeId = params.executionNodeId;
+    if (params.executionNodeName !== undefined) updates.executionNodeName = params.executionNodeName;
     this.db
       .update(agentThreads)
-      .set({ ...params, updatedAt: now })
+      .set(updates)
       .where(eq(agentThreads.id, id))
       .run();
     return this.getById(id);
