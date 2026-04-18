@@ -54,6 +54,7 @@ export {
   createSshSessionRunTool,
   createSshSessionCloseTool,
 } from "./ssh-tools.js";
+export { createElevatedRunTool } from "./elevated-tools.js";
 export { createRedeployTool } from "./redeploy-tools.js";
 export { createMaintenanceRunTool } from "./maintenance-tools.js";
 export { createArchitectureTool } from "./architecture-tools.js";
@@ -167,6 +168,7 @@ import {
   createSshSessionRunTool,
   createSshSessionCloseTool,
 } from "./ssh-tools.js";
+import { createElevatedRunTool } from "./elevated-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
 import { createMaintenanceRunTool } from "./maintenance-tools.js";
 import { createArchitectureTool } from "./architecture-tools.js";
@@ -368,6 +370,7 @@ export function createToolRegistry(
 
   // Network tools
   tools.register(createNetworkScanTool());
+  tools.register(createElevatedRunTool(deps.secretInputService));
   tools.register(createSshRunTool(deps.secretInputService));
   tools.register(createSshSessionStartTool(deps.secretInputService));
   tools.register(createSshSessionRunTool());

@@ -87,6 +87,7 @@ export const ToolName = {
 
   // ── Network ──
   NetworkScan: "network.scan",
+  ElevatedRun: "elevated.run",
 
   // ── Core tools (simplified set) ──
   CoreRead: "read",
