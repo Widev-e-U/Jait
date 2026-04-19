@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2 } from 'lucide-react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -59,11 +59,15 @@ function NodeIcon({ platform }: { platform: string }) {
 
 export function SessionSelector({
   workspaces,
+  personalSessions = [],
   activeWorkspaceId,
+  activeSessionId,
   loading = false,
   hasMoreWorkspaces = false,
   showFewerWorkspaces = false,
   onSelectWorkspace,
+  onSelectPersonalSession,
+  onNewPersonalSession,
   onCreateWorkspace,
   onRemoveWorkspace,
   onChangeDirectory,
@@ -102,6 +106,48 @@ export function SessionSelector({
             </div>
           ) : (
             <>
+              {/* Personal sessions */}
+              {personalSessions.length > 0 && (
+                <div className="mb-2">
+                  <div className="flex items-center justify-between px-1.5 pb-1">
+                    <span className="text-2xs font-medium text-muted-foreground">Personal</span>
+                    {onNewPersonalSession && (
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onNewPersonalSession}>
+                            <Plus className="h-3 w-3" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="right">New personal chat</TooltipContent>
+                      </Tooltip>
+                    )}
+                  </div>
+                  {personalSessions.map((session) => {
+                    const isActive = activeWorkspaceId === null && session.id === activeSessionId
+                    return (
+                      <div
+                        key={session.id}
+                        className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors text-sm ${
+                          isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
+                        }`}
+                        onClick={() => { if (!isActive && onSelectPersonalSession) onSelectPersonalSession(session.id) }}
+                      >
+                        <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-xs font-medium">
+                            {session.name || 'Personal chat'}
+                          </div>
+                          <div className="text-2xs text-muted-foreground">
+                            {formatTime(session.lastActiveAt ?? session.createdAt)}
+                          </div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
+
+              {/* Workspaces */}
               {workspaces.length === 0 && (
                 <p className="text-xs text-muted-foreground text-center py-4">
                   No workspaces yet.

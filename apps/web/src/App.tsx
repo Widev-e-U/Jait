@@ -5238,10 +5238,10 @@ function App() {
       onDragStart={(event) => event.preventDefault()}
     >
       <Tooltip><TooltipTrigger asChild>
-        <Button variant={activeWorkspaceId === null ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleGoToPersonalChat() }} aria-label="Personal chat">
+        <Button variant={!showWorkspace && !showTerminal && !showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { if (showWorkspace) closeWorkspacePanel(); if (showTerminal) closeTerminalPanel(); if (showSidebar) setShowSidebar(false); setShowMobileToolbar(false) }} aria-label="Chat">
           <MessageSquare className="h-5 w-5" />
         </Button>
-      </TooltipTrigger><TooltipContent side="left">Personal chat</TooltipContent></Tooltip>
+      </TooltipTrigger><TooltipContent side="left">Chat</TooltipContent></Tooltip>
       <Tooltip><TooltipTrigger asChild>
         <Button variant={mobileWorkspaceMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
           {showSidebar ? <PanelLeftClose className="h-5 w-5 rotate-90" /> : <PanelLeftOpen className="h-5 w-5 rotate-90" />}
@@ -7103,37 +7103,47 @@ function App() {
             )}
 
             {isMobile && viewMode === 'developer' && currentView === 'chat' && (
-              <div
-                className="fixed right-0 top-1/2 z-40 flex -translate-y-1/2 items-center gap-1"
-                draggable={false}
-                onDragStart={(event) => event.preventDefault()}
-              >
+              <>
+                {/* Invisible backdrop to close toolbar on tap-outside */}
+                {showMobileToolbar && (
+                  <div
+                    className="fixed inset-0 z-[39]"
+                    onClick={() => setShowMobileToolbar(false)}
+                    aria-hidden="true"
+                  />
+                )}
                 <div
-                  className={`transition-all duration-200 ${
-                    showMobileToolbar
-                      ? 'translate-x-0 opacity-100'
-                      : 'pointer-events-none translate-x-2 opacity-0'
-                  }`}
+                  className="fixed right-0 top-1/2 z-40 flex -translate-y-1/2 items-center gap-1"
+                  draggable={false}
+                  onDragStart={(event) => event.preventDefault()}
                 >
-                  {mobileFooterToolbarControls}
+                  <div
+                    className={`transition-all duration-200 ${
+                      showMobileToolbar
+                        ? 'translate-x-0 opacity-100'
+                        : 'pointer-events-none translate-x-2 opacity-0'
+                    }`}
+                  >
+                    {mobileFooterToolbarControls}
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="icon"
+                    className="h-14 w-7 rounded-l-lg rounded-r-none border-y border-l border-r-0 bg-background/90 shadow-lg backdrop-blur-lg"
+                    onClick={() => setShowMobileToolbar((show) => !show)}
+                    aria-expanded={showMobileToolbar}
+                    aria-label={showMobileToolbar ? 'Hide mobile toolbar' : 'Show mobile toolbar'}
+                    title={showMobileToolbar ? 'Hide mobile toolbar' : 'Show mobile toolbar'}
+                  >
+                    {showMobileToolbar ? (
+                      <ChevronRight className="h-4 w-4" />
+                    ) : (
+                      <ChevronLeft className="h-4 w-4" />
+                    )}
+                  </Button>
                 </div>
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="icon"
-                  className="h-14 w-7 rounded-l-lg rounded-r-none border-y border-l border-r-0 bg-background/90 shadow-lg backdrop-blur-lg"
-                  onClick={() => setShowMobileToolbar((show) => !show)}
-                  aria-expanded={showMobileToolbar}
-                  aria-label={showMobileToolbar ? 'Hide mobile toolbar' : 'Show mobile toolbar'}
-                  title={showMobileToolbar ? 'Hide mobile toolbar' : 'Show mobile toolbar'}
-                >
-                  {showMobileToolbar ? (
-                    <ChevronRight className="h-4 w-4" />
-                  ) : (
-                    <ChevronLeft className="h-4 w-4" />
-                  )}
-                </Button>
-              </div>
+              </>
             )}
           </>
         )}
