@@ -1,0 +1,127 @@
+flowchart LR
+  subgraph Clients["Client Apps"]
+    Web["apps/web<br/>React + Vite UI"]
+    Desktop["apps/desktop<br/>Electron shell"]
+    Mobile["apps/mobile<br/>Expo / Capacitor"]
+    CLI["packages/cli<br/>jait CLI"]
+    E2E["tests/e2e<br/>Playwright"]
+  end
+
+  subgraph SharedPackages["Shared Packages"]
+    Shared["packages/shared<br/>schemas, constants, domain types"]
+    ApiClient["packages/api-client<br/>typed REST + WebSocket client"]
+    UIShared["packages/ui-shared<br/>shared UI helpers"]
+    ScreenSharePkg["packages/screen-share<br/>ScreenShareService"]
+  end
+
+  subgraph Gateway["packages/gateway"]
+    Entry["index.ts<br/>composition root"]
+    Server["server.ts<br/>Fastify REST / SSE / static SPA"]
+    WS["ws.ts<br/>WebSocket control plane"]
+
+    Routes["Routes<br/>auth, chat, sessions, workspace, terminal, filesystem, preview, browser collaboration, screen share, jobs, hooks, network, voice, threads, repos, plans, maintenance, git, MCP, plugins, skills, store, update, architecture"]
+
+    Services["Services<br/>sessions, users, workspaces, assistant profiles, threads, repos, plans, maintenance, git, preview, browser collaboration, architecture diagrams, notifications, audit, voice assistant"]
+
+    Execution["Execution Core<br/>ToolRegistry, ConsentAwareExecutor, ConsentManager, TrustEngine, Scheduler, HookBus, MemoryEngine, ProviderRegistry, PluginManager, SkillRegistry"]
+
+    Surfaces["Surface Registry<br/>terminal, filesystem, remote filesystem, browser, preview runner"]
+
+    DB[("SQLite<br/>~/.jait/data/jait.db")]
+    Memory[("Memory store<br/>~/.jait/memory")]
+    WebDist["web-dist<br/>bundled apps/web assets"]
+    Config["Config / env<br/>ports, JWT, provider keys"]
+  end
+
+  subgraph External["External Dependencies"]
+    LLMs["Agent providers<br/>Codex, Claude Code, Gemini, OpenCode, Copilot, OpenAI Realtime"]
+    OS["Host OS<br/>shell, filesystem, processes"]
+    Browser["Playwright / Chromium<br/>managed browser sessions"]
+    Network["LAN, SSH, remote Jait nodes"]
+    Git["Git / GitHub<br/>repos, PRs, releases"]
+    NPM["npm registry<br/>@jait packages"]
+    Store["ClawHub / OpenClaw<br/>plugins + skills"]
+  end
+
+  subgraph CIRelease["CI and Release"]
+    CI["ci.yml<br/>lint, typecheck, test, Docker"]
+    Release["release.yml<br/>version bump -> tag -> publish -> artifacts"]
+  end
+
+  Web --> ApiClient
+  Web --> Shared
+  Web --> UIShared
+  Desktop --> Web
+  Desktop --> ApiClient
+  Mobile --> Web
+  Mobile --> ApiClient
+  ApiClient --> Shared
+  ScreenSharePkg --> Shared
+  Gateway --> Shared
+  Gateway --> ScreenSharePkg
+  E2E --> Web
+  E2E --> Gateway
+
+  Web -- "REST + SSE" --> Server
+  Web -- "WebSocket events / commands" --> WS
+  Desktop -- "loads shared web UI + IPC open-folder" --> Web
+  Mobile -- "mobile bootstrap / shared UI" --> Web
+  CLI -- "setup / lifecycle / status / resources" --> Server
+
+  Entry --> Config
+  Entry --> DB
+  Entry --> Server
+  Entry --> WS
+  Entry --> Services
+  Entry --> Execution
+  Entry --> Surfaces
+  Server --> Routes
+  Server -- "serves SPA fallback" --> WebDist
+  Server -- "shares HTTP upgrade port" --> WS
+
+  Routes --> Services
+  Routes --> Execution
+  Routes --> Surfaces
+  Routes --> ScreenSharePkg
+  Services --> DB
+  Services -- "broadcasts state changes" --> WS
+  Execution --> DB
+  Execution --> Memory
+  Execution --> Services
+  Execution --> Surfaces
+  Execution --> ScreenSharePkg
+  Surfaces -- "snapshots / output / events" --> WS
+
+  Execution -- "tool calls guarded by consent / trust / audit" --> OS
+  Surfaces -- "terminal / file ops" --> OS
+  Surfaces -- "browser automation / live preview" --> Browser
+  WS -- "remote fs / provider / tool ops" --> Network
+  ScreenSharePkg -- "WebRTC signaling / data path" --> Network
+  Execution -- "agent turns + realtime voice" --> LLMs
+  Services -- "repo automation / PR state" --> Git
+  Execution -- "plugins / skills marketplace" --> Store
+
+  Web -- "vite build" --> WebDist
+  Gateway -- "prebuild bundles web-dist" --> WebDist
+  CI --> Gateway
+  CI --> Web
+  CI --> SharedPackages
+  Release --> NPM
+  Release --> Git
+  Release --> Desktop
+  Release --> Mobile
+  NPM -- "npm install -g @jait/gateway" --> Gateway
+
+  classDef app fill:#e8f3ff,stroke:#2b6cb0,color:#111
+  classDef pkg fill:#eef8ea,stroke:#2f855a,color:#111
+  classDef core fill:#fff7e6,stroke:#b7791f,color:#111
+  classDef data fill:#f8e8ff,stroke:#805ad5,color:#111
+  classDef ext fill:#f2f2f2,stroke:#666,color:#111
+  classDef rel fill:#ffecec,stroke:#c53030,color:#111
+
+  class Web,Desktop,Mobile,CLI,E2E app
+  class Shared,ApiClient,UIShared,ScreenSharePkg pkg
+  class Entry,Server,WS,Routes,Services,Execution,Surfaces core
+  class DB,Memory,WebDist,Config data
+  class LLMs,OS,Browser,Network,Git,NPM,Store ext
+  class CI,Release rel
