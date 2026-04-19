@@ -2490,6 +2490,14 @@ function App() {
           setShowTerminal(v.open !== false)
         }
         break
+      case 'footer.menu':
+        if (!value) {
+          setShowMobileToolbar(true)
+        } else {
+          const v = value as { open?: boolean }
+          setShowMobileToolbar(v.open !== false)
+        }
+        break
       case 'chat.mode':
         if (value === 'ask' || value === 'agent' || value === 'plan') {
           setChatMode(value)
@@ -2643,6 +2651,14 @@ function App() {
       setManagerMessageQueues(qtm as SavedQueuedThreadMessages)
     } else {
       setManagerMessageQueues({})
+    }
+
+    const fm = state['footer.menu']
+    if (fm && typeof fm === 'object' && !Array.isArray(fm)) {
+      const footerMenu = fm as { open?: boolean }
+      setShowMobileToolbar(footerMenu.open !== false)
+    } else {
+      setShowMobileToolbar(true)
     }
 
     // ── Workspace-scoped state (bundled inside _workspace envelope) ──
@@ -2884,6 +2900,17 @@ function App() {
   }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token, activeSessionId, consumeSuppressedUiSync, sendUIState])
 
   const prevChatModePayloadRef = useRef<string | null>(null)
+  const prevFooterMenuPayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeSessionId && token && !wsFullStateReceivedRef.current) return
+    const payload = { open: showMobileToolbar }
+    const serialized = JSON.stringify(payload)
+    if (serialized === prevFooterMenuPayloadRef.current) return
+    prevFooterMenuPayloadRef.current = serialized
+    if (consumeSuppressedUiSync('footer.menu')) return
+    sendUIState('footer.menu', payload, activeSessionId)
+  }, [activeSessionId, consumeSuppressedUiSync, sendUIState, showMobileToolbar, token])
+
   useEffect(() => {
     if (activeSessionId && token && loadingChatMode) return
     if (chatMode === prevChatModePayloadRef.current) return
@@ -5151,6 +5178,7 @@ function App() {
     showWorkspaceEditor,
     treeTab: mobileTreeTab,
   }), [mobileTreeTab, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree])
+  const mobileWorkspaceMenuActive = showSidebar || activeWorkspaceId !== null
 
   const userInitial = user?.username?.[0]?.toUpperCase() ?? '?'
 
@@ -5196,7 +5224,7 @@ function App() {
         </Button>
       </TooltipTrigger><TooltipContent side="top">Personal chat</TooltipContent></Tooltip>
       <Tooltip><TooltipTrigger asChild>
-        <Button variant={showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
+        <Button variant={mobileWorkspaceMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
           {showSidebar ? <PanelLeftClose className="h-5 w-5 rotate-90" /> : <PanelLeftOpen className="h-5 w-5 rotate-90" />}
         </Button>
       </TooltipTrigger><TooltipContent side="top">Workspaces</TooltipContent></Tooltip>

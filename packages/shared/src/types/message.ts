@@ -152,6 +152,7 @@ export type UIStateKey =
   | "workspace.layout"
   | "screen-share.panel"
   | "terminal.panel"
+  | "footer.menu"
   | "chat.mode"
   | "chat.responseStyle"
   | "chat.providerRuntimeMode"
