@@ -54,7 +54,7 @@ export function shouldResumeChatSession(params: {
   messageCount: number
 }): boolean {
   if (!params.sessionId || params.isLoadingHistory) return false
-  return params.isLoading
+  return params.isLoading || params.messageCount === 0
 }
 
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {

@@ -475,7 +475,14 @@ export async function parseOpenAIStream(
   >();
 
   while (true) {
-    const { done, value } = await reader.read();
+    let readResult: { done: boolean; value?: Uint8Array };
+    try {
+      readResult = await reader.read();
+    } catch {
+      // Abort or network error — return whatever we've accumulated so far
+      break;
+    }
+    const { done, value } = readResult;
     if (done) break;
 
     buffer += decoder.decode(value, { stream: true });

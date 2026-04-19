@@ -31,7 +31,7 @@ async function collectBody(req: IncomingMessage): Promise<string> {
 function startMockOllama(delayMs = TOKEN_DELAY_MS): Promise<Server> {
   return new Promise((resolve) => {
     const server = createHttpServer(async (req: IncomingMessage, res: ServerResponse) => {
-      if (req.method !== "POST" || !req.url?.endsWith("/api/chat")) {
+      if (req.method !== "POST" || !req.url?.endsWith("/chat/completions")) {
         res.writeHead(404);
         res.end();
         return;
@@ -50,20 +50,18 @@ function startMockOllama(delayMs = TOKEN_DELAY_MS): Promise<Server> {
       const reply = `Echo: ${lastUserMsg}`;
       const words = reply.split(" ");
 
-      res.writeHead(200, { "Content-Type": "application/x-ndjson" });
+      res.writeHead(200, { "Content-Type": "text/event-stream" });
 
       for (let i = 0; i < words.length; i++) {
         const token = words[i] + (i < words.length - 1 ? " " : "");
-        res.write(
-          JSON.stringify({ message: { content: token }, done: false }) + "\n",
-        );
+        const chunk = {
+          choices: [{ delta: { content: token }, finish_reason: null }],
+        };
+        res.write(`data: ${JSON.stringify(chunk)}\n\n`);
         await sleep(delayMs);
       }
 
-      // done sentinel
-      res.write(
-        JSON.stringify({ message: { content: "" }, done: true }) + "\n",
-      );
+      res.write("data: [DONE]\n\n");
       res.end();
     });
 

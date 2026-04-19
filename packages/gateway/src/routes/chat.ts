@@ -1059,7 +1059,13 @@ export function registerChatRoutes(
     const userSettings = userService?.getSettings(authUser.id);
     const userApiKeys = userSettings?.apiKeys ?? {};
     const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
-    const jaitBackend = userSettings?.jaitBackend ?? "openai";
+    // Use the user's preferred backend, but fall back to the server-level config
+    // when the user still has the initial default ("openai") and the server is
+    // configured for a different provider (e.g. ollama-only deployments).
+    const userBackend = userSettings?.jaitBackend;
+    const jaitBackend = (userBackend && userBackend !== "openai")
+      ? userBackend
+      : (config.llmProvider ?? userBackend ?? "openai");
     let llmRuntime: ResolvedJaitLlmConfig;
     try {
       llmRuntime = resolveJaitLlmConfig({
@@ -1835,8 +1841,8 @@ export function registerChatRoutes(
 
     // Persist partial results BEFORE clearing stream state so that a reload
     // between these two steps loads the cancelled tool calls from the DB.
-    if (streamAbort.signal.aborted && partialToolCalls.length > 0) {
-      const tcJson = JSON.stringify(partialToolCalls);
+    if (streamAbort.signal.aborted && (fullContent || partialToolCalls.length > 0)) {
+      const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
       persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
     }
 
