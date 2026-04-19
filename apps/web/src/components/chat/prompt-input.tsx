@@ -651,7 +651,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const shouldShowSendTargetSelector = showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
   const workspaceDisplayName = workspaceName?.trim() || workspacePath?.trim() || null
   const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
-  const hasFooterLeftContent = hasFooterControls || Boolean(workspaceDisplayName)
+  const hasFooterLeftContent = hasFooterControls
 
   useEffect(() => {
     const el = rootRef.current
@@ -1437,6 +1437,17 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       onDragOver={onDragOver}
       onDrop={onDrop}
     >
+      {workspaceDisplayName && (
+        <div
+          className="absolute top-2 right-3 z-10 text-[10px] leading-none text-muted-foreground pointer-events-none"
+          title={workspacePath?.trim() || workspaceDisplayName}
+        >
+          <span className="block truncate max-w-[180px]">
+            <span className="font-semibold text-foreground/60">WORKSPACE</span>{' '}
+            {workspaceDisplayName}
+          </span>
+        </div>
+      )}
       {/* Attachment previews */}
       {attachments.length > 0 && (
         <div className="flex flex-wrap gap-2 px-3 pt-3">
@@ -1592,20 +1603,6 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                     <ModeSelector mode={mode!} onChange={onModeChange!} disabled={selectorsDisabled} compact={compactFooterControls} />
                   )}
                 </div>
-              </div>
-            )}
-            {workspaceDisplayName && (
-              <div
-                className={cn(
-                  'min-w-0 text-[10px] leading-none text-muted-foreground',
-                  hasFooterControls ? 'pt-1.5' : 'pt-0.5',
-                )}
-                title={workspacePath?.trim() || workspaceDisplayName}
-              >
-                <span className="block truncate">
-                  <span className="font-semibold text-foreground/60">WORKSPACE</span>{' '}
-                  {workspaceDisplayName}
-                </span>
               </div>
             )}
           </div>
