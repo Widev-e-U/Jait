@@ -113,6 +113,7 @@ export function verifySchema(sqlite: SqliteDatabase) {
       pr_state: "TEXT",
       execution_node_id: "TEXT",
       execution_node_name: "TEXT",
+      skill_ids: "TEXT",
     },
     user_settings: {
       disabled_tools: "TEXT",

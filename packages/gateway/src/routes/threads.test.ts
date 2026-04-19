@@ -36,6 +36,13 @@ async function waitFor(condition: () => boolean, timeoutMs = 2000) {
   }
 }
 
+function expectThreadTurnMessage(message: unknown, startsWith: string): void {
+  expect(message).toEqual(expect.stringContaining(startsWith));
+  expect(message).toEqual(expect.stringContaining("<skill-evaluation>"));
+  expect(message).toEqual(expect.stringContaining("Always evaluate whether the requested work should become a reusable skill."));
+  expect(message).toEqual(expect.stringContaining("</skill-evaluation>"));
+}
+
 class MockThreadProvider implements CliProviderAdapter {
   readonly id: "jait" | "codex" | "claude-code";
   readonly info: ProviderInfo;
@@ -256,7 +263,9 @@ describe("thread routes", () => {
 
     expect(response.statusCode).toBe(200);
     await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
-    expect(provider.sendTurn).toHaveBeenCalledWith("mock-session-1", "inspect ui", undefined);
+    expect(provider.sendTurn.mock.calls[0]?.[0]).toBe("mock-session-1");
+    expectThreadTurnMessage(provider.sendTurn.mock.calls[0]?.[1], "inspect ui");
+    expect(provider.sendTurn.mock.calls[0]?.[2]).toBeUndefined();
 
     await app.close();
     sqlite.close();
@@ -421,7 +430,9 @@ describe("thread routes", () => {
 
     expect(startResponse.statusCode).toBe(200);
     await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
-    expect(provider.sendTurn).toHaveBeenNthCalledWith(1, "mock-session-1", "inspect ui", undefined);
+    expect(provider.sendTurn.mock.calls[0]?.[0]).toBe("mock-session-1");
+    expectThreadTurnMessage(provider.sendTurn.mock.calls[0]?.[1], "inspect ui");
+    expect(provider.sendTurn.mock.calls[0]?.[2]).toBeUndefined();
 
     threadService.update(thread.id, {
       status: "completed",
@@ -437,7 +448,9 @@ describe("thread routes", () => {
     });
 
     expect(sendResponse.statusCode).toBe(200);
-    expect(provider.sendTurn).toHaveBeenNthCalledWith(2, "mock-session-1", "address the follow-up", undefined);
+    expect(provider.sendTurn.mock.calls[1]?.[0]).toBe("mock-session-1");
+    expectThreadTurnMessage(provider.sendTurn.mock.calls[1]?.[1], "address the follow-up");
+    expect(provider.sendTurn.mock.calls[1]?.[2]).toBeUndefined();
 
     await app.close();
     sqlite.close();
@@ -559,7 +572,9 @@ describe("thread routes", () => {
     provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
 
     await waitFor(() => provider.sendTurn.mock.calls.length >= 2);
-    expect(provider.sendTurn).toHaveBeenNthCalledWith(2, "mock-session-1", "second message", undefined);
+    expect(provider.sendTurn.mock.calls[1]?.[0]).toBe("mock-session-1");
+    expectThreadTurnMessage(provider.sendTurn.mock.calls[1]?.[1], "second message");
+    expect(provider.sendTurn.mock.calls[1]?.[2]).toBeUndefined();
     expect(sessionState.get(sessionId, ["queued_thread_messages"])["queued_thread_messages"]).toBeUndefined();
     expect(threadService.getActivities(thread.id).some((activity) => (
       activity.kind === "message" && activity.summary.includes("second message")

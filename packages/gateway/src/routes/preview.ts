@@ -6,7 +6,12 @@ import type { PreviewService } from "../services/preview.js";
 export function registerPreviewRoutes(
   app: FastifyInstance,
   config: AppConfig,
-  deps: { previewService: PreviewService },
+  deps: {
+    previewService: PreviewService;
+    browserCollaborationService?: {
+      getSessionByPreviewSessionId(sessionId: string): { secretSafe?: boolean } | null;
+    };
+  },
 ): void {
 
   app.get("/api/preview/session/:sessionId", async (request, reply) => {
@@ -40,6 +45,10 @@ export function registerPreviewRoutes(
     if (!authUser) return;
     const { sessionId } = request.params as { sessionId: string };
     const query = request.query as { selector?: string };
+    const linkedBrowserSession = deps.browserCollaborationService?.getSessionByPreviewSessionId(sessionId);
+    if (linkedBrowserSession?.secretSafe) {
+      return { inspect: null, suppressed: true };
+    }
     const inspect = await deps.previewService.inspect(sessionId, typeof query.selector === "string" ? query.selector : undefined);
     return { inspect };
   });
