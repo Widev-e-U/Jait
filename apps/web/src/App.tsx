@@ -5167,6 +5167,69 @@ function App() {
       onAddRepository={handleFolderPickerOpen}
     />
   ) : null
+  const developerComposerFooterControls = viewMode === 'developer' ? (
+    <>
+      <SessionSwitcher
+        sessions={activeWorkspaceSessions}
+        activeSessionId={activeSessionId}
+        workspaceTitle={activeWorkspaceRecord?.title ?? 'Personal chat'}
+        onSelectSession={(sessionId) => { switchSession(activeWorkspaceId, sessionId) }}
+        onNewSession={() => { void createSession() }}
+        onOpenChange={handleSessionSwitcherOpen}
+        showTitle={false}
+        triggerLabel="History"
+      />
+      <SendTargetSelector
+        target={sendTarget}
+        onChange={setSendTarget}
+        disabled={isLoading}
+      />
+      {isMobile && currentView === 'chat' && (
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 shrink-0 rounded-lg"
+          onClick={() => setShowMobileToolbar((show) => !show)}
+          aria-label={showMobileToolbar ? 'Hide footer toolbar' : 'Show footer toolbar'}
+          title={showMobileToolbar ? 'Hide footer toolbar' : 'Show footer toolbar'}
+        >
+          {showMobileToolbar ? (
+            <ChevronDown className="h-4 w-4" />
+          ) : (
+            <ChevronUp className="h-4 w-4" />
+          )}
+        </Button>
+      )}
+      {sendTarget !== 'thread' && (
+        <button
+          type="button"
+          onClick={handleStartNewChat}
+          className="shrink-0 text-xs text-muted-foreground transition-colors hover:text-foreground"
+        >
+          New chat
+        </button>
+      )}
+      {sendTarget === 'thread' && developerThreadToolbarRepoPicker}
+      {approveAllInSession && (
+        <>
+          <span className="shrink-0 text-xs text-green-600 dark:text-green-400">
+            Approved all commands for this session
+          </span>
+          <button
+            type="button"
+            onClick={handleClearApproveAll}
+            className="shrink-0 text-xs text-muted-foreground transition-colors hover:text-foreground"
+          >
+            Clear approve all
+          </button>
+        </>
+      )}
+      {remainingPrompts !== null && (
+        <span className="shrink-0 text-xs text-muted-foreground">{remainingPrompts} remaining</span>
+      )}
+    </>
+  ) : undefined
   const editComposerFooter = useMemo(() => {
     if (sendTarget !== 'thread') return undefined
     return (
@@ -6748,6 +6811,7 @@ function App() {
                     sendTarget={sendTarget}
                     onSendTargetChange={setSendTarget}
                     showSendTargetSelector={false}
+                    footerLeadingContent={developerComposerFooterControls}
                     provider={chatProvider}
                     onProviderChange={handleChatProviderChange}
                     providerRuntimeMode={chatProviderRuntimeMode}
@@ -6762,47 +6826,6 @@ function App() {
                     sessionInfo={sessionInfo}
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
-                  {viewMode === 'developer' && (
-                    <div className="overflow-x-auto px-1">
-                      <div className="grid min-w-max grid-cols-[1fr_auto_1fr] items-center gap-3 whitespace-nowrap">
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                          {sendTarget === 'thread' ? (
-                            developerThreadToolbarRepoPicker
-                          ) : (
-                            <SessionSwitcher
-                              sessions={activeWorkspaceSessions}
-                              activeSessionId={activeSessionId}
-                              workspaceTitle={activeWorkspaceRecord?.title ?? 'Personal chat'}
-                              onSelectSession={(sessionId) => { switchSession(activeWorkspaceId, sessionId) }}
-                              onNewSession={() => { void createSession() }}
-                              onOpenChange={handleSessionSwitcherOpen}
-                              showTitle={false}
-                              triggerLabel="History"
-                            />
-                          )}
-                        </div>
-                        <div className="justify-self-center">
-                          <SendTargetSelector
-                            target={sendTarget}
-                            onChange={setSendTarget}
-                            disabled={isLoading}
-                          />
-                        </div>
-                        <div className="flex shrink-0 items-center justify-self-end gap-2">
-                          {sendTarget !== 'thread' && (
-                            <>
-                              <button
-                                onClick={handleStartNewChat}
-                                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                              >
-                                New chat
-                              </button>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  )}
                 </div>
               </div>
             ) : (
@@ -6938,6 +6961,7 @@ function App() {
                       sendTarget={sendTarget}
                       onSendTargetChange={setSendTarget}
                       showSendTargetSelector={false}
+                      footerLeadingContent={developerComposerFooterControls}
                       provider={chatProvider}
                       onProviderChange={handleChatProviderChange}
                       providerRuntimeMode={chatProviderRuntimeMode}
@@ -6952,71 +6976,6 @@ function App() {
                       sessionInfo={sessionInfo}
                       workspaceNodeId={activeWorkspace?.nodeId}
                     />
-                    <div className={`overflow-x-auto ${isMobile ? 'px-0.5' : 'px-1'}`}>
-                      <div className={`grid min-w-max grid-cols-[1fr_auto_1fr] items-center whitespace-nowrap ${isMobile ? 'gap-2' : 'gap-3'}`}>
-                        <div className="flex min-w-0 flex-1 items-center gap-2">
-                          {viewMode === 'developer' && sendTarget === 'thread' ? (
-                            developerThreadToolbarRepoPicker
-                          ) : viewMode === 'developer' ? (
-                            <SessionSwitcher
-                              sessions={activeWorkspaceSessions}
-                              activeSessionId={activeSessionId}
-                              workspaceTitle={activeWorkspaceRecord?.title ?? 'Personal chat'}
-                              onSelectSession={(sessionId) => { switchSession(activeWorkspaceId, sessionId) }}
-                              onNewSession={() => { void createSession() }}
-                              onOpenChange={handleSessionSwitcherOpen}
-                              showTitle={false}
-                              triggerLabel="History"
-                            />
-                          ) : null}
-                          {approveAllInSession && (
-                            <>
-                              <span className="text-xs text-green-600 dark:text-green-400 truncate">
-                                Approved all commands for this session
-                              </span>
-                              <button
-                                onClick={handleClearApproveAll}
-                                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                              >
-                                Clear approve all
-                              </button>
-                            </>
-                          )}
-                        </div>
-                        <div className="justify-self-center">
-                          {viewMode === 'developer' && (
-                            <SendTargetSelector
-                              target={sendTarget}
-                              onChange={setSendTarget}
-                              disabled={isLoading}
-                            />
-                          )}
-                        </div>
-                        <div className="flex shrink-0 items-center justify-self-end gap-2">
-                          {viewMode === 'developer' && sendTarget !== 'thread' && (
-                            <>
-                              <button
-                                onClick={handleStartNewChat}
-                                className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                              >
-                                New chat
-                              </button>
-                            </>
-                          )}
-                          {(viewMode as string) === 'manager' && (
-                            <button
-                              onClick={() => automation.setSelectedThreadId(null)}
-                              className="text-xs text-muted-foreground hover:text-foreground transition-colors shrink-0"
-                            >
-                              New thread
-                            </button>
-                          )}
-                          {remainingPrompts !== null && (
-                            <span className="text-xs text-muted-foreground shrink-0">{remainingPrompts} remaining</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
                   </div>
                 </div>
                 </>)}
@@ -7036,16 +6995,6 @@ function App() {
             {/* Mobile footer – only on chat view, collapsible */}
             {isMobile && viewMode === 'developer' && currentView === 'chat' && (
               <>
-                {/* Pull tab when toolbar is hidden */}
-                {!showMobileToolbar && (
-                  <button
-                    className="fixed bottom-2 left-1/2 -translate-x-1/2 z-30 flex items-center justify-center h-6 w-12 rounded-full bg-background/60 backdrop-blur border shadow-md transition-all active:scale-95"
-                    onClick={() => setShowMobileToolbar(true)}
-                    aria-label="Show toolbar"
-                  >
-                    <ChevronUp className="h-3.5 w-3.5 text-muted-foreground" />
-                  </button>
-                )}
                 {/* Floating toolbar */}
                 <div
                   className={`fixed left-1/2 -translate-x-1/2 z-30 flex items-center gap-0.5 rounded-2xl border bg-background/70 backdrop-blur-lg shadow-lg px-1.5 py-1 transition-all duration-200 ${
