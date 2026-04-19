@@ -299,3 +299,10 @@
     @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10;
   }
 }
+
+/* Touch-device variant: show elements that are hover-only on pointer devices */
+@media (hover: none) {
+  .touch-device\:opacity-80 {
+    opacity: 0.8;
+  }
+}

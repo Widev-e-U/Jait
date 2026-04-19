@@ -691,6 +691,7 @@ function MessageInner({
           'absolute z-10 rounded-full border border-border/70 bg-background p-1',
           outsideBubble ? 'right-0 top-full mt-0.5' : 'bottom-1.5 right-1.5',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
+          'touch-device:opacity-80',
           copied && 'opacity-100',
         )}
       >
@@ -762,7 +763,7 @@ function MessageInner({
         )}
 
         {!isUser && segments && segments.length > 0 ? (
-          <div className="relative min-w-0 max-w-full break-words [overflow-wrap:anywhere]">
+          <div className="relative min-w-0 max-w-full select-text break-words [overflow-wrap:anywhere]">
             {(() => {
               return segments.map((seg, i) => {
                 if (seg.type === 'toolGroup') {

@@ -7,7 +7,7 @@ import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 import { shouldAcceptTerminalOutput, type TerminalOutputPayload } from './terminal-stream'
 import { buildTerminalDragPayload, JAIT_TERMINAL_REF_MIME } from '@/lib/jait-dnd'
 import { useResolvedTheme } from '@/hooks/use-resolved-theme'
-import { ChevronDown } from 'lucide-react'
+import { ChevronDown, Copy, ClipboardPaste } from 'lucide-react'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
@@ -192,6 +192,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const wsRef = useRef<WebSocket | null>(null)
   const lastSelectionKeyRef = useRef<string | null>(null)
   const resolvedTheme = useResolvedTheme()
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
 
   useImperativeHandle(ref, () => ({
     focus() {
@@ -358,11 +359,11 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault()
       const selection = term.getSelection()
-      void handleTerminalContextMenuAction(navigator.clipboard, selection, (text) => {
-        term.focus()
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
-        }
+      const rect = rootEl.getBoundingClientRect()
+      setContextMenu({
+        x: event.clientX - rect.left,
+        y: event.clientY - rect.top,
+        hasSelection: !!selection.trim(),
       })
     }
     rootEl.addEventListener('mouseup', handleMouseUp)
@@ -394,11 +395,40 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     term.options.theme = getTerminalTheme()
   }, [resolvedTheme])
 
+  const handleCopy = useCallback(() => {
+    const term = termRef.current
+    if (!term) return
+    const selection = term.getSelection().trim()
+    if (selection && navigator.clipboard?.writeText) {
+      void navigator.clipboard.writeText(selection)
+    }
+    setContextMenu(null)
+    term.focus()
+  }, [])
+
+  const handlePaste = useCallback(() => {
+    const term = termRef.current
+    const ws = wsRef.current
+    if (!term) return
+    void pasteClipboardTextIntoTerminal(navigator.clipboard, (text) => {
+      term.focus()
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
+      }
+    })
+    setContextMenu(null)
+    term.focus()
+  }, [terminalId])
+
   return (
     <div
-      className={`w-full overflow-hidden ${className ?? ''}`}
+      className={`relative w-full overflow-hidden ${className ?? ''}`}
       tabIndex={-1}
       onMouseDown={(e) => {
+        // Close context menu on any click outside it
+        if (contextMenu) {
+          setContextMenu(null)
+        }
         // Only focus terminal if user clicked directly on the terminal area
         if (e.target === e.currentTarget || containerRef.current?.contains(e.target as Node)) {
           requestAnimationFrame(() => termRef.current?.focus())
@@ -406,6 +436,31 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       }}
     >
       <div ref={containerRef} className="h-full w-full" style={{ minHeight: 0 }} />
+      {contextMenu && (
+        <div
+          className="absolute z-50 min-w-[140px] rounded-md border border-border bg-popover py-1 shadow-md"
+          style={{ left: contextMenu.x, top: contextMenu.y }}
+          onMouseDown={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground disabled:opacity-40 disabled:pointer-events-none"
+            disabled={!contextMenu.hasSelection}
+            onClick={handleCopy}
+          >
+            <Copy className="h-3.5 w-3.5" />
+            Copy
+          </button>
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 px-3 py-1.5 text-left text-sm text-popover-foreground hover:bg-accent hover:text-accent-foreground"
+            onClick={handlePaste}
+          >
+            <ClipboardPaste className="h-3.5 w-3.5" />
+            Paste
+          </button>
+        </div>
+      )}
     </div>
   )
 })

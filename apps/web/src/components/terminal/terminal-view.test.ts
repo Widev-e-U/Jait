@@ -74,4 +74,31 @@ describe('handleTerminalContextMenuAction', () => {
 
     expect(sendInput).not.toHaveBeenCalled()
   })
+
+  it('trims whitespace-only selections and pastes instead', async () => {
+    const sendInput = vi.fn()
+    const clipboard = {
+      readText: vi.fn().mockResolvedValue('from-clipboard'),
+      writeText: vi.fn(),
+    }
+
+    await expect(handleTerminalContextMenuAction(clipboard, '   \n  ', sendInput)).resolves.toBe('pasted')
+
+    expect(clipboard.writeText).not.toHaveBeenCalled()
+    expect(sendInput).toHaveBeenCalledWith('from-clipboard')
+  })
+
+  it('copies multiline selections', async () => {
+    const sendInput = vi.fn()
+    const clipboard = {
+      readText: vi.fn(),
+      writeText: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const multiline = 'line 1\nline 2\nline 3'
+    await expect(handleTerminalContextMenuAction(clipboard, multiline, sendInput)).resolves.toBe('copied')
+
+    expect(clipboard.writeText).toHaveBeenCalledWith(multiline)
+    expect(sendInput).not.toHaveBeenCalled()
+  })
 })

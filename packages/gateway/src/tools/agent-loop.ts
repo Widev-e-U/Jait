@@ -83,6 +83,7 @@ export interface ExecutedToolCall {
 /** Events emitted during the loop */
 export type AgentLoopEvent =
   | { type: "token"; content: string }
+  | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
   | { type: "tool_start"; tool: string; args: unknown; call_id: string }
   | { type: "tool_output"; call_id: string; content: string }
@@ -459,6 +460,11 @@ export async function parseOpenAIStream(
 
         const delta = choice.delta;
         if (!delta) continue;
+
+        // Reasoning / thinking tokens (e.g. Gemma 4, DeepSeek R1 via Ollama)
+        if (delta.reasoning) {
+          onEvent?.({ type: "thinking", content: delta.reasoning });
+        }
 
         // Text content
         if (delta.content) {
