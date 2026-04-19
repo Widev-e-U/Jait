@@ -7,7 +7,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 export type ThemeMode = "light" | "dark" | "system";
 export type SttProvider = "wyoming" | "whisper";
 export type ChatProvider = "jait" | "codex" | "claude-code";
-export type JaitBackend = "openai" | "openrouter";
+export type JaitBackend = "openai" | "openrouter" | "ollama";
 
 function normalizeSttProvider(value: string | null | undefined): SttProvider {
   return value === "wyoming" ? "wyoming" : "whisper";

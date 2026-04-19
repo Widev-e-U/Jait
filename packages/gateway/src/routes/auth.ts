@@ -28,7 +28,7 @@ function clearAuthCookie(reply: FastifyReply): void {
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
 const STT_PROVIDER_VALUES = new Set<SttProvider>(["wyoming", "whisper"]);
 const CHAT_PROVIDER_VALUES = new Set<ChatProvider>(["jait", "codex", "claude-code"]);
-const JAIT_BACKEND_VALUES = new Set<JaitBackend>(["openai", "openrouter"]);
+const JAIT_BACKEND_VALUES = new Set<JaitBackend>(["openai", "openrouter", "ollama"]);
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (!value || typeof value !== "object") return null;

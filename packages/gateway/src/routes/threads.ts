@@ -153,6 +153,32 @@ async function fetchOpenRouterModels(apiKey: string): Promise<ProviderModelInfo[
   }
 }
 
+let ollamaCache: { models: ProviderModelInfo[]; fetchedAt: number; url: string } | null = null;
+const OLLAMA_CACHE_TTL = 30 * 1000; // 30 seconds (local, fast)
+
+async function fetchOllamaModels(baseUrl: string): Promise<ProviderModelInfo[]> {
+  const url = baseUrl.replace(/\/+$/, "");
+  if (ollamaCache && ollamaCache.url === url && Date.now() - ollamaCache.fetchedAt < OLLAMA_CACHE_TTL) {
+    return ollamaCache.models;
+  }
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch(`${url}/api/tags`, { signal: controller.signal });
+    if (!res.ok) return [];
+    const data = (await res.json()) as { models?: Array<{ name: string; size?: number; details?: { parameter_size?: string; family?: string } }> };
+    const models: ProviderModelInfo[] = (data.models ?? []).map((m) => ({
+      id: m.name,
+      name: m.name,
+      description: [m.details?.family, m.details?.parameter_size].filter(Boolean).join(" · ") || undefined,
+    }));
+    ollamaCache = { models, fetchedAt: Date.now(), url };
+    return models;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 export interface ThreadRouteDeps {
   threadService: ThreadService;
   providerRegistry: ProviderRegistry;
@@ -1684,7 +1710,18 @@ export function registerThreadRoutes(
         const userApiKeys = settings.apiKeys ?? {};
         const jaitBackend = settings.jaitBackend || "openai";
 
-        if (jaitBackend === "openrouter") {
+        if (jaitBackend === "ollama") {
+          const ollamaUrl = userApiKeys["OLLAMA_URL"]?.trim() || config.ollamaUrl || "http://localhost:11434";
+          try {
+            const ollamaModels = await fetchOllamaModels(ollamaUrl);
+            if (ollamaModels.length > 0) {
+              models = ollamaModels;
+            }
+          } catch {
+            // Ollama unreachable — return empty list
+            models = [];
+          }
+        } else if (jaitBackend === "openrouter") {
           const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
           if (openRouterKey) {
             // Try fetching live models from OpenRouter

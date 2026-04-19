@@ -130,8 +130,6 @@ export function ProviderModelSelector({
     setModels([])
     setRecentIds(loadRecentModels())
 
-    if (provider === 'jait') return
-
     let cancelled = false
     setLoadingModels(true)
     agentsApi.listProviderModels(provider)
@@ -229,9 +227,7 @@ export function ProviderModelSelector({
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon
   const currentModel = model ? models.find((entry) => entry.id === model) : null
-  const displayModelLabel = provider === 'jait'
-    ? 'Native'
-    : loadingModels
+  const displayModelLabel = loadingModels
       ? 'Loading'
       : (currentModel?.name ?? model ?? 'Default')
   const locationLabel = scopedToRepo
@@ -269,7 +265,6 @@ export function ProviderModelSelector({
 
   const handleProviderSelect = (nextProvider: ProviderId) => {
     onProviderChange(nextProvider)
-    if (nextProvider === 'jait') onModelChange(null)
   }
 
   const handleModelSelect = (modelId: string) => {
@@ -291,8 +286,8 @@ export function ProviderModelSelector({
             'disabled:pointer-events-none disabled:opacity-50',
             className,
           )}
-          title={`Provider: ${currentProvider.label}${provider !== 'jait' ? ` · Model: ${displayModelLabel}` : ''}`}
-          aria-label={`Provider ${currentProvider.label}${provider !== 'jait' ? `, model ${displayModelLabel}` : ''}`}
+          title={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}
+          aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}`}
         >
           <CurrentIcon className="h-4 w-4 shrink-0" />
           {!compact && (
@@ -307,7 +302,7 @@ export function ProviderModelSelector({
               {locationLabel}
             </span>
           )}
-          {loadingModels && provider !== 'jait' ? <Loader2 className="h-3 w-3 animate-spin opacity-70" /> : null}
+          {loadingModels ? <Loader2 className="h-3 w-3 animate-spin opacity-70" /> : null}
           <ChevronDown className="h-3 w-3 opacity-60" />
         </button>
       </PopoverTrigger>
@@ -404,8 +399,7 @@ export function ProviderModelSelector({
           )}
         </div>
 
-        {provider !== 'jait' && (
-          <>
+        <>
             <div className="border-y px-3 py-2">
               <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
             </div>
@@ -456,7 +450,6 @@ export function ProviderModelSelector({
               )}
             </div>
           </>
-        )}
       </PopoverContent>
     </Popover>
   )

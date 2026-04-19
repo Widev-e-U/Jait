@@ -86,7 +86,7 @@ export function SessionSelector({
     <div className="flex flex-col h-full">
       <div className="flex h-[35px] shrink-0 items-center justify-between px-3 border-b">
         <span className="text-xs font-medium text-muted-foreground">
-          Workspaces
+          Chats &amp; Workspaces
         </span>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -98,192 +98,212 @@ export function SessionSelector({
         </Tooltip>
       </div>
 
-      <ScrollArea className="flex-1">
-        <div className="p-1.5 space-y-0.5">
-          {loading ? (
-            <div className="flex items-center justify-center py-8">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+      {loading ? (
+        <div className="flex flex-1 items-center justify-center">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <>
+          {/* ── Top half: Workspaces ──────────────────────────── */}
+          <div className="flex max-h-[50%] min-h-0 shrink-0 flex-col border-b">
+            <div className="flex h-7 shrink-0 items-center justify-between px-3">
+              <span className="text-2xs font-medium text-muted-foreground">Workspaces</span>
             </div>
-          ) : (
-            <>
-              {/* Personal sessions */}
-              {personalSessions.length > 0 && (
-                <div className="mb-2">
-                  <div className="flex items-center justify-between px-1.5 pb-1">
-                    <span className="text-2xs font-medium text-muted-foreground">Personal</span>
-                    {onNewPersonalSession && (
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onNewPersonalSession}>
-                            <Plus className="h-3 w-3" />
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent side="right">New personal chat</TooltipContent>
-                      </Tooltip>
-                    )}
-                  </div>
-                  {personalSessions.map((session) => {
-                    const isActive = activeWorkspaceId === null && session.id === activeSessionId
-                    return (
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-0.5 px-1.5 pb-1.5">
+                {workspaces.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    No workspaces yet.
+                    <br />
+                    <button onClick={onCreateWorkspace} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
+                      Choose workspace folder
+                    </button>
+                  </p>
+                )}
+                {workspaces.map((workspace) => {
+                  const isActiveWorkspace = workspace.id === activeWorkspaceId
+                  const remoteNode = workspace.nodeId && workspace.nodeId !== 'gateway'
+                    ? nodes.find((n) => n.id === workspace.nodeId)
+                    : null
+                  const offline = isNodeOffline(workspace.nodeId, onlineNodeIds)
+                  return (
+                    <div key={workspace.id} className={`overflow-hidden rounded-md border border-border/60 bg-background/40 ${offline ? 'opacity-50' : ''}`}>
                       <div
-                        key={session.id}
-                        className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors text-sm ${
-                          isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
+                        className={`group flex items-start gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
+                          offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
+                        } ${
+                          isActiveWorkspace ? 'bg-secondary/70' : offline ? '' : 'hover:bg-muted/40'
                         }`}
-                        onClick={() => { if (!isActive && onSelectPersonalSession) onSelectPersonalSession(session.id) }}
+                        draggable={Boolean(workspace.rootPath)}
+                        onDragStart={(e) => {
+                          if (!workspace.rootPath) {
+                            e.preventDefault()
+                            return
+                          }
+                          e.dataTransfer.effectAllowed = 'copy'
+                          e.dataTransfer.setData(
+                            JAIT_WORKSPACE_REF_MIME,
+                            JSON.stringify(buildWorkspaceDragPayload(workspace.rootPath, workspace.title || undefined)),
+                          )
+                        }}
+                        onClick={() => { if (!offline && !isActiveWorkspace) onSelectWorkspace(workspace.id) }}
                       >
-                        <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <div className="min-w-0 flex-1">
+                        {isActiveWorkspace ? (
+                          <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                        ) : (
+                          <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                        )}
+                        <div className="min-w-0 flex-1 overflow-hidden">
                           <div className="truncate text-xs font-medium">
-                            {session.name || 'Personal chat'}
+                            {workspace.title || 'Untitled Workspace'}
                           </div>
-                          <div className="text-2xs text-muted-foreground">
-                            {formatTime(session.lastActiveAt ?? session.createdAt)}
+                          <div className="flex items-center gap-1 text-2xs text-muted-foreground overflow-hidden">
+                            <span className="truncate min-w-0">{workspace.rootPath || 'No folder linked'}</span>
+                            <span className="shrink-0">·</span>
+                            <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
                           </div>
+                          {offline && (
+                            <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
+                              <WifiOff className="h-2.5 w-2.5" />
+                              <span>Node offline</span>
+                            </div>
+                          )}
+                          {remoteNode && !offline && (
+                            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
+                              <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
+                                <NodeIcon platform={remoteNode.platform} />
+                                <span className="truncate max-w-[80px]">{remoteNode.name}</span>
+                              </span>
+                            </div>
+                          )}
+                          {isActiveWorkspace && sessionInfo && (
+                            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-blue-500">
+                              <span className="truncate">{sessionInfo.provider}</span>
+                              <span className="shrink-0 text-muted-foreground">·</span>
+                              <Monitor className="h-2.5 w-2.5 shrink-0" />
+                              <span className="truncate">
+                                {sessionInfo.isRemote && sessionInfo.remoteNode
+                                  ? sessionInfo.remoteNode.nodeName
+                                  : 'Gateway'}
+                              </span>
+                            </div>
+                          )}
                         </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              )}
-
-              {/* Workspaces */}
-              {workspaces.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-4">
-                  No workspaces yet.
-                  <br />
-                  <button onClick={onCreateWorkspace} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
-                    Choose workspace folder
-                  </button>
-                </p>
-              )}
-              {workspaces.map((workspace) => {
-                const isActiveWorkspace = workspace.id === activeWorkspaceId
-                const remoteNode = workspace.nodeId && workspace.nodeId !== 'gateway'
-                  ? nodes.find((n) => n.id === workspace.nodeId)
-                  : null
-                const offline = isNodeOffline(workspace.nodeId, onlineNodeIds)
-                return (
-                  <div key={workspace.id} className={`rounded-md border border-border/60 bg-background/40 ${offline ? 'opacity-50' : ''}`}>
-                    <div
-                      className={`group flex items-start gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
-                        offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
-                      } ${
-                        isActiveWorkspace ? 'bg-secondary/70' : offline ? '' : 'hover:bg-muted/40'
-                      }`}
-                      draggable={Boolean(workspace.rootPath)}
-                      onDragStart={(e) => {
-                        if (!workspace.rootPath) {
-                          e.preventDefault()
-                          return
-                        }
-                        e.dataTransfer.effectAllowed = 'copy'
-                        e.dataTransfer.setData(
-                          JAIT_WORKSPACE_REF_MIME,
-                          JSON.stringify(buildWorkspaceDragPayload(workspace.rootPath, workspace.title || undefined)),
-                        )
-                      }}
-                      onClick={() => { if (!offline && !isActiveWorkspace) onSelectWorkspace(workspace.id) }}
-                    >
-                      {isActiveWorkspace ? (
-                        <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                      ) : (
-                        <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      )}
-                      <div className="min-w-0 flex-1">
-                        <div className="truncate text-xs font-medium">
-                          {workspace.title || 'Untitled Workspace'}
+                        <div className="flex shrink-0 self-start gap-0.5">
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onChangeDirectory(workspace.id)
+                                }}
+                              >
+                                <FolderInput className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">Change directory</TooltipContent>
+                          </Tooltip>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onRemoveWorkspace(workspace.id)
+                                }}
+                              >
+                                <Archive className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">Archive workspace</TooltipContent>
+                          </Tooltip>
                         </div>
-                        <div className="flex items-center gap-1 text-2xs text-muted-foreground">
-                          <span className="truncate min-w-0">{workspace.rootPath || 'No folder linked'}</span>
-                          <span className="shrink-0">·</span>
-                          <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
-                        </div>
-                        {offline && (
-                          <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
-                            <WifiOff className="h-2.5 w-2.5" />
-                            <span>Node offline</span>
-                          </div>
-                        )}
-                        {remoteNode && !offline && (
-                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
-                            <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
-                              <NodeIcon platform={remoteNode.platform} />
-                              <span className="truncate max-w-[80px]">{remoteNode.name}</span>
-                            </span>
-                          </div>
-                        )}
-                        {isActiveWorkspace && sessionInfo && (
-                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-blue-500">
-                            <span className="truncate">{sessionInfo.provider}</span>
-                            <span className="shrink-0 text-muted-foreground">·</span>
-                            <Monitor className="h-2.5 w-2.5 shrink-0" />
-                            <span className="truncate">
-                              {sessionInfo.isRemote && sessionInfo.remoteNode
-                                ? sessionInfo.remoteNode.nodeName
-                                : 'Gateway'}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      <div className="flex shrink-0 self-start gap-0.5">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onChangeDirectory(workspace.id)
-                              }}
-                            >
-                              <FolderInput className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right">Change directory</TooltipContent>
-                        </Tooltip>
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                onRemoveWorkspace(workspace.id)
-                              }}
-                            >
-                              <Archive className="h-3 w-3" />
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent side="right">Archive workspace</TooltipContent>
-                        </Tooltip>
                       </div>
                     </div>
-                  </div>
-                )
-              })}
-              {hasMoreWorkspaces && onShowMore && (
-                <button
-                  className="w-full px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={onShowMore}
-                >
-                  Show more workspaces
-                </button>
+                  )
+                })}
+                {hasMoreWorkspaces && onShowMore && (
+                  <button
+                    className="w-full px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={onShowMore}
+                  >
+                    Show more workspaces
+                  </button>
+                )}
+                {showFewerWorkspaces && onShowFewer && (
+                  <button
+                    className="w-full px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
+                    onClick={onShowFewer}
+                  >
+                    Show fewer workspaces
+                  </button>
+                )}
+              </div>
+            </ScrollArea>
+          </div>
+
+          {/* ── Bottom half: Personal chats ───────────────────── */}
+          <div className="flex min-h-0 flex-1 flex-col">
+            <div className="flex h-7 shrink-0 items-center justify-between px-3">
+              <span className="text-2xs font-medium text-muted-foreground">Personal chats</span>
+              {onNewPersonalSession && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" className="h-5 w-5" onClick={onNewPersonalSession}>
+                      <Plus className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="right">New personal chat</TooltipContent>
+                </Tooltip>
               )}
-              {showFewerWorkspaces && onShowFewer && (
-                <button
-                  className="w-full px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
-                  onClick={onShowFewer}
-                >
-                  Show fewer workspaces
-                </button>
-              )}
-            </>
-          )}
-        </div>
-      </ScrollArea>
+            </div>
+            <ScrollArea className="min-h-0 flex-1">
+              <div className="space-y-0.5 px-1.5 pb-1.5">
+                {personalSessions.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    No personal chats yet.
+                    {onNewPersonalSession && (
+                      <>
+                        <br />
+                        <button onClick={onNewPersonalSession} className="underline underline-offset-2 hover:text-foreground mt-1 inline-block">
+                          Start a chat
+                        </button>
+                      </>
+                    )}
+                  </p>
+                )}
+                {personalSessions.map((session) => {
+                  const isActive = activeWorkspaceId === null && session.id === activeSessionId
+                  return (
+                    <div
+                      key={session.id}
+                      className={`group flex items-center gap-1.5 rounded-md px-1.5 py-1 transition-colors text-sm ${
+                        isActive ? 'bg-secondary/70 cursor-default' : 'cursor-pointer hover:bg-muted/40'
+                      }`}
+                      onClick={() => { if (!isActive && onSelectPersonalSession) onSelectPersonalSession(session.id) }}
+                    >
+                      <MessageSquare className={`h-3.5 w-3.5 shrink-0 ${isActive ? 'text-primary' : 'text-muted-foreground'}`} />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-xs font-medium">
+                          {session.name || 'Personal chat'}
+                        </div>
+                        <div className="text-2xs text-muted-foreground">
+                          {formatTime(session.lastActiveAt ?? session.createdAt)}
+                        </div>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </ScrollArea>
+          </div>
+        </>
+      )}
     </div>
   )
 }

@@ -29,6 +29,7 @@ import Gemini from '@lobehub/icons/es/Gemini'
 import Moonshot from '@lobehub/icons/es/Moonshot'
 import Kimi from '@lobehub/icons/es/Kimi'
 import Grok from '@lobehub/icons/es/Grok'
+import Ollama from '@lobehub/icons/es/Ollama'
 
 interface ApiFieldGroup {
   label: string
@@ -37,6 +38,7 @@ interface ApiFieldGroup {
 
 const API_FIELD_GROUPS: ApiFieldGroup[] = [
   { label: 'OpenAI / Jait', fields: ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
+  { label: 'Ollama', fields: ['OLLAMA_URL', 'OLLAMA_MODEL'] },
   { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY', 'PERPLEXITY_MODEL', 'PERPLEXITY_OPENROUTER_MODEL'] },
   { label: 'OpenRouter', fields: ['OPENROUTER_API_KEY'] },
   { label: 'xAI / Grok', fields: ['XAI_API_KEY', 'GROK_MODEL'] },
@@ -60,6 +62,7 @@ const FIELD_ICON: Record<string, React.ComponentType<{ size?: number; className?
   MOONSHOT: Moonshot,
   KIMI: Kimi,
   GROK: Grok,
+  OLLAMA: Ollama,
   HA: Home as React.ComponentType<{ size?: number; className?: string }>,
 }
 
@@ -638,12 +641,15 @@ export function SettingsPage({
                   <SelectContent>
                     <SelectItem value="openai">OpenAI (direct)</SelectItem>
                     <SelectItem value="openrouter">OpenRouter</SelectItem>
+                    <SelectItem value="ollama">Ollama (local)</SelectItem>
                   </SelectContent>
                 </Select>
                 <p className="mt-1.5 text-xs text-muted-foreground">
                   {jaitBackend === 'openrouter'
                     ? 'Models will be fetched from OpenRouter. Set your OPENROUTER_API_KEY in the API tab.'
-                    : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
+                    : jaitBackend === 'ollama'
+                      ? 'Models will be fetched from your local Ollama instance. Set OLLAMA_URL in the API tab if not running on localhost:11434.'
+                      : 'Uses your OPENAI_API_KEY and OPENAI_BASE_URL.'}
                 </p>
               </div>
             </Card>
