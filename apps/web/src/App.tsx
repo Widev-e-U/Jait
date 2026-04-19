@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, type FocusEvent } from 'react'
 import {
   ArrowLeft,
   ArrowUpCircle,
@@ -1150,6 +1150,7 @@ function App() {
   const [showManagerRepos, setShowManagerRepos] = useState(false)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
+  const sidebarRef = useRef<HTMLElement | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showMobileToolbar, setShowMobileToolbar] = useState(false)
   const showWorkspaceRef = useRef(false)
@@ -2987,6 +2988,28 @@ function App() {
   useEffect(() => {
     localStorage.setItem('showSessionsSidebar', showSidebar ? 'true' : 'false')
   }, [showSidebar])
+
+  useEffect(() => {
+    if (!showSidebar) return
+
+    const frame = window.requestAnimationFrame(() => {
+      sidebarRef.current?.focus({ preventScroll: true })
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [showSidebar])
+
+  const handleSidebarBlur = useCallback((event: FocusEvent<HTMLElement>) => {
+    const nextTarget = event.relatedTarget
+    if (nextTarget && event.currentTarget.contains(nextTarget as Node)) return
+
+    window.requestAnimationFrame(() => {
+      const sidebar = sidebarRef.current
+      const activeElement = document.activeElement
+      if (!sidebar || (activeElement && sidebar.contains(activeElement))) return
+      setShowSidebar(false)
+    })
+  }, [])
 
   useEffect(() => {
     localStorage.setItem('showDebugPanel', showDebugPanel ? 'true' : 'false')
@@ -6329,7 +6352,12 @@ function App() {
                 <div className="fixed inset-0 z-20" onClick={() => setShowSidebar(false)} />
               )}
               {viewMode === 'developer' && showSidebar && (
-                <aside className={`overflow-hidden ${isMobile ? 'fixed bottom-16 left-4 right-4 z-30 max-h-[50vh] max-w-sm mx-auto rounded-xl border bg-background shadow-2xl' : 'w-64 border-r shrink-0'}`}>
+                <aside
+                  ref={sidebarRef}
+                  tabIndex={-1}
+                  onBlur={handleSidebarBlur}
+                  className={`overflow-hidden outline-none ${isMobile ? 'fixed right-[3.25rem] top-1/2 z-50 h-[min(28rem,80vh)] w-[min(20rem,calc(100vw-5rem))] -translate-y-1/2 rounded-xl border bg-background shadow-2xl' : 'w-64 border-r shrink-0'}`}
+                >
                   <SessionSelector
                     workspaces={workspaces}
                     personalSessions={personalSessions}
@@ -7093,7 +7121,7 @@ function App() {
                   type="button"
                   variant="secondary"
                   size="icon"
-                  className="h-12 w-8 rounded-l-lg rounded-r-none border-y border-l border-r-0 bg-background/90 shadow-lg backdrop-blur-lg"
+                  className="h-14 w-7 rounded-l-lg rounded-r-none border-y border-l border-r-0 bg-background/90 shadow-lg backdrop-blur-lg"
                   onClick={() => setShowMobileToolbar((show) => !show)}
                   aria-expanded={showMobileToolbar}
                   aria-label={showMobileToolbar ? 'Hide mobile toolbar' : 'Show mobile toolbar'}

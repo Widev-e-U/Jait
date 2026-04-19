@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Check, Copy, MessageSquare, Wrench } from 'lucide-react'
 import {
@@ -262,7 +262,18 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
       return Math.min(520, 135 + Math.ceil(row.content.length / 90) * 18 + row.toolCalls.length * 72)
     },
     overscan: 5,
+    enabled: open && mode === 'trace',
   })
+
+  useEffect(() => {
+    if (!open || mode !== 'trace') return
+
+    const frame = window.requestAnimationFrame(() => {
+      virtualizer.measure()
+    })
+
+    return () => window.cancelAnimationFrame(frame)
+  }, [open, mode, rows.length, virtualizer])
 
   const copyRaw = async () => {
     if (!rawText) return
