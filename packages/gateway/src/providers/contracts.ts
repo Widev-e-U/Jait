@@ -81,6 +81,8 @@ export interface ProviderModelInfo {
   description?: string;
   /** Whether this is the provider's current/default model */
   isDefault?: boolean;
+  /** Grouping label for display (e.g. "OpenAI", "OpenRouter", "Ollama") */
+  group?: string;
 }
 
 export interface CliProviderAdapter {

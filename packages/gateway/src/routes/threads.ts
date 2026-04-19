@@ -1704,55 +1704,48 @@ export function registerThreadRoutes(
     try {
       let models = await provider.listModels();
 
-      // For jait provider, check the user's configured backend
+      // For jait provider, return models from ALL configured backends, grouped
       if (id === "jait" && deps.userService) {
         const settings = deps.userService.getSettings(authUser.id);
         const userApiKeys = settings.apiKeys ?? {};
         const jaitBackend = settings.jaitBackend || "openai";
 
-        if (jaitBackend === "ollama") {
-          const ollamaUrl = userApiKeys["OLLAMA_URL"]?.trim() || config.ollamaUrl || "http://localhost:11434";
+        const allModels: ProviderModelInfo[] = [];
+
+        // ── OpenAI models (always shown) ──────────────────────────
+        allModels.push(...models.map((m) => ({ ...m, group: "OpenAI" })));
+
+        // ── OpenRouter models ─────────────────────────────────────
+        const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
+        if (openRouterKey) {
+          try {
+            const orModels = await fetchOpenRouterModels(openRouterKey);
+            if (orModels.length > 0) {
+              allModels.push(...orModels.map((m) => ({ ...m, group: "OpenRouter" })));
+            } else {
+              const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
+              allModels.push(...OPENROUTER_MODELS.map((m) => ({ ...m, group: "OpenRouter" })));
+            }
+          } catch {
+            const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
+            allModels.push(...OPENROUTER_MODELS.map((m) => ({ ...m, group: "OpenRouter" })));
+          }
+        }
+
+        // ── Ollama models ─────────────────────────────────────────
+        const ollamaUrl = userApiKeys["OLLAMA_URL"]?.trim() || config.ollamaUrl;
+        if (ollamaUrl) {
           try {
             const ollamaModels = await fetchOllamaModels(ollamaUrl);
             if (ollamaModels.length > 0) {
-              models = ollamaModels;
+              allModels.push(...ollamaModels.map((m) => ({ ...m, group: "Ollama" })));
             }
           } catch {
-            // Ollama unreachable — return empty list
-            models = [];
-          }
-        } else if (jaitBackend === "openrouter") {
-          const openRouterKey = userApiKeys["OPENROUTER_API_KEY"]?.trim();
-          if (openRouterKey) {
-            // Try fetching live models from OpenRouter
-            try {
-              const orModels = await fetchOpenRouterModels(openRouterKey);
-              if (orModels.length > 0) {
-                models = orModels;
-              } else {
-                // Fallback to static list
-                const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-                models = OPENROUTER_MODELS;
-              }
-            } catch {
-              const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-              models = OPENROUTER_MODELS;
-            }
-          } else {
-            // No key but openrouter backend selected — show static list
-            const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-            models = OPENROUTER_MODELS;
-          }
-        } else {
-          // openai backend — still append OpenRouter models if key present (backwards compat)
-          const hasOpenRouterKey = Boolean(userApiKeys["OPENROUTER_API_KEY"]?.trim());
-          const baseUrl = userApiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl;
-          const isOpenRouterBaseUrl = baseUrl?.toLowerCase().includes("openrouter.ai");
-          if (hasOpenRouterKey || isOpenRouterBaseUrl) {
-            const { OPENROUTER_MODELS } = await import("../providers/jait-provider.js");
-            models = [...models, ...OPENROUTER_MODELS];
+            // Ollama unreachable — skip
           }
         }
+
+        models = allModels;
 
         // Prepend recent models (if they exist in the full list)
         const recentIds = settings.recentModels ?? [];
@@ -1761,9 +1754,10 @@ export function registerThreadRoutes(
           const recents = recentIds
             .filter((rid) => modelMap.has(rid))
             .map((rid) => ({ ...modelMap.get(rid)!, isRecent: true }));
-          // Return recents info in response
-          return { models, recentModels: recents.slice(0, 5).map((r) => r.id) };
+          return { models, currentBackend: jaitBackend, recentModels: recents.slice(0, 5).map((r) => r.id) };
         }
+
+        return { models, currentBackend: jaitBackend };
       }
 
       return { models };

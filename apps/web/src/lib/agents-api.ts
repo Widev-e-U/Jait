@@ -270,10 +270,10 @@ export class AgentsApi {
     return this.listProviders()
   }
 
-  private _modelsInflight = new Map<string, Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }>>()
+  private _modelsInflight = new Map<string, Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }>>()
   private _modelsCachedAt = new Map<string, number>()
 
-  async listProviderModels(providerId: ProviderId): Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }> {
+  async listProviderModels(providerId: ProviderId): Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }> {
     const now = Date.now()
     const cachedAt = this._modelsCachedAt.get(providerId) ?? 0
     const existing = this._modelsInflight.get(providerId)
@@ -285,7 +285,7 @@ export class AgentsApi {
         headers: this.getHeaders(),
       })
       if (!res.ok) throw new Error(`Failed to list models: ${res.statusText}`)
-      return res.json() as Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean }[]; recentModels?: string[] }>
+      return res.json() as Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }>
     })()
     this._modelsInflight.set(providerId, promise)
     promise.catch(() => {

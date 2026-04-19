@@ -9,6 +9,7 @@ import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { useIsMobile } from '@/hooks/useIsMobile'
+import { useAuth } from '@/hooks/useAuth'
 
 const JaitIcon = ({ className }: { className?: string }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 1024 1024" className={className}>
@@ -27,6 +28,7 @@ interface ModelDef {
   name: string
   description?: string
   isDefault?: boolean
+  group?: string
 }
 
 interface ProviderDef {
@@ -100,6 +102,7 @@ export function ProviderModelSelector({
   workspaceNodeId,
 }: ProviderModelSelectorProps) {
   const isMobile = useIsMobile()
+  const { updateSettings } = useAuth()
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
@@ -107,6 +110,7 @@ export function ProviderModelSelector({
   const [models, setModels] = useState<ModelDef[]>([])
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
+  const [currentBackend, setCurrentBackend] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -138,6 +142,9 @@ export function ProviderModelSelector({
         setModels(result.models)
         if (result.recentModels?.length) {
           setRecentIds(result.recentModels)
+        }
+        if (result.currentBackend) {
+          setCurrentBackend(result.currentBackend)
         }
       })
       .catch(() => {
@@ -267,7 +274,19 @@ export function ProviderModelSelector({
     onProviderChange(nextProvider)
   }
 
+  const GROUP_TO_BACKEND: Record<string, string> = { OpenAI: 'openai', OpenRouter: 'openrouter', Ollama: 'ollama' }
+
   const handleModelSelect = (modelId: string) => {
+    // Auto-switch jaitBackend when picking a model from a different backend group
+    const selectedModel = models.find((m) => m.id === modelId)
+    if (provider === 'jait' && selectedModel?.group) {
+      const targetBackend = GROUP_TO_BACKEND[selectedModel.group]
+      if (targetBackend && targetBackend !== currentBackend) {
+        updateSettings({ jait_backend: targetBackend as 'openai' | 'openrouter' | 'ollama' }).then(() => {
+          setCurrentBackend(targetBackend)
+        }).catch(() => {})
+      }
+    }
     onModelChange(modelId)
     saveRecentModel(modelId)
     setRecentIds(loadRecentModels())
@@ -440,9 +459,35 @@ export function ProviderModelSelector({
                   Loading models…
                 </div>
               )}
-              {!loadingModels && nonRecentFiltered.map((entry) => (
-                <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
-              ))}
+              {!loadingModels && (() => {
+                const hasGroups = nonRecentFiltered.some((m) => m.group)
+                if (!hasGroups) {
+                  return nonRecentFiltered.map((entry) => (
+                    <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
+                  ))
+                }
+                // Render models grouped by backend
+                const groups: { label: string; items: ModelDef[] }[] = []
+                const seen = new Set<string>()
+                for (const m of nonRecentFiltered) {
+                  const g = m.group || 'Other'
+                  if (!seen.has(g)) {
+                    seen.add(g)
+                    groups.push({ label: g, items: [] })
+                  }
+                  groups.find((gr) => gr.label === g)!.items.push(m)
+                }
+                return groups.map((g) => (
+                  <div key={g.label}>
+                    <div className="sticky top-0 z-10 bg-popover px-2 py-1.5">
+                      <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{g.label}</span>
+                    </div>
+                    {g.items.map((entry) => (
+                      <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
+                    ))}
+                  </div>
+                ))
+              })()}
               {!loadingModels && filteredModels.length === 0 && (
                 <div className="px-3 py-4 text-center text-xs text-muted-foreground">
                   {search ? `No models matching "${search}"` : 'No models available'}
