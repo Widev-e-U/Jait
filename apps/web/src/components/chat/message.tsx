@@ -1,4 +1,4 @@
-import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
+import { memo, useMemo, useEffect, useRef, useState, useCallback } from 'react'
 import { markdownLookBack } from '@llm-ui/markdown'
 import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
@@ -27,15 +27,12 @@ import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './m
 import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
-import type { LlmContextFlow, MessageSegment } from '@/hooks/useChat'
+import type { LlmContextFlow, MessageSegment, SessionInfo } from '@/hooks/useChat'
 import type { ProviderId, RuntimeMode } from '@/lib/agents-api'
 import type { ChatMode } from './mode-selector'
-import type { SendTarget } from './send-target-selector'
 import type { ReferencedFile } from './prompt-input'
-import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import type { SessionInfo } from '@/hooks/useChat'
-import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
+import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import type { ResponseStyle } from '@jait/shared'
 import {
   JAIT_REF_MIME,
@@ -99,8 +96,6 @@ interface MessageProps {
     onVoiceStop?: () => void
     mode?: ChatMode
     onModeChange?: (mode: ChatMode) => void
-    sendTarget?: SendTarget
-    onSendTargetChange?: (target: SendTarget) => void
     provider?: ProviderId
     onProviderChange?: (provider: ProviderId) => void
     responseStyle?: ResponseStyle
@@ -109,14 +104,11 @@ interface MessageProps {
     onProviderRuntimeModeChange?: (mode: RuntimeMode) => void
     cliModel?: string | null
     onCliModelChange?: (model: string | null) => void
-    repoRuntime?: RepositoryRuntimeInfo | null
-    onMoveToGateway?: () => void
     sessionInfo?: SessionInfo | null
     workspaceNodeId?: string
     availableFiles?: ReferencedFile[]
     onSearchFiles?: (query: string, limit: number, signal?: AbortSignal) => Promise<ReferencedFile[]>
     workspaceOpen?: boolean
-    footerLeadingContent?: ReactNode
   }
   onOpenPath?: (path: string, line?: number, column?: number) => Promise<void> | void
   onOpenDiff?: (filePath: string) => void
@@ -159,34 +151,39 @@ function HighlightedCode({
   useEffect(() => {
     let cancelled = false
 
-    const highlight = async () => {
-      const theme = document.documentElement.classList.contains('dark') ? 'github-dark' : 'github-light'
-      const normalizedLanguage = normalizeCodeLanguage(language)
+    // Debounce highlighting to avoid running Shiki on every streamed token
+    const timeoutId = setTimeout(() => {
+      const highlight = async () => {
+        const theme = document.documentElement.classList.contains('dark') ? 'github-dark' : 'github-light'
+        const normalizedLanguage = normalizeCodeLanguage(language)
 
-      try {
-        const html = await codeToHtml(code, {
-          lang: normalizedLanguage as any,
-          theme,
-        })
-        if (cancelled) return
-        setHighlightedHtml(html.match(CODE_HTML_MATCHER)?.[1] ?? null)
-      } catch {
         try {
           const html = await codeToHtml(code, {
-            lang: 'txt' as any,
+            lang: normalizedLanguage as any,
             theme,
           })
           if (cancelled) return
           setHighlightedHtml(html.match(CODE_HTML_MATCHER)?.[1] ?? null)
         } catch {
-          if (!cancelled) setHighlightedHtml(null)
+          try {
+            const html = await codeToHtml(code, {
+              lang: 'txt' as any,
+              theme,
+            })
+            if (cancelled) return
+            setHighlightedHtml(html.match(CODE_HTML_MATCHER)?.[1] ?? null)
+          } catch {
+            if (!cancelled) setHighlightedHtml(null)
+          }
         }
       }
-    }
 
-    void highlight()
+      void highlight()
+    }, 150)
+
     return () => {
       cancelled = true
+      clearTimeout(timeoutId)
     }
   }, [code, language])
 
@@ -198,7 +195,7 @@ function HighlightedCode({
 }
 
 function proseClassName(_compact?: boolean) {
-  return 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-base prose-p:leading-relaxed'
+  return 'prose dark:prose-invert max-w-none break-words [overflow-wrap:anywhere] prose-pre:bg-muted prose-pre:border prose-pre:max-w-full prose-pre:overflow-x-auto prose-code:before:content-none prose-code:after:content-none prose-p:leading-relaxed [font-size:0.9rem]'
 }
 
 function getFileLinkLabel(path: string): string {
@@ -276,7 +273,7 @@ function buildMarkdownComponents(
       return (
         <code
           className={cn(
-            'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1.5 align-middle font-mono text-xs font-medium leading-[1.2] text-foreground',
+            'not-prose inline-flex max-w-full items-baseline rounded-md border border-border/70 bg-muted/45 px-2 py-1 align-middle font-mono text-xs font-medium leading-[1.2] text-foreground',
             'shadow-[inset_0_1px_0_hsl(var(--background)/0.55)]',
           )}
           {...props}
@@ -689,7 +686,7 @@ function MessageInner({
       <div
         className={cn(
           'absolute z-10 rounded-full border border-border/70 bg-background p-1',
-          outsideBubble ? 'right-0 top-full mt-0.5' : 'bottom-1.5 right-1.5',
+          outsideBubble ? 'right-0 top-full mt-0.5' : 'right-1 bottom-[.25rem]',
           'opacity-0 transition-opacity group-hover/message:opacity-100 focus-within:opacity-100',
           'touch-device:opacity-80',
           copied && 'opacity-100',
@@ -875,8 +872,6 @@ function MessageInner({
                           onVoiceStop={editComposer?.onVoiceStop}
                           mode={editComposer?.mode}
                           onModeChange={editComposer?.onModeChange}
-                          sendTarget={editComposer?.sendTarget}
-                          onSendTargetChange={editComposer?.onSendTargetChange}
                           provider={editComposer?.provider}
                           onProviderChange={editComposer?.onProviderChange}
                           responseStyle={editComposer?.responseStyle}
@@ -885,9 +880,6 @@ function MessageInner({
                           onProviderRuntimeModeChange={editComposer?.onProviderRuntimeModeChange}
                           cliModel={editComposer?.cliModel}
                           onCliModelChange={editComposer?.onCliModelChange}
-                          repoRuntime={editComposer?.repoRuntime}
-                          onMoveToGateway={editComposer?.onMoveToGateway}
-                          footerLeadingContent={editComposer?.footerLeadingContent}
                           sessionInfo={editComposer?.sessionInfo}
                           workspaceNodeId={editComposer?.workspaceNodeId}
                           availableFiles={editComposer?.availableFiles ?? userReferencedFilesFromSegments(userDisplaySegments)}
@@ -919,7 +911,7 @@ function MessageInner({
                       className={cn(
                         'min-w-0 rounded-lg bg-muted px-4 py-3 break-words [overflow-wrap:anywhere]',
                         canEdit && !isEditing && 'cursor-text transition-colors hover:bg-muted/80',
-                        'text-base leading-relaxed',
+                        'leading-relaxed [font-size:0.9rem]',
                       )}
                       onClick={handleUserBubbleClick}
                       title={canEdit && !isEditing ? 'Click to edit message' : undefined}

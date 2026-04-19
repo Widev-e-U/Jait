@@ -187,6 +187,7 @@ export const messages = sqliteTable(
     toolCalls: text("tool_calls"), // JSON array of executed tool calls (nullable)
     segments: text("segments"), // JSON array of MessageSegment for interleaved rendering (nullable)
     contextFlow: text("context_flow"), // JSON snapshot of outbound LLM context for this assistant response
+    thinking: text("thinking"), // Chain-of-thought / reasoning content (nullable)
     createdAt: text("created_at").notNull(),
   },
   (table) => [
@@ -264,6 +265,7 @@ export const agentThreads = sqliteTable(
     prState: text("pr_state"), // open | closed | merged
     executionNodeId: text("execution_node_id"),   // Id of the FsNode executing this thread
     executionNodeName: text("execution_node_name"), // Human-readable node name
+    routingPlan: text("routing_plan"), // JSON RoutingPlan from thread router
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     completedAt: text("completed_at"),

@@ -13,7 +13,7 @@
  */
 
 import type { ThreadActivity } from '@/lib/agents-api'
-import type { ChatMessage, MessageSegment } from '@/hooks/useChat'
+import type { ChatMessage, LlmContextFlow, MessageSegment } from '@/hooks/useChat'
 import { parseUserMessageSegments, userMessageTextFromSegments } from '@/lib/user-message-segments'
 import type { ToolCallInfo } from '@/components/chat/tool-call-card'
 import { normalizeToolArgs } from '@/lib/tool-call-body'
@@ -277,6 +277,52 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         msg.toolCalls.push(tc)
         toolCallMap.set(callId, tc)
         currentToolGroupIds.push(callId)
+        break
+      }
+
+      // ── Skill activation ─────────────────────────────────────
+      case 'skill.active': {
+        const msg = ensureAssistant(act.id)
+        const names = Array.isArray(payload.names) ? (payload.names as string[]).join(', ') : 'unknown'
+        const skills = Array.isArray(payload.skills) ? payload.skills as Array<{ id: string; name: string; description: string }> : []
+        const callId = act.id
+        const tc: ToolCallInfo = {
+          callId,
+          tool: 'skill',
+          args: { skills: skills.map(s => s.name).join(', ') },
+          status: 'success',
+          startedAt: new Date(act.createdAt).getTime(),
+          completedAt: new Date(act.createdAt).getTime(),
+          result: { ok: true, message: `Using skills: ${names}` },
+        }
+        msg.toolCalls = msg.toolCalls ?? []
+        msg.toolCalls.push(tc)
+        toolCallMap.set(callId, tc)
+        currentToolGroupIds.push(callId)
+        break
+      }
+
+      // ── Context flow (trace data) ─────────────────────────────
+      case 'context_flow': {
+        // Attach the context flow to the current or most recent assistant message
+        const flow: LlmContextFlow = {
+          provider: typeof payload.provider === 'string' ? payload.provider : 'jait',
+          model: typeof payload.model === 'string' ? payload.model : undefined,
+          rounds: Array.isArray(payload.rounds) ? payload.rounds as LlmContextFlow['rounds'] : [],
+        }
+        const cur = current as ChatMessage | null
+        if (cur && cur.role === 'assistant') {
+          cur.contextFlow = flow
+        } else {
+          // Walk backwards to find the last assistant message
+          for (let i = messages.length - 1; i >= 0; i--) {
+            const msg = messages[i] as ChatMessage | undefined
+            if (msg && msg.role === 'assistant') {
+              msg.contextFlow = flow
+              break
+            }
+          }
+        }
         break
       }
 

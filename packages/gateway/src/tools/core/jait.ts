@@ -67,17 +67,8 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
   return {
     name: "jait",
     description:
-      "Jait platform tool — access memory, scheduler, network, and gateway status.\n\n" +
-      "**Actions:**\n" +
-      "- `memory.save` — Save a memory entry for later retrieval. Provide `content`, `scope` (workspace/project/contact), " +
-      "`sourceType`, `sourceId`.\n" +
-      "- `memory.search` — Search saved memories using semantic similarity. Provide `query`, optional `limit` and `scope`.\n" +
-      "- `memory.forget` — Delete a memory by ID. Provide `memoryId`.\n" +
-      "- `cron.add` — Add a scheduled cron job. Provide `name`, `cron` (cron expression), `toolName`, optional `input`.\n" +
-      "- `cron.list` — List all configured cron jobs.\n" +
-      "- `cron.update` — Update a cron job. Provide `jobId`, plus any fields to change (`name`, `cron`, `enabled`, `input`).\n" +
-      "- `cron.remove` — Remove a cron job. Provide `jobId`.\n" +
-      "- `status` — Get gateway runtime health: uptime, sessions, surfaces, connected devices, scheduler stats.",
+      "Jait platform tool — access memory, scheduler, and gateway status. " +
+      "Actions: memory.save, memory.search, memory.forget, cron.add, cron.list, cron.update, cron.remove, status.",
     tier: "core",
     category: "gateway",
     source: "builtin",
@@ -86,9 +77,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
       properties: {
         action: {
           type: "string",
-          description:
-            "The action to perform: memory.save, memory.search, memory.forget, " +
-            "cron.add, cron.list, cron.update, cron.remove, status.",
+          description: "Action to perform.",
           enum: [
             "memory.save", "memory.search", "memory.forget",
             "cron.add", "cron.list", "cron.update", "cron.remove",
@@ -98,24 +87,24 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
         // Memory params
         content: {
           type: "string",
-          description: "Memory content to save (for memory.save).",
+          description: "Content to save.",
         },
         scope: {
           type: "string",
-          description: 'Memory scope: "workspace", "project", or "contact" (for memory.save/search).',
+          description: "Memory scope.",
           enum: ["workspace", "project", "contact"],
         },
         query: {
           type: "string",
-          description: "Search query (for memory.search).",
+          description: "Search query.",
         },
         memoryId: {
           type: "string",
-          description: "Memory ID to forget (for memory.forget).",
+          description: "Memory ID to forget.",
         },
         sourceType: {
           type: "string",
-          description: "Source type (for memory.save).",
+          description: "Source type.",
         },
         sourceId: {
           type: "string",

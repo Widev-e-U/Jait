@@ -165,6 +165,9 @@ export class CodexProvider implements CliProviderAdapter {
       return [];
     }
 
+    // Suppress EPIPE errors when child exits before we finish writing
+    child.stdin?.on("error", () => {/* ignore broken pipe */});
+
     // Handle spawn errors (e.g. ENOENT when codex is not installed)
     const spawnError = new Promise<never>((_, reject) => {
       child.on("error", (err) => reject(err));
@@ -276,6 +279,9 @@ export class CodexProvider implements CliProviderAdapter {
         shell: process.platform === "win32",
       },
     );
+
+    // Suppress EPIPE errors when child exits before we finish writing
+    child.stdin?.on("error", () => {/* ignore broken pipe */});
 
     const rl = readline.createInterface({ input: child.stdout! });
 

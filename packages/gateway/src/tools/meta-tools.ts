@@ -26,14 +26,13 @@ export function createToolsListTool(registry: ToolRegistry): ToolDefinition<Tool
   return {
     name: "tools.list",
     description:
-      "List all available tools grouped by category. Use this to discover what tools exist before calling tools.search for full schemas. Optionally filter by category.",
+      "List all available tools grouped by category. Use tools.search for full schemas.",
     parameters: {
       type: "object",
       properties: {
         category: {
           type: "string",
-          description:
-            "Optional category filter: terminal, filesystem, os, surfaces, scheduler, gateway, screen, browser, web, memory, voice, agent, meta, external",
+          description: "Filter by category.",
           enum: [
             "terminal",
             "filesystem",
@@ -105,14 +104,13 @@ export function createToolsSearchTool(registry: ToolRegistry): ToolDefinition<To
   return {
     name: "tools.search",
     description:
-      "Search available tools by keyword and return their FULL schemas (name, description, parameters). Call this when you need a tool that isn\u2019t in your current set \u2014 e.g. browser, cron, memory, screen, voice, or any MCP tool.",
+      "Search tools by keyword and return their full schemas. Use when you need a tool not in your current set.",
     parameters: {
       type: "object",
       properties: {
         query: {
           type: "string",
-          description:
-            "Search keyword(s). Matches against tool names, descriptions, and categories. Examples: 'browser', 'schedule cron', 'memory save', 'screenshot'.",
+          description: "Search keyword(s) matching tool names, descriptions, categories.",
         },
       },
       required: ["query"],

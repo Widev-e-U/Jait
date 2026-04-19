@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Check, Copy, MessageSquare, Wrench } from 'lucide-react'
+import { Check, Copy, MessageSquare, Wrench, X, Clock, Zap, Database, BarChart3 } from 'lucide-react'
+import * as DialogPrimitive from '@radix-ui/react-dialog'
 import {
   Dialog,
   DialogContent,
@@ -10,9 +11,10 @@ import {
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
-import type { LlmContextFlow, LlmContextFlowRound } from '@/hooks/useChat'
+import type { LlmContextFlow, LlmContextFlowRound, RoundMetrics } from '@/hooks/useChat'
 
 type TraceRow =
+  | { id: string; kind: 'summary'; flow: LlmContextFlow }
   | { id: string; kind: 'round'; round: LlmContextFlowRound; messageCount: number; toolCount: number }
   | { id: string; kind: 'message'; roundNumber: number; index: number; role: string; content: string; raw: unknown; toolCalls: ToolTraceCall[] }
   | { id: string; kind: 'tools'; roundNumber: number; tools: ToolSchemaSummary[] }
@@ -96,10 +98,134 @@ function summarizeToolSchema(raw: unknown, index: number): ToolSchemaSummary {
   }
 }
 
+function formatDuration(ms: number): string {
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(1)}s`
+}
+
+function formatNumber(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
+  return String(n)
+}
+
+function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
+  const rounds = flow.rounds
+  const hasMetrics = rounds.some(r => r.metrics)
+  if (!hasMetrics) return null
+
+  let totalDuration = 0
+  let totalPromptTokens = 0
+  let totalCompletionTokens = 0
+  let totalTokens = 0
+  let lastContextUsage: RoundMetrics['contextUsage'] | undefined
+  let weightedTokSec = 0
+  let tokSecWeight = 0
+
+  for (const r of rounds) {
+    const m = r.metrics
+    if (!m) continue
+    totalDuration += m.durationMs
+    if (m.promptTokens) totalPromptTokens += m.promptTokens
+    if (m.completionTokens) totalCompletionTokens += m.completionTokens
+    if (m.totalTokens) totalTokens += m.totalTokens
+    if (m.tokensPerSecond && m.completionTokens) {
+      weightedTokSec += m.tokensPerSecond * m.completionTokens
+      tokSecWeight += m.completionTokens
+    }
+    if (m.contextUsage) lastContextUsage = m.contextUsage
+  }
+
+  const avgTokSec = tokSecWeight > 0 ? Math.round((weightedTokSec / tokSecWeight) * 10) / 10 : undefined
+
+  return (
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+      <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          Total Duration
+        </div>
+        <div className="mt-0.5 text-sm font-semibold text-foreground">{formatDuration(totalDuration)}</div>
+        <div className="text-xs text-muted-foreground">{rounds.length} round{rounds.length !== 1 ? 's' : ''}</div>
+      </div>
+      <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <BarChart3 className="h-3 w-3" />
+          Tokens
+        </div>
+        <div className="mt-0.5 text-sm font-semibold text-foreground">
+          {totalTokens > 0 ? formatNumber(totalTokens) : totalPromptTokens + totalCompletionTokens > 0 ? formatNumber(totalPromptTokens + totalCompletionTokens) : '—'}
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {totalPromptTokens > 0 ? `${formatNumber(totalPromptTokens)} in` : ''}
+          {totalPromptTokens > 0 && totalCompletionTokens > 0 ? ' · ' : ''}
+          {totalCompletionTokens > 0 ? `${formatNumber(totalCompletionTokens)} out` : ''}
+          {totalPromptTokens === 0 && totalCompletionTokens === 0 ? 'estimated' : ''}
+        </div>
+      </div>
+      <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Zap className="h-3 w-3" />
+          Speed
+        </div>
+        <div className="mt-0.5 text-sm font-semibold text-foreground">{avgTokSec ? `${avgTokSec} tok/s` : '—'}</div>
+        <div className="text-xs text-muted-foreground">completion tokens/sec</div>
+      </div>
+      <div className="rounded-md border border-border bg-muted/30 px-2.5 py-2">
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Database className="h-3 w-3" />
+          Context Window
+        </div>
+        {lastContextUsage ? (
+          <>
+            <div className="mt-0.5 text-sm font-semibold text-foreground">
+              {Math.round(lastContextUsage.ratio * 100)}%
+            </div>
+            <div className="text-xs text-muted-foreground">
+              {formatNumber(lastContextUsage.total)} / {formatNumber(lastContextUsage.limit)} tokens
+              {lastContextUsage.pruned ? ' (pruned)' : ''}
+            </div>
+          </>
+        ) : (
+          <>
+            <div className="mt-0.5 text-sm font-semibold text-foreground">—</div>
+            <div className="text-xs text-muted-foreground">no data</div>
+          </>
+        )}
+      </div>
+    </div>
+  )
+}
+
+function RoundMetricsBar({ metrics }: { metrics?: RoundMetrics }) {
+  if (!metrics) return null
+  return (
+    <div className="mt-2 flex flex-wrap gap-x-3 gap-y-1 text-xs text-muted-foreground">
+      <span title="LLM request duration">{formatDuration(metrics.durationMs)}</span>
+      {metrics.promptTokens != null && <span title="Prompt tokens">{formatNumber(metrics.promptTokens)} prompt</span>}
+      {metrics.completionTokens != null && <span title="Completion tokens">{formatNumber(metrics.completionTokens)} completion</span>}
+      {metrics.tokensPerSecond != null && (
+        <span title="Completion tokens per second" className="font-medium text-foreground/80">{metrics.tokensPerSecond} tok/s</span>
+      )}
+      {metrics.contextUsage && (
+        <span title="Context window utilisation">
+          ctx {Math.round(metrics.contextUsage.ratio * 100)}%
+          {metrics.contextUsage.pruned ? ' (pruned)' : ''}
+        </span>
+      )}
+    </div>
+  )
+}
+
 function buildRows(contextFlow?: LlmContextFlow, responseContent?: string): TraceRow[] {
   const rows: TraceRow[] = []
 
   if (!contextFlow) return responseContent ? [{ id: 'assistant-response', kind: 'response', content: responseContent }] : rows
+
+  // Add summary row if any round has metrics
+  if (contextFlow.rounds.some(r => r.metrics)) {
+    rows.push({ id: 'summary', kind: 'summary', flow: contextFlow })
+  }
 
   for (const round of contextFlow.rounds) {
     const messages = Array.isArray(round.messages) ? round.messages : []
@@ -141,6 +267,10 @@ function buildRows(contextFlow?: LlmContextFlow, responseContent?: string): Trac
 }
 
 function TraceRowView({ row }: { row: TraceRow }) {
+  if (row.kind === 'summary') {
+    return <SummaryMetrics flow={row.flow} />
+  }
+
   if (row.kind === 'round') {
     return (
       <div className="rounded-md border border-border bg-background px-3 py-2">
@@ -156,6 +286,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
           <span>{row.toolCount} tool schemas available</span>
           {row.round.tool_choice ? <span>tool_choice: {row.round.tool_choice}</span> : null}
         </div>
+        <RoundMetricsBar metrics={row.round.metrics} />
       </div>
     )
   }
@@ -256,7 +387,8 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
     estimateSize: (index) => {
       const row = rows[index]
       if (!row) return 120
-      if (row.kind === 'round') return 96
+      if (row.kind === 'summary') return 110
+      if (row.kind === 'round') return 120
       if (row.kind === 'tools') return Math.min(420, 110 + row.tools.length * 72)
       if (row.kind === 'response') return Math.min(520, 120 + Math.ceil(row.content.length / 90) * 18)
       return Math.min(520, 135 + Math.ceil(row.content.length / 90) * 18 + row.toolCalls.length * 72)
@@ -284,22 +416,21 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="grid h-[85vh] max-w-[min(1200px,96vw)] grid-rows-[auto_minmax(0,1fr)] p-0">
-        <DialogHeader className="border-b px-5 py-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <DialogTitle>LLM Context Flow</DialogTitle>
-              <DialogDescription>
-                {contextFlow
-                  ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} / ${contextFlow.rounds.length} request${contextFlow.rounds.length === 1 ? '' : 's'}`
-                  : 'No context snapshot is available for this message.'}
-              </DialogDescription>
-            </div>
-            <div className="flex items-center gap-2">
+      <DialogContent showCloseButton={false} className="grid h-[85vh] max-w-[min(1200px,96vw)] grid-rows-[auto_minmax(0,1fr)] p-0">
+        <DialogHeader className="border-b px-3 py-2">
+          <div className="flex items-center gap-3">
+            <DialogTitle className="shrink-0 text-sm font-semibold">LLM Context Flow</DialogTitle>
+            <DialogDescription className="min-w-0 truncate text-xs">
+              {contextFlow
+                ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} · ${contextFlow.rounds.length} round${contextFlow.rounds.length === 1 ? '' : 's'}`
+                : 'No context snapshot available'}
+            </DialogDescription>
+            <div className="ml-auto flex shrink-0 items-center gap-1.5">
               <Button
                 type="button"
                 variant={mode === 'trace' ? 'default' : 'outline'}
                 size="sm"
+                className="h-7 px-2.5 text-xs"
                 onClick={() => setMode('trace')}
               >
                 Trace
@@ -308,22 +439,27 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
                 type="button"
                 variant={mode === 'raw' ? 'default' : 'outline'}
                 size="sm"
+                className="h-7 px-2.5 text-xs"
                 onClick={() => setMode('raw')}
               >
                 Raw
               </Button>
-              <Button type="button" variant="outline" size="sm" onClick={copyRaw} disabled={!rawText}>
-                {copied ? <Check className="mr-1.5 h-3.5 w-3.5" /> : <Copy className="mr-1.5 h-3.5 w-3.5" />}
+              <Button type="button" variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={copyRaw} disabled={!rawText}>
+                {copied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
                 {copied ? 'Copied' : 'Copy'}
               </Button>
+              <DialogPrimitive.Close className="ml-1 rounded-sm p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
+                <X className="h-4 w-4" />
+                <span className="sr-only">Close</span>
+              </DialogPrimitive.Close>
             </div>
           </div>
         </DialogHeader>
 
         {mode === 'trace' ? (
-          <div className="min-h-0 px-5 pb-5 pt-4">
+          <div className="min-h-0 px-3 pb-3 pt-2">
             {contextFlow?.note ? (
-              <p className="mb-3 rounded-md border border-border/70 bg-muted/40 px-3 py-2 text-sm text-muted-foreground">
+              <p className="mb-2 rounded-md border border-border/70 bg-muted/40 px-2.5 py-1.5 text-xs text-muted-foreground">
                 {contextFlow.note}
               </p>
             ) : null}
@@ -358,7 +494,7 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
             )}
           </div>
         ) : (
-          <div className="min-h-0 overflow-auto px-5 pb-5 pt-4">
+          <div className="min-h-0 overflow-auto px-3 pb-3 pt-2">
             <pre className="min-h-full whitespace-pre-wrap break-words rounded-md border border-border/70 bg-muted/35 p-3 font-mono text-xs leading-relaxed text-foreground [overflow-wrap:anywhere]">
               {rawText || 'No context snapshot is available for this message.'}
             </pre>

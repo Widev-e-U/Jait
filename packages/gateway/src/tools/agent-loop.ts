@@ -55,6 +55,31 @@ export interface LlmContextFlowRound {
   messages: ReturnType<typeof serializeMessages>;
   tools?: OpenAIToolSchema[];
   tool_choice?: "auto";
+  /** Metrics captured after the round completes. */
+  metrics?: RoundMetrics;
+}
+
+/** Per-round performance and token metrics. */
+export interface RoundMetrics {
+  /** Wall-clock duration of the LLM request in ms. */
+  durationMs: number;
+  /** Provider-reported token usage (when available). */
+  promptTokens?: number;
+  completionTokens?: number;
+  totalTokens?: number;
+  /** Estimated tokens/second for the completion. */
+  tokensPerSecond?: number;
+  /** Context budget snapshot at request time. */
+  contextUsage?: {
+    system: number;
+    history: number;
+    toolResults: number;
+    tools: number;
+    total: number;
+    limit: number;
+    ratio: number;
+    pruned?: boolean;
+  };
 }
 
 /** LLM connection config */
@@ -180,7 +205,7 @@ export interface AgentLoopOptions {
   /** Called immediately before each outbound LLM request. */
   onContext?: (round: LlmContextFlowRound) => void;
   /** Persistence callback — called when a final assistant message should be saved */
-  onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string, segments?: string) => void;
+  onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, thinking?: string) => void;
 }
 
 export interface AgentLoopResult {
@@ -390,8 +415,13 @@ export function buildToolSchemas(
 export function buildTieredToolSchemas(
   registry: ToolRegistry,
   disabledTools?: Set<string>,
+  options?: { ollamaEssentials?: boolean },
 ): OpenAIToolSchema[] {
-  const tools = registry.listForLLM(disabledTools);
+  let tools = registry.listForLLM(disabledTools);
+  if (options?.ollamaEssentials) {
+    const keep = new Set(["read", "edit", "execute", "search", "web"]);
+    tools = tools.filter((t) => keep.has(t.name));
+  }
   return tools.map((t) => ({
     type: "function" as const,
     function: {
@@ -421,8 +451,11 @@ export function toolDefsToSchemas(defs: Array<{ name: string; description: strin
 
 interface ParsedStream {
   contentText: string;
+  thinkingText: string;
   toolCalls: OpenAIToolCall[];
   finishReason: string | null;
+  /** Token usage reported by the provider (from the final chunk). */
+  usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number };
 }
 
 export async function parseOpenAIStream(
@@ -432,7 +465,9 @@ export async function parseOpenAIStream(
   const decoder = new TextDecoder();
   let buffer = "";
   let contentText = "";
+  let thinkingText = "";
   let finishReason: string | null = null;
+  let usage: ParsedStream["usage"] | undefined;
 
   const toolCallMap = new Map<
     number,
@@ -462,8 +497,10 @@ export async function parseOpenAIStream(
         if (!delta) continue;
 
         // Reasoning / thinking tokens (e.g. Gemma 4, DeepSeek R1 via Ollama)
-        if (delta.reasoning) {
-          onEvent?.({ type: "thinking", content: delta.reasoning });
+        const reasoningToken = delta.reasoning ?? delta.reasoning_content;
+        if (reasoningToken) {
+          thinkingText += reasoningToken;
+          onEvent?.({ type: "thinking", content: reasoningToken });
         }
 
         // Text content
@@ -503,6 +540,18 @@ export async function parseOpenAIStream(
         if (choice.finish_reason) {
           finishReason = choice.finish_reason;
         }
+
+        // Usage stats (sent in the final chunk by OpenAI-compatible APIs)
+        if (chunk.usage && typeof chunk.usage === "object") {
+          const u = chunk.usage;
+          if (typeof u.prompt_tokens === "number" && typeof u.completion_tokens === "number") {
+            usage = {
+              prompt_tokens: u.prompt_tokens,
+              completion_tokens: u.completion_tokens,
+              total_tokens: u.total_tokens ?? (u.prompt_tokens + u.completion_tokens),
+            };
+          }
+        }
       } catch {
         // partial JSON chunk — ignore
       }
@@ -513,7 +562,7 @@ export async function parseOpenAIStream(
     .sort(([a], [b]) => a - b)
     .map(([, tc]) => tc);
 
-  return { contentText, toolCalls, finishReason };
+  return { contentText, thinkingText, toolCalls, finishReason, usage };
 }
 
 // ── Execute a single tool call with validation + retry ───────────────
@@ -877,24 +926,51 @@ export async function runAgentLoop(
       model: llm.openaiModel,
       messages: serializeMessages(history),
       stream: true,
+      stream_options: { include_usage: true },
     };
     if (hasTools) {
       reqBody.tools = activeSchemas;
       reqBody.tool_choice = "auto";
     }
-    onContext?.({
+    // Snapshot context_usage for inclusion in round metrics
+    let roundContextUsage: RoundMetrics["contextUsage"] | undefined;
+    if (contextWindow > 0) {
+      const snap = computeContextUsage(history, activeSchemas, contextWindow);
+      roundContextUsage = snap;
+    }
+
+    // Track the current round object so we can attach metrics after the LLM call
+    const currentRound: LlmContextFlowRound = {
       round: round + 1,
       createdAt: new Date().toISOString(),
       model: llm.openaiModel,
       messages: reqBody.messages as ReturnType<typeof serializeMessages>,
-      ...(hasTools ? { tools: activeSchemas, tool_choice: "auto" } : {}),
-    });
+      ...(hasTools ? { tools: activeSchemas, tool_choice: "auto" as const } : {}),
+    };
+    onContext?.(currentRound);
+
+    const llmStartTime = Date.now();
+
+    // Debug: log payload size so we can diagnose slow local model requests
+    {
+      const bodyJson = JSON.stringify(reqBody);
+      const sysMsgLen = history.find(m => m.role === "system")?.content?.length ?? 0;
+      log.info(`LLM request round=${round + 1} model=${llm.openaiModel} bodySize=${bodyJson.length} sysPromptChars=${sysMsgLen} tools=${activeSchemas.length} → ${llm.openaiBaseUrl}`);
+    }
 
     let contentText = "";
+    let thinkingText = "";
     let toolCalls: OpenAIToolCall[] = [];
     let finishReason: string | null = null;
 
     try {
+      // Use a generous timeout (10 min) for LLM streaming — slow local models
+      // (e.g. Ollama on CPU) can take several minutes for the first token.
+      // Combine with the user-cancel abort signal so either can stop the request.
+      const llmSignal = AbortSignal.any([
+        abort.signal,
+        AbortSignal.timeout(10 * 60 * 1000),
+      ]);
       const response = await fetch(`${llm.openaiBaseUrl}/chat/completions`, {
         method: "POST",
         headers: {
@@ -902,7 +978,7 @@ export async function runAgentLoop(
           Authorization: `Bearer ${llm.openaiApiKey}`,
         },
         body: JSON.stringify(reqBody),
-        signal: abort.signal,
+        signal: llmSignal,
       });
 
       if (!response.ok) {
@@ -921,8 +997,30 @@ export async function runAgentLoop(
 
       const parsed = await parseOpenAIStream(reader as any, onEvent);
       contentText = parsed.contentText;
+      thinkingText = parsed.thinkingText;
       toolCalls = parsed.toolCalls;
       finishReason = parsed.finishReason;
+
+      // Attach metrics to the round now that streaming is complete
+      const durationMs = Date.now() - llmStartTime;
+      const metrics: RoundMetrics = { durationMs };
+      if (parsed.usage) {
+        metrics.promptTokens = parsed.usage.prompt_tokens;
+        metrics.completionTokens = parsed.usage.completion_tokens;
+        metrics.totalTokens = parsed.usage.total_tokens;
+        if (parsed.usage.completion_tokens > 0 && durationMs > 0) {
+          metrics.tokensPerSecond = Math.round((parsed.usage.completion_tokens / (durationMs / 1000)) * 10) / 10;
+        }
+      } else {
+        // Estimate completion tokens from text length when provider doesn't report usage
+        const estimatedCompletionTokens = estimateTokens(contentText + thinkingText);
+        if (estimatedCompletionTokens > 0 && durationMs > 0) {
+          metrics.completionTokens = estimatedCompletionTokens;
+          metrics.tokensPerSecond = Math.round((estimatedCompletionTokens / (durationMs / 1000)) * 10) / 10;
+        }
+      }
+      if (roundContextUsage) metrics.contextUsage = roundContextUsage;
+      currentRound.metrics = metrics;
     } catch (fetchErr) {
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
@@ -1167,7 +1265,7 @@ export async function runAgentLoop(
       history.push({ role: "assistant", content: contentText });
       const tcJson = executedToolCalls.length > 0 ? JSON.stringify(executedToolCalls) : undefined;
       const segJson = segments.length > 0 ? JSON.stringify(segments) : undefined;
-      onPersist?.(sessionId, "assistant", contentText, tcJson, segJson);
+      onPersist?.(sessionId, "assistant", contentText, tcJson, segJson, thinkingText || undefined);
     }
 
     // ── Emit plan completion in plan mode ──

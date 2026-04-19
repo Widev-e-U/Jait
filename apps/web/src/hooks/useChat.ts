@@ -54,7 +54,7 @@ export function shouldResumeChatSession(params: {
   messageCount: number
 }): boolean {
   if (!params.sessionId || params.isLoadingHistory) return false
-  return params.isLoading || params.messageCount === 0
+  return params.isLoading
 }
 
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
@@ -87,6 +87,27 @@ export interface LlmContextFlowRound {
   messages: Array<Record<string, unknown>>
   tools?: unknown[]
   tool_choice?: 'auto'
+  /** Per-round metrics (timing, tokens, context budget). */
+  metrics?: RoundMetrics
+}
+
+/** Per-round performance and token metrics. */
+export interface RoundMetrics {
+  durationMs: number
+  promptTokens?: number
+  completionTokens?: number
+  totalTokens?: number
+  tokensPerSecond?: number
+  contextUsage?: {
+    system: number
+    history: number
+    toolResults: number
+    tools: number
+    total: number
+    limit: number
+    ratio: number
+    pruned?: boolean
+  }
 }
 
 export interface LlmContextFlow {
@@ -345,6 +366,44 @@ export function useChat(
           return arr
         }
 
+        // ── rAF-batched message updater for high-frequency stream events ──
+        let pendingSubscribeUpdates: Partial<ChatMessage> | null = null
+        let pendingSubscribeFrame: number | null = null
+
+        const flushSubscribeUpdates = () => {
+          if (pendingSubscribeFrame !== null) {
+            window.cancelAnimationFrame(pendingSubscribeFrame)
+            pendingSubscribeFrame = null
+          }
+          if (cancelled || !pendingSubscribeUpdates || !assistantId) return
+          const updates = pendingSubscribeUpdates
+          const targetId = assistantId
+          pendingSubscribeUpdates = null
+          setState(prev => ({
+            ...prev,
+            messages: prev.messages.map(m =>
+              m.id === targetId ? { ...m, ...updates } : m
+            ),
+          }))
+        }
+
+        const batchSubscribeUpdate = (updates: Partial<ChatMessage>) => {
+          pendingSubscribeUpdates = {
+            ...(pendingSubscribeUpdates ?? {}),
+            ...updates,
+          }
+          if (pendingSubscribeFrame !== null) return
+          pendingSubscribeFrame = window.requestAnimationFrame(() => {
+            pendingSubscribeFrame = null
+            flushSubscribeUpdates()
+          })
+        }
+
+        // Accumulate content/segments between flushes so each batch is a single setState
+        let accumulatedContent = ''
+        let accumulatedSegments: MessageSegment[] | undefined
+        let accumulatedThinking = ''
+
         while (true) {
           const { done, value } = await reader.read()
           if (done) break
@@ -366,6 +425,7 @@ export function useChat(
                   role: 'user' | 'assistant';
                   content: string;
                   contextFlow?: LlmContextFlow;
+                  thinking?: string;
                   segments?: unknown[];
                   toolCalls?: Array<{
                     callId: string;
@@ -383,7 +443,7 @@ export function useChat(
                 }>
                 const snapshotStreaming = data.streaming as boolean
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
-                  const msg: ChatMessage = { id: m.id, role: m.role, content: m.content, contextFlow: m.contextFlow }
+                  const msg: ChatMessage = { id: m.id, role: m.role, content: m.content, contextFlow: m.contextFlow, thinking: m.thinking }
                   if (m.role === 'user' && m.segments && m.segments.length > 0) {
                     msg.displaySegments = parseUserMessageSegments(m.segments)
                     msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
@@ -433,7 +493,13 @@ export function useChat(
                 })
                 // Track the last assistant message for token updates
                 const lastMsg = msgs[msgs.length - 1]
-                if (lastMsg?.role === 'assistant') assistantId = lastMsg.id
+                if (lastMsg?.role === 'assistant') {
+                  assistantId = lastMsg.id
+                  // Reset accumulators when we get a fresh snapshot
+                  accumulatedContent = lastMsg.content
+                  accumulatedSegments = lastMsg.segments as MessageSegment[] | undefined
+                  accumulatedThinking = (lastMsg as any).thinking ?? ''
+                }
                 setState(prev => ({
                   ...prev,
                   messages: mergeSnapshotMessagesWithOptimisticUsers(msgs, prev.messages),
@@ -442,17 +508,18 @@ export function useChat(
                   error: null,
                 }))
               } else if (data.type === 'token' && assistantId) {
-                // Append token to the tracked assistant message
+                // Batch token updates via rAF instead of per-token setState
                 const token = data.content as string
-                setState(prev => ({
-                  ...prev,
-                  messages: prev.messages.map(m =>
-                    m.id === assistantId
-                      ? { ...m, content: m.content + token, segments: withTextSegment(m.segments, token) }
-                      : m
-                  ),
-                }))
+                accumulatedContent += token
+                accumulatedSegments = withTextSegment(accumulatedSegments, token)
+                batchSubscribeUpdate({ content: accumulatedContent, segments: accumulatedSegments ? [...accumulatedSegments] : undefined })
+              } else if (data.type === 'thinking' && assistantId) {
+                // Batch thinking updates
+                accumulatedThinking += data.content as string
+                batchSubscribeUpdate({ thinking: accumulatedThinking })
               } else if (data.type === 'tool_call_delta' && assistantId) {
+                // Flush any pending content batch before tool updates
+                flushSubscribeUpdates()
                 const callId = data.call_id as string
                 const nameDelta = (data.name_delta as string) || ''
                 const argsDelta = (data.args_delta as string) || ''
@@ -494,6 +561,7 @@ export function useChat(
                   }
                 })
               } else if (data.type === 'tool_start' && assistantId) {
+                flushSubscribeUpdates()
                 const callId = data.call_id as string
                 setState(prev => {
                   const msg = prev.messages.find(m => m.id === assistantId)
@@ -636,6 +704,8 @@ export function useChat(
                   return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
                 })
               } else if (data.type === 'done') {
+                // Flush any batched token updates before marking completion
+                flushSubscribeUpdates()
                 setState(prev => {
                   // Only signal completion if this was an active chat response,
                   // not just the end of a history-only stream.
@@ -674,6 +744,8 @@ export function useChat(
             }
           }
         }
+        // Flush any remaining batched updates when stream ends
+        flushSubscribeUpdates()
       } catch (err) {
         if (err instanceof Error && err.name === 'AbortError') return
         if (!cancelled) {

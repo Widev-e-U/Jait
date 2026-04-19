@@ -235,12 +235,14 @@ function createDetachedPreviewWindow(url: string, title?: string): BrowserWindow
 
 // ── Load the web app ──────────────────────────────────────────────────
 async function loadApp(win: BrowserWindow): Promise<void> {
+  if (win.isDestroyed()) return;
   if (IS_DEV) {
     // In development, load from Vite dev server
     try {
       await win.loadURL(DEV_SERVER_URL);
       console.log(`Loaded dev server: ${DEV_SERVER_URL}`);
     } catch {
+      if (win.isDestroyed()) return;
       // Fallback: show a helpful message if dev server isn't running
       win.loadURL(
         `data:text/html,<html><body style="background:#09090b;color:#fafafa;font-family:system-ui;display:flex;align-items:center;justify-content:center;height:100vh;margin:0">` +
@@ -564,14 +566,30 @@ function rpcSend(session: RemoteProviderSession, method: string, params?: unknow
     }, timeoutMs);
     session.pendingRpc.set(id, { resolve, reject, timer });
     const msg = JSON.stringify({ method, id, params }) + "\n";
-    child.stdin?.write(msg);
+    try {
+      child.stdin?.write(msg, (err) => {
+        if (err) {
+          session.pendingRpc.delete(id);
+          clearTimeout(timer);
+          reject(new Error(`Write error: ${err.message}`));
+        }
+      });
+    } catch (e) {
+      session.pendingRpc.delete(id);
+      clearTimeout(timer);
+      reject(e instanceof Error ? e : new Error(String(e)));
+    }
   });
 }
 
 function rpcNotify(session: RemoteProviderSession, method: string, params?: unknown) {
   if (!session.child?.stdin?.writable) return;
   const msg = JSON.stringify({ method, params }) + "\n";
-  session.child.stdin?.write(msg);
+  try {
+    session.child.stdin?.write(msg, () => {/* ignore EPIPE on fire-and-forget */});
+  } catch {
+    /* child already gone — ignore */
+  }
 }
 
 function sendProviderEvent(sessionId: string, notification: unknown) {
@@ -707,6 +725,9 @@ function runClaudeRemoteTurn(session: RemoteProviderSession, message: string): P
 
   session.child = child;
   session.stopRequested = false;
+
+  // Suppress EPIPE errors when child exits before we finish writing
+  child.stdin?.on("error", () => {/* ignore broken pipe */});
   sendProviderEvent(session.sessionId, { type: "turn.started", sessionId: session.sessionId });
 
   let buffer = "";
@@ -930,6 +951,9 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
       };
       remoteProviderSessions.set(sessionId, sess);
 
+      // Suppress EPIPE errors when child exits before we finish writing
+      child.stdin?.on("error", () => {/* ignore broken pipe */});
+
       // Parse NDJSON from stdout
       const rl = createInterface({ input: child.stdout! });
       rl.on("line", (line) => {
@@ -1044,6 +1068,9 @@ ipcMain.handle("desktop:provider-op", async (_event, op: string, params: Record<
         stopRequested: false,
         pendingToolCalls: [],
       };
+
+      // Suppress EPIPE errors on temp process
+      child.stdin?.on("error", () => {/* ignore broken pipe */});
 
       const rl = createInterface({ input: child.stdout! });
       rl.on("line", (line) => {
@@ -2130,7 +2157,7 @@ app.whenReady().then(async () => {
     // macOS: re-create window when dock icon is clicked
     if (BrowserWindow.getAllWindows().length === 0) {
       mainWindow = createMainWindow();
-      loadApp(mainWindow);
+      void loadApp(mainWindow);
     }
   });
 });

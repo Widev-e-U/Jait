@@ -8,8 +8,9 @@
 
 import type { FastifyInstance } from "fastify";
 import { exec } from "node:child_process";
+import { readdir, readFile } from "node:fs/promises";
 import { platform } from "node:os";
-import { relative } from "node:path";
+import { join, relative } from "node:path";
 import { promisify } from "node:util";
 import type { SurfaceRegistry } from "../surfaces/index.js";
 import { PathTraversalError } from "../security/path-guard.js";
@@ -25,6 +26,76 @@ import { uuidv7 } from "../db/uuidv7.js";
 type AnyFsSurface = FileSystemSurface | RemoteFileSystemSurface;
 const execAsync = promisify(exec);
 
+const SEARCH_EXTENSIONS = new Set([
+  ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs",
+  ".json", ".css", ".scss", ".html", ".md", ".yaml", ".yml",
+  ".svelte", ".vue", ".py", ".rs", ".go", ".java", ".c", ".cpp", ".h",
+  ".sh", ".toml", ".env", ".txt",
+]);
+const SKIP_SEARCH_DIRS = new Set([
+  "node_modules", ".git", "dist", "build", "release", ".next", ".nuxt", ".output",
+  "coverage", ".turbo", ".cache", "__pycache__", ".svelte-kit", "web-dist",
+]);
+
+/** Pure-Node content search fallback when rg is not installed. */
+async function nodeContentSearch(root: string, query: string, maxResults: number): Promise<string> {
+  const lowerQuery = query.toLowerCase();
+  const results: string[] = [];
+
+  async function walk(dir: string) {
+    if (results.length >= maxResults) return;
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (results.length >= maxResults) return;
+      if (entry.isDirectory()) {
+        if (!SKIP_SEARCH_DIRS.has(entry.name)) await walk(join(dir, entry.name));
+      } else if (entry.isFile()) {
+        const ext = entry.name.includes(".") ? "." + entry.name.split(".").pop()! : "";
+        if (!SEARCH_EXTENSIONS.has(ext.toLowerCase())) continue;
+        const filePath = join(dir, entry.name);
+        try {
+          const content = await readFile(filePath, "utf-8");
+          const lines = content.split("\n");
+          for (let i = 0; i < lines.length && results.length < maxResults; i++) {
+            if (lines[i]!.toLowerCase().includes(lowerQuery)) {
+              results.push(`${filePath}:${i + 1}:${lines[i]}`);
+            }
+          }
+        } catch { /* skip unreadable files */ }
+      }
+    }
+  }
+
+  await walk(root);
+  return results.join("\n");
+}
+
+/** Pure-Node file name search fallback when rg is not installed. */
+async function nodeFileSearch(root: string, query: string, maxResults: number): Promise<string> {
+  const lowerQuery = query.toLowerCase();
+  const results: string[] = [];
+
+  async function walk(dir: string) {
+    if (results.length >= maxResults) return;
+    let entries;
+    try { entries = await readdir(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      if (results.length >= maxResults) return;
+      if (entry.isDirectory()) {
+        if (!SKIP_SEARCH_DIRS.has(entry.name)) await walk(join(dir, entry.name));
+      } else if (entry.isFile()) {
+        if (entry.name.toLowerCase().includes(lowerQuery)) {
+          results.push(join(dir, entry.name));
+        }
+      }
+    }
+  }
+
+  await walk(root);
+  return results.join("\n");
+}
+
 async function runWorkspaceSearch(
   workspaceRoot: string,
   query: string,
@@ -34,27 +105,21 @@ async function runWorkspaceSearch(
   const isWin = platform() === "win32";
   const safeDir = workspaceRoot.replace(/"/g, '\\"');
   const safeQuery = query.replace(/"/g, '\\"');
+  const execOpts = { timeout: 15_000, maxBuffer: 2 * 1024 * 1024, cwd: workspaceRoot };
 
   try {
     if (mode === "content") {
       let stdout = "";
-      if (isWin) {
-        // Try rg first, fall back to findstr (separate calls to avoid cmd.exe || issues)
-        try {
-          ({ stdout } = await execAsync(
-            `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}"`,
-            { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 },
-          ));
-        } catch {
-          ({ stdout } = await execAsync(
-            `findstr /s /n /i /l /c:"${safeQuery}" "${safeDir}\\*"`,
-            { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 },
-          ));
-        }
-      } else {
-        const cmd = `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}" 2>/dev/null`
-          + ` || grep -rn -i -F --max-count=${maxResults} -- "${safeQuery}" "${safeDir}" 2>/dev/null`;
-        ({ stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 }));
+
+      // Strategy: rg (fast, respects .gitignore) > Node.js fallback
+      try {
+        ({ stdout } = await execAsync(
+          `rg --no-heading --line-number --max-count ${maxResults} --ignore-case --fixed-strings -- "${safeQuery}" "${safeDir}"`,
+          execOpts,
+        ));
+      } catch {
+        // rg not available — use Node.js-based search
+        stdout = await nodeContentSearch(workspaceRoot, query, maxResults);
       }
 
       const lines = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults);
@@ -62,7 +127,9 @@ async function runWorkspaceSearch(
         const match = line.match(/^(.+?):(\d+):(.*)$/);
         if (!match) return null;
         const absPath = match[1]!;
-        const relPath = relative(workspaceRoot, absPath).replace(/\\/g, "/");
+        const relPath = absPath.includes(workspaceRoot.replace(/\\/g, "/")) || absPath.includes(workspaceRoot)
+          ? relative(workspaceRoot, absPath).replace(/\\/g, "/")
+          : absPath.replace(/\\/g, "/");
         return { file: relPath, line: parseInt(match[2]!, 10), content: match[3]!.trim() };
       }).filter(Boolean);
 
@@ -76,26 +143,31 @@ async function runWorkspaceSearch(
     const safeFileQuery = cleanedQuery.replace(/"/g, '\\"');
 
     let stdout = "";
-    if (isWin) {
-      // Try rg first, fall back to dir (separate calls to avoid cmd.exe || issues)
-      try {
+
+    // Strategy: rg --files (fast, respects .gitignore) > Node.js fallback
+    try {
+      if (isWin) {
         ({ stdout } = await execAsync(
           `rg --files "${safeDir}" | findstr /i /l "${safeFileQuery}"`,
-          { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 },
+          execOpts,
         ));
-      } catch {
+      } else {
         ({ stdout } = await execAsync(
-          `dir /s /b "${safeDir}" | findstr /i /l "${safeFileQuery}"`,
-          { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 },
+          `(rg --files "${safeDir}" 2>/dev/null || find "${safeDir}" -type f 2>/dev/null) | grep -iF -- "${safeFileQuery}" | head -n ${maxResults}`,
+          execOpts,
         ));
       }
-    } else {
-      const cmd = `((rg --files "${safeDir}" 2>/dev/null | grep -iF -- "${safeFileQuery}") || (find "${safeDir}" -type f 2>/dev/null | grep -iF -- "${safeFileQuery}")) | head -n ${maxResults}`;
-      ({ stdout } = await execAsync(cmd, { timeout: 15_000, maxBuffer: 2 * 1024 * 1024 }));
+    } catch {
+      // rg not available — use Node.js-based search
+      stdout = await nodeFileSearch(workspaceRoot, cleanedQuery, maxResults);
     }
 
-    const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((absPath) => {
-      const relPath = relative(workspaceRoot, absPath.trim()).replace(/\\/g, "/");
+    const files = stdout.trim().split("\n").filter(Boolean).slice(0, maxResults).map((rawPath) => {
+      const trimmed = rawPath.trim();
+      // git ls-files returns relative paths; others return absolute
+      const relPath = trimmed.includes(workspaceRoot.replace(/\\/g, "/")) || trimmed.includes(workspaceRoot)
+        ? relative(workspaceRoot, trimmed).replace(/\\/g, "/")
+        : trimmed.replace(/\\/g, "/");
       const name = relPath.split("/").pop() || relPath;
       return { path: relPath, name };
     });

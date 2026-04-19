@@ -324,6 +324,8 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       sessionService: deps.sessionService,
       userService: deps.userService,
       sessionState: deps.sessionState,
+      threadService: deps.threadService,
+      ws: deps.ws,
     });
   }
 

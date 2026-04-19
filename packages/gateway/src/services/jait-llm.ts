@@ -75,7 +75,11 @@ export function resolveJaitLlmConfig(options: ResolveJaitLlmOptions): ResolvedJa
     const ollamaUrl = apiKeys["OLLAMA_URL"]?.trim()
       || options.config.ollamaUrl
       || "http://localhost:11434";
-    const ollamaModel = requestedModel || apiKeys["OLLAMA_MODEL"]?.trim() || options.config.ollamaModel || "llama3";
+    // Only use the explicit request model (from the UI model picker), not OpenAI defaults
+    const ollamaModel = options.requestedModel?.trim()
+      || apiKeys["OLLAMA_MODEL"]?.trim()
+      || options.config.ollamaModel
+      || "llama3";
     return {
       backend: "ollama",
       openaiApiKey: "ollama", // Ollama's OpenAI-compat endpoint ignores the key but requires a non-empty value

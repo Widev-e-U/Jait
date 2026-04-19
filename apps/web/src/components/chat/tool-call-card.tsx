@@ -1,5 +1,5 @@
 import { memo, useEffect, useMemo, useRef, useState } from 'react'
-import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap } from 'lucide-react'
+import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap, BookOpen } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
@@ -53,6 +53,7 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
   'todo':            { icon: ListTodo,  label: 'Todo',        color: 'text-orange-500' },
   'jait':            { icon: Zap,       label: 'Jait',        color: 'text-indigo-500' },
   'mcp-tool':        { icon: Server,    label: 'MCP Tool',   color: 'text-purple-500' },
+  'skill':           { icon: BookOpen,  label: 'Skill',      color: 'text-violet-500' },
   // ── SSH tools ───────────────────────────────────────────
   'ssh.run':           { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
   'ssh.session.start': { icon: Terminal,  label: 'SSH',        color: 'text-yellow-500' },
@@ -97,6 +98,146 @@ const toolMeta: Record<string, { icon: typeof Terminal; label: string; color: st
 function getToolMeta(tool: string) {
   const normalized = normalizeTool(tool)
   return toolMeta[normalized] ?? { icon: Terminal, label: normalized, color: 'text-muted-foreground' }
+}
+
+/**
+ * Return verb-tense-aware labels for a tool call, similar to Copilot's
+ * `invocationMessage` / `pastTenseMessage` pattern.
+ *
+ * Returns { running, done } where:
+ * - `running` is the in-progress label (e.g. "Reading file.ts")
+ * - `done` is the completed label (e.g. "Read file.ts")
+ *
+ * Falls back to the static `meta.label` when no specific mapping exists.
+ */
+function getToolInvocationLabels(
+  tool: string,
+  args: Record<string, unknown>,
+  resultData?: Record<string, unknown>,
+  _resultMessage?: string | null,
+): { running: string; done: string } {
+  const normalized = normalizeTool(tool)
+  const normalizedArgs = normalizeToolArgs(normalized, args)
+  const fileName = (() => {
+    const p = displayStr(normalizedArgs.path ?? normalizedArgs.file)
+    return p ? getBaseName(p) : ''
+  })()
+  const query = displayStr(normalizedArgs.query ?? normalizedArgs.pattern ?? normalizedArgs.q)
+
+  // ── Core tools ──────────────────────────────────────────
+  if (normalized === 'read' || normalized === 'file.read') {
+    return { running: `Reading ${fileName || 'file'}`, done: `Read ${fileName || 'file'}` }
+  }
+  if (normalized === 'edit' || normalized === 'file.patch') {
+    return { running: `Editing ${fileName || 'file'}`, done: `Edited ${fileName || 'file'}` }
+  }
+  if (normalized === 'file.write') {
+    return { running: `Writing ${fileName || 'file'}`, done: `Created ${fileName || 'file'}` }
+  }
+  if (normalized === 'file.list') {
+    return { running: 'Listing files', done: 'Listed files' }
+  }
+  if (normalized === 'file.stat') {
+    return { running: `Inspecting ${fileName || 'file'}`, done: `Inspected ${fileName || 'file'}` }
+  }
+  if (normalized === 'execute' || normalized.startsWith('terminal.')) {
+    return { running: 'Running command', done: 'Ran command' }
+  }
+  if (normalized === 'search') {
+    const mode = displayStr(normalizedArgs.mode ?? args.mode, 'content')
+    const target = query ? ` "${truncate(query, 40)}"` : ''
+    if (mode === 'files') return { running: `Finding files${target}`, done: `Found files${target}` }
+    return { running: `Searching${target}`, done: `Searched${target}` }
+  }
+  if (normalized === 'web' || normalized === 'web.search' || normalized === 'browser.search') {
+    const mode = displayStr(normalizedArgs.mode ?? normalizedArgs.type)
+    if (mode === 'fetch') {
+      const host = getUrlHost(normalizedArgs.url)
+      return { running: `Fetching ${host || 'page'}`, done: `Fetched ${host || 'page'}` }
+    }
+    const target = query ? ` "${truncate(query, 40)}"` : ''
+    return { running: `Searching web${target}`, done: `Searched web${target}` }
+  }
+  if (normalized === 'web.fetch' || normalized === 'browser.fetch') {
+    const host = getUrlHost(normalizedArgs.url)
+    return { running: `Fetching ${host || 'page'}`, done: `Fetched ${host || 'page'}` }
+  }
+  if (normalized === 'browser.navigate') {
+    const host = getUrlHost(normalizedArgs.url)
+    return { running: `Navigating to ${host || 'page'}`, done: `Navigated to ${host || 'page'}` }
+  }
+  if (normalized === 'browser.snapshot') {
+    return { running: 'Taking snapshot', done: 'Took snapshot' }
+  }
+  if (normalized === 'browser.click') {
+    return { running: 'Clicking element', done: 'Clicked element' }
+  }
+  if (normalized === 'browser.type') {
+    return { running: 'Typing text', done: 'Typed text' }
+  }
+  if (normalized === 'browser.screenshot') {
+    return { running: 'Taking screenshot', done: 'Took screenshot' }
+  }
+  if (normalized === 'agent') {
+    const desc = truncate(displayStr(args.description ?? args.prompt), 60)
+    return { running: `Running agent: ${desc}`, done: `Agent completed: ${desc}` }
+  }
+  if (normalized === 'todo') {
+    return { running: 'Updating tasks', done: 'Updated tasks' }
+  }
+  if (normalized === 'skill') {
+    const names = displayStr(args.skills)
+    return { running: `Using skills ${names || ''}`.trim(), done: `Using skills ${names || ''}`.trim() }
+  }
+  if (normalized === 'memory.save') {
+    return { running: 'Saving to memory', done: 'Saved to memory' }
+  }
+  if (normalized === 'memory.search') {
+    return { running: 'Searching memory', done: 'Searched memory' }
+  }
+  if (normalized === 'memory.forget') {
+    return { running: 'Removing memory', done: 'Removed memory' }
+  }
+  if (normalized === 'os.query') {
+    return { running: 'Querying system', done: 'Queried system' }
+  }
+  if (normalized === 'os.install') {
+    return { running: `Installing ${displayStr(args.package) || 'package'}`, done: `Installed ${displayStr(args.package) || 'package'}` }
+  }
+  if (normalized.startsWith('cron.')) {
+    const verb = normalized.split('.')[1] ?? 'manage'
+    const ing = verb === 'add' ? 'Adding' : verb === 'update' ? 'Updating' : verb === 'remove' ? 'Removing' : 'Listing'
+    const ed = verb === 'add' ? 'Added' : verb === 'update' ? 'Updated' : verb === 'remove' ? 'Removed' : 'Listed'
+    return { running: `${ing} cron job`, done: `${ed} cron job` }
+  }
+  if (normalized.startsWith('surfaces.')) {
+    const verb = normalized.split('.')[1] ?? 'manage'
+    if (verb === 'start') return { running: 'Starting surface', done: 'Started surface' }
+    if (verb === 'stop') return { running: 'Stopping surface', done: 'Stopped surface' }
+    return { running: 'Listing surfaces', done: 'Listed surfaces' }
+  }
+  if (normalized.startsWith('ssh.')) {
+    return { running: 'Running SSH command', done: 'Ran SSH command' }
+  }
+  if (normalized === 'image.view') {
+    return { running: 'Viewing image', done: 'Viewed image' }
+  }
+  if (normalized === 'preview.open') {
+    return { running: 'Opening preview', done: 'Opened preview' }
+  }
+  if (normalized === 'jait') {
+    const action = displayStr(args.action)
+    return { running: `Jait: ${action || 'working'}`, done: `Jait: ${action || 'done'}` }
+  }
+  if (normalized === 'mcp-tool') {
+    const mcp = getMcpToolLabel(normalizedArgs, resultData)
+    const label = mcp.title || 'MCP Tool'
+    return { running: `Running ${label}`, done: `Ran ${label}` }
+  }
+
+  // Fallback
+  const meta = getToolMeta(tool)
+  return { running: meta.label, done: meta.label }
 }
 
 /**
@@ -1334,6 +1475,10 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
     return () => window.clearInterval(id)
   }, [call.status])
 
+  const invocationLabels = getToolInvocationLabels(normalizedTool, normalizedArgs, resultData, call.result?.message)
+  const isActive = call.status === 'running' || call.status === 'pending'
+  const invocationLabel = isActive ? invocationLabels.running : invocationLabels.done
+
   const headerContent = (
     <>
       <StatusIcon className={cn(
@@ -1352,7 +1497,7 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
           </span>
         ) : showFileSummary ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
-            <span>{meta.label}:</span>
+            <span>{invocationLabel}:</span>
             <FileSummaryButton
               path={filePath}
               onOpenDiff={onOpenDiff}
@@ -1361,7 +1506,7 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
           </span>
         ) : mcpLabel && (mcpLabel.title || mcpLabel.details) ? (
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
-            <span>{getMcpDisplayLabel(mcpLabel.title)?.label ?? meta.label}:</span>
+            <span>{invocationLabel}:</span>
             <span className="min-w-0 truncate">
               {mcpLabel.title ? <code className="text-xs font-mono">{mcpLabel.title}</code> : null}
               {mcpLabel.title && mcpLabel.details ? <span className="text-muted-foreground"> • </span> : null}
@@ -1369,7 +1514,7 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
             </span>
           </span>
         ) : (
-          <span>{meta.label}: <code className="text-xs font-mono">{summary}</code></span>
+          <span>{invocationLabel}: <code className="text-xs font-mono">{summary}</code></span>
         )}
       </span>
       <span className="text-xs text-muted-foreground/60 tabular-nums shrink-0">

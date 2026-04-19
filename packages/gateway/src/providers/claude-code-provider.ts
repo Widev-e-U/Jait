@@ -256,6 +256,9 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     state.session.status = "running";
     this.emit({ type: "turn.started", sessionId });
 
+    // Suppress EPIPE errors when child exits before we finish writing
+    child.stdin?.on("error", () => {/* ignore broken pipe */});
+
     // Close stdin — the prompt is passed as a CLI argument, not via stdin
     child.stdin?.end();
 
@@ -644,8 +647,7 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
         "--model", alias,
         ".",
       ], { stdio: ["pipe", "pipe", "pipe"], windowsHide: true });
-      child.stdin?.end();
-
+      child.stdin?.on("error", () => {/* ignore broken pipe */});
       let resolved = false;
       const timer = setTimeout(() => {
         if (!resolved) { resolved = true; child.kill(); resolve(null); }

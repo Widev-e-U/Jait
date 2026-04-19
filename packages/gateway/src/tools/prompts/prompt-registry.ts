@@ -19,6 +19,8 @@ import { getResponseStyleInstructions, type ResponseStyle, JAIT_EXTERNAL_PROVIDE
 export interface ModelEndpoint {
   model: string;
   baseUrl: string;
+  /** Backend provider label (e.g. "openai", "ollama", "openrouter") */
+  backend?: string;
 }
 
 export interface IAgentPrompt {
@@ -85,29 +87,43 @@ export interface PromptContext {
   skills?: Skill[];
   /** Optional response style override for this session */
   responseStyle?: ResponseStyle;
+  /** Backend provider label — used to select lighter prompts for local models */
+  backend?: string;
 }
 
 export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?: PromptContext): string {
   const resolver = promptRegistry.resolve(endpoint);
-  const identity = resolver.resolveIdentityRules?.(endpoint) ?? DEFAULT_IDENTITY;
-  const safety = resolver.resolveSafetyRules?.(endpoint) ?? DEFAULT_SAFETY;
-  const systemPrompt = resolver.resolveSystemPrompt(mode, endpoint);
+  const isLocalModel = ctx?.backend === "ollama" || endpoint.backend === "ollama";
 
-  let prompt = `${identity}\n\n${safety}\n\n<jaitExternalProvider>\n${JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS}\n</jaitExternalProvider>\n\n${systemPrompt}`;
+  let prompt: string;
+  if (isLocalModel) {
+    // Minimal prompt for local / slow models — skip identity, safety, and wrapper blocks
+    prompt = resolver.resolveSystemPrompt(mode, endpoint);
+    if (ctx?.workspaceRoot) {
+      prompt += `\nWorkspace: ${ctx.workspaceRoot}`;
+    }
+  } else {
+    const identity = resolver.resolveIdentityRules?.(endpoint) ?? DEFAULT_IDENTITY;
+    const safety = resolver.resolveSafetyRules?.(endpoint) ?? DEFAULT_SAFETY;
+    const systemPrompt = resolver.resolveSystemPrompt(mode, endpoint);
 
-  // Inject workspace context so the agent knows its working directory
-  if (ctx?.workspaceRoot) {
-    prompt += `\n\n<workspaceContext>\nYou are working in the workspace: ${ctx.workspaceRoot}\nAll relative file paths and searches default to this directory. Use relative paths when possible. Do not search from the drive root — scope operations to this workspace.\n</workspaceContext>`;
-  }
+    const extProviderBlock = JAIT_EXTERNAL_PROVIDER_INSTRUCTIONS;
+    prompt = `${identity}\n\n${safety}\n\n<jaitExternalProvider>\n${extProviderBlock}\n</jaitExternalProvider>\n\n${systemPrompt}`;
 
-  // Inject available skills
-  if (ctx?.skills && ctx.skills.length > 0) {
-    prompt += formatSkillsForPrompt(ctx.skills);
-  }
+    // Inject workspace context so the agent knows its working directory
+    if (ctx?.workspaceRoot) {
+      prompt += `\n\n<workspaceContext>\nYou are working in the workspace: ${ctx.workspaceRoot}\nAll relative file paths and searches default to this directory. Use relative paths when possible. Do not search from the drive root — scope operations to this workspace.\n</workspaceContext>`;
+    }
 
-  const responseStyleInstructions = getResponseStyleInstructions(ctx?.responseStyle);
-  if (responseStyleInstructions) {
-    prompt += `\n\n<responseStyle>\n${responseStyleInstructions}\n</responseStyle>`;
+    // Inject available skills
+    if (ctx?.skills && ctx.skills.length > 0) {
+      prompt += formatSkillsForPrompt(ctx.skills);
+    }
+
+    const responseStyleInstructions = getResponseStyleInstructions(ctx?.responseStyle);
+    if (responseStyleInstructions) {
+      prompt += `\n\n<responseStyle>\n${responseStyleInstructions}\n</responseStyle>`;
+    }
   }
 
   return prompt;

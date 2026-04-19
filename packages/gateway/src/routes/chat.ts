@@ -24,7 +24,7 @@ import { eq } from "drizzle-orm";
 import { uuidv7 } from "../db/uuidv7.js";
 import { requireAuth } from "../security/http-auth.js";
 import { signAuthToken } from "../security/http-auth.js";
-import { JaitConfigError, resolveJaitLlmConfig } from "../services/jait-llm.js";
+import { JaitConfigError, resolveJaitLlmConfig, type ResolvedJaitLlmConfig } from "../services/jait-llm.js";
 import {
   runAgentLoop,
   retryToolCall,
@@ -60,6 +60,8 @@ interface ChatMessage {
   segments?: unknown[];
   /** Outbound LLM request snapshots that produced this visible response */
   contextFlow?: LlmContextFlow;
+  /** Chain-of-thought / reasoning content (e.g. Gemma 4 thinking) */
+  thinking?: string;
 }
 
 interface LlmContextFlow {
@@ -226,6 +228,7 @@ interface StreamingAccumulator {
   content: string;
   toolCalls: PersistedToolCall[];
   segments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] }>;
+  thinking: string;
 }
 const sessionStreamingState = new Map<string, StreamingAccumulator>();
 const sessionStreamSeq = new Map<string, number>();
@@ -312,7 +315,7 @@ export function getExternalFileMutationPath(tool: string, args: unknown): string
 function getOrCreateAccumulator(sessionId: string): StreamingAccumulator {
   let acc = sessionStreamingState.get(sessionId);
   if (!acc) {
-    acc = { content: "", toolCalls: [], segments: [] };
+    acc = { content: "", toolCalls: [], segments: [], thinking: "" };
     sessionStreamingState.set(sessionId, acc);
   }
   return acc;
@@ -328,6 +331,12 @@ function accumulateToken(sessionId: string, token: string): void {
   } else {
     acc.segments.push({ type: "text", content: token });
   }
+}
+
+/** Append a thinking/reasoning token to the streaming accumulator */
+function accumulateThinking(sessionId: string, content: string): void {
+  const acc = getOrCreateAccumulator(sessionId);
+  acc.thinking += content;
 }
 
 /** Record a tool call start in the streaming accumulator */
@@ -391,6 +400,7 @@ function getRequestBaseUrl(request: FastifyRequest): string | undefined {
 
 type StreamEvent =
   | { type: "token"; content: string }
+  | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
   | { type: "tool_start"; tool: string; args: unknown; call_id: string }
   | { type: "tool_output"; call_id: string; content: string }
@@ -406,7 +416,7 @@ const sessionSubscribers = new Map<string, Set<StreamSubscriber>>();
 const DEFAULT_UI_MESSAGE_LIMIT = 120;
 const MAX_UI_MESSAGE_LIMIT = 500;
 
-type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown; segments?: unknown; contextFlow?: LlmContextFlow };
+type UIMsg = { id: string; role: "user" | "assistant"; content: string; toolCalls?: unknown; segments?: unknown; contextFlow?: LlmContextFlow; thinking?: string };
 type VisibleHistoryMsg = UIMsg & { historyIndex: number };
 
 function parseToolArguments(raw: string): unknown {
@@ -578,6 +588,7 @@ function buildVisibleHistoryEntries(
       toolCalls: uiToolCalls,
       segments: m.segments,
       contextFlow: m.contextFlow,
+      thinking: m.thinking,
       historyIndex: i,
     });
     visibleIndex++;
@@ -590,20 +601,21 @@ function buildVisibleHistoryMessages(
   history: ChatMessage[],
   options?: { includePendingAssistantToolCalls?: boolean },
 ): UIMsg[] {
-  const msgs = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls, segments, contextFlow }) => ({
+  const msgs = buildVisibleHistoryEntries(sessionId, history, options).map(({ id, role, content, toolCalls, segments, contextFlow, thinking }) => ({
     id,
     role,
     content,
     toolCalls,
     segments,
     contextFlow,
+    thinking,
   }));
 
   // If there is a live streaming accumulator for this session, inject a
   // synthetic assistant message so that reconnecting clients see the partial
   // content that has been streamed so far.
   const acc = sessionStreamingState.get(sessionId);
-  if (acc && (acc.content || acc.toolCalls.length > 0)) {
+  if (acc && (acc.content || acc.toolCalls.length > 0 || acc.thinking)) {
     const last = msgs[msgs.length - 1];
     // Merge into the last assistant message if it exists and has no content yet
     // (the snapshot builder may have emitted a stub). Otherwise append a new one.
@@ -611,6 +623,7 @@ function buildVisibleHistoryMessages(
       last.content = acc.content;
       last.toolCalls = acc.toolCalls.length > 0 ? mapPersistedToolCallsForUI(acc.toolCalls) : undefined;
       last.segments = acc.segments.length > 0 ? acc.segments : undefined;
+      last.thinking = acc.thinking || undefined;
     } else {
       msgs.push({
         id: `${sessionId}-streaming`,
@@ -619,6 +632,7 @@ function buildVisibleHistoryMessages(
         toolCalls: acc.toolCalls.length > 0 ? mapPersistedToolCallsForUI(acc.toolCalls) : undefined,
         segments: acc.segments.length > 0 ? acc.segments : undefined,
         contextFlow: undefined,
+        thinking: acc.thinking || undefined,
       });
     }
   }
@@ -656,7 +670,8 @@ const MAX_TOOL_ROUNDS = 15;
 let _dbRef: JaitDB | undefined;
 let _appRef: FastifyInstance | undefined;
 
-function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string): void {
+// @ts-ignore TS6133 — reserved for upcoming global persistence refactor
+function persistMessageGlobal(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string): void {
   if (!_dbRef) return;
   try {
     _dbRef.insert(messagesTable)
@@ -668,6 +683,7 @@ function persistMessageGlobal(sessionId: string, role: string, content: string, 
         toolCalls: toolCalls ?? null,
         segments: segments ?? null,
         contextFlow: contextFlow ?? null,
+        thinking: thinking ?? null,
         createdAt: new Date().toISOString(),
       })
       .run();
@@ -906,13 +922,14 @@ export function registerChatRoutes(
             uiToolCalls,
             segments,
             contextFlow,
+            thinking: r.thinking ?? undefined,
           };
         }),
       ]);
     }
   }
 
-  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string): void {
+  function persistMessage(sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, contextFlow?: string, thinking?: string): void {
     if (!db) return;
     try {
       db.insert(messagesTable)
@@ -924,6 +941,7 @@ export function registerChatRoutes(
           toolCalls: toolCalls ?? null,
           segments: segments ?? null,
           contextFlow: contextFlow ?? null,
+          thinking: thinking ?? null,
           createdAt: new Date().toISOString(),
         })
         .run();
@@ -1042,7 +1060,7 @@ export function registerChatRoutes(
     const userApiKeys = userSettings?.apiKeys ?? {};
     const requestBodyModel = typeof body["model"] === "string" ? (body["model"] as string).trim() : "";
     const jaitBackend = userSettings?.jaitBackend ?? "openai";
-    let llmRuntime;
+    let llmRuntime: ResolvedJaitLlmConfig;
     try {
       llmRuntime = resolveJaitLlmConfig({
         config,
@@ -1077,6 +1095,7 @@ export function registerChatRoutes(
     const modelEndpoint: ModelEndpoint = {
       model: llmRuntime.openaiModel,
       baseUrl: llmRuntime.openaiBaseUrl,
+      backend: llmRuntime.backend,
     };
 
     // Build conversation history (hydrate from DB if needed)
@@ -1094,6 +1113,7 @@ export function registerChatRoutes(
       workspaceRoot: wsRoot,
       skills: skillRegistry?.listEnabled(),
       responseStyle,
+      backend: llmRuntime.backend,
     };
 
     if (!sessionHistory.has(sessionId)) {
@@ -1645,16 +1665,17 @@ export function registerChatRoutes(
 
       }
 
-      if (!usedCliProvider && config.llmProvider === "openai") {
-        // ══ OpenAI agentic loop (using extracted runAgentLoop) ═════
+      if (!usedCliProvider) {
+        // ══ Agentic loop (OpenAI-compat — works for OpenAI, Ollama, OpenRouter) ═════
 
         // Build tiered schemas per request — respects user-disabled tools
         const userSettings = userService?.getSettings(authUser.id);
         const disabledTools = userSettings?.disabledTools?.length
           ? new Set(userSettings.disabledTools)
           : undefined;
+        const isOllama = llmRuntime.backend === "ollama";
         const toolSchemas = toolRegistry
-          ? buildTieredToolSchemas(toolRegistry, disabledTools)
+          ? buildTieredToolSchemas(toolRegistry, disabledTools, { ollamaEssentials: isOllama })
           : [];
 
         const onEvent = (event: AgentLoopEvent) => {
@@ -1663,6 +1684,7 @@ export function registerChatRoutes(
 
           // ── Update streaming accumulator so reload snapshots include partial content ──
           if (event.type === "token") accumulateToken(sessionId, event.content);
+          else if (event.type === "thinking") accumulateThinking(sessionId, event.content);
           else if (event.type === "tool_start") accumulateToolStart(sessionId, event.call_id, event.tool, event.args);
           else if (event.type === "tool_output") accumulateToolOutput(sessionId, event.call_id, event.content);
           else if (event.type === "tool_result") accumulateToolResult(sessionId, event.call_id, event.ok, event.message, event.data);
@@ -1746,7 +1768,7 @@ export function registerChatRoutes(
               emitToSubscribers(sessionId, event as unknown as StreamEvent);
               safeWrite(`data: ${JSON.stringify(event)}\n\n`);
             },
-            onPersist: (sid, role, content, tc, seg) => persistMessage(sid, role, content, tc, seg, contextFlowJson),
+            onPersist: (sid, role, content, tc, seg, thinking) => persistMessage(sid, role, content, tc, seg, contextFlowJson, thinking),
             log: app.log,
           },
           executeTool,
@@ -1756,6 +1778,24 @@ export function registerChatRoutes(
         partialToolCalls = result.executedToolCalls as unknown as PersistedToolCall[];
         resultSegmentsJson = result.segments.length > 0 ? JSON.stringify(result.segments) : undefined;
         hitMaxRounds = result.hitMaxRounds;
+
+        // Re-serialize contextFlow now that round metrics have been attached
+        if (contextRounds.length > 0) {
+          contextFlowJson = JSON.stringify({
+            provider: "jait",
+            model: llmRuntime.openaiModel,
+            rounds: contextRounds,
+          } satisfies LlmContextFlow);
+          const finalEvent = {
+            type: "context_flow",
+            provider: "jait",
+            model: llmRuntime.openaiModel,
+            rounds: contextRounds,
+          };
+          emitToSubscribers(sessionId, finalEvent as unknown as StreamEvent);
+          safeWrite(`data: ${JSON.stringify(finalEvent)}\n\n`);
+        }
+
         if (contextFlowJson) {
           const lastAssistant = [...history].reverse().find((msg) => msg.role === "assistant" && !msg.contextFlow);
           if (lastAssistant) {
@@ -1768,11 +1808,6 @@ export function registerChatRoutes(
         if (result.plan) {
           sessionPlans.set(sessionId, result.plan);
         }
-      } else if (!usedCliProvider) {
-        // ══ Ollama (text only — no tool support) ═══════════════════
-        fullContent = await runOllamaStream(
-          config, history, sessionId, streamAbort, safeWrite, app,
-        );
       }
     } catch (err) {
       // The OpenAI agentic loop now handles AbortError internally and returns
@@ -2067,6 +2102,17 @@ export function registerChatRoutes(
           }
           if (r.segments) {
             try { msg.segments = JSON.parse(r.segments); } catch { /* ignore */ }
+          }
+          if (r.thinking) {
+            msg.thinking = r.thinking;
+          }
+          if (r.contextFlow) {
+            try {
+              const parsed = JSON.parse(r.contextFlow) as unknown;
+              if (parsed && typeof parsed === "object" && Array.isArray((parsed as { rounds?: unknown }).rounds)) {
+                msg.contextFlow = parsed as LlmContextFlow;
+              }
+            } catch { /* ignore */ }
           }
           return msg;
         });
@@ -2456,90 +2502,3 @@ export function registerChatRoutes(
 // (runAgentLoop, parseOpenAIStream, serializeMessages, etc.)
 // ══════════════════════════════════════════════════════════════════════
 
-// ══════════════════════════════════════════════════════════════════════
-// Ollama streaming (text-only — no tool support)
-// ══════════════════════════════════════════════════════════════════════
-
-async function runOllamaStream(
-  config: AppConfig,
-  history: ChatMessage[],
-  sessionId: string,
-  streamAbort: AbortController,
-  safeWrite: (data: string) => void,
-  app: FastifyInstance,
-): Promise<string> {
-  let fullContent = "";
-
-  const ollamaResponse = await fetch(
-    `${config.ollamaUrl}/api/chat`,
-    {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        model: config.ollamaModel,
-        messages: history
-          .filter(m => m.role !== "tool")
-          .map(m => ({ role: m.role, content: m.content })),
-        stream: true,
-      }),
-      signal: streamAbort.signal,
-    },
-  );
-
-  if (!ollamaResponse.ok) {
-    const errText = await ollamaResponse.text();
-    app.log.error(`Ollama error ${ollamaResponse.status}: ${errText}`);
-    safeWrite(`data: ${JSON.stringify({ type: "error", message: `Ollama error: ${ollamaResponse.status}` })}\n\n`);
-    return fullContent;
-  }
-
-  const reader = ollamaResponse.body?.getReader();
-  if (!reader) {
-    safeWrite(`data: ${JSON.stringify({ type: "error", message: "No response body from Ollama" })}\n\n`);
-    return fullContent;
-  }
-
-  const decoder = new TextDecoder();
-  let buffer = "";
-
-  let streamingAssistantIndex: number | null = null;
-
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split("\n");
-    buffer = lines.pop() || "";
-
-    for (const line of lines) {
-      if (!line.trim()) continue;
-      try {
-        const chunk = JSON.parse(line);
-        if (chunk.message?.content) {
-          const token = chunk.message.content;
-          fullContent += token;
-
-          // Keep in-memory history updated during streaming so endpoints can
-          // return a partial assistant response mid-stream.
-          if (streamingAssistantIndex === null) {
-            history.push({ role: "assistant", content: "" });
-            streamingAssistantIndex = history.length - 1;
-          }
-          history[streamingAssistantIndex]!.content += token;
-
-          emitToSubscribers(sessionId, { type: "token", content: token });
-          safeWrite(`data: ${JSON.stringify({ type: "token", content: token })}\n\n`);
-        }
-      } catch {
-        // partial JSON
-      }
-    }
-  }
-
-  if (fullContent) {
-    persistMessageGlobal(sessionId, "assistant", fullContent);
-  }
-
-  return fullContent;
-}

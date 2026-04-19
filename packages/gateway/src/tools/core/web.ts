@@ -40,14 +40,7 @@ export function createWebTool(): ToolDefinition<WebInput> {
   return {
     name: "web",
     description:
-      "Search the web or fetch content from URLs.\n\n" +
-      '**Search mode** (default when `query` is provided): Search the web for information using AI-powered search. ' +
-      "Returns relevant results from multiple providers. Use when you need to find documentation, answers, " +
-      "or current information.\n\n" +
-      '**Fetch mode** (when `url`/`urls` is provided): Fetch the content of one or more web pages. ' +
-      "Returns the main text content of each page. Use when you have a specific URL to retrieve.\n\n" +
-      "You should use this tool when you think the user is looking for information from a specific webpage " +
-      "or needs to research a topic online.",
+      "Search the web or fetch content from URLs. Provide query for search, url/urls for fetching.",
     tier: "core",
     category: "web",
     source: "builtin",
@@ -56,25 +49,25 @@ export function createWebTool(): ToolDefinition<WebInput> {
       properties: {
         mode: {
           type: "string",
-          description: '"search" or "fetch". Inferred from params if omitted: query → search, url/urls → fetch.',
+          description: '"search" or "fetch". Inferred from params if omitted.',
           enum: ["search", "fetch"],
         },
         query: {
           type: "string",
-          description: "Search query (for search mode). A clear and concise description of the information you need.",
+          description: "Search query.",
         },
         url: {
           type: "string",
-          description: "A single URL to fetch content from (for fetch mode).",
+          description: "URL to fetch.",
         },
         urls: {
           type: "array",
-          items: { type: "string", description: "A URL to fetch" },
-          description: "An array of URLs to fetch content from (for fetch mode). Use instead of `url` for multiple pages.",
+          items: { type: "string" },
+          description: "Multiple URLs to fetch.",
         },
         provider: {
           type: "string",
-          description: 'Search provider (default: "auto"). Options: auto, openai, brave, perplexity, grok, gemini, kimi.',
+          description: "Search provider (default: auto).",
         },
         limit: {
           type: "number",

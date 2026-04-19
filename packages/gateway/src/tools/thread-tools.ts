@@ -9,6 +9,8 @@ import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import type { ToolContext, ToolDefinition, ToolResult } from "./contracts.js";
 import { ToolName } from "./tool-names.js";
+import type { SkillRegistry } from "../skills/index.js";
+import { routeThread, formatRoutingPlanForPrompt } from "../services/thread-router.js";
 
 interface ThreadControlInput {
   action:
@@ -81,6 +83,7 @@ export interface ThreadControlToolDeps {
   providerRegistry: ProviderRegistry;
   userService?: UserService;
   sessionState?: SessionStateService;
+  skillRegistry?: SkillRegistry;
   ws?: WsControlPlane;
   mcpConfig?: { host: string; port: number };
   gitService?: ThreadControlGit;
@@ -252,6 +255,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           broadcastThreadEvent(effectiveThread.id, "activity", { event, activity });
         }
 
+        // Emit dedicated todo activity so the frontend can track the list in real time
+        if (event.type === "tool.result" && event.tool === "todo" && event.ok && event.data && typeof event.data === "object" && "items" in event.data) {
+          const todoActivity = deps.threadService.addActivity(effectiveThread.id, "todo", "Todo list updated", { items: (event.data as { items: unknown }).items });
+          broadcastThreadEvent(effectiveThread.id, "activity", { activity: todoActivity });
+        }
+
         if (event.type === "session.completed") {
           if (autoFinishAfterFirstTurn) {
             deps.threadService.markCompletedAndClearSession(effectiveThread.id);
@@ -288,7 +297,23 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       if (message) {
         const userActivity = deps.threadService.addActivity(effectiveThread.id, "message", message.slice(0, 500), { role: "user" });
         broadcastThreadEvent(effectiveThread.id, "activity", { activity: userActivity });
-        await provider.sendTurn(session.id, message, attachments);
+
+        // Run thread router for the first turn
+        let turnMessage = message;
+        if (deps.skillRegistry) {
+          const availableSkills = deps.skillRegistry.listEnabled();
+          const routingPlan = routeThread({
+            message,
+            availableSkills,
+            pinnedSkillIds: effectiveThread.skillIds ? (typeof effectiveThread.skillIds === "string" ? JSON.parse(effectiveThread.skillIds) : effectiveThread.skillIds) : null,
+            kind: effectiveThread.kind as "delivery" | "delegation",
+          });
+          deps.threadService.update(effectiveThread.id, { routingPlan });
+          broadcastThreadEvent(effectiveThread.id, "updated", { thread: deps.threadService.getById(effectiveThread.id) });
+          turnMessage = `${formatRoutingPlanForPrompt(routingPlan)}\n\n${message}`;
+        }
+
+        await provider.sendTurn(session.id, turnMessage, attachments);
       }
 
       const updated = deps.threadService.getById(effectiveThread.id) ?? effectiveThread;

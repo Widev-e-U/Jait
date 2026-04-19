@@ -702,4 +702,22 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 029: Persist chain-of-thought / reasoning content ────────────
+  {
+    id: 29,
+    name: "messages_thinking_column",
+    run(db) {
+      try { db.exec(`ALTER TABLE messages ADD COLUMN thinking TEXT`); } catch { /* exists */ }
+    },
+  },
+
+  // ─── 030: Thread routing plan (auto-orchestration) ────────────────
+  {
+    id: 30,
+    name: "agent_threads_routing_plan",
+    run(db) {
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN routing_plan TEXT`); } catch { /* exists */ }
+    },
+  },
+
 ];

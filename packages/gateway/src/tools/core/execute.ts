@@ -42,15 +42,9 @@ export function createExecuteTool(registry: SurfaceRegistry): ToolDefinition<Exe
   return {
     name: "execute",
     description:
-      "Run a shell command in a persistent terminal and return the output.\n\n" +
-      "The terminal is visible to the user and stays alive between calls. " +
-      "Use PowerShell syntax on Windows. Multi-line scripts, pipes, and complex syntax all work.\n\n" +
-      "Set `isBackground: true` for long-running processes (servers, watchers, build in watch mode). " +
-      "Background commands run asynchronously — you won't see output immediately but the process keeps running.\n\n" +
-      "Use this for: running builds, installing packages, git operations, starting servers, " +
-      "checking processes, running tests, or any shell task.\n\n" +
-      "When executing non-trivial commands, explain their purpose so the user understands what's happening. " +
-      "Prefer using `;` to chain commands on one line. Use `timeout: 0` for commands that may take a long time.",
+      "Run a shell command in a persistent terminal visible to the user. " +
+      "Set isBackground: true for long-running processes (servers, watchers). " +
+      "Use timeout: 0 for commands that may take a long time.",
     tier: "core",
     category: "terminal",
     source: "builtin",
@@ -59,36 +53,31 @@ export function createExecuteTool(registry: SurfaceRegistry): ToolDefinition<Exe
       properties: {
         command: {
           type: "string",
-          description: "The shell command to execute.",
+          description: "The shell command to run.",
         },
         explanation: {
           type: "string",
-          description: "A one-sentence description of what the command does. Shown to the user before the command runs.",
+          description: "What the command does (shown to user).",
         },
         goal: {
           type: "string",
-          description: 'A short description of the goal (e.g., "Install dependencies", "Start development server").',
+          description: "Short goal label for UI.",
         },
         isBackground: {
           type: "boolean",
-          description:
-            "Whether this starts a background process. " +
-            "If true, runs asynchronously (e.g. servers, watchers). " +
-            "If false (default), blocks until complete and returns output.",
+          description: "True for long-running processes (servers, watchers).",
         },
         cwd: {
           type: "string",
-          description: "Working directory for the command. Defaults to workspace root.",
+          description: "Working directory (defaults to workspace root).",
         },
         terminalId: {
           type: "string",
-          description: "Reuse a specific terminal by ID (omit to auto-select or create).",
+          description: "Reuse a specific terminal by ID.",
         },
         timeout: {
           type: "number",
-          description:
-            "Execution timeout in milliseconds (default 30000). " +
-            "Use 0 for no timeout. Be conservative — give enough time for slow machines.",
+          description: "Timeout in ms (default 30000). Use 0 for no timeout.",
         },
       },
       required: ["command", "explanation"],

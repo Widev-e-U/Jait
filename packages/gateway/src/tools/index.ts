@@ -109,6 +109,7 @@ export {
   type OpenAIToolCall,
   type OpenAIToolSchema,
   type LLMConfig,
+  type LlmContextFlowRound,
   type ExecutedToolCall,
   type ToolExecutor,
 } from "./agent-loop.js";
@@ -226,6 +227,7 @@ export interface ToolRegistryDeps {
   previewService?: PreviewService;
   architectureDiagramService?: ArchitectureDiagramService;
   secretInputService?: SecretInputService;
+  skillRegistry?: import("../skills/index.js").SkillRegistry;
 }
 
 /** Create a ToolRegistry with all gateway tools pre-registered. */
@@ -256,8 +258,7 @@ export function createToolRegistry(
   // Agent tool registered below (needs config for LLM settings)
 
   // ════════════════════════════════════════════════════════════════════
-  // Standard tools (available via tools.search/tools.list, or for
-  // backward compat — not sent to LLM by default in tiered mode)
+  // Standard tools (discovered via tools.search/tools.list)
   // ════════════════════════════════════════════════════════════════════
 
   // Terminal tools (underlying implementations for core "execute")
@@ -332,6 +333,7 @@ export function createToolRegistry(
         providerRegistry: deps.providerRegistry,
         userService: deps.userService,
         sessionState: deps.sessionState,
+        skillRegistry: deps.skillRegistry,
         ws: deps.ws,
         mcpConfig: deps.threadMcpConfig,
       }),

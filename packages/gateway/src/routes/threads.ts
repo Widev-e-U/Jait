@@ -36,6 +36,7 @@ import { assertOwnership } from "../security/ownership.js";
 import { existsSync } from "node:fs";
 import type { SkillRegistry } from "../skills/index.js";
 import { formatSkillsForPrompt } from "../skills/index.js";
+import { routeThread, formatRoutingPlanForPrompt } from "../services/thread-router.js";
 import {
   generateTitleViaTurn,
   generateTitleViaApi,
@@ -319,6 +320,7 @@ export function registerThreadRoutes(
         prState: normalizeThreadPrState(thread.prState),
         executionNodeId: thread.executionNodeId ?? null,
         executionNodeName: thread.executionNodeName ?? null,
+        routingPlan: thread.routingPlan ?? null,
         skillIds: thread.skillIds,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
@@ -571,6 +573,12 @@ export function registerThreadRoutes(
       const activity = threadService.logProviderEvent(threadId, event);
       if (activity) {
         broadcastThreadEvent(threadId, "activity", { event, activity });
+      }
+
+      // Emit dedicated todo activity so the frontend can track the list in real time
+      if (event.type === "tool.result" && event.tool === "todo" && event.ok && event.data && typeof event.data === "object" && "items" in event.data) {
+        const todoActivity = threadService.addActivity(threadId, "todo", "Todo list updated", { items: (event.data as { items: unknown }).items });
+        broadcastThreadEvent(threadId, "activity", { activity: todoActivity });
       }
 
       if (event.type === "session.completed") {
@@ -1199,10 +1207,76 @@ export function registerThreadRoutes(
 
             // Prepend skills context on the first turn of a new CLI session
             let turnMessage = fullMessage;
-            if (deps.skillRegistry) {
-              const skillsBlock = formatSkillsForPrompt(resolveThreadSkills(deps.skillRegistry, activeThread.skillIds));
-              if (skillsBlock) turnMessage = `${skillsBlock}\n\n${fullMessage}`;
+            const availableSkills = deps.skillRegistry
+              ? resolveThreadSkills(deps.skillRegistry, activeThread.skillIds)
+              : [];
+
+            // Run the thread router — classify intent, auto-select skills, determine topology
+            const routingPlan = routeThread({
+              message,
+              availableSkills,
+              pinnedSkillIds: activeThread.skillIds,
+              kind: activeThread.kind as "delivery" | "delegation",
+              repoStrategy,
+            });
+
+            app.log.info({ threadId: id, intent: routingPlan.intent, topology: routingPlan.topology, reason: routingPlan.reason }, "Thread routed");
+
+            // Persist the routing plan on the thread
+            threadService.update(id, { routingPlan });
+            broadcastThreadEvent(id, "updated", { thread: threadService.getById(id) });
+
+            // Log routing as a visible activity
+            const routingActivity = threadService.addActivity(id, "activity", `Routed: ${routingPlan.reason}`, {
+              type: "routing",
+              intent: routingPlan.intent,
+              topology: routingPlan.topology,
+              suggestedSkillIds: routingPlan.suggestedSkillIds,
+              subtasks: routingPlan.subtasks,
+            });
+            broadcastThreadEvent(id, "activity", { activity: routingActivity });
+
+            // Use router-suggested skills (includes auto-matched + pinned)
+            const routedSkills = deps.skillRegistry
+              ? routingPlan.suggestedSkillIds
+                  .map((sid) => deps.skillRegistry!.get(sid))
+                  .filter((s): s is NonNullable<typeof s> => Boolean(s))
+              : [];
+            const effectiveSkills = routedSkills.length > 0 ? routedSkills : availableSkills;
+
+            if (effectiveSkills.length > 0) {
+              // Log skill activation as a visible activity
+              const skillNames = effectiveSkills.map((s) => s.name);
+              const skillActivity = threadService.addActivity(id, "skill.active", `Using skills: ${skillNames.join(", ")}`, {
+                names: skillNames,
+                skills: effectiveSkills.map((s) => ({ id: s.id, name: s.name, description: s.description })),
+              });
+              broadcastThreadEvent(id, "activity", { activity: skillActivity });
+
+              const skillsBlock = formatSkillsForPrompt(effectiveSkills);
+              if (skillsBlock) turnMessage = `${skillsBlock}\n\n${turnMessage}`;
             }
+
+            // Inject routing plan context so the agent knows the orchestration strategy
+            const routingBlock = formatRoutingPlanForPrompt(routingPlan);
+            turnMessage = `${routingBlock}\n\n${turnMessage}`;
+
+            // Synthesize context_flow for CLI providers (they don't emit it natively)
+            if (providerId !== "jait") {
+              const cliContextFlow = threadService.addActivity(id, "context_flow", "Turn context", {
+                provider: providerId,
+                model: thread.model ?? providerId,
+                note: "CLI providers keep their own session context. This captures the turn text Jait sent to the CLI provider.",
+                rounds: [{
+                  round: 1,
+                  createdAt: new Date().toISOString(),
+                  model: thread.model ?? providerId,
+                  messages: [{ role: "user", content: turnMessage }],
+                }],
+              });
+              broadcastThreadEvent(id, "activity", { activity: cliContextFlow });
+            }
+
             await provider.sendTurn(session.id, turnMessage, attachments);
           }
         } catch (err) {

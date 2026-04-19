@@ -3,7 +3,7 @@ import type { AuditWriter } from "../services/audit.js";
 import { SecretInputService } from "../services/secret-input.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
 import { ToolRegistry } from "./registry.js";
-import { buildTieredToolSchemas } from "./agent-loop.js";
+import { buildToolSchemas } from "./agent-loop.js";
 import { createToolRegistry } from "./index.js";
 import {
   createSshRunTool,
@@ -145,12 +145,12 @@ describe("ssh tools for external providers", () => {
 });
 
 describe("ssh tools for Jait provider tool discovery", () => {
-  it("exposes SSH tools through the tiered schema path without password parameters", () => {
+  it("exposes SSH tools through the schema path without password parameters", () => {
     const tools = createToolRegistry(new SurfaceRegistry(), {
       secretInputService: new SecretInputService(),
     });
 
-    const schemas = buildTieredToolSchemas(tools);
+    const schemas = buildToolSchemas(tools);
     const byName = new Map(schemas.map((schema) => [schema.function.name, schema]));
 
     expect(byName.has("ssh_run")).toBe(true);

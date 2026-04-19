@@ -14,8 +14,11 @@ import type { SessionStateService } from "../services/session-state.js";
 import type { UserService } from "../services/users.js";
 import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import type { ToolRegistry } from "../tools/registry.js";
-import type { ToolContext, ToolDefinition } from "../tools/contracts.js";
+import type { ToolContext, ToolDefinition, ToolResult } from "../tools/contracts.js";
 import { uuidv7 } from "../db/uuidv7.js";
+import type { ThreadService } from "../services/threads.js";
+import type { WsControlPlane } from "../ws.js";
+import type { WsEventType } from "@jait/shared";
 
 interface McpDeps {
   toolRegistry: ToolRegistry;
@@ -23,6 +26,8 @@ interface McpDeps {
   sessionService?: SessionService;
   userService?: UserService;
   sessionState?: SessionStateService;
+  threadService?: ThreadService;
+  ws?: WsControlPlane;
 }
 
 // ── MCP JSON-RPC types ───────────────────────────────────────────────
@@ -231,12 +236,16 @@ function appendMcpContextQuery(baseUrl: string, query?: Record<string, unknown>)
   return url.toString();
 }
 
+/** Core tools that should still be exposed to MCP clients (e.g. thread agents). */
+const MCP_EXPOSED_CORE_TOOLS = new Set(["todo"]);
+
 export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
   return toolRegistry.list().filter((tool) => {
     const source = tool.source ?? "builtin";
     const tier = tool.tier ?? "standard";
     // Expose builtin non-core tools AND plugin-contributed tools
     if (source.startsWith("plugin:")) return true;
+    if (MCP_EXPOSED_CORE_TOOLS.has(tool.name)) return true;
     return source === "builtin" && tier !== "core";
   });
 }
@@ -245,6 +254,26 @@ export function listToolsForMcp(toolRegistry: ToolRegistry): ToolDefinition[] {
 
 export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
   const { toolRegistry, config, sessionService, userService, sessionState } = deps;
+
+  // Callback for post-tool-execution side effects (e.g., thread todo activities)
+  const onToolExecuted: McpToolExecutedCallback = (toolName, result, context) => {
+    // Broadcast todo list updates as thread activities
+    if (toolName === "todo" && result.ok && result.data && typeof result.data === "object" && "items" in result.data) {
+      const items = (result.data as { items: unknown }).items;
+      if (!Array.isArray(items) || !deps.threadService) return;
+      const thread = deps.threadService.getById(context.sessionId);
+      if (!thread) return;
+      const activity = deps.threadService.addActivity(context.sessionId, "todo", "Todo list updated", { items });
+      if (deps.ws) {
+        deps.ws.broadcastAll({
+          type: "thread.activity" as WsEventType,
+          sessionId: "",
+          timestamp: new Date().toISOString(),
+          payload: { threadId: context.sessionId, activity },
+        });
+      }
+    }
+  };
 
   app.get("/mcp", async (_request, reply) => {
     reply.raw.writeHead(200, {
@@ -288,6 +317,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       toolRegistry,
       negotiatedVersion,
       await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params),
+      onToolExecuted,
     );
     if (body.id == null) {
       return reply.status(202).send();
@@ -371,6 +401,7 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
       toolRegistry,
       DEFAULT_MCP_PROTOCOL_VERSION,
       await resolveMcpToolContext(request, config, sessionService, userService, sessionState, body.params),
+      onToolExecuted,
     );
 
     // Also push the response via SSE to the connected client
@@ -387,11 +418,14 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
 
 // ── Request handler ──────────────────────────────────────────────────
 
+export type McpToolExecutedCallback = (toolName: string, result: ToolResult, context: ToolContext) => void;
+
 export async function handleMcpRequest(
   request: McpRequest,
   toolRegistry: ToolRegistry,
   protocolVersion = DEFAULT_MCP_PROTOCOL_VERSION,
   contextOverrides: McpToolContextOverrides = {},
+  onToolExecuted?: McpToolExecutedCallback,
 ): Promise<McpResponse> {
   switch (request.method) {
     case "initialize":
@@ -470,6 +504,7 @@ export async function handleMcpRequest(
 
       try {
         const result = await tool.execute(args, context);
+        onToolExecuted?.(toolName, result, context);
         return {
           jsonrpc: "2.0",
           id: request.id ?? null,

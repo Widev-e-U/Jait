@@ -537,10 +537,12 @@ async function main() {
   });
   await pluginManager.syncAndLoad();
 
-  // Skill registry — discover skills from user dir, workspace, and OpenClaw
+  // Skill registry — discover skills from bundled, user dir, workspace, and OpenClaw
   const { SkillRegistry, userSkillsDir } = await import("./skills/index.js");
   const skillRegistry = new SkillRegistry();
   const skillScanDirs: { path: string; source: "bundled" | "user" | "workspace" | "plugin" }[] = [
+    // Bundled skills shipped with the gateway package
+    { path: join((import.meta as any).dir ?? ".", "..", "skills"), source: "bundled" },
     { path: userSkillsDir(), source: "user" },
     { path: join(process.cwd(), ".jait", "skills"), source: "workspace" },
     { path: join(process.cwd(), ".agents", "skills"), source: "workspace" },

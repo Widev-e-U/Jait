@@ -50,13 +50,13 @@ export interface ToolPropertySchema {
 /**
  * Tool tier determines when a tool's schema is sent to the LLM.
  *
- * - `core`     — Always included in every LLM request (~8 tools).
+ * - `core`     — Always included in every LLM request (~10 tools).
  *                These are the bread-and-butter tools the agent uses
- *                on nearly every interaction.
- * - `standard` — Included only when discovered via `tools.search` or
- *                `tools.list`, or when the user has not disabled them
- *                (for backward compat, standard tools are sent unless
- *                the user explicitly disables them).
+ *                on nearly every interaction: read, edit, execute,
+ *                search, web, todo, jait, agent, tools.list, tools.search.
+ * - `standard` — NOT sent in the initial payload. Discovered via
+ *                `tools.search` or `tools.list` meta-tools and
+ *                dynamically injected into the active schema set.
  * - `external` — MCP / user-provided tools. Never auto-included;
  *                must be explicitly discovered or enabled.
  */

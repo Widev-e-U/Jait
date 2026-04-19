@@ -1,4 +1,5 @@
-import { CheckCircle2, Circle, Loader2 } from 'lucide-react'
+import { useState } from 'react'
+import { CheckCircle2, ChevronDown, Circle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface TodoItem {
@@ -13,6 +14,8 @@ interface TodoListProps {
 }
 
 export function TodoList({ items, className }: TodoListProps) {
+  const [expanded, setExpanded] = useState(false)
+
   if (items.length === 0) return null
 
   const completed = items.filter((t) => t.status === 'completed').length
@@ -21,8 +24,18 @@ export function TodoList({ items, className }: TodoListProps) {
 
   return (
     <div className={cn('rounded-lg border bg-muted/30 p-3 space-y-2', className)}>
-      {/* Header with progress */}
-      <div className="flex items-center gap-2">
+      {/* Header with progress — clickable to toggle */}
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="flex items-center gap-2 w-full text-left"
+      >
+        <ChevronDown
+          className={cn(
+            'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200',
+            !expanded && '-rotate-90',
+          )}
+        />
         <span className="text-xs font-medium text-foreground">Tasks</span>
         <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
           <div
@@ -33,31 +46,33 @@ export function TodoList({ items, className }: TodoListProps) {
         <span className="text-2xs text-muted-foreground tabular-nums">
           {completed}/{total}
         </span>
-      </div>
+      </button>
 
-      {/* Items */}
-      <div className="space-y-1">
-        {items.map((item) => (
-          <div
-            key={item.id}
-            className={cn(
-              'flex items-start gap-2 text-xs py-0.5',
-              item.status === 'completed' && 'text-muted-foreground',
-            )}
-          >
-            {item.status === 'completed' ? (
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-500" />
-            ) : item.status === 'in-progress' ? (
-              <Loader2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary animate-spin" />
-            ) : (
-              <Circle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground/50" />
-            )}
-            <span className={cn(item.status === 'completed' && 'line-through')}>
-              {item.title}
-            </span>
-          </div>
-        ))}
-      </div>
+      {/* Items — collapsible */}
+      {expanded && (
+        <div className="space-y-1">
+          {items.map((item) => (
+            <div
+              key={item.id}
+              className={cn(
+                'flex items-start gap-2 text-xs py-0.5',
+                item.status === 'completed' && 'text-muted-foreground',
+              )}
+            >
+              {item.status === 'completed' ? (
+                <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-green-500" />
+              ) : item.status === 'in-progress' ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary animate-spin" />
+              ) : (
+                <Circle className="h-3.5 w-3.5 shrink-0 mt-0.5 text-muted-foreground/50" />
+              )}
+              <span className={cn('flex-1 min-w-0', item.status === 'completed' && 'line-through')}>
+                {item.title}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   )
 }

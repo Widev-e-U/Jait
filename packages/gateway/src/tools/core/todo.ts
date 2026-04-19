@@ -50,24 +50,8 @@ export function createTodoTool(): ToolDefinition<TodoInput> {
   return {
     name: "todo",
     description:
-      "Manage a structured todo list to track progress and plan tasks throughout your session. " +
-      "Use this tool frequently to ensure task visibility and proper planning.\n\n" +
-      "**When to use:**\n" +
-      "- Complex multi-step work requiring planning and tracking\n" +
-      "- When the user provides multiple tasks or requests\n" +
-      "- After receiving new instructions that require multiple steps\n" +
-      "- BEFORE starting work on any todo (mark as in-progress)\n" +
-      "- IMMEDIATELY after completing each todo (mark as completed)\n" +
-      "- When breaking down larger tasks into smaller actionable steps\n\n" +
-      "**When NOT to use:**\n" +
-      "- Single, trivial tasks that can be completed in one step\n" +
-      "- Purely conversational/informational requests\n\n" +
-      "**Rules:**\n" +
-      "- Provide the COMPLETE todo list every time (all items, both old and new)\n" +
-      "- At most ONE item can be `in-progress` at a time\n" +
-      "- Mark todos completed immediately after finishing — do not batch completions\n" +
-      "- Use sequential IDs starting from 1\n" +
-      "- Keep titles concise (3-7 words) and action-oriented",
+      "Manage a structured todo list for tracking multi-step tasks. " +
+      "Provide the COMPLETE list each time. At most one item can be in-progress.",
     tier: "core",
     category: "meta",
     source: "builtin",
@@ -76,24 +60,20 @@ export function createTodoTool(): ToolDefinition<TodoInput> {
       properties: {
         todoList: {
           type: "array",
-          description:
-            "Complete array of all todo items. Must include ALL items — both existing and new. " +
-            "Items not included will be removed.",
+          description: "Complete array of all todo items.",
           items: {
             type: "object",
             properties: {
               id: {
                 type: "number",
-                description: "Unique identifier. Use sequential numbers starting from 1.",
+                description: "Sequential ID starting from 1.",
               },
               title: {
                 type: "string",
-                description: "Concise action-oriented todo label (3-7 words). Displayed in UI.",
+                description: "Concise action label (3-7 words).",
               },
               status: {
                 type: "string",
-                description:
-                  "not-started: Not begun | in-progress: Currently working (max 1) | completed: Fully finished",
                 enum: ["not-started", "in-progress", "completed"],
               },
             },

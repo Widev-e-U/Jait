@@ -96,7 +96,7 @@ export function createAgentSpawnTool(deps: AgentSpawnDeps): ToolDefinition<Agent
       "The sub-agent gets its own conversation and tool set, runs independently, " +
       "and returns a single result. Use this for research, code search, multi-file " +
       "analysis, or any task that requires several tool calls to complete.",
-    tier: "core",
+    tier: "standard",
     category: "agent",
     source: "builtin",
     parameters: {

@@ -49,19 +49,10 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
   return {
     name: "search",
     description:
-      "Search for files or text in the workspace.\n\n" +
-      '**Content search** (default, mode="content"): Fast text/regex search through file contents. ' +
-      "Returns matching lines with file paths and line numbers. " +
-      "Use `isRegexp: true` when searching with regex patterns. " +
-      "If you are not sure what words will appear in the workspace, prefer using regex patterns with " +
-      'alternation (|) or character classes to search for multiple potential words at once instead of ' +
-      "making separate searches. For example, use `function|method|procedure` to find all of those " +
-      "at once. Use `include` to search within files matching a specific glob (e.g. \"*.ts\", \"src/**\").\n\n" +
-      '**File search** (mode="files"): Find files by name pattern (plain substring, not globs). ' +
-      "For example, use `readme` not `*readme*`. Returns only file paths.\n\n" +
-      "Use `includeIgnoredFiles: true` to search in normally-ignored directories like node_modules " +
-      "or build outputs — but be aware this may be slower.\n\n" +
-      "Use this tool when you want to see an overview of a file, instead of calling read many times.",
+      "Search for files or text in the workspace. " +
+      'mode="content" (default): grep through file contents, returns matching lines. ' +
+      'mode="files": find files by name substring. ' +
+      "Use isRegexp for regex patterns (e.g. 'word1|word2' for alternation).",
     tier: "core",
     category: "filesystem",
     source: "builtin",
@@ -70,14 +61,11 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
       properties: {
         pattern: {
           type: "string",
-          description:
-            "The pattern to search for. Use regex with alternation (e.g. 'word1|word2') or character " +
-            "classes to find multiple words in a single search. Set `isRegexp` appropriately.",
+          description: "Text or regex pattern to search for.",
         },
         isRegexp: {
           type: "boolean",
-          description:
-            "Whether the pattern is a regex (default: false). Search is case-insensitive by default.",
+          description: "True if pattern is a regex.",
         },
         path: {
           type: "string",
@@ -90,21 +78,15 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
         },
         include: {
           type: "string",
-          description:
-            'File glob to filter results (e.g. "*.ts", "src/**/*.py"). ' +
-            "Applied to paths relative to the search directory.",
+          description: 'File glob filter (e.g. "*.ts", "src/**").',
         },
         limit: {
           type: "number",
-          description:
-            `Maximum number of results (default: ${DEFAULT_MAX_RESULTS}, max: ${MAX_RESULTS_CAP}). ` +
-            "Don't set this unless necessary — it can slow things down.",
+          description: `Max results (default: ${DEFAULT_MAX_RESULTS}, max: ${MAX_RESULTS_CAP}).`,
         },
         includeIgnoredFiles: {
           type: "boolean",
-          description:
-            "Whether to include files normally ignored by .gitignore and search.exclude settings. " +
-            "Warning: may be slower. Only set when searching in node_modules or build outputs.",
+          description: "Include gitignored files (may be slower).",
         },
       },
       required: ["pattern"],

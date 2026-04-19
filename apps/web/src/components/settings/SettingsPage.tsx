@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder } from 'lucide-react'
+import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -11,6 +11,7 @@ import { SkillSettings } from './SkillSettings'
 import { Switch } from '@/components/ui/switch'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import { ActivityFeed } from '@/components/activity'
 import type { WorkspaceRecord } from '@/hooks/useWorkspaces'
 import type { ActivityEvent } from '@jait/ui-shared'
@@ -163,6 +164,14 @@ export function SettingsPage({
 
   useEffect(() => {
     setDraft(apiKeys)
+  }, [apiKeys])
+
+  const isDirty = API_KEY_FIELDS.some((field) => (draft[field] ?? '') !== (apiKeys[field] ?? ''))
+
+  const handleDiscard = useCallback(() => {
+    setDraft(apiKeys)
+    setStatus(null)
+    setError(null)
   }, [apiKeys])
 
   // Fetch which fields have env values on mount
@@ -701,7 +710,7 @@ export function SettingsPage({
           {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showWorkspaceArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
         </TabsContent>
 
-        <TabsContent value="api" className="space-y-6">
+        <TabsContent value="api" className="space-y-6 pb-20">
       {filteredApiFields.length > 0 ? (<>
         <p className="text-sm text-muted-foreground">
           Values stored here are user-specific and override environment defaults for your account.
@@ -711,58 +720,68 @@ export function SettingsPage({
           if (groupFields.length === 0) return null
           const GroupIcon = getFieldIcon(groupFields[0] as FieldName)
           return (
-            <Card key={group.label} className="p-5 space-y-3">
-              <h3 className="flex items-center gap-2 text-sm font-semibold">
-                {GroupIcon ? <GroupIcon size={16} className="text-muted-foreground" /> : <Key className="h-4 w-4 text-muted-foreground" />}
-                {highlight(group.label)}
-              </h3>
-              <div className="grid gap-4 md:grid-cols-2">
-                {groupFields.map((field) => {
-                  const secret = isSecretField(field)
-                  const shown = !!visible[field]
-                  return (
-                    <div key={field} className="space-y-1.5">
-                      <div className="flex items-center gap-1.5">
-                        <Label htmlFor={`api-${field}`} className="font-mono text-xs">{highlight(field)}</Label>
-                        {renderSourceBadge(field as FieldName)}
-                      </div>
-                      <div className="relative">
-                        <Input
-                          id={`api-${field}`}
-                          type={secret && !shown ? 'password' : 'text'}
-                          value={draft[field] ?? ''}
-                          onChange={(event) => {
-                            setDraft((prev) => ({ ...prev, [field]: event.target.value }))
-                          }}
-                          placeholder={envSet[field] ? '(set via .env)' : '(empty)'}
-                          className={secret ? 'pr-9' : ''}
-                        />
-                        {secret && (
-                          <button
-                            type="button"
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
-                            onClick={() => toggleVisibility(field)}
-                            tabIndex={-1}
-                            aria-label={shown ? 'Hide value' : 'Show value'}
-                          >
-                            {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  )
-                })}
-              </div>
-            </Card>
+            <Collapsible key={group.label} defaultOpen={false}>
+              <Card className="p-0 overflow-hidden">
+                <CollapsibleTrigger className="flex w-full items-center gap-2 px-5 py-3.5 text-left hover:bg-muted/50 transition-colors group">
+                  <ChevronRight className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-90" />
+                  {GroupIcon ? <GroupIcon size={16} className="text-muted-foreground" /> : <Key className="h-4 w-4 text-muted-foreground" />}
+                  <span className="text-sm font-semibold">{highlight(group.label)}</span>
+                </CollapsibleTrigger>
+                <CollapsibleContent>
+                  <div className="grid gap-4 px-5 pb-5 md:grid-cols-2">
+                    {groupFields.map((field) => {
+                      const secret = isSecretField(field)
+                      const shown = !!visible[field]
+                      return (
+                        <div key={field} className="space-y-1.5">
+                          <div className="flex items-center gap-1.5">
+                            <Label htmlFor={`api-${field}`} className="font-mono text-xs">{highlight(field)}</Label>
+                            {renderSourceBadge(field as FieldName)}
+                          </div>
+                          <div className="relative">
+                            <Input
+                              id={`api-${field}`}
+                              type={secret && !shown ? 'password' : 'text'}
+                              value={draft[field] ?? ''}
+                              onChange={(event) => {
+                                setDraft((prev) => ({ ...prev, [field]: event.target.value }))
+                              }}
+                              placeholder={envSet[field] ? '(set via .env)' : '(empty)'}
+                              className={secret ? 'pr-9' : ''}
+                            />
+                            {secret && (
+                              <button
+                                type="button"
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
+                                onClick={() => toggleVisibility(field)}
+                                tabIndex={-1}
+                                aria-label={shown ? 'Hide value' : 'Show value'}
+                              >
+                                {shown ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </CollapsibleContent>
+              </Card>
+            </Collapsible>
           )
         })}
-        <div className="flex items-center gap-3">
-          <Button onClick={() => { void handleSave() }} disabled={saving}>
-            {saving ? 'Saving...' : 'Save API settings'}
-          </Button>
-          {status && <span className="text-sm text-muted-foreground">{status}</span>}
+        <div className="fixed bottom-0 left-0 right-0 z-30 border-t bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80">
+          <div className="mx-auto flex max-w-5xl items-center gap-3 px-4 py-3 sm:px-6">
+            <Button onClick={() => { void handleSave() }} disabled={saving || !isDirty}>
+              {saving ? 'Saving...' : 'Save API settings'}
+            </Button>
+            <Button variant="ghost" onClick={handleDiscard} disabled={!isDirty}>
+              Discard
+            </Button>
+            {status && <span className="text-sm text-muted-foreground">{status}</span>}
+            {error && <span className="text-sm text-destructive">{error}</span>}
+          </div>
         </div>
-        {error && <p className="text-sm text-destructive">{error}</p>}
       </>) : emptyState}
         </TabsContent>
 

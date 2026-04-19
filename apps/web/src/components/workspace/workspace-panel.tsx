@@ -21,7 +21,6 @@ import { cn } from '@/lib/utils'
 import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
 import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { searchWorkspaceContent } from '@/lib/workspace-content-search'
-import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getDesktopWorkspacePanelStyle } from './workspace-panel-layout'
 import { getSourceControlChangeCount } from './source-control-summary'
@@ -936,9 +935,10 @@ const TreeNodeRow = memo(function TreeNodeRow({
       <>
         <div
           className={`group flex items-center gap-1.5 rounded px-1 cursor-pointer hover:bg-muted active:bg-muted ${
-            isMobile ? 'py-2 text-sm' : 'py-1 text-xs'
+            isMobile ? 'py-2 text-sm' : 'py-1 [font-size:0.9rem]'
           } ${(dragOver || mobileDragTargetPath === node.path) ? 'bg-primary/15 ring-1 ring-primary/40' : ''}`}
           style={{ paddingLeft }}
+          data-tree-path={node.path}
           data-tree-drop-dir={node.path}
           onClick={() => onToggleDir(node)}
           onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTreeContextMenu(node, e.clientX, e.clientY) }}
@@ -1039,11 +1039,12 @@ const TreeNodeRow = memo(function TreeNodeRow({
   return (
     <div
       className={`group flex items-center gap-1.5 rounded px-1 cursor-pointer ${
-        isMobile ? 'py-2 text-sm' : 'py-1 text-xs'
+        isMobile ? 'py-2 text-sm' : 'py-1 [font-size:0.9rem]'
       } ${
         isActive ? 'bg-primary/15 text-foreground' : 'hover:bg-muted active:bg-muted'
       }`}
       style={{ paddingLeft: paddingLeft + (isMobile ? 12 : 14) }}
+      data-tree-path={node.path}
       onClick={() => onSelectFile(node)}
       onContextMenu={(e) => { e.preventDefault(); e.stopPropagation(); onTreeContextMenu(node, e.clientX, e.clientY) }}
       onPointerDown={(e) => onMobilePointerStart?.(node, e)}
@@ -1159,8 +1160,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   useEffect(() => { if (restoreRef) restoreRef.current = panel.restore }, [restoreRef, panel.restore])
 
   // Tree max is clamped so the editor pane never disappears
-  const treeMax = Math.max(220, panel.size - minEditorWidth)
-  const tree = useDragResize(260, 220, treeMax, 'horizontal', 'workspaceTreePaneWidth', {
+  const treeMax = Math.max(240, panel.size - minEditorWidth)
+  const tree = useDragResize(260, 240, treeMax, 'horizontal', 'workspaceTreePaneWidth', {
     snapCollapse: true,
   })
 
@@ -1853,6 +1854,70 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fsWatcherVersion])
+
+  // ── Reveal active file in tree: expand parents & scroll into view ──
+  useEffect(() => {
+    if (!activeNativePath || !remoteRoot) return
+    const norm = (p: string) => p.replace(/\\/g, '/')
+    const normRoot = norm(remoteRoot).replace(/\/$/, '')
+    const normActive = norm(activeNativePath)
+    if (!normActive.startsWith(normRoot + '/')) return
+
+    const relParts = normActive.slice(normRoot.length + 1).split('/')
+    if (relParts.length < 2) {
+      // File is at root level — no dirs to expand, just scroll
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[data-tree-path="${CSS.escape(activeNativePath)}"]`)
+        el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+      return
+    }
+
+    // Build list of ancestor dir paths that need to be expanded
+    const dirParts = relParts.slice(0, -1)
+    let cancelled = false
+    ;(async () => {
+      let currentPath = normRoot
+      let children: LazyNode[] = lazyTree
+      const dirsToExpand: string[] = []
+
+      for (const part of dirParts) {
+        currentPath = currentPath + '/' + part
+        const dirNode = children.find(
+          (n): n is LazyDir => n.kind === 'dir' && norm(n.path) === currentPath,
+        )
+        if (!dirNode) break
+        dirsToExpand.push(dirNode.path)
+        if (dirNode.children === null) {
+          dirNode.childrenLoading = true
+          bumpTree()
+          const loaded = await remoteScanDir(dirNode.path, surfaceId)
+          if (cancelled) return
+          dirNode.children = loaded
+          dirNode.childrenLoading = false
+          bumpTree()
+        }
+        children = dirNode.children
+      }
+
+      if (cancelled) return
+      if (dirsToExpand.length) {
+        setExpandedDirs((prev) => {
+          const next = new Set(prev)
+          for (const d of dirsToExpand) next.add(d)
+          return next
+        })
+      }
+      // Scroll after the DOM updates with the expanded tree
+      requestAnimationFrame(() => {
+        const el = document.querySelector<HTMLElement>(`[data-tree-path="${CSS.escape(activeNativePath)}"]`)
+        el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' })
+      })
+    })()
+
+    return () => { cancelled = true }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeNativePath])
 
   // ── File watcher: poll the open file's mtime and re-fetch on change ──
   const lastMtimeRef = useRef<string | null>(null)
@@ -4694,22 +4759,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           ) : (
           <ScrollArea className="flex-1 min-h-0">
             <div className="p-1">
-              {remoteRoot && (
-                <div
-                  className={`mb-1 flex items-center gap-1.5 rounded px-2 py-2 text-sm text-muted-foreground ${
-                    mobileTreeDrag?.dropDir === remoteRoot ? 'bg-primary/15 ring-1 ring-primary/40 text-foreground' : 'bg-muted/30'
-                  }`}
-                  data-tree-drop-root="true"
-                  draggable={!isMobile}
-                  onDragStart={(e) => {
-                    e.dataTransfer.effectAllowed = 'copy'
-                    e.dataTransfer.setData(JAIT_WORKSPACE_REF_MIME, JSON.stringify(buildWorkspaceDragPayload(remoteRoot)))
-                  }}
-                >
-                  <FolderOpen className="h-4 w-4 shrink-0" />
-                  <span className="truncate">Workspace root</span>
-                </div>
-              )}
+
               {hasNativeTree && lazyTree.map((node) => (
                 <TreeNodeRow
                   key={node.path}
@@ -5184,7 +5234,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             placeholder={fileSearchMode === 'content' ? 'Search in files…' : 'Search file names…'}
             value={fileSearchQuery}
             onChange={(e) => setFileSearchQuery(e.target.value)}
-            className="flex-1 h-6 bg-transparent text-xs outline-none placeholder:text-muted-foreground/60"
+            className="flex-1 h-6 bg-transparent [font-size:0.9rem] outline-none placeholder:text-muted-foreground/60"
           />
           {fileSearchQuery && (
             <button onClick={() => { setFileSearchQuery(''); setFileSearchResults(null) }} className="p-0.5 rounded hover:bg-muted text-muted-foreground">
@@ -5263,32 +5313,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         ) : (
         <ScrollArea className="flex-1 min-h-0">
           <div className="p-1">
-            {remoteRoot && (
-              <div
-                className="mb-1 flex items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground bg-muted/30"
-                data-tree-drop-root="true"
-                draggable
-                onDragStart={(e) => {
-                  e.dataTransfer.effectAllowed = 'copy'
-                  e.dataTransfer.setData(JAIT_WORKSPACE_REF_MIME, JSON.stringify(buildWorkspaceDragPayload(remoteRoot)))
-                }}
-                onDragOver={(e) => {
-                  if (!e.dataTransfer.types.includes('text/jait-tree-node')) return
-                  e.preventDefault()
-                  e.dataTransfer.dropEffect = 'move'
-                }}
-                onDrop={(e) => {
-                  const raw = e.dataTransfer.getData('text/jait-tree-node')
-                  if (!raw) return
-                  e.preventDefault()
-                  const data = JSON.parse(raw) as { path: string }
-                  handleMoveTreeNode(data.path, remoteRoot)
-                }}
-              >
-                <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-                <span className="truncate">Workspace root</span>
-              </div>
-            )}
+
             {hasNativeTree && lazyTree.map((node) => (
               <TreeNodeRow
                 key={node.path}

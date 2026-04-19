@@ -107,6 +107,8 @@ interface PromptInputProps {
   workspaceOpen?: boolean
   /** Stable key for preserving local attachment draft state across remounts. */
   draftStateKey?: string
+  /** Bumped when the parent externally changes `value` (e.g. clear on submit). */
+  syncKey?: number
 }
 
 /* ------------------------------------------------------------------ */
@@ -597,6 +599,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onSearchFiles,
   workspaceOpen = false,
   draftStateKey,
+  syncKey,
 }: PromptInputProps, ref) {
   const rootRef = useRef<HTMLDivElement>(null)
   const editableRef = useRef<HTMLDivElement>(null)
@@ -901,7 +904,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
     setIsEmpty(isTextEmpty(value) && !hasChipRefs(editableRef.current))
     isSyncing.current = false
     lastAppliedDraftSignatureRef.current = getPromptDraftSignature(value, segments)
-  }, [value, segments, handleRemoveChip])
+  }, [value, segments, handleRemoveChip, syncKey])
 
   // Close menu on outside click
   useEffect(() => {
@@ -1487,7 +1490,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       {/* Editable area with inline file chips */}
       <div className="relative px-3 pt-3 pb-1.5">
         {isEmpty && (
-          <div className="absolute top-5 left-5 pointer-events-none text-muted-foreground text-base leading-relaxed select-none">
+          <div className="absolute top-5 left-5 pointer-events-none text-muted-foreground leading-relaxed select-none [font-size:0.9rem]">
             {placeholder}
           </div>
         )}
@@ -1507,7 +1510,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             if (inputType === 'insertFromDrop' || inputType === 'insertHTML') e.preventDefault()
           }}
           className={cn(
-            'min-h-[40px] max-h-[200px] overflow-y-auto text-base leading-relaxed outline-none py-2 px-2 text-foreground',
+            'min-h-[40px] max-h-[200px] overflow-y-auto leading-relaxed outline-none py-2 px-2 text-foreground [font-size:0.9rem]',
             'whitespace-pre-wrap break-words',
             composerDisabled && 'cursor-not-allowed opacity-50',
           )}

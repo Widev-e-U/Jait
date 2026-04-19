@@ -226,15 +226,17 @@ export class ToolRegistry {
 
   /**
    * Get tools that should be sent in the initial LLM payload.
-   * Core tools always, standard tools unless user disabled them.
+   * Only core-tier tools (~10) are included. Standard and external tools
+   * are discovered dynamically via tools.search / tools.list meta-tools.
    */
   listForLLM(disabledTools?: Set<string>): ToolDefinition[] {
     return this.list().filter((t) => {
       if (disabledTools?.has(t.name)) return false;
       const tier = t.tier ?? "standard";
-      // Core and standard go in the initial payload
-      // External (MCP) tools must be discovered via tools.search
-      return tier === "core" || tier === "standard";
+      // Only core tools in the initial payload (~10 tools)
+      // Standard tools are discovered via tools.search / tools.list
+      // External (MCP) tools must also be discovered via tools.search
+      return tier === "core";
     });
   }
 

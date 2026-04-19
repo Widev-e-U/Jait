@@ -32,13 +32,8 @@ export function createReadTool(registry: SurfaceRegistry): ToolDefinition<ReadIn
   return {
     name: "read",
     description:
-      "Read the contents of a file, or list a directory.\n\n" +
-      "If the path points to a file, returns its content (optionally a specific line range). " +
-      "If the path points to a directory, returns the list of entries (names ending in `/` are folders).\n\n" +
-      "You must specify the line range you're interested in for large files. Line numbers are 1-indexed. " +
-      "This tool truncates output at " + MAX_LINES_PER_READ + " lines — call it again with an offset to read " +
-      "more. Prefer reading larger ranges over doing many small reads.\n\n" +
-      "Use this to understand code, check configs, explore project structure, or verify changes you made.",
+      "Read a file or list a directory. Returns file content (with optional line range) or directory entries. " +
+      "Truncates at " + MAX_LINES_PER_READ + " lines; call again with startLine/endLine for more.",
     tier: "core",
     category: "filesystem",
     source: "builtin",
@@ -47,15 +42,15 @@ export function createReadTool(registry: SurfaceRegistry): ToolDefinition<ReadIn
       properties: {
         path: {
           type: "string",
-          description: "The file or directory path (relative to workspace root, or absolute).",
+          description: "File or directory path.",
         },
         startLine: {
           type: "number",
-          description: "The 1-based line number to start reading from. Omit to start from the beginning.",
+          description: "1-based start line.",
         },
         endLine: {
           type: "number",
-          description: "The 1-based inclusive line number to stop reading at. Omit to read to the end (capped at " + MAX_LINES_PER_READ + " lines).",
+          description: "1-based end line (inclusive).",
         },
       },
       required: ["path"],

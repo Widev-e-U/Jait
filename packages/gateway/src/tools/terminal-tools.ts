@@ -377,7 +377,7 @@ export function createTerminalRunTool(
       "Execute a shell command in a persistent terminal (visible to the user) and return the output. " +
       "The terminal stays alive between calls — like VS Code's integrated terminal. " +
       "Multi-line scripts, pipes, and complex syntax all work unchanged.",
-    tier: "core",
+    tier: "standard",
     category: "terminal",
     source: "builtin",
     parameters: {

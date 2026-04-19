@@ -174,6 +174,9 @@ export class GeminiProvider implements CliProviderAdapter {
     state.session.status = "running";
     this.emit({ type: "turn.started", sessionId });
 
+    // Suppress EPIPE errors when child exits before we finish writing
+    child.stdin?.on("error", () => {/* ignore broken pipe */});
+
     child.stdout?.on("data", (data: Buffer) => {
       state.buffer += data.toString();
       this.processBuffer(sessionId, state);

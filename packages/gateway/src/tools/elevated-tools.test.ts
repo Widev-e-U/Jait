@@ -4,7 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { AuditWriter } from "../services/audit.js";
 import { SecretInputService } from "../services/secret-input.js";
 import { SurfaceRegistry } from "../surfaces/registry.js";
-import { buildTieredToolSchemas } from "./agent-loop.js";
+import { buildToolSchemas } from "./agent-loop.js";
 import { createToolRegistry } from "./index.js";
 import { ToolRegistry } from "./registry.js";
 import { createElevatedRunTool, type ElevatedSpawnFactory } from "./elevated-tools.js";
@@ -119,12 +119,12 @@ describe("elevated.run for external providers", () => {
 });
 
 describe("elevated.run for Jait provider tool discovery", () => {
-  it("exposes the elevated tool through the tiered schema path without password parameters", () => {
+  it("exposes the elevated tool through the schema path without password parameters", () => {
     const tools = createToolRegistry(new SurfaceRegistry(), {
       secretInputService: new SecretInputService(),
     });
 
-    const schemas = buildTieredToolSchemas(tools);
+    const schemas = buildToolSchemas(tools);
     const byName = new Map(schemas.map((schema) => [schema.function.name, schema]));
 
     expect(byName.has("elevated_run")).toBe(true);

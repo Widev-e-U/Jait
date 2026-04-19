@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Bot, Loader2, Sparkles } from 'lucide-react'
+import { Bot, Lightbulb, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
@@ -69,7 +69,7 @@ export function ThreadSkillPicker({ token, threadId, selectedSkillIds }: ThreadS
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" size="sm" className="h-6 gap-1 px-2 text-[10px] text-muted-foreground">
-          <Sparkles className="h-3 w-3" />
+          <Lightbulb className="h-3 w-3" />
           {usingGlobal ? 'Skills:auto' : `Skills:${selectedSkillIds?.length ?? 0}`}
         </Button>
       </PopoverTrigger>

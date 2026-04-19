@@ -1,4 +1,4 @@
-import { MessageSquare, Bot, ClipboardList, ChevronDown, Check } from 'lucide-react'
+import { MessageSquare, Infinity, ClipboardList, ChevronDown, Check } from 'lucide-react'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -32,7 +32,7 @@ const MODES: Array<{
   {
     value: 'agent',
     label: 'Agent',
-    icon: Bot,
+    icon: Infinity,
     description: 'Full agentic — reads, writes, runs commands',
   },
   {

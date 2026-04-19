@@ -41,7 +41,7 @@ export function createFileReadTool(registry: SurfaceRegistry): ToolDefinition<Fi
   return {
     name: "file.read",
     description: "Read the contents of a file within the workspace",
-    tier: "core",
+    tier: "standard",
     category: "filesystem",
     source: "builtin",
     parameters: {
@@ -74,7 +74,7 @@ export function createFileWriteTool(registry: SurfaceRegistry): ToolDefinition<F
   return {
     name: "file.write",
     description: "Write content to a file within the workspace (creates parent directories)",
-    tier: "core",
+    tier: "standard",
     category: "filesystem",
     source: "builtin",
     parameters: {
@@ -108,7 +108,7 @@ export function createFilePatchTool(registry: SurfaceRegistry): ToolDefinition<F
   return {
     name: "file.patch",
     description: "Search-and-replace within a file (first occurrence)",
-    tier: "core",
+    tier: "standard",
     category: "filesystem",
     source: "builtin",
     parameters: {
@@ -146,7 +146,7 @@ export function createFileListTool(registry: SurfaceRegistry): ToolDefinition<Fi
   return {
     name: "file.list",
     description: "List files and directories at a path within the workspace",
-    tier: "core",
+    tier: "standard",
     category: "filesystem",
     source: "builtin",
     parameters: {

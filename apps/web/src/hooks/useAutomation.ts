@@ -8,6 +8,7 @@
 
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { getAuthToken } from '@/lib/auth-token'
+import type { TodoItem } from '@/components/chat/todo-list'
 import {
   persistSelectedRepoId,
   readPersistedSelectedRepoId,
@@ -76,6 +77,17 @@ function mergeActivities(
   return sortActivities([...byId.values()])
 }
 
+/** Extract the latest todo list from thread activities (find the last todo activity). */
+function extractTodosFromActivities(activities: ThreadActivity[]): TodoItem[] {
+  for (let i = activities.length - 1; i >= 0; i--) {
+    const a = activities[i]
+    if (a.kind === 'todo' && a.payload && typeof a.payload === 'object' && 'items' in a.payload) {
+      return (a.payload as { items: TodoItem[] }).items
+    }
+  }
+  return []
+}
+
 function mapNodeStatesToRemoteProviders(nodes: NodeState[]): RemoteProviderInfo[] {
   return nodes
     .filter((node) => node.role !== 'gateway')
@@ -114,6 +126,10 @@ export function useAutomation(enabled = true) {
   const [providersLoaded, setProvidersLoaded] = useState(false)
   const [loadingActivities, setLoadingActivities] = useState(false)
   const [error, setError] = useState<string | null>(null)
+
+  // Todo list per thread (extracted from todo activities)
+  const threadTodosRef = useRef(new Map<string, TodoItem[]>())
+  const [selectedThreadTodos, setSelectedThreadTodos] = useState<TodoItem[]>([])
 
   // Send state
   const activityEndRef = useRef<HTMLDivElement | null>(null)
@@ -315,6 +331,15 @@ export function useAutomation(enabled = true) {
           if (threadId === selectedThreadIdRef.current) {
             setActivities(nextActivities)
           }
+
+          // Track todo list updates
+          if (activity.kind === 'todo' && activity.payload && typeof activity.payload === 'object' && 'items' in activity.payload) {
+            const items = (activity.payload as { items: TodoItem[] }).items
+            threadTodosRef.current.set(threadId, items)
+            if (threadId === selectedThreadIdRef.current) {
+              setSelectedThreadTodos(items)
+            }
+          }
         }
         break
       }
@@ -391,6 +416,7 @@ export function useAutomation(enabled = true) {
   useEffect(() => {
     if (!enabled || !selectedThreadId) {
       setActivities([])
+      setSelectedThreadTodos([])
       setLoadingActivities(false)
       return
     }
@@ -398,11 +424,13 @@ export function useAutomation(enabled = true) {
     const cached = activityCacheRef.current.get(selectedThreadId)
     if (cached) {
       setActivities(cached)
+      setSelectedThreadTodos(threadTodosRef.current.get(selectedThreadId) ?? extractTodosFromActivities(cached))
       setLoadingActivities(false)
       return
     }
 
     setActivities([])
+    setSelectedThreadTodos([])
     setLoadingActivities(true)
     let cancelled = false
     const fetchActivities = async () => {
@@ -413,6 +441,9 @@ export function useAutomation(enabled = true) {
           const sorted = sortActivities(acts)
           activityCacheRef.current.set(selectedThreadId, sorted)
           setActivities(sorted)
+          const todos = extractTodosFromActivities(sorted)
+          threadTodosRef.current.set(selectedThreadId, todos)
+          setSelectedThreadTodos(todos)
         }
       } catch {
         /* ignore */
@@ -889,6 +920,7 @@ export function useAutomation(enabled = true) {
     activities,
     loadingActivities,
     activityEndRef,
+    selectedThreadTodos,
     providers,
     remoteProviders,
     loading,

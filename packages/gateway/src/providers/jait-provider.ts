@@ -18,6 +18,7 @@ import {
   runAgentLoop,
   type AgentLoopEvent,
   type LLMConfig,
+  type LlmContextFlowRound,
 } from "../tools/index.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { ToolRegistry } from "../tools/registry.js";
@@ -45,6 +46,7 @@ interface JaitSessionState {
   }>;
   currentTurnAbort?: AbortController;
   currentTurn?: Promise<void>;
+  contextRounds?: LlmContextFlowRound[];
 }
 
 export interface JaitProviderDeps {
@@ -124,6 +126,7 @@ export class JaitProvider implements CliProviderAdapter {
 
     const abort = new AbortController();
     state.currentTurnAbort = abort;
+    state.contextRounds = [];
     state.history.push({ role: "user", content: message });
     this.emit({ type: "turn.started", sessionId });
 
@@ -158,6 +161,7 @@ export class JaitProvider implements CliProviderAdapter {
             disabledTools,
             mode: "agent",
             onEvent: (event) => this.forwardAgentLoopEvent(sessionId, event),
+            onContext: (round) => this.forwardContextRound(sessionId, state, round),
           },
           (toolName, input, sid, auth, onOutputChunk, signal) =>
             this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
@@ -269,6 +273,24 @@ export class JaitProvider implements CliProviderAdapter {
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  private forwardContextRound(sessionId: string, state: JaitSessionState, round: LlmContextFlowRound): void {
+    // Accumulate rounds so we can emit the full flow each time
+    if (!state.contextRounds) state.contextRounds = [];
+    state.contextRounds.push(round);
+    const llm = this.buildLlmConfig(state.userId, state.model);
+    this.emit({
+      type: "activity",
+      sessionId,
+      kind: "context_flow",
+      summary: `Round ${round.round} context`,
+      payload: {
+        provider: "jait",
+        model: llm.openaiModel,
+        rounds: state.contextRounds,
+      },
+    });
   }
 
   private forwardAgentLoopEvent(sessionId: string, event: AgentLoopEvent): void {

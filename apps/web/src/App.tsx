@@ -26,6 +26,7 @@ import {
   Settings,
   Sun,
   Square,
+  Timer,
   Trash2,
   Terminal as TerminalIcon,
   Wifi,
@@ -841,6 +842,39 @@ function ManagerRepositoryPanel({
   )
 }
 
+function formatThreadDuration(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  if (totalSec < 60) return `${totalSec}s`
+  const min = Math.floor(totalSec / 60)
+  const sec = totalSec % 60
+  if (min < 60) return `${min}m ${sec.toString().padStart(2, '0')}s`
+  const hr = Math.floor(min / 60)
+  const rm = min % 60
+  return `${hr}h ${rm.toString().padStart(2, '0')}m`
+}
+
+function ThreadDuration({ createdAt, completedAt, status }: { createdAt: string; completedAt: string | null; status: string }) {
+  const [now, setNow] = useState(Date.now)
+  const isRunning = status === 'running' || status === 'queued'
+
+  useEffect(() => {
+    if (!isRunning) return
+    const id = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(id)
+  }, [isRunning])
+
+  const start = new Date(createdAt).getTime()
+  const end = completedAt ? new Date(completedAt).getTime() : now
+  const ms = Math.max(0, end - start)
+
+  return (
+    <span className="shrink-0 tabular-nums" title={isRunning ? 'Elapsed time' : 'Total duration'}>
+      {isRunning && <Timer className="inline h-3 w-3 mr-0.5 -mt-px" />}
+      {formatThreadDuration(ms)}
+    </span>
+  )
+}
+
 interface ManagerThreadListItemProps {
   thread: AgentThread
   repo: AutomationRepository | null
@@ -935,6 +969,8 @@ function ManagerThreadListItem({
               <ThreadPrBadge prState={prState} />
             </>
           )}
+          <span className="hidden sm:inline">·</span>
+          <ThreadDuration createdAt={thread.createdAt} completedAt={thread.completedAt} status={thread.status} />
         </div>
       </div>
       <div className="flex items-center gap-0.5 sm:gap-1">
@@ -1135,7 +1171,19 @@ function ManagerActiveThreadsMenu({
 }
 
 function App() {
-  const [inputValue, setInputValue] = useState('')
+  // Input value lives in a ref to avoid re-rendering the entire App on every keystroke.
+  // inputVersion is bumped when the value is externally changed (clear on submit, voice, etc.)
+  // so PromptInput can re-sync its contentEditable.
+  const inputValueRef = useRef('')
+  const [inputVersion, setInputVersion] = useState(0)
+  const setInputValue = useCallback((valOrFn: string | ((prev: string) => string)) => {
+    const next = typeof valOrFn === 'function' ? valOrFn(inputValueRef.current) : valOrFn
+    inputValueRef.current = next
+    setInputVersion((v) => v + 1)
+  }, [])
+  const handleInputChange = useCallback((text: string) => {
+    inputValueRef.current = text
+  }, [])
   const [inputSegments, setInputSegments] = useState<UserMessageSegment[] | undefined>(undefined)
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
@@ -1882,6 +1930,7 @@ function App() {
     setOnChangedFilesSync,
     refreshMessages,
   } = useChat(activeSessionId, token, onLoginRequired, activeWorkspace?.surfaceId ?? null)
+  const messageContents = useMemo(() => messages.map((msg) => msg.content), [messages])
   const [managerMessageQueues, setManagerMessageQueues] = useState<Record<string, ManagerQueuedMessage[]>>({})
   const [remoteMessageCompleteCount, setRemoteMessageCompleteCount] = useState(0)
   const [sourceControlRefreshSignal, setSourceControlRefreshSignal] = useState(0)
@@ -3000,6 +3049,7 @@ function App() {
   }, [showSidebar])
 
   const handleSidebarBlur = useCallback((event: FocusEvent<HTMLElement>) => {
+    if (!isMobile) return
     const nextTarget = event.relatedTarget
     if (nextTarget && event.currentTarget.contains(nextTarget as Node)) return
 
@@ -3009,7 +3059,7 @@ function App() {
       if (!sidebar || (activeElement && sidebar.contains(activeElement))) return
       setShowSidebar(false)
     })
-  }, [])
+  }, [isMobile])
 
   useEffect(() => {
     localStorage.setItem('showDebugPanel', showDebugPanel ? 'true' : 'false')
@@ -4258,7 +4308,7 @@ function App() {
     fileAttachments?: ChatAttachment[],
     displaySegments?: UserMessageSegment[],
   ) => {
-    const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
+    const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
     if (!prepared) return
     const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
     enqueueMessage({
@@ -4275,7 +4325,7 @@ function App() {
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatResponseStyle, cliModel, enqueueMessage, inputValue, preparePromptSubmission])
+  }, [chatMode, chatProvider, chatProviderRuntimeMode, chatResponseStyle, cliModel, enqueueMessage, preparePromptSubmission, setInputValue])
 
   const ensureSessionTitle = useCallback(async (sessionId: string, prompt: string) => {
     if (!shouldAutoTitleSession(activeSessionRecord?.name)) return
@@ -4293,14 +4343,14 @@ function App() {
     if (viewMode === 'manager' || sendTarget === 'thread') {
       return handleThreadSubmit(chipFiles, fileAttachments, displaySegments)
     }
-    const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
+    const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
     if (!prepared && (!fileAttachments || fileAttachments.length === 0)) return
     if (!token) {
       setShowLoginDialog(true)
       return
     }
 
-    const promptText = prepared?.promptWithReferences ?? inputValue.trim()
+    const promptText = prepared?.promptWithReferences ?? inputValueRef.current.trim()
     const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared?.displaySegments, fileAttachments)
     const generatedTitle = deriveSessionTitle(prepared?.displayContent || promptText)
 
@@ -4354,7 +4404,7 @@ function App() {
     fileAttachments?: ChatAttachment[],
     displaySegments?: UserMessageSegment[],
   ) => {
-    const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
+    const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
     if (!prepared || threadComposerDisabled) return
     const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
     const selectedThreadQueueLength = automation.selectedThread
@@ -4561,7 +4611,7 @@ function App() {
   ) => {
     const thread = automation.selectedThread
     if (!thread) return
-    const prepared = await preparePromptSubmission(inputValue, chipFiles, displaySegments)
+    const prepared = await preparePromptSubmission(inputValueRef.current, chipFiles, displaySegments)
     if (!prepared) return
     const nextDisplaySegments = mergeImageAttachmentsIntoSegments(prepared.displaySegments, fileAttachments)
     enqueueManagerMessage(thread.id, {
@@ -4579,7 +4629,7 @@ function App() {
     })
     setInputValue('')
     setInputSegments(undefined)
-  }, [automation.selectedThread, chatProvider, chatProviderRuntimeMode, cliModel, enqueueManagerMessage, inputValue, preparePromptSubmission])
+  }, [automation.selectedThread, chatProvider, chatProviderRuntimeMode, cliModel, enqueueManagerMessage, preparePromptSubmission, setInputValue])
 
   useEffect(() => {
     if (activeSessionId) return
@@ -4790,12 +4840,6 @@ function App() {
     clearMessages()
     void createSession()
   }, [clearMessages, createSession])
-
-  const handleGoToPersonalChat = useCallback(async () => {
-    const session = personalSessions[0] ?? await createSession(null)
-    if (!session) return
-    switchSession(null, session.id)
-  }, [createSession, personalSessions, switchSession])
 
   const handleSaveApiKeys = async (next: Record<string, string>) => {
     const sanitized = Object.fromEntries(
@@ -5231,27 +5275,32 @@ function App() {
       onAddRepository={handleFolderPickerOpen}
     />
   ) : null
+  const isManagerThread = viewMode === 'manager' && automation.selectedThread
   const mobileFooterToolbarControls = isMobile && currentView === 'chat' ? (
     <div
       className="flex flex-col items-center gap-1 rounded-lg border bg-background/85 px-1.5 py-1.5 shadow-lg backdrop-blur-lg"
       draggable={false}
       onDragStart={(event) => event.preventDefault()}
     >
-      <Tooltip><TooltipTrigger asChild>
-        <Button variant={!showWorkspace && !showTerminal && !showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { if (showWorkspace) closeWorkspacePanel(); if (showTerminal) closeTerminalPanel(); if (showSidebar) setShowSidebar(false); setShowMobileToolbar(false) }} aria-label="Chat">
-          <MessageSquare className="h-5 w-5" />
-        </Button>
-      </TooltipTrigger><TooltipContent side="left">Chat</TooltipContent></Tooltip>
-      <Tooltip><TooltipTrigger asChild>
-        <Button variant={mobileWorkspaceMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
-          {showSidebar ? <PanelLeftClose className="h-5 w-5 rotate-90" /> : <PanelLeftOpen className="h-5 w-5 rotate-90" />}
-        </Button>
-      </TooltipTrigger><TooltipContent side="left">Workspaces</TooltipContent></Tooltip>
-      <Tooltip><TooltipTrigger asChild>
-        <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }} aria-label="Terminal">
-          <TerminalIcon className="h-5 w-5" />
-        </Button>
-      </TooltipTrigger><TooltipContent side="left">Terminal</TooltipContent></Tooltip>
+      {!isManagerThread && (
+        <>
+          <Tooltip><TooltipTrigger asChild>
+            <Button variant={!showWorkspace && !showTerminal && !showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { if (showWorkspace) closeWorkspacePanel(); if (showTerminal) closeTerminalPanel(); if (showSidebar) setShowSidebar(false); setShowMobileToolbar(false) }} aria-label="Chat">
+              <MessageSquare className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger><TooltipContent side="left">Chat</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+            <Button variant={mobileWorkspaceMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
+              {showSidebar ? <PanelLeftClose className="h-5 w-5 rotate-90" /> : <PanelLeftOpen className="h-5 w-5 rotate-90" />}
+            </Button>
+          </TooltipTrigger><TooltipContent side="left">Workspaces</TooltipContent></Tooltip>
+          <Tooltip><TooltipTrigger asChild>
+            <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }} aria-label="Terminal">
+              <TerminalIcon className="h-5 w-5" />
+            </Button>
+          </TooltipTrigger><TooltipContent side="left">Terminal</TooltipContent></Tooltip>
+        </>
+      )}
       {activeWorkspaceId && (
         <>
           <Tooltip><TooltipTrigger asChild>
@@ -5331,20 +5380,6 @@ function App() {
       </div>
     </div>
   ) : null
-  const editComposerFooter = useMemo(() => {
-    if (sendTarget !== 'thread') return undefined
-    return (
-      <ManagerRepoPicker
-        repositories={automation.repositories}
-        selectedRepo={automation.selectedRepo}
-        disabled={automation.creating}
-        getRuntimeInfo={automation.getRuntimeInfoForRepository}
-        onSelect={automation.setSelectedRepoId}
-        onAddRepository={handleFolderPickerOpen}
-      />
-    )
-  }, [sendTarget, automation.repositories, automation.selectedRepo, automation.creating, automation.getRuntimeInfoForRepository, automation.setSelectedRepoId, handleFolderPickerOpen])
-
   const editComposerBag = useMemo(() => ({
     onVoiceInput: handleVoiceInput,
     voiceRecording,
@@ -5353,8 +5388,6 @@ function App() {
     onVoiceStop: handleVoiceStop,
     mode: chatMode,
     onModeChange: setChatMode,
-    sendTarget,
-    onSendTargetChange: setSendTarget,
     provider: chatProvider,
     onProviderChange: handleChatProviderChange,
     responseStyle: chatResponseStyle,
@@ -5363,9 +5396,6 @@ function App() {
     onProviderRuntimeModeChange: handleChatProviderRuntimeModeChange,
     cliModel,
     onCliModelChange: handleCliModelChange,
-    repoRuntime: sendTarget === 'thread' ? selectedRepoRuntime : null,
-    onMoveToGateway: sendTarget === 'thread' ? handleMoveRepoToGateway : undefined,
-    footerLeadingContent: editComposerFooter,
     availableFiles: availableFilesForMention,
     onSearchFiles: handleSearchFiles,
     workspaceOpen: showWorkspace,
@@ -5373,10 +5403,9 @@ function App() {
     workspaceNodeId: activeWorkspace?.nodeId,
   }), [
     handleVoiceInput, voiceRecording, voiceLevels, voiceTranscribing, handleVoiceStop,
-    chatMode, setChatMode, sendTarget, setSendTarget, chatProvider, handleChatProviderChange,
+    chatMode, setChatMode, chatProvider, handleChatProviderChange,
     chatResponseStyle, handleChatResponseStyleChange,
     chatProviderRuntimeMode, handleChatProviderRuntimeModeChange, cliModel, handleCliModelChange,
-    selectedRepoRuntime, handleMoveRepoToGateway, editComposerFooter,
     availableFilesForMention, handleSearchFiles, showWorkspace, sessionInfo, activeWorkspace?.nodeId,
   ])
 
@@ -5573,6 +5602,8 @@ function App() {
                   setCurrentView('chat')
                   automation.setSelectedThreadId(threadId)
                   setSendTarget('thread')
+                  setShowWorkspace(false)
+                  setShowWorkspaceEditor(false)
                 }}
                 onStopThread={(threadId) => automation.handleStop(threadId)}
               />
@@ -5625,20 +5656,21 @@ function App() {
             )}
             <ContextIndicator usage={contextUsage} />
             {(() => {
+              const effectiveModel = cliModel ?? model
               const displayProvider = chatProvider === 'codex' ? 'openai'
                 : chatProvider === 'claude-code' ? 'anthropic'
                 : provider ?? 'ollama'
               const displayModel = chatProvider === 'codex' ? (cliModel ?? 'Codex')
                 : chatProvider === 'claude-code' ? (cliModel ?? 'Claude Code')
-                : model ? getModelDisplayName(model) : null
+                : effectiveModel ? getModelDisplayName(effectiveModel) : null
               const tooltipText = chatProvider === 'codex' ? `OpenAI Codex CLI${cliModel ? ` · ${cliModel}` : ''}`
                 : chatProvider === 'claude-code' ? `Anthropic Claude Code CLI${cliModel ? ` · ${cliModel}` : ''}`
-                : model ?? ''
+                : effectiveModel ?? ''
               return displayModel ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <div className="ui-pill cursor-default sm:mr-2">
-                      <ModelIcon provider={displayProvider} model={chatProvider === 'codex' ? 'codex' : chatProvider === 'claude-code' ? 'claude-3' : model ?? undefined} size={16} />
+                      <ModelIcon provider={displayProvider} model={chatProvider === 'codex' ? 'codex' : chatProvider === 'claude-code' ? 'claude-3' : effectiveModel ?? undefined} size={16} />
                       <span className="text-xs text-muted-foreground hidden sm:inline">{displayModel}</span>
                     </div>
                   </TooltipTrigger>
@@ -5916,30 +5948,12 @@ function App() {
             {/* Chat-specific toolbar */}
             {currentView === 'chat' && (
               <div
-                className={`border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${isMobile ? 'hidden' : 'flex'} ${
+                className={`border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${isMobile && !compactManagerToolbar ? 'hidden' : 'flex'} ${
                   compactManagerToolbar
-                    ? 'min-h-[35px] flex-wrap items-start gap-2 py-1.5'
+                    ? 'min-h-[35px] items-center gap-1.5 pt-14 py-2'
                     : 'h-11 md:h-[35px] items-center gap-1 overflow-x-auto overflow-y-visible scrollbar-none'
                 }`}
               >
-            {viewMode === 'developer' && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant={activeWorkspaceId === null ? 'secondary' : 'ghost'}
-                    size="sm"
-                    className={isMobile ? 'h-9 w-9 shrink-0 rounded-md p-0' : 'h-7 shrink-0 rounded-md px-2 text-xs'}
-                    onClick={() => { void handleGoToPersonalChat() }}
-                    aria-label="Personal chat"
-                  >
-                    <MessageSquare className={`h-3 w-3${isMobile ? '' : ' mr-1'}`} />
-                    {!isMobile && 'Personal'}
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="bottom">Switch to personal chat</TooltipContent>
-              </Tooltip>
-            )}
-
             {viewMode === 'developer' && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -5995,8 +6009,24 @@ function App() {
               </Tooltip>
             )}
 
+            {/* Manager thread back button — rendered before editor controls */}
+            {viewMode === 'manager' && automation.selectedThread && !isMobile && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-6 text-xs px-2 shrink-0"
+                onClick={() => {
+                  automation.setSelectedThreadId(null)
+                  setInputValue('')
+                }}
+              >
+                <ArrowLeft className="h-3 w-3 mr-1" />
+                Back
+              </Button>
+            )}
+
             {/* Chat workspace / editor controls */}
-            {activeWorkspaceId && (viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && (
+            {activeWorkspaceId && (viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && !(isMobile && viewMode === 'manager') && (
               <>
 
                 <div className={`flex items-center shrink-0 ${isMobile ? 'gap-1' : ''}`}>
@@ -6147,23 +6177,10 @@ function App() {
               </Tooltip>
             )}
 
-            {/* Manager mode: repos toggle (list view) / back button (thread view) + thread info */}
+            {/* Manager mode: repos toggle (list view) + thread info */}
             {viewMode === 'manager' && (
               <>
-                {automation.selectedThread ? (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs px-2 shrink-0"
-                    onClick={() => {
-                      automation.setSelectedThreadId(null)
-                      setInputValue('')
-                    }}
-                  >
-                    <ArrowLeft className="h-3 w-3 mr-1" />
-                    Back
-                  </Button>
-                ) : (
+                {automation.selectedThread ? null : (
                   <>
                   <Tooltip>
                     <TooltipTrigger asChild>
@@ -6216,9 +6233,22 @@ function App() {
                   )}
                   </>
                 )}
-                <div className="flex-1" />
+                {!(isMobile && automation.selectedThread) && <div className="flex-1" />}
                 {automation.selectedThread ? (
-                  <div className={isMobile ? 'flex min-w-0 basis-full items-start gap-1.5' : 'flex min-w-0 items-center gap-2 shrink-0'}>
+                  <div className={isMobile ? 'flex min-w-0 flex-1 items-center gap-1.5' : 'flex min-w-0 items-center gap-2 shrink-0'}>
+                    {isMobile && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 w-7 shrink-0 p-0"
+                        onClick={() => {
+                          automation.setSelectedThreadId(null)
+                          setInputValue('')
+                        }}
+                      >
+                        <ArrowLeft className="h-3.5 w-3.5" />
+                      </Button>
+                    )}
                     <div className="flex min-w-0 flex-1 items-start gap-2">
                       <ManagerStatusDot status={automation.selectedThread.status} />
                       {isMobile ? (
@@ -6367,8 +6397,8 @@ function App() {
                     hasMoreWorkspaces={hasMoreWorkspaces}
                     showFewerWorkspaces={workspaces.length > workspaceListLimit}
                     onSelectWorkspace={handleSwitchWorkspace}
-                    onSelectPersonalSession={(sessionId) => switchSession(null, sessionId)}
-                    onNewPersonalSession={() => { void createSession(null) }}
+                    onSelectPersonalSession={(sessionId) => { if (isMobile) setShowSidebar(false); switchSession(null, sessionId) }}
+                    onNewPersonalSession={() => { if (isMobile) setShowSidebar(false); void createSession(null) }}
                     onCreateWorkspace={handleCreateWorkspace}
                     onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
                     onChangeDirectory={handleChangeDirectory}
@@ -6557,7 +6587,7 @@ function App() {
               </section>
             )}
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
-              <section className="flex-1 min-h-0 overflow-hidden border-b bg-background pt-16">
+              <section className={`flex-1 min-h-0 overflow-hidden border-b bg-background ${viewMode === 'manager' ? '' : 'pt-16'}`}>
                 <WorkspacePanel
                   ref={workspaceRef}
                   autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
@@ -6606,7 +6636,7 @@ function App() {
 
             {!showMobileWorkspaceFullscreen && !showMobileTerminalFullscreen && (viewMode === 'manager' ? (
               /* ── Manager main content ────────────────────────────── */
-              <div className="flex-1 min-w-0 flex flex-col min-h-0">
+              <div className={`flex-1 min-w-0 flex flex-col min-h-0 ${isMobile && !automation.selectedThread ? 'pt-12' : ''}`}>
                 {automation.selectedThread ? (
                   <>
 
@@ -6658,11 +6688,15 @@ function App() {
                             className="mb-2"
                           />
                         )}
+                        {automation.selectedThreadTodos.length > 0 && (
+                          <TodoList items={automation.selectedThreadTodos} className="mb-2" />
+                        )}
                         <PromptInput
                           ref={promptInputRef}
                           draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
-                          value={inputValue}
-                          onChange={setInputValue}
+                          value={inputValueRef.current}
+                          syncKey={inputVersion}
+                          onChange={handleInputChange}
                           onSubmit={handleSubmit}
                           onQueue={handleManagerQueue}
                           onStop={() => { if (automation.selectedThread) void automation.handleStop(automation.selectedThread.id) }}
@@ -6734,8 +6768,9 @@ function App() {
                           <PromptInput
                           ref={promptInputRef}
                           draftStateKey={`manager:${automation.selectedRepo?.id ?? 'repo-draft'}`}
-                          value={inputValue}
-                          onChange={setInputValue}
+                          value={inputValueRef.current}
+                          syncKey={inputVersion}
+                          onChange={handleInputChange}
                           onSubmit={handleSubmit}
                           disabled={threadComposerDisabled}
                           controlsDisabled={automation.creating || selectedRepoOffline}
@@ -6814,7 +6849,7 @@ function App() {
                                     repoName={repoName}
                                     prState={prState}
                                     ghAvailable={automation.ghAvailable}
-                                    onOpen={() => automation.setSelectedThreadId(thread.id)}
+                                    onOpen={() => { automation.setSelectedThreadId(thread.id); setShowWorkspace(false); setShowWorkspaceEditor(false) }}
                                     onStop={() => { void automation.handleStop(thread.id) }}
                                     onDelete={() => automation.handleDelete(thread.id)}
                                   />
@@ -6897,9 +6932,10 @@ function App() {
                   <PromptInput
                     ref={promptInputRef}
                     draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
-                    value={inputValue}
+                    value={inputValueRef.current}
+                    syncKey={inputVersion}
                     segments={inputSegments}
-                    onChange={setInputValue}
+                    onChange={handleInputChange}
                     onSubmit={handleSubmit}
                     onStop={handleCancelRequest}
                     onQueue={handleQueue}
@@ -6954,7 +6990,7 @@ function App() {
                   compact={showDesktopWorkspace}
                   loading={isLoadingHistory}
                   loadingLabel="Loading chat"
-                  messageContents={messages.map((msg) => msg.content)}
+                  messageContents={messageContents}
                 >
                   {messages.map((msg, idx) => (
                     <Message
@@ -7048,9 +7084,10 @@ function App() {
                     <PromptInput
                       ref={promptInputRef}
                       draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
-                      value={inputValue}
+                      value={inputValueRef.current}
+                      syncKey={inputVersion}
                       segments={inputSegments}
-                      onChange={setInputValue}
+                      onChange={handleInputChange}
                       onSubmit={handleSubmit}
                       onStop={handleCancelRequest}
                       onQueue={handleQueue}
@@ -7102,7 +7139,7 @@ function App() {
               </div>
             )}
 
-            {isMobile && viewMode === 'developer' && currentView === 'chat' && (
+            {isMobile && (viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && currentView === 'chat' && (
               <>
                 {/* Invisible backdrop to close toolbar on tap-outside */}
                 {showMobileToolbar && (

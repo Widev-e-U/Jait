@@ -25,7 +25,7 @@ export function createOsQueryTool(): ToolDefinition<OsQueryInput> {
   return {
     name: "os.query",
     description: "Query system information: info, processes, disk usage, or environment",
-    tier: "core",
+    tier: "standard",
     category: "os",
     source: "builtin",
     parameters: {
