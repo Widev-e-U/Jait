@@ -7,7 +7,8 @@ import {
   Bug,
   Cast,
   ChevronDown,
-  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
   Code,
   Eye,
   EyeOff,
@@ -1150,7 +1151,7 @@ function App() {
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
-  const [showMobileToolbar, setShowMobileToolbar] = useState(true)
+  const [showMobileToolbar, setShowMobileToolbar] = useState(false)
   const showWorkspaceRef = useRef(false)
   const [chatCollapsed, setChatCollapsed] = useState(false)
   const workspaceRestoreRef = useRef<(() => void) | null>(null)
@@ -2492,10 +2493,10 @@ function App() {
         break
       case 'footer.menu':
         if (!value) {
-          setShowMobileToolbar(true)
+          setShowMobileToolbar(false)
         } else {
           const v = value as { open?: boolean }
-          setShowMobileToolbar(v.open !== false)
+          setShowMobileToolbar(v.open === true)
         }
         break
       case 'chat.mode':
@@ -2656,9 +2657,9 @@ function App() {
     const fm = state['footer.menu']
     if (fm && typeof fm === 'object' && !Array.isArray(fm)) {
       const footerMenu = fm as { open?: boolean }
-      setShowMobileToolbar(footerMenu.open !== false)
+      setShowMobileToolbar(footerMenu.open === true)
     } else {
-      setShowMobileToolbar(true)
+      setShowMobileToolbar(false)
     }
 
     // ── Workspace-scoped state (bundled inside _workspace envelope) ──
@@ -5207,26 +5208,9 @@ function App() {
       onAddRepository={handleFolderPickerOpen}
     />
   ) : null
-  const mobileFooterToolbarToggle = isMobile && currentView === 'chat' ? (
-    <Button
-      type="button"
-      variant="ghost"
-      size="icon"
-      className="h-8 w-8 shrink-0 rounded-lg"
-      onClick={() => setShowMobileToolbar((show) => !show)}
-      aria-label={showMobileToolbar ? 'Hide footer toolbar' : 'Show footer toolbar'}
-      title={showMobileToolbar ? 'Hide footer toolbar' : 'Show footer toolbar'}
-    >
-      {showMobileToolbar ? (
-        <ChevronDown className="h-4 w-4" />
-      ) : (
-        <ChevronUp className="h-4 w-4" />
-      )}
-    </Button>
-  ) : null
   const mobileFooterToolbarControls = isMobile && currentView === 'chat' ? (
     <div
-      className="flex items-center gap-0.5 rounded-2xl border bg-background/70 px-1.5 py-1 shadow-lg backdrop-blur-lg"
+      className="flex flex-col items-center gap-1 rounded-lg border bg-background/85 px-1.5 py-1.5 shadow-lg backdrop-blur-lg"
       draggable={false}
       onDragStart={(event) => event.preventDefault()}
     >
@@ -5234,42 +5218,42 @@ function App() {
         <Button variant={activeWorkspaceId === null ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleGoToPersonalChat() }} aria-label="Personal chat">
           <MessageSquare className="h-5 w-5" />
         </Button>
-      </TooltipTrigger><TooltipContent side="top">Personal chat</TooltipContent></Tooltip>
+      </TooltipTrigger><TooltipContent side="left">Personal chat</TooltipContent></Tooltip>
       <Tooltip><TooltipTrigger asChild>
         <Button variant={mobileWorkspaceMenuActive ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => setShowSidebar(s => !s)} aria-label="Workspaces">
           {showSidebar ? <PanelLeftClose className="h-5 w-5 rotate-90" /> : <PanelLeftOpen className="h-5 w-5 rotate-90" />}
         </Button>
-      </TooltipTrigger><TooltipContent side="top">Workspaces</TooltipContent></Tooltip>
+      </TooltipTrigger><TooltipContent side="left">Workspaces</TooltipContent></Tooltip>
       <Tooltip><TooltipTrigger asChild>
         <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'terminal') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('terminal') }} aria-label="Terminal">
           <TerminalIcon className="h-5 w-5" />
         </Button>
-      </TooltipTrigger><TooltipContent side="top">Terminal</TooltipContent></Tooltip>
+      </TooltipTrigger><TooltipContent side="left">Terminal</TooltipContent></Tooltip>
       {activeWorkspaceId && (
         <>
           <Tooltip><TooltipTrigger asChild>
             <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'files') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('files') }} aria-label="Files">
               <FolderOpen className="h-5 w-5" />
             </Button>
-          </TooltipTrigger><TooltipContent side="top">Files</TooltipContent></Tooltip>
+          </TooltipTrigger><TooltipContent side="left">Files</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
             <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'git') ? 'secondary' : 'ghost'} size="sm" className="relative h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('git') }} aria-label="Changes">
               <GitBranch className="h-5 w-5" />
               {changedFiles.length > 0 && <span className="absolute -right-1 -top-1 z-10 min-w-[14px] rounded-full bg-primary px-1 text-2xs font-bold leading-[14px] text-primary-foreground">{changedFiles.length > 99 ? '99+' : changedFiles.length}</span>}
             </Button>
-          </TooltipTrigger><TooltipContent side="top">Changes</TooltipContent></Tooltip>
+          </TooltipTrigger><TooltipContent side="left">Changes</TooltipContent></Tooltip>
           <Tooltip><TooltipTrigger asChild>
             <Button variant={isMobileWorkspaceTargetActive(mobileWorkspaceControlState, 'editor') ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { void handleMobileWorkspaceTargetAction('editor') }} aria-label="Editor">
               <Code className="h-5 w-5" />
             </Button>
-          </TooltipTrigger><TooltipContent side="top">Editor</TooltipContent></Tooltip>
+          </TooltipTrigger><TooltipContent side="left">Editor</TooltipContent></Tooltip>
         </>
       )}
     </div>
   ) : null
   const developerComposerControlRow = viewMode === 'developer' ? (
     <div className={`overflow-x-auto ${isMobile ? 'px-0.5' : 'px-1'}`}>
-      <div className={`grid min-w-max grid-cols-[1fr_auto_auto_1fr] items-center whitespace-nowrap ${isMobile ? 'gap-2' : 'gap-3'}`}>
+      <div className={`grid min-w-max grid-cols-[1fr_auto_1fr] items-center whitespace-nowrap ${isMobile ? 'gap-2' : 'gap-3'}`}>
         <div className="flex min-w-0 flex-1 items-center gap-2">
           {sendTarget === 'thread' ? (
             developerThreadToolbarRepoPicker
@@ -5306,9 +5290,6 @@ function App() {
             onChange={setSendTarget}
             disabled={isLoading}
           />
-        </div>
-        <div className="justify-self-center">
-          {mobileFooterToolbarToggle}
         </div>
         <div className="flex shrink-0 items-center justify-self-end gap-2">
           {sendTarget !== 'thread' && (
@@ -6985,7 +6966,7 @@ function App() {
                   )}
                 </Conversation>
 
-                <div className={`shrink-0 ${isMobile ? (showMobileToolbar ? 'px-2 pt-2 pb-16' : 'px-2 py-2') : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`}>
+                <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`}>
                   <div className="mx-auto w-full max-w-3xl space-y-1.5">
                     {todoList.length > 0 && (
                       <TodoList items={todoList} />
@@ -7095,11 +7076,35 @@ function App() {
 
             {isMobile && viewMode === 'developer' && currentView === 'chat' && (
               <div
-                className={`fixed left-1/2 z-30 -translate-x-1/2 transition-all duration-200 ${
-                  showMobileToolbar ? 'bottom-3 opacity-100' : 'bottom-[-72px] pointer-events-none opacity-0'
-                }`}
+                className="fixed right-0 top-1/2 z-40 flex -translate-y-1/2 items-center gap-1"
+                draggable={false}
+                onDragStart={(event) => event.preventDefault()}
               >
-                {mobileFooterToolbarControls}
+                <div
+                  className={`transition-all duration-200 ${
+                    showMobileToolbar
+                      ? 'translate-x-0 opacity-100'
+                      : 'pointer-events-none translate-x-2 opacity-0'
+                  }`}
+                >
+                  {mobileFooterToolbarControls}
+                </div>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="icon"
+                  className="h-12 w-8 rounded-l-lg rounded-r-none border-y border-l border-r-0 bg-background/90 shadow-lg backdrop-blur-lg"
+                  onClick={() => setShowMobileToolbar((show) => !show)}
+                  aria-expanded={showMobileToolbar}
+                  aria-label={showMobileToolbar ? 'Hide mobile toolbar' : 'Show mobile toolbar'}
+                  title={showMobileToolbar ? 'Hide mobile toolbar' : 'Show mobile toolbar'}
+                >
+                  {showMobileToolbar ? (
+                    <ChevronRight className="h-4 w-4" />
+                  ) : (
+                    <ChevronLeft className="h-4 w-4" />
+                  )}
+                </Button>
               </div>
             )}
           </>
