@@ -3721,6 +3721,14 @@ function App() {
   }, [terminalColumnWidth])
 
   const activeWorkspaceRoot = activeWorkspace?.workspaceRoot ?? activeWorkspaceRecord?.rootPath ?? null
+  const activeWorkspaceDisplayName = useMemo(() => {
+    const title = activeWorkspaceRecord?.title?.trim()
+    if (title) return title
+    const root = activeWorkspaceRoot?.trim()
+    if (!root) return null
+    const normalizedRoot = root.replace(/[\\/]+$/, '')
+    return normalizedRoot.split(/[\\/]/).pop() || normalizedRoot
+  }, [activeWorkspaceRecord?.title, activeWorkspaceRoot])
 
   // Filter terminals to only show those belonging to the active workspace
   const workspaceTerminals = useMemo(() => {
@@ -6907,6 +6915,8 @@ function App() {
                     availableFiles={availableFilesForMention}
                     onSearchFiles={handleSearchFiles}
                     workspaceOpen={showWorkspace}
+                    workspaceName={activeWorkspaceDisplayName}
+                    workspacePath={activeWorkspaceRoot}
                     sessionInfo={sessionInfo}
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
@@ -7057,6 +7067,8 @@ function App() {
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}
                       workspaceOpen={showWorkspace}
+                      workspaceName={activeWorkspaceDisplayName}
+                      workspacePath={activeWorkspaceRoot}
                       sessionInfo={sessionInfo}
                       workspaceNodeId={activeWorkspace?.nodeId}
                     />

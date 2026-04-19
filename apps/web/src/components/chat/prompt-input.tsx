@@ -93,6 +93,10 @@ interface PromptInputProps {
   sessionInfo?: SessionInfo | null
   /** Node ID of the open workspace (scopes CLI providers to that device). */
   workspaceNodeId?: string
+  /** Display name for the currently selected workspace. */
+  workspaceName?: string | null
+  /** Full path for the currently selected workspace, used as hover context. */
+  workspacePath?: string | null
   /** All files available for @ mention (pre-loaded from visible tree) */
   availableFiles?: ReferencedFile[]
   /** Ordered text/file segments for restoring an existing draft. */
@@ -586,6 +590,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onMoveToGateway,
   sessionInfo,
   workspaceNodeId,
+  workspaceName,
+  workspacePath,
   availableFiles = EMPTY_FILES,
   segments,
   onSearchFiles,
@@ -643,7 +649,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const showProviderRuntimeSelector = Boolean(provider && providerRuntimeMode && onProviderRuntimeModeChange)
   const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
   const shouldShowSendTargetSelector = showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
-  const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
+  const workspaceDisplayName = workspaceName?.trim() || workspacePath?.trim() || null
+  const hasWorkspaceBadge = Boolean(workspaceDisplayName)
+  const hasFooterControls = hasWorkspaceBadge || shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
 
   useEffect(() => {
     const el = rootRef.current
@@ -1538,6 +1546,15 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         {hasFooterControls && (
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
+              {workspaceDisplayName && (
+                <div
+                  className="flex max-w-[14rem] min-w-0 items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs text-muted-foreground"
+                  title={workspacePath?.trim() || workspaceDisplayName}
+                >
+                  <span className="shrink-0 text-[10px] uppercase text-muted-foreground/70">Workspace</span>
+                  <span className="min-w-0 truncate font-medium text-foreground/80">{workspaceDisplayName}</span>
+                </div>
+              )}
               {footerLeadingContent}
               {shouldShowSendTargetSelector && (
                 <SendTargetSelector
