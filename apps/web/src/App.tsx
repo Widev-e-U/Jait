@@ -3241,6 +3241,10 @@ function App() {
     const workspace = workspaces.find((w) => w.id === workspaceId)
     if (!workspace) return
 
+    if (isMobile) {
+      setShowSidebar(false)
+    }
+
     // Determine which session to activate (mirrors switchWorkspace logic)
     const hasCurrentSession = workspace.sessions.some((s) => s.id === activeSessionId)
     const nextSessionId = hasCurrentSession ? activeSessionId : workspace.sessions[0]?.id ?? null
@@ -3268,7 +3272,7 @@ function App() {
         console.error('Failed to open workspace:', e)
       }
     }
-  }, [workspaces, activeSessionId, switchWorkspace, setSavedWorkspace])
+  }, [workspaces, activeSessionId, switchWorkspace, setSavedWorkspace, isMobile])
 
   const handleCreateWorkspace = useCallback(() => {
     setWorkspacePickerMode('workspace')

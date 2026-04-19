@@ -650,8 +650,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const showModeSelector = Boolean(mode && onModeChange && sendTarget !== 'thread' && (!provider || provider === 'jait'))
   const shouldShowSendTargetSelector = showSendTargetSelector && Boolean(sendTarget && onSendTargetChange)
   const workspaceDisplayName = workspaceName?.trim() || workspacePath?.trim() || null
-  const hasWorkspaceBadge = Boolean(workspaceDisplayName)
-  const hasFooterControls = hasWorkspaceBadge || shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
+  const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
 
   useEffect(() => {
     const el = rootRef.current
@@ -1542,19 +1541,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
         </div>
       )}
 
+      {workspaceDisplayName && (
+        <div
+          className="min-w-0 px-3 pb-1 pt-0.5 text-[10px] leading-none text-muted-foreground"
+          title={workspacePath?.trim() || workspaceDisplayName}
+        >
+          <span className="block truncate">{workspaceDisplayName}</span>
+        </div>
+      )}
+
       <div className="flex min-w-0 items-center gap-2 px-3 pb-2.5 pt-0.5">
         {hasFooterControls && (
           <div className="min-w-0 flex-1 overflow-x-auto scrollbar-none">
             <div className="flex min-w-max items-center gap-1 pr-1">
-              {workspaceDisplayName && (
-                <div
-                  className="flex max-w-[14rem] min-w-0 items-center gap-1.5 rounded-md border border-border/60 bg-muted/40 px-2 py-1 text-xs text-muted-foreground"
-                  title={workspacePath?.trim() || workspaceDisplayName}
-                >
-                  <span className="shrink-0 text-[10px] uppercase text-muted-foreground/70">Workspace</span>
-                  <span className="min-w-0 truncate font-medium text-foreground/80">{workspaceDisplayName}</span>
-                </div>
-              )}
               {footerLeadingContent}
               {shouldShowSendTargetSelector && (
                 <SendTargetSelector
