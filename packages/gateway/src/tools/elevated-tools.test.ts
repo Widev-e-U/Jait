@@ -133,9 +133,25 @@ describe("elevated.run for Jait provider tool discovery", () => {
 });
 
 describe("elevated.run on Windows", () => {
-  it("requires an explicit administrator username", async () => {
-    const { service } = autoSubmitSecret();
-    const tool = createElevatedRunTool(service, fakeSpawnFactory().factory, {
+  it("uses UAC elevation via -Verb RunAs when no username is provided", async () => {
+    const { factory, calls } = fakeSpawnFactory((command, args, proc) => {
+      if (command !== "powershell.exe") return;
+      queueMicrotask(() => {
+        expect(args).toContain("-EncodedCommand");
+        // Decode the EncodedCommand and verify it uses -Verb RunAs (UAC path)
+        const encodedIdx = args.indexOf("-EncodedCommand");
+        const script = Buffer.from(args[encodedIdx + 1], "base64").toString("utf16le");
+        expect(script).toContain("-Verb RunAs");
+        expect(script).not.toContain("-Credential");
+        proc.stdout.write(JSON.stringify({
+          exitCode: 0,
+          stdout: "uac-elevated-output\n",
+          stderr: "",
+        }));
+        proc.emit("close", 0, null);
+      });
+    });
+    const tool = createElevatedRunTool(undefined, factory, {
       platform: () => "win32",
       getuid: () => undefined,
     });
@@ -144,8 +160,10 @@ describe("elevated.run on Windows", () => {
       command: "Get-Service",
     }, context());
 
-    expect(result.ok).toBe(false);
-    expect(result.message).toBe("On Windows, elevated.run requires `username` for an administrator account");
+    expect(result.ok).toBe(true);
+    expect((result.data as { output: string }).output).toContain("uac-elevated-output");
+    // UAC mode should not require the secret input service at all
+    expect(calls[0]?.command).toBe("powershell.exe");
   });
 
   it("runs powershell under the provided administrator account without exposing the password in inputs", async () => {
@@ -154,6 +172,11 @@ describe("elevated.run on Windows", () => {
       if (command !== "powershell.exe") return;
       queueMicrotask(() => {
         expect(args).toContain("-EncodedCommand");
+        // Verify credential-based path (not UAC) when username is provided
+        const encodedIdx = args.indexOf("-EncodedCommand");
+        const script = Buffer.from(args[encodedIdx + 1], "base64").toString("utf16le");
+        expect(script).toContain("-Credential");
+        expect(script).not.toContain("-Verb RunAs");
         proc.stdout.write(JSON.stringify({
           exitCode: 0,
           stdout: "windows-admin-output\n",

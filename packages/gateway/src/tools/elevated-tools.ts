@@ -48,7 +48,7 @@ function sanitizeStreamChunk(chunk: string): string {
   return chunk.replace(/\r\n/g, "\n").replace(/\r/g, "");
 }
 
-function buildWindowsWrapperScript(): string {
+function buildWindowsCredentialWrapperScript(): string {
   return [
     "$ErrorActionPreference = 'Stop'",
     "$password = ConvertTo-SecureString $env:JAIT_ELEVATED_PASSWORD -AsPlainText -Force",
@@ -67,7 +67,57 @@ function buildWindowsWrapperScript(): string {
   ].join("\n");
 }
 
-function buildWindowsSpawn(
+/**
+ * Builds a PowerShell script that uses Start-Process -Verb RunAs to trigger
+ * the native Windows UAC dialog for elevation, without requiring explicit
+ * credentials.  Output is captured via temp files since -Verb RunAs cannot
+ * use -RedirectStandardOutput/-RedirectStandardError directly.
+ */
+function buildWindowsUacWrapperScript(): string {
+  return [
+    "$ErrorActionPreference = 'Stop'",
+    "$id = [guid]::NewGuid().ToString()",
+    "$base = Join-Path $env:TEMP \"jait-uac-$id\"",
+    "$stdoutPath = \"${base}-out.txt\"",
+    "$stderrPath = \"${base}-err.txt\"",
+    "$exitCodePath = \"${base}-ec.txt\"",
+    "$cmdPath = \"${base}-cmd.txt\"",
+    "$scriptPath = \"${base}.ps1\"",
+    "",
+    "# Write the command to a file (passed base64-encoded to avoid quoting issues)",
+    "[System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String($env:JAIT_ELEVATED_COMMAND_B64)) | Set-Content -Path $cmdPath -Encoding UTF8 -NoNewline",
+    "",
+    "# Build the inner elevated script that reads the command from file",
+    "$cwd = $env:JAIT_ELEVATED_CWD -replace \"'\", \"''\"",
+    "$lines = @(",
+    "  \"`$ErrorActionPreference = 'Continue'\"",
+    "  \"Set-Location -LiteralPath '\" + $cwd + \"'\"",
+    "  \"`$cmd = Get-Content -Path '\" + ($cmdPath -replace \"'\", \"''\") + \"' -Raw\"",
+    "  'try {'",
+    "  \"  `$output = Invoke-Expression `$cmd 2>'\" + ($stderrPath -replace \"'\", \"''\") + \"'\"",
+    "  \"  `$output | Out-File -FilePath '\" + ($stdoutPath -replace \"'\", \"''\") + \"' -Encoding utf8\"",
+    "  \"  if (`$null -eq `$LASTEXITCODE) { 0 } else { `$LASTEXITCODE } | Out-File -FilePath '\" + ($exitCodePath -replace \"'\", \"''\") + \"' -Encoding utf8\"",
+    "  '} catch {'",
+    "  \"  `$_.Exception.Message | Out-File -FilePath '\" + ($stderrPath -replace \"'\", \"''\") + \"' -Encoding utf8 -Append\"",
+    "  \"  1 | Out-File -FilePath '\" + ($exitCodePath -replace \"'\", \"''\") + \"' -Encoding utf8\"",
+    "  '}'",
+    ")",
+    "$lines | Set-Content -Path $scriptPath -Encoding UTF8",
+    "",
+    "try {",
+    "  $proc = Start-Process -Verb RunAs -FilePath 'powershell.exe' -ArgumentList @('-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', $scriptPath) -Wait -PassThru -WindowStyle Hidden",
+    "  $stdout = if (Test-Path $stdoutPath) { Get-Content -Raw $stdoutPath } else { '' }",
+    "  $stderr = if (Test-Path $stderrPath) { Get-Content -Raw $stderrPath } else { '' }",
+    "  $ec = if (Test-Path $exitCodePath) { (Get-Content -Raw $exitCodePath).Trim() -as [int] } else { $null }",
+    "  if ($null -eq $ec) { $ec = $proc.ExitCode }",
+    "  [pscustomobject]@{ exitCode = $ec; stdout = $stdout; stderr = $stderr } | ConvertTo-Json -Compress",
+    "} finally {",
+    "  Remove-Item -Path \"${base}*\" -Force -ErrorAction SilentlyContinue",
+    "}",
+  ].join("\n");
+}
+
+function buildWindowsCredentialSpawn(
   input: {
     command: string;
     cwd: string;
@@ -75,7 +125,7 @@ function buildWindowsSpawn(
     password: string;
   },
 ): { command: string; args: string[]; env: NodeJS.ProcessEnv } {
-  const script = buildWindowsWrapperScript();
+  const script = buildWindowsCredentialWrapperScript();
   return {
     command: "powershell.exe",
     args: ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")],
@@ -89,6 +139,24 @@ function buildWindowsSpawn(
   };
 }
 
+function buildWindowsUacSpawn(
+  input: {
+    command: string;
+    cwd: string;
+  },
+): { command: string; args: string[]; env: NodeJS.ProcessEnv } {
+  const script = buildWindowsUacWrapperScript();
+  return {
+    command: "powershell.exe",
+    args: ["-NoProfile", "-NonInteractive", "-EncodedCommand", Buffer.from(script, "utf16le").toString("base64")],
+    env: {
+      ...process.env,
+      JAIT_ELEVATED_COMMAND_B64: Buffer.from(input.command, "utf8").toString("base64"),
+      JAIT_ELEVATED_CWD: input.cwd,
+    },
+  };
+}
+
 async function runElevatedCommand(
   input: {
     command: string;
@@ -98,6 +166,7 @@ async function runElevatedCommand(
     password: string | null;
     isElevatedAlready: boolean;
     platform: NodeJS.Platform;
+    useUac?: boolean;
   },
   context: ToolContext,
   spawnFactory: ElevatedSpawnFactory,
@@ -111,12 +180,17 @@ async function runElevatedCommand(
   return new Promise((resolve) => {
     const windows = input.platform === "win32";
     const spawnSpec = windows
-      ? buildWindowsSpawn({
-        command: input.command,
-        cwd: input.cwd,
-        username: input.username!,
-        password: input.password!,
-      })
+      ? (input.useUac
+        ? buildWindowsUacSpawn({
+          command: input.command,
+          cwd: input.cwd,
+        })
+        : buildWindowsCredentialSpawn({
+          command: input.command,
+          cwd: input.cwd,
+          username: input.username!,
+          password: input.password!,
+        }))
       : {
         command: input.isElevatedAlready ? "sh" : "sudo",
         args: input.isElevatedAlready
@@ -206,7 +280,7 @@ export function createElevatedRunTool(
   return {
     name: "elevated.run",
     description:
-      "Run a local command with elevated privileges. On Linux and macOS, this uses sudo. On Windows, this runs PowerShell under an explicitly provided administrator account. Passwords are requested through a secret prompt and are never sent to the LLM or included in tool arguments.",
+      "Run a local command with elevated privileges. On Linux and macOS, this uses sudo. On Windows, if no username is provided the native UAC dialog is shown for one-click elevation; if a username is supplied the command runs under that account with credential-based elevation. Passwords (when needed) are requested through a secret prompt and are never sent to the LLM or included in tool arguments.",
     tier: "standard",
     category: "os",
     source: "builtin",
@@ -216,7 +290,7 @@ export function createElevatedRunTool(
       type: "object",
       properties: {
         command: { type: "string", description: "Shell command to run with elevated privileges" },
-        username: { type: "string", description: "Windows only: administrator account username to run the command under" },
+        username: { type: "string", description: "Windows only: administrator account username. When omitted on Windows, the native UAC dialog is shown instead." },
         cwd: { type: "string", description: "Working directory for the command. Defaults to the workspace root." },
         timeoutMs: { type: "number", description: "Execution timeout in milliseconds, default 30000" },
         reason: { type: "string", description: "Short human-readable reason shown in the password prompt context." },
@@ -231,11 +305,10 @@ export function createElevatedRunTool(
       const currentUid = runtime.getuid?.() ?? (typeof process.getuid === "function" ? process.getuid() : undefined);
       const isElevatedAlready = currentPlatform !== "win32" && currentUid === 0;
       const windowsUsername = input.username?.trim();
-      if (currentPlatform === "win32" && !windowsUsername) {
-        return { ok: false, message: "On Windows, elevated.run requires `username` for an administrator account" };
-      }
+      const useUac = currentPlatform === "win32" && !windowsUsername;
+
       let password: string | null = null;
-      if (!isElevatedAlready) {
+      if (!isElevatedAlready && !useUac) {
         if (!secretInput) return { ok: false, message: "Secret input service is unavailable" };
         password = await secretInput.requestSecret({
           sessionId: context.sessionId,
@@ -262,6 +335,7 @@ export function createElevatedRunTool(
         password,
         isElevatedAlready,
         platform: currentPlatform,
+        useUac,
       }, context, spawnFactory);
 
       let stdout = result.stdout.trim();
