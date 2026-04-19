@@ -465,6 +465,24 @@ function cleanEmptyNodes(el: HTMLElement) {
   }
 }
 
+function sanitizeEditableContent(el: HTMLElement) {
+  for (let i = el.childNodes.length - 1; i >= 0; i--) {
+    const child = el.childNodes[i]
+    if (child.nodeType === Node.TEXT_NODE) continue
+    if (!(child instanceof HTMLElement)) {
+      child.remove()
+      continue
+    }
+    if (child.hasAttribute('data-chip-ref') || child.tagName === 'BR') continue
+    if (child.matches('button, a, input, textarea, select, svg, [role="button"]')
+      || child.querySelector('button, a, input, textarea, select, svg, [role="button"]')) {
+      child.remove()
+      continue
+    }
+    child.replaceWith(document.createTextNode(child.textContent ?? ''))
+  }
+}
+
 function appendSegmentNodes(
   el: HTMLElement,
   segments: UserMessageSegment[],
@@ -968,6 +986,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
 
     const handleNativeInput = () => {
       isSyncing.current = true
+      sanitizeEditableContent(el)
       const text = getTextFromEditable(el)
       draftSegmentsRef.current = getComposerSegments(el)
       onChangeRef.current(text)
@@ -1463,6 +1482,11 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
           onPaste={handlePaste}
           onCopy={handleCopy}
           onDrop={(e) => { e.preventDefault() }}
+          onDragStart={(e) => { e.preventDefault() }}
+          onBeforeInput={(e) => {
+            const inputType = (e.nativeEvent as InputEvent).inputType
+            if (inputType === 'insertFromDrop' || inputType === 'insertHTML') e.preventDefault()
+          }}
           className={cn(
             'min-h-[40px] max-h-[200px] overflow-y-auto text-base leading-relaxed outline-none py-2 px-2 text-foreground',
             'whitespace-pre-wrap break-words',
