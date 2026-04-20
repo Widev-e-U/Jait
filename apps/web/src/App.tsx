@@ -6849,7 +6849,7 @@ function App() {
                             repoRuntime={selectedRepoRuntime}
                             onMoveToGateway={handleMoveRepoToGateway}
                           />
-                          <div className="overflow-x-auto px-1 pt-1">
+                          <div className="overflow-x-auto px-1 pt-3">
                             <div className="flex min-w-max items-center gap-2 whitespace-nowrap">
                               <ManagerRepoPicker
                                 repositories={automation.repositories}
