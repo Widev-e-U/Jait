@@ -327,7 +327,7 @@ export function ProviderModelSelector({
       </PopoverTrigger>
       <PopoverContent
         align="start"
-        side="top"
+        side={isMobile ? 'bottom' : 'top'}
         collisionPadding={8}
         className="flex w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
         style={{
@@ -336,26 +336,26 @@ export function ProviderModelSelector({
             : 'min(32rem, var(--radix-popover-content-available-height, 80dvh))',
         }}
       >
-        <div className="border-b px-3 py-2">
+        <div className="shrink-0 border-b px-3 py-2">
           <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
         </div>
         {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && (
-          <div className="border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
             Device is offline — only Jait (gateway) is available
           </div>
         )}
         {scopedToRepo && repoLoading && (
-          <div className="flex items-center gap-1.5 border-b px-3 py-2 text-xs text-muted-foreground">
+          <div className="flex shrink-0 items-center gap-1.5 border-b px-3 py-2 text-xs text-muted-foreground">
             <Loader2 className="h-3 w-3 animate-spin" />
             Connecting to device…
           </div>
         )}
         {scopedToWorkspaceNode && !wsRemoteNode && (
-          <div className="border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
             Device is offline — only Jait (gateway) is available
           </div>
         )}
-        <div className="min-h-0 max-h-56 overflow-y-auto p-1">
+        <div className="min-h-24 max-h-56 shrink-0 overflow-y-auto p-1">
           {providerEntries.map((entry) => {
             const Icon = entry.icon
             const active = entry.value === provider
@@ -419,10 +419,10 @@ export function ProviderModelSelector({
         </div>
 
         <>
-            <div className="border-y px-3 py-2">
+            <div className="shrink-0 border-y px-3 py-2">
               <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
             </div>
-            <div className="border-b px-3 py-2">
+            <div className="shrink-0 border-b px-3 py-2">
               <div className="flex items-center gap-2">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <input
