@@ -5522,6 +5522,22 @@ function App() {
                 )}
               </button>
             )}
+            {isMobile && currentView === 'chat' && activeManagerThreads.length > 0 && (
+              <ManagerActiveThreadsMenu
+                threads={activeManagerThreads}
+                getRepositoryForThread={automation.getRepositoryForThread}
+                threadPrStates={automation.threadPrStates}
+                ghAvailable={automation.ghAvailable}
+                onOpenThread={(threadId) => {
+                  setCurrentView('chat')
+                  automation.setSelectedThreadId(threadId)
+                  setSendTarget('thread')
+                  setShowWorkspace(false)
+                  setShowWorkspaceEditor(false)
+                }}
+                onStopThread={(threadId) => automation.handleStop(threadId)}
+              />
+            )}
           </div>
 
           {/* Nav — hidden on mobile, visible on md+ */}
@@ -5634,22 +5650,6 @@ function App() {
 
           {/* Right: Context + Model + Account */}
           <div className={`flex items-center gap-1 sm:gap-1.5 shrink-0 ${isMobile ? 'pointer-events-auto rounded-2xl bg-background/70 backdrop-blur-lg shadow-lg border px-1 py-0.5 h-10' : ''}`} style={isElectron ? { WebkitAppRegion: 'no-drag' } as React.CSSProperties : undefined}>
-            {currentView === 'chat' && activeManagerThreads.length > 0 && (
-              <ManagerActiveThreadsMenu
-                threads={activeManagerThreads}
-                getRepositoryForThread={automation.getRepositoryForThread}
-                threadPrStates={automation.threadPrStates}
-                ghAvailable={automation.ghAvailable}
-                onOpenThread={(threadId) => {
-                  setCurrentView('chat')
-                  automation.setSelectedThreadId(threadId)
-                  setSendTarget('thread')
-                  setShowWorkspace(false)
-                  setShowWorkspaceEditor(false)
-                }}
-                onStopThread={(threadId) => automation.handleStop(threadId)}
-              />
-            )}
             {/* Desktop status items — hidden on mobile */}
             <div className="hidden md:flex items-center gap-1 sm:gap-1.5">
             {screenShare.isActive && (
@@ -5695,6 +5695,22 @@ function App() {
                       : 'Click to enable always-on "Hey Jait" wake word'}
                 </TooltipContent>
               </Tooltip>
+            )}
+            {currentView === 'chat' && activeManagerThreads.length > 0 && (
+              <ManagerActiveThreadsMenu
+                threads={activeManagerThreads}
+                getRepositoryForThread={automation.getRepositoryForThread}
+                threadPrStates={automation.threadPrStates}
+                ghAvailable={automation.ghAvailable}
+                onOpenThread={(threadId) => {
+                  setCurrentView('chat')
+                  automation.setSelectedThreadId(threadId)
+                  setSendTarget('thread')
+                  setShowWorkspace(false)
+                  setShowWorkspaceEditor(false)
+                }}
+                onStopThread={(threadId) => automation.handleStop(threadId)}
+              />
             )}
             <ContextIndicator usage={contextUsage} />
             {(() => {
