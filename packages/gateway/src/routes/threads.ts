@@ -1166,11 +1166,15 @@ export function registerThreadRoutes(
                 });
                 if (titleUpdated) broadcastThreadEvent(id, "updated", { thread: titleUpdated });
               }
-            } catch {
+            } catch (titleErr) {
               // Title generation failed — leave the placeholder title.
               // Reset the counter so the real coding turn's turn.completed
               // isn't swallowed (the title turn never emitted one).
               suppressTitleTurnEvents = 0;
+              app.log.warn(
+                { threadId: id, provider: providerId, error: String(titleErr) },
+                "Thread title generation failed",
+              );
             }
           }
 
