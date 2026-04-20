@@ -31,7 +31,7 @@ describe("buildCreatePrUrl", () => {
     const remoteUrlSpy = vi.spyOn(git, "getRemoteUrl");
     remoteUrlSpy.mockResolvedValueOnce("git@github.com:acme/repo.git");
     await expect(git.buildCreatePrUrl("/repo", "feature/test", "origin", "main")).resolves.toBe(
-      "https://github.com/acme/repo/compare/feature%2Ftest?expand=1",
+      "https://github.com/acme/repo/compare/main...feature%2Ftest?expand=1",
     );
 
     remoteUrlSpy.mockResolvedValueOnce("https://dev.azure.com/acme/project/_git/repo");

@@ -243,8 +243,8 @@ export class GitHubForge implements GitForge {
     }
   }
 
-  buildCreatePrUrl(remote: ParsedRemote, headBranch: string, _baseBranch?: string): string | null {
-    return `${remote.normalizedUrl}/compare/${encodeURIComponent(headBranch)}?expand=1`;
+  buildCreatePrUrl(remote: ParsedRemote, headBranch: string, baseBranch?: string): string | null {
+    return `${remote.normalizedUrl}/compare/${encodeURIComponent(baseBranch ?? "main")}...${encodeURIComponent(headBranch)}?expand=1`;
   }
 
   private async createPrViaCli(cwd: string, remote: ParsedRemote, input: ForgePrInput): Promise<ForgePrResult> {
