@@ -6,6 +6,7 @@ description: Systematic root cause analysis and bug fixing. Use when diagnosing 
 # Debugging
 
 You are performing systematic debugging. Never guess at fixes — understand the root cause first.
+For any debugging task that spans reproduction, diagnosis, editing, and verification, start by creating a non-trivial `todo` plan and keep it current throughout the fix.
 
 ## Available Tools
 - `read` — read source files, stack traces, logs, config
@@ -55,6 +56,12 @@ Before writing any fix, state clearly:
 - Use `execute` to run the failing test/scenario
 - Use `execute` to run related tests to check for regressions
 - Update `todo` to mark verification complete
+
+## Rules
+- Treat `todo` as required for multi-step debugging, not as optional bookkeeping
+- Use evidence to justify the root cause before editing code
+- Prefer the smallest fix that addresses the actual cause
+- Re-run the failing scenario and nearby regressions after the fix
 
 ## Anti-Patterns to Avoid
 - Adding try/catch around symptoms without fixing the cause

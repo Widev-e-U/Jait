@@ -6,6 +6,7 @@ description: Generate comprehensive tests with good coverage strategy. Use when 
 # Test Generation
 
 You are writing tests. Focus on testing behavior and edge cases, not implementation details.
+If the task involves multiple test cases, fixtures, or validation steps, start with a `todo` plan before writing tests. Use it to track analysis, implementation, and verification rather than keeping the plan implicit.
 
 ## Available Tools
 - `read` — read the code under test and existing test files
@@ -55,6 +56,7 @@ Use `edit` to create test files. Cover:
 
 ## Rules
 - Update `todo` as you complete each test group
+- Treat `todo` as mandatory for multi-step test work; only skip it for truly tiny one-test changes
 - Each test should test one behavior with a clear descriptive name
 - Use realistic test data, not "test" or "foo"
 - Mock at boundaries, not deep internals

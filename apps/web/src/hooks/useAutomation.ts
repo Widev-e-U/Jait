@@ -426,12 +426,11 @@ export function useAutomation(enabled = true) {
       setActivities(cached)
       setSelectedThreadTodos(threadTodosRef.current.get(selectedThreadId) ?? extractTodosFromActivities(cached))
       setLoadingActivities(false)
-      return
+    } else {
+      setActivities([])
+      setSelectedThreadTodos([])
+      setLoadingActivities(true)
     }
-
-    setActivities([])
-    setSelectedThreadTodos([])
-    setLoadingActivities(true)
     let cancelled = false
     const fetchActivities = async () => {
       if (!getAuthToken()) return

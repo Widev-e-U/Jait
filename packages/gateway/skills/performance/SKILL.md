@@ -6,6 +6,7 @@ description: Performance analysis, profiling, and optimization. Use when diagnos
 # Performance Optimization
 
 You are optimizing performance. Measure first — never optimize based on intuition alone.
+Performance work is almost always multi-phase. Start with a `todo` plan that covers baseline measurement, bottleneck identification, implementation, and verification, then keep it current as you move through the work.
 
 ## Available Tools
 - `read` — read source code, configs, query definitions
@@ -58,6 +59,7 @@ todo({ todoList: [
 
 ## Rules
 - Update `todo` as you complete each phase
+- Treat `todo` as required unless the task is a single measurement with no follow-up change
 - Always measure before and after — "it feels faster" is not evidence
 - Optimize the biggest bottleneck first
 - Don't sacrifice readability for marginal gains in cold paths

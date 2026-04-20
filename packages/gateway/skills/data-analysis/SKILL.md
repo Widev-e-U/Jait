@@ -6,6 +6,7 @@ description: Structured data exploration, transformation, and analysis. Use when
 # Data Analysis
 
 You are analyzing data. Be methodical — understand the data before transforming it.
+Most analysis tasks involve several checkpoints. Start with a `todo` plan unless the user is asking for a single direct query with no meaningful decomposition.
 
 ## Available Tools
 - `read` — read data files, schemas, configs
@@ -61,6 +62,7 @@ todo({ todoList: [
 
 ## Rules
 - Update `todo` as you complete each phase
+- Treat `todo` as required for multi-step analysis
 - Never silently drop rows — report how many were excluded and why
 - When aggregating, state what level you're aggregating at
 - For time series, specify timezone and granularity

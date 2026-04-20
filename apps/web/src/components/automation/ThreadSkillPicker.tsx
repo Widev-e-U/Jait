@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { Lightbulb, Loader2 } from 'lucide-react'
+import { AlertCircle, Bot, Lightbulb, Loader2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Switch } from '@/components/ui/switch'
@@ -8,6 +8,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 import { agentsApi } from '@/lib/agents-api'
 import { getSkillVisual } from '@/lib/skill-icons'
 import type { SkillInfo } from '@jait/shared'
+import { shouldAutoLoadThreadSkills } from './thread-skill-picker-state'
 
 const API_URL = getApiUrl()
 
@@ -21,10 +22,13 @@ export function ThreadSkillPicker({ token, threadId, selectedSkillIds }: ThreadS
   const [open, setOpen] = useState(false)
   const [skills, setSkills] = useState<SkillInfo[]>([])
   const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+  const [attemptedLoad, setAttemptedLoad] = useState(false)
   const [saving, setSaving] = useState(false)
 
   const loadSkills = useCallback(async () => {
     setLoading(true)
+    setError(null)
     try {
       const headers: Record<string, string> = {}
       if (token) headers.Authorization = `Bearer ${token}`
@@ -32,16 +36,19 @@ export function ThreadSkillPicker({ token, threadId, selectedSkillIds }: ThreadS
       if (!res.ok) throw new Error(`Failed to load skills (HTTP ${res.status})`)
       const data = await res.json() as SkillInfo[]
       setSkills(data)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to load skills')
     } finally {
       setLoading(false)
+      setAttemptedLoad(true)
     }
   }, [token])
 
   useEffect(() => {
-    if (open && skills.length === 0 && !loading) {
+    if (shouldAutoLoadThreadSkills({ open, attemptedLoad, skillsLength: skills.length, loading })) {
       void loadSkills()
     }
-  }, [loadSkills, loading, open, skills.length])
+  }, [attemptedLoad, loadSkills, loading, open, skills.length])
 
   const enabledInstalledSkills = useMemo(
     () => skills.filter((skill) => skill.enabled),
@@ -102,6 +109,24 @@ export function ThreadSkillPicker({ token, threadId, selectedSkillIds }: ThreadS
           <div className="flex items-center gap-2 py-4 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             Loading skills...
+          </div>
+        ) : error ? (
+          <div className="space-y-3 rounded-lg border border-destructive/50 bg-destructive/5 p-3">
+            <div className="flex items-start gap-2 text-sm text-destructive">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{error}</span>
+            </div>
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-7 text-xs"
+              onClick={() => {
+                setAttemptedLoad(false)
+                void loadSkills()
+              }}
+            >
+              Retry
+            </Button>
           </div>
         ) : enabledInstalledSkills.length === 0 ? (
           <div className="rounded-lg border border-dashed p-4 text-xs text-muted-foreground">

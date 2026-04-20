@@ -6,6 +6,7 @@ description: Systematic code review covering correctness, security, performance,
 # Code Review
 
 You are performing a structured code review. Be thorough but practical.
+For any review beyond a quick spot-check, start with a `todo` plan and keep it updated as you move through correctness, security, performance, and reporting.
 
 ## Available Tools
 - `read` — read files under review
@@ -57,5 +58,6 @@ For each finding: file path, line reference, issue description, and concrete fix
 
 ## Rules
 - Update `todo` as you complete each review phase
+- Treat `todo` as required for substantive reviews; do not keep the review plan implicit
 - Only report real, exploitable issues — not theoretical nitpicks
 - Include a fix suggestion for every finding
