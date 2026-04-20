@@ -11,16 +11,44 @@ import { readFile, writeFile, unlink, mkdir, rm, readdir } from "node:fs/promise
 import { existsSync } from "node:fs";
 import { basename, join } from "node:path";
 import { homedir, tmpdir } from "node:os";
-import { promisify } from "node:util";
-
-const _exec = promisify(execCb);
-function exec(cmd: string, opts?: Record<string, unknown>) {
-  return _exec(cmd, { encoding: "utf-8" as const, windowsHide: true, ...opts });
+function exec(cmd: string, opts?: Record<string, unknown>): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execCb(
+      cmd,
+      { encoding: "utf-8" as const, windowsHide: true, ...opts },
+      (error, stdout, stderr) => {
+        if (error) {
+          const enriched = error as Error & { stdout?: string; stderr?: string };
+          enriched.stdout = stdout;
+          enriched.stderr = stderr;
+          reject(enriched);
+          return;
+        }
+        resolve({ stdout, stderr });
+      },
+    );
+  });
 }
 const DEFAULT_TIMEOUT = 30_000;
 
 function trimCommandOutput(stdout: string): string {
   return stdout.replace(/\r?\n$/, "");
+}
+
+function escapeShellArg(value: string): string {
+  return value.replace(/(["\\$`])/g, "\\$1");
+}
+
+async function getBranchUpstream(cwd: string, branch: string): Promise<string | null> {
+  const ref = escapeShellArg(`refs/heads/${branch}`);
+  const upstream = await gitExec(cwd, `for-each-ref --format="%(upstream:short)" "${ref}"`).catch(() => "");
+  return upstream.trim() || null;
+}
+
+async function getConfiguredBranchRemote(cwd: string, branch: string): Promise<string | null> {
+  const key = escapeShellArg(`branch.${branch}.remote`);
+  const remote = await gitExec(cwd, `config --default "" --get "${key}"`).catch(() => "");
+  return remote.trim() || null;
 }
 
 // ── Types ──────────────────────────────────────────────────────────
@@ -572,14 +600,14 @@ export class GitService {
     let aheadCount = 0;
     let behindCount = 0;
     if (branch) {
-      try {
-        const upstream = await gitExec(cwd, `rev-parse --abbrev-ref ${branch}@{upstream}`);
+      const upstream = await getBranchUpstream(cwd, branch);
+      if (upstream) {
         hasUpstream = !!upstream;
-        const counts = await gitExec(cwd, `rev-list --left-right --count ${branch}...${branch}@{upstream}`);
+        const counts = await gitExec(cwd, `rev-list --left-right --count ${branch}...${upstream}`);
         const [ahead, behind] = counts.split("\t").map(Number);
         aheadCount = ahead ?? 0;
         behindCount = behind ?? 0;
-      } catch { /* no upstream */ }
+      }
     }
 
     // PR status (via gh cli)
@@ -822,12 +850,7 @@ export class GitService {
 
   async sync(cwd: string): Promise<GitSyncResult> {
     const branch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD");
-    let upstream: string | null = null;
-    try {
-      upstream = await gitExec(cwd, `rev-parse --abbrev-ref ${branch}@{upstream}`);
-    } catch {
-      upstream = null;
-    }
+    const upstream = await getBranchUpstream(cwd, branch);
 
     const result: GitSyncResult = {
       branch,
@@ -1003,10 +1026,10 @@ export class GitService {
       if (currentBranch) {
         let hasUpstream = false;
         let upstreamBranch: string | undefined;
-        try {
-          upstreamBranch = await gitExec(cwd, `rev-parse --abbrev-ref ${currentBranch}@{upstream}`);
+        upstreamBranch = await getBranchUpstream(cwd, currentBranch) ?? undefined;
+        if (upstreamBranch) {
           hasUpstream = true;
-        } catch { /* no upstream */ }
+        }
 
         // Rebase onto the latest remote base branch so PRs show a clean diff.
         // Without this, the branch may be rooted on a stale commit and GitHub
@@ -1429,7 +1452,7 @@ export class GitService {
     if (remotes.length === 0) return null;
 
     if (branch) {
-      const configuredRemote = await gitExec(cwd, `config --get branch.${branch}.remote`).catch(() => "");
+      const configuredRemote = await getConfiguredBranchRemote(cwd, branch) ?? "";
       if (configuredRemote && remotes.includes(configuredRemote)) {
         return configuredRemote;
       }
