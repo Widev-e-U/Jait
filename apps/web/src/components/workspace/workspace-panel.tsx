@@ -5545,7 +5545,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           )}
           <div
             ref={tabScrollRef}
-            className="flex items-center flex-1 min-w-0 overflow-x-auto overflow-y-hidden scrollbar-none"
+            className="flex items-center flex-1 min-w-0 overflow-x-auto scrollbar-none"
             onWheel={(e) => {
               if (e.deltaY === 0) return
               e.preventDefault()
