@@ -977,6 +977,7 @@ export class GitService {
     featureBranch?: boolean,
     baseBranch?: string,
     githubToken?: string,
+    expectedBranch?: string,
   ): Promise<GitStepResult> {
     const effectiveToken = await resolveGithubTokenWithFallback(githubToken);
     const result: GitStepResult = {
@@ -994,7 +995,25 @@ export class GitService {
       result.branch = { status: "created", name: branchName };
     }
 
-    const currentBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
+    let currentBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
+
+    // If we expect a specific branch (e.g. thread branch) but are on a different one
+    // (e.g. main because worktree creation failed), switch to it before committing.
+    if (expectedBranch && currentBranch && currentBranch !== expectedBranch) {
+      try {
+        // Try to checkout the expected branch (it may already exist locally)
+        await gitExec(cwd, `checkout "${expectedBranch}"`);
+        currentBranch = expectedBranch;
+      } catch {
+        try {
+          // Branch doesn't exist locally — create it from current HEAD
+          await gitExec(cwd, `checkout -b "${expectedBranch}"`);
+          currentBranch = expectedBranch;
+        } catch {
+          // Last resort: stay on current branch
+        }
+      }
+    }
 
     // Commit step
     const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");

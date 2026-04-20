@@ -1529,6 +1529,7 @@ export function registerThreadRoutes(
           featureBranch: false,
           baseBranch,
           githubToken,
+          expectedBranch: thread.branch || undefined,
         }, 120_000);
       } else {
         result = await gitService.runStackedAction(
@@ -1538,6 +1539,7 @@ export function registerThreadRoutes(
           false,
           baseBranch,
           githubToken,
+          thread.branch || undefined,
         );
       }
 

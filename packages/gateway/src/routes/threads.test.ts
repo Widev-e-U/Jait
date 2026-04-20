@@ -721,6 +721,7 @@ describe("thread routes", () => {
       false,
       "main",
       undefined,
+      undefined,
     );
 
     const updated = threadService.getById(thread.id);

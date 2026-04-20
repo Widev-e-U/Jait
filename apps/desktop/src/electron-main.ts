@@ -1441,6 +1441,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const commitMessage = params.commitMessage as string | undefined;
       const featureBranch = params.featureBranch as boolean | undefined;
       const baseBranch = params.baseBranch as string | undefined;
+      const expectedBranch = params.expectedBranch as string | undefined;
       const { exec: execAsync } = await import("node:child_process");
       const { promisify } = await import("node:util");
       const { tmpdir } = await import("node:os");
@@ -1502,7 +1503,21 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         result.branch = { status: "created", name: branchName };
       }
 
-      const currentBranch = await gitExecLocal("rev-parse --abbrev-ref HEAD").catch(() => null);
+      let currentBranch = await gitExecLocal("rev-parse --abbrev-ref HEAD").catch(() => null);
+
+      // If we expect a specific branch (e.g. thread branch) but are on a different one
+      // (e.g. main because worktree creation failed), switch to it before committing.
+      if (expectedBranch && currentBranch && currentBranch !== expectedBranch) {
+        try {
+          await gitExecLocal(`checkout "${expectedBranch}"`);
+          currentBranch = expectedBranch;
+        } catch {
+          try {
+            await gitExecLocal(`checkout -b "${expectedBranch}"`);
+            currentBranch = expectedBranch;
+          } catch { /* stay on current branch */ }
+        }
+      }
 
       // Commit step
       const porcelain = await gitExecLocal("status --porcelain").catch(() => "");
@@ -1529,9 +1544,22 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
           hasUpstream = true;
         } catch { /* no upstream */ }
 
+        // Rebase onto latest remote base so PRs show a clean diff
+        try {
+          const rebaseTarget = baseBranch ?? "main";
+          const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
+          const rebaseRemote = remotes.includes("origin") ? "origin" : remotes[0];
+          if (rebaseRemote) {
+            await gitExecLocal(`fetch ${rebaseRemote} ${rebaseTarget}`, 60_000);
+            await gitExecLocal(`rebase ${rebaseRemote}/${rebaseTarget}`);
+          }
+        } catch {
+          await gitExecLocal("rebase --abort").catch(() => {});
+        }
+
         if (hasUpstream) {
           try {
-            await gitExecLocal("push --no-verify", 60_000);
+            await gitExecLocal("push --no-verify --force-with-lease", 60_000);
             result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
           } catch (pushErr) {
             const msg = pushErr instanceof Error ? pushErr.message : String(pushErr);
