@@ -1,4 +1,4 @@
-import { Bot, GitBranch } from 'lucide-react'
+import { GitBranch, Infinity } from 'lucide-react'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
 
@@ -21,7 +21,7 @@ const TARGETS: Array<{
   {
     value: 'agent',
     label: 'Agent',
-    icon: Bot,
+    icon: Infinity,
     description: 'Send to the current coding chat session',
   },
   {
