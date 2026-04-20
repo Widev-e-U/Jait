@@ -310,7 +310,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           });
           deps.threadService.update(effectiveThread.id, { routingPlan });
           broadcastThreadEvent(effectiveThread.id, "updated", { thread: deps.threadService.getById(effectiveThread.id) });
-          turnMessage = `${formatRoutingPlanForPrompt(routingPlan)}\n\n${message}`;
+          turnMessage = `${formatRoutingPlanForPrompt(routingPlan, message.length)}\n\n${message}`;
         }
 
         await provider.sendTurn(session.id, turnMessage, attachments);

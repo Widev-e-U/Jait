@@ -92,7 +92,7 @@ export function createSearchTool(registry: SurfaceRegistry): ToolDefinition<Sear
       required: ["pattern"],
     },
     async execute(input: SearchInput, context: ToolContext): Promise<ToolResult> {
-      const effectiveRoot = resolveWorkspaceRoot(registry, context.sessionId);
+      const effectiveRoot = resolveWorkspaceRoot(registry, context.sessionId, context.workspaceRoot);
       const searchDir = input.path || effectiveRoot;
       const limit = Math.min(input.limit ?? DEFAULT_MAX_RESULTS, MAX_RESULTS_CAP);
       const mode = input.mode ?? "content";

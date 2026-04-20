@@ -38,9 +38,6 @@ async function waitFor(condition: () => boolean, timeoutMs = 2000) {
 
 function expectThreadTurnMessage(message: unknown, startsWith: string): void {
   expect(message).toEqual(expect.stringContaining(startsWith));
-  expect(message).toEqual(expect.stringContaining("<skill-evaluation>"));
-  expect(message).toEqual(expect.stringContaining("Always evaluate whether the requested work should become a reusable skill."));
-  expect(message).toEqual(expect.stringContaining("</skill-evaluation>"));
 }
 
 class MockThreadProvider implements CliProviderAdapter {

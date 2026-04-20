@@ -678,16 +678,6 @@ export function registerThreadRoutes(
       ].join("\n\n");
     }
 
-    fullMessage = [
-      fullMessage,
-      "<skill-evaluation>",
-      "Always evaluate whether the requested work should become a reusable skill.",
-      "A skill is justified when the workflow or instruction pattern will likely repeat across tasks, repositories, or users.",
-      "If it is repo-specific, one-off, or too narrow, treat it as not worth a skill.",
-      "When relevant, call out a short proposed skill name and why it should or should not exist.",
-      "</skill-evaluation>",
-    ].join("\n\n");
-
     return fullMessage;
   }
 
@@ -1260,7 +1250,7 @@ export function registerThreadRoutes(
             }
 
             // Inject routing plan context so the agent knows the orchestration strategy
-            const routingBlock = formatRoutingPlanForPrompt(routingPlan);
+            const routingBlock = formatRoutingPlanForPrompt(routingPlan, message.length);
             turnMessage = `${routingBlock}\n\n${turnMessage}`;
 
             // Synthesize context_flow for CLI providers (they don't emit it natively)
@@ -1375,13 +1365,17 @@ export function registerThreadRoutes(
       branch: thread.branch,
     });
 
-    // Inject thread skills on follow-up turns so the agent keeps skill context
-    const availableSkills = deps.skillRegistry
-      ? resolveThreadSkills(deps.skillRegistry, thread.skillIds)
-      : [];
-    if (availableSkills.length > 0) {
-      const skillsBlock = formatSkillsForPrompt(availableSkills);
-      if (skillsBlock) fullMessage = `${skillsBlock}\n\n${fullMessage}`;
+    // Re-inject skills on follow-up turns only for CLI providers (codex, claude-code)
+    // whose history Jait doesn't control. The jait provider keeps cumulative history,
+    // so skills from the first turn are already present — re-injecting would duplicate them.
+    if (thread.providerId !== "jait") {
+      const availableSkills = deps.skillRegistry
+        ? resolveThreadSkills(deps.skillRegistry, thread.skillIds)
+        : [];
+      if (availableSkills.length > 0) {
+        const skillsBlock = formatSkillsForPrompt(availableSkills);
+        if (skillsBlock) fullMessage = `${skillsBlock}\n\n${fullMessage}`;
+      }
     }
 
     await provider.sendTurn(thread.providerSessionId, fullMessage, attachments);

@@ -263,15 +263,33 @@ function buildReason(
  * Format the routing plan as a prescriptive problem-solving methodology
  * injected into the agent's first turn message. This tells the agent
  * exactly how to approach the task using structured orchestration phases.
+ *
+ * For short, straightforward messages the orchestration is kept lightweight
+ * to avoid wasting tokens on ceremony for trivial tasks.
  */
-export function formatRoutingPlanForPrompt(plan: RoutingPlan): string {
+export function formatRoutingPlanForPrompt(plan: RoutingPlan, messageLength?: number): string {
+  const isSimple = (messageLength ?? 0) < 200 && plan.topology !== "delegated";
+
   const lines = [
     "<orchestration>",
     `Classification: ${plan.intent} — ${plan.reason}`,
+  ];
+
+  if (isSimple) {
+    // Lightweight orchestration — no rigid phases for quick tasks
+    lines.push(
+      "",
+      "This looks like a straightforward task. Proceed directly — read the relevant code, make the change, and verify it compiles.",
+      "</orchestration>",
+    );
+    return lines.join("\n");
+  }
+
+  lines.push(
     "",
     "You MUST follow this problem-solving process:",
     "",
-  ];
+  );
 
   // Phase-specific instructions based on intent
   const phases = getOrchestrationPhases(plan);

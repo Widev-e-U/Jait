@@ -987,6 +987,32 @@ export class GitService {
       pr: { status: "skipped_not_requested" },
     };
 
+    // Before creating a feature branch, push the base branch to remote if it
+    // has unpushed commits.  Otherwise the feature branch inherits those
+    // commits and the PR diff on GitHub includes changes that belong to main.
+    if (
+      (action === "commit_push" || action === "commit_push_pr") &&
+      (featureBranch || expectedBranch)
+    ) {
+      const preBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
+      const targetBase = baseBranch ?? "main";
+      if (preBranch === targetBase) {
+        try {
+          const remote = await this.getPreferredRemote(cwd, preBranch).catch(() => null);
+          if (remote) {
+            await gitExec(cwd, `fetch ${remote} ${targetBase}`, 60_000);
+            const ahead = await gitExec(cwd, `rev-list --count ${remote}/${targetBase}..HEAD`).catch(() => "0");
+            if (parseInt(ahead, 10) > 0) {
+              await gitExec(cwd, `push --no-verify "${remote}" "${preBranch}"`);
+            }
+          }
+        } catch {
+          // Push failed (e.g. protected branch, conflict) — continue anyway.
+          // The feature branch may carry extra commits in the PR diff.
+        }
+      }
+    }
+
     // Optionally create a feature branch
     if (featureBranch) {
       const timestamp = Date.now().toString(36);
