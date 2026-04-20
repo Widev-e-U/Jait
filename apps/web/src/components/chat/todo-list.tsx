@@ -58,10 +58,8 @@ export function TodoList({ items, className }: TodoListProps) {
   if (items.length === 0) return null
   if (hidden) return null
 
-  const activeItem = items.find((item) => item.status === 'in-progress') ?? null
   const completed = items.filter((t) => t.status === 'completed').length
   const total = items.length
-  const allCompleted = completed === total
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
   const headerLabel = !expanded && activeItem ? activeItem.title : 'Tasks'
 

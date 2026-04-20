@@ -1008,9 +1008,24 @@ export class GitService {
           hasUpstream = true;
         } catch { /* no upstream */ }
 
+        // Rebase onto the latest remote base branch so PRs show a clean diff.
+        // Without this, the branch may be rooted on a stale commit and GitHub
+        // shows the entire delta between that old base and current main.
+        try {
+          const rebaseTarget = baseBranch ?? "main";
+          const rebaseRemote = await this.getPreferredRemote(cwd, currentBranch).catch(() => null);
+          if (rebaseRemote) {
+            await gitExec(cwd, `fetch ${rebaseRemote} ${rebaseTarget}`, 60_000);
+            await gitExec(cwd, `rebase ${rebaseRemote}/${rebaseTarget}`);
+          }
+        } catch {
+          // Abort if rebase has conflicts — push from current state
+          await gitExec(cwd, "rebase --abort").catch(() => {});
+        }
+
         if (hasUpstream) {
           try {
-            await gitExec(cwd, "push --no-verify");
+            await gitExec(cwd, "push --no-verify --force-with-lease");
             result.push = { status: "pushed", branch: currentBranch, upstreamBranch };
           } catch (pushErr) {
             const msg = pushErr instanceof Error ? pushErr.message : String(pushErr);
