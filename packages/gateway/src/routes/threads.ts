@@ -1178,7 +1178,10 @@ export function registerThreadRoutes(
                 if (titleUpdated) broadcastThreadEvent(id, "updated", { thread: titleUpdated });
               }
             } catch {
-              // Title generation failed — leave the placeholder title
+              // Title generation failed — leave the placeholder title.
+              // Reset the counter so the real coding turn's turn.completed
+              // isn't swallowed (the title turn never emitted one).
+              suppressTitleTurnEvents = 0;
             }
           }
 
@@ -1366,12 +1369,21 @@ export function registerThreadRoutes(
     threadService.update(id, { status: "running", error: null });
     broadcastThreadStatus(id, "running");
 
-    const fullMessage = buildThreadTurnMessage({
+    let fullMessage = buildThreadTurnMessage({
       message,
       prUrl: thread.prUrl,
       prState: normalizeThreadPrState(thread.prState),
       branch: thread.branch,
     });
+
+    // Inject thread skills on follow-up turns so the agent keeps skill context
+    const availableSkills = deps.skillRegistry
+      ? resolveThreadSkills(deps.skillRegistry, thread.skillIds)
+      : [];
+    if (availableSkills.length > 0) {
+      const skillsBlock = formatSkillsForPrompt(availableSkills);
+      if (skillsBlock) fullMessage = `${skillsBlock}\n\n${fullMessage}`;
+    }
 
     await provider.sendTurn(thread.providerSessionId, fullMessage, attachments);
     return reply.status(200).send({ ok: true });

@@ -127,7 +127,7 @@ export function SessionSelector({
                     : null
                   const offline = isNodeOffline(workspace.nodeId, onlineNodeIds)
                   return (
-                    <div key={workspace.id} className={`overflow-hidden rounded-md border border-border/60 bg-background/40 ${offline ? 'opacity-50' : ''}`}>
+                    <div key={workspace.id} className={`overflow-hidden rounded-md ${offline ? 'opacity-50' : ''}`}>
                       <div
                         className={`group flex items-start gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
                           offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
