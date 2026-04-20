@@ -9,12 +9,25 @@ import { exec as execCb } from "node:child_process";
 import { writeFile, unlink } from "node:fs/promises";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
-import { promisify } from "node:util";
 import { parseGitRemote, type GitRemoteProvider, type ParsedRemote } from "./git.js";
 
-const _exec = promisify(execCb);
-function exec(cmd: string, opts?: Record<string, unknown>) {
-  return _exec(cmd, { encoding: "utf-8" as const, windowsHide: true, ...opts });
+function exec(cmd: string, opts?: Record<string, unknown>): Promise<{ stdout: string; stderr: string }> {
+  return new Promise((resolve, reject) => {
+    execCb(
+      cmd,
+      { encoding: "utf-8" as const, windowsHide: true, ...opts },
+      (error, stdout, stderr) => {
+        if (error) {
+          const enriched = error as Error & { stdout?: string; stderr?: string };
+          enriched.stdout = stdout;
+          enriched.stderr = stderr;
+          reject(enriched);
+          return;
+        }
+        resolve({ stdout, stderr });
+      },
+    );
+  });
 }
 
 export type { GitRemoteProvider, ParsedRemote };
