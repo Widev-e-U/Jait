@@ -10,6 +10,15 @@ function git(cwd: string, cmd: string) {
   return execSync(`git ${cmd}`, { cwd, encoding: "utf-8" }).trim();
 }
 
+async function captureError(run: Promise<unknown>): Promise<unknown> {
+  try {
+    await run;
+    return null;
+  } catch (error) {
+    return error;
+  }
+}
+
 describe("runStackedAction – unstage on commit failure", () => {
   let repoDir: string;
   let svc: GitService;
@@ -39,9 +48,9 @@ describe("runStackedAction – unstage on commit failure", () => {
     await writeFile(hookPath, "#!/bin/sh\nexit 1\n");
     if (platform() !== "win32") await chmod(hookPath, 0o755);
 
-    await expect(
-      svc.runStackedAction(repoDir, "commit", "test commit"),
-    ).rejects.toThrow();
+    const error = await captureError(svc.runStackedAction(repoDir, "commit", "test commit"));
+
+    expect(error).toBeInstanceOf(Error);
 
     // Files should NOT be left staged
     const staged = git(repoDir, "diff --cached --name-only");
@@ -58,9 +67,9 @@ describe("runStackedAction – unstage on commit failure", () => {
     await writeFile(hookPath, "#!/bin/sh\nexit 1\n");
     if (platform() !== "win32") await chmod(hookPath, 0o755);
 
-    await expect(
-      svc.runStackedAction(repoDir, "commit", "test commit"),
-    ).rejects.toThrow();
+    const error = await captureError(svc.runStackedAction(repoDir, "commit", "test commit"));
+
+    expect(error).toBeInstanceOf(Error);
 
     // Verify nothing is left staged
     const staged = git(repoDir, "diff --cached --name-only");
