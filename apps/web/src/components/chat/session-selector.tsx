@@ -129,7 +129,7 @@ export function SessionSelector({
                   return (
                     <div key={workspace.id} className={`overflow-hidden rounded-md border border-border/60 bg-background/40 ${offline ? 'opacity-50' : ''}`}>
                       <div
-                        className={`group flex items-start gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
+                        className={`group grid grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
                           offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
                         } ${
                           isActiveWorkspace ? 'bg-secondary/70' : offline ? '' : 'hover:bg-muted/40'
@@ -153,11 +153,11 @@ export function SessionSelector({
                         ) : (
                           <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                         )}
-                        <div className="min-w-0 flex-1 overflow-hidden">
+                        <div className="min-w-0 overflow-hidden">
                           <div className="truncate text-xs font-medium">
                             {workspace.title || 'Untitled Workspace'}
                           </div>
-                          <div className="flex items-center gap-1 text-2xs text-muted-foreground overflow-hidden">
+                          <div className="flex min-w-0 items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
                             <span className="truncate min-w-0">{workspace.rootPath || 'No folder linked'}</span>
                             <span className="shrink-0">·</span>
                             <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
@@ -170,7 +170,7 @@ export function SessionSelector({
                           )}
                           {remoteNode && !offline && (
                             <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
-                              <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
+                              <span className="inline-flex max-w-full items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
                                 <NodeIcon platform={remoteNode.platform} />
                                 <span className="truncate max-w-[80px]">{remoteNode.name}</span>
                               </span>
