@@ -15,6 +15,12 @@ interface TodoListProps {
 
 const TODO_LIST_AUTO_HIDE_DELAY_MS = 5000
 
+export interface CollapsedTodoDisplay {
+  headerLabel: string
+  showHeaderSpinner: boolean
+  showCompletedSummary: boolean
+}
+
 export function getActiveTodoItem(items: TodoItem[]): TodoItem | null {
   return items.find((item) => item.status === 'in-progress') ?? null
 }
@@ -23,13 +29,24 @@ export function areAllTodoItemsCompleted(items: TodoItem[]): boolean {
   return items.length > 0 && items.every((item) => item.status === 'completed')
 }
 
+export function getCollapsedTodoDisplay(items: TodoItem[]): CollapsedTodoDisplay {
+  const activeItem = getActiveTodoItem(items)
+  const allCompleted = areAllTodoItemsCompleted(items)
+
+  return {
+    headerLabel: activeItem ? activeItem.title : 'Tasks',
+    showHeaderSpinner: Boolean(activeItem),
+    showCompletedSummary: !activeItem && allCompleted,
+  }
+}
+
 export function TodoList({ items, className }: TodoListProps) {
   const [expanded, setExpanded] = useState(false)
   const [hidden, setHidden] = useState(false)
   const hideTimeoutRef = useRef<number | null>(null)
 
-  const activeItem = useMemo(() => getActiveTodoItem(items), [items])
   const allCompleted = useMemo(() => areAllTodoItemsCompleted(items), [items])
+  const collapsedDisplay = useMemo(() => getCollapsedTodoDisplay(items), [items])
 
   useEffect(() => {
     if (hideTimeoutRef.current !== null) {
@@ -61,7 +78,7 @@ export function TodoList({ items, className }: TodoListProps) {
   const completed = items.filter((t) => t.status === 'completed').length
   const total = items.length
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
-  const headerLabel = !expanded && activeItem ? activeItem.title : 'Tasks'
+  const headerLabel = expanded ? 'Tasks' : collapsedDisplay.headerLabel
 
   return (
     <div className={cn('rounded-lg border bg-muted/30 p-3 space-y-2', className)}>
@@ -77,6 +94,9 @@ export function TodoList({ items, className }: TodoListProps) {
             !expanded && '-rotate-90',
           )}
         />
+        {!expanded && collapsedDisplay.showHeaderSpinner && (
+          <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
+        )}
         <span className="min-w-0 truncate text-xs font-medium text-foreground">{headerLabel}</span>
         <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
           <div
@@ -89,16 +109,7 @@ export function TodoList({ items, className }: TodoListProps) {
         </span>
       </button>
 
-      {!expanded && activeItem && (
-        <div className="flex items-start gap-2 text-xs">
-          <Loader2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary animate-spin" />
-          <span className="min-w-0 flex-1 truncate text-foreground">
-            {activeItem.title}
-          </span>
-        </div>
-      )}
-
-      {!expanded && !activeItem && allCompleted && (
+      {!expanded && collapsedDisplay.showCompletedSummary && (
         <div className="flex items-start gap-2 text-xs text-green-600 dark:text-green-400">
           <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
           <span className="min-w-0 flex-1 truncate font-medium">
