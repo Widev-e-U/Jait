@@ -2,6 +2,12 @@
 @tailwind components;
 @tailwind utilities;
 
+.jait-top-header,
+.jait-top-header button,
+.jait-top-header span {
+  color: #ef4444;
+}
+
 @layer base {
   :root {
     color-scheme: light;

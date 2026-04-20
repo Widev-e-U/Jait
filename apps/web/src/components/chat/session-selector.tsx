@@ -127,102 +127,101 @@ export function SessionSelector({
                     : null
                   const offline = isNodeOffline(workspace.nodeId, onlineNodeIds)
                   return (
-                    <div key={workspace.id} className={`overflow-hidden rounded-md ${offline ? 'opacity-50' : ''}`}>
-                      <div
-                        className={`group grid grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 rounded-md px-1.5 py-1.5 transition-colors text-sm ${
-                          offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
-                        } ${
-                          isActiveWorkspace ? 'bg-secondary/70' : offline ? '' : 'hover:bg-muted/40'
-                        }`}
-                        draggable={Boolean(workspace.rootPath)}
-                        onDragStart={(e) => {
-                          if (!workspace.rootPath) {
-                            e.preventDefault()
-                            return
-                          }
-                          e.dataTransfer.effectAllowed = 'copy'
-                          e.dataTransfer.setData(
-                            JAIT_WORKSPACE_REF_MIME,
-                            JSON.stringify(buildWorkspaceDragPayload(workspace.rootPath, workspace.title || undefined)),
-                          )
-                        }}
-                        onClick={() => { if (!offline && !isActiveWorkspace) onSelectWorkspace(workspace.id) }}
-                      >
-                        {isActiveWorkspace ? (
-                          <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
-                        ) : (
-                          <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                    <div
+                      key={workspace.id}
+                      className={`group flex w-full items-start gap-1 px-1.5 py-1.5 text-sm transition-colors ${
+                        offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
+                      } ${
+                        isActiveWorkspace ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'
+                      }`}
+                      draggable={Boolean(workspace.rootPath)}
+                      onDragStart={(e) => {
+                        if (!workspace.rootPath) {
+                          e.preventDefault()
+                          return
+                        }
+                        e.dataTransfer.effectAllowed = 'copy'
+                        e.dataTransfer.setData(
+                          JAIT_WORKSPACE_REF_MIME,
+                          JSON.stringify(buildWorkspaceDragPayload(workspace.rootPath, workspace.title || undefined)),
+                        )
+                      }}
+                      onClick={() => { if (!offline && !isActiveWorkspace) onSelectWorkspace(workspace.id) }}
+                    >
+                      {isActiveWorkspace ? (
+                        <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-primary" />
+                      ) : (
+                        <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      )}
+                      <div className="min-w-0 flex-1 overflow-hidden pr-0.5">
+                        <div className="truncate text-xs font-medium">
+                          {workspace.title || 'Untitled Workspace'}
+                        </div>
+                        <div className="flex items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
+                          <span className="min-w-0 truncate">{workspace.rootPath || 'No folder linked'}</span>
+                          <span className="shrink-0">·</span>
+                          <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
+                        </div>
+                        {offline && (
+                          <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
+                            <WifiOff className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">Node offline</span>
+                          </div>
                         )}
-                        <div className="min-w-0 overflow-hidden">
-                          <div className="truncate text-xs font-medium">
-                            {workspace.title || 'Untitled Workspace'}
+                        {remoteNode && !offline && (
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
+                            <span className="inline-flex min-w-0 items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
+                              <NodeIcon platform={remoteNode.platform} />
+                              <span className="truncate max-w-[80px]">{remoteNode.name}</span>
+                            </span>
                           </div>
-                          <div className="flex min-w-0 items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
-                            <span className="truncate min-w-0">{workspace.rootPath || 'No folder linked'}</span>
-                            <span className="shrink-0">·</span>
-                            <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
+                        )}
+                        {isActiveWorkspace && sessionInfo && (
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-blue-500">
+                            <span className="truncate">{sessionInfo.provider}</span>
+                            <span className="shrink-0 text-muted-foreground">·</span>
+                            <Monitor className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">
+                              {sessionInfo.isRemote && sessionInfo.remoteNode
+                                ? sessionInfo.remoteNode.nodeName
+                                : 'Gateway'}
+                            </span>
                           </div>
-                          {offline && (
-                            <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
-                              <WifiOff className="h-2.5 w-2.5" />
-                              <span>Node offline</span>
-                            </div>
-                          )}
-                          {remoteNode && !offline && (
-                            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
-                              <span className="inline-flex max-w-full items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
-                                <NodeIcon platform={remoteNode.platform} />
-                                <span className="truncate max-w-[80px]">{remoteNode.name}</span>
-                              </span>
-                            </div>
-                          )}
-                          {isActiveWorkspace && sessionInfo && (
-                            <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-blue-500">
-                              <span className="truncate">{sessionInfo.provider}</span>
-                              <span className="shrink-0 text-muted-foreground">·</span>
-                              <Monitor className="h-2.5 w-2.5 shrink-0" />
-                              <span className="truncate">
-                                {sessionInfo.isRemote && sessionInfo.remoteNode
-                                  ? sessionInfo.remoteNode.nodeName
-                                  : 'Gateway'}
-                              </span>
-                            </div>
-                          )}
-                        </div>
-                        <div className="flex shrink-0 self-start gap-0.5">
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-foreground"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onChangeDirectory(workspace.id)
-                                }}
-                              >
-                                <FolderInput className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">Change directory</TooltipContent>
-                          </Tooltip>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity shrink-0 text-muted-foreground hover:text-destructive"
-                                onClick={(e) => {
-                                  e.stopPropagation()
-                                  onRemoveWorkspace(workspace.id)
-                                }}
-                              >
-                                <Archive className="h-3 w-3" />
-                              </Button>
-                            </TooltipTrigger>
-                            <TooltipContent side="right">Archive workspace</TooltipContent>
-                          </Tooltip>
-                        </div>
+                        )}
+                      </div>
+                      <div className="flex shrink-0 self-start">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5.5 w-5.5 shrink-0 opacity-100 text-muted-foreground transition-opacity hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onChangeDirectory(workspace.id)
+                              }}
+                            >
+                              <FolderInput className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">Change directory</TooltipContent>
+                        </Tooltip>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-5.5 w-5.5 shrink-0 opacity-100 text-muted-foreground transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                onRemoveWorkspace(workspace.id)
+                              }}
+                            >
+                              <Archive className="h-3 w-3" />
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent side="right">Archive workspace</TooltipContent>
+                        </Tooltip>
                       </div>
                     </div>
                   )

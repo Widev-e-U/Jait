@@ -34,7 +34,7 @@ import type { UserService } from "../services/users.js";
 import type { RepositoryService } from "../services/repositories.js";
 import { assertOwnership } from "../security/ownership.js";
 import { existsSync } from "node:fs";
-import type { SkillRegistry } from "../skills/index.js";
+import type { Skill, SkillRegistry } from "../skills/index.js";
 import { formatSkillsForPrompt } from "../skills/index.js";
 import { routeThread, formatRoutingPlanForPrompt } from "../services/thread-router.js";
 import {
@@ -42,8 +42,7 @@ import {
   generateTitleViaApi,
   normalizeGeneratedThreadTitle,
 } from "../services/thread-title.js";
-import type { WsEventType } from "@jait/shared";
-import type { ThreadInfo, ThreadRegistrySnapshot } from "@jait/shared";
+import type { WsEventType, ThreadInfo, ThreadRegistrySnapshot } from "@jait/shared/types";
 import type { ProviderModelInfo } from "../providers/contracts.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 
@@ -1240,10 +1239,10 @@ export function registerThreadRoutes(
             broadcastThreadEvent(id, "activity", { activity: routingActivity });
 
             // Use router-suggested skills (includes auto-matched + pinned)
-            const routedSkills = deps.skillRegistry
+            const routedSkills: Skill[] = deps.skillRegistry
               ? routingPlan.suggestedSkillIds
-                  .map((sid) => deps.skillRegistry!.get(sid))
-                  .filter((s): s is NonNullable<typeof s> => Boolean(s))
+                  .map((sid: string) => deps.skillRegistry!.get(sid))
+                  .filter((skill): skill is Skill => Boolean(skill))
               : [];
             const effectiveSkills = routedSkills.length > 0 ? routedSkills : availableSkills;
 

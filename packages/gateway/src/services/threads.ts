@@ -15,6 +15,7 @@ import type {
   RuntimeMode,
   ProviderEvent,
 } from "../providers/contracts.js";
+import type { RoutingPlan } from "@jait/shared/types";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -58,7 +59,7 @@ export interface UpdateThreadParams {
   completedAt?: string | null;
   executionNodeId?: string | null;
   executionNodeName?: string | null;
-  routingPlan?: import("@jait/shared").RoutingPlan | null;
+  routingPlan?: RoutingPlan | null;
 }
 
 export interface ThreadActivity {
@@ -73,7 +74,7 @@ export interface ThreadActivity {
 type ThreadRowRecord = typeof agentThreads.$inferSelect;
 export type ThreadRow = Omit<ThreadRowRecord, "skillIds" | "routingPlan"> & {
   skillIds: string[] | null;
-  routingPlan: import("@jait/shared").RoutingPlan | null;
+  routingPlan: RoutingPlan | null;
 };
 
 function serializeSkillIds(skillIds: string[] | null | undefined): string | null | undefined {
@@ -95,10 +96,10 @@ function parseSkillIds(raw: string | null): string[] | null {
   }
 }
 
-function parseRoutingPlan(raw: string | null): import("@jait/shared").RoutingPlan | null {
+function parseRoutingPlan(raw: string | null): RoutingPlan | null {
   if (!raw) return null;
   try {
-    return JSON.parse(raw) as import("@jait/shared").RoutingPlan;
+    return JSON.parse(raw) as RoutingPlan;
   } catch {
     return null;
   }

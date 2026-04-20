@@ -8,7 +8,7 @@
  * its plan into the thread record + agent context.
  */
 
-import type { RoutingPlan, ThreadIntent, ExecutionTopology } from "@jait/shared";
+import type { RoutingPlan, ThreadIntent, ExecutionTopology } from "@jait/shared/types";
 import type { Skill } from "../skills/index.js";
 
 // ── Intent classification ────────────────────────────────────────────

@@ -5445,8 +5445,8 @@ function App() {
             <header
               className={
                 isMobile
-                  ? 'fixed top-2 left-2 right-2 z-40 flex items-center gap-1 pointer-events-none h-10'
-                  : `relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
+                  ? 'jait-top-header fixed top-2 left-2 right-2 z-40 flex items-center gap-1 pointer-events-none h-10'
+                  : `jait-top-header relative flex items-center gap-1 shrink-0 border-b bg-background px-2 sm:gap-2 sm:px-5 ${isElectron ? 'h-10 !pl-[0.8rem]' : 'h-14'}`
               }
               style={isElectron ? {
                 WebkitAppRegion: 'drag',
