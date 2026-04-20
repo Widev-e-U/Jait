@@ -193,11 +193,32 @@ export interface ParsedRemote {
   project?: string;
 }
 
+// ── Per-worktree mutex ─────────────────────────────────────────────
+
+/**
+ * Serializes git operations per working directory to prevent index.lock
+ * races when multiple threads/requests target the same repo or worktree.
+ */
+const gitLocks = new Map<string, Promise<unknown>>();
+
+function withGitLock<T>(cwd: string, fn: () => Promise<T>): Promise<T> {
+  const key = cwd.replace(/\\/g, "/");
+  const prev = gitLocks.get(key) ?? Promise.resolve();
+  const next = prev.then(fn, fn);           // run even if previous rejected
+  gitLocks.set(key, next);
+  next.finally(() => {                       // clean up when chain settles
+    if (gitLocks.get(key) === next) gitLocks.delete(key);
+  });
+  return next;
+}
+
 // ── Helpers ────────────────────────────────────────────────────────
 
 async function gitExec(cwd: string, args: string, timeout = DEFAULT_TIMEOUT): Promise<string> {
-  const { stdout } = await exec(`git ${args}`, { cwd, timeout });
-  return trimCommandOutput(stdout);
+  return withGitLock(cwd, async () => {
+    const { stdout } = await exec(`git ${args}`, { cwd, timeout });
+    return trimCommandOutput(stdout);
+  });
 }
 
 function gitRevisionPath(filePath: string): string {
