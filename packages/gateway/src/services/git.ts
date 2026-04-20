@@ -234,7 +234,9 @@ function withGitLock<T>(cwd: string, fn: () => Promise<T>): Promise<T> {
   const prev = gitLocks.get(key) ?? Promise.resolve();
   const next = prev.then(fn, fn);           // run even if previous rejected
   gitLocks.set(key, next);
-  next.finally(() => {                       // clean up when chain settles
+  // Cleanup: swallow rejections on the derived chain so Node doesn't
+  // report unhandled rejections — callers catch on `next` directly.
+  next.catch(() => {}).finally(() => {
     if (gitLocks.get(key) === next) gitLocks.delete(key);
   });
   return next;
