@@ -262,7 +262,7 @@ export function ThreadActions({
           <Button
             variant="ghost"
             size="sm"
-            className={`h-5 text-2xs gap-1 ${isMobile ? 'px-1.5' : ''}`}
+            className="h-7 gap-1 px-2 text-xs sm:h-6 sm:text-2xs"
             onClick={() => setDiffOpen(true)}
             title="View changes"
             aria-label={`View changes: +${changeTotals.insertions} -${changeTotals.deletions}`}
@@ -274,7 +274,7 @@ export function ThreadActions({
         <Button
           variant="ghost"
           size="sm"
-          className={`h-5 text-2xs gap-1 ${isMobile ? 'px-1.5' : ''}`}
+          className="h-7 min-w-8 gap-1 px-2 text-xs sm:h-6 sm:min-w-7 sm:text-2xs"
           disabled={isBusy || !canCreatePr}
           onClick={handlePushAndPR}
           title={threadKind !== 'delivery'
@@ -284,7 +284,7 @@ export function ThreadActions({
               : prButtonTitle}
           aria-label={prButtonTitle}
         >
-          {isBusy ? <Loader2 className="h-3 w-3 animate-spin" /> : <GitPullRequest className="h-3 w-3" />}
+          {isBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin sm:h-3 sm:w-3" /> : <GitPullRequest className="h-3.5 w-3.5 sm:h-3 sm:w-3" />}
           {!isMobile && buttonLabel}
         </Button>
         {showStatusBadge && existingPrLink && (

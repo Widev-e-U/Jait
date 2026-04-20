@@ -63,6 +63,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, SessionSwitcher, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
@@ -898,6 +899,7 @@ function ManagerThreadListItem({
 }: ManagerThreadListItemProps) {
   const isMobile = useIsMobile()
   const [deleting, setDeleting] = useState(false)
+  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const showThreadActions = shouldRenderThreadActions({
     hasRepository: repo != null,
     threadKind: thread.kind,
@@ -925,7 +927,7 @@ function ManagerThreadListItem({
         }
       }}
     >
-      <div className="flex flex-col gap-0.5">
+      <div className="flex min-w-0 flex-col gap-0.5">
         <div className="flex w-full min-w-0 items-center gap-1.5">
           <ManagerStatusDot status={thread.status} />
           <div className="flex-1 truncate text-sm font-medium sm:text-sm">
@@ -935,29 +937,30 @@ function ManagerThreadListItem({
               <span>{thread.title.replace(/^\[.*?\]\s*/, '')}</span>
             )}
           </div>
+          <ThreadDuration createdAt={thread.createdAt} completedAt={thread.completedAt} status={thread.status} />
         </div>
-        <div className="flex min-w-0 flex-wrap items-center gap-x-1.5 gap-y-0.5 pl-[calc(0.75rem+6px)] text-xs leading-tight text-muted-foreground sm:flex-nowrap sm:gap-x-1 sm:gap-y-0 sm:text-xs">
+        <div className="flex min-w-0 flex-nowrap items-center gap-x-1.5 overflow-hidden pl-[calc(0.75rem+6px)] text-xs leading-tight text-muted-foreground sm:gap-x-1 sm:text-xs">
           <span className="min-w-0 truncate">{repoName}</span>
           {showKindBadge && <ThreadKindBadge kind={thread.kind} />}
           {thread.kind === 'delegation' && (
-            <span className="shrink-0 text-amber-700 dark:text-amber-300">Helper thread</span>
+            <span className="hidden shrink-0 text-amber-700 dark:text-amber-300 sm:inline">Helper thread</span>
           )}
           {thread.branch && (
             <>
               <span className="hidden sm:inline">·</span>
-              <span className="max-w-full truncate font-mono">{thread.branch}</span>
+              <span className="hidden max-w-full truncate font-mono sm:inline">{thread.branch}</span>
             </>
           )}
           {thread.providerId && thread.providerId !== 'jait' && (
             <>
               <span className="hidden sm:inline">·</span>
-              <span className="shrink-0 whitespace-nowrap">{thread.providerId}</span>
+              <span className="hidden shrink-0 whitespace-nowrap sm:inline">{thread.providerId}</span>
             </>
           )}
           {thread.executionNodeName && (
             <>
               <span className="hidden sm:inline">·</span>
-              <span className="inline-flex max-w-full items-center gap-1 truncate text-blue-500 dark:text-blue-400">
+              <span className="hidden max-w-full items-center gap-1 truncate text-blue-500 dark:text-blue-400 sm:inline-flex">
                 <Monitor className="inline h-3 w-3 mr-0.5 -mt-px" />
                 {thread.executionNodeName}
               </span>
@@ -969,8 +972,6 @@ function ManagerThreadListItem({
               <ThreadPrBadge prState={prState} />
             </>
           )}
-          <span className="hidden sm:inline">·</span>
-          <ThreadDuration createdAt={thread.createdAt} completedAt={thread.completedAt} status={thread.status} />
         </div>
       </div>
       <div className="flex items-center gap-0.5 sm:gap-1">
@@ -1010,19 +1011,60 @@ function ManagerThreadListItem({
             <Square className="h-3 w-3" />
           </Button>
         )}
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 rounded-lg opacity-100 transition-opacity sm:h-7 sm:w-7"
-          disabled={deleting}
-          onClick={(event) => {
-            event.stopPropagation()
-            setDeleting(true)
-            onDelete().finally(() => setDeleting(false))
-          }}
-        >
-          {deleting ? <SpinnerIcon className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
-        </Button>
+        <Popover open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-lg opacity-100 transition-opacity"
+              disabled={deleting}
+              onClick={(event) => event.stopPropagation()}
+              title="Delete thread"
+            >
+              {deleting ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="end"
+            className="w-56 p-2"
+            onClick={(event) => event.stopPropagation()}
+            onMouseDown={(event) => event.stopPropagation()}
+            onKeyDown={(event) => event.stopPropagation()}
+          >
+            <div className="space-y-2">
+              <div className="text-xs font-medium">Delete this thread?</div>
+              <div className="text-2xs leading-snug text-muted-foreground">
+                This removes the thread and its local worktree cleanup will run in the background.
+              </div>
+              <div className="flex justify-end gap-1.5">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 rounded-md px-2 text-xs"
+                  disabled={deleting}
+                  onClick={() => setDeleteConfirmOpen(false)}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  className="h-7 rounded-md px-2 text-xs"
+                  disabled={deleting}
+                  onClick={() => {
+                    setDeleting(true)
+                    onDelete().finally(() => {
+                      setDeleting(false)
+                      setDeleteConfirmOpen(false)
+                    })
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </PopoverContent>
+        </Popover>
       </div>
     </div>
   )
