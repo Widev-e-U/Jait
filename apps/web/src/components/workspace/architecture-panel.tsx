@@ -26,8 +26,8 @@ export interface ArchitecturePanelProps {
 /* ------------------------------------------------------------------ */
 
 let mermaidInitialized = false
-const MIN_ZOOM = 0.25
-const MAX_ZOOM = 4
+const MIN_ZOOM = 0.1
+const MAX_ZOOM = 20
 
 function clampZoom(value: number): number {
   return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, value))
@@ -110,7 +110,25 @@ export function ArchitecturePanel({
       const { svg } = await mermaid.render(`arch-${id}`, source)
       if (id !== renderIdRef.current) return
       containerRef.current.innerHTML = svg
-      setZoom(1)
+
+      // Fit diagram to viewport
+      const svgEl = containerRef.current.querySelector('svg')
+      const viewport = viewportRef.current
+      if (svgEl && viewport) {
+        const vw = viewport.clientWidth
+        const vh = viewport.clientHeight
+        const sw = svgEl.width.baseVal.value || svgEl.getBoundingClientRect().width
+        const sh = svgEl.height.baseVal.value || svgEl.getBoundingClientRect().height
+        if (sw > 0 && sh > 0 && vw > 0 && vh > 0) {
+          const padding = 32
+          const fitZoom = Math.min((vw - padding) / sw, (vh - padding) / sh)
+          setZoom(clampZoom(fitZoom))
+        } else {
+          setZoom(1)
+        }
+      } else {
+        setZoom(1)
+      }
       setPan({ x: 0, y: 0 })
       setRenderError(null)
       onRenderResult?.({ ok: true })

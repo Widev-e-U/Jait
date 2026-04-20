@@ -2015,7 +2015,7 @@ export function registerChatRoutes(
     if (memoryService) {
       const toFlush = visibleEntries
         .slice(targetVisibleIndex)
-        .filter((entry) => entry.content.trim().length > 0)
+        .filter((entry) => typeof entry.content === "string" && entry.content.trim().length > 0)
         .map((entry) => `[${entry.role}] ${entry.content}`);
       await memoryService.flushPreCompaction(sessionId, toFlush);
     }

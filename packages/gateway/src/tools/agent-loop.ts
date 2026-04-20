@@ -712,7 +712,13 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
     },
     historyEntry: {
       role: "tool",
-      content: JSON.stringify({ ok: result.ok, message: result.message, data: result.data }),
+      content: JSON.stringify({
+        ok: result.ok,
+        message: result.message.length > TOOL_RESULT_MAX_CHARS
+          ? result.message.slice(0, TOOL_RESULT_MAX_CHARS) + `\n\n[truncated — ${result.message.length} chars total, showing first ${TOOL_RESULT_MAX_CHARS}]`
+          : result.message,
+        data: result.data,
+      }),
       tool_call_id: tc.id,
       name: tc.function.name,
     },
@@ -751,6 +757,13 @@ export type ToolExecutor = (
 
 const DEFAULT_MAX_ROUNDS = 15;
 const DEFAULT_MAX_RETRIES = 2;
+
+/** Max times the same tool+args signature can be called before being rejected as a duplicate. */
+const DUPLICATE_CALL_THRESHOLD = 2;
+/** Max characters for a single tool result message before truncation (~8k tokens). */
+const TOOL_RESULT_MAX_CHARS = 30_000;
+/** Consecutive rounds with zero successful tool calls before the loop bails out. */
+const MAX_UNPRODUCTIVE_ROUNDS = 3;
 
 /**
  * Run the agentic tool-calling loop.
@@ -863,6 +876,12 @@ export async function runAgentLoop(
   const executedToolCalls: ExecutedToolCall[] = [];
   const segments: MessageSegment[] = [];
   const queue = new ToolCallQueue();
+
+  // ── Loop health tracking ──
+  /** Fingerprint → call count. Detects the model calling the same tool with identical args. */
+  const toolCallFingerprints = new Map<string, number>();
+  /** Consecutive rounds where no tool call succeeded — triggers early bail-out. */
+  let consecutiveUnproductiveRounds = 0;
 
   // ── Plan mode state ──
   const plannedActions: PlannedAction[] = [];
@@ -1063,9 +1082,34 @@ export async function runAgentLoop(
         tool_calls: toolCalls,
       });
 
-      // Enqueue all tool calls with appropriate parallelism hints
+      // Enqueue tool calls, rejecting duplicates
       for (const tc of toolCalls) {
         const internalName = fromOpenAIName(tc.function.name);
+        const fingerprint = `${internalName}:${tc.function.arguments}`;
+        const prevCount = toolCallFingerprints.get(fingerprint) ?? 0;
+        toolCallFingerprints.set(fingerprint, prevCount + 1);
+
+        if (prevCount >= DUPLICATE_CALL_THRESHOLD) {
+          // Duplicate detected — skip execution, tell the model to try something else
+          log.warn(`Duplicate tool call detected: ${internalName} (${prevCount + 1}x) — skipping`);
+          const dupMsg = `DUPLICATE CALL: You have already called "${internalName}" with these exact arguments ${prevCount + 1} times. The result will not change. Try a different approach or tool.`;
+          history.push({
+            role: "tool",
+            content: JSON.stringify({ ok: false, message: dupMsg }),
+            tool_call_id: tc.id,
+            name: tc.function.name,
+          });
+          executedToolCalls.push({
+            callId: tc.id,
+            tool: internalName,
+            args: (() => { try { return JSON.parse(tc.function.arguments); } catch { return {}; } })(),
+            ok: false,
+            message: dupMsg,
+            startedAt: Date.now(),
+            completedAt: Date.now(),
+          });
+          continue;
+        }
         queue.enqueue(tc, ToolCallPriority.Normal, isParallelSafe(internalName));
       }
 
@@ -1260,6 +1304,24 @@ export async function runAgentLoop(
               }
             }
           }
+        }
+      }
+
+      // ── Stuck-loop detection ──
+      // If every tool call in this round failed, increment the unproductive counter.
+      const roundStart = executedToolCalls.length - toolCalls.length;
+      const roundCalls = executedToolCalls.slice(roundStart < 0 ? 0 : roundStart);
+      const anySuccess = roundCalls.some(c => c.ok);
+      if (anySuccess) {
+        consecutiveUnproductiveRounds = 0;
+      } else {
+        consecutiveUnproductiveRounds++;
+        if (consecutiveUnproductiveRounds >= MAX_UNPRODUCTIVE_ROUNDS) {
+          log.warn(`${MAX_UNPRODUCTIVE_ROUNDS} consecutive unproductive rounds — stopping loop for session ${sessionId}`);
+          const bailMsg = "\n\n[Stopped: multiple consecutive rounds produced no successful results. The current approach isn't working — please try a different strategy.]";
+          onEvent?.({ type: "token", content: bailMsg });
+          fullContent += bailMsg;
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false };
         }
       }
 

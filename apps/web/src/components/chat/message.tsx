@@ -766,7 +766,7 @@ function MessageInner({
                 if (seg.type === 'toolGroup') {
                   const calls = (toolCalls ?? []).filter((tc) => seg.callIds.includes(tc.callId))
                   // Collapse completed tool groups that are followed by text
-                  const followedByText = segments!.slice(i + 1).some(s => s.type === 'text' && s.content.trim())
+                  const followedByText = segments!.slice(i + 1).some(s => s.type === 'text' && typeof s.content === 'string' && s.content.trim())
                   return calls.length > 0 ? (
                     shouldUseAgentToolCallWrapper(provider, calls) ? (
                       <AgentToolCallWrapper
@@ -789,7 +789,7 @@ function MessageInner({
                   ) : null
                 }
 
-                return seg.content.trim() ? (
+                return (typeof seg.content === 'string' && seg.content.trim()) ? (
                   <AIMessageContent
                     key={`ts-${i}`}
                     data-message-from="assistant"
@@ -807,7 +807,7 @@ function MessageInner({
               })
             })()}
 
-            {isStreaming && !content && !segments.some((s) => s.type === 'text' && s.content.trim()) && (
+            {isStreaming && !content && !segments.some((s) => s.type === 'text' && typeof s.content === 'string' && s.content.trim()) && (
               <div className="flex items-center gap-3 px-1 py-1 text-sm text-muted-foreground">
                 <ThinkingDots />
               </div>
