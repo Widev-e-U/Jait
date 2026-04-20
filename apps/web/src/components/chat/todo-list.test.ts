@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { areAllTodoItemsCompleted, getActiveTodoItem, type TodoItem } from './todo-list'
+import { areAllTodoItemsCompleted, getActiveTodoItem, getCollapsedTodoDisplay, type TodoItem } from './todo-list'
 
 describe('getActiveTodoItem', () => {
   it('returns the in-progress item when present', () => {
@@ -37,5 +37,31 @@ describe('areAllTodoItemsCompleted', () => {
 
   it('returns false for an empty list', () => {
     expect(areAllTodoItemsCompleted([])).toBe(false)
+  })
+})
+
+describe('getCollapsedTodoDisplay', () => {
+  it('puts the active task and spinner in the collapsed header', () => {
+    expect(getCollapsedTodoDisplay([
+      { id: 1, title: 'Map existing architecture', status: 'completed' },
+      { id: 2, title: 'Patch collapsed task row', status: 'in-progress' },
+      { id: 3, title: 'Verify UI behavior', status: 'not-started' },
+    ])).toEqual({
+      headerLabel: 'Patch collapsed task row',
+      showHeaderSpinner: true,
+      showCompletedSummary: false,
+    })
+  })
+
+  it('uses the completed summary only when every task is complete', () => {
+    expect(getCollapsedTodoDisplay([
+      { id: 1, title: 'Map existing architecture', status: 'completed' },
+      { id: 2, title: 'Patch collapsed task row', status: 'completed' },
+      { id: 3, title: 'Verify UI behavior', status: 'completed' },
+    ])).toEqual({
+      headerLabel: 'Tasks',
+      showHeaderSpinner: false,
+      showCompletedSummary: true,
+    })
   })
 })
