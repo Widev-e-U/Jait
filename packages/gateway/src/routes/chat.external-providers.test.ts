@@ -139,4 +139,38 @@ describe("chat external provider runtime mode selection", () => {
 
     await app.close();
   });
+
+  it("includes the Jait system prompt in the first external-provider turn and context trace", { timeout: 30_000 }, async () => {
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const headers = await authHeaders();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "fix the bug",
+        sessionId: "chat-system-prompt-trace-session",
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const firstTurnMessage = provider.sendTurn.mock.calls[0]?.[1];
+    expect(typeof firstTurnMessage).toBe("string");
+    expect(firstTurnMessage).toContain("Jait session instructions:");
+    expect(firstTurnMessage).toContain("use the todo tool even if you are operating through an external or CLI provider");
+    expect(firstTurnMessage).toContain("User request:");
+    expect(firstTurnMessage).toContain("fix the bug");
+
+    expect(response.body).toContain("\"type\":\"context_flow\"");
+    expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
+
+    await app.close();
+  });
 });

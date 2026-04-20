@@ -15,9 +15,11 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("<jaitExternalProvider>");
     expect(prompt).toContain("You are operating inside Jait, a tool-centric coding workspace and gateway.");
     expect(prompt).toContain("Respect Jait workspace boundaries");
+    expect(prompt).toContain("use the todo tool even if you are operating through an external or CLI provider");
     expect(prompt).toContain("If the user asks to open, switch, or use a workspace, project, or repo");
     expect(prompt).toContain("attach to an existing local target when available");
     expect(prompt).toContain("If `preview.start` fails, then fall back to opening the localhost URL directly in the browser surface.");
+    expect(prompt).toContain("This guidance still applies when you are operating through an external or CLI provider inside Jait.");
     expect(prompt).toContain("You are working in the workspace: /tmp/project");
   });
 
