@@ -6754,9 +6754,9 @@ function App() {
                       </div>
                     )}
                     {/* Main content */}
-                    <div className={`flex-1 flex flex-col min-w-0 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
+                    <div className={`flex-1 flex flex-col min-w-0 overflow-y-auto ${isMobile ? 'pt-8' : ''}`}>
                       {/* Title + composer */}
-                      <div className="relative z-10 flex flex-col items-center px-3 pb-1.5 pt-3 sm:px-4 sm:pb-2 sm:pt-4">
+                      <div className="relative z-10 flex flex-col items-center px-3 pb-8 pt-8 sm:px-4 sm:pb-2 sm:pt-4">
                         <div className="w-full max-w-3xl">
                           <h1 className="mb-3 text-center text-xl font-semibold tracking-tight sm:mb-4 sm:text-2xl">What do you want to build?</h1>
                           {automation.error && (
