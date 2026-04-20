@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { CheckCircle2, ChevronDown, Circle, Loader2 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -13,14 +13,55 @@ interface TodoListProps {
   className?: string
 }
 
+const TODO_LIST_AUTO_HIDE_DELAY_MS = 5000
+
+export function getActiveTodoItem(items: TodoItem[]): TodoItem | null {
+  return items.find((item) => item.status === 'in-progress') ?? null
+}
+
+export function areAllTodoItemsCompleted(items: TodoItem[]): boolean {
+  return items.length > 0 && items.every((item) => item.status === 'completed')
+}
+
 export function TodoList({ items, className }: TodoListProps) {
   const [expanded, setExpanded] = useState(false)
+  const [hidden, setHidden] = useState(false)
+  const hideTimeoutRef = useRef<number | null>(null)
+
+  const activeItem = useMemo(() => getActiveTodoItem(items), [items])
+  const allCompleted = useMemo(() => areAllTodoItemsCompleted(items), [items])
+
+  useEffect(() => {
+    if (hideTimeoutRef.current !== null) {
+      window.clearTimeout(hideTimeoutRef.current)
+      hideTimeoutRef.current = null
+    }
+
+    setHidden(false)
+
+    if (!allCompleted) {
+      return
+    }
+
+    hideTimeoutRef.current = window.setTimeout(() => {
+      setHidden(true)
+    }, TODO_LIST_AUTO_HIDE_DELAY_MS)
+
+    return () => {
+      if (hideTimeoutRef.current !== null) {
+        window.clearTimeout(hideTimeoutRef.current)
+        hideTimeoutRef.current = null
+      }
+    }
+  }, [allCompleted, items])
 
   if (items.length === 0) return null
+  if (hidden) return null
 
   const completed = items.filter((t) => t.status === 'completed').length
   const total = items.length
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
+  const headerLabel = !expanded && activeItem ? activeItem.title : 'Tasks'
 
   return (
     <div className={cn('rounded-lg border bg-muted/30 p-3 space-y-2', className)}>
@@ -36,7 +77,7 @@ export function TodoList({ items, className }: TodoListProps) {
             !expanded && '-rotate-90',
           )}
         />
-        <span className="text-xs font-medium text-foreground">Tasks</span>
+        <span className="min-w-0 truncate text-xs font-medium text-foreground">{headerLabel}</span>
         <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
           <div
             className="h-full rounded-full bg-primary transition-all duration-300"
@@ -47,6 +88,24 @@ export function TodoList({ items, className }: TodoListProps) {
           {completed}/{total}
         </span>
       </button>
+
+      {!expanded && activeItem && (
+        <div className="flex items-start gap-2 text-xs">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary animate-spin" />
+          <span className="min-w-0 flex-1 truncate text-foreground">
+            {activeItem.title}
+          </span>
+        </div>
+      )}
+
+      {!expanded && !activeItem && allCompleted && (
+        <div className="flex items-start gap-2 text-xs text-green-600 dark:text-green-400">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span className="min-w-0 flex-1 truncate font-medium">
+            All tasks completed
+          </span>
+        </div>
+      )}
 
       {/* Items — collapsible */}
       {expanded && (
