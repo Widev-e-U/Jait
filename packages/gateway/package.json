@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.345",
+  "version": "0.1.346",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "author": "JakobWl",
   "type": "module",
@@ -12,7 +12,8 @@
   "files": [
     "dist",
     "bin",
-    "web-dist"
+    "web-dist",
+    "skills"
   ],
   "scripts": {
     "prebuild": "bun run --filter @jait/web build && bun run bundle-web",

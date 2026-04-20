@@ -16,7 +16,8 @@ import { SchedulerService } from "./scheduler/service.js";
 import { HookBus, registerBuiltInHooks } from "./scheduler/hooks.js";
 import { MemoryEngine } from "./memory/service.js";
 import { SqliteMemoryBackend } from "./memory/sqlite-backend.js";
-import { join } from "node:path";
+import { join, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { homedir } from "node:os";
 import { createRequire } from "node:module";
 
@@ -542,7 +543,7 @@ async function main() {
   const skillRegistry = new SkillRegistry();
   const skillScanDirs: { path: string; source: "bundled" | "user" | "workspace" | "plugin" }[] = [
     // Bundled skills shipped with the gateway package
-    { path: join((import.meta as any).dir ?? ".", "..", "skills"), source: "bundled" },
+    { path: join(typeof (import.meta as any).dir === "string" ? (import.meta as any).dir : dirname(fileURLToPath(import.meta.url)), "..", "skills"), source: "bundled" },
     { path: userSkillsDir(), source: "user" },
     { path: join(process.cwd(), ".jait", "skills"), source: "workspace" },
     { path: join(process.cwd(), ".agents", "skills"), source: "workspace" },
