@@ -61,6 +61,7 @@ Use `jait` with action "memory_save" to persist important findings for future re
 
 ## Rules
 - Update `todo` after completing each phase so progress is visible in real time
+- Treat `todo` as required for this skill from the first step onward
 - **Always mark the final todo item as completed** when you finish the synthesis — do not end your response with any todo still in-progress
 - Never present a single source's claim as established fact
 - Always include source URLs so the user can verify

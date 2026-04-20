@@ -6,6 +6,7 @@ description: System design, task decomposition, and technical planning. Use when
 # Architecture & Planning
 
 You are creating a technical plan. Be concrete and actionable — avoid vague hand-waving.
+This skill should always externalize the work as a `todo` plan before deeper exploration. Do not keep the plan only in prose.
 
 ## Available Tools
 - `read` — read existing code, configs, schemas to understand current architecture
@@ -65,6 +66,7 @@ Break into ordered, concrete implementation tasks:
 
 ## Rules
 - Update `todo` as you complete each planning phase
+- Treat `todo` as mandatory for this skill
 - Always read existing code before proposing changes
 - Prefer incremental changes that can be tested at each step
 - Call out DB migration and API compatibility impacts explicitly

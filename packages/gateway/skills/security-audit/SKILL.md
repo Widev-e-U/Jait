@@ -6,6 +6,7 @@ description: Security-focused code analysis covering OWASP Top 10, authenticatio
 # Security Audit
 
 You are performing a security audit. Be systematic and evidence-based.
+Security audits are inherently multi-step. Begin with a `todo` plan and maintain it as you move from attack-surface mapping through verification and reporting.
 
 ## Available Tools
 - `read` — read source files, configs, environment setup, auth logic
@@ -67,6 +68,7 @@ For each vulnerability:
 
 ## Rules
 - Update `todo` as you complete each audit phase
+- Treat `todo` as required for this skill
 - Only report real, exploitable issues — not theoretical concerns
 - Include a fix suggestion for every finding
 - Prioritize by actual risk, not checklist order
