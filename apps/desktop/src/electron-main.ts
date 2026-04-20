@@ -1494,6 +1494,23 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
         branch: { status: "skipped_not_requested" },
         pr: { status: "skipped_not_requested" },
       };
+      let resolvedBaseBranch: string | undefined;
+      const resolveBaseBranchLocal = async () => {
+        if (resolvedBaseBranch) return resolvedBaseBranch;
+        const explicitBase = baseBranch?.trim();
+        if (explicitBase) {
+          resolvedBaseBranch = explicitBase;
+          return resolvedBaseBranch;
+        }
+        resolvedBaseBranch = await gitExecLocal("symbolic-ref refs/remotes/origin/HEAD --short")
+          .then(r => r.replace(/^origin\//, "").trim())
+          .catch(async () => {
+            try { await gitExecLocal("rev-parse --verify refs/heads/main"); return "main"; } catch { /* */ }
+            try { await gitExecLocal("rev-parse --verify refs/heads/master"); return "master"; } catch { /* */ }
+            return "main";
+          });
+        return resolvedBaseBranch;
+      };
 
       // Optionally create a feature branch
       if (featureBranch) {
@@ -1520,17 +1537,17 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       }
 
       // Commit step
-      const porcelain = await gitExecLocal("status --porcelain").catch(() => "");
+      const porcelain = await gitExecLocal("status --porcelain -- .").catch(() => "");
       if (porcelain.length > 0) {
-        await gitExecLocal("add -A");
+        await gitExecLocal("add -A -- .");
         let msg = commitMessage?.trim();
         if (!msg) {
           try {
-            const diffSummary = await gitExecLocal("diff --cached --stat");
+            const diffSummary = await gitExecLocal("diff --cached --stat -- .");
             msg = `chore: auto-commit ${diffSummary.split("\n").length} file(s) changed`;
           } catch { msg = "chore: auto-commit changes"; }
         }
-        await gitExecLocal(`commit -m "${msg.replace(/"/g, '\\"')}"`);
+        await gitExecLocal(`commit -m "${msg.replace(/"/g, '\\"')}" -- .`);
         const sha = await gitExecLocal("rev-parse HEAD");
         result.commit = { status: "created", commitSha: sha, subject: msg };
       }
@@ -1546,7 +1563,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
         // Rebase onto latest remote base so PRs show a clean diff
         try {
-          const rebaseTarget = baseBranch ?? "main";
+          const rebaseTarget = await resolveBaseBranchLocal();
           const remotes = (await gitExecLocal("remote").catch(() => "")).split("\n").map(r => r.trim()).filter(Boolean);
           const rebaseRemote = remotes.includes("origin") ? "origin" : remotes[0];
           if (rebaseRemote) {
@@ -1605,7 +1622,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
             } catch { /* no existing PR */ }
 
             // Generate PR body
-            const resolvedBase = baseBranch || await gitExecLocal("symbolic-ref refs/remotes/origin/HEAD").then(r => r.replace("refs/remotes/origin/", "").trim()).catch(() => "main");
+            const resolvedBase = await resolveBaseBranchLocal();
             const prTitle = (result.commit as Record<string, unknown>).subject as string ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
             let prBody = `## Summary\n\n${prTitle}\n`;
             try {
@@ -1622,7 +1639,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
             const bodyFile = join(tmpdir(), `jait-pr-body-${Date.now()}.md`);
             await writeTmpFile(bodyFile, prBody, "utf-8");
             try {
-              const baseFlag = baseBranch ? ` --base "${baseBranch}"` : "";
+              const baseFlag = ` --base "${resolvedBase}"`;
               // If the branch wasn't pushed yet, push it now before creating the PR
               if ((result.push as Record<string, unknown>).status !== "pushed") {
                 try {
@@ -1639,7 +1656,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
               // Fetch PR details
               let prNumber = 0;
-              let prBaseBranch = baseBranch ?? "";
+              let prBaseBranch = resolvedBase;
               let prHeadBranch = currentBranch;
               let prFinalTitle = prTitle;
               try {

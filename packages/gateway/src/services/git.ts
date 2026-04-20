@@ -986,6 +986,19 @@ export class GitService {
       branch: { status: "skipped_not_requested" },
       pr: { status: "skipped_not_requested" },
     };
+    let resolvedBaseBranch: string | undefined;
+    const resolvePrBaseBranch = async (branch?: string | null): Promise<string> => {
+      if (resolvedBaseBranch) return resolvedBaseBranch;
+      const explicitBase = baseBranch?.trim();
+      if (explicitBase) {
+        resolvedBaseBranch = explicitBase;
+        return resolvedBaseBranch;
+      }
+      const remote = await this.getPreferredRemote(cwd, branch ?? undefined).catch(() => null);
+      const remoteUrl = remote ? await this.getRemoteUrl(cwd, remote).catch(() => null) : null;
+      resolvedBaseBranch = await this.resolveDefaultBranch(cwd, remoteUrl);
+      return resolvedBaseBranch;
+    };
 
     // Before creating a feature branch, push the base branch to remote if it
     // has unpushed commits.  Otherwise the feature branch inherits those
@@ -995,7 +1008,7 @@ export class GitService {
       (featureBranch || expectedBranch)
     ) {
       const preBranch = await gitExec(cwd, "rev-parse --abbrev-ref HEAD").catch(() => null);
-      const targetBase = baseBranch ?? "main";
+      const targetBase = await resolvePrBaseBranch(preBranch);
       if (preBranch === targetBase) {
         try {
           const remote = await this.getPreferredRemote(cwd, preBranch).catch(() => null);
@@ -1042,28 +1055,28 @@ export class GitService {
     }
 
     // Commit step
-    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+    const porcelain = await gitExec(cwd, "status --porcelain -- .").catch(() => "");
     if (porcelain.length > 0) {
-      await gitExec(cwd, "add -A");
+      await gitExec(cwd, "add -A -- .");
 
       try {
         let msg = commitMessage?.trim();
         if (!msg) {
           // Auto-generate a commit message from the diff summary
           try {
-            const diffSummary = await gitExec(cwd, "diff --cached --stat");
+            const diffSummary = await gitExec(cwd, "diff --cached --stat -- .");
             msg = `chore: auto-commit ${diffSummary.split("\n").length} file(s) changed`;
           } catch {
             msg = "chore: auto-commit changes";
           }
         }
 
-        await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}"`);
+        await gitExec(cwd, `commit -m "${msg.replace(/"/g, '\\"')}" -- .`);
         const sha = await gitExec(cwd, "rev-parse HEAD");
         result.commit = { status: "created", commitSha: sha, subject: msg };
       } catch (err) {
         // Unstage so we don't leave stale staged files behind
-        await gitExec(cwd, "reset HEAD").catch(() => {});
+        await gitExec(cwd, "reset HEAD -- .").catch(() => {});
         throw err;
       }
     }
@@ -1082,7 +1095,7 @@ export class GitService {
         // Without this, the branch may be rooted on a stale commit and GitHub
         // shows the entire delta between that old base and current main.
         try {
-          const rebaseTarget = baseBranch ?? "main";
+          const rebaseTarget = await resolvePrBaseBranch(currentBranch);
           const rebaseRemote = await this.getPreferredRemote(cwd, currentBranch).catch(() => null);
           if (rebaseRemote) {
             await gitExec(cwd, `fetch ${rebaseRemote} ${rebaseTarget}`, 60_000);
@@ -1121,7 +1134,7 @@ export class GitService {
       // Attach a "create PR" URL so the frontend can link to it
       if (result.push.status === "pushed" && currentBranch) {
         const upstreamRemote = result.push.upstreamBranch?.split("/")[0];
-        result.push.createPrUrl = await this.buildCreatePrUrl(cwd, currentBranch, upstreamRemote, baseBranch);
+        result.push.createPrUrl = await this.buildCreatePrUrl(cwd, currentBranch, upstreamRemote, await resolvePrBaseBranch(currentBranch));
       }
     }
 
@@ -1133,8 +1146,9 @@ export class GitService {
         const remoteUrl = await this.getRemoteUrl(cwd, preferredRemote ?? "");
         const parsedRemote = parseGitRemote(remoteUrl);
         const githubRemote = parseGithubRemote(remoteUrl);
+        const resolvedBase = await resolvePrBaseBranch(currentBranch);
         const manualUrl = result.push.createPrUrl ?? (preferredRemote
-          ? await this.buildCreatePrUrl(cwd, currentBranch, preferredRemote, baseBranch)
+          ? await this.buildCreatePrUrl(cwd, currentBranch, preferredRemote, resolvedBase)
           : undefined);
 
         if (parsedRemote?.provider === "github" && !hasGh && !effectiveToken) {
@@ -1168,7 +1182,7 @@ export class GitService {
 
           // Create new PR
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
-          const baseFlag = baseBranch ? ` --base "${baseBranch}"` : '';
+          const baseFlag = ` --base "${resolvedBase}"`;
 
           // If the branch wasn't pushed yet, push it now before creating the PR
           if (result.push.status !== "pushed") {
@@ -1182,7 +1196,6 @@ export class GitService {
           }
 
           // Generate PR body from diff context
-          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd, remoteUrl);
           const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
 
           // Write body to temp file (avoids shell escaping issues with markdown)
@@ -1199,7 +1212,7 @@ export class GitService {
 
             // Fetch full PR details via gh pr view
             let prNumber = 0;
-            let prBaseBranch = baseBranch ?? "";
+            let prBaseBranch = resolvedBase;
             let prHeadBranch = currentBranch;
             let prFinalTitle = prTitle;
             try {
@@ -1231,7 +1244,6 @@ export class GitService {
             await unlink(bodyFile).catch(() => {});
           }
         } else if (parsedRemote?.provider === "github" && githubRemote && effectiveToken) {
-          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd, remoteUrl);
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
           const apiResult = await this.createGithubPrViaApi(githubRemote, effectiveToken, {
@@ -1251,7 +1263,6 @@ export class GitService {
           };
         } else if (parsedRemote?.provider === "azure-devops") {
           const azureRemote = parsedRemote as ParsedRemote & { provider: "azure-devops" };
-          const resolvedBase = baseBranch || await this.resolveDefaultBranch(cwd, remoteUrl);
           const prTitle = result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`;
           const prBody = await this.generatePrBody(cwd, resolvedBase, currentBranch, prTitle);
           let apiResult: GitStepResult["pr"] | null = null;
@@ -1278,7 +1289,7 @@ export class GitService {
             ? {
                 status: "skipped_no_remote",
                 url: manualUrl,
-                baseBranch: baseBranch ?? undefined,
+                baseBranch: resolvedBase,
                 headBranch: currentBranch,
                 title: result.commit.subject ?? commitMessage?.trim() ?? `Changes from ${currentBranch}`,
               }
@@ -1789,7 +1800,7 @@ export class GitService {
     if (!parsed) return undefined;
 
     if (parsed.provider === "github") {
-      return `${parsed.normalizedUrl}/compare/${encodeURIComponent(branch)}?expand=1`;
+      return `${parsed.normalizedUrl}/compare/${encodeURIComponent(baseBranch ?? "main")}...${encodeURIComponent(branch)}?expand=1`;
     }
     if (parsed.provider === "gitlab") {
       return `${parsed.normalizedUrl}/-/merge_requests/new?merge_request[source_branch]=${encodeURIComponent(branch)}`;

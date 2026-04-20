@@ -85,8 +85,8 @@ describe("forge PR URL builders", () => {
   const bbRemote = { provider: "bitbucket" as const, host: "bitbucket.org", normalizedUrl: "https://bitbucket.org/user/repo", repo: "repo", owner: "user" };
 
   it("GitHub PR URL", () => {
-    const url = new GitHubForge().buildCreatePrUrl(ghRemote, "feature");
-    expect(url).toBe("https://github.com/user/repo/compare/feature?expand=1");
+    const url = new GitHubForge().buildCreatePrUrl(ghRemote, "feature", "main");
+    expect(url).toBe("https://github.com/user/repo/compare/main...feature?expand=1");
   });
 
   it("GitLab MR URL", () => {

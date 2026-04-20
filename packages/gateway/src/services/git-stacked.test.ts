@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm, chmod } from "node:fs/promises";
+import { mkdtemp, writeFile, rm, chmod, mkdir } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -85,6 +85,19 @@ describe("runStackedAction – unstage on commit failure", () => {
     // No staged or unstaged files should remain
     const status = git(repoDir, "status --porcelain");
     expect(status).toBe("");
+  });
+
+  it("commits only changes under the requested working directory", { timeout: 15_000 }, async () => {
+    const packageDir = join(repoDir, "packages", "one");
+    await mkdir(packageDir, { recursive: true });
+    await writeFile(join(packageDir, "inside.txt"), "inside");
+    await writeFile(join(repoDir, "outside.txt"), "outside");
+
+    const result = await svc.runStackedAction(packageDir, "commit", "test: scoped commit");
+
+    expect(result.commit.status).toBe("created");
+    expect(git(repoDir, "show --name-only --format= HEAD")).toBe("packages/one/inside.txt");
+    expect(git(repoDir, "status --porcelain")).toBe("?? outside.txt");
   });
 
   it("sync publishes the current branch when no upstream exists", { timeout: 15_000 }, async () => {
