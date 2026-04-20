@@ -18,8 +18,10 @@ export function TodoList({ items, className }: TodoListProps) {
 
   if (items.length === 0) return null
 
+  const activeItem = items.find((item) => item.status === 'in-progress') ?? null
   const completed = items.filter((t) => t.status === 'completed').length
   const total = items.length
+  const allCompleted = completed === total
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
 
   return (
@@ -47,6 +49,24 @@ export function TodoList({ items, className }: TodoListProps) {
           {completed}/{total}
         </span>
       </button>
+
+      {!expanded && activeItem && (
+        <div className="flex items-start gap-2 text-xs">
+          <Loader2 className="h-3.5 w-3.5 shrink-0 mt-0.5 text-primary animate-spin" />
+          <span className="min-w-0 flex-1 truncate text-foreground">
+            {activeItem.title}
+          </span>
+        </div>
+      )}
+
+      {!expanded && !activeItem && allCompleted && (
+        <div className="flex items-start gap-2 text-xs text-green-600 dark:text-green-400">
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+          <span className="min-w-0 flex-1 truncate font-medium">
+            All tasks completed
+          </span>
+        </div>
+      )}
 
       {/* Items — collapsible */}
       {expanded && (
