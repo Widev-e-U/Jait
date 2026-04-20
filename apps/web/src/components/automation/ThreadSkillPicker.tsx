@@ -6,6 +6,7 @@ import { Switch } from '@/components/ui/switch'
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl } from '@/lib/gateway-url'
 import { agentsApi } from '@/lib/agents-api'
+import { getSkillVisual } from '@/lib/skill-icons'
 import type { SkillInfo } from '@jait/shared'
 import { shouldAutoLoadThreadSkills } from './thread-skill-picker-state'
 
@@ -135,10 +136,12 @@ export function ThreadSkillPicker({ token, threadId, selectedSkillIds }: ThreadS
           <div className="max-h-64 space-y-2 overflow-y-auto pr-1">
             {enabledInstalledSkills.map((skill) => {
               const checked = pinnedIds.includes(skill.id)
+              const skillVisual = getSkillVisual(skill)
+              const SkillIcon = skillVisual.icon
               return (
                 <div key={skill.id} className="flex items-start gap-3 rounded-lg border p-2.5">
-                  <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md bg-muted">
-                    <Bot className="h-3.5 w-3.5 text-muted-foreground" />
+                  <div className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-md ${skillVisual.className}`}>
+                    <SkillIcon className="h-3.5 w-3.5" />
                   </div>
                   <div className="min-w-0 flex-1">
                     <p className="truncate text-sm font-medium">{skill.name}</p>
