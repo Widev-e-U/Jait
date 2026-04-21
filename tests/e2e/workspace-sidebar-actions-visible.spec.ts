@@ -111,15 +111,17 @@ test.describe('workspace sidebar actions', () => {
     await expect(workspaceRow).toBeVisible()
     await workspaceRow.hover()
 
-    const actionButtons = workspaceRow.locator('button')
-    await expect(actionButtons).toHaveCount(2)
+    const changeDirectoryButton = workspaceRow.getByRole('button', { name: 'Change directory' })
+    const archiveWorkspaceButton = workspaceRow.getByRole('button', { name: 'Archive workspace' })
+    await expect(changeDirectoryButton).toBeVisible()
+    await expect(archiveWorkspaceButton).toBeVisible()
 
     const sidebarBox = await sidebar.boundingBox()
     const rowBox = await workspaceRow.boundingBox()
     expect(sidebarBox).not.toBeNull()
     expect(rowBox).not.toBeNull()
 
-    for (const button of await actionButtons.all()) {
+    for (const button of [changeDirectoryButton, archiveWorkspaceButton]) {
       await expect(button).toBeVisible()
       const buttonBox = await button.boundingBox()
       expect(buttonBox).not.toBeNull()
