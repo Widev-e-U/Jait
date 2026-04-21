@@ -1140,10 +1140,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Resizable: file tree width + total panel width
   // VS Code–style constraints: panel max is viewport-aware, tree max is panel-aware.
-  // Keep this in sync with the desktop sidebar width in App.tsx (`w-64` = 256px).
+  // Keep this in sync with the desktop rail + workspaces panel widths in App.tsx
+  // (`w-12` + `w-64` = 304px total when the workspaces panel is open).
   // Underestimating it lets the workspace panel steal space from the chat column,
   // which can clip sidebar/chat actions at narrower desktop widths.
-  const sidebarWidth = 256
+  const sidebarWidth = 304
   const minChatWidth = 320 // minimum chat column width to prevent squishing
   const minEditorWidth = 200 // minimum editor pane width when tree is visible
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
@@ -1241,7 +1242,6 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const canMaximizeActiveTab = Boolean(activeTab)
   const effectiveShowTree = showTreeProp && !tabMaximized && !panel.collapsed && !tree.collapsed
   const effectiveShowEditor = (showEditorProp || tabMaximized) && !panel.collapsed
-
   useEffect(() => {
     if (activeTab) return
     setTabMaximized(false)
@@ -3502,44 +3502,62 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     )))
   }, [fetchManagedPreviewSession])
 
-  const handleOpenPreviewFromControls = useCallback(() => {
-    const trimmed = previewInput.trim()
+  const startManagedPreview = useCallback(async ({
+    target,
+    command,
+    port,
+    resetTab = true,
+  }: {
+    target?: string | null
+    command?: string | null
+    port?: number | null
+    resetTab?: boolean
+  }) => {
     if (!previewSessionId || !previewToken) {
       setPreviewPanelError('Login is required to start a live preview session.')
       return
     }
-    void (async () => {
-      setPreviewBusy(true)
-      setPreviewPanelError(null)
-      setPreviewPanelWarning(null)
-      setPreviewFrameLoading(true)
+    setPreviewBusy(true)
+    setPreviewPanelError(null)
+    setPreviewPanelWarning(null)
+    setPreviewFrameLoading(true)
+    if (resetTab) {
       handleOpenPreviewTarget(null)
-      try {
-        const response = await fetch(`${API_URL}/api/preview/start`, {
-          method: 'POST',
-          headers: authHeaders(previewToken),
-          body: JSON.stringify({
-            sessionId: previewSessionId,
-            workspaceRoot: previewWorkspaceRoot,
-            target: trimmed || null,
-            command: previewCommand.trim() || null,
-            port: previewPort.trim() ? Number.parseInt(previewPort.trim(), 10) : null,
-          }),
-        })
-        const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
-        if (!response.ok || !data.session) {
-          throw new Error(data.error || 'Failed to start preview')
-        }
-        setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
-        setPreviewSideTab('controls')
-      } catch (error) {
-        setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start preview')
-        setPreviewFrameLoading(false)
-      } finally {
-        setPreviewBusy(false)
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/preview/start`, {
+        method: 'POST',
+        headers: authHeaders(previewToken),
+        body: JSON.stringify({
+          sessionId: previewSessionId,
+          workspaceRoot: previewWorkspaceRoot,
+          target: target?.trim() || null,
+          command: command?.trim() || null,
+          port: typeof port === 'number' ? port : null,
+        }),
+      })
+      const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
+      if (!response.ok || !data.session) {
+        throw new Error(data.error || 'Failed to start preview')
       }
-    })()
-  }, [handleOpenPreviewTarget, previewCommand, previewInput, previewPort, previewSessionId, previewToken, previewWorkspaceRoot])
+      setManagedPreviewSession((current) => isSamePreviewSession(current, data.session ?? null) ? current : (data.session ?? null))
+      setPreviewSideTab('controls')
+    } catch (error) {
+      setPreviewPanelError(error instanceof Error ? error.message : 'Failed to start preview')
+      setPreviewFrameLoading(false)
+    } finally {
+      setPreviewBusy(false)
+    }
+  }, [handleOpenPreviewTarget, previewSessionId, previewToken, previewWorkspaceRoot])
+
+  const handleOpenPreviewFromControls = useCallback(() => {
+    const trimmed = previewInput.trim()
+    void startManagedPreview({
+      target: trimmed || null,
+      command: previewCommand.trim() || null,
+      port: previewPort.trim() ? Number.parseInt(previewPort.trim(), 10) : null,
+    })
+  }, [previewCommand, previewInput, previewPort, startManagedPreview])
 
   const handleRestartManagedPreview = useCallback(async () => {
     if (!previewSessionId || !previewToken) return
@@ -3595,7 +3613,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (handledPreviewRequestKeyRef.current === previewRequest.key) return
     handledPreviewRequestKeyRef.current = previewRequest.key
     handleOpenPreviewTarget(previewRequest.target)
-  }, [previewRequest, handleOpenPreviewTarget])
+    const trimmedTarget = previewRequest.target?.trim() || ''
+    if (!trimmedTarget || !previewSessionId || !previewToken) return
+    const activeTarget = managedPreviewSession?.target?.trim() || ''
+    const activeStatus = managedPreviewSession?.status
+    if (activeTarget === trimmedTarget && (activeStatus === 'starting' || activeStatus === 'ready')) return
+    void startManagedPreview({ target: trimmedTarget, resetTab: false })
+  }, [handleOpenPreviewTarget, managedPreviewSession?.status, managedPreviewSession?.target, previewRequest, previewSessionId, previewToken, startManagedPreview])
 
   useEffect(() => {
     if (!architectureRequest) return
@@ -4682,13 +4706,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           {/* Mobile search bar */}
           <div className="flex items-center gap-1 px-1.5 py-1 border-b shrink-0">
             <Search className="h-3 w-3 text-muted-foreground shrink-0" />
-            <input
-              type="text"
-              placeholder={fileSearchMode === 'content' ? 'Search in files…' : 'Search file names…'}
-              value={fileSearchQuery}
-              onChange={(e) => setFileSearchQuery(e.target.value)}
-              className="flex-1 h-7 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
-            />
+          <input
+            type="text"
+            placeholder={fileSearchMode === 'content' ? 'Search in files…' : 'Search file names…'}
+            value={fileSearchQuery}
+            onChange={(e) => setFileSearchQuery(e.target.value)}
+            className="min-w-0 flex-1 h-7 bg-transparent text-sm outline-none placeholder:text-muted-foreground/60"
+          />
             {fileSearchQuery && (
               <button onClick={() => { setFileSearchQuery(''); setFileSearchResults(null) }} className="p-0.5 rounded hover:bg-muted text-muted-foreground">
                 <X className="h-3.5 w-3.5" />
@@ -5237,7 +5261,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             placeholder={fileSearchMode === 'content' ? 'Search in files…' : 'Search file names…'}
             value={fileSearchQuery}
             onChange={(e) => setFileSearchQuery(e.target.value)}
-            className="flex-1 h-6 bg-transparent [font-size:0.9rem] outline-none placeholder:text-muted-foreground/60"
+            className="min-w-0 flex-1 h-6 bg-transparent [font-size:0.9rem] outline-none placeholder:text-muted-foreground/60"
           />
           {fileSearchQuery && (
             <button onClick={() => { setFileSearchQuery(''); setFileSearchResults(null) }} className="p-0.5 rounded hover:bg-muted text-muted-foreground">

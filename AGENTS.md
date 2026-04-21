@@ -65,7 +65,13 @@ To deploy to a server after publish: `npm install -g @jait/gateway@<version>` an
 - Keep path boundaries and SSRF protections intact when adding new tools or surfaces.
 
 ## Preview Workflow Preference
-- For Jait itself, do not treat `apps/web` as a complete preview target by default. Start the backend infra first so the frontend runs against the real gateway/API.
-- Preferred Jait flow: start the gateway/full dev stack, verify the gateway responds on its local URL, then attach preview to that running gateway-served app.
-- Only use the standalone `apps/web` Vite server by itself when the user explicitly asks for frontend-only work or when backend integration is intentionally out of scope.
-- Do not default to managed preview-launched frontend processes when a direct local target attachment works, since managed preview sessions may be ephemeral in this environment.
+- When the user asks for a preview, the goal is to show the actual live web UI they can iterate on while prompting, not just any responding local URL.
+- Start from the project's normal development entrypoint first, usually `bun run dev` from the repo root unless the project clearly documents a different command.
+- After starting the dev stack, inspect which web frontend server is actually running and attach preview to that frontend target, not to unrelated APIs, health endpoints, CLIs, or background services.
+- Prefer attaching to an already-running dev server instead of launching a separate production-style preview build when possible, so UI changes appear live as the user edits and prompts.
+- If the default dev command cannot expose a usable web frontend directly, identify the correct frontend workspace or app-specific dev command and use that instead.
+- Always verify which host and port belong to the user-facing web app before opening preview. Do not assume `localhost:3000`, `localhost:8000`, or any other conventional port without checking.
+- Avoid port conflicts: if starting a frontend dev server requires a port override, choose a free port first and pass it explicitly so the preview target is stable and non-conflicting.
+- If multiple local web targets exist, prefer the one that renders the main user-facing app. If the choice is ambiguous, report the discovered targets and attach to the most likely frontend while noting the assumption.
+- Do not attach preview to a backend-only service just because it responds successfully. A healthy API is not the same thing as a usable frontend preview.
+- When a project has no web frontend, say that explicitly instead of forcing a preview target.

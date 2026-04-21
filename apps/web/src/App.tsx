@@ -3449,10 +3449,86 @@ function App() {
       applyWorkspaceLayout(showMobileWorkspacePane('editor'), { immediateSync: true })
     } else {
       setShowWorkspaceTree(true)
-      setShowWorkspaceEditor(true)
+      showWorkspaceEditorPanel()
     }
     setSavedWorkspace({ open: true, remotePath: path, nodeId: nodeId ?? undefined })
-  }, [applyWorkspaceLayout, isMobile, openRemoteWorkspaceOnGateway, setSavedWorkspace])
+  }, [applyWorkspaceLayout, isMobile, openRemoteWorkspaceOnGateway, setSavedWorkspace, showWorkspaceEditorPanel])
+
+  const ensureWorkspaceReadyForSidebarAction = useCallback(async () => {
+    if (!activeWorkspaceRef.current && !activeWorkspaceRecordRef.current && (authLoadingRef.current || workspacesLoadingRef.current)) {
+      await waitForWorkspaceHydration()
+    }
+
+    if (activeWorkspaceRef.current) return activeWorkspaceRef.current
+
+    const currentActiveWorkspaceRecord = activeWorkspaceRecordRef.current
+    const currentActiveSessionId = activeSessionIdRef.current
+
+    if (currentActiveWorkspaceRecord?.rootPath) {
+      await reopenPersistedWorkspace(
+        currentActiveWorkspaceRecord.rootPath,
+        currentActiveWorkspaceRecord.nodeId ?? 'gateway',
+        currentActiveSessionId,
+      )
+      return activeWorkspaceRef.current
+    }
+
+    const pendingWorkspacePanel = pendingWsWorkspaceStateRef.current?.ui.panel
+    const pendingWorkspaceRoot = pendingWorkspacePanel?.remotePath?.trim() || null
+    if (pendingWorkspaceRoot && currentActiveSessionId) {
+      await reopenPersistedWorkspace(
+        pendingWorkspaceRoot,
+        pendingWorkspacePanel?.nodeId ?? undefined,
+        currentActiveSessionId,
+      )
+      return activeWorkspaceRef.current
+    }
+
+    const persistedWorkspacePanel = workspaceUIRef.current?.panel
+    const persistedWorkspaceRoot = persistedWorkspacePanel?.remotePath?.trim() || null
+    if (persistedWorkspaceRoot && currentActiveSessionId) {
+      await reopenPersistedWorkspace(
+        persistedWorkspaceRoot,
+        persistedWorkspacePanel?.nodeId ?? undefined,
+        currentActiveSessionId,
+      )
+      return activeWorkspaceRef.current
+    }
+
+    return null
+  }, [reopenPersistedWorkspace, waitForWorkspaceHydration])
+
+  const handleSidebarPreviewToggle = useCallback(async () => {
+    const workspace = await ensureWorkspaceReadyForSidebarAction()
+    if (!workspace) return
+
+    if (previewOpen) {
+      closeDevPreviewPanel()
+      return
+    }
+
+    const nextTarget = workspacePreviewState.target
+      ?? devPreviewTarget?.trim()
+      ?? savedDevPreview?.target?.trim()
+      ?? null
+    if (routePreviewToWorkspace(nextTarget, workspace.workspaceRoot ?? null)) return
+    openDevPreviewPanel(nextTarget)
+  }, [closeDevPreviewPanel, devPreviewTarget, ensureWorkspaceReadyForSidebarAction, openDevPreviewPanel, previewOpen, routePreviewToWorkspace, savedDevPreview?.target, workspacePreviewState.target])
+
+  const handleSidebarArchitectureToggle = useCallback(async () => {
+    const workspace = await ensureWorkspaceReadyForSidebarAction()
+    if (!workspace) return
+
+    if (showArchitecture) {
+      workspaceRef.current?.closeArchitectureTab()
+      setArchitectureRequest(null)
+      setShowArchitecture(false)
+      return
+    }
+
+    setShowArchitecture(true)
+    openArchitectureInWorkspace(workspace.workspaceRoot)
+  }, [ensureWorkspaceReadyForSidebarAction, openArchitectureInWorkspace, showArchitecture])
 
   const handleToggleEditor = useCallback(async () => {
     if (showWorkspace) {
@@ -6014,7 +6090,7 @@ function App() {
 
 
             {/* Chat-specific toolbar */}
-            {currentView === 'chat' && (
+            {currentView === 'chat' && (isMobile || viewMode === 'manager') && (
               <div
                 className={`border-b bg-muted/30 px-2 sm:px-5 shrink-0 ${isMobile && !compactManagerToolbar ? 'hidden' : 'flex'} ${
                   compactManagerToolbar
@@ -6449,7 +6525,88 @@ function App() {
               {viewMode === 'developer' && showSidebar && isMobile && (
                 <div className="fixed inset-0 z-20" onClick={() => setShowSidebar(false)} />
               )}
-              {viewMode === 'developer' && showSidebar && (
+              {viewMode === 'developer' && !isMobile && (
+                <aside className="flex w-12 shrink-0 flex-col items-center gap-2 border-r bg-background px-1 py-2">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={showSidebar ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-9 w-9 rounded-md p-0"
+                        onClick={() => setShowSidebar((s) => !s)}
+                        aria-label="Toggle workspaces panel"
+                      >
+                        {showSidebar ? <PanelLeftClose className="h-4 w-4" /> : <PanelLeftOpen className="h-4 w-4" />}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Workspaces</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant={showTerminal ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={() => { void handleToggleTerminal() }} aria-label="Terminal">
+                        <TerminalIcon className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Terminal</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant={showWorkspace ? 'secondary' : 'ghost'} size="sm" className="h-9 w-9 rounded-md p-0" onClick={() => { void handleToggleEditor() }} aria-label="Editor">
+                        <Code className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Editor</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={previewOpen ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-9 w-9 rounded-md p-0"
+                        aria-label="Preview"
+                        disabled={authLoading || workspacesLoading}
+                        onClick={() => { void handleSidebarPreviewToggle() }}
+                      >
+                        <Globe className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Preview</TooltipContent>
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={showArchitecture ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-9 w-9 rounded-md p-0"
+                        disabled={authLoading || workspacesLoading}
+                        aria-label="Architecture"
+                        onClick={() => { void handleSidebarArchitectureToggle() }}
+                      >
+                        <Boxes className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Architecture</TooltipContent>
+                  </Tooltip>
+                  <div className="flex-1" />
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant={showDebugPanel ? 'secondary' : 'ghost'}
+                        size="sm"
+                        className="h-9 w-9 rounded-md p-0"
+                        disabled={!showWorkspace || !activeWorkspace}
+                        aria-label="Debug"
+                        onClick={() => setShowDebugPanel((d) => !d)}
+                      >
+                        <Bug className="h-4 w-4" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="right">Debug</TooltipContent>
+                  </Tooltip>
+                </aside>
+              )}
+
+              {viewMode === 'developer' && (showSidebar || isMobile) && (
                 <aside
                   ref={sidebarRef}
                   tabIndex={-1}

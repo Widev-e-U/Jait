@@ -13,6 +13,7 @@ export default defineConfig({
     server: {
         port,
         strictPort: true,
+        allowedHosts: ['host.docker.internal'],
         proxy: {
             '/api': {
                 target: gatewayTarget,
