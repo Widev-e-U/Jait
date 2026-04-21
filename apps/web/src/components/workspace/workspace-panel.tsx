@@ -1140,7 +1140,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Resizable: file tree width + total panel width
   // VS Code–style constraints: panel max is viewport-aware, tree max is panel-aware.
-  const sidebarWidth = 224 // approximate sidebar + session selector width
+  // Keep this in sync with the desktop sidebar width in App.tsx (`w-64` = 256px).
+  // Underestimating it lets the workspace panel steal space from the chat column,
+  // which can clip sidebar/chat actions at narrower desktop widths.
+  const sidebarWidth = 256
   const minChatWidth = 320 // minimum chat column width to prevent squishing
   const minEditorWidth = 200 // minimum editor pane width when tree is visible
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
