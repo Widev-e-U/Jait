@@ -8,7 +8,7 @@ import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { shouldShowThreadChangesButton } from './thread-actions-state'
+import { getThreadDiffRequest, shouldShowThreadChangesButton, shouldUseRecordedBranchDiff } from './thread-actions-state'
 
 interface ThreadActionsProps {
   /** Thread id to persist PR metadata after creation/open. */
@@ -80,13 +80,14 @@ export function ThreadActions({
 
   useEffect(() => {
     let cancelled = false
-    const useRecordedBranchDiff = Boolean(branch && (prState === 'merged' || prState === 'closed'))
+    const useRecordedBranchDiff = shouldUseRecordedBranchDiff(branch, prState)
+    const diffRequest = getThreadDiffRequest(baseBranch, branch, prState)
 
     const loadStatus = async () => {
       try {
         const status = await gitApi.status(cwd, useRecordedBranchDiff ? undefined : branch ?? undefined)
         const diffStats = branch
-          ? await gitApi.diffStats(cwd, baseBranch, useRecordedBranchDiff ? branch : undefined).catch(() => null)
+          ? await gitApi.diffStats(cwd, diffRequest.baseBranch, diffRequest.branch).catch(() => null)
           : null
         if (cancelled) return
         setGitStatus(status)
@@ -160,7 +161,8 @@ export function ThreadActions({
     (prUrl ? { url: prUrl, kind: 'created' as const } : null) ??
     (gitStatus?.pr?.url ? { url: gitStatus.pr.url, kind: 'created' as const } : null)
   const effectivePrState = prState === 'creating' && existingPrLink?.kind === 'created' ? 'open' : prState
-  const useRecordedBranchDiff = Boolean(branch && (effectivePrState === 'merged' || effectivePrState === 'closed'))
+  const useRecordedBranchDiff = shouldUseRecordedBranchDiff(branch, effectivePrState)
+  const diffRequest = getThreadDiffRequest(baseBranch, branch, effectivePrState)
   const creatingPr = effectivePrState === 'creating'
   const showChangesButton = useRecordedBranchDiff
     ? Boolean(changeTotals?.hasChanges)
@@ -333,8 +335,8 @@ export function ThreadActions({
       {diffOpen && (
         <GitDiffViewer
           cwd={cwd}
-          baseBranch={branch ? baseBranch : undefined}
-          branch={effectivePrState === 'merged' || effectivePrState === 'closed' ? branch ?? undefined : undefined}
+          baseBranch={diffRequest.baseBranch}
+          branch={diffRequest.branch}
           onClose={() => setDiffOpen(false)}
         />
       )}

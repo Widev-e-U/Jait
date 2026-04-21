@@ -2,6 +2,26 @@ import type { GitStatusResult } from '@/lib/git-api'
 
 export type ThreadPrState = 'creating' | 'open' | 'closed' | 'merged' | null | undefined
 
+export function shouldUseRecordedBranchDiff(
+  threadBranch: string | null | undefined,
+  prState: ThreadPrState,
+): boolean {
+  if (!threadBranch) return false
+  return prState === 'creating' || prState === 'open' || prState === 'merged' || prState === 'closed'
+}
+
+export function getThreadDiffRequest(
+  baseBranch: string,
+  threadBranch: string | null | undefined,
+  prState: ThreadPrState,
+): { baseBranch?: string; branch?: string } {
+  if (!threadBranch) return {}
+  if (shouldUseRecordedBranchDiff(threadBranch, prState)) {
+    return { baseBranch, branch: threadBranch }
+  }
+  return { baseBranch }
+}
+
 export function shouldShowThreadChangesButton(
   gitStatus: GitStatusResult | null,
   threadBranch: string | null | undefined,

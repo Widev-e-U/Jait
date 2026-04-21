@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest'
 import type { GitStatusResult } from '@/lib/git-api'
-import { shouldRenderThreadActions, shouldShowThreadChangesButton } from './thread-actions-state'
+import {
+  getThreadDiffRequest,
+  shouldRenderThreadActions,
+  shouldShowThreadChangesButton,
+  shouldUseRecordedBranchDiff,
+} from './thread-actions-state'
 
 function gitStatus(overrides: Partial<GitStatusResult> = {}): GitStatusResult {
   return {
@@ -40,6 +45,64 @@ describe('shouldShowThreadChangesButton', () => {
 
   it('keeps local working tree changes visible even for terminal PRs', () => {
     expect(shouldShowThreadChangesButton(gitStatus({ hasWorkingTreeChanges: true }), 'jait/feature', 'closed')).toBe(true)
+  })
+})
+
+describe('shouldUseRecordedBranchDiff', () => {
+  it('keeps local diff mode before PR creation', () => {
+    expect(shouldUseRecordedBranchDiff('jait/feature', null)).toBe(false)
+  })
+
+  it('uses the recorded branch diff while the PR is being created', () => {
+    expect(shouldUseRecordedBranchDiff('jait/feature', 'creating')).toBe(true)
+  })
+
+  it('uses the recorded branch diff while the PR is open', () => {
+    expect(shouldUseRecordedBranchDiff('jait/feature', 'open')).toBe(true)
+  })
+
+  it('uses the recorded branch diff after the PR is merged or closed', () => {
+    expect(shouldUseRecordedBranchDiff('jait/feature', 'merged')).toBe(true)
+    expect(shouldUseRecordedBranchDiff('jait/feature', 'closed')).toBe(true)
+  })
+
+  it('does not use recorded branch diffs without a thread branch', () => {
+    expect(shouldUseRecordedBranchDiff(null, 'open')).toBe(false)
+  })
+})
+
+describe('getThreadDiffRequest', () => {
+  it('uses the current branch diff before PR creation', () => {
+    expect(getThreadDiffRequest('main', 'jait/feature', null)).toEqual({ baseBranch: 'main' })
+  })
+
+  it('pins diff stats to the recorded branch while the PR is being created', () => {
+    expect(getThreadDiffRequest('main', 'jait/feature', 'creating')).toEqual({
+      baseBranch: 'main',
+      branch: 'jait/feature',
+    })
+  })
+
+  it('pins diff stats to the recorded branch while the PR is open', () => {
+    expect(getThreadDiffRequest('main', 'jait/feature', 'open')).toEqual({
+      baseBranch: 'main',
+      branch: 'jait/feature',
+    })
+  })
+
+  it('pins diff stats to the recorded branch after merge and close', () => {
+    expect(getThreadDiffRequest('main', 'jait/feature', 'merged')).toEqual({
+      baseBranch: 'main',
+      branch: 'jait/feature',
+    })
+    expect(getThreadDiffRequest('main', 'jait/feature', 'closed')).toEqual({
+      baseBranch: 'main',
+      branch: 'jait/feature',
+    })
+  })
+
+  it('returns no branch-scoped diff request when the thread branch is missing', () => {
+    expect(getThreadDiffRequest('main', null, 'open')).toEqual({})
   })
 })
 
