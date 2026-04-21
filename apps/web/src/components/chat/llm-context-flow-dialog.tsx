@@ -293,14 +293,14 @@ function TraceRowView({ row }: { row: TraceRow }) {
 
   if (row.kind === 'tools') {
     return (
-      <div className="relative ml-4 border-l border-border pl-4">
+      <div className="relative ml-2 sm:ml-4 border-l border-border pl-2 sm:pl-4">
         <div className="absolute -left-1.5 top-3 h-3 w-3 rounded-full border border-border bg-background" />
         <div className="rounded-md border border-border/80 bg-muted/25 p-3">
           <div className="mb-2 flex items-center gap-2 text-xs font-medium text-foreground">
             <Wrench className="h-3.5 w-3.5" />
             Tools offered to model in round {row.roundNumber}
           </div>
-          <div className="grid gap-2 md:grid-cols-2">
+          <div className="grid gap-2 sm:grid-cols-2">
             {row.tools.map((tool) => (
               <details key={tool.name} className="rounded-md border border-border/70 bg-background/70 p-2">
                 <summary className="cursor-pointer text-xs font-medium text-foreground">{tool.name}</summary>
@@ -320,7 +320,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
 
   if (row.kind === 'response') {
     return (
-      <div className="relative ml-4 border-l border-border pl-4">
+      <div className="relative ml-2 sm:ml-4 border-l border-border pl-2 sm:pl-4">
         <div className="absolute -left-1.5 top-3 h-3 w-3 rounded-full border border-emerald-500/40 bg-background" />
         <div className="rounded-md border border-emerald-500/25 bg-emerald-500/10 p-3">
           <div className="mb-2 flex flex-wrap items-center gap-2">
@@ -342,7 +342,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
     : '(empty content)'
 
   return (
-    <div className="relative ml-4 border-l border-border pl-4">
+    <div className="relative ml-2 sm:ml-4 border-l border-border pl-2 sm:pl-4">
       <div className="absolute -left-1.5 top-3 h-3 w-3 rounded-full border border-border bg-background" />
       <details className="rounded-md border border-border/80 bg-background">
         <summary className="cursor-pointer px-3 py-2">
@@ -354,7 +354,7 @@ function TraceRowView({ row }: { row: TraceRow }) {
             {row.toolCalls.length > 0 ? (
               <span className="text-xs text-amber-600 dark:text-amber-400">{row.toolCalls.length} tool call{row.toolCalls.length !== 1 ? 's' : ''}</span>
             ) : null}
-            <span className="text-xs text-muted-foreground/60 truncate max-w-[400px]">{contentPreview}</span>
+            <span className="text-xs text-muted-foreground/60 truncate max-w-[200px] sm:max-w-[400px]">{contentPreview}</span>
           </div>
         </summary>
         <div className="px-3 pb-3">
@@ -429,11 +429,11 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="grid h-[85vh] max-w-[min(1200px,96vw)] grid-rows-[auto_minmax(0,1fr)] p-0">
+      <DialogContent showCloseButton={false} className="grid h-[95vh] sm:h-[85vh] max-w-[min(1200px,96vw)] grid-rows-[auto_minmax(0,1fr)] p-0">
         <DialogHeader className="border-b px-3 py-2">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
             <DialogTitle className="shrink-0 text-sm font-semibold">LLM Context Flow</DialogTitle>
-            <DialogDescription className="min-w-0 truncate text-xs">
+            <DialogDescription className="min-w-0 basis-full truncate text-xs sm:basis-auto">
               {contextFlow
                 ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} · ${contextFlow.rounds.length} round${contextFlow.rounds.length === 1 ? '' : 's'}`
                 : 'No context snapshot available'}
