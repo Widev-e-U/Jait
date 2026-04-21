@@ -18,7 +18,7 @@ const TODO_LIST_AUTO_HIDE_DELAY_MS = 5000
 export interface CollapsedTodoDisplay {
   headerLabel: string
   showHeaderSpinner: boolean
-  showCompletedSummary: boolean
+  showHeaderCompleted: boolean
 }
 
 export function getActiveTodoItem(items: TodoItem[]): TodoItem | null {
@@ -34,9 +34,9 @@ export function getCollapsedTodoDisplay(items: TodoItem[]): CollapsedTodoDisplay
   const allCompleted = areAllTodoItemsCompleted(items)
 
   return {
-    headerLabel: activeItem ? activeItem.title : 'Tasks',
+    headerLabel: activeItem ? activeItem.title : allCompleted ? 'All tasks completed' : 'Tasks',
     showHeaderSpinner: Boolean(activeItem),
-    showCompletedSummary: !activeItem && allCompleted,
+    showHeaderCompleted: !activeItem && allCompleted,
   }
 }
 
@@ -79,6 +79,7 @@ export function TodoList({ items, className }: TodoListProps) {
   const total = items.length
   const pct = total > 0 ? Math.round((completed / total) * 100) : 0
   const headerLabel = expanded ? 'Tasks' : collapsedDisplay.headerLabel
+  const progressBarClassName = allCompleted ? 'bg-green-500' : 'bg-primary'
 
   return (
     <div className={cn('rounded-lg border bg-muted/30 p-3 space-y-2', className)}>
@@ -97,10 +98,13 @@ export function TodoList({ items, className }: TodoListProps) {
         {!expanded && collapsedDisplay.showHeaderSpinner && (
           <Loader2 className="h-3.5 w-3.5 shrink-0 text-primary animate-spin" />
         )}
+        {!expanded && collapsedDisplay.showHeaderCompleted && (
+          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />
+        )}
         <span className="min-w-0 truncate text-xs font-medium text-foreground">{headerLabel}</span>
         <div className="flex-1 h-1.5 rounded-full bg-muted overflow-hidden">
           <div
-            className="h-full rounded-full bg-primary transition-all duration-300"
+            className={cn('h-full rounded-full transition-all duration-300', progressBarClassName)}
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -108,15 +112,6 @@ export function TodoList({ items, className }: TodoListProps) {
           {completed}/{total}
         </span>
       </button>
-
-      {!expanded && collapsedDisplay.showCompletedSummary && (
-        <div className="flex items-start gap-2 text-xs text-green-600 dark:text-green-400">
-          <CheckCircle2 className="h-3.5 w-3.5 shrink-0 mt-0.5" />
-          <span className="min-w-0 flex-1 truncate font-medium">
-            All tasks completed
-          </span>
-        </div>
-      )}
 
       {/* Items — collapsible */}
       {expanded && (

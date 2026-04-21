@@ -49,19 +49,19 @@ describe('getCollapsedTodoDisplay', () => {
     ])).toEqual({
       headerLabel: 'Patch collapsed task row',
       showHeaderSpinner: true,
-      showCompletedSummary: false,
+      showHeaderCompleted: false,
     })
   })
 
-  it('uses the completed summary only when every task is complete', () => {
+  it('uses the completed header state only when every task is complete', () => {
     expect(getCollapsedTodoDisplay([
       { id: 1, title: 'Map existing architecture', status: 'completed' },
       { id: 2, title: 'Patch collapsed task row', status: 'completed' },
       { id: 3, title: 'Verify UI behavior', status: 'completed' },
     ])).toEqual({
-      headerLabel: 'Tasks',
+      headerLabel: 'All tasks completed',
       showHeaderSpinner: false,
-      showCompletedSummary: true,
+      showHeaderCompleted: true,
     })
   })
 })
