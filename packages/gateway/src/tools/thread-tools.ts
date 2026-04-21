@@ -4,6 +4,7 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { SessionStateService } from "../services/session-state.js";
 import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
+import { buildThreadHistoryReplayPrompt } from "../services/thread-history.js";
 import type { ThreadRow, ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
@@ -277,7 +278,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           // Re-assert running when a new turn begins
           const cur = deps.threadService.getById(effectiveThread.id);
           if (cur && cur.status !== "running") {
-            deps.threadService.update(effectiveThread.id, { status: "running", error: null });
+            deps.threadService.update(effectiveThread.id, { status: "running", error: null, completedAt: null });
             broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
           }
         } else if (event.type === "turn.completed" && autoFinishAfterFirstTurn) {
@@ -294,12 +295,17 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
       deps.threadService.markRunning(effectiveThread.id, session.id);
       broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
 
+      const historyReplayPrompt = buildThreadHistoryReplayPrompt(deps.threadService, effectiveThread.id);
+
       if (message) {
         const userActivity = deps.threadService.addActivity(effectiveThread.id, "message", message.slice(0, 500), { role: "user" });
         broadcastThreadEvent(effectiveThread.id, "activity", { activity: userActivity });
 
         // Run thread router for the first turn
         let turnMessage = message;
+        if (historyReplayPrompt) {
+          turnMessage = `${historyReplayPrompt}\n\n${turnMessage}`;
+        }
         if (deps.skillRegistry) {
           const availableSkills = deps.skillRegistry.listEnabled();
           const routingPlan = routeThread({
@@ -616,14 +622,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!input.message?.trim()) return { ok: false, message: "send requires non-empty `message`." };
             const thread = getAccessibleThread(input.threadId, userId);
             if (!thread) return { ok: false, message: "Thread not found." };
-            if (thread.status !== "running" || !thread.providerSessionId) {
-              return { ok: false, message: "Thread is not running." };
+            if (!thread.providerSessionId) {
+              return { ok: false, message: "Thread has no active session." };
             }
 
             const provider = deps.providerRegistry.get(thread.providerId as ProviderId);
             if (!provider) return { ok: false, message: `Provider '${thread.providerId}' not found` };
 
-            deps.threadService.update(thread.id, { status: "running", error: null });
+            deps.threadService.update(thread.id, { status: "running", error: null, completedAt: null });
             broadcastThreadEvent(thread.id, "status", { status: "running" });
             await provider.sendTurn(thread.providerSessionId, input.message, input.attachments);
             const activity = deps.threadService.addActivity(thread.id, "message", input.message.slice(0, 500), { role: "user" });

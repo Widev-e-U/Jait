@@ -701,7 +701,7 @@ export function useAutomation(enabled = true) {
         // Follow-up turn — session is alive and previous turn completed
         setThreads(prev => prev.map(t =>
           t.id === targetThread.id
-            ? { ...t, status: 'running', error: null }
+            ? { ...t, status: 'running', error: null, completedAt: null }
             : t,
         ))
         await agentsApi.sendTurn(targetThread.id, {
@@ -724,7 +724,7 @@ export function useAutomation(enabled = true) {
         try {
           setThreads(prev => prev.map(t =>
             t.id === targetThread.id
-              ? { ...t, status: 'running', error: null }
+              ? { ...t, status: 'running', error: null, completedAt: null }
               : t,
           ))
           const updated = await agentsApi.startThread(targetThread.id, {

@@ -37,6 +37,7 @@ import { existsSync } from "node:fs";
 import type { Skill, SkillRegistry } from "../skills/index.js";
 import { formatSkillsForPrompt } from "../skills/index.js";
 import { routeThread, formatRoutingPlanForPrompt } from "../services/thread-router.js";
+import { buildThreadHistoryReplayPrompt } from "../services/thread-history.js";
 import {
   generateTitleViaTurn,
   generateTitleViaApi,
@@ -603,7 +604,7 @@ export function registerThreadRoutes(
       } else if (event.type === "turn.started") {
         const cur = threadService.getById(threadId);
         if (cur && cur.status !== "running") {
-          threadService.update(threadId, { status: "running", error: null });
+          threadService.update(threadId, { status: "running", error: null, completedAt: null });
           broadcastThreadStatus(threadId, "running");
         }
       } else if (event.type === "turn.completed") {
@@ -1125,6 +1126,8 @@ export function registerThreadRoutes(
       const titlePrefix = typeof body["titlePrefix"] === "string" ? body["titlePrefix"] : "";
       const titleTask = typeof body["titleTask"] === "string" ? body["titleTask"] : displayContent ?? message ?? "";
 
+      const historyReplayPrompt = buildThreadHistoryReplayPrompt(threadService, id);
+
       if (message) {
         const userActivity = threadService.addActivity(id, "message", (displayContent ?? message).slice(0, 500), {
           role: "user",
@@ -1203,6 +1206,9 @@ export function registerThreadRoutes(
 
             // Prepend skills context on the first turn of a new CLI session
             let turnMessage = fullMessage;
+            if (historyReplayPrompt) {
+              turnMessage = `${historyReplayPrompt}\n\n${turnMessage}`;
+            }
             const availableSkills = deps.skillRegistry
               ? resolveThreadSkills(deps.skillRegistry, activeThread.skillIds)
               : [];
@@ -1359,7 +1365,7 @@ export function registerThreadRoutes(
     });
     broadcastThreadEvent(id, "activity", { activity: userActivity });
 
-    threadService.update(id, { status: "running", error: null });
+    threadService.update(id, { status: "running", error: null, completedAt: null });
     broadcastThreadStatus(id, "running");
 
     let fullMessage = buildThreadTurnMessage({

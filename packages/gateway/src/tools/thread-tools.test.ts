@@ -249,6 +249,111 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("reuses a completed thread session for follow-up sends and clears completedAt", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const thread = threadService.create({
+        userId: context.userId,
+        title: "Delivery thread",
+        providerId: "codex",
+      });
+      threadService.update(thread.id, {
+        status: "completed",
+        providerSessionId: "mock-session-1",
+        completedAt: "2026-04-21T00:00:00.000Z",
+      });
+
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "send",
+          threadId: thread.id,
+          message: "Continue with the fix",
+        },
+        context,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(provider.sendTurn).toHaveBeenCalledWith("mock-session-1", "Continue with the fix", undefined);
+      expect(threadService.getById(thread.id)).toMatchObject({
+        status: "running",
+        completedAt: null,
+      });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("replays prior thread history when starting a fresh session for an existing thread", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const thread = threadService.create({
+        userId: context.userId,
+        title: "Delivery thread",
+        providerId: "codex",
+      });
+      threadService.addActivity(thread.id, "message", "Investigate the bug", {
+        role: "user",
+        content: "Investigate the bug",
+        fullContent: "Investigate the bug",
+      });
+      threadService.addActivity(thread.id, "message", "The issue is stale completion state.", {
+        role: "assistant",
+        content: "The issue is stale completion state.",
+      });
+      threadService.update(thread.id, {
+        status: "completed",
+        providerSessionId: null,
+        completedAt: "2026-04-21T00:00:00.000Z",
+      });
+
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "start",
+          threadId: thread.id,
+          message: "Apply the fix",
+        },
+        context,
+      );
+
+      expect(result.ok).toBe(true);
+      const sentMessage = provider.sendTurn.mock.calls[0]?.[1];
+      expect(sentMessage).toEqual(expect.stringContaining("<thread-history>"));
+      expect(sentMessage).toEqual(expect.stringContaining("User: Investigate the bug"));
+      expect(sentMessage).toEqual(expect.stringContaining("Assistant: The issue is stale completion state."));
+      expect(sentMessage).toEqual(expect.stringContaining("Apply the fix"));
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("uses the selected provider from user settings", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

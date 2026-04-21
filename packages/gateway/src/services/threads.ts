@@ -243,6 +243,7 @@ export class ThreadService {
       status: "running",
       providerSessionId,
       error: null,
+      completedAt: null,
     });
   }
 
