@@ -1008,12 +1008,17 @@ export function registerChatRoutes(
     if (signal?.aborted) {
       return { ok: false, message: "Cancelled" };
     }
+    const sessionRecord = sessionService?.getById(sessionId);
+    const workspaceRecord = sessionRecord?.workspaceId
+      ? workspaceService?.getById(sessionRecord.workspaceId, auth?.userId)
+      : null;
+    const wsPath = workspaceRecord?.rootPath ?? sessionRecord?.workspacePath;
     const context: ToolContext = {
       sessionId,
       actionId: uuidv7(),
       workspaceRoot: surfaceRegistry
-        ? resolveWorkspaceRoot(surfaceRegistry, sessionId)
-        : process.cwd(),
+        ? resolveWorkspaceRoot(surfaceRegistry, sessionId, wsPath)
+        : (wsPath?.trim() || process.cwd()),
       requestedBy: "agent",
       userId: auth?.userId,
       apiKeys: auth?.apiKeys,

@@ -337,40 +337,52 @@ function TraceRowView({ row }: { row: TraceRow }) {
     )
   }
 
+  const contentPreview = row.content
+    ? row.content.length > 80 ? row.content.slice(0, 80) + '...' : row.content
+    : '(empty content)'
+
   return (
     <div className="relative ml-4 border-l border-border pl-4">
       <div className="absolute -left-1.5 top-3 h-3 w-3 rounded-full border border-border bg-background" />
-      <div className="rounded-md border border-border/80 bg-background p-3">
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <span className={cn('rounded-md border px-2 py-0.5 text-xs font-semibold', roleClassName(row.role))}>
-            {row.role}
-          </span>
-          <span className="text-xs text-muted-foreground">round {row.roundNumber} / message {row.index + 1}</span>
-        </div>
-        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/35 p-3 font-mono text-xs leading-5 text-foreground [overflow-wrap:anywhere]">
-          {row.content || '(empty content)'}
-        </pre>
-        {row.toolCalls.length > 0 ? (
-          <div className="mt-3 space-y-2">
-            {row.toolCalls.map((call) => (
-              <details key={call.id} className="rounded-md border border-amber-500/25 bg-amber-500/10 p-2">
-                <summary className="cursor-pointer text-xs font-medium text-amber-800 dark:text-amber-200">
-                  Tool call: {call.name} <span className="font-normal text-muted-foreground">({call.id})</span>
-                </summary>
-                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background/70 p-2 font-mono text-xs leading-5">
-                  {call.args || '{}'}
-                </pre>
-              </details>
-            ))}
+      <details className="rounded-md border border-border/80 bg-background">
+        <summary className="cursor-pointer px-3 py-2">
+          <div className="inline-flex flex-wrap items-center gap-2">
+            <span className={cn('rounded-md border px-2 py-0.5 text-xs font-semibold', roleClassName(row.role))}>
+              {row.role}
+            </span>
+            <span className="text-xs text-muted-foreground">round {row.roundNumber} / message {row.index + 1}</span>
+            {row.toolCalls.length > 0 ? (
+              <span className="text-xs text-amber-600 dark:text-amber-400">{row.toolCalls.length} tool call{row.toolCalls.length !== 1 ? 's' : ''}</span>
+            ) : null}
+            <span className="text-xs text-muted-foreground/60 truncate max-w-[400px]">{contentPreview}</span>
           </div>
-        ) : null}
-        <details className="mt-2">
-          <summary className="cursor-pointer text-xs text-muted-foreground">Raw message JSON</summary>
-          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/35 p-2 font-mono text-xs leading-5">
-            {stringifyExact(row.raw)}
+        </summary>
+        <div className="px-3 pb-3">
+          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/35 p-3 font-mono text-xs leading-5 text-foreground [overflow-wrap:anywhere]">
+            {row.content || '(empty content)'}
           </pre>
-        </details>
-      </div>
+          {row.toolCalls.length > 0 ? (
+            <div className="mt-3 space-y-2">
+              {row.toolCalls.map((call) => (
+                <details key={call.id} className="rounded-md border border-amber-500/25 bg-amber-500/10 p-2">
+                  <summary className="cursor-pointer text-xs font-medium text-amber-800 dark:text-amber-200">
+                    Tool call: {call.name} <span className="font-normal text-muted-foreground">({call.id})</span>
+                  </summary>
+                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background/70 p-2 font-mono text-xs leading-5">
+                    {call.args || '{}'}
+                  </pre>
+                </details>
+              ))}
+            </div>
+          ) : null}
+          <details className="mt-2">
+            <summary className="cursor-pointer text-xs text-muted-foreground">Raw message JSON</summary>
+            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/35 p-2 font-mono text-xs leading-5">
+              {stringifyExact(row.raw)}
+            </pre>
+          </details>
+        </div>
+      </details>
     </div>
   )
 }
@@ -391,7 +403,8 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
       if (row.kind === 'round') return 120
       if (row.kind === 'tools') return Math.min(420, 110 + row.tools.length * 72)
       if (row.kind === 'response') return Math.min(520, 120 + Math.ceil(row.content.length / 90) * 18)
-      return Math.min(520, 135 + Math.ceil(row.content.length / 90) * 18 + row.toolCalls.length * 72)
+      // Messages start collapsed — estimate only the summary line height
+      return 52
     },
     overscan: 5,
     enabled: open && mode === 'trace',
