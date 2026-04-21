@@ -37,6 +37,7 @@ import {
 import { gitApi } from '@/lib/git-api'
 import { generateDeviceId } from '@/lib/device-id'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
+import { shouldRenderThreadActions } from '@/components/automation/thread-actions-state'
 import { resolveThreadPrStateFromPoll, type ThreadPrState } from '@/lib/thread-pr-state'
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -165,14 +166,14 @@ export function useAutomation(enabled = true) {
   const showGitActions = useMemo(
     () =>
       selectedThread != null &&
-      selectedThread.kind === 'delivery' &&
-      selectedRepo != null &&
-      (
-        selectedThread.status === 'completed' ||
-        Boolean(selectedThread.prUrl) ||
-        selectedThreadPrState === 'creating' ||
-        selectedThreadPrState === 'open'
-      ),
+      shouldRenderThreadActions({
+        hasRepository: selectedRepo != null,
+        threadKind: selectedThread.kind,
+        threadStatus: selectedThread.status,
+        threadBranch: selectedThread.branch,
+        prUrl: selectedThread.prUrl,
+        prState: selectedThreadPrState,
+      }),
     [selectedThread, selectedRepo, selectedThreadPrState],
   )
 

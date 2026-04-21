@@ -1128,6 +1128,14 @@ function ManagerActiveThreadsMenu({
               thread,
               thread.id in threadPrStates ? threadPrStates[thread.id] : undefined,
             )
+            const showThreadActions = shouldRenderThreadActions({
+              hasRepository: repo != null,
+              threadKind: thread.kind,
+              threadStatus: thread.status,
+              threadBranch: thread.branch,
+              prUrl: thread.prUrl,
+              prState,
+            })
 
             return (
               <div
@@ -1172,7 +1180,7 @@ function ManagerActiveThreadsMenu({
                   </div>
                 </button>
                 <div className="flex items-center gap-1 self-start">
-                  {repo && (
+                  {showThreadActions && repo && (
                     <div
                       onClick={(event) => event.stopPropagation()}
                       onMouseDown={(event) => event.stopPropagation()}
