@@ -135,6 +135,7 @@ import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type Th
 import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
+import { getDeveloperChatUiState } from '@/lib/developer-chat-state'
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
   collapseMobileWorkspace,
@@ -5277,6 +5278,11 @@ function App() {
       )
     )
   const hasMessages = messages.length > 0 || isLoadingHistory
+  const developerChatUiState = getDeveloperChatUiState({
+    developerChatHydrating,
+    isLoadingHistory,
+    todoCount: todoList.length,
+  })
   const mobileActiveWorkspaceTarget = useMemo(
     () => getMobileWorkspaceActiveTarget({
       showWorkspace,
@@ -5406,7 +5412,7 @@ function App() {
           <SendTargetSelector
             target={sendTarget}
             onChange={setSendTarget}
-            disabled={isLoading}
+            disabled={developerChatUiState.disableSendTargetSelector}
           />
         </div>
         <div className="flex shrink-0 items-center justify-self-end gap-2">
@@ -7031,6 +7037,9 @@ function App() {
                     sessionInfo={sessionInfo}
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
+                  {developerChatUiState.showTodoList && (
+                    <TodoList items={todoList} />
+                  )}
                   {developerComposerControlRow}
                 </div>
               </div>
@@ -7094,7 +7103,7 @@ function App() {
 
                 <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`}>
                   <div className="mx-auto w-full max-w-3xl space-y-1.5">
-                    {todoList.length > 0 && (
+                    {developerChatUiState.showTodoList && (
                       <TodoList items={todoList} />
                     )}
                     {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
