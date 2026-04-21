@@ -129,7 +129,7 @@ export function SessionSelector({
                   return (
                     <div
                       key={workspace.id}
-                      className={`group flex w-full items-start gap-1 px-1.5 py-1.5 text-sm transition-colors ${
+                      className={`group grid w-full grid-cols-[auto,minmax(0,1fr),auto] items-start gap-1.5 px-1.5 py-1.5 text-sm transition-colors ${
                         offline || isActiveWorkspace ? 'cursor-default' : 'cursor-pointer'
                       } ${
                         isActiveWorkspace ? 'rounded-md bg-secondary/70' : offline ? 'opacity-50' : 'hover:rounded-md hover:bg-muted/40'
@@ -153,11 +153,11 @@ export function SessionSelector({
                       ) : (
                         <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
-                      <div className="min-w-0 flex-1 overflow-hidden pr-0.5">
+                      <div className="min-w-0 overflow-hidden">
                         <div className="truncate text-xs font-medium">
                           {workspace.title || 'Untitled Workspace'}
                         </div>
-                        <div className="flex items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
+                        <div className="flex min-w-0 items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
                           <span className="min-w-0 truncate">{workspace.rootPath || 'No folder linked'}</span>
                           <span className="shrink-0">·</span>
                           <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
@@ -170,7 +170,7 @@ export function SessionSelector({
                         )}
                         {remoteNode && !offline && (
                           <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs">
-                            <span className="inline-flex min-w-0 items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
+                            <span className="inline-flex max-w-full items-center gap-0.5 rounded bg-muted px-1 py-0.5 text-muted-foreground">
                               <NodeIcon platform={remoteNode.platform} />
                               <span className="truncate max-w-[80px]">{remoteNode.name}</span>
                             </span>
@@ -189,14 +189,14 @@ export function SessionSelector({
                           </div>
                         )}
                       </div>
-                      <div className="flex shrink-0 self-start">
+                      <div className="flex shrink-0 self-start gap-0.5">
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button
                               variant="ghost"
                               size="icon"
                               aria-label="Change directory"
-                              className="h-5.5 w-5.5 shrink-0 text-muted-foreground transition-colors hover:text-foreground"
+                              className="h-5.5 w-5.5 shrink-0 opacity-100 text-muted-foreground transition-opacity hover:text-foreground sm:opacity-0 sm:group-hover:opacity-100"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 onChangeDirectory(workspace.id)
@@ -213,7 +213,7 @@ export function SessionSelector({
                               variant="ghost"
                               size="icon"
                               aria-label="Archive workspace"
-                              className="h-5.5 w-5.5 shrink-0 text-muted-foreground transition-colors hover:text-destructive"
+                              className="h-5.5 w-5.5 shrink-0 opacity-100 text-muted-foreground transition-opacity hover:text-destructive sm:opacity-0 sm:group-hover:opacity-100"
                               onClick={(e) => {
                                 e.stopPropagation()
                                 onRemoveWorkspace(workspace.id)
