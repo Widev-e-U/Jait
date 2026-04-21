@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { CheckCircle2, ChevronDown, Circle, Loader2 } from 'lucide-react'
+import { CheckCircle2, ChevronDown, Circle, Loader2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
 export interface TodoItem {
@@ -11,6 +11,7 @@ export interface TodoItem {
 interface TodoListProps {
   items: TodoItem[]
   className?: string
+  onClear?: () => void
 }
 
 const TODO_LIST_AUTO_HIDE_DELAY_MS = 5000
@@ -40,7 +41,7 @@ export function getCollapsedTodoDisplay(items: TodoItem[]): CollapsedTodoDisplay
   }
 }
 
-export function TodoList({ items, className }: TodoListProps) {
+export function TodoList({ items, className, onClear }: TodoListProps) {
   const [expanded, setExpanded] = useState(false)
   const [hidden, setHidden] = useState(false)
   const hideTimeoutRef = useRef<number | null>(null)
@@ -111,6 +112,16 @@ export function TodoList({ items, className }: TodoListProps) {
         <span className="text-2xs text-muted-foreground tabular-nums">
           {completed}/{total}
         </span>
+        {onClear && (
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onClear() }}
+            className="shrink-0 p-0.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+            title="Clear todo list"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        )}
       </button>
 
       {/* Items — collapsible */}

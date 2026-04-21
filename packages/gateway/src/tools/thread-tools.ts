@@ -1,5 +1,6 @@
 import type { WsEventType } from "@jait/shared";
 import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
+import { extractTodoResultItems } from "../providers/todo-result.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { SessionStateService } from "../services/session-state.js";
@@ -257,8 +258,11 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         }
 
         // Emit dedicated todo activity so the frontend can track the list in real time
-        if (event.type === "tool.result" && event.tool === "todo" && event.ok && event.data && typeof event.data === "object" && "items" in event.data) {
-          const todoActivity = deps.threadService.addActivity(effectiveThread.id, "todo", "Todo list updated", { items: (event.data as { items: unknown }).items });
+        const todoItems = event.type === "tool.result" && event.ok
+          ? extractTodoResultItems(event.tool, event.data)
+          : null;
+        if (todoItems) {
+          const todoActivity = deps.threadService.addActivity(effectiveThread.id, "todo", "Todo list updated", { items: todoItems });
           broadcastThreadEvent(effectiveThread.id, "activity", { activity: todoActivity });
         }
 

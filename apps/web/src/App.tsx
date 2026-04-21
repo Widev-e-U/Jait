@@ -1515,12 +1515,6 @@ function App() {
     setViewMode('developer')
     setDevPreviewTarget(trimmed)
     setWorkspacePreviewState(nextPreviewState)
-    if (workspaceRoot?.trim()) {
-      setActiveWorkspace((prev) => {
-        if (prev?.workspaceRoot === workspaceRoot.trim()) return prev
-        return { surfaceId: prev?.surfaceId ?? '', workspaceRoot: workspaceRoot.trim(), nodeId: prev?.nodeId }
-      })
-    }
     if (!showWorkspace) {
       showWorkspaceRef.current = true
       setShowWorkspace(true)
@@ -3922,6 +3916,11 @@ function App() {
   }, [terminalColumnWidth])
 
   const activeWorkspaceRoot = activeWorkspace?.workspaceRoot ?? activeWorkspaceRecord?.rootPath ?? null
+  const previewWorkspaceRoot =
+    workspacePreviewState.workspaceRoot
+    ?? savedDevPreview?.workspaceRoot
+    ?? activeWorkspace?.workspaceRoot
+    ?? null
   const activeWorkspaceDisplayName = useMemo(() => {
     const title = activeWorkspaceRecord?.title?.trim()
     if (title) return title
@@ -5470,18 +5469,17 @@ function App() {
             />
           )}
           {approveAllInSession && (
-            <>
-              <span className="truncate text-xs text-green-600 dark:text-green-400">
-                Approved all commands for this session
-              </span>
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-600 dark:text-green-400">
+              Auto-approved
               <button
                 type="button"
                 onClick={handleClearApproveAll}
-                className="shrink-0 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                className="rounded-full p-0.5 hover:bg-green-500/20 transition-colors"
+                title="Clear approve all"
               >
-                Clear approve all
+                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
               </button>
-            </>
+            </span>
           )}
         </div>
         <div className="justify-self-center">
@@ -6675,7 +6673,7 @@ function App() {
                       onPreviewOpenChange={handleWorkspacePreviewOpenChange}
                       previewSessionId={activeSessionId}
                       previewToken={token}
-                      previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
+                      previewWorkspaceRoot={previewWorkspaceRoot}
                       previewInitialTarget={devPreviewTarget}
                       architectureDiagram={architectureDiagram}
                       architectureGenerating={architectureGenerating}
@@ -6841,7 +6839,7 @@ function App() {
                   onPreviewOpenChange={handleWorkspacePreviewOpenChange}
                   previewSessionId={activeSessionId}
                   previewToken={token}
-                  previewWorkspaceRoot={activeWorkspace?.workspaceRoot ?? null}
+                  previewWorkspaceRoot={previewWorkspaceRoot}
                   previewInitialTarget={devPreviewTarget}
                   architectureDiagram={architectureDiagram}
                   architectureGenerating={architectureGenerating}
@@ -7195,7 +7193,7 @@ function App() {
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
                   {developerChatUiState.showTodoList && (
-                    <TodoList items={todoList} />
+                    <TodoList items={todoList} onClear={() => setTodoList([])} />
                   )}
                   {developerComposerControlRow}
                 </div>
@@ -7260,55 +7258,57 @@ function App() {
 
                 <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`}>
                   <div className="mx-auto w-full max-w-3xl space-y-1.5">
-                    {developerChatUiState.showTodoList && (
-                      <TodoList items={todoList} />
-                    )}
-                    {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
-                      <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
-                        <AlertTriangle className="h-4 w-4 shrink-0" />
-                        <span className="min-w-0 break-words">{error}</span>
-                      </div>
-                    )}
-                    {hitMaxRounds && !isLoading && (
-                      <div className="flex items-center justify-center gap-2 py-1.5">
-                        <button
-                          onClick={() => continueChat({ token, sessionId: activeSessionId })}
-                          className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-accent transition-colors"
-                        >
-                          <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-                          Continue
-                        </button>
-                        <span className="text-xs text-muted-foreground">Agent stopped — hit the tool execution limit</span>
-                      </div>
-                    )}
-                    <ConsentQueue
-                      compact
-                      sessionId={activeSessionId}
-                      onApproveAllEnabled={() => setApproveAllInSession(true)}
-                    />
-                    {pendingPlan && (
-                      <PlanReview
-                        plan={pendingPlan}
-                        onApprove={executePlan}
-                        onReject={rejectPlan}
-                        isExecuting={isLoading}
+                    <div className="space-y-1.5 max-h-[40vh] overflow-y-auto">
+                      {developerChatUiState.showTodoList && (
+                        <TodoList items={todoList} onClear={() => setTodoList([])} />
+                      )}
+                      {error && error !== 'login_required' && error !== 'limit_reached' && !isLoading && (
+                        <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 dark:text-red-400 dark:border-red-400/40 dark:bg-red-400/10">
+                          <AlertTriangle className="h-4 w-4 shrink-0" />
+                          <span className="min-w-0 break-words">{error}</span>
+                        </div>
+                      )}
+                      {hitMaxRounds && !isLoading && (
+                        <div className="flex items-center justify-center gap-2 py-1.5">
+                          <button
+                            onClick={() => continueChat({ token, sessionId: activeSessionId })}
+                            className="inline-flex items-center gap-1.5 rounded-md border bg-background px-3 py-1.5 text-xs font-medium text-foreground shadow-sm hover:bg-accent transition-colors"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+                            Continue
+                          </button>
+                          <span className="text-xs text-muted-foreground">Agent stopped — hit the tool execution limit</span>
+                        </div>
+                      )}
+                      <ConsentQueue
+                        compact
+                        sessionId={activeSessionId}
+                        onApproveAllEnabled={() => setApproveAllInSession(true)}
                       />
-                    )}
-                    {limitReached && (
-                      <p className="text-center text-sm text-destructive">
-                        Daily limit reached. Come back tomorrow.
-                      </p>
-                    )}
-                    {changedFiles.length > 0 && (
-                      <FilesChanged
-                        files={changedFiles}
-                        onAccept={acceptFile}
-                        onReject={rejectFile}
-                        onAcceptAll={acceptAllFiles}
-                        onRejectAll={rejectAllFiles}
-                        onFileClick={handleChangedFileClick}
-                      />
-                    )}
+                      {pendingPlan && (
+                        <PlanReview
+                          plan={pendingPlan}
+                          onApprove={executePlan}
+                          onReject={rejectPlan}
+                          isExecuting={isLoading}
+                        />
+                      )}
+                      {limitReached && (
+                        <p className="text-center text-sm text-destructive">
+                          Daily limit reached. Come back tomorrow.
+                        </p>
+                      )}
+                      {changedFiles.length > 0 && (
+                        <FilesChanged
+                          files={changedFiles}
+                          onAccept={acceptFile}
+                          onReject={rejectFile}
+                          onAcceptAll={acceptAllFiles}
+                          onRejectAll={rejectAllFiles}
+                          onFileClick={handleChangedFileClick}
+                        />
+                      )}
+                    </div>
                     <PromptInput
                       ref={promptInputRef}
                       draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}

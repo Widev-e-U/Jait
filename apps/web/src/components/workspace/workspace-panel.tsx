@@ -277,7 +277,7 @@ function isDescendantPath(parentPath: string, candidatePath: string): boolean {
 /*  Remote (server-backed) workspace helpers                           */
 /* ------------------------------------------------------------------ */
 import { getApiUrl } from '@/lib/gateway-url'
-import { isSamePreviewSession } from '@/lib/preview-session'
+import { deriveManagedPreviewSessionId, isSamePreviewSession } from '@/lib/preview-session'
 import { subscribePreviewSession } from '@/lib/preview-events'
 
 const API_URL = getApiUrl()
@@ -1313,7 +1313,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     ) ?? [],
     [managedPreviewSession],
   )
-  const activePreviewSessionId = previewSessionId ?? null
+  const activePreviewSessionId = deriveManagedPreviewSessionId(previewSessionId)
   const activePreviewSrc = useMemo(
     () => managedPreviewSession?.remoteBrowser?.novncUrl
       ?? activePreviewTab?.previewSrc
@@ -1369,12 +1369,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [onActiveFileChange, openTabs])
 
   const stopManagedPreviewSession = useCallback(async (preserveTab: boolean) => {
-    if (previewSessionId && previewToken) {
+    if (activePreviewSessionId && previewToken) {
       try {
         await fetch(`${API_URL}/api/preview/stop`, {
           method: 'POST',
           headers: authHeaders(previewToken),
-          body: JSON.stringify({ sessionId: previewSessionId }),
+          body: JSON.stringify({ sessionId: activePreviewSessionId }),
         })
       } catch {
         // ignore
@@ -1401,7 +1401,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         previewMode: null,
       })
     }
-  }, [previewSessionId, previewToken, syncPreviewTab])
+  }, [activePreviewSessionId, previewToken, syncPreviewTab])
 
   const fetchManagedPreviewSession = useCallback(async () => {
     if (!activePreviewSessionId || !previewToken) return null
@@ -3513,7 +3513,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     port?: number | null
     resetTab?: boolean
   }) => {
-    if (!previewSessionId || !previewToken) {
+    if (!activePreviewSessionId || !previewToken) {
       setPreviewPanelError('Login is required to start a live preview session.')
       return
     }
@@ -3529,7 +3529,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         method: 'POST',
         headers: authHeaders(previewToken),
         body: JSON.stringify({
-          sessionId: previewSessionId,
+          sessionId: activePreviewSessionId,
           workspaceRoot: previewWorkspaceRoot,
           target: target?.trim() || null,
           command: command?.trim() || null,
@@ -3548,7 +3548,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } finally {
       setPreviewBusy(false)
     }
-  }, [handleOpenPreviewTarget, previewSessionId, previewToken, previewWorkspaceRoot])
+  }, [activePreviewSessionId, handleOpenPreviewTarget, previewToken, previewWorkspaceRoot])
 
   const handleOpenPreviewFromControls = useCallback(() => {
     const trimmed = previewInput.trim()
@@ -3560,7 +3560,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   }, [previewCommand, previewInput, previewPort, startManagedPreview])
 
   const handleRestartManagedPreview = useCallback(async () => {
-    if (!previewSessionId || !previewToken) return
+    if (!activePreviewSessionId || !previewToken) return
     setPreviewBusy(true)
     setPreviewPanelError(null)
     setPreviewFrameLoading(true)
@@ -3568,7 +3568,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       const response = await fetch(`${API_URL}/api/preview/restart`, {
         method: 'POST',
         headers: authHeaders(previewToken),
-        body: JSON.stringify({ sessionId: previewSessionId }),
+        body: JSON.stringify({ sessionId: activePreviewSessionId }),
       })
       const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
       if (!response.ok || !data.session) {
@@ -3581,7 +3581,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     } finally {
       setPreviewBusy(false)
     }
-  }, [previewSessionId, previewToken])
+  }, [activePreviewSessionId, previewToken])
 
   const handleStopManagedPreview = useCallback(async () => {
     setPreviewBusy(true)
@@ -3614,12 +3614,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     handledPreviewRequestKeyRef.current = previewRequest.key
     handleOpenPreviewTarget(previewRequest.target)
     const trimmedTarget = previewRequest.target?.trim() || ''
-    if (!trimmedTarget || !previewSessionId || !previewToken) return
+    if (!trimmedTarget || !activePreviewSessionId || !previewToken) return
     const activeTarget = managedPreviewSession?.target?.trim() || ''
     const activeStatus = managedPreviewSession?.status
     if (activeTarget === trimmedTarget && (activeStatus === 'starting' || activeStatus === 'ready')) return
     void startManagedPreview({ target: trimmedTarget, resetTab: false })
-  }, [handleOpenPreviewTarget, managedPreviewSession?.status, managedPreviewSession?.target, previewRequest, previewSessionId, previewToken, startManagedPreview])
+  }, [activePreviewSessionId, handleOpenPreviewTarget, managedPreviewSession?.status, managedPreviewSession?.target, previewRequest, previewToken, startManagedPreview])
 
   useEffect(() => {
     if (!architectureRequest) return

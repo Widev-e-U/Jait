@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { isSamePreviewSession, type PreviewSessionLike } from './preview-session'
+import { deriveManagedPreviewSessionId, isSamePreviewSession, type PreviewSessionLike } from './preview-session'
 
 function createSession(overrides: Partial<PreviewSessionLike> = {}): PreviewSessionLike {
   return {
@@ -43,5 +43,17 @@ describe('isSamePreviewSession', () => {
     const previous = createSession()
     const next = createSession({ status: 'error', lastError: 'process exited' })
     expect(isSamePreviewSession(previous, next)).toBe(false)
+  })
+})
+
+describe('deriveManagedPreviewSessionId', () => {
+  it('creates an isolated nested preview session id', () => {
+    expect(deriveManagedPreviewSessionId('session-123')).toBe('session-123::managed-preview')
+  })
+
+  it('returns null for empty session ids', () => {
+    expect(deriveManagedPreviewSessionId('')).toBeNull()
+    expect(deriveManagedPreviewSessionId('   ')).toBeNull()
+    expect(deriveManagedPreviewSessionId(null)).toBeNull()
   })
 })

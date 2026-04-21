@@ -60,6 +60,18 @@ function httpToWs(httpUrl: string): string {
   return httpUrl.replace(/^http/, 'ws')
 }
 
+export function normalizeDirectGatewayBase(url: string, isDev = import.meta.env.DEV): string {
+  try {
+    const parsed = new URL(url)
+    if (isDev && parsed.port && parsed.port !== '8000') {
+      parsed.port = '8000'
+    }
+    return stripTrailingSlash(parsed.toString())
+  } catch {
+    return stripTrailingSlash(url)
+  }
+}
+
 // ── Read / write user override ───────────────────────────────────────
 
 export function getStoredGatewayUrl(): string | null {
@@ -127,14 +139,14 @@ export function getWsUrl(): string {
   if (import.meta.env.DEV && env) return stripTrailingSlash(env)
 
   const stored = getStoredGatewayUrl()
-  if (stored) return stripTrailingSlash(httpToWs(stored))
+  if (stored) return stripTrailingSlash(httpToWs(normalizeDirectGatewayBase(stored)))
 
   // Electron desktop bridge
   const desktop = typeof window !== 'undefined' ? (window as any).jaitDesktop?.gatewayUrl as string | undefined : undefined
-  if (desktop) return stripTrailingSlash(httpToWs(desktop))
+  if (desktop) return stripTrailingSlash(httpToWs(normalizeDirectGatewayBase(desktop)))
 
   const env2 = import.meta.env.VITE_API_URL as string | undefined
-  if (env2) return stripTrailingSlash(httpToWs(env2))
+  if (env2) return stripTrailingSlash(httpToWs(normalizeDirectGatewayBase(env2)))
 
   // Use direct gateway URL (not proxied) for WebSocket
   return stripTrailingSlash(httpToWs(getDirectGatewayUrl()))

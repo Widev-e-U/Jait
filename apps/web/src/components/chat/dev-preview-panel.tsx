@@ -6,7 +6,7 @@ import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { isNoVncViewerUrl, isWebSocketUrl } from '@/lib/no-vnc'
 import { PreviewMetricsPanel, type PreviewPerformanceMetrics } from '@/components/workspace/workspace-preview-inspect-panel'
 import { getApiUrl } from '@/lib/gateway-url'
-import { isSamePreviewSession } from '@/lib/preview-session'
+import { deriveManagedPreviewSessionId, isSamePreviewSession } from '@/lib/preview-session'
 import { subscribePreviewSession } from '@/lib/preview-events'
 
 // BrowserSession was removed — keep a minimal type alias for residual references
@@ -187,6 +187,7 @@ export function DevPreviewPanel({
   token = null,
   workspaceRoot = null,
 }: DevPreviewPanelProps) {
+  const managedPreviewSessionId = deriveManagedPreviewSessionId(sessionId)
   const [input, setInput] = useState(initialTarget?.trim() || '')
   const [command, setCommand] = useState('')
   const [port, setPort] = useState('')
@@ -217,8 +218,8 @@ export function DevPreviewPanel({
   const showLoadingBar = isFrameLoading && activeTab === 'preview' && !screenshotUrl
 
   const fetchManagedSession = useCallback(async () => {
-    if (!sessionId || !token) return null
-    const response = await fetch(`${getApiUrl()}/api/preview/session/${sessionId}`, {
+    if (!managedPreviewSessionId || !token) return null
+    const response = await fetch(`${getApiUrl()}/api/preview/session/${managedPreviewSessionId}`, {
       headers: authHeaders(token),
     })
     if (!response.ok) return null
@@ -226,7 +227,7 @@ export function DevPreviewPanel({
     setManagedSession((current) => isSamePreviewSession(current, data.session) ? current : data.session)
     setManagedBrowserSession(data.browserSession ?? null)
     return data.session
-  }, [sessionId, token])
+  }, [managedPreviewSessionId, token])
 
   useEffect(() => {
     void fetchManagedSession()
@@ -234,12 +235,12 @@ export function DevPreviewPanel({
 
   // Subscribe to WS-pushed preview session updates instead of polling
   useEffect(() => {
-    if (!sessionId) return
+    if (!managedPreviewSessionId) return
     return subscribePreviewSession((session) => {
-      if (session.sessionId !== sessionId) return
+      if (session.sessionId !== managedPreviewSessionId) return
       setManagedSession((current) => isSamePreviewSession(current, session as any) ? current : session as any)
     })
-  }, [sessionId])
+  }, [managedPreviewSessionId])
 
   useEffect(() => {
     const next = initialTarget?.trim()
@@ -248,7 +249,7 @@ export function DevPreviewPanel({
   }, [initialTarget])
 
   const startManagedPreview = useCallback(async () => {
-    if (!sessionId || !token) {
+    if (!managedPreviewSessionId || !token) {
       setPanelError('Login is required to start a live preview session.')
       return
     }
@@ -262,7 +263,7 @@ export function DevPreviewPanel({
         method: 'POST',
         headers: authHeaders(token),
         body: JSON.stringify({
-          sessionId,
+          sessionId: managedPreviewSessionId,
           workspaceRoot,
           target: input.trim() || null,
           command: command.trim() || null,
@@ -281,14 +282,14 @@ export function DevPreviewPanel({
     } finally {
       setIsBusy(false)
     }
-  }, [command, input, port, sessionId, token, workspaceRoot])
+  }, [command, input, managedPreviewSessionId, port, token, workspaceRoot])
 
   const handleOpenPreview = useCallback(() => {
     void startManagedPreview()
   }, [startManagedPreview])
 
   const handleRestart = useCallback(async () => {
-    if (!sessionId || !token) return
+    if (!managedPreviewSessionId || !token) return
     setIsBusy(true)
     setIsFrameLoading(true)
     setPanelError(null)
@@ -296,7 +297,7 @@ export function DevPreviewPanel({
       const response = await fetch(`${getApiUrl()}/api/preview/restart`, {
         method: 'POST',
         headers: authHeaders(token),
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ sessionId: managedPreviewSessionId }),
       })
       const data = await response.json().catch(() => ({})) as { session?: PreviewSessionState; error?: string }
       if (!response.ok || !data.session) {
@@ -309,10 +310,10 @@ export function DevPreviewPanel({
     } finally {
       setIsBusy(false)
     }
-  }, [sessionId, token])
+  }, [managedPreviewSessionId, token])
 
   const handleStop = useCallback(async () => {
-    if (!sessionId || !token) {
+    if (!managedPreviewSessionId || !token) {
       setManagedSession(null)
       return
     }
@@ -322,7 +323,7 @@ export function DevPreviewPanel({
       await fetch(`${getApiUrl()}/api/preview/stop`, {
         method: 'POST',
         headers: authHeaders(token),
-        body: JSON.stringify({ sessionId }),
+        body: JSON.stringify({ sessionId: managedPreviewSessionId }),
       })
       setManagedSession(null)
       setManagedBrowserSession(null)
@@ -332,7 +333,7 @@ export function DevPreviewPanel({
     } finally {
       setIsBusy(false)
     }
-  }, [sessionId, token])
+  }, [managedPreviewSessionId, token])
 
   useEffect(() => {
     if (!initialTarget?.trim()) return
@@ -357,9 +358,9 @@ export function DevPreviewPanel({
   )
 
   const handleScreenshot = useCallback(async () => {
-    if (!sessionId || !token) return
+    if (!managedPreviewSessionId || !token) return
     try {
-      const response = await fetch(`${getApiUrl()}/api/preview/screenshot/${sessionId}`, {
+      const response = await fetch(`${getApiUrl()}/api/preview/screenshot/${managedPreviewSessionId}`, {
         headers: authHeaders(token),
       })
       if (!response.ok) return
@@ -375,7 +376,7 @@ export function DevPreviewPanel({
     } catch {
       // ignore
     }
-  }, [sessionId, token])
+  }, [managedPreviewSessionId, token])
 
   const secretSafeWarning = managedBrowserSession?.secretSafe
     ? 'Secret-safe mode is active. Preview screenshots and browser inspection capture are suppressed until the session is returned to normal agent flow.'

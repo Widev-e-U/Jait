@@ -36,6 +36,12 @@ function lastId(items: { id: number }[]): number | null {
   return items.length > 0 ? items[items.length - 1]?.id ?? null : null
 }
 
+export function deriveManagedPreviewSessionId(sessionId: string | null | undefined): string | null {
+  const trimmed = sessionId?.trim()
+  if (!trimmed) return null
+  return `${trimmed}::managed-preview`
+}
+
 export function isSamePreviewSession(
   previous: PreviewSessionLike | null,
   next: PreviewSessionLike | null,

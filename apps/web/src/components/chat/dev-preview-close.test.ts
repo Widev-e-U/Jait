@@ -15,6 +15,49 @@ import { describe, expect, it, vi } from 'vitest'
  * The fix unifies both paths to always call closeDevPreviewPanel().
  */
 describe('close preview clears persisted state', () => {
+  it('preview routing keeps the active workspace root unchanged', () => {
+    const setViewMode = vi.fn()
+    const setDevPreviewTarget = vi.fn()
+    const setWorkspacePreviewState = vi.fn()
+    const setShowWorkspace = vi.fn()
+    const showWorkspaceEditorPanel = vi.fn()
+    const setWorkspacePreviewRequest = vi.fn()
+    const showWorkspaceRef = { current: false }
+    const activeWorkspace = { surfaceId: 'fs-root', workspaceRoot: '/home/jakob/jait', nodeId: 'gateway' }
+
+    const routePreviewToWorkspace = (target?: string | null, workspaceRoot?: string | null) => {
+      const trimmed = target?.trim() || null
+      const nextPreviewState = {
+        open: true,
+        target: trimmed,
+        workspaceRoot: workspaceRoot?.trim() || activeWorkspace.workspaceRoot || null,
+        displayState: trimmed ? 'connected' as const : 'blank' as const,
+        displayTarget: trimmed,
+      }
+      setViewMode('developer')
+      setDevPreviewTarget(trimmed)
+      setWorkspacePreviewState(nextPreviewState)
+      if (!showWorkspaceRef.current) {
+        showWorkspaceRef.current = true
+        setShowWorkspace(true)
+      }
+      showWorkspaceEditorPanel()
+      setWorkspacePreviewRequest({ target: trimmed, key: 123 })
+      return true
+    }
+
+    routePreviewToWorkspace('http://127.0.0.1:4173/', '/home/jakob/jait/apps/web')
+
+    expect(setWorkspacePreviewState).toHaveBeenCalledWith({
+      open: true,
+      target: 'http://127.0.0.1:4173/',
+      workspaceRoot: '/home/jakob/jait/apps/web',
+      displayState: 'connected',
+      displayTarget: 'http://127.0.0.1:4173/',
+    })
+    expect(activeWorkspace.workspaceRoot).toBe('/home/jakob/jait')
+  })
+
   it('closeDevPreviewPanel clears workspace preview tab AND all local + saved state', () => {
     const closePreviewTarget = vi.fn()
     const closeWorkspacePreview = vi.fn(() => closePreviewTarget())
