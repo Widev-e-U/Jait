@@ -837,6 +837,109 @@ describe("thread routes", () => {
     sqlite.close();
   });
 
+  it("replays prior thread messages when restarting with a fresh provider session", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider();
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "Implement feature",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+    });
+    threadService.addActivity(thread.id, "message", "Investigate the flaky test", {
+      role: "user",
+      content: "Investigate the flaky test",
+      fullContent: "Investigate the flaky test",
+    });
+    threadService.addActivity(thread.id, "message", "I found a race in the retry path.", {
+      role: "assistant",
+      content: "I found a race in the retry path.",
+    });
+    threadService.update(thread.id, {
+      status: "completed",
+      providerSessionId: null,
+      completedAt: new Date().toISOString(),
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/start`,
+      headers,
+      payload: { message: "Apply the fix now", titleTask: "" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
+    const firstTurn = provider.sendTurn.mock.calls[0]?.[1];
+    expect(firstTurn).toEqual(expect.stringContaining("<thread-history>"));
+    expect(firstTurn).toEqual(expect.stringContaining("User: Investigate the flaky test"));
+    expect(firstTurn).toEqual(expect.stringContaining("Assistant: I found a race in the retry path."));
+    expect(firstTurn).toEqual(expect.stringContaining("Apply the fix now"));
+
+    await app.close();
+    sqlite.close();
+  });
+
+  it("clears completedAt when resuming a thread through send", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const app = Fastify();
+    const config = { ...loadConfig(), jwtSecret: "test-jwt-secret", logLevel: "silent" };
+    const threadService = new ThreadService(db);
+    const providerRegistry = new ProviderRegistry();
+    const provider = new MockThreadProvider();
+    providerRegistry.register(provider);
+
+    registerThreadRoutes(app, config, {
+      threadService,
+      providerRegistry,
+    });
+
+    const headers = await authHeader(config.jwtSecret, "user-1");
+    const thread = threadService.create({
+      userId: "user-1",
+      title: "Implement feature",
+      providerId: "codex",
+      workingDirectory: process.cwd(),
+    });
+    threadService.update(thread.id, {
+      status: "completed",
+      providerSessionId: "mock-session-1",
+      completedAt: "2026-04-21T00:00:00.000Z",
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: `/api/threads/${thread.id}/send`,
+      headers,
+      payload: { message: "Continue with the fix" },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(threadService.getById(thread.id)).toMatchObject({
+      status: "running",
+      completedAt: null,
+    });
+
+    await app.close();
+    sqlite.close();
+  });
+
   it("marks the thread PR state as creating while PR creation is in flight", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

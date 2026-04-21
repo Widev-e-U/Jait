@@ -865,7 +865,11 @@ function ThreadDuration({ createdAt, completedAt, status }: { createdAt: string;
   }, [isRunning])
 
   const start = new Date(createdAt).getTime()
-  const end = completedAt ? new Date(completedAt).getTime() : now
+  const end = isRunning
+    ? now
+    : completedAt
+      ? new Date(completedAt).getTime()
+      : now
   const ms = Math.max(0, end - start)
 
   return (
