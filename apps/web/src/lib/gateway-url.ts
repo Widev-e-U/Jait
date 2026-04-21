@@ -139,11 +139,11 @@ export function getWsUrl(): string {
   if (import.meta.env.DEV && env) return stripTrailingSlash(env)
 
   const stored = getStoredGatewayUrl()
-  if (stored) return stripTrailingSlash(httpToWs(normalizeDirectGatewayBase(stored)))
+  if (stored) return stripTrailingSlash(httpToWs(stored))
 
   // Electron desktop bridge
   const desktop = typeof window !== 'undefined' ? (window as any).jaitDesktop?.gatewayUrl as string | undefined : undefined
-  if (desktop) return stripTrailingSlash(httpToWs(normalizeDirectGatewayBase(desktop)))
+  if (desktop) return stripTrailingSlash(httpToWs(desktop))
 
   const env2 = import.meta.env.VITE_API_URL as string | undefined
   if (env2) return stripTrailingSlash(httpToWs(normalizeDirectGatewayBase(env2)))

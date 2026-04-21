@@ -249,7 +249,7 @@ function executeInTerminal(
     const finish = (timedOut: boolean, exitCode: number | null = null) => {
       if (settled) return;
       settled = true;
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       if (settleTimer) clearTimeout(settleTimer);
       signal?.removeEventListener("abort", onAbort);
       surface.removeOutputListener(listener);
@@ -318,11 +318,14 @@ function executeInTerminal(
     // Listen BEFORE writing so we don't miss fast output
     surface.addOutputListener(listener);
 
-    const timer = setTimeout(() => {
-      // Interrupt the running command + Enter for clean prompt
-      surface.write("\x03\r");
-      setTimeout(() => finish(true), 500);
-    }, timeoutMs);
+    // timeout <= 0 means no timeout (run until completion or abort)
+    const timer = timeoutMs > 0
+      ? setTimeout(() => {
+          // Interrupt the running command + Enter for clean prompt
+          surface.write("\x03\r");
+          setTimeout(() => finish(true), 500);
+        }, timeoutMs)
+      : null;
 
     const onAbort = () => {
       surface.write("\x03");
@@ -355,6 +358,7 @@ interface TerminalRunInput {
   sessionId?: string;
   terminalId?: string;
   timeout?: number;
+  isBackground?: boolean;
   sandbox?: boolean;
   sandboxMountMode?: SandboxMountMode;
 }
@@ -385,14 +389,15 @@ export function createTerminalRunTool(
       properties: {
         command: { type: "string", description: "The shell command to execute" },
         terminalId: { type: "string", description: "Reuse a specific terminal (omit to auto-select or create)" },
-        timeout: { type: "number", description: "Execution timeout in ms (default 30000)" },
+        timeout: { type: "number", description: "Execution timeout in ms (default 30000). Use 0 for no timeout." },
+        isBackground: { type: "boolean", description: "If true, start the command and return immediately without waiting for output (for servers, watchers, etc.)" },
         sandbox: { type: "boolean", description: "Run inside Docker sandbox container" },
         sandboxMountMode: { type: "string", description: "Sandbox mount mode: none, read-only, read-write" },
       },
       required: ["command"],
     },
     async execute(input: TerminalRunInput, context: ToolContext): Promise<ToolResult> {
-      const { command, timeout = 30000, terminalId: preferredId } = input;
+      const { command, timeout = 30000, terminalId: preferredId, isBackground } = input;
 
       if (input.sandbox) {
         const result = await sandboxManager.runCommand({
@@ -432,7 +437,17 @@ export function createTerminalRunTool(
         const { surface, terminalId, isNew, warning } =
           await ensureSessionTerminal(registry, context, preferredId);
 
-        // 2. Execute the command (sentinel-based)
+        // 2. Background mode: start the command and return immediately
+        if (isBackground) {
+          surface.write(command + "\r");
+          return {
+            ok: true,
+            message: `Background command started in terminal ${terminalId}`,
+            data: { output: "(background — not waiting for output)", exitCode: null, timedOut: false, terminalId, isBackground: true },
+          };
+        }
+
+        // 3. Execute the command (sentinel-based)
         const execPromise = executeInTerminal(
           surface,
           command,
