@@ -5,6 +5,7 @@ import { signAuthToken } from "../security/http-auth.js";
 import { SessionStateService } from "../services/session-state.js";
 import { SessionService } from "../services/sessions.js";
 import { UserService } from "../services/users.js";
+import { createTodoTool } from "../tools/core/todo.js";
 import { ToolRegistry } from "../tools/registry.js";
 import {
   handleMcpRequest,
@@ -595,6 +596,95 @@ describe("mcp-server", () => {
         model: "gpt-5-codex",
         runtimeMode: "supervised",
       });
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("persists and broadcasts todo_list updates for MCP todo calls", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const sessionService = new SessionService(db);
+      const sessionState = new SessionStateService(db);
+      const userService = new UserService(db);
+      const user = userService.createUser("mcp-todo-user", "password123");
+      const session = sessionService.create({
+        userId: user.id,
+        name: "MCP Todo Session",
+        workspacePath: "/tmp/mcp-workspace",
+      });
+
+      const registry = new ToolRegistry();
+      registry.register(createTodoTool());
+
+      const wsEvents: Array<{ type: string; sessionId: string; payload?: unknown }> = [];
+      const app = Fastify();
+      appsToClose.push(app);
+      registerMcpRoutes(app, {
+        toolRegistry: registry,
+        sessionService,
+        userService,
+        sessionState,
+        ws: {
+          broadcast(sessionId, event) {
+            wsEvents.push({
+              type: event.type,
+              sessionId,
+              payload: "payload" in event ? event.payload : undefined,
+            });
+          },
+          broadcastAll() {},
+        } as any,
+        config: {
+          host: "127.0.0.1",
+          port: 3000,
+          jwtSecret: "test-secret",
+        } as any,
+      });
+
+      const response = await app.inject({
+        method: "POST",
+        url: `/mcp?sessionId=${encodeURIComponent(session.id)}`,
+        headers: {
+          "content-type": "application/json",
+        },
+        payload: {
+          jsonrpc: "2.0",
+          id: 1,
+          method: "tools/call",
+          params: {
+            name: "todo",
+            arguments: {
+              todoList: [
+                { id: 1, title: "Trace MCP sync", status: "in-progress" },
+                { id: 2, title: "Verify todo render", status: "not-started" },
+              ],
+            },
+          },
+        },
+      });
+
+      expect(response.statusCode).toBe(200);
+      expect(sessionState.get(session.id, ["todo_list"])).toEqual({
+        todo_list: [
+          { id: 1, title: "Trace MCP sync", status: "in-progress" },
+          { id: 2, title: "Verify todo render", status: "not-started" },
+        ],
+      });
+      expect(wsEvents).toEqual([
+        {
+          type: "ui.state-sync",
+          sessionId: session.id,
+          payload: {
+            key: "todo_list",
+            value: [
+              { id: 1, title: "Trace MCP sync", status: "in-progress" },
+              { id: 2, title: "Verify todo render", status: "not-started" },
+            ],
+          },
+        },
+      ]);
     } finally {
       sqlite.close();
     }

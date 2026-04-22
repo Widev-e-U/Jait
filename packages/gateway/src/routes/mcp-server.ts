@@ -257,10 +257,32 @@ export function registerMcpRoutes(app: FastifyInstance, deps: McpDeps): void {
 
   // Callback for post-tool-execution side effects (e.g., thread todo activities)
   const onToolExecuted: McpToolExecutedCallback = (toolName, result, context) => {
+    if (toolName !== "todo" || !result.ok || !result.data || typeof result.data !== "object" || !("items" in result.data)) {
+      return;
+    }
+
+    const items = (result.data as { items: unknown }).items;
+    if (!Array.isArray(items)) return;
+
+    if (sessionState) {
+      try {
+        sessionState.set(context.sessionId, { "todo_list": items });
+      } catch {
+        /* ignore session state sync errors */
+      }
+    }
+
+    if (deps.ws) {
+      deps.ws.broadcast(context.sessionId, {
+        type: "ui.state-sync",
+        sessionId: context.sessionId,
+        timestamp: new Date().toISOString(),
+        payload: { key: "todo_list", value: items },
+      });
+    }
+
     // Broadcast todo list updates as thread activities
-    if (toolName === "todo" && result.ok && result.data && typeof result.data === "object" && "items" in result.data) {
-      const items = (result.data as { items: unknown }).items;
-      if (!Array.isArray(items) || !deps.threadService) return;
+    if (deps.threadService) {
       const thread = deps.threadService.getById(context.sessionId);
       if (!thread) return;
       const activity = deps.threadService.addActivity(context.sessionId, "todo", "Todo list updated", { items });
