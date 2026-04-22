@@ -35,4 +35,22 @@ describe("extractTodoResultItems", () => {
       { id: 2, title: "Patch bug", status: "completed" },
     ]);
   });
+
+  it("normalizes renamed todo tools used by external providers", () => {
+    expect(extractTodoResultItems("TodoWrite", null, {
+      todos: [
+        { id: 1, content: "Trace bug", status: "in_progress" },
+      ],
+    })).toEqual([
+      { id: 1, title: "Trace bug", status: "in-progress" },
+    ]);
+
+    expect(extractTodoResultItems("mcp__jait__todo", null, {
+      todoList: [
+        { id: 1, title: "Patch bug", status: "completed" },
+      ],
+    })).toEqual([
+      { id: 1, title: "Patch bug", status: "completed" },
+    ]);
+  });
 });

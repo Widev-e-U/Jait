@@ -61,4 +61,16 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("Write in concise caveman style.");
     expect(prompt).toContain("If the topic is risky, subtle, or confusing, fall back to normal precise prose.");
   });
+
+  it("does not inject the skill evaluation appendix", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "gpt-4o",
+      baseUrl: "https://api.openai.com/v1",
+    }, {
+      workspaceRoot: "/tmp/project",
+    });
+
+    expect(prompt).not.toContain("<skill-evaluation>");
+    expect(prompt).not.toContain("Always evaluate whether the requested work should become a reusable skill.");
+  });
 });

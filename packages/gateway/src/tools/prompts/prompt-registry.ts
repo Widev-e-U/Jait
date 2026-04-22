@@ -125,7 +125,6 @@ export function buildSystemPrompt(mode: ChatMode, endpoint: ModelEndpoint, ctx?:
       prompt += `\n\n<responseStyle>\n${responseStyleInstructions}\n</responseStyle>`;
     }
 
-    prompt += `\n\n<skill-evaluation>\nAlways evaluate whether the requested work should become a reusable skill.\nA skill is justified when the workflow or instruction pattern will likely repeat across tasks, repositories, or users.\nIf it is repo-specific, one-off, or too narrow, treat it as not worth a skill.\nWhen relevant, call out a short proposed skill name and why it should or should not exist.\n</skill-evaluation>`;
   }
 
   return prompt;

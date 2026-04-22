@@ -67,7 +67,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, SessionSwitcher, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
-import type { ReferencedFile, PromptInputHandle, ChangedFile } from '@/components/chat'
+import type { ReferencedFile, PromptInputHandle, ChangedFile, TodoItem } from '@/components/chat'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
@@ -136,6 +136,7 @@ import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatUiState } from '@/lib/developer-chat-state'
+import { normalizeTodoStateValue, toPersistedTodoState } from '@/lib/todo-state'
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
   collapseMobileWorkspace,
@@ -2341,6 +2342,9 @@ function App() {
   const [, setSavedQueuedMessages] = useSessionState<SavedQueuedMessage[]>(
     activeSessionId, 'queued_messages', token,
   )
+  const [, setSavedTodoList] = useSessionState<TodoItem[]>(
+    activeSessionId, 'todo_list', token,
+  )
   const [, setSavedQueuedThreadMessages] = useSessionState<SavedQueuedThreadMessages>(
     activeSessionId, 'queued_thread_messages', token,
   )
@@ -2622,7 +2626,7 @@ function App() {
         }
         break
       case 'todo_list':
-        if (Array.isArray(value)) setTodoList(value)
+        setTodoList(normalizeTodoStateValue(value))
         break
       case 'file_changed': {
         const fc = value as { path?: string; name?: string } | null
@@ -2718,10 +2722,7 @@ function App() {
     }
 
     // Todo list
-    const tl = state['todo_list']
-    if (Array.isArray(tl) && tl.length > 0) {
-      setTodoList(tl)
-    }
+    setTodoList(normalizeTodoStateValue(state['todo_list']))
 
     // Changed files
     const cf = state['changed_files']
@@ -3052,6 +3053,18 @@ function App() {
     if (consumeSuppressedUiSync('queued_messages')) return
     sendUIState('queued_messages', payload, activeSessionId)
   }, [messageQueue, setSavedQueuedMessages, sendUIState, activeSessionId, consumeSuppressedUiSync])
+
+  const prevTodoListPayloadRef = useRef<string | null>(null)
+  useEffect(() => {
+    if (activeSessionId && token && !wsFullStateReceivedRef.current) return
+    const payload = toPersistedTodoState(todoList)
+    const serialized = `${activeSessionId ?? ''}:${JSON.stringify(payload)}`
+    if (serialized === prevTodoListPayloadRef.current) return
+    prevTodoListPayloadRef.current = serialized
+    setSavedTodoList(payload)
+    if (consumeSuppressedUiSync('todo_list')) return
+    sendUIState('todo_list', payload, activeSessionId)
+  }, [todoList, setSavedTodoList, sendUIState, activeSessionId, consumeSuppressedUiSync, token])
 
   const prevThreadQueuePayloadRef = useRef<string | null>(null)
   useEffect(() => {

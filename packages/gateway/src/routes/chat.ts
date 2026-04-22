@@ -45,7 +45,7 @@ import {
 } from "../tools/chat-modes.js";
 import { buildSystemPrompt, type ModelEndpoint, type PromptContext } from "../tools/prompts/index.js";
 import { getResponseStyleInstructions, isResponseStyle, type ResponseStyle } from "../tools/prompts/shared-sections.js";
-import type { SkillRegistry } from "../skills/index.js";
+import type { Skill, SkillRegistry } from "../skills/index.js";
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -126,6 +126,58 @@ interface PersistedToolCall {
   data?: unknown;
   startedAt?: number;
   completedAt?: number;
+}
+
+function buildSyntheticSkillToolCall(skills: Skill[]): PersistedToolCall | null {
+  if (skills.length === 0) return null;
+  const names = skills.map((skill) => skill.name);
+  return {
+    callId: `skill-${randomUUID()}`,
+    tool: "skill",
+    args: { skills: names.join(", ") },
+    ok: true,
+    message: `Using skills: ${names.join(", ")}`,
+    data: {
+      names,
+      skills: skills.map((skill) => ({
+        id: skill.id,
+        name: skill.name,
+        description: skill.description,
+      })),
+    },
+    startedAt: Date.now(),
+    completedAt: Date.now(),
+  };
+}
+
+function emitSyntheticSkillToolCall(
+  sessionId: string,
+  toolCall: PersistedToolCall | null,
+  safeWrite: (data: string) => void,
+  emitToSubscribers: (sessionId: string, event: StreamEvent) => void,
+): void {
+  if (!toolCall) return;
+  const toolStartEvent = {
+    type: "tool_start" as const,
+    call_id: toolCall.callId,
+    tool: toolCall.tool,
+    args: toolCall.args,
+  };
+  safeWrite(`data: ${JSON.stringify(toolStartEvent)}\n\n`);
+  emitToSubscribers(sessionId, toolStartEvent as StreamEvent);
+  accumulateToolStart(sessionId, toolCall.callId, toolCall.tool, toolCall.args);
+
+  const toolResultEvent = {
+    type: "tool_result" as const,
+    call_id: toolCall.callId,
+    tool: toolCall.tool,
+    ok: true,
+    message: toolCall.message,
+    data: toolCall.data,
+  };
+  safeWrite(`data: ${JSON.stringify(toolResultEvent)}\n\n`);
+  emitToSubscribers(sessionId, toolResultEvent as StreamEvent);
+  accumulateToolResult(sessionId, toolCall.callId, true, toolCall.message, toolCall.data);
 }
 
 interface QueuedChatMessage {
@@ -1236,6 +1288,9 @@ export function registerChatRoutes(
       }
     };
 
+    const turnSkillToolCall = buildSyntheticSkillToolCall(promptCtx.skills ?? []);
+    emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
+
     const providerLabel = requestProvider === "codex"
       ? "Codex"
       : requestProvider === "claude-code"
@@ -1382,10 +1437,10 @@ export function registerChatRoutes(
         let tokenBytesThisBlock = 0;
 
         // ── Accumulate tool calls + segments for persistence ──
-        const cliToolCalls: PersistedToolCall[] = [];
+        const cliToolCalls: PersistedToolCall[] = turnSkillToolCall ? [{ ...turnSkillToolCall }] : [];
         const cliSegments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] }> = [];
         /** Track the current pending tool-group callIds (batched between text tokens) */
-        let pendingToolGroup: string[] = [];
+        let pendingToolGroup: string[] = turnSkillToolCall ? [turnSkillToolCall.callId] : [];
         let lastSegmentWasText = false;
 
         /** Flush any buffered text into a text segment */
@@ -1805,7 +1860,14 @@ export function registerChatRoutes(
         );
         fullContent = result.content;
         partialToolCalls = result.executedToolCalls as unknown as PersistedToolCall[];
-        resultSegmentsJson = result.segments.length > 0 ? JSON.stringify(result.segments) : undefined;
+        if (turnSkillToolCall) {
+          partialToolCalls = [{ ...turnSkillToolCall }, ...partialToolCalls];
+        }
+        const resultSegments = result.segments.length > 0 ? [...result.segments] : [];
+        if (turnSkillToolCall) {
+          resultSegments.unshift({ type: "toolGroup", callIds: [turnSkillToolCall.callId] });
+        }
+        resultSegmentsJson = resultSegments.length > 0 ? JSON.stringify(resultSegments) : undefined;
         hitMaxRounds = result.hitMaxRounds;
 
         // Re-serialize contextFlow now that round metrics have been attached

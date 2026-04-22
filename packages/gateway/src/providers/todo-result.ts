@@ -8,6 +8,15 @@ function isTodoStatus(value: unknown): value is TodoResultItem["status"] {
   return value === "not-started" || value === "in-progress" || value === "completed";
 }
 
+function normalizeTodoToolName(toolName: string | null | undefined): string {
+  const normalized = toolName?.trim().toLowerCase() ?? "";
+  if (!normalized) return "";
+  if (normalized === "todo" || normalized === "todowrite") return "todo";
+  if (normalized.endsWith("__todo")) return "todo";
+  if (normalized.endsWith("manage_todo_list")) return "todo";
+  return normalized;
+}
+
 function normalizeTodoItems(items: unknown): TodoResultItem[] | null {
   if (!Array.isArray(items)) return null;
   const normalized: TodoResultItem[] = [];
@@ -31,7 +40,7 @@ export function extractTodoResultItems(
   data: unknown,
   args?: unknown,
 ): TodoResultItem[] | null {
-  const normalizedToolName = toolName?.trim().toLowerCase() ?? "";
+  const normalizedToolName = normalizeTodoToolName(toolName);
   if (data && typeof data === "object" && "items" in data) {
     const items = normalizeTodoItems((data as { items?: unknown }).items);
     if (items) return items;
