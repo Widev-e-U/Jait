@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { normalizeTodoStateValue, toPersistedTodoState } from './todo-state'
+import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from './todo-state'
 
 describe('normalizeTodoStateValue', () => {
   it('returns items when the persisted value is a todo array', () => {
@@ -26,5 +26,25 @@ describe('toPersistedTodoState', () => {
     ])
 
     expect(toPersistedTodoState([])).toBeNull()
+  })
+})
+
+describe('mergeHydratedTodoState', () => {
+  it('keeps a streamed todo list when a stale hydrate payload is empty', () => {
+    expect(mergeHydratedTodoState([
+      { id: 1, title: 'Trace bug', status: 'in-progress' },
+    ], null)).toEqual([
+      { id: 1, title: 'Trace bug', status: 'in-progress' },
+    ])
+  })
+
+  it('applies hydrated todos when they are present', () => {
+    expect(mergeHydratedTodoState([
+      { id: 1, title: 'Trace bug', status: 'in-progress' },
+    ], [
+      { id: 2, title: 'Patch bug', status: 'not-started' },
+    ])).toEqual([
+      { id: 2, title: 'Patch bug', status: 'not-started' },
+    ])
   })
 })

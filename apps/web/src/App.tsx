@@ -136,7 +136,7 @@ import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatUiState } from '@/lib/developer-chat-state'
-import { normalizeTodoStateValue, toPersistedTodoState } from '@/lib/todo-state'
+import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from '@/lib/todo-state'
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
   collapseMobileWorkspace,
@@ -2723,7 +2723,7 @@ function App() {
     }
 
     // Todo list
-    setTodoList(normalizeTodoStateValue(state['todo_list']))
+    setTodoList((current) => mergeHydratedTodoState(current, state['todo_list']))
 
     // Changed files
     const cf = state['changed_files']
