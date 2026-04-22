@@ -1282,6 +1282,8 @@ interface ToolCallCardProps {
   childCalls?: ToolCallInfo[]
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
+  hideTopConnector?: boolean
+  hideBottomConnector?: boolean
 }
 
 function isInlineToolBodyKind(bodyKind: ReturnType<typeof getToolCallBodyKind>): boolean {
@@ -1359,7 +1361,14 @@ function FileSummaryButton({
   )
 }
 
-function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: ToolCallCardProps) {
+function ToolCallCardInner({
+  call,
+  childCalls,
+  onOpenTerminal,
+  onOpenDiff,
+  hideTopConnector = false,
+  hideBottomConnector = false,
+}: ToolCallCardProps) {
   const initialInline = isInlineToolCall(call)
   const [open, setOpen] = useState(call.status === 'running' || call.status === 'pending' || initialInline)
   const [now, setNow] = useState(() => Date.now())
@@ -1486,8 +1495,7 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
         statusColor,
         (call.status === 'running' || call.status === 'pending') && 'animate-spin'
       )} />
-      <Icon className={cn('h-4 w-4 shrink-0', effectiveColor)} />
-      <span className="text-sm font-medium text-muted-foreground truncate flex-1">
+      <span className="flex-1 truncate text-[13px] font-medium text-muted-foreground">
         {isPending ? (
           <PendingToolLabel tool={call.tool} streamingArgs={call.streamingArgs} />
         ) : isTerminal ? (
@@ -1508,13 +1516,13 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
           <span className="inline-flex min-w-0 max-w-full items-center gap-2">
             <span>{invocationLabel}:</span>
             <span className="min-w-0 truncate">
-              {mcpLabel.title ? <code className="text-xs font-mono">{mcpLabel.title}</code> : null}
+              {mcpLabel.title ? <code className="text-[11px] font-mono">{mcpLabel.title}</code> : null}
               {mcpLabel.title && mcpLabel.details ? <span className="text-muted-foreground"> • </span> : null}
               {mcpLabel.details ? <span className="text-xs text-muted-foreground">{mcpLabel.details}</span> : null}
             </span>
           </span>
         ) : (
-          <span>{invocationLabel}: <code className="text-xs font-mono">{summary}</code></span>
+          <span>{invocationLabel}: <code className="text-[11px] font-mono">{summary}</code></span>
         )}
       </span>
       <span className="text-xs text-muted-foreground/60 tabular-nums shrink-0">
@@ -1632,72 +1640,101 @@ function ToolCallCardInner({ call, childCalls, onOpenTerminal, onOpenDiff }: Too
 
   return (
     <Collapsible open={hasExpandableContent ? open : false} onOpenChange={setOpen}>
-      <div className="group flex items-center gap-2 rounded-md px-3 py-2 hover:bg-muted/50 transition-colors">
-        {hasExpandableContent ? (
-          <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
-            <ChevronRight className={cn(
-              'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
-              open && 'rotate-90'
-            )} />
-            {headerContent}
-          </CollapsibleTrigger>
-        ) : (
-          <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
-            <span className="h-3.5 w-3.5 shrink-0" />
-            {headerContent}
+      <div className="relative pl-7">
+        {!hideTopConnector && (
+          <span
+            className="absolute left-[10.5px] top-0 h-6 w-px bg-border/60"
+            style={{ maskImage: 'linear-gradient(to bottom, transparent 0 22px, #000 22px 100%)' }}
+            aria-hidden="true"
+          />
+        )}
+        {!hideBottomConnector && (
+          <span
+            className="absolute left-[10.5px] top-0 bottom-0 w-px bg-border/60"
+            style={{ maskImage: 'linear-gradient(to bottom, #000 0 5px, transparent 5px 23px, #000 23px 100%)' }}
+            aria-hidden="true"
+          />
+        )}
+        {hideBottomConnector && !hideTopConnector && (
+          <span
+            className="absolute left-[10.5px] top-0 bottom-0 w-px bg-border/60"
+            style={{ maskImage: 'linear-gradient(to bottom, #000 0 5px, transparent 5px 100%)' }}
+            aria-hidden="true"
+          />
+        )}
+        <div className="absolute left-[5px] top-[9px] z-10 flex h-3 w-3 items-center justify-center">
+          <Icon className={cn('h-3 w-3 shrink-0', effectiveColor)} />
+        </div>
+
+        <div className="group pb-1">
+          <div className="flex items-center gap-2 rounded-sm px-1 py-1.5 transition-colors hover:bg-muted/20">
+            {hasExpandableContent ? (
+              <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <ChevronRight className={cn(
+                  'h-3 w-3 shrink-0 text-muted-foreground transition-transform duration-200',
+                  open && 'rotate-90'
+                )} />
+                {headerContent}
+              </CollapsibleTrigger>
+            ) : (
+              <div className="flex min-w-0 flex-1 items-center gap-2 text-left">
+                <span className="h-3 w-3 shrink-0" />
+                {headerContent}
+              </div>
+            )}
+            {canOpenTerminal && onOpenTerminal && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onOpenTerminal(terminalId)
+                    }}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Open terminal</TooltipContent>
+              </Tooltip>
+            )}
+            {bodyKind === 'editDiff' && onOpenDiff && call.status === 'success' && filePath && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 shrink-0"
+                    onClick={(e) => {
+                      e.preventDefault()
+                      e.stopPropagation()
+                      onOpenDiff(filePath)
+                    }}
+                  >
+                    <ExternalLink className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">Open diff in editor</TooltipContent>
+              </Tooltip>
+            )}
           </div>
-        )}
-        {canOpenTerminal && onOpenTerminal && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onOpenTerminal(terminalId)
-                }}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Open terminal</TooltipContent>
-          </Tooltip>
-        )}
-        {bodyKind === 'editDiff' && onOpenDiff && call.status === 'success' && filePath && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                type="button"
-                variant="ghost"
-                size="icon"
-                className="h-7 w-7 shrink-0"
-                onClick={(e) => {
-                  e.preventDefault()
-                  e.stopPropagation()
-                  onOpenDiff(filePath)
-                }}
-              >
-                <ExternalLink className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Open diff in editor</TooltipContent>
-          </Tooltip>
-        )}
+        </div>
       </div>
 
       {hasExpandableContent && (
         <CollapsibleContent>
-          <div className="ml-[3.25rem] mr-3 mb-2">
+          <div className="ml-7 mr-3 mb-2 border-l border-border/40 pl-4">
             {bodyContent}
           </div>
         </CollapsibleContent>
       )}
       {inlineBody && (
-        <div className="ml-[3.25rem] mr-3 mb-2">
+        <div className="ml-7 mr-3 mb-2 border-l border-border/40 pl-4">
           {bodyContent}
         </div>
       )}
@@ -1764,11 +1801,11 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
 
   if (shouldCollapseGroup && !groupOpen) {
     return (
-      <div className="my-2 overflow-hidden rounded-xl border border-border/40 bg-muted/[0.18]">
+      <div className="my-2">
         <button
           type="button"
           onClick={() => setGroupOpen(true)}
-          className="flex w-full items-center gap-2 px-3 py-2 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-xs text-muted-foreground transition-colors hover:bg-muted/35"
         >
           <ChevronRight className="h-3.5 w-3.5 shrink-0" />
           <SummaryIcon className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
@@ -1797,12 +1834,12 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
   const errorCount = hiddenCount - successCount
 
   return (
-    <div className="my-2 overflow-hidden rounded-xl border border-border/40 bg-muted/[0.18] divide-y divide-border/30">
+    <div className="my-2">
       {shouldCollapseGroup && (
         <button
           type="button"
           onClick={() => setGroupOpen(false)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+          className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/35"
         >
           <ChevronRight className="h-3 w-3 rotate-90 transition-transform" />
           <span>Collapse {summarizeCollapsedToolCalls(completedCalls)}</span>
@@ -1812,7 +1849,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
         <button
           type="button"
           onClick={() => setShowAll(true)}
-          className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+          className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/35"
         >
           <ChevronRight className="h-3 w-3" />
           <span>
@@ -1822,14 +1859,38 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
           </span>
         </button>
       )}
-      {showAll && completedCalls.slice(0, hiddenCount).map((call) => (
-        <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+      {showAll && completedCalls.slice(0, hiddenCount).map((call, index, arr) => (
+        <ToolCallCard
+          key={call.callId}
+          call={call}
+          childCalls={childMap.get(call.callId)}
+          onOpenTerminal={onOpenTerminal}
+          onOpenDiff={onOpenDiff}
+          hideTopConnector={index === 0}
+          hideBottomConnector={index === arr.length - 1 && visibleCompleted.length === 0 && activeCalls.length === 0}
+        />
       ))}
-      {visibleCompleted.map((call) => (
-        <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+      {visibleCompleted.map((call, index) => (
+        <ToolCallCard
+          key={call.callId}
+          call={call}
+          childCalls={childMap.get(call.callId)}
+          onOpenTerminal={onOpenTerminal}
+          onOpenDiff={onOpenDiff}
+          hideTopConnector={showAll ? false : index === 0}
+          hideBottomConnector={index === visibleCompleted.length - 1 && activeCalls.length === 0}
+        />
       ))}
-      {activeCalls.map((call) => (
-        <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+      {activeCalls.map((call, index) => (
+        <ToolCallCard
+          key={call.callId}
+          call={call}
+          childCalls={childMap.get(call.callId)}
+          onOpenTerminal={onOpenTerminal}
+          onOpenDiff={onOpenDiff}
+          hideTopConnector={completedCalls.length === 0 && index === 0}
+          hideBottomConnector={index === activeCalls.length - 1}
+        />
       ))}
     </div>
   )
@@ -1916,8 +1977,8 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="my-2 overflow-hidden rounded-xl border border-border/40 bg-muted/[0.18]">
-        <CollapsibleTrigger className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-muted/50 transition-colors">
+      <div className="my-2">
+        <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left transition-colors hover:bg-muted/35">
           <ChevronRight className={cn(
             'h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200',
             open && 'rotate-90',
@@ -1944,12 +2005,12 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
         </CollapsibleTrigger>
 
         <CollapsibleContent>
-          <div className="divide-y divide-border/30 border-t border-border/30">
+          <div className="mt-1">
             {needsInnerCollapse && (
               <button
                 type="button"
                 onClick={() => setShowAll(true)}
-                className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
+                className="mb-1 flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted/35"
               >
                 <ChevronRight className="h-3 w-3" />
                 <span>
@@ -1959,14 +2020,38 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
                 </span>
               </button>
             )}
-            {showAll && completedCalls.slice(0, hiddenCount).map((call) => (
-              <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+            {showAll && completedCalls.slice(0, hiddenCount).map((call, index, arr) => (
+              <ToolCallCard
+                key={call.callId}
+                call={call}
+                childCalls={childMap.get(call.callId)}
+                onOpenTerminal={onOpenTerminal}
+                onOpenDiff={onOpenDiff}
+                hideTopConnector={index === 0}
+                hideBottomConnector={index === arr.length - 1 && visibleCompleted.length === 0 && activeCalls.length === 0}
+              />
             ))}
-            {visibleCompleted.map((call) => (
-              <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+            {visibleCompleted.map((call, index) => (
+              <ToolCallCard
+                key={call.callId}
+                call={call}
+                childCalls={childMap.get(call.callId)}
+                onOpenTerminal={onOpenTerminal}
+                onOpenDiff={onOpenDiff}
+                hideTopConnector={showAll ? false : index === 0}
+                hideBottomConnector={index === visibleCompleted.length - 1 && activeCalls.length === 0}
+              />
             ))}
-            {activeCalls.map((call) => (
-              <ToolCallCard key={call.callId} call={call} childCalls={childMap.get(call.callId)} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+            {activeCalls.map((call, index) => (
+              <ToolCallCard
+                key={call.callId}
+                call={call}
+                childCalls={childMap.get(call.callId)}
+                onOpenTerminal={onOpenTerminal}
+                onOpenDiff={onOpenDiff}
+                hideTopConnector={completedCalls.length === 0 && index === 0}
+                hideBottomConnector={index === activeCalls.length - 1}
+              />
             ))}
           </div>
         </CollapsibleContent>
