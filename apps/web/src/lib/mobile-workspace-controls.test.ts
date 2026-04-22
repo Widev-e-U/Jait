@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { getMobileWorkspaceActiveTarget, isMobileWorkspaceTargetActive } from './mobile-workspace-controls'
+import { getMobileWorkspaceActiveTarget, isMobileWorkspaceTargetActive, shouldRenderSessionSidebar } from './mobile-workspace-controls'
 
 describe('mobile workspace controls', () => {
   it('returns the terminal target when terminal fullscreen is open', () => {
@@ -95,5 +95,10 @@ describe('mobile workspace controls', () => {
       showWorkspaceEditor: false,
       treeTab: 'files',
     }, 'files')).toBe(false)
+  })
+
+  it('renders the session sidebar only when explicitly open', () => {
+    expect(shouldRenderSessionSidebar(false)).toBe(false)
+    expect(shouldRenderSessionSidebar(true)).toBe(true)
   })
 })

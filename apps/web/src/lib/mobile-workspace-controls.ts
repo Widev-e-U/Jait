@@ -8,6 +8,10 @@ export interface MobileWorkspaceControlState {
   treeTab: 'files' | 'git'
 }
 
+export function shouldRenderSessionSidebar(showSidebar: boolean): boolean {
+  return showSidebar
+}
+
 export function getMobileWorkspaceActiveTarget(
   state: MobileWorkspaceControlState,
 ): MobileWorkspaceTarget | null {

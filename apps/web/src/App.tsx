@@ -146,6 +146,7 @@ import {
 import {
   getMobileWorkspaceActiveTarget,
   isMobileWorkspaceTargetActive,
+  shouldRenderSessionSidebar,
   type MobileWorkspaceTarget,
 } from '@/lib/mobile-workspace-controls'
 import {
@@ -6617,7 +6618,7 @@ function App() {
                 </aside>
               )}
 
-              {viewMode === 'developer' && (showSidebar || isMobile) && (
+              {viewMode === 'developer' && shouldRenderSessionSidebar(showSidebar) && (
                 <aside
                   ref={sidebarRef}
                   tabIndex={-1}
