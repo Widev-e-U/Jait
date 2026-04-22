@@ -108,7 +108,7 @@ function classifyIntent(message: string): { intent: ThreadIntent; confidence: nu
 
 // ── Skill matching ───────────────────────────────────────────────────
 
-function matchSkills(message: string, skills: Skill[]): string[] {
+export function matchSkills(message: string, skills: Skill[]): string[] {
   if (skills.length === 0) return [];
 
   const messageLower = message.toLowerCase();

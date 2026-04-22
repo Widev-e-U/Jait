@@ -26,4 +26,35 @@ describe("mapCodexNotification", () => {
       },
     });
   });
+
+  it("maps direct MCP completion events using the original tool name", () => {
+    const events = mapCodexNotification("item/mcpToolCall/completed", {
+      id: "call-1",
+      name: "todo",
+      arguments: {
+        todoList: [
+          { id: 1, title: "Trace bug", status: "in-progress" },
+        ],
+      },
+      result: {
+        items: [
+          { id: 1, title: "Trace bug", status: "in-progress" },
+        ],
+      },
+    }, "session-1");
+
+    expect(events).toContainEqual({
+      type: "tool.result",
+      sessionId: "session-1",
+      tool: "todo",
+      ok: true,
+      message: "",
+      callId: "call-1",
+      data: {
+        items: [
+          { id: 1, title: "Trace bug", status: "in-progress" },
+        ],
+      },
+    });
+  });
 });

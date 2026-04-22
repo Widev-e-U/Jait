@@ -7165,6 +7165,9 @@ function App() {
                   ) : (
                     <Suggestions suggestions={showWorkspace && activeWorkspace ? workspaceSuggestions : suggestions} onSelect={handleSuggestion} />
                   )}
+                  {developerChatUiState.showTodoList && (
+                    <TodoList items={todoList} onClear={() => setTodoList([])} />
+                  )}
                   <PromptInput
                     ref={promptInputRef}
                     draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
@@ -7205,9 +7208,6 @@ function App() {
                     sessionInfo={sessionInfo}
                     workspaceNodeId={activeWorkspace?.nodeId}
                   />
-                  {developerChatUiState.showTodoList && (
-                    <TodoList items={todoList} onClear={() => setTodoList([])} />
-                  )}
                   {developerComposerControlRow}
                 </div>
               </div>

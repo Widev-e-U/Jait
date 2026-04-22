@@ -38,6 +38,7 @@ import {
   type OpenAIToolCall,
 } from "../tools/agent-loop.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
+import { matchSkills } from "../services/thread-router.js";
 import {
   type ChatMode,
   type PlannedAction,
@@ -1288,7 +1289,9 @@ export function registerChatRoutes(
       }
     };
 
-    const turnSkillToolCall = buildSyntheticSkillToolCall(promptCtx.skills ?? []);
+    const matchedSkillIds = new Set(matchSkills(content, promptCtx.skills ?? []));
+    const matchedSkills = (promptCtx.skills ?? []).filter((skill) => matchedSkillIds.has(skill.id));
+    const turnSkillToolCall = buildSyntheticSkillToolCall(matchedSkills);
     emitSyntheticSkillToolCall(sessionId, turnSkillToolCall, safeWrite, emitToSubscribers);
 
     const providerLabel = requestProvider === "codex"

@@ -2,9 +2,13 @@ import { EventEmitter } from "node:events";
 import { describe, expect, it, vi } from "vitest";
 import { createServer } from "../server.js";
 import { loadConfig } from "../config.js";
+import { openDatabase, migrateDatabase } from "../db/index.js";
 import type { CliProviderAdapter, ProviderEvent, ProviderInfo, ProviderSession, StartSessionOptions } from "../providers/contracts.js";
 import { ProviderRegistry } from "../providers/registry.js";
 import { signAuthToken } from "../security/http-auth.js";
+import { SessionService } from "../services/sessions.js";
+import { SessionStateService } from "../services/session-state.js";
+import { UserService } from "../services/users.js";
 import { getExternalFileMutationPath } from "./chat.js";
 
 describe("getExternalFileMutationPath", () => {
@@ -90,9 +94,47 @@ class MockChatProvider implements CliProviderAdapter {
     return () => this.emitter.off("event", handler);
   }
 
-  private emit(event: ProviderEvent): void {
+  protected emitForTest(event: ProviderEvent): void {
     this.emitter.emit("event", event);
   }
+
+  private emit(event: ProviderEvent): void {
+    this.emitForTest(event);
+  }
+}
+
+class MockTodoChatProvider extends MockChatProvider {
+  override readonly sendTurn = vi.fn(async (sessionId: string): Promise<void> => {
+    setTimeout(() => {
+      this.emitForTest({
+        type: "tool.start",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        args: {
+          todoList: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({
+        type: "tool.result",
+        sessionId,
+        callId: "todo-call-1",
+        tool: "todo",
+        ok: true,
+        message: "Todo list updated (0/2 done). Working on: Trace bug",
+        data: {
+          items: [
+            { id: 1, title: "Trace bug", status: "in-progress" },
+            { id: 2, title: "Patch bug", status: "not-started" },
+          ],
+        },
+      });
+      this.emitForTest({ type: "turn.completed", sessionId });
+    }, 0);
+  });
 }
 
 describe("chat external provider runtime mode selection", () => {
@@ -172,5 +214,58 @@ describe("chat external provider runtime mode selection", () => {
     expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
 
     await app.close();
+  });
+
+  it("persists and streams todo_list updates from Codex todo completions", { timeout: 30_000 }, async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const provider = new MockTodoChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const sessionService = new SessionService(db);
+    const sessionState = new SessionStateService(db);
+    const userService = new UserService(db);
+    const user = userService.createUser("todo-chat-user", "password123");
+    const session = sessionService.create({ userId: user.id, name: "Todo Chat" });
+    const token = await signAuthToken({ id: user.id, username: user.username }, testConfig.jwtSecret);
+
+    const app = await createServer(testConfig, {
+      db,
+      sqlite,
+      providerRegistry,
+      sessionService,
+      sessionState,
+      userService,
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers: {
+        authorization: `Bearer ${token}`,
+        "content-type": "application/json",
+      },
+      payload: {
+        content: "track this work with todos",
+        sessionId: session.id,
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(response.body).toContain("\"type\":\"todo_list\"");
+    expect(response.body).toContain("\"title\":\"Trace bug\"");
+
+    expect(sessionState.get(session.id, ["todo_list"])).toEqual({
+      todo_list: [
+        { id: 1, title: "Trace bug", status: "in-progress" },
+        { id: 2, title: "Patch bug", status: "not-started" },
+      ],
+    });
+
+    await app.close();
+    sqlite.close();
   });
 });

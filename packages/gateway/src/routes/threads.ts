@@ -1248,7 +1248,7 @@ export function registerThreadRoutes(
                   .map((sid: string) => deps.skillRegistry!.get(sid))
                   .filter((skill): skill is Skill => Boolean(skill))
               : [];
-            const effectiveSkills = routedSkills.length > 0 ? routedSkills : availableSkills;
+            const effectiveSkills = routedSkills;
 
             if (effectiveSkills.length > 0) {
               // Log skill activation as a visible activity

@@ -98,6 +98,32 @@ export function mapCodexNotification(
       return [{ type: "tool.start", sessionId, tool: toolName, args: params.arguments ?? params.args ?? {}, callId: itemId }];
     }
 
+    case "item/mcpToolCall/completed":
+    case "item/mcpToolCall/failed": {
+      const itemId = extractItemId(params);
+      const toolName =
+        typeof params.name === "string" ? params.name
+          : typeof params.toolName === "string" ? params.toolName
+            : typeof params.tool === "string" ? params.tool
+              : "mcp-tool";
+      const status = typeof params.status === "string"
+        ? params.status
+        : method.endsWith("/failed") ? "failed" : "completed";
+      const output = typeof params.output === "string" ? params.output
+        : typeof params.summary === "string" ? params.summary
+          : typeof params.message === "string" ? params.message
+            : "";
+      return [{
+        type: "tool.result",
+        sessionId,
+        tool: toolName,
+        ok: status !== "error" && status !== "failed",
+        message: output,
+        callId: itemId,
+        data: extractToolResultData(params),
+      }];
+    }
+
     // ── codex/event item lifecycle (codex 0.111.0+ envelope format) ──
     case "codex/event/item_started": {
       const msg = (params.msg ?? params) as Record<string, unknown>;
