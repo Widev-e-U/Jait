@@ -64,6 +64,21 @@ export interface ForgePrCheck {
   detailsUrl: string;
 }
 
+export interface ForgeDiffStats {
+  files: number;
+  insertions: number;
+  deletions: number;
+  hasChanges: boolean;
+}
+
+export interface ForgeFileDiff {
+  path: string;
+  original: string;
+  modified: string;
+  /** 'A' = added, 'M' = modified, 'D' = deleted, 'R' = renamed */
+  status: string;
+}
+
 export interface GitForge {
   readonly provider: GitRemoteProvider;
   readonly displayName: string;
@@ -77,6 +92,19 @@ export interface GitForge {
   createPr(cwd: string, remote: ParsedRemote, input: ForgePrInput, token?: string): Promise<ForgePrResult>;
   getPrChecks(cwd: string, headBranch: string): Promise<ForgePrCheck[]>;
   buildCreatePrUrl(remote: ParsedRemote, headBranch: string, baseBranch?: string): string | null;
+
+  /**
+   * Get diff stats for a PR identified by its head branch.
+   * Returns null if no PR exists or the operation isn't supported.
+   * Uses the forge's native PR diff (merge-base aware) instead of raw git diff.
+   */
+  prDiffStats(cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeDiffStats | null>;
+
+  /**
+   * Get per-file original/modified content for a PR identified by its head branch.
+   * Returns null if no PR exists or the operation isn't supported.
+   */
+  prFileDiffs(cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeFileDiff[] | null>;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -245,6 +273,144 @@ export class GitHubForge implements GitForge {
 
   buildCreatePrUrl(remote: ParsedRemote, headBranch: string, baseBranch?: string): string | null {
     return `${remote.normalizedUrl}/compare/${encodeURIComponent(baseBranch ?? "main")}...${encodeURIComponent(headBranch)}?expand=1`;
+  }
+
+  async prDiffStats(cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeDiffStats | null> {
+    // Try gh CLI first — `gh pr view` returns additions/deletions/changedFiles
+    if (await this.checkCliAvailable(cwd)) {
+      try {
+        const raw = await cliExec(
+          `gh pr view --head "${headBranch}"${buildGhRepoFlag(remote)} --json additions,deletions,changedFiles`,
+          cwd, 15_000, cleanGhEnv(),
+        );
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        if (parsed.changedFiles != null) {
+          return {
+            files: Number(parsed.changedFiles ?? 0),
+            insertions: Number(parsed.additions ?? 0),
+            deletions: Number(parsed.deletions ?? 0),
+            hasChanges: Number(parsed.changedFiles ?? 0) > 0,
+          };
+        }
+      } catch { /* no PR or gh error — fall through to API */ }
+    }
+
+    // Fall back to API
+    const effectiveToken = token ?? await this.resolveToken(cwd);
+    if (!effectiveToken || !remote.owner) return null;
+    return this.prDiffStatsViaApi(remote, effectiveToken, headBranch);
+  }
+
+  async prFileDiffs(cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeFileDiff[] | null> {
+    // Try gh CLI first — `gh pr diff` returns the unified diff
+    if (await this.checkCliAvailable(cwd)) {
+      try {
+        // Get PR number first so we can use the files API
+        const raw = await cliExec(
+          `gh pr view --head "${headBranch}"${buildGhRepoFlag(remote)} --json number`,
+          cwd, 15_000, cleanGhEnv(),
+        );
+        const parsed = JSON.parse(raw) as Record<string, unknown>;
+        const prNumber = Number(parsed.number ?? 0);
+        if (prNumber > 0) {
+          // Use API for structured per-file diffs (we need original + modified content)
+          const effectiveToken = token ?? await this.resolveToken(cwd);
+          if (effectiveToken) {
+            return this.prFileDiffsViaApi(remote, effectiveToken, prNumber, cwd);
+          }
+        }
+      } catch { /* no PR — fall through */ }
+    }
+
+    // Fall back to API if we have a token
+    const effectiveToken = token ?? await this.resolveToken(cwd);
+    if (!effectiveToken || !remote.owner) return null;
+    // Find PR number via API
+    const pr = await this.findPrViaApi(remote, effectiveToken, headBranch);
+    if (!pr?.number) return null;
+    return this.prFileDiffsViaApi(remote, effectiveToken, pr.number, cwd);
+  }
+
+  private async prDiffStatsViaApi(remote: ParsedRemote, token: string, headBranch: string): Promise<ForgeDiffStats | null> {
+    const apiBase = remote.host === "github.com" ? "https://api.github.com" : `https://${remote.host}/api/v3`;
+    const headers = apiHeaders(token, { Accept: "application/vnd.github+json" });
+    const headParam = `${remote.owner}:${headBranch}`;
+    try {
+      const res = await fetch(
+        `${apiBase}/repos/${remote.owner}/${remote.repo}/pulls?head=${encodeURIComponent(headParam)}&state=all`,
+        { headers },
+      );
+      if (!res.ok) return null;
+      const list = await res.json() as Array<Record<string, unknown>>;
+      const pr = (list.find((p) => p?.state === "open") ?? list[0]) as Record<string, unknown> | undefined;
+      if (!pr) return null;
+      return {
+        files: Number(pr.changed_files ?? 0),
+        insertions: Number(pr.additions ?? 0),
+        deletions: Number(pr.deletions ?? 0),
+        hasChanges: Number(pr.changed_files ?? 0) > 0,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  private async prFileDiffsViaApi(
+    remote: ParsedRemote, token: string, prNumber: number, cwd: string,
+  ): Promise<ForgeFileDiff[]> {
+    const apiBase = remote.host === "github.com" ? "https://api.github.com" : `https://${remote.host}/api/v3`;
+    const headers = apiHeaders(token, { Accept: "application/vnd.github+json" });
+    const entries: ForgeFileDiff[] = [];
+
+    // Paginate through all PR files
+    let page = 1;
+    while (true) {
+      const res = await fetch(
+        `${apiBase}/repos/${remote.owner}/${remote.repo}/pulls/${prNumber}/files?per_page=100&page=${page}`,
+        { headers },
+      );
+      if (!res.ok) break;
+      const files = await res.json() as Array<Record<string, unknown>>;
+      if (files.length === 0) break;
+
+      for (const file of files) {
+        const filePath = String(file.filename ?? "");
+        const ghStatus = String(file.status ?? "modified");
+        let status = "M";
+        if (ghStatus === "added") status = "A";
+        else if (ghStatus === "removed") status = "D";
+        else if (ghStatus === "renamed") status = "R";
+
+        // Get file content at both refs using git locally
+        let original = "";
+        let modified = "";
+
+        if (status !== "A") {
+          try {
+            original = await cliExec(
+              `gh api repos/${remote.owner}/${remote.repo}/contents/${encodeURIComponent(filePath)}?ref=${encodeURIComponent(String(file.contents_url ?? "").match(/ref=([^&]+)/)?.[1] ?? "HEAD")} --jq .content`,
+              cwd, 15_000, cleanGhEnv(),
+            ).catch(() => "");
+            // content is base64 encoded
+            if (original) original = Buffer.from(original, "base64").toString("utf-8");
+          } catch { /* new file */ }
+        }
+
+        // For modified content, use the patch to reconstruct or get from the branch
+        if (status !== "D") {
+          try {
+            modified = String(file.patch ?? "");
+          } catch { /* deleted */ }
+        }
+
+        entries.push({ path: filePath, original, modified, status });
+      }
+
+      if (files.length < 100) break;
+      page++;
+    }
+
+    return entries;
   }
 
   private async createPrViaCli(cwd: string, remote: ParsedRemote, input: ForgePrInput): Promise<ForgePrResult> {
@@ -463,6 +629,83 @@ export class GitLabForge implements GitForge {
   buildCreatePrUrl(remote: ParsedRemote, headBranch: string, _baseBranch?: string): string | null {
     return `${remote.normalizedUrl}/-/merge_requests/new?merge_request[source_branch]=${encodeURIComponent(headBranch)}`;
   }
+
+  async prDiffStats(_cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeDiffStats | null> {
+    const effectiveToken = token ?? await this.resolveToken(_cwd);
+    if (!effectiveToken) return null;
+    const apiBase = `https://${remote.host}/api/v4`;
+    const projectPath = remote.owner ? `${remote.owner}/${remote.repo}` : remote.repo;
+    try {
+      // Find MR by source branch
+      const res = await fetch(
+        `${apiBase}/projects/${encodeURIComponent(projectPath)}/merge_requests?source_branch=${encodeURIComponent(headBranch)}&state=opened`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!res.ok) return null;
+      const list = await res.json() as Array<Record<string, unknown>>;
+      const mr = list[0];
+      if (!mr) return null;
+      const mrIid = Number(mr.iid ?? 0);
+      // Get changes to count files and compute stats
+      const changesRes = await fetch(
+        `${apiBase}/projects/${encodeURIComponent(projectPath)}/merge_requests/${mrIid}/changes`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!changesRes.ok) return null;
+      const changesData = await changesRes.json() as { changes?: Array<{ diff?: string; new_file?: boolean; deleted_file?: boolean; renamed_file?: boolean }> };
+      const changes = changesData.changes ?? [];
+      let insertions = 0;
+      let deletions = 0;
+      for (const change of changes) {
+        const diff = change.diff ?? "";
+        for (const line of diff.split("\n")) {
+          if (line.startsWith("+") && !line.startsWith("+++")) insertions++;
+          else if (line.startsWith("-") && !line.startsWith("---")) deletions++;
+        }
+      }
+      return { files: changes.length, insertions, deletions, hasChanges: changes.length > 0 };
+    } catch {
+      return null;
+    }
+  }
+
+  async prFileDiffs(_cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeFileDiff[] | null> {
+    const effectiveToken = token ?? await this.resolveToken(_cwd);
+    if (!effectiveToken) return null;
+    const apiBase = `https://${remote.host}/api/v4`;
+    const projectPath = remote.owner ? `${remote.owner}/${remote.repo}` : remote.repo;
+    try {
+      const res = await fetch(
+        `${apiBase}/projects/${encodeURIComponent(projectPath)}/merge_requests?source_branch=${encodeURIComponent(headBranch)}&state=opened`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!res.ok) return null;
+      const list = await res.json() as Array<Record<string, unknown>>;
+      const mr = list[0];
+      if (!mr) return null;
+      const mrIid = Number(mr.iid ?? 0);
+      const changesRes = await fetch(
+        `${apiBase}/projects/${encodeURIComponent(projectPath)}/merge_requests/${mrIid}/changes`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!changesRes.ok) return null;
+      const changesData = await changesRes.json() as { changes?: Array<{ old_path?: string; new_path?: string; new_file?: boolean; deleted_file?: boolean; renamed_file?: boolean; diff?: string }> };
+      const entries: ForgeFileDiff[] = [];
+      for (const change of changesData.changes ?? []) {
+        const filePath = change.new_path ?? change.old_path ?? "";
+        let status = "M";
+        if (change.new_file) status = "A";
+        else if (change.deleted_file) status = "D";
+        else if (change.renamed_file) status = "R";
+        // For GitLab, we return the patch as modified content —
+        // full file content retrieval requires additional API calls.
+        entries.push({ path: filePath, original: "", modified: change.diff ?? "", status });
+      }
+      return entries;
+    } catch {
+      return null;
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -575,6 +818,62 @@ export class GiteaForge implements GitForge {
   buildCreatePrUrl(remote: ParsedRemote, headBranch: string, baseBranch?: string): string | null {
     return `${remote.normalizedUrl}/compare/${encodeURIComponent(baseBranch ?? "main")}...${encodeURIComponent(headBranch)}`;
   }
+
+  async prDiffStats(_cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeDiffStats | null> {
+    const effectiveToken = token ?? await this.resolveToken(_cwd);
+    if (!effectiveToken || !remote.owner) return null;
+    try {
+      // Find PR by head branch
+      const res = await fetch(
+        `https://${remote.host}/api/v1/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${encodeURIComponent(`${remote.owner}:${headBranch}`)}`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!res.ok) return null;
+      const list = await res.json() as Array<Record<string, unknown>>;
+      const pr = list[0];
+      if (!pr) return null;
+      return {
+        files: Number(pr.changed_files ?? 0),
+        insertions: Number(pr.additions ?? 0),
+        deletions: Number(pr.deletions ?? 0),
+        hasChanges: Number(pr.changed_files ?? 0) > 0,
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  async prFileDiffs(_cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeFileDiff[] | null> {
+    const effectiveToken = token ?? await this.resolveToken(_cwd);
+    if (!effectiveToken || !remote.owner) return null;
+    try {
+      const res = await fetch(
+        `https://${remote.host}/api/v1/repos/${remote.owner}/${remote.repo}/pulls?state=open&head=${encodeURIComponent(`${remote.owner}:${headBranch}`)}`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!res.ok) return null;
+      const list = await res.json() as Array<Record<string, unknown>>;
+      const pr = list[0];
+      if (!pr) return null;
+      const prNumber = Number(pr.number ?? 0);
+      // Gitea /pulls/:index/files returns per-file diffs
+      const filesRes = await fetch(
+        `https://${remote.host}/api/v1/repos/${remote.owner}/${remote.repo}/pulls/${prNumber}/files`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!filesRes.ok) return null;
+      const files = await filesRes.json() as Array<{ filename?: string; status?: string; additions?: number; deletions?: number; patch?: string }>;
+      return files.map((f) => {
+        let status = "M";
+        if (f.status === "added") status = "A";
+        else if (f.status === "removed" || f.status === "deleted") status = "D";
+        else if (f.status === "renamed") status = "R";
+        return { path: f.filename ?? "", original: "", modified: f.patch ?? "", status };
+      });
+    } catch {
+      return null;
+    }
+  }
 }
 
 // ══════════════════════════════════════════════════════════════════════
@@ -674,6 +973,32 @@ export class AzureDevOpsForge implements GitForge {
   buildCreatePrUrl(remote: ParsedRemote, headBranch: string, baseBranch?: string): string | null {
     const base = this.buildRepoUrl(remote);
     return `${base}/pullrequestcreate?sourceRef=${encodeURIComponent(`refs/heads/${headBranch}`)}${baseBranch ? `&targetRef=${encodeURIComponent(`refs/heads/${baseBranch}`)}` : ""}`;
+  }
+
+  async prDiffStats(cwd: string, remote: ParsedRemote, headBranch: string, _token?: string): Promise<ForgeDiffStats | null> {
+    if (!await this.checkCliAvailable(cwd)) return null;
+    const orgUrl = this.buildOrgUrl(remote);
+    try {
+      // Find active PR by source branch
+      const raw = await cliExec(
+        `az repos pr list --organization "${orgUrl}" --project "${remote.project}" --repository "${remote.repo}" --source-branch "${headBranch}" --status active --output json`,
+        cwd, 30_000,
+      );
+      const list = JSON.parse(raw) as Array<Record<string, unknown>>;
+      const first = list[0];
+      if (!first) return null;
+      // az repos CLI doesn't have a direct diff-stats command;
+      // return null and let the caller use git merge-base fallback.
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
+  async prFileDiffs(_cwd: string, _remote: ParsedRemote, _headBranch: string, _token?: string): Promise<ForgeFileDiff[] | null> {
+    // Azure DevOps CLI doesn't provide structured file diffs easily;
+    // fall back to git merge-base in the caller.
+    return null;
   }
 
   private buildOrgUrl(remote: ParsedRemote): string {
@@ -802,6 +1127,71 @@ export class BitbucketForge implements GitForge {
 
   buildCreatePrUrl(remote: ParsedRemote, headBranch: string, _baseBranch?: string): string | null {
     return `${remote.normalizedUrl}/pull-requests/new?source=${encodeURIComponent(headBranch)}`;
+  }
+
+  async prDiffStats(_cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeDiffStats | null> {
+    const effectiveToken = token ?? await this.resolveToken(_cwd);
+    if (!effectiveToken || !remote.owner) return null;
+    try {
+      // Use diffstat endpoint for PR
+      const prRes = await fetch(
+        `https://api.bitbucket.org/2.0/repositories/${remote.owner}/${remote.repo}/pullrequests?q=source.branch.name="${encodeURIComponent(headBranch)}"&state=OPEN`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!prRes.ok) return null;
+      const prData = await prRes.json() as { values?: Array<Record<string, unknown>> };
+      const pr = prData.values?.[0];
+      if (!pr) return null;
+      const prId = Number(pr.id ?? 0);
+      const diffstatRes = await fetch(
+        `https://api.bitbucket.org/2.0/repositories/${remote.owner}/${remote.repo}/pullrequests/${prId}/diffstat`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!diffstatRes.ok) return null;
+      const diffstat = await diffstatRes.json() as { values?: Array<{ lines_added?: number; lines_removed?: number }> };
+      const values = diffstat.values ?? [];
+      let insertions = 0;
+      let deletions = 0;
+      for (const v of values) {
+        insertions += Number(v.lines_added ?? 0);
+        deletions += Number(v.lines_removed ?? 0);
+      }
+      return { files: values.length, insertions, deletions, hasChanges: values.length > 0 };
+    } catch {
+      return null;
+    }
+  }
+
+  async prFileDiffs(_cwd: string, remote: ParsedRemote, headBranch: string, token?: string): Promise<ForgeFileDiff[] | null> {
+    const effectiveToken = token ?? await this.resolveToken(_cwd);
+    if (!effectiveToken || !remote.owner) return null;
+    try {
+      const prRes = await fetch(
+        `https://api.bitbucket.org/2.0/repositories/${remote.owner}/${remote.repo}/pullrequests?q=source.branch.name="${encodeURIComponent(headBranch)}"&state=OPEN`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!prRes.ok) return null;
+      const prData = await prRes.json() as { values?: Array<Record<string, unknown>> };
+      const pr = prData.values?.[0];
+      if (!pr) return null;
+      const prId = Number(pr.id ?? 0);
+      const diffstatRes = await fetch(
+        `https://api.bitbucket.org/2.0/repositories/${remote.owner}/${remote.repo}/pullrequests/${prId}/diffstat`,
+        { headers: apiHeaders(effectiveToken) },
+      );
+      if (!diffstatRes.ok) return null;
+      const diffstat = await diffstatRes.json() as { values?: Array<{ old?: { path?: string }; new?: { path?: string }; status?: string; lines_added?: number; lines_removed?: number }> };
+      return (diffstat.values ?? []).map((v) => {
+        const filePath = v.new?.path ?? v.old?.path ?? "";
+        let status = "M";
+        if (v.status === "added") status = "A";
+        else if (v.status === "removed") status = "D";
+        else if (v.status === "renamed") status = "R";
+        return { path: filePath, original: "", modified: "", status };
+      });
+    } catch {
+      return null;
+    }
   }
 }
 

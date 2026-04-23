@@ -1338,7 +1338,9 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       const seen = new Set<string>();
 
       if (baseBranch && branch) {
-        const nameStatus = await gitExecLocal(`diff --name-status ${baseBranch} ${branch}`).catch(() => "");
+        // Compute merge-base to get the PR-style diff (not tip-to-tip)
+        const diffBase = await gitExecLocal(`merge-base ${JSON.stringify(baseBranch)} ${JSON.stringify(branch)}`).catch(() => baseBranch);
+        const nameStatus = await gitExecLocal(`diff --name-status ${diffBase} ${branch}`).catch(() => "");
         for (const line of nameStatus.split("\n").filter(Boolean)) {
           const parts = line.split("\t");
           const statusCode = parts[0]?.trim() ?? "M";
@@ -1355,7 +1357,7 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
 
           let original = "";
           if (status !== "A") {
-            try { original = await gitExecLocal(`show ${baseBranch}:${JSON.stringify(filePath)}`); } catch { /* new file */ }
+            try { original = await gitExecLocal(`show ${diffBase}:${JSON.stringify(filePath)}`); } catch { /* new file */ }
           }
           let modified = "";
           if (status !== "D") {
@@ -1433,6 +1435,66 @@ ipcMain.handle("desktop:fs-op", async (_event, op: string, params: Record<string
       }
 
       return entries;
+    }
+    case "git-diff-stats": {
+      // Compound operation: merge-base-aware diff stats for branch comparisons
+      const cwd = resolve(params.cwd as string);
+      const baseBranch = params.baseBranch as string | undefined;
+      const branch = params.branch as string | undefined;
+      const { exec: execAsync } = await import("node:child_process");
+      const { promisify } = await import("node:util");
+      const execP = promisify(execAsync);
+
+      const gitExecLocal = async (args: string) => {
+        const { stdout } = await execP(`git ${args}`, {
+          cwd, timeout: 30_000, maxBuffer: 10 * 1024 * 1024,
+          env: { ...process.env, GIT_TERMINAL_PROMPT: "0" },
+        });
+        return stdout.trimEnd();
+      };
+
+      try { await gitExecLocal("rev-parse --is-inside-work-tree"); } catch {
+        return { files: 0, insertions: 0, deletions: 0, hasChanges: false };
+      }
+
+      const filePaths = new Set<string>();
+      let insertions = 0;
+      let deletions = 0;
+
+      const collectNumstat = async (args: string) => {
+        const numstat = await gitExecLocal(args).catch(() => "");
+        for (const line of numstat.split("\n").filter(Boolean)) {
+          const [ins, del, filePath] = line.split("\t");
+          if (!filePath) continue;
+          filePaths.add(filePath);
+          insertions += ins === "-" ? 0 : parseInt(ins ?? "0", 10);
+          deletions += del === "-" ? 0 : parseInt(del ?? "0", 10);
+        }
+      };
+
+      if (baseBranch && branch) {
+        // Compute merge-base for PR-style diff
+        const mergeBase = await gitExecLocal(
+          `merge-base ${JSON.stringify(baseBranch)} ${JSON.stringify(branch)}`,
+        ).catch(() => baseBranch);
+        await collectNumstat(`diff --numstat ${mergeBase.trim()} ${JSON.stringify(branch)}`);
+      } else if (baseBranch) {
+        await collectNumstat(`diff --numstat ${JSON.stringify(baseBranch)}`);
+      } else {
+        await collectNumstat("diff --cached --numstat");
+        await collectNumstat("diff --numstat");
+      }
+
+      if (!branch) {
+        const porcelain = await gitExecLocal("status --porcelain").catch(() => "");
+        for (const line of porcelain.split("\n").filter(Boolean)) {
+          if (!line.startsWith("??")) continue;
+          const fp = line.slice(3).trim();
+          if (fp) filePaths.add(fp);
+        }
+      }
+
+      return { files: filePaths.size, insertions, deletions, hasChanges: filePaths.size > 0 };
     }
     case "git-stacked-action": {
       // Compound operation: commit → push → create PR, matching GitStepResult format

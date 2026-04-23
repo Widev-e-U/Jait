@@ -19,7 +19,7 @@ import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config.js";
 import { requireAuth } from "../security/http-auth.js";
 import { GitService, detectGitRemoteProvider, parseGitRemote, type GitSyncResult } from "../services/git.js";
-import { getForge } from "../services/git-forge.js";
+import { getForge, getForgeForRemote } from "../services/git-forge.js";
 import type { WsControlPlane } from "../ws.js";
 import { existsSync } from "node:fs";
 import type { UserService } from "../services/users.js";
@@ -614,6 +614,23 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
     try {
       const remoteNodeId = findRemoteNodeForCwd(ws, body.cwd);
       if (remoteNodeId && ws) {
+        // ── Remote execution node ───────────────────────────────────
+        // If we have a branch (thread PR diff), try forge-based PR diff stats first.
+        // The forge uses the provider's native PR diff (merge-base aware).
+        if (body.baseBranch && body.branch) {
+          // Try the compound git-diff-stats op on the remote node
+          // (it uses merge-base, matching the local git.diffStats() behaviour)
+          try {
+            const stats = await ws.proxyFsOp<{ files: number; insertions: number; deletions: number; hasChanges: boolean }>(
+              remoteNodeId, "git-diff-stats",
+              { cwd: body.cwd, baseBranch: body.baseBranch, branch: body.branch },
+              30_000,
+            );
+            return stats;
+          } catch { /* compound op not supported on this node — fall through */ }
+        }
+
+        // Fallback: raw git proxy (for non-branch diffs or old nodes without git-diff-stats)
         const gitProxy = async (args: string) => {
           const r = await ws.proxyFsOp<{ stdout: string }>(remoteNodeId, "git", { cwd: body.cwd, args }, 30_000);
           return trimCommandOutput(r.stdout);
@@ -634,7 +651,11 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
         };
 
         if (body.baseBranch && body.branch) {
-          await collectNumstat(`diff --numstat ${JSON.stringify(body.baseBranch)} ${JSON.stringify(body.branch)}`);
+          // Compute merge-base on the remote node to avoid the growing-diff bug
+          const mergeBase = await gitProxy(
+            `merge-base ${JSON.stringify(body.baseBranch)} ${JSON.stringify(body.branch)}`,
+          ).catch(() => body.baseBranch);
+          await collectNumstat(`diff --numstat ${JSON.stringify(mergeBase)} ${JSON.stringify(body.branch)}`);
         } else if (body.baseBranch) {
           await collectNumstat(`diff --numstat ${JSON.stringify(body.baseBranch)}`);
         } else {
@@ -642,11 +663,13 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
           await collectNumstat("diff --numstat");
         }
 
-        const porcelain = await gitProxy("status --porcelain").catch(() => "");
-        for (const line of porcelain.split("\n").filter(Boolean)) {
-          if (!line.startsWith("??")) continue;
-          const filePath = line.slice(3).trim();
-          if (filePath) filePaths.add(filePath);
+        if (!body.branch) {
+          const porcelain = await gitProxy("status --porcelain").catch(() => "");
+          for (const line of porcelain.split("\n").filter(Boolean)) {
+            if (!line.startsWith("??")) continue;
+            const filePath = line.slice(3).trim();
+            if (filePath) filePaths.add(filePath);
+          }
         }
 
         return {
@@ -655,6 +678,24 @@ export function registerGitRoutes(app: FastifyInstance, config: AppConfig, deps?
           deletions,
           hasChanges: filePaths.size > 0,
         };
+      }
+
+      // ── Local execution ─────────────────────────────────────────
+      // Try forge PR diff stats first (uses provider's native PR diff)
+      if (body.baseBranch && body.branch) {
+        try {
+          const remotes = await git.listRemotes(body.cwd);
+          const remoteName = remotes.includes("origin") ? "origin" : remotes[0];
+          const remoteUrl = remoteName ? await git.getRemoteUrl(body.cwd, remoteName) : null;
+          const forge = getForgeForRemote(remoteUrl);
+          if (forge && remoteUrl) {
+            const parsed = parseGitRemote(remoteUrl);
+            if (parsed) {
+              const stats = await forge.prDiffStats(body.cwd, parsed, body.branch);
+              if (stats) return stats;
+            }
+          }
+        } catch { /* forge unavailable — fall through to git */ }
       }
 
       return await git.diffStats(body.cwd, body.baseBranch || undefined, body.branch || undefined);
