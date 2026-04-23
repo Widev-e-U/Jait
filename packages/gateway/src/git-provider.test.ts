@@ -145,4 +145,71 @@ describe("diffStats", () => {
       rmSync(root, { recursive: true, force: true });
     }
   });
+
+  it("keeps recorded branch totals scoped to PR changes after main advances", { timeout: 15_000 }, async () => {
+    const root = mkdtempSync(join(tmpdir(), "jait-git-diff-stats-merged-"));
+    try {
+      execSync("git init -b main", { cwd: root, stdio: "ignore" });
+      execSync('git config user.email "test@example.com"', { cwd: root, stdio: "ignore" });
+      execSync('git config user.name "Test User"', { cwd: root, stdio: "ignore" });
+      execSync("git config core.autocrlf false", { cwd: root, stdio: "ignore" });
+
+      writeFileSync(join(root, "base.txt"), "base\n");
+      execSync("git add base.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "init"', { cwd: root, stdio: "ignore" });
+
+      execSync("git checkout -b feature/thread", { cwd: root, stdio: "ignore" });
+      writeFileSync(join(root, "thread.txt"), "thread\n");
+      execSync("git add thread.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "thread change"', { cwd: root, stdio: "ignore" });
+
+      execSync("git checkout main", { cwd: root, stdio: "ignore" });
+      execSync('git merge --no-ff feature/thread -m "merge thread"', { cwd: root, stdio: "ignore" });
+      writeFileSync(join(root, "main-only.txt"), "main only\n");
+      execSync("git add main-only.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "main advances"', { cwd: root, stdio: "ignore" });
+
+      const git = new GitService();
+      await expect(git.diffStats(root, "main", "feature/thread")).resolves.toEqual({
+        files: 1,
+        insertions: 1,
+        deletions: 0,
+        hasChanges: true,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("does not mix local untracked files into recorded branch totals", { timeout: 15_000 }, async () => {
+    const root = mkdtempSync(join(tmpdir(), "jait-git-diff-stats-untracked-"));
+    try {
+      execSync("git init -b main", { cwd: root, stdio: "ignore" });
+      execSync('git config user.email "test@example.com"', { cwd: root, stdio: "ignore" });
+      execSync('git config user.name "Test User"', { cwd: root, stdio: "ignore" });
+      execSync("git config core.autocrlf false", { cwd: root, stdio: "ignore" });
+
+      writeFileSync(join(root, "base.txt"), "base\n");
+      execSync("git add base.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "init"', { cwd: root, stdio: "ignore" });
+
+      execSync("git checkout -b feature/thread", { cwd: root, stdio: "ignore" });
+      writeFileSync(join(root, "thread.txt"), "thread\n");
+      execSync("git add thread.txt", { cwd: root, stdio: "ignore" });
+      execSync('git commit -m "thread change"', { cwd: root, stdio: "ignore" });
+
+      execSync("git checkout main", { cwd: root, stdio: "ignore" });
+      writeFileSync(join(root, "scratch.txt"), "local only\n");
+
+      const git = new GitService();
+      await expect(git.diffStats(root, "main", "feature/thread")).resolves.toEqual({
+        files: 1,
+        insertions: 1,
+        deletions: 0,
+        hasChanges: true,
+      });
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
 });
