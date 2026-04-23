@@ -3,6 +3,18 @@ export interface WorkspaceLayoutState {
   editor: boolean
 }
 
+export function normalizeHydratedWorkspaceLayout(
+  layout: WorkspaceLayoutState,
+  isMobile: boolean,
+): WorkspaceLayoutState {
+  if (!isMobile || !layout.editor) return layout
+
+  return {
+    tree: layout.tree,
+    editor: false,
+  }
+}
+
 export function collapseMobileWorkspace(): WorkspaceLayoutState {
   return { tree: false, editor: false }
 }

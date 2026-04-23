@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   collapseMobileWorkspace,
+  normalizeHydratedWorkspaceLayout,
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
 } from './mobile-workspace-layout'
@@ -28,5 +29,14 @@ describe('mobile workspace layout', () => {
   it('normalizes a dual-open layout into a single active pane', () => {
     expect(toggleMobileWorkspacePane({ tree: true, editor: true }, 'tree')).toEqual({ tree: true, editor: false })
     expect(toggleMobileWorkspacePane({ tree: true, editor: true }, 'editor')).toEqual({ tree: false, editor: true })
+  })
+
+  it('prevents hydrated mobile state from reopening the editor', () => {
+    expect(normalizeHydratedWorkspaceLayout({ tree: false, editor: true }, true)).toEqual({ tree: false, editor: false })
+    expect(normalizeHydratedWorkspaceLayout({ tree: true, editor: true }, true)).toEqual({ tree: true, editor: false })
+  })
+
+  it('keeps hydrated editor state on desktop', () => {
+    expect(normalizeHydratedWorkspaceLayout({ tree: false, editor: true }, false)).toEqual({ tree: false, editor: true })
   })
 })

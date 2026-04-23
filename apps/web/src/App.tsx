@@ -140,6 +140,7 @@ import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState }
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
   collapseMobileWorkspace,
+  normalizeHydratedWorkspaceLayout,
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
 } from '@/lib/mobile-workspace-layout'
@@ -2568,9 +2569,12 @@ function App() {
         break
       case 'workspace.layout':
         if (value && typeof value === 'object' && !Array.isArray(value)) {
-          const layout = value as { tree?: boolean; editor?: boolean }
-          setShowWorkspaceTree(layout.tree !== false)
-          setShowWorkspaceEditor(layout.editor !== false)
+          const hydratedLayout = normalizeHydratedWorkspaceLayout({
+            tree: (value as { tree?: boolean }).tree !== false,
+            editor: (value as { editor?: boolean }).editor !== false,
+          }, isMobile)
+          setShowWorkspaceTree(hydratedLayout.tree)
+          setShowWorkspaceEditor(hydratedLayout.editor)
         }
         break
       case 'screen-share.panel':
@@ -2777,8 +2781,12 @@ function App() {
         // Workspace layout
         if (ui.layout) {
           suppressNextUiSync('workspace.layout')
-          setShowWorkspaceTree(ui.layout.tree !== false)
-          setShowWorkspaceEditor(ui.layout.editor !== false)
+          const hydratedLayout = normalizeHydratedWorkspaceLayout({
+            tree: ui.layout.tree !== false,
+            editor: ui.layout.editor !== false,
+          }, isMobile)
+          setShowWorkspaceTree(hydratedLayout.tree)
+          setShowWorkspaceEditor(hydratedLayout.editor)
         }
 
         // Stash the full UI state for deferred panel + preview application
@@ -3454,7 +3462,7 @@ function App() {
     showWorkspaceRef.current = true
     setShowWorkspace(true)
     if (isMobile) {
-      applyWorkspaceLayout(showMobileWorkspacePane('editor'), { immediateSync: true })
+      applyWorkspaceLayout(collapseMobileWorkspace(), { immediateSync: true })
     } else {
       setShowWorkspaceTree(true)
       showWorkspaceEditorPanel()
