@@ -1,4 +1,4 @@
-import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { Children, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import { Loader2 } from 'lucide-react'
 import { Conversation as AIConversation, ConversationScrollButton } from '@/components/ai-elements/conversation'
@@ -17,6 +17,11 @@ interface ConversationProps {
 
 const STICKY_BOTTOM_THRESHOLD_PX = 24
 const DEFAULT_ITEM_HEIGHT = 120
+const MOBILE_SCROLL_CONTAINMENT_STYLE: CSSProperties = {
+  WebkitOverflowScrolling: 'touch',
+  overscrollBehaviorY: 'contain',
+  touchAction: 'pan-y',
+}
 
 export function Conversation({ children, className, loading, loadingLabel = 'Loading conversation', messageContents }: ConversationProps) {
   const scrollRef = useRef<HTMLDivElement | null>(null)
@@ -195,6 +200,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           ref={scrollRef}
           onScroll={updateBottomState}
           className="h-full overflow-y-auto"
+          style={MOBILE_SCROLL_CONTAINMENT_STYLE}
         >
           <div ref={innerRef} className="mx-auto max-w-3xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
             <div
