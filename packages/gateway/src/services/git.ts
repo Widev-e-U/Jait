@@ -1879,7 +1879,8 @@ export class GitService {
     };
 
     if (baseBranch && branch) {
-      await collectNumstat(`diff --numstat ${JSON.stringify(baseBranch)} ${JSON.stringify(branch)}`);
+      const diffBase = await this.resolveBranchDiffBase(cwd, baseBranch, branch);
+      await collectNumstat(`diff --numstat ${JSON.stringify(diffBase)} ${JSON.stringify(branch)}`);
     } else if (baseBranch) {
       await collectNumstat(`diff --numstat ${JSON.stringify(baseBranch)}`);
     } else {
@@ -1887,11 +1888,13 @@ export class GitService {
       await collectNumstat("diff --numstat");
     }
 
-    const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
-    for (const line of porcelain.split("\n").filter(Boolean)) {
-      if (!line.startsWith("??")) continue;
-      const filePath = line.slice(3).trim();
-      if (filePath) filePaths.add(filePath);
+    if (!branch) {
+      const porcelain = await gitExec(cwd, "status --porcelain").catch(() => "");
+      for (const line of porcelain.split("\n").filter(Boolean)) {
+        if (!line.startsWith("??")) continue;
+        const filePath = line.slice(3).trim();
+        if (filePath) filePaths.add(filePath);
+      }
     }
 
     return {
@@ -1908,8 +1911,8 @@ export class GitService {
    *
    * @param baseBranch — when given, diff working tree against that branch
    *   (shows all thread changes: committed + uncommitted).
-   * @param branch — when given with baseBranch, diff baseBranch..branch
-   *   using both refs directly (used for merged/closed thread history).
+   * @param branch — when given with baseBranch, diff the thread branch
+   *   against its merge-base with baseBranch (matches PR-style history).
    *   When omitted entirely, only uncommitted working-tree changes are
    *   returned (original = HEAD).
    */
@@ -2030,11 +2033,12 @@ export class GitService {
   }
 
   /**
-   * Diff two refs directly (used after a PR is merged/closed, when the
-   * working tree no longer matches the thread branch history).
+   * Diff a branch against its merge-base with the base branch, matching the
+   * PR view even after the base branch has moved on.
    */
   private async fileDiffsBetweenRefs(cwd: string, baseBranch: string, branch: string): Promise<FileDiffEntry[]> {
-    const nameStatus = await gitExec(cwd, `diff --name-status ${baseBranch} ${branch}`).catch(() => "");
+    const diffBase = await this.resolveBranchDiffBase(cwd, baseBranch, branch);
+    const nameStatus = await gitExec(cwd, `diff --name-status ${JSON.stringify(diffBase)} ${JSON.stringify(branch)}`).catch(() => "");
     const lines = nameStatus.split("\n").filter(Boolean);
     const entries: FileDiffEntry[] = [];
     const seen = new Set<string>();
@@ -2058,7 +2062,7 @@ export class GitService {
       let original = "";
       if (status !== "A") {
         try {
-          original = await gitExec(cwd, `show ${baseBranch}:${JSON.stringify(gitRevisionPath(filePath))}`);
+          original = await gitExec(cwd, `show ${JSON.stringify(`${diffBase}:${gitRevisionPath(filePath)}`)}`);
         } catch { original = ""; }
       }
 
@@ -2073,6 +2077,46 @@ export class GitService {
     }
 
     return entries;
+  }
+
+  private async resolveBranchDiffBase(cwd: string, baseBranch: string, branch: string): Promise<string> {
+    const [mergeBase, branchSha] = await Promise.all([
+      gitExec(
+        cwd,
+        `merge-base ${JSON.stringify(baseBranch)} ${JSON.stringify(branch)}`,
+      ).catch(() => ""),
+      gitExec(cwd, `rev-parse ${JSON.stringify(branch)}`).catch(() => ""),
+    ]);
+    const normalizedMergeBase = mergeBase.trim();
+    const normalizedBranchSha = branchSha.trim();
+    if (!normalizedMergeBase) return baseBranch;
+    if (!normalizedBranchSha || normalizedMergeBase !== normalizedBranchSha) {
+      return normalizedMergeBase;
+    }
+
+    const mergeCommits = await gitExec(
+      cwd,
+      `rev-list --first-parent --merges ${JSON.stringify(baseBranch)}`,
+    ).catch(() => "");
+    for (const mergeCommit of mergeCommits.split("\n").filter(Boolean)) {
+      const parentLine = await gitExec(
+        cwd,
+        `rev-list --parents -n 1 ${JSON.stringify(mergeCommit)}`,
+      ).catch(() => "");
+      const parts = parentLine.trim().split(/\s+/).filter(Boolean);
+      if (parts.length < 3) continue;
+      const firstParent = parts[1];
+      if (!firstParent) continue;
+      for (const parent of parts.slice(2)) {
+        const mergedFromBranch = await gitExec(
+          cwd,
+          `merge-base --is-ancestor ${JSON.stringify(normalizedBranchSha)} ${JSON.stringify(parent)}`,
+        ).then(() => true).catch(() => false);
+        if (mergedFromBranch) return firstParent;
+      }
+    }
+
+    return normalizedMergeBase;
   }
 }
 
