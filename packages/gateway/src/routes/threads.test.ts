@@ -268,7 +268,7 @@ describe("thread routes", () => {
     sqlite.close();
   });
 
-  it("prepends the enabled skills block on the first thread turn", async () => {
+  it("prepends the auto-matched skills block on the first thread turn", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
@@ -306,26 +306,15 @@ describe("thread routes", () => {
       method: "POST",
       url: `/api/threads/${thread.id}/start`,
       headers,
-      payload: { message: "Inspect the template", titleTask: "" },
+      payload: { message: "Inspect the DOCX template", titleTask: "" },
     });
 
     expect(response.statusCode).toBe(200);
     await waitFor(() => provider.sendTurn.mock.calls.length >= 1);
-    expect(provider.sendTurn).toHaveBeenCalledWith(
-      "mock-session-1",
-      expect.stringContaining("<available_skills>"),
-      undefined,
-    );
-    expect(provider.sendTurn).toHaveBeenCalledWith(
-      "mock-session-1",
-      expect.stringContaining("<name>Word / DOCX</name>"),
-      undefined,
-    );
-    expect(provider.sendTurn).toHaveBeenCalledWith(
-      "mock-session-1",
-      expect.stringContaining("Inspect the template"),
-      undefined,
-    );
+    const turnMessage = provider.sendTurn.mock.calls.at(-1)?.[1] as string;
+    expect(turnMessage).toContain("<available_skills>");
+    expect(turnMessage).toContain("<name>Word / DOCX</name>");
+    expect(turnMessage).toContain("Inspect the DOCX template");
 
     await app.close();
     sqlite.close();
