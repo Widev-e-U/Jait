@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
-import { Check, Copy, MessageSquare, Wrench, X, Clock, Zap, Database, BarChart3 } from 'lucide-react'
+import { Check, ChevronRight, Copy, MessageSquare, Wrench, X, Clock, Zap, Database, BarChart3 } from 'lucide-react'
 import * as DialogPrimitive from '@radix-ui/react-dialog'
 import {
   Dialog,
@@ -10,6 +10,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog'
 import { Button } from '@/components/ui/button'
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { cn } from '@/lib/utils'
 import type { LlmContextFlow, LlmContextFlowRound, RoundMetrics } from '@/hooks/useChat'
 
@@ -37,6 +38,16 @@ interface LlmContextFlowDialogProps {
   onOpenChange: (open: boolean) => void
   contextFlow?: LlmContextFlow
   responseContent?: string
+}
+
+interface TraceExpandableCardProps {
+  badge: ReactNode
+  meta?: ReactNode
+  preview?: ReactNode
+  children: ReactNode
+  tone?: 'default' | 'assistant'
+  defaultOpen?: boolean
+  onOpenChange?: () => void
 }
 
 function roleClassName(role: string): string {
@@ -107,6 +118,60 @@ function formatNumber(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`
   if (n >= 1_000) return `${(n / 1_000).toFixed(1)}k`
   return String(n)
+}
+
+function TraceExpandableCard({
+  badge,
+  meta,
+  preview,
+  children,
+  tone = 'default',
+  defaultOpen = false,
+  onOpenChange,
+}: TraceExpandableCardProps) {
+  const [open, setOpen] = useState(defaultOpen)
+
+  return (
+    <Collapsible
+      open={open}
+      onOpenChange={(nextOpen) => {
+        setOpen(nextOpen)
+        onOpenChange?.()
+      }}
+    >
+      <div
+        className={cn(
+          'rounded-md border p-3',
+          tone === 'assistant'
+            ? 'border-emerald-500/25 bg-emerald-500/10'
+            : 'border-border/80 bg-background',
+        )}
+      >
+        <div className="flex items-start gap-2">
+          <CollapsibleTrigger className="mt-0.5 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-background/70 hover:text-foreground">
+            <ChevronRight className={cn('h-4 w-4 transition-transform', open && 'rotate-90')} />
+            <span className="sr-only">{open ? 'Collapse section' : 'Expand section'}</span>
+          </CollapsibleTrigger>
+          <div className="min-w-0 flex-1">
+            <div className="flex min-w-0 flex-wrap items-center gap-2">
+              {badge}
+              {meta}
+            </div>
+            {preview ? (
+              <div className="mt-1 text-xs text-muted-foreground/70">
+                {preview}
+              </div>
+            ) : null}
+          </div>
+        </div>
+        <CollapsibleContent className="pl-6">
+          <div className="pt-3">
+            {children}
+          </div>
+        </CollapsibleContent>
+      </div>
+    </Collapsible>
+  )
 }
 
 function SummaryMetrics({ flow }: { flow: LlmContextFlow }) {
@@ -266,7 +331,7 @@ function buildRows(contextFlow?: LlmContextFlow, responseContent?: string): Trac
   return rows
 }
 
-function TraceRowView({ row }: { row: TraceRow }) {
+function TraceRowView({ row, onExpandChange }: { row: TraceRow; onExpandChange?: () => void }) {
   if (row.kind === 'summary') {
     return <SummaryMetrics flow={row.flow} />
   }
@@ -322,17 +387,22 @@ function TraceRowView({ row }: { row: TraceRow }) {
     return (
       <div className="relative ml-2 sm:ml-4 border-l border-border pl-2 sm:pl-4">
         <div className="absolute -left-1.5 top-3 h-3 w-3 rounded-full border border-emerald-500/40 bg-background" />
-        <div className="rounded-md border border-emerald-500/25 bg-emerald-500/10 p-3">
-          <div className="mb-2 flex flex-wrap items-center gap-2">
+        <TraceExpandableCard
+          tone="assistant"
+          defaultOpen={false}
+          onOpenChange={onExpandChange}
+          badge={(
             <span className={cn('rounded-md border px-2 py-0.5 text-xs font-semibold', roleClassName('assistant'))}>
               assistant response
             </span>
-            <span className="text-xs text-muted-foreground">rendered chat answer</span>
-          </div>
+          )}
+          meta={<span className="text-xs text-muted-foreground">rendered chat answer</span>}
+          preview={<span className="block truncate">{row.content || '(empty response)'}</span>}
+        >
           <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-background/70 p-3 font-mono text-xs leading-5 text-foreground [overflow-wrap:anywhere]">
             {row.content || '(empty response)'}
           </pre>
-        </div>
+        </TraceExpandableCard>
       </div>
     )
   }
@@ -344,45 +414,48 @@ function TraceRowView({ row }: { row: TraceRow }) {
   return (
     <div className="relative ml-2 sm:ml-4 border-l border-border pl-2 sm:pl-4">
       <div className="absolute -left-1.5 top-3 h-3 w-3 rounded-full border border-border bg-background" />
-      <details className="rounded-md border border-border/80 bg-background">
-        <summary className="cursor-pointer px-3 py-2">
-          <div className="inline-flex flex-wrap items-center gap-2">
-            <span className={cn('rounded-md border px-2 py-0.5 text-xs font-semibold', roleClassName(row.role))}>
-              {row.role}
-            </span>
+      <TraceExpandableCard
+        defaultOpen={false}
+        onOpenChange={onExpandChange}
+        badge={(
+          <span className={cn('rounded-md border px-2 py-0.5 text-xs font-semibold', roleClassName(row.role))}>
+            {row.role}
+          </span>
+        )}
+        meta={(
+          <>
             <span className="text-xs text-muted-foreground">round {row.roundNumber} / message {row.index + 1}</span>
             {row.toolCalls.length > 0 ? (
               <span className="text-xs text-amber-600 dark:text-amber-400">{row.toolCalls.length} tool call{row.toolCalls.length !== 1 ? 's' : ''}</span>
             ) : null}
-            <span className="text-xs text-muted-foreground/60 truncate max-w-[200px] sm:max-w-[400px]">{contentPreview}</span>
+          </>
+        )}
+        preview={<span className="block truncate">{contentPreview}</span>}
+      >
+        <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/35 p-3 font-mono text-xs leading-5 text-foreground [overflow-wrap:anywhere]">
+          {row.content || '(empty content)'}
+        </pre>
+        {row.toolCalls.length > 0 ? (
+          <div className="mt-3 space-y-2">
+            {row.toolCalls.map((call) => (
+              <details key={call.id} className="rounded-md border border-amber-500/25 bg-amber-500/10 p-2">
+                <summary className="cursor-pointer text-xs font-medium text-amber-800 dark:text-amber-200">
+                  Tool call: {call.name} <span className="font-normal text-muted-foreground">({call.id})</span>
+                </summary>
+                <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background/70 p-2 font-mono text-xs leading-5">
+                  {call.args || '{}'}
+                </pre>
+              </details>
+            ))}
           </div>
-        </summary>
-        <div className="px-3 pb-3">
-          <pre className="max-h-72 overflow-auto whitespace-pre-wrap break-words rounded-md bg-muted/35 p-3 font-mono text-xs leading-5 text-foreground [overflow-wrap:anywhere]">
-            {row.content || '(empty content)'}
+        ) : null}
+        <details className="mt-2">
+          <summary className="cursor-pointer text-xs text-muted-foreground">Raw message JSON</summary>
+          <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/35 p-2 font-mono text-xs leading-5">
+            {stringifyExact(row.raw)}
           </pre>
-          {row.toolCalls.length > 0 ? (
-            <div className="mt-3 space-y-2">
-              {row.toolCalls.map((call) => (
-                <details key={call.id} className="rounded-md border border-amber-500/25 bg-amber-500/10 p-2">
-                  <summary className="cursor-pointer text-xs font-medium text-amber-800 dark:text-amber-200">
-                    Tool call: {call.name} <span className="font-normal text-muted-foreground">({call.id})</span>
-                  </summary>
-                  <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-background/70 p-2 font-mono text-xs leading-5">
-                    {call.args || '{}'}
-                  </pre>
-                </details>
-              ))}
-            </div>
-          ) : null}
-          <details className="mt-2">
-            <summary className="cursor-pointer text-xs text-muted-foreground">Raw message JSON</summary>
-            <pre className="mt-2 max-h-48 overflow-auto whitespace-pre-wrap break-words rounded bg-muted/35 p-2 font-mono text-xs leading-5">
-              {stringifyExact(row.raw)}
-            </pre>
-          </details>
-        </div>
-      </details>
+        </details>
+      </TraceExpandableCard>
     </div>
   )
 }
@@ -402,8 +475,8 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
       if (row.kind === 'summary') return 110
       if (row.kind === 'round') return 120
       if (row.kind === 'tools') return Math.min(420, 110 + row.tools.length * 72)
-      if (row.kind === 'response') return Math.min(520, 120 + Math.ceil(row.content.length / 90) * 18)
-      // Messages start collapsed — estimate only the summary line height
+      // Messages and the final response start collapsed — estimate only the header height
+      if (row.kind === 'response') return 72
       return 52
     },
     overscan: 5,
@@ -427,23 +500,29 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
     window.setTimeout(() => setCopied(false), 1200)
   }
 
+  const handleExpandChange = () => {
+    window.requestAnimationFrame(() => {
+      virtualizer.measure()
+    })
+  }
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent showCloseButton={false} className="grid h-[95vh] sm:h-[85vh] max-w-[min(1200px,96vw)] grid-rows-[auto_minmax(0,1fr)] p-0">
         <DialogHeader className="border-b px-3 py-2">
-          <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
             <DialogTitle className="shrink-0 text-sm font-semibold">LLM Context Flow</DialogTitle>
-            <DialogDescription className="min-w-0 basis-full truncate text-xs sm:basis-auto">
+            <DialogDescription className="min-w-0 flex-1 truncate text-xs">
               {contextFlow
                 ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} · ${contextFlow.rounds.length} round${contextFlow.rounds.length === 1 ? '' : 's'}`
                 : 'No context snapshot available'}
             </DialogDescription>
-            <div className="ml-auto flex shrink-0 items-center gap-1.5">
+            <div className="ml-auto flex shrink-0 items-center gap-1">
               <Button
                 type="button"
                 variant={mode === 'trace' ? 'default' : 'outline'}
                 size="sm"
-                className="h-7 px-2.5 text-xs"
+                className="h-7 px-2 text-xs"
                 onClick={() => setMode('trace')}
               >
                 Trace
@@ -452,14 +531,15 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
                 type="button"
                 variant={mode === 'raw' ? 'default' : 'outline'}
                 size="sm"
-                className="h-7 px-2.5 text-xs"
+                className="h-7 px-2 text-xs"
                 onClick={() => setMode('raw')}
               >
                 Raw
               </Button>
-              <Button type="button" variant="outline" size="sm" className="h-7 px-2.5 text-xs" onClick={copyRaw} disabled={!rawText}>
-                {copied ? <Check className="mr-1 h-3 w-3" /> : <Copy className="mr-1 h-3 w-3" />}
-                {copied ? 'Copied' : 'Copy'}
+              <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-xs" onClick={copyRaw} disabled={!rawText}>
+                {copied ? <Check className="h-3 w-3 sm:mr-1" /> : <Copy className="h-3 w-3 sm:mr-1" />}
+                <span className="hidden sm:inline">{copied ? 'Copied' : 'Copy'}</span>
+                <span className="sr-only">{copied ? 'Copied' : 'Copy raw trace'}</span>
               </Button>
               <DialogPrimitive.Close className="ml-1 rounded-sm p-1 opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2">
                 <X className="h-4 w-4" />
@@ -493,7 +573,7 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
                         className="absolute left-0 top-0 w-full pb-3"
                         style={{ transform: `translateY(${virtualRow.start}px)` }}
                       >
-                        <TraceRowView row={row} />
+                        <TraceRowView row={row} onExpandChange={handleExpandChange} />
                       </div>
                     )
                   })}
