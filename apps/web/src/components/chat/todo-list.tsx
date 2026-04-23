@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { CheckCircle2, ChevronDown, Circle, Loader2, X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 
@@ -13,8 +13,6 @@ interface TodoListProps {
   className?: string
   onClear?: () => void
 }
-
-const TODO_LIST_AUTO_HIDE_DELAY_MS = 5000
 
 export interface CollapsedTodoDisplay {
   headerLabel: string
@@ -43,38 +41,11 @@ export function getCollapsedTodoDisplay(items: TodoItem[]): CollapsedTodoDisplay
 
 export function TodoList({ items, className, onClear }: TodoListProps) {
   const [expanded, setExpanded] = useState(false)
-  const [hidden, setHidden] = useState(false)
-  const hideTimeoutRef = useRef<number | null>(null)
 
   const allCompleted = useMemo(() => areAllTodoItemsCompleted(items), [items])
   const collapsedDisplay = useMemo(() => getCollapsedTodoDisplay(items), [items])
 
-  useEffect(() => {
-    if (hideTimeoutRef.current !== null) {
-      window.clearTimeout(hideTimeoutRef.current)
-      hideTimeoutRef.current = null
-    }
-
-    setHidden(false)
-
-    if (!allCompleted) {
-      return
-    }
-
-    hideTimeoutRef.current = window.setTimeout(() => {
-      setHidden(true)
-    }, TODO_LIST_AUTO_HIDE_DELAY_MS)
-
-    return () => {
-      if (hideTimeoutRef.current !== null) {
-        window.clearTimeout(hideTimeoutRef.current)
-        hideTimeoutRef.current = null
-      }
-    }
-  }, [allCompleted, items])
-
   if (items.length === 0) return null
-  if (hidden) return null
 
   const completed = items.filter((t) => t.status === 'completed').length
   const total = items.length
