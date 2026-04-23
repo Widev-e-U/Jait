@@ -35,6 +35,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const stickToBottomRef = useRef(true)
   const userScrollingRef = useRef(false)
   const userScrollTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined)
+  const touchStartYRef = useRef<number | null>(null)
 
   // Track inner container width for pretext layout calculations.
   const innerRef = useRef<HTMLDivElement | null>(null)
@@ -98,11 +99,51 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
       }
     }
 
+    const handleTouchStart = (e: TouchEvent) => {
+      markUserScroll()
+      touchStartYRef.current = e.touches[0]?.clientY ?? null
+    }
+
+    // CSS overscroll containment is not enough on all mobile browsers.
+    // Prevent boundary drags from escaping the chat scroller and
+    // triggering page bounce / pull-to-refresh.
+    const handleTouchMove = (e: TouchEvent) => {
+      markUserScroll()
+      if (e.touches.length !== 1) return
+      const startY = touchStartYRef.current
+      const currentY = e.touches[0]?.clientY
+      if (startY == null || currentY == null) return
+
+      const maxScrollTop = el.scrollHeight - el.clientHeight
+      if (maxScrollTop <= 0) {
+        e.preventDefault()
+        return
+      }
+
+      const deltaY = currentY - startY
+      const atTop = el.scrollTop <= 0
+      const atBottom = el.scrollTop >= maxScrollTop - 1
+
+      if ((atTop && deltaY > 0) || (atBottom && deltaY < 0)) {
+        e.preventDefault()
+      }
+    }
+
+    const clearTouchState = () => {
+      touchStartYRef.current = null
+    }
+
     el.addEventListener('wheel', handleWheel, { passive: true })
-    el.addEventListener('touchstart', markUserScroll, { passive: true })
+    el.addEventListener('touchstart', handleTouchStart, { passive: true })
+    el.addEventListener('touchmove', handleTouchMove, { passive: false })
+    el.addEventListener('touchend', clearTouchState, { passive: true })
+    el.addEventListener('touchcancel', clearTouchState, { passive: true })
     return () => {
       el.removeEventListener('wheel', handleWheel)
-      el.removeEventListener('touchstart', markUserScroll)
+      el.removeEventListener('touchstart', handleTouchStart)
+      el.removeEventListener('touchmove', handleTouchMove)
+      el.removeEventListener('touchend', clearTouchState)
+      el.removeEventListener('touchcancel', clearTouchState)
       clearTimeout(userScrollTimerRef.current)
     }
   }, [loading]) // re-attach when scroll element mounts (loading → !loading)
