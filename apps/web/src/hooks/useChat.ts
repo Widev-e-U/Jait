@@ -52,9 +52,10 @@ export function shouldResumeChatSession(params: {
   isLoading: boolean
   isLoadingHistory: boolean
   messageCount: number
+  error?: string | null
 }): boolean {
   if (!params.sessionId || params.isLoadingHistory) return false
-  return params.isLoading || params.messageCount === 0
+  return params.isLoading || params.messageCount === 0 || params.error === TRANSIENT_CONNECTION_MESSAGE
 }
 
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
@@ -1287,6 +1288,7 @@ export function useChat(
         isLoading: state.isLoading,
         isLoadingHistory: state.isLoadingHistory,
         messageCount: state.messages.length,
+        error: state.error,
       })) return
       if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
       resumeSessionStream()
@@ -1300,7 +1302,7 @@ export function useChat(
 
     document.addEventListener('visibilitychange', handleVisibilityChange)
     return () => document.removeEventListener('visibilitychange', handleVisibilityChange)
-  }, [state.isLoading, state.isLoadingHistory, resumeSessionStream, sessionId])
+  }, [state.error, state.isLoading, state.isLoadingHistory, resumeSessionStream, sessionId, state.messages.length])
 
   useEffect(() => {
     if (typeof window === 'undefined') return
@@ -1311,6 +1313,7 @@ export function useChat(
         isLoading: state.isLoading,
         isLoadingHistory: state.isLoadingHistory,
         messageCount: state.messages.length,
+        error: state.error,
       })) return
       if (directStreamSessionRef.current === sessionId && abortControllerRef.current) return
       resumeSessionStream()
