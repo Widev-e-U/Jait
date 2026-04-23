@@ -21,6 +21,16 @@ describe('shouldResumeChatSession', () => {
     })).toBe(true)
   })
 
+  it('resumes when the chat is preserved behind a transient reconnect error', () => {
+    expect(shouldResumeChatSession({
+      sessionId: 'session-1',
+      isLoading: false,
+      isLoadingHistory: false,
+      messageCount: 2,
+      error: 'Connection interrupted. Attempting to reconnect...',
+    })).toBe(true)
+  })
+
   it('does not resume while history is already loading', () => {
     expect(shouldResumeChatSession({
       sessionId: 'session-1',
