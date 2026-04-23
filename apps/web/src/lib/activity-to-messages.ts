@@ -199,6 +199,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         if (toolCallMap.has(callId)) break
         const tc: ToolCallInfo = {
           callId,
+          parentCallId: payload.parentCallId as string | undefined,
           tool,
           args: normalizeToolArgs(tool, extractToolArgs(payload, tool)),
           status: 'running',
@@ -234,6 +235,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
           const synthesizedCallId = callId ?? act.id
           tc = {
             callId: synthesizedCallId,
+            parentCallId: payload.parentCallId as string | undefined,
             tool,
             args: normalizeToolArgs(tool, extractToolArgs(payload, tool), asRecord(resultData) ?? undefined),
             status: ok ? 'success' : 'error',
@@ -250,6 +252,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
           mergeArgs(tc.args, extractToolArgs(payload, tool)),
           asRecord(resultData) ?? undefined,
         )
+        tc.parentCallId = tc.parentCallId ?? (payload.parentCallId as string | undefined)
         tc.status = ok ? 'success' : 'error'
         tc.result = {
           ok,
@@ -265,6 +268,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const callId = (payload.requestId as string) ?? act.id
         const tc: ToolCallInfo = {
           callId,
+          parentCallId: payload.parentCallId as string | undefined,
           tool: (payload.tool as string) ?? 'unknown',
           args: normalizeToolArgs(
             String(payload.tool ?? 'unknown'),
@@ -288,6 +292,7 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         const callId = act.id
         const tc: ToolCallInfo = {
           callId,
+          parentCallId: payload.parentCallId as string | undefined,
           tool: 'skill',
           args: { skills: skills.map(s => s.name).join(', ') },
           status: 'success',

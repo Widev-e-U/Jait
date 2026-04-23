@@ -359,13 +359,14 @@ export class ThreadService {
           tool: event.tool,
           args: event.args,
           callId: event.callId,
+          parentCallId: event.parentCallId,
         });
       case "tool.result":
         return this.addActivity(
           threadId,
           event.ok ? "tool.result" : "tool.error",
           `${event.tool}: ${event.message}`,
-          { tool: event.tool, ok: event.ok, message: event.message, callId: event.callId, data: event.data },
+          { tool: event.tool, ok: event.ok, message: event.message, callId: event.callId, parentCallId: event.parentCallId, data: event.data },
         );
       case "tool.output":
         // Don't persist per-delta output — too noisy (like tokens).

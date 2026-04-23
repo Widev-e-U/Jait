@@ -7,8 +7,8 @@
  *   { type: "assistant.turn_start", ... }
  *   { type: "assistant.message_delta", data: { deltaContent } }
  *   { type: "assistant.message", data: { content } }
- *   { type: "tool.execution_start", data: { toolCallId, toolName, arguments } }
- *   { type: "tool.execution_complete", data: { toolCallId, success, result?, error? } }
+ *   { type: "tool.execution_start", data: { toolCallId, toolName, arguments, parentToolCallId? } }
+ *   { type: "tool.execution_complete", data: { toolCallId, success, result?, error?, parentToolCallId? } }
  *   { type: "assistant.turn_end", ... }
  */
 
@@ -388,6 +388,9 @@ export class CopilotProvider implements CliProviderAdapter {
       case "tool.execution_start": {
         const toolName = String(data?.["toolName"] ?? "");
         const callId = String(data?.["toolCallId"] ?? uuidv7());
+        const parentCallId = typeof data?.["parentToolCallId"] === "string"
+          ? String(data["parentToolCallId"])
+          : undefined;
         const args = (data?.["arguments"] ?? {}) as Record<string, unknown>;
         this.emit({
           type: "tool.start",
@@ -395,6 +398,7 @@ export class CopilotProvider implements CliProviderAdapter {
           tool: toolName,
           args,
           callId,
+          parentCallId,
         });
         break;
       }
@@ -404,6 +408,9 @@ export class CopilotProvider implements CliProviderAdapter {
         const success = data?.["success"] === true;
         const result = data?.["result"] as Record<string, unknown> | undefined;
         const error = data?.["error"] as Record<string, unknown> | undefined;
+        const parentCallId = typeof data?.["parentToolCallId"] === "string"
+          ? String(data["parentToolCallId"])
+          : undefined;
         const content = String(result?.["content"] ?? error?.["message"] ?? "");
         this.emit({
           type: "tool.result",
@@ -412,6 +419,7 @@ export class CopilotProvider implements CliProviderAdapter {
           ok: success,
           message: content,
           callId,
+          parentCallId,
         });
         break;
       }

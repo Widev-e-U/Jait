@@ -141,4 +141,44 @@ describe('activitiesToMessages', () => {
     })
     expect(messages[0]?.toolCalls?.[0]?.result?.message).toBe('web.search completed')
   })
+
+  it('preserves explicit parent call ancestry from activities', () => {
+    const messages = activitiesToMessages([
+      {
+        id: 'a1',
+        threadId: 't1',
+        kind: 'tool.start',
+        summary: 'Using agent',
+        payload: {
+          callId: 'parent-1',
+          tool: 'agent',
+          args: {
+            description: 'delegate search',
+          },
+        },
+        createdAt: '2026-03-16T00:00:00.000Z',
+      },
+      {
+        id: 'a2',
+        threadId: 't1',
+        kind: 'tool.start',
+        summary: 'Using search',
+        payload: {
+          callId: 'child-1',
+          parentCallId: 'parent-1',
+          tool: 'search',
+          args: {
+            query: 'auth middleware',
+          },
+        },
+        createdAt: '2026-03-16T00:00:01.000Z',
+      },
+    ] as ThreadActivity[])
+
+    expect(messages[0]?.toolCalls?.[1]).toMatchObject({
+      callId: 'child-1',
+      parentCallId: 'parent-1',
+      tool: 'search',
+    })
+  })
 })
