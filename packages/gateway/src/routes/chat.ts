@@ -117,6 +117,7 @@ function buildExternalProviderContextFlow(
 /** Serialized tool call info for DB persistence */
 interface PersistedToolCall {
   callId: string;
+  parentCallId?: string;
   tool: string;
   args: unknown;
   ok: boolean;
@@ -161,16 +162,18 @@ function emitSyntheticSkillToolCall(
   const toolStartEvent = {
     type: "tool_start" as const,
     call_id: toolCall.callId,
+    parent_call_id: toolCall.parentCallId,
     tool: toolCall.tool,
     args: toolCall.args,
   };
   safeWrite(`data: ${JSON.stringify(toolStartEvent)}\n\n`);
   emitToSubscribers(sessionId, toolStartEvent as StreamEvent);
-  accumulateToolStart(sessionId, toolCall.callId, toolCall.tool, toolCall.args);
+  accumulateToolStart(sessionId, toolCall.callId, toolCall.tool, toolCall.args, toolCall.parentCallId);
 
   const toolResultEvent = {
     type: "tool_result" as const,
     call_id: toolCall.callId,
+    parent_call_id: toolCall.parentCallId,
     tool: toolCall.tool,
     ok: true,
     message: toolCall.message,
@@ -435,9 +438,9 @@ function accumulateThinking(sessionId: string, content: string): void {
 }
 
 /** Record a tool call start in the streaming accumulator */
-function accumulateToolStart(sessionId: string, callId: string, tool: string, args: unknown): void {
+function accumulateToolStart(sessionId: string, callId: string, tool: string, args: unknown, parentCallId?: string): void {
   const acc = getOrCreateAccumulator(sessionId);
-  acc.toolCalls.push({ callId, tool, args, ok: true, message: "", startedAt: Date.now() });
+  acc.toolCalls.push({ callId, parentCallId, tool, args, ok: true, message: "", startedAt: Date.now() });
   const last = acc.segments[acc.segments.length - 1];
   if (last?.type === "toolGroup") {
     if (!last.callIds.includes(callId)) {
@@ -497,9 +500,9 @@ type StreamEvent =
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
-  | { type: "tool_start"; tool: string; args: unknown; call_id: string }
+  | { type: "tool_start"; tool: string; args: unknown; call_id: string; parent_call_id?: string }
   | { type: "tool_output"; call_id: string; content: string }
-  | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; data?: unknown }
+  | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; parent_call_id?: string; data?: unknown }
   | { type: "todo_list"; items: { id: number; title: string; status: "not-started" | "in-progress" | "completed" }[] }
   | { type: "context_usage"; system: number; history: number; toolResults: number; tools: number; total: number; limit: number; ratio: number; pruned?: boolean }
   | { type: "done"; session_id: string; prompt_count: number; remaining_prompts: null }
@@ -556,6 +559,7 @@ function mapPendingToolCallsForUI(
 function mapPersistedToolCallsForUI(toolCalls: PersistedToolCall[]): Array<Record<string, unknown>> {
   return toolCalls.map((tc) => ({
     callId: tc.callId,
+    parentCallId: tc.parentCallId,
     tool: tc.tool,
     args: (typeof tc.args === "object" && tc.args !== null ? tc.args : {}),
     status: tc.ok ? "success" : "error",
@@ -1498,6 +1502,7 @@ export function registerChatRoutes(
               // Accumulate for persistence
               cliToolCalls.push({
                 callId,
+                parentCallId: event.parentCallId,
                 tool: event.tool,
                 args: event.args ?? {},
                 ok: true,
@@ -1512,9 +1517,9 @@ export function registerChatRoutes(
                 cliFsSurface.saveExternalBackup(mutationPath).catch(() => {});
               }
 
-              safeWrite(`data: ${JSON.stringify({ type: "tool_start", call_id: callId, tool: event.tool, args: event.args })}\n\n`);
-              emitToSubscribers(sessionId, { type: "tool_start", call_id: callId, tool: event.tool, args: event.args } as unknown as StreamEvent);
-              accumulateToolStart(sessionId, callId, event.tool, event.args ?? {});
+              safeWrite(`data: ${JSON.stringify({ type: "tool_start", call_id: callId, parent_call_id: event.parentCallId, tool: event.tool, args: event.args })}\n\n`);
+              emitToSubscribers(sessionId, { type: "tool_start", call_id: callId, parent_call_id: event.parentCallId, tool: event.tool, args: event.args } as unknown as StreamEvent);
+              accumulateToolStart(sessionId, callId, event.tool, event.args ?? {}, event.parentCallId);
               break;
             }
             case "tool.output": {
@@ -1537,8 +1542,8 @@ export function registerChatRoutes(
                 tc.data = event.data;
                 tc.completedAt = Date.now();
               }
-              safeWrite(`data: ${JSON.stringify({ type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data })}\n\n`);
-              emitToSubscribers(sessionId, { type: "tool_result", call_id: resultCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data } as StreamEvent);
+              safeWrite(`data: ${JSON.stringify({ type: "tool_result", call_id: resultCallId, parent_call_id: event.parentCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data })}\n\n`);
+              emitToSubscribers(sessionId, { type: "tool_result", call_id: resultCallId, parent_call_id: event.parentCallId, tool: event.tool, ok: event.ok, message: event.message, data: event.data } as StreamEvent);
               accumulateToolResult(sessionId, resultCallId, event.ok, event.message || "", event.data);
 
               const todoItems = event.ok
@@ -1772,7 +1777,7 @@ export function registerChatRoutes(
           // ── Update streaming accumulator so reload snapshots include partial content ──
           if (event.type === "token") accumulateToken(sessionId, event.content);
           else if (event.type === "thinking") accumulateThinking(sessionId, event.content);
-          else if (event.type === "tool_start") accumulateToolStart(sessionId, event.call_id, event.tool, event.args);
+          else if (event.type === "tool_start") accumulateToolStart(sessionId, event.call_id, event.tool, event.args, event.parent_call_id);
           else if (event.type === "tool_output") accumulateToolOutput(sessionId, event.call_id, event.content);
           else if (event.type === "tool_result") accumulateToolResult(sessionId, event.call_id, event.ok, event.message, event.data);
 

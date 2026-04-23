@@ -23,6 +23,7 @@ function useAutoScroll(dep: unknown) {
 
 export interface ToolCallInfo {
   callId: string
+  parentCallId?: string
   tool: string
   args: Record<string, unknown>
   status: 'pending' | 'running' | 'success' | 'error'
@@ -1238,16 +1239,25 @@ function PendingToolBody({ tool, streamingArgs, scrollRef }: { tool: string; str
 }
 
 /**
- * Compute parent/child relationships for "agent" tool calls within a flat list.
- * Calls that appear sequentially after an agent tool_start and before its tool_result
- * are considered children of that agent call.
+ * Compute parent/child relationships for tool calls.
+ * Explicit parentCallId edges take priority; agent lifetime heuristics remain
+ * as a fallback for providers that do not emit ancestry metadata.
  */
-function computeAgentNesting(calls: ToolCallInfo[]): {
+export function computeAgentNesting(calls: ToolCallInfo[]): {
   childMap: Map<string, ToolCallInfo[]>
   parentSet: Set<string>
 } {
   const childMap = new Map<string, ToolCallInfo[]>()
   const parentSet = new Set<string>()
+  const callMap = new Map(calls.map((call) => [call.callId, call]))
+
+  for (const call of calls) {
+    if (!call.parentCallId) continue
+    if (!callMap.has(call.parentCallId)) continue
+    const existing = childMap.get(call.parentCallId) ?? []
+    childMap.set(call.parentCallId, [...existing, call])
+    parentSet.add(call.callId)
+  }
 
   for (let i = 0; i < calls.length; i++) {
     const call = calls[i]
@@ -1270,7 +1280,8 @@ function computeAgentNesting(calls: ToolCallInfo[]): {
     }
 
     if (children.length > 0) {
-      childMap.set(call.callId, children)
+      const existing = childMap.get(call.callId) ?? []
+      childMap.set(call.callId, [...existing, ...children])
     }
   }
 

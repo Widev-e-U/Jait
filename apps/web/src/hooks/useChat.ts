@@ -546,6 +546,7 @@ export function useChat(
                   }
                   const callInfo: ToolCallInfo = {
                     callId,
+                    parentCallId: data.parent_call_id as string | undefined,
                     tool: nameDelta,
                     args: {},
                     status: 'pending',
@@ -577,7 +578,7 @@ export function useChat(
                               ...m,
                               toolCalls: m.toolCalls?.map(tc =>
                                 tc.callId === callId
-                                  ? { ...tc, tool: data.tool as string, args: (data.args as Record<string, unknown>) ?? {}, status: 'running' as const, streamingArgs: undefined }
+                                  ? { ...tc, tool: data.tool as string, args: (data.args as Record<string, unknown>) ?? {}, parentCallId: data.parent_call_id as string | undefined, status: 'running' as const, streamingArgs: undefined }
                                   : tc
                               ),
                             }
@@ -587,6 +588,7 @@ export function useChat(
                   }
                   const callInfo: ToolCallInfo = {
                     callId,
+                    parentCallId: data.parent_call_id as string | undefined,
                     tool: data.tool as string,
                     args: (data.args as Record<string, unknown>) ?? {},
                     status: 'running',
@@ -627,6 +629,7 @@ export function useChat(
                         tc.callId === (data.call_id as string)
                           ? {
                               ...tc,
+                              parentCallId: tc.parentCallId ?? (data.parent_call_id as string | undefined),
                               status: (data.ok as boolean) ? 'success' as const : 'error' as const,
                               result: { ok: data.ok as boolean, message: data.message as string, data: data.data as unknown },
                               completedAt: Date.now(),
@@ -973,6 +976,7 @@ export function useChat(
               } else {
                 toolCalls.push({
                   callId,
+                  parentCallId: data.parent_call_id as string | undefined,
                   tool: nameDelta,
                   args: {},
                   status: 'pending',
@@ -991,12 +995,14 @@ export function useChat(
                   ...toolCalls[idx],
                   tool: data.tool as string,
                   args: (data.args as Record<string, unknown>) ?? {},
+                  parentCallId: data.parent_call_id as string | undefined,
                   status: 'running',
                   streamingArgs: undefined,
                 }
               } else {
                 toolCalls.push({
                   callId,
+                  parentCallId: data.parent_call_id as string | undefined,
                   tool: data.tool as string,
                   args: (data.args as Record<string, unknown>) ?? {},
                   status: 'running',
@@ -1019,6 +1025,7 @@ export function useChat(
               if (idx !== -1) {
                 toolCalls[idx] = {
                   ...toolCalls[idx],
+                  parentCallId: toolCalls[idx].parentCallId ?? (data.parent_call_id as string | undefined),
                   status: (data.ok as boolean) ? 'success' : 'error',
                   result: { ok: data.ok as boolean, message: data.message as string, data: data.data as unknown },
                   completedAt: Date.now(),

@@ -94,6 +94,7 @@ export interface LLMConfig {
 /** Persisted record of a tool call execution */
 export interface ExecutedToolCall {
   callId: string;
+  parentCallId?: string;
   tool: string;
   args: unknown;
   ok: boolean;
@@ -110,9 +111,9 @@ export type AgentLoopEvent =
   | { type: "token"; content: string }
   | { type: "thinking"; content: string }
   | { type: "tool_call_delta"; call_id: string; index: number; name_delta?: string; args_delta?: string }
-  | { type: "tool_start"; tool: string; args: unknown; call_id: string }
+  | { type: "tool_start"; tool: string; args: unknown; call_id: string; parent_call_id?: string }
   | { type: "tool_output"; call_id: string; content: string }
-  | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; data?: unknown }
+  | { type: "tool_result"; call_id: string; tool: string; ok: boolean; message: string; parent_call_id?: string; data?: unknown }
   | { type: "tool_retry"; call_id: string; attempt: number; maxAttempts: number }
   | { type: "tool_validation_error"; call_id: string; tool: string; errors: string[] }
   | { type: "steering"; message: string }

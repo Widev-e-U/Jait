@@ -5,6 +5,7 @@ let shouldInitiallyCollapseToolCallGroup: typeof import('./tool-call-card')['sho
 let shouldInitiallyCollapseAgentToolCallWrapper: typeof import('./tool-call-card')['shouldInitiallyCollapseAgentToolCallWrapper']
 let isInlineToolCall: typeof import('./tool-call-card')['isInlineToolCall']
 let summarizeCollapsedToolCalls: typeof import('./tool-call-card')['summarizeCollapsedToolCalls']
+let computeAgentNesting: typeof import('./tool-call-card')['computeAgentNesting']
 
 beforeAll(async () => {
   ;(globalThis as typeof globalThis & { window?: unknown }).window = {
@@ -21,6 +22,7 @@ beforeAll(async () => {
     shouldInitiallyCollapseAgentToolCallWrapper,
     isInlineToolCall,
     summarizeCollapsedToolCalls,
+    computeAgentNesting,
   } = await import('./tool-call-card'))
 }, 30_000)
 
@@ -114,6 +116,18 @@ describe('AgentToolCallWrapper', () => {
       ],
       true,
     )).toBe(false)
+  })
+
+  it('prefers explicit parent call ancestry when present', () => {
+    const nested = computeAgentNesting([
+      { callId: 'agent-1', tool: 'agent', args: { description: 'delegate task' }, status: 'success', startedAt: 1, completedAt: 10 },
+      { callId: 'read-1', parentCallId: 'agent-1', tool: 'read', args: { path: 'a.ts' }, status: 'success', startedAt: 2, completedAt: 3 },
+      { callId: 'search-1', parentCallId: 'agent-1', tool: 'search', args: { query: 'needle' }, status: 'success', startedAt: 4, completedAt: 5 },
+    ])
+
+    expect(nested.parentSet.has('read-1')).toBe(true)
+    expect(nested.parentSet.has('search-1')).toBe(true)
+    expect(nested.childMap.get('agent-1')?.map(call => call.callId)).toEqual(['read-1', 'search-1'])
   })
 })
 
