@@ -4004,6 +4004,10 @@ function App() {
   }, [ensureActiveTerminal, openTerminalPanel])
 
   const handleMobileWorkspaceTargetAction = useCallback(async (target: MobileWorkspaceTarget) => {
+    if (showSidebar) {
+      setShowSidebar(false)
+    }
+
     const controlState = {
       showWorkspace,
       showTerminal,
@@ -4043,7 +4047,7 @@ function App() {
     }
 
     showMobileWorkspaceTreeTab(target)
-  }, [closeTerminalPanel, closeWorkspacePanel, ensureActiveTerminal, handleToggleEditor, mobileTreeTab, openTerminalPanel, setCurrentView, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree])
+  }, [closeTerminalPanel, closeWorkspacePanel, ensureActiveTerminal, handleToggleEditor, mobileTreeTab, openTerminalPanel, setCurrentView, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, showSidebar, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree])
 
   const handleReferenceFile = useCallback((file: ReferencedFile) => {
     promptInputRef.current?.insertChip(file)
