@@ -131,6 +131,8 @@ describe("plan generation provider selection", () => {
     expect(stubProvider.lastStartOptions?.workingDirectory).toBe(repo.localPath);
     expect(stubProvider.lastStartOptions?.model).toBe("gpt-5-codex");
     expect(stubProvider.lastMessage).toContain("Output ONLY the JSON array");
+    expect(stubProvider.lastMessage).not.toContain("skillCandidate");
+    expect(stubProvider.lastMessage).not.toContain("reusable skill");
 
     const body = res.json() as { generated: number; plan: { tasks: Array<{ title: string; description: string }> } };
     expect(body.generated).toBe(1);

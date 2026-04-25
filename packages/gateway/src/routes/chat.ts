@@ -1645,10 +1645,10 @@ export function registerChatRoutes(
             requestProvider,
             typeof body["model"] === "string" ? body["model"] : undefined,
             setupContent,
-            isNewCliSession ? currentSystemPrompt : null,
+            currentSystemPrompt,
             content,
             sentAt,
-            "CLI providers keep their own session context. This captures the Jait setup metadata, the Jait system prompt when Jait sent it, and the user turn content.",
+            "CLI providers keep their own session context. This captures the Jait setup metadata, the current Jait session system prompt, and the user turn content. On reused CLI sessions, the system prompt is shown for inspection even though it was only sent when Jait initialized or recovered the provider session.",
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
           safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);

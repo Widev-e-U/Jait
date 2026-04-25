@@ -216,6 +216,51 @@ describe("chat external provider runtime mode selection", () => {
     await app.close();
   });
 
+  it("includes the Jait system prompt in external-provider context trace for reused sessions", { timeout: 30_000 }, async () => {
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer(testConfig, { providerRegistry });
+    const headers = await authHeaders();
+
+    const sessionId = "chat-reused-system-prompt-trace-session";
+    await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "first turn",
+        sessionId,
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "second turn",
+        sessionId,
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+    expect(provider.startSession).toHaveBeenCalledTimes(1);
+
+    const secondTurnMessage = provider.sendTurn.mock.calls[1]?.[1];
+    expect(secondTurnMessage).toBe("second turn");
+    expect(response.body).toContain("session=reused");
+    expect(response.body).toContain("\"role\":\"system\"");
+    expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
+    expect(response.body).toContain("shown for inspection even though it was only sent");
+
+    await app.close();
+  });
+
   it("persists and streams todo_list updates from Codex todo completions", { timeout: 30_000 }, async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
