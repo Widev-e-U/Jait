@@ -7408,15 +7408,11 @@ function App() {
                   draggable={false}
                   onDragStart={(event) => event.preventDefault()}
                 >
-                  <div
-                    className={`transition-all duration-200 ${
-                      showMobileToolbar
-                        ? 'translate-x-0 opacity-100'
-                        : 'pointer-events-none translate-x-2 opacity-0'
-                    }`}
-                  >
-                    {mobileFooterToolbarControls}
-                  </div>
+                  {showMobileToolbar && (
+                    <div className="transition-all duration-200 translate-x-0 opacity-100">
+                      {mobileFooterToolbarControls}
+                    </div>
+                  )}
                   <Button
                     type="button"
                     variant="secondary"
