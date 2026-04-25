@@ -403,67 +403,6 @@ export function SettingsPage({
         </TabsList>
 
         <TabsContent value="general" className="space-y-6">
-          {showThemeSection && (
-            <Card className="space-y-4 p-5">
-              <div>
-                <h2 className="text-base font-medium">{highlight('Editor theme')}</h2>
-                <p className="text-sm text-muted-foreground">
-                  Import a VS Code theme JSON file and apply its Monaco token colors plus a mapped shell palette.
-                </p>
-              </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".json,application/json"
-                  className="hidden"
-                  onChange={(event) => { void handleThemeImport(event) }}
-                />
-                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
-                  Import theme JSON
-                </Button>
-                <Button variant="ghost" size="sm" disabled={!activeTheme} onClick={() => setActiveVsCodeTheme(null)}>
-                  Use built-in theme
-                </Button>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Imported themes stay local to this device. The quick light/system/dark toggle falls back to the built-in theme set.
-              </p>
-              {importedThemes.length > 0 ? (
-                <div className="space-y-2">
-                  {importedThemes.map((theme) => {
-                    const isActive = activeTheme?.id === theme.id
-                    return (
-                      <div key={theme.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
-                        <div className="min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="truncate text-sm font-medium">{theme.name}</p>
-                            <Badge variant={isActive ? 'default' : 'outline'} className="h-5 px-1.5 text-2xs">
-                              {isActive ? 'active' : theme.colorMode}
-                            </Badge>
-                          </div>
-                          <p className="truncate text-xs text-muted-foreground">{theme.sourceLabel}</p>
-                        </div>
-                        <div className="flex shrink-0 items-center gap-2">
-                          {!isActive && (
-                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setActiveVsCodeTheme(theme.id)}>
-                              Apply
-                            </Button>
-                          )}
-                          <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => removeVsCodeTheme(theme.id)}>
-                            Remove
-                          </Button>
-                        </div>
-                      </div>
-                    )
-                  })}
-                </div>
-              ) : (
-                <p className="text-sm text-muted-foreground">No imported themes yet.</p>
-              )}
-            </Card>
-          )}
-
           {showUpdateSection && (
             <Card className="space-y-4 p-5">
               <div>
@@ -525,6 +464,67 @@ export function SettingsPage({
                   <AlertCircle className="h-3.5 w-3.5" />
                   Version {updateInfo.latestVersion} is available{platform !== 'web' ? ' — download from jait.dev' : ''}.
                 </p>
+              )}
+            </Card>
+          )}
+
+          {showThemeSection && (
+            <Card className="space-y-4 p-5">
+              <div>
+                <h2 className="text-base font-medium">{highlight('Editor theme')}</h2>
+                <p className="text-sm text-muted-foreground">
+                  Import a VS Code theme JSON file and apply its Monaco token colors plus a mapped shell palette.
+                </p>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".json,application/json"
+                  className="hidden"
+                  onChange={(event) => { void handleThemeImport(event) }}
+                />
+                <Button variant="outline" size="sm" onClick={() => fileInputRef.current?.click()}>
+                  Import theme JSON
+                </Button>
+                <Button variant="ghost" size="sm" disabled={!activeTheme} onClick={() => setActiveVsCodeTheme(null)}>
+                  Use built-in theme
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Imported themes stay local to this device. The quick light/system/dark toggle falls back to the built-in theme set.
+              </p>
+              {importedThemes.length > 0 ? (
+                <div className="space-y-2">
+                  {importedThemes.map((theme) => {
+                    const isActive = activeTheme?.id === theme.id
+                    return (
+                      <div key={theme.id} className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2">
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="truncate text-sm font-medium">{theme.name}</p>
+                            <Badge variant={isActive ? 'default' : 'outline'} className="h-5 px-1.5 text-2xs">
+                              {isActive ? 'active' : theme.colorMode}
+                            </Badge>
+                          </div>
+                          <p className="truncate text-xs text-muted-foreground">{theme.sourceLabel}</p>
+                        </div>
+                        <div className="flex shrink-0 items-center gap-2">
+                          {!isActive && (
+                            <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setActiveVsCodeTheme(theme.id)}>
+                              Apply
+                            </Button>
+                          )}
+                          <Button variant="ghost" size="sm" className="h-7 text-xs text-destructive hover:text-destructive" onClick={() => removeVsCodeTheme(theme.id)}>
+                            Remove
+                          </Button>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <p className="text-sm text-muted-foreground">No imported themes yet.</p>
               )}
             </Card>
           )}
@@ -594,11 +594,11 @@ export function SettingsPage({
                   Restore or permanently remove archived workspaces and their sessions.
                 </p>
               </div>
-              <div className="flex gap-2">
-                <Button variant="outline" onClick={() => { void loadArchivedWorkspaces() }} disabled={loadingArchived}>
+              <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
+                <Button className="w-full sm:w-auto" variant="outline" onClick={() => { void loadArchivedWorkspaces() }} disabled={loadingArchived}>
                   {loadingArchived ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Loading...</> : 'Show archived workspaces'}
                 </Button>
-                <Button variant="destructive" onClick={() => { void handleClearArchivedWorkspaces() }} disabled={clearingWorkspaces}>
+                <Button className="w-full sm:w-auto" variant="destructive" onClick={() => { void handleClearArchivedWorkspaces() }} disabled={clearingWorkspaces}>
                   {clearingWorkspaces ? 'Clearing...' : 'Clear all archived'}
                 </Button>
               </div>
