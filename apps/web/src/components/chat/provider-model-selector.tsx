@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search } from 'lucide-react'
+import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, LogOut, Copy, ExternalLink } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import Gemini from '@lobehub/icons/es/Gemini'
@@ -111,10 +111,20 @@ export function ProviderModelSelector({
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [currentBackend, setCurrentBackend] = useState<string | null>(null)
+  const [authBusy, setAuthBusy] = useState<{ providerId: ProviderId; action: 'login' | 'logout' } | null>(null)
+  const [authMessage, setAuthMessage] = useState<{
+    providerId: ProviderId
+    tone: 'success' | 'error'
+    message: string
+    userCode?: string
+    verificationUri?: string
+    copied?: boolean
+  } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  useEffect(() => {
-    agentsApi.listProviders()
+  const refreshProviders = (fresh = false) => {
+    const request = fresh ? agentsApi.listProvidersFresh() : agentsApi.listProviders()
+    request
       .then(({ providers, remoteProviders: remote }) => {
         const map: Record<string, ProviderInfo> = {}
         for (const item of providers) map[item.id] = item
@@ -122,7 +132,96 @@ export function ProviderModelSelector({
         setRemoteProviders(remote)
       })
       .catch(() => {})
+  }
+
+  useEffect(() => {
+    refreshProviders()
   }, [])
+
+  const copyCode = async (providerId: ProviderId, code: string) => {
+    try {
+      await navigator.clipboard.writeText(code)
+      setAuthMessage((prev) => prev && prev.providerId === providerId ? { ...prev, copied: true } : prev)
+    } catch {
+      setAuthMessage((prev) => prev && prev.providerId === providerId ? { ...prev, copied: false } : prev)
+    }
+  }
+
+  const startLogin = async (providerId: ProviderId, label: string) => {
+    if (authBusy) return
+    let authWindow: Window | null = null
+    try {
+      authWindow = window.open('about:blank', '_blank')
+    } catch {
+      authWindow = null
+    }
+    setAuthBusy({ providerId, action: 'login' })
+    setAuthMessage(null)
+    try {
+      const result = await agentsApi.startProviderLogin(providerId)
+      if (result.verificationUri) {
+        if (authWindow) {
+          authWindow.location.href = result.verificationUri
+        } else {
+          window.open(result.verificationUri, '_blank', 'noopener,noreferrer')
+        }
+      } else {
+        authWindow?.close()
+      }
+      let copied = false
+      if (result.userCode) {
+        try {
+          await navigator.clipboard.writeText(result.userCode)
+          copied = true
+        } catch {
+          copied = false
+        }
+      }
+      setAuthMessage({
+        providerId,
+        tone: 'success',
+        message: result.userCode
+          ? `${label} login started. Device code ${copied ? 'copied to clipboard.' : 'is ready to copy.'}`
+          : result.message,
+        userCode: result.userCode,
+        verificationUri: result.verificationUri,
+        copied,
+      })
+      refreshProviders(true)
+    } catch (error) {
+      authWindow?.close()
+      setAuthMessage({
+        providerId,
+        tone: 'error',
+        message: error instanceof Error ? error.message : `Failed to start ${label} login.`,
+      })
+    } finally {
+      setAuthBusy(null)
+    }
+  }
+
+  const logoutProvider = async (providerId: ProviderId, label: string) => {
+    if (authBusy) return
+    setAuthBusy({ providerId, action: 'logout' })
+    setAuthMessage(null)
+    try {
+      const result = await agentsApi.logoutProvider(providerId)
+      setAuthMessage({
+        providerId,
+        tone: 'success',
+        message: result.message || `${label} logout completed.`,
+      })
+      refreshProviders(true)
+    } catch (error) {
+      setAuthMessage({
+        providerId,
+        tone: 'error',
+        message: error instanceof Error ? error.message : `Failed to log out from ${label}.`,
+      })
+    } finally {
+      setAuthBusy(null)
+    }
+  }
 
   useEffect(() => {
     if (!open) return
@@ -227,7 +326,7 @@ export function ProviderModelSelector({
         nodeLabel = !status?.available && remoteNode ? remoteNode.nodeName : 'Gateway'
       }
 
-      return { ...item, isAvailable, reason, nodeLabel }
+      return { ...item, isAvailable, reason, nodeLabel, auth: status?.auth }
     })
   }, [providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToWorkspaceNode, wsRemoteNode])
 
@@ -359,42 +458,119 @@ export function ProviderModelSelector({
           {providerEntries.map((entry) => {
             const Icon = entry.icon
             const active = entry.value === provider
+            const showLocalAuthActions = Boolean(entry.auth?.login || entry.auth?.logout) && !scopedToWorkspaceNode && (!scopedToRepo || repoIsGateway)
+            const busyForProvider = authBusy?.providerId === entry.value ? authBusy.action : null
+            const providerAuthMessage = authMessage?.providerId === entry.value ? authMessage : null
             return (
-              <button
-                key={entry.value}
-                type="button"
-                onClick={() => handleProviderSelect(entry.value)}
-                disabled={!entry.isAvailable}
-                className={cn(
-                  'flex w-full items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
-                  'hover:bg-accent hover:text-accent-foreground',
-                  active && 'bg-accent/50',
-                  !entry.isAvailable && 'cursor-not-allowed opacity-60',
+              <div key={entry.value} className={cn('rounded-sm', active && 'bg-accent/50')}>
+                <button
+                  type="button"
+                  onClick={() => handleProviderSelect(entry.value)}
+                  disabled={!entry.isAvailable}
+                  className={cn(
+                    'flex w-full items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
+                    'hover:bg-accent hover:text-accent-foreground',
+                    !entry.isAvailable && 'cursor-not-allowed opacity-60',
+                  )}
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                      {entry.label}
+                      {entry.isAvailable && entry.nodeLabel && (
+                        <span className="flex items-center gap-0.5 text-2xs text-muted-foreground">
+                          <Monitor className="h-3 w-3" />
+                          {entry.nodeLabel}
+                        </span>
+                      )}
+                      {!entry.isAvailable && (
+                        <span className="flex items-center gap-0.5 text-2xs text-destructive/80">
+                          <AlertTriangle className="h-3 w-3" />
+                          {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
+                        </span>
+                      )}
+                      {entry.auth && entry.auth.authenticated === true && (
+                        <span className="text-2xs text-emerald-600 dark:text-emerald-400">signed in</span>
+                      )}
+                    </div>
+                    <div className="text-xs leading-snug text-muted-foreground">
+                      {!entry.isAvailable && entry.reason ? entry.reason : entry.description}
+                    </div>
+                  </div>
+                  {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+                </button>
+                {showLocalAuthActions && (
+                  <div className="ml-8 mr-2 mb-2 space-y-2">
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      {entry.auth?.login && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void startLogin(entry.value, entry.label)
+                          }}
+                          disabled={Boolean(authBusy)}
+                          className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-background px-2 text-2xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                        >
+                          {busyForProvider === 'login' ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogIn className="h-3 w-3" />}
+                          Login
+                        </button>
+                      )}
+                      {entry.auth?.logout && (
+                        <button
+                          type="button"
+                          onClick={(event) => {
+                            event.preventDefault()
+                            event.stopPropagation()
+                            void logoutProvider(entry.value, entry.label)
+                          }}
+                          disabled={Boolean(authBusy)}
+                          className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-background px-2 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
+                        >
+                          {busyForProvider === 'logout' ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogOut className="h-3 w-3" />}
+                          Logout
+                        </button>
+                      )}
+                    </div>
+                    {providerAuthMessage && (
+                      <div className={cn(
+                        'rounded-md border px-2 py-1.5 text-xs leading-snug',
+                        providerAuthMessage.tone === 'success'
+                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                          : 'border-destructive/25 bg-destructive/10 text-destructive',
+                      )}>
+                        <div>{providerAuthMessage.message}</div>
+                        {providerAuthMessage.userCode && (
+                          <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
+                            <code className="min-w-0 flex-1 rounded bg-background/80 px-1.5 py-1 font-mono text-xs [overflow-wrap:anywhere]">
+                              {providerAuthMessage.userCode}
+                            </code>
+                            <button
+                              type="button"
+                              onClick={() => void copyCode(entry.value, providerAuthMessage.userCode!)}
+                              className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-background px-2 text-2xs font-medium text-foreground hover:bg-muted"
+                            >
+                              <Copy className="h-3 w-3" />
+                              {providerAuthMessage.copied ? 'Copied' : 'Copy'}
+                            </button>
+                          </div>
+                        )}
+                        {providerAuthMessage.verificationUri && (
+                          <button
+                            type="button"
+                            onClick={() => window.open(providerAuthMessage.verificationUri, '_blank', 'noopener,noreferrer')}
+                            className="mt-1.5 inline-flex items-center gap-1 text-2xs font-medium underline-offset-2 hover:underline"
+                          >
+                            <ExternalLink className="h-3 w-3" />
+                            Open login page
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
-              >
-                <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 text-sm font-medium">
-                    {entry.label}
-                    {entry.isAvailable && entry.nodeLabel && (
-                      <span className="flex items-center gap-0.5 text-2xs text-muted-foreground">
-                        <Monitor className="h-3 w-3" />
-                        {entry.nodeLabel}
-                      </span>
-                    )}
-                    {!entry.isAvailable && (
-                      <span className="flex items-center gap-0.5 text-2xs text-destructive/80">
-                        <AlertTriangle className="h-3 w-3" />
-                        {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
-                      </span>
-                    )}
-                  </div>
-                  <div className="text-xs leading-snug text-muted-foreground">
-                    {!entry.isAvailable && entry.reason ? entry.reason : entry.description}
-                  </div>
-                </div>
-                {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
-              </button>
+              </div>
             )
           })}
           {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && onMoveToGateway && (
