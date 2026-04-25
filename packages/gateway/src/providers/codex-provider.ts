@@ -15,7 +15,7 @@
 
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import readline from "node:readline";
@@ -135,20 +135,37 @@ export class CodexProvider implements CliProviderAdapter {
     }
   }
 
-  /**
-   * Check if ~/.codex/auth.json (or CODEX_HOME/auth.json) contains OAuth tokens.
-   */
-  private checkCodexAuthFile(): boolean {
+  private getCodexAuthPath(): string {
+    const codexHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
+    return join(codexHome, "auth.json");
+  }
+
+  private readCodexAuthFile(): {
+    OPENAI_API_KEY?: string | null;
+    tokens?: { access_token?: string | null };
+    [key: string]: unknown;
+  } | null {
     try {
-      const codexHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
-      const authPath = join(codexHome, "auth.json");
-      if (!existsSync(authPath)) return false;
+      const authPath = this.getCodexAuthPath();
+      if (!existsSync(authPath)) return null;
       const raw = readFileSync(authPath, "utf-8");
-      const auth = JSON.parse(raw) as {
+      return JSON.parse(raw) as {
         OPENAI_API_KEY?: string | null;
         tokens?: { access_token?: string | null };
+        [key: string]: unknown;
       };
-      // Has an API key stored in auth.json, or has OAuth tokens
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Check if ~/.codex/auth.json (or CODEX_HOME/auth.json) contains Codex CLI credentials.
+   */
+  private checkCodexAuthFile(): boolean {
+    const auth = this.readCodexAuthFile();
+    if (!auth) return false;
+    try {
       if (auth.OPENAI_API_KEY) return true;
       if (auth.tokens?.access_token) return true;
       return false;
@@ -157,12 +174,34 @@ export class CodexProvider implements CliProviderAdapter {
     }
   }
 
+  private clearCodexAuthFile(): boolean {
+    const auth = this.readCodexAuthFile();
+    if (!auth) return true;
+
+    delete auth.OPENAI_API_KEY;
+    delete auth.tokens;
+
+    const remaining = Object.entries(auth).filter(([, value]) => value !== undefined && value !== null);
+    try {
+      if (remaining.length === 0) {
+        unlinkSync(this.getCodexAuthPath());
+      } else {
+        writeFileSync(this.getCodexAuthPath(), `${JSON.stringify(Object.fromEntries(remaining), null, 2)}\n`, "utf-8");
+      }
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
   async getAuthStatus(): Promise<ProviderAuthStatus> {
-    const authenticated = !!process.env.OPENAI_API_KEY || this.checkCodexAuthFile();
+    const authenticated = this.checkCodexAuthFile();
     return {
       ...DEVICE_PROVIDER_AUTH,
       authenticated,
-      detail: authenticated ? "Codex credentials are configured." : "Codex is not authenticated.",
+      detail: authenticated
+        ? "Codex CLI credentials are configured."
+        : "Codex CLI is not authenticated.",
     };
   }
 
@@ -194,10 +233,17 @@ export class CodexProvider implements CliProviderAdapter {
       this.authLoginProcess = null;
     }
     const result = await runAuthCommand(this.id, this.codexPath ?? "codex", ["logout"]);
+    const cleared = result.ok ? this.clearCodexAuthFile() : true;
     await this.checkAvailability().catch(() => false);
     return {
       ...result,
-      message: result.ok ? "Codex logout completed." : result.message,
+      ok: result.ok && cleared,
+      status: result.ok && cleared ? result.status : "error",
+      message: result.ok
+        ? cleared
+          ? "Codex logout completed."
+          : "Codex logout ran, but stored credentials could not be removed."
+        : result.message,
     };
   }
 
