@@ -1242,6 +1242,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const canMaximizeActiveTab = Boolean(activeTab)
   const effectiveShowTree = showTreeProp && !tabMaximized && !panel.collapsed && !tree.collapsed
   const effectiveShowEditor = (showEditorProp || tabMaximized) && !panel.collapsed
+  const ensureEditorVisible = useCallback(() => {
+    if (!showEditorProp && onToggleEditor) onToggleEditor()
+  }, [onToggleEditor, showEditorProp])
   useEffect(() => {
     if (activeTab) return
     setTabMaximized(false)
@@ -2644,6 +2647,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const handleOpenFileByPath = useCallback(async (path: string): Promise<boolean> => {
     const targetPath = normalizePath(path)
+    ensureEditorVisible()
     const rootPath = remoteRoot ? normalizePath(remoteRoot) : null
     const parts = rootPath && (targetPath === rootPath || targetPath.startsWith(`${rootPath}/`))
       ? targetPath.slice(rootPath.length).replace(/^\/+/, '').split('/').filter(Boolean)
@@ -2719,7 +2723,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
     setLoadingFile(false)
     return true
-  }, [bumpTree, lazyTree, loadTabReviewBaseline, onActiveFileChange, remoteRoot, setTabLoadedContent, surfaceId])
+  }, [bumpTree, ensureEditorVisible, lazyTree, loadTabReviewBaseline, onActiveFileChange, remoteRoot, setTabLoadedContent, surfaceId])
 
   /* ---- Toggle directory ---- */
   const handleToggleDir = useCallback(async (node: LazyDir) => {
@@ -2748,6 +2752,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- Select native file ---- */
   const handleSelectNativeFile = useCallback(async (node: LazyFile) => {
+    ensureEditorVisible()
     const tabId = `file:${node.path}`
     // If tab already open, just activate it
     setOpenTabs(prev => {
@@ -2781,7 +2786,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       setTabLoadedContent(tabId, '// Failed to read file')
     }
     setLoadingFile(false)
-  }, [loadTabReviewBaseline, onActiveFileChange, setTabLoadedContent, surfaceId])
+  }, [ensureEditorVisible, loadTabReviewBaseline, onActiveFileChange, setTabLoadedContent, surfaceId])
 
   const handleSelectNativeFileFromTree = useCallback((node: LazyFile) => {
     if (consumeSuppressedTreeClick()) return
@@ -3797,6 +3802,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const handleSelectExtFile = useCallback((id: string) => {
     const extFile = files.find(f => f.id === id)
     if (!extFile) return
+    ensureEditorVisible()
     const tabId = `ext:${id}`
     setOpenTabs(prev => {
       const existing = prev.find(t => t.id === tabId)
@@ -3816,7 +3822,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     setActiveNativePath(null)
     setPreviewContent(null)
     onActiveFileChange(id)
-  }, [onActiveFileChange, files])
+  }, [ensureEditorVisible, onActiveFileChange, files])
 
   /* ---- Tab management ---- */
   const handleCloseTab = useCallback((tabId: string, options?: CloseTabOptions) => {
@@ -5197,7 +5203,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       className={cn(
         'bg-muted/20 flex min-h-0',
         panel.maxCollapsed ? 'flex-1' : 'shrink-0',
-        tabMaximized ? 'z-30 border-r shadow-2xl' : !panel.maxCollapsed && 'border-r',
+        tabMaximized ? 'z-30 border-r shadow-2xl' : !panel.maxCollapsed && showEditorProp && 'border-r',
       )}
       style={getDesktopWorkspacePanelStyle({
         showTree: showTreeProp,
@@ -6171,6 +6177,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       )}
 
       {/* Resize handle: panel ↔ chat (right edge) */}
+      {showEditorProp && (
       <div
         className={`${tabMaximized && !panel.collapsed
           ? 'absolute right-0 inset-y-0 w-2 z-30'
@@ -6184,6 +6191,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         <style>{`.sash-handle:hover > div { background-color: hsl(var(--primary) / 0.4) !important; transition-delay: 300ms; }
 .sash-handle:active > div { background-color: hsl(var(--primary) / 0.5) !important; transition-delay: 0ms; }`}</style>
       </div>
+      )}
     </aside>
   )
 })

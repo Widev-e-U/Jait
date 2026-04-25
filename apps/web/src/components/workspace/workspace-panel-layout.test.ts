@@ -27,6 +27,18 @@ describe('workspace panel desktop layout', () => {
     })
   })
 
+  it('uses only the tree width when the editor is hidden', () => {
+    expect(getDesktopWorkspacePanelStyle({
+      showTree: true,
+      showEditor: false,
+      panelSize: 720,
+      treeSize: 260,
+    })).toEqual({
+      width: 260,
+      maxWidth: '70vw',
+    })
+  })
+
   it('preserves the in-flow panel width for maximized tabs', () => {
     expect(getDesktopWorkspacePanelStyle({
       showTree: true,
