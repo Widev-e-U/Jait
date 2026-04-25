@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
-import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, LogOut, Copy, ExternalLink } from 'lucide-react'
+import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
 import Gemini from '@lobehub/icons/es/Gemini'
 import Copilot from '@lobehub/icons/es/Copilot'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 import { agentsApi, type ProviderId, type ProviderInfo, type RemoteProviderInfo } from '@/lib/agents-api'
 import type { RepositoryRuntimeInfo } from '@/lib/automation-repositories'
@@ -111,10 +113,11 @@ export function ProviderModelSelector({
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
   const [currentBackend, setCurrentBackend] = useState<string | null>(null)
-  const [authBusy, setAuthBusy] = useState<{ providerId: ProviderId; action: 'login' | 'logout' } | null>(null)
-  const [authMessage, setAuthMessage] = useState<{
+  const [authBusyProvider, setAuthBusyProvider] = useState<ProviderId | null>(null)
+  const [loginDialog, setLoginDialog] = useState<{
     providerId: ProviderId
-    tone: 'success' | 'error'
+    label: string
+    tone: 'loading' | 'success' | 'error'
     message: string
     userCode?: string
     verificationUri?: string
@@ -141,33 +144,24 @@ export function ProviderModelSelector({
   const copyCode = async (providerId: ProviderId, code: string) => {
     try {
       await navigator.clipboard.writeText(code)
-      setAuthMessage((prev) => prev && prev.providerId === providerId ? { ...prev, copied: true } : prev)
+      setLoginDialog((prev) => prev && prev.providerId === providerId ? { ...prev, copied: true } : prev)
     } catch {
-      setAuthMessage((prev) => prev && prev.providerId === providerId ? { ...prev, copied: false } : prev)
+      setLoginDialog((prev) => prev && prev.providerId === providerId ? { ...prev, copied: false } : prev)
     }
   }
 
   const startLogin = async (providerId: ProviderId, label: string) => {
-    if (authBusy) return
-    let authWindow: Window | null = null
-    try {
-      authWindow = window.open('about:blank', '_blank')
-    } catch {
-      authWindow = null
-    }
-    setAuthBusy({ providerId, action: 'login' })
-    setAuthMessage(null)
+    if (authBusyProvider) return
+    setOpen(false)
+    setAuthBusyProvider(providerId)
+    setLoginDialog({
+      providerId,
+      label,
+      tone: 'loading',
+      message: `Starting ${label} login...`,
+    })
     try {
       const result = await agentsApi.startProviderLogin(providerId)
-      if (result.verificationUri) {
-        if (authWindow) {
-          authWindow.location.href = result.verificationUri
-        } else {
-          window.open(result.verificationUri, '_blank', 'noopener,noreferrer')
-        }
-      } else {
-        authWindow?.close()
-      }
       let copied = false
       if (result.userCode) {
         try {
@@ -177,11 +171,12 @@ export function ProviderModelSelector({
           copied = false
         }
       }
-      setAuthMessage({
+      setLoginDialog({
         providerId,
+        label,
         tone: 'success',
         message: result.userCode
-          ? `${label} login started. Device code ${copied ? 'copied to clipboard.' : 'is ready to copy.'}`
+          ? `Device code ${copied ? 'copied to clipboard.' : 'is ready to copy.'}`
           : result.message,
         userCode: result.userCode,
         verificationUri: result.verificationUri,
@@ -189,37 +184,14 @@ export function ProviderModelSelector({
       })
       refreshProviders(true)
     } catch (error) {
-      authWindow?.close()
-      setAuthMessage({
+      setLoginDialog({
         providerId,
+        label,
         tone: 'error',
         message: error instanceof Error ? error.message : `Failed to start ${label} login.`,
       })
     } finally {
-      setAuthBusy(null)
-    }
-  }
-
-  const logoutProvider = async (providerId: ProviderId, label: string) => {
-    if (authBusy) return
-    setAuthBusy({ providerId, action: 'logout' })
-    setAuthMessage(null)
-    try {
-      const result = await agentsApi.logoutProvider(providerId)
-      setAuthMessage({
-        providerId,
-        tone: 'success',
-        message: result.message || `${label} logout completed.`,
-      })
-      refreshProviders(true)
-    } catch (error) {
-      setAuthMessage({
-        providerId,
-        tone: 'error',
-        message: error instanceof Error ? error.message : `Failed to log out from ${label}.`,
-      })
-    } finally {
-      setAuthBusy(null)
+      setAuthBusyProvider(null)
     }
   }
 
@@ -393,6 +365,7 @@ export function ProviderModelSelector({
   }
 
   return (
+    <>
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild disabled={disabled}>
         <button
@@ -458,9 +431,8 @@ export function ProviderModelSelector({
           {providerEntries.map((entry) => {
             const Icon = entry.icon
             const active = entry.value === provider
-            const showLocalAuthActions = Boolean(entry.auth?.login || entry.auth?.logout) && !scopedToWorkspaceNode && (!scopedToRepo || repoIsGateway)
-            const busyForProvider = authBusy?.providerId === entry.value ? authBusy.action : null
-            const providerAuthMessage = authMessage?.providerId === entry.value ? authMessage : null
+            const showLoginAction = Boolean(entry.auth?.login) && entry.auth?.authenticated !== true && !scopedToWorkspaceNode && (!scopedToRepo || repoIsGateway)
+            const loginBusy = authBusyProvider === entry.value
             return (
               <div key={entry.value} className={cn('rounded-sm', active && 'bg-accent/50')}>
                 <button
@@ -499,75 +471,22 @@ export function ProviderModelSelector({
                   </div>
                   {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
                 </button>
-                {showLocalAuthActions && (
-                  <div className="ml-8 mr-2 mb-2 space-y-2">
-                    <div className="flex flex-wrap items-center gap-1.5">
-                      {entry.auth?.login && (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            void startLogin(entry.value, entry.label)
-                          }}
-                          disabled={Boolean(authBusy)}
-                          className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-background px-2 text-2xs font-medium text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                        >
-                          {busyForProvider === 'login' ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogIn className="h-3 w-3" />}
-                          Login
-                        </button>
-                      )}
-                      {entry.auth?.logout && (
-                        <button
-                          type="button"
-                          onClick={(event) => {
-                            event.preventDefault()
-                            event.stopPropagation()
-                            void logoutProvider(entry.value, entry.label)
-                          }}
-                          disabled={Boolean(authBusy)}
-                          className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-background px-2 text-2xs font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-50"
-                        >
-                          {busyForProvider === 'logout' ? <Loader2 className="h-3 w-3 animate-spin" /> : <LogOut className="h-3 w-3" />}
-                          Logout
-                        </button>
-                      )}
-                    </div>
-                    {providerAuthMessage && (
-                      <div className={cn(
-                        'rounded-md border px-2 py-1.5 text-xs leading-snug',
-                        providerAuthMessage.tone === 'success'
-                          ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                          : 'border-destructive/25 bg-destructive/10 text-destructive',
-                      )}>
-                        <div>{providerAuthMessage.message}</div>
-                        {providerAuthMessage.userCode && (
-                          <div className="mt-1.5 flex min-w-0 items-center gap-1.5">
-                            <code className="min-w-0 flex-1 rounded bg-background/80 px-1.5 py-1 font-mono text-xs [overflow-wrap:anywhere]">
-                              {providerAuthMessage.userCode}
-                            </code>
-                            <button
-                              type="button"
-                              onClick={() => void copyCode(entry.value, providerAuthMessage.userCode!)}
-                              className="inline-flex h-6 items-center gap-1 rounded-md border border-border bg-background px-2 text-2xs font-medium text-foreground hover:bg-muted"
-                            >
-                              <Copy className="h-3 w-3" />
-                              {providerAuthMessage.copied ? 'Copied' : 'Copy'}
-                            </button>
-                          </div>
-                        )}
-                        {providerAuthMessage.verificationUri && (
-                          <button
-                            type="button"
-                            onClick={() => window.open(providerAuthMessage.verificationUri, '_blank', 'noopener,noreferrer')}
-                            className="mt-1.5 inline-flex items-center gap-1 text-2xs font-medium underline-offset-2 hover:underline"
-                          >
-                            <ExternalLink className="h-3 w-3" />
-                            Open login page
-                          </button>
-                        )}
-                      </div>
-                    )}
+                {showLoginAction && (
+                  <div className="ml-8 mr-2 mb-2">
+                    <button
+                      type="button"
+                      title={`Login to ${entry.label}`}
+                      aria-label={`Login to ${entry.label}`}
+                      onClick={(event) => {
+                        event.preventDefault()
+                        event.stopPropagation()
+                        void startLogin(entry.value, entry.label)
+                      }}
+                      disabled={Boolean(authBusyProvider)}
+                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                    >
+                      {loginBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
+                    </button>
                   </div>
                 )}
               </div>
@@ -673,6 +592,62 @@ export function ProviderModelSelector({
           </>
       </PopoverContent>
     </Popover>
+    <Dialog open={Boolean(loginDialog)} onOpenChange={(next) => { if (!next) setLoginDialog(null) }}>
+      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
+        <DialogHeader>
+          <DialogTitle>{loginDialog?.label ?? 'Provider'} login</DialogTitle>
+          <DialogDescription>
+            {loginDialog?.tone === 'loading'
+              ? loginDialog.message
+              : 'Use the device code below on the provider login page.'}
+          </DialogDescription>
+        </DialogHeader>
+        {loginDialog && (
+          <div className="space-y-4">
+            {loginDialog.tone !== 'loading' && (
+              <div className={cn(
+                'rounded-md border px-3 py-2 text-sm',
+                loginDialog.tone === 'success'
+                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                  : 'border-destructive/25 bg-destructive/10 text-destructive',
+              )}>
+                {loginDialog.message}
+              </div>
+            )}
+            {loginDialog.tone === 'loading' && (
+              <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Starting device login...
+              </div>
+            )}
+            {loginDialog.userCode && (
+              <div className="space-y-1.5">
+                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Device code</div>
+                <div className="flex min-w-0 items-center gap-2">
+                  <code className="min-w-0 flex-1 rounded-md border bg-muted px-3 py-2 text-center font-mono text-lg font-semibold [overflow-wrap:anywhere]">
+                    {loginDialog.userCode}
+                  </code>
+                  <Button variant="outline" size="sm" onClick={() => void copyCode(loginDialog.providerId, loginDialog.userCode!)}>
+                    <Copy className="mr-1.5 h-3.5 w-3.5" />
+                    {loginDialog.copied ? 'Copied' : 'Copy'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        )}
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button variant="outline" onClick={() => setLoginDialog(null)}>Close</Button>
+          {loginDialog?.verificationUri && (
+            <Button onClick={() => window.open(loginDialog.verificationUri, '_blank', 'noopener,noreferrer')}>
+              <ExternalLink className="mr-1.5 h-4 w-4" />
+              Open login page
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+    </>
   )
 }
 

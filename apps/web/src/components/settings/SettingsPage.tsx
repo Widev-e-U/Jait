@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight } from 'lucide-react'
+import { Eye, EyeOff, Key, CheckCircle2, AlertCircle, Loader2, Download, ArrowUpCircle, Home, Search, ArchiveRestore, Folder, ChevronRight, LogOut, RefreshCw } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -21,6 +21,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 import { highlightSearchMatchHtml } from './settings-search-highlight'
 import { getVsCodeThemeSearchTerms } from '@/lib/vscode-theme'
 import { importVsCodeThemeFromText, removeVsCodeTheme, setActiveVsCodeTheme, useVsCodeThemeStore } from '@/lib/vscode-theme-store'
+import { agentsApi, type ProviderId, type ProviderInfo } from '@/lib/agents-api'
 
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Perplexity from '@lobehub/icons/es/Perplexity'
@@ -79,6 +80,15 @@ function isSecretField(field: string): boolean {
 }
 
 const API_URL = getApiUrl()
+
+const PROVIDER_LABELS: Record<ProviderId, string> = {
+  jait: 'Jait',
+  codex: 'Codex',
+  'claude-code': 'Claude Code',
+  gemini: 'Gemini CLI',
+  opencode: 'OpenCode',
+  copilot: 'Copilot',
+}
 
 export interface UpdateInfo {
   currentVersion: string
@@ -142,6 +152,9 @@ export function SettingsPage({
   const [error, setError] = useState<string | null>(null)
   const [envSet, setEnvSet] = useState<Record<string, boolean>>({})
   const [visible, setVisible] = useState<Record<string, boolean>>({})
+  const [providerAccounts, setProviderAccounts] = useState<ProviderInfo[]>([])
+  const [providerAccountsLoading, setProviderAccountsLoading] = useState(false)
+  const [providerLogoutBusy, setProviderLogoutBusy] = useState<ProviderId | null>(null)
   const [activeTab, setActiveTab] = useState<SettingsTab>('general')
   const [search, setSearch] = useState('')
   const fileInputRef = useRef<HTMLInputElement | null>(null)
@@ -168,6 +181,38 @@ export function SettingsPage({
   }, [apiKeys])
 
   const isDirty = API_KEY_FIELDS.some((field) => (draft[field] ?? '') !== (apiKeys[field] ?? ''))
+
+  const loadProviderAccounts = useCallback(async () => {
+    if (!token) return
+    setProviderAccountsLoading(true)
+    try {
+      const { providers } = await agentsApi.listProvidersFresh()
+      setProviderAccounts(providers.filter((provider) => Boolean(provider.auth?.login || provider.auth?.logout)))
+    } catch {
+      setProviderAccounts([])
+    } finally {
+      setProviderAccountsLoading(false)
+    }
+  }, [token])
+
+  useEffect(() => {
+    void loadProviderAccounts()
+  }, [loadProviderAccounts])
+
+  const handleProviderLogout = async (providerId: ProviderId) => {
+    setProviderLogoutBusy(providerId)
+    setError(null)
+    setStatus(null)
+    try {
+      const result = await agentsApi.logoutProvider(providerId)
+      setStatus(result.message || `${PROVIDER_LABELS[providerId]} logout completed.`)
+      await loadProviderAccounts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : `Failed to log out from ${PROVIDER_LABELS[providerId]}.`)
+    } finally {
+      setProviderLogoutBusy(null)
+    }
+  }
 
   const handleDiscard = useCallback(() => {
     setDraft(apiKeys)
@@ -331,6 +376,10 @@ export function SettingsPage({
   const showJaitBackendSection = matchesSearch(
     'jait backend provider openai openrouter model api llm',
     jaitBackend,
+  )
+  const showProviderAccountsSection = matchesSearch(
+    'provider accounts login logout codex claude gemini opencode copilot authentication',
+    ...providerAccounts.map((provider) => `${provider.name} ${provider.auth?.detail ?? ''}`),
   )
   const showSpeechSection = matchesSearch(
     'speech stt input microphone whisper wyoming home assistant transcription gpt openai elevenlabs scribe',
@@ -670,6 +719,60 @@ export function SettingsPage({
             </Card>
           )}
 
+          {showProviderAccountsSection && (
+            <Card className="space-y-4 p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h2 className="text-base font-medium">{highlight('Provider accounts')}</h2>
+                  <p className="text-sm text-muted-foreground">
+                    Manage CLI provider sessions. Login is started from the provider picker; logout is handled here.
+                  </p>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => { void loadProviderAccounts() }} disabled={providerAccountsLoading}>
+                  {providerAccountsLoading ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="mr-1.5 h-3.5 w-3.5" />}
+                  Refresh
+                </Button>
+              </div>
+              <div className="space-y-2">
+                {providerAccounts.length === 0 && !providerAccountsLoading ? (
+                  <p className="text-sm text-muted-foreground">No provider account actions are available on this gateway.</p>
+                ) : providerAccounts.map((provider) => {
+                  const auth = provider.auth
+                  const providerId = provider.id
+                  const isSignedIn = auth?.authenticated === true
+                  const busy = providerLogoutBusy === providerId
+                  return (
+                    <div key={provider.id} className="flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                      <div className="min-w-0">
+                        <div className="flex flex-wrap items-center gap-2">
+                          <p className="text-sm font-medium">{PROVIDER_LABELS[providerId] ?? provider.name}</p>
+                          <Badge variant={isSignedIn ? 'success' : 'outline'} className="text-2xs">
+                            {isSignedIn ? 'signed in' : auth?.authenticated === false ? 'signed out' : 'unknown'}
+                          </Badge>
+                        </div>
+                        {auth?.detail && (
+                          <p className="mt-1 text-xs text-muted-foreground">{auth.detail}</p>
+                        )}
+                      </div>
+                      {auth?.logout && (
+                        <Button
+                          className="w-full sm:w-auto"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => { void handleProviderLogout(providerId) }}
+                          disabled={busy || providerLogoutBusy !== null || !isSignedIn}
+                        >
+                          {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
+                          Logout
+                        </Button>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </Card>
+          )}
+
           {showSpeechSection && (
             <Card className="space-y-4 p-5">
               <div>
@@ -729,7 +832,7 @@ export function SettingsPage({
             </Card>
           )}
 
-          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showWorkspaceArchiveSection && !showJaitBackendSection && !showSpeechSection && emptyState}
+          {!showThemeSection && !showUpdateSection && !showDesktopSection && !showGatewaySection && !showArchiveSection && !showWorkspaceArchiveSection && !showJaitBackendSection && !showProviderAccountsSection && !showSpeechSection && emptyState}
         </TabsContent>
 
         <TabsContent value="api" className="space-y-6 pb-20">

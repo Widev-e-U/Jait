@@ -42,6 +42,25 @@ export function stripAnsi(value: string): string {
 export function extractDeviceAuthDetails(output: string): { verificationUri?: string; userCode?: string } {
   const clean = stripAnsi(output);
   const verificationUri = clean.match(/https?:\/\/[^\s<>"')]+/i)?.[0]?.replace(/[.,;:]+$/, "");
+  const normalizeCode = (value: string): string | undefined => {
+    const candidate = value.trim().replace(/\s+/g, "-").toUpperCase();
+    const compact = candidate.replace(/-/g, "");
+    const blocked = new Set([
+      "AUTHORIZATION",
+      "AUTHORISATION",
+      "AUTHENTICATION",
+      "DEVICE",
+      "LOGIN",
+      "OPENAI",
+      "CODE",
+      "BROWSER",
+    ]);
+    if (blocked.has(compact)) return undefined;
+    const parts = candidate.split("-").filter(Boolean);
+    if (parts.length > 1 && parts.every((part) => blocked.has(part))) return undefined;
+    if (!/[0-9-]/.test(candidate) && compact.length > 10) return undefined;
+    return candidate;
+  };
   const codePatterns = [
     /(?:user\s*)?code(?:\s+is)?\s*[:=]?\s*([A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){0,4})/i,
     /enter\s+(?:the\s+)?(?:code\s+)?([A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){1,4})/i,
@@ -50,9 +69,17 @@ export function extractDeviceAuthDetails(output: string): { verificationUri?: st
   ];
   let userCode: string | undefined;
   for (const pattern of codePatterns) {
-    const match = clean.match(pattern)?.[1]?.trim();
-    if (match && !/^HTTPS?$/i.test(match)) {
-      userCode = match.replace(/\s+/g, "-").toUpperCase();
+    const globalPattern = new RegExp(pattern.source, pattern.flags.includes("g") ? pattern.flags : `${pattern.flags}g`);
+    for (const match of clean.matchAll(globalPattern)) {
+      const raw = match[1]?.trim();
+      if (!raw || /^HTTPS?$/i.test(raw)) continue;
+      const normalized = normalizeCode(raw);
+      if (normalized) {
+        userCode = normalized;
+        break;
+      }
+    }
+    if (userCode) {
       break;
     }
   }

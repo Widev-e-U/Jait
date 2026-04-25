@@ -23,4 +23,18 @@ describe("provider auth helpers", () => {
       userCode: "WXYZ-1234",
     });
   });
+
+  it("does not mistake authorization labels for device codes", () => {
+    const details = extractDeviceAuthDetails([
+      "DEVICE AUTHORIZATION",
+      "Open https://auth.openai.com/activate in your browser",
+      "Code: AUTHORIZATION",
+      "Use code AB12-CD34 to continue",
+    ].join("\n"));
+
+    expect(details).toEqual({
+      verificationUri: "https://auth.openai.com/activate",
+      userCode: "AB12-CD34",
+    });
+  });
 });
