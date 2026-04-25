@@ -261,6 +261,64 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("creates a managed worktree branch for scheduler-created delivery threads", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async () => new Promise<void>(() => {}));
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const createWorktree = vi.fn(async (_cwd: string, _baseBranch: string, newBranch: string) => ({
+        path: `/tmp/jait-worktrees/${newBranch.replace(/\//g, "-")}`,
+        branch: newBranch,
+      }));
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+        gitService: {
+          runStackedAction: async (): Promise<GitStepResult> => ({
+            commit: { status: "skipped_no_changes" },
+            push: { status: "skipped_not_requested" },
+            branch: { status: "skipped_not_requested" },
+            pr: { status: "skipped_not_requested" },
+          }),
+          isRepo: async () => true,
+          getPreferredRemote: async () => "origin",
+          getRemoteUrl: async () => "git@github.com:Widev-e-U/Jait.git",
+          resolveDefaultBranch: async () => "main",
+          createWorktree,
+        },
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Cron task",
+          kind: "delivery",
+          workingDirectory: process.cwd(),
+          start: true,
+          prompt: "run scheduled quality task",
+        },
+        { ...context, requestedBy: "scheduler" },
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { id: string; branch: string | null; workingDirectory: string | null } };
+      expect(data.thread.branch).toMatch(/^jait\/[0-9a-f]{8}$/);
+      expect(data.thread.workingDirectory).toBe(`/tmp/jait-worktrees/${data.thread.branch!.replace(/\//g, "-")}`);
+      expect(createWorktree).toHaveBeenCalledWith(process.cwd(), "main", data.thread.branch);
+      expect(threadService.getById(data.thread.id)?.workingDirectory).toBe(data.thread.workingDirectory);
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("can auto-stop a delivery thread after the first completed turn", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

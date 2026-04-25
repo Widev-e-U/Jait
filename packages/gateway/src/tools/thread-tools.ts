@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import type { WsEventType } from "@jait/shared";
 import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
 import { extractTodoResultItems } from "../providers/todo-result.js";
@@ -86,6 +87,11 @@ interface ThreadControlGit {
     baseBranch?: string,
     githubToken?: string,
   ): Promise<GitStepResult>;
+  isRepo?(cwd: string): Promise<boolean>;
+  getPreferredRemote?(cwd: string, branch?: string): Promise<string | null>;
+  getRemoteUrl?(cwd: string, name: string): Promise<string | null>;
+  resolveDefaultBranch?(cwd: string, remoteUrl?: string | null): Promise<string>;
+  createWorktree?(cwd: string, baseBranch: string, newBranch: string, customPath?: string): Promise<{ path: string; branch: string }>;
 }
 
 export interface ThreadControlToolDeps {
@@ -172,6 +178,36 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
   const ensureUserId = (context: ToolContext): string => {
     const userId = context.userId?.trim();
     return userId || "system";
+  };
+
+  const createManagedDeliveryWorktree = async (thread: ThreadRow): Promise<ThreadRow> => {
+    if (thread.kind !== "delivery") return thread;
+    if (thread.branch) return thread;
+    const cwd = thread.workingDirectory?.trim();
+    if (!cwd) return thread;
+    if (!existsSync(cwd)) return thread;
+    if (!gitService.isRepo || !gitService.createWorktree) return thread;
+
+    const isRepo = await gitService.isRepo(cwd).catch(() => false);
+    if (!isRepo) return thread;
+
+    let remoteUrl: string | null = null;
+    if (gitService.getPreferredRemote && gitService.getRemoteUrl) {
+      const remote = await gitService.getPreferredRemote(cwd).catch(() => null);
+      if (remote) {
+        remoteUrl = await gitService.getRemoteUrl(cwd, remote).catch(() => null);
+      }
+    }
+
+    const defaultBranch = gitService.resolveDefaultBranch
+      ? await gitService.resolveDefaultBranch(cwd, remoteUrl).catch(() => "main")
+      : "main";
+    const branch = `jait/${thread.id.slice(-8)}`;
+    const worktree = await gitService.createWorktree(cwd, defaultBranch, branch);
+    return deps.threadService.update(thread.id, {
+      workingDirectory: worktree.path,
+      branch: worktree.branch,
+    }) ?? thread;
   };
 
   const resolveSelectedThreadDefaults = (context: ToolContext) => {
@@ -574,7 +610,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             }
             const selectedProviderId = resolvedProvider.providerId;
             const selectedDefaults = resolveSelectedThreadDefaults(context);
-            const thread = deps.threadService.create({
+            let thread = deps.threadService.create({
               userId,
               sessionId: input.sessionId,
               title: input.title?.trim() || "New Thread",
@@ -586,6 +622,22 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               branch: input.branch,
             });
             broadcastThreadEvent(thread.id, "created", { thread });
+            try {
+              const isolatedThread = await createManagedDeliveryWorktree(thread);
+              if (isolatedThread.id === thread.id && isolatedThread.workingDirectory !== thread.workingDirectory) {
+                thread = isolatedThread;
+                broadcastThreadEvent(thread.id, "updated", { thread });
+              }
+            } catch (err) {
+              const message = err instanceof Error ? err.message : String(err);
+              deps.threadService.markError(thread.id, message);
+              broadcastThreadEvent(thread.id, "status", { status: "error", error: message });
+              return {
+                ok: false,
+                message: `Thread created but failed to create delivery worktree: ${message}`,
+                data: { thread: deps.threadService.getById(thread.id) ?? thread },
+              };
+            }
 
             if (!input.start) {
               const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
@@ -638,11 +690,11 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               };
             }
 
-            const created = validatedSpecs.map(({ spec, resolvedProvider }) => {
+            const created = await Promise.all(validatedSpecs.map(async ({ spec, resolvedProvider }) => {
               const selectedProviderId = resolvedProvider.providerId!;
               const selectedDefaults = resolveSelectedThreadDefaults(context);
               const prompt = (normalizePrompt(spec.message, spec.prompt) ?? normalizePrompt(input.message, input.prompt))!;
-              const thread = deps.threadService.create({
+              let thread = deps.threadService.create({
                 userId,
                 sessionId: spec.sessionId ?? input.sessionId,
                 title: spec.title?.trim() || "New Thread",
@@ -654,8 +706,35 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 branch: spec.branch ?? input.branch,
               });
               broadcastThreadEvent(thread.id, "created", { thread });
+              try {
+                const isolatedThread = await createManagedDeliveryWorktree(thread);
+                if (isolatedThread.id === thread.id && isolatedThread.workingDirectory !== thread.workingDirectory) {
+                  thread = isolatedThread;
+                  broadcastThreadEvent(thread.id, "updated", { thread });
+                }
+              } catch (err) {
+                const message = err instanceof Error ? err.message : String(err);
+                deps.threadService.markError(thread.id, message);
+                broadcastThreadEvent(thread.id, "status", { status: "error", error: message });
+                return { thread: deps.threadService.getById(thread.id) ?? thread, spec, prompt, worktreeError: message };
+              }
               return { thread, spec, prompt };
-            });
+            }));
+
+            const worktreeFailures = created.filter((entry) => entry.worktreeError);
+            if (worktreeFailures.length > 0) {
+              return {
+                ok: false,
+                message: `Created ${created.length} thread(s), ${worktreeFailures.length} failed to create delivery worktrees.`,
+                data: {
+                  threads: created.map((entry) => entry.thread),
+                  failedWorktrees: worktreeFailures.map((entry) => ({
+                    threadId: entry.thread.id,
+                    message: entry.worktreeError,
+                  })),
+                },
+              };
+            }
 
             const startTargets = created.filter(({ spec }) => spec.start === true || input.start === true);
             const startResults = await Promise.all(
