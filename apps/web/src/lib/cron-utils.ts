@@ -153,8 +153,8 @@ export function getNextRunTime(cron: string): Date | null {
     // For simple cases, calculate next occurrence
     if (minute.startsWith('*/')) {
       const step = parseInt(minute.slice(2))
-      const nextMinute = Math.ceil(now.getMinutes() / step) * step
       const next = new Date(now)
+      const nextMinute = Math.ceil(now.getMinutes() / step) * step
       if (nextMinute >= 60) {
         next.setHours(next.getHours() + 1)
         next.setMinutes(nextMinute % 60)
@@ -163,6 +163,9 @@ export function getNextRunTime(cron: string): Date | null {
       }
       next.setSeconds(0)
       next.setMilliseconds(0)
+      if (next <= now) {
+        next.setMinutes(next.getMinutes() + step)
+      }
       return next
     }
     
