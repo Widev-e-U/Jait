@@ -23,17 +23,22 @@ export const CRON_PRESETS: CronPreset[] = [
   { label: 'Monthly', value: '0 0 1 * *', description: 'Runs at midnight on the 1st of each month' },
 ]
 
+export function normalizeCronExpression(cron: string): string {
+  return cron.trim().split(/\s+/).join(' ')
+}
+
 /**
  * Parse a cron expression into human-readable format
  */
 export function describeCron(cron: string): string {
-  const parts = cron.split(' ')
-  if (parts.length !== 5) return cron
+  const normalizedCron = normalizeCronExpression(cron)
+  const parts = normalizedCron.split(' ')
+  if (parts.length !== 5) return normalizedCron
   
   const [minute, hour, day, month, weekday] = parts
   
   // Check for presets first
-  const preset = CRON_PRESETS.find(p => p.value === cron)
+  const preset = CRON_PRESETS.find(p => p.value === normalizedCron)
   if (preset) return preset.description
   
   // Build description
@@ -83,7 +88,7 @@ export function describeCron(cron: string): string {
  * Validate a cron expression
  */
 export function validateCron(cron: string): { valid: boolean; error?: string } {
-  const parts = cron.trim().split(/\s+/)
+  const parts = normalizeCronExpression(cron).split(' ')
   
   if (parts.length !== 5) {
     return { valid: false, error: 'Cron expression must have 5 parts (minute hour day month weekday)' }
@@ -145,7 +150,7 @@ export function getNextRunTime(cron: string): Date | null {
   // For accurate calculation, use a proper cron library
   try {
     const now = new Date()
-    const parts = cron.split(' ')
+    const parts = normalizeCronExpression(cron).split(' ')
     if (parts.length !== 5) return null
     
     const [minute, hour] = parts

@@ -13,7 +13,7 @@ import {
 } from '../ui/select'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs'
 import { ModelIcon } from '../icons/model-icons'
-import { CRON_PRESETS, validateCron, describeCron } from '@/lib/cron-utils'
+import { CRON_PRESETS, validateCron, describeCron, normalizeCronExpression } from '@/lib/cron-utils'
 import { JobsApi, type CreateJobRequest, type ScheduledJob, type JobType, type ProviderInfo } from '@/lib/jobs-api'
 import { Loader2, X, AlertCircle } from 'lucide-react'
 
@@ -144,10 +144,12 @@ export function CreateJobDialog({
       return
     }
 
+    const normalizedSchedule = normalizeCronExpression(currentSchedule)
+
     const jobData: CreateJobRequest = {
       name,
       job_type: jobType,
-      cron_expression: currentSchedule,
+      cron_expression: normalizedSchedule,
       enabled,
     }
 
