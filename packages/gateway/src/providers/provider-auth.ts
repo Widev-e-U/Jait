@@ -42,6 +42,7 @@ export function stripAnsi(value: string): string {
 export function extractDeviceAuthDetails(output: string): { verificationUri?: string; userCode?: string } {
   const clean = stripAnsi(output);
   const verificationUri = clean.match(/https?:\/\/[^\s<>"')]+/i)?.[0]?.replace(/[.,;:]+$/, "");
+  const codeShape = /^[A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){1,4}$/i;
   const normalizeCode = (value: string): string | undefined => {
     const candidate = value.trim().replace(/\s+/g, "-").toUpperCase();
     const compact = candidate.replace(/-/g, "");
@@ -54,13 +55,25 @@ export function extractDeviceAuthDetails(output: string): { verificationUri?: st
       "OPENAI",
       "CODE",
       "BROWSER",
+      "THIS",
+      "ONE",
+      "TIME",
     ]);
     if (blocked.has(compact)) return undefined;
     const parts = candidate.split("-").filter(Boolean);
     if (parts.length > 1 && parts.every((part) => blocked.has(part))) return undefined;
     if (!/[0-9-]/.test(candidate) && compact.length > 10) return undefined;
+    if (!codeShape.test(candidate)) return undefined;
     return candidate;
   };
+  const lines = clean.split(/\r?\n/).map((line) => line.trim()).filter(Boolean);
+  for (let index = 0; index < lines.length; index += 1) {
+    if (!/enter\s+this\s+one-time\s+code/i.test(lines[index] ?? "")) continue;
+    const nextLine = lines[index + 1];
+    if (!nextLine) continue;
+    const normalized = normalizeCode(nextLine);
+    if (normalized) return { verificationUri, userCode: normalized };
+  }
   const codePatterns = [
     /(?:user\s*)?code(?:\s+is)?\s*[:=]?\s*([A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){0,4})/i,
     /enter\s+(?:the\s+)?(?:code\s+)?([A-Z0-9]{4,}(?:[- ][A-Z0-9]{3,}){1,4})/i,

@@ -435,44 +435,44 @@ export function ProviderModelSelector({
             const loginBusy = authBusyProvider === entry.value
             return (
               <div key={entry.value} className={cn('rounded-sm', active && 'bg-accent/50')}>
-                <button
-                  type="button"
-                  onClick={() => handleProviderSelect(entry.value)}
-                  disabled={!entry.isAvailable}
-                  className={cn(
-                    'flex w-full items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
-                    'hover:bg-accent hover:text-accent-foreground',
-                    !entry.isAvailable && 'cursor-not-allowed opacity-60',
-                  )}
-                >
-                  <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                      {entry.label}
-                      {entry.isAvailable && entry.nodeLabel && (
-                        <span className="flex items-center gap-0.5 text-2xs text-muted-foreground">
-                          <Monitor className="h-3 w-3" />
-                          {entry.nodeLabel}
-                        </span>
-                      )}
-                      {!entry.isAvailable && (
-                        <span className="flex items-center gap-0.5 text-2xs text-destructive/80">
-                          <AlertTriangle className="h-3 w-3" />
-                          {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
-                        </span>
-                      )}
-                      {entry.auth && entry.auth.authenticated === true && (
-                        <span className="text-2xs text-emerald-600 dark:text-emerald-400">signed in</span>
-                      )}
+                <div className="flex items-start gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => handleProviderSelect(entry.value)}
+                    disabled={!entry.isAvailable}
+                    className={cn(
+                      'flex min-w-0 flex-1 items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
+                      'hover:bg-accent hover:text-accent-foreground',
+                      !entry.isAvailable && 'cursor-not-allowed opacity-60',
+                    )}
+                  >
+                    <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                    <div className="min-w-0 flex-1">
+                      <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                        {entry.label}
+                        {entry.isAvailable && entry.nodeLabel && (
+                          <span className="flex items-center gap-0.5 text-2xs text-muted-foreground">
+                            <Monitor className="h-3 w-3" />
+                            {entry.nodeLabel}
+                          </span>
+                        )}
+                        {!entry.isAvailable && (
+                          <span className="flex items-center gap-0.5 text-2xs text-destructive/80">
+                            <AlertTriangle className="h-3 w-3" />
+                            {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
+                          </span>
+                        )}
+                        {entry.auth && entry.auth.authenticated === true && (
+                          <span className="text-2xs text-emerald-600 dark:text-emerald-400">signed in</span>
+                        )}
+                      </div>
+                      <div className="text-xs leading-snug text-muted-foreground">
+                        {!entry.isAvailable && entry.reason ? entry.reason : entry.description}
+                      </div>
                     </div>
-                    <div className="text-xs leading-snug text-muted-foreground">
-                      {!entry.isAvailable && entry.reason ? entry.reason : entry.description}
-                    </div>
-                  </div>
-                  {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
-                </button>
-                {showLoginAction && (
-                  <div className="ml-8 mr-2 mb-2">
+                    {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+                  </button>
+                  {showLoginAction && (
                     <button
                       type="button"
                       title={`Login to ${entry.label}`}
@@ -483,12 +483,12 @@ export function ProviderModelSelector({
                         void startLogin(entry.value, entry.label)
                       }}
                       disabled={Boolean(authBusyProvider)}
-                      className="inline-flex h-7 w-7 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50"
+                      className="mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                     >
                       {loginBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
                     </button>
-                  </div>
-                )}
+                  )}
+                </div>
               </div>
             )
           })}
