@@ -36,6 +36,10 @@ export function isNoVncViewerUrl(value?: string | null): boolean {
   return Boolean(trimmed && /\/(?:noVNC\/)?vnc(?:_lite)?\.html(?:[?#].*)?$/i.test(trimmed))
 }
 
+function usesQueryParams(viewerUrl: string): boolean {
+  return /(?:^|\/)vnc_lite\.html(?:[?#].*)?$/i.test(viewerUrl)
+}
+
 export function buildNoVncViewerUrl(options: NoVncSessionOptions): string {
   const viewerUrl = normalizeUrl(options.viewerUrl) ?? DEFAULT_VIEWER_URL
   const websocketUrl = normalizeUrl(options.websocketUrl)
@@ -60,5 +64,10 @@ export function buildNoVncViewerUrl(options: NoVncSessionOptions): string {
 
   if (options.bell != null) params.set('bell', options.bell ? '1' : '0')
 
-  return `${viewerUrl.split('#')[0] ?? viewerUrl}#${params.toString()}`
+  const baseUrl = viewerUrl.split('#')[0] ?? viewerUrl
+  if (usesQueryParams(baseUrl)) {
+    const separator = baseUrl.includes('?') ? '&' : '?'
+    return `${baseUrl}${separator}${params.toString()}`
+  }
+  return `${baseUrl}#${params.toString()}`
 }
