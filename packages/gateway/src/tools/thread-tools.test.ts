@@ -80,13 +80,14 @@ function makeContext(
     providerId: ProviderId;
     model: string;
     runtimeMode: "full-access" | "supervised";
+    requestedBy: string;
   }> = {},
 ) {
   return {
     sessionId: "s-thread-tools",
     actionId: "a-thread-tools",
     workspaceRoot: process.cwd(),
-    requestedBy: "test",
+    requestedBy: overrides.requestedBy ?? "test",
     userId,
     providerId: overrides.providerId,
     model: overrides.model,
@@ -158,6 +159,151 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("rejects creating a thread without a prompt", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "No prompt",
+        },
+        context,
+      );
+
+      expect(result.ok).toBe(false);
+      expect(result.message).toBe("create requires non-empty `prompt`.");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("accepts prompt as the clearer alias for message", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      providerRegistry.register(provider);
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Prompt alias",
+          start: true,
+          prompt: "inspect ui",
+        },
+        context,
+      );
+
+      expect(result.ok).toBe(true);
+      expect(provider.sendTurn).toHaveBeenCalledWith("mock-session-1", "inspect ui", undefined);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("detaches scheduler-started turns so cron jobs do not block on long provider runs", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async () => new Promise<void>(() => {}));
+      providerRegistry.register(provider);
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Cron task",
+          kind: "delivery",
+          start: true,
+          prompt: "run scheduled quality task",
+        },
+        { ...context, requestedBy: "scheduler" },
+      );
+
+      expect(result.ok).toBe(true);
+      expect(result.message).toBe("Thread created and started");
+      expect(provider.sendTurn).toHaveBeenCalledWith("mock-session-1", "run scheduled quality task", undefined);
+      const data = result.data as { thread: { status: string; providerSessionId: string | null } };
+      expect(data.thread.status).toBe("running");
+      expect(data.thread.providerSessionId).toBe("mock-session-1");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("can auto-stop a delivery thread after the first completed turn", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async () => {
+        provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+      });
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "One-shot delivery",
+          kind: "delivery",
+          start: true,
+          prompt: "implement one focused fix",
+          autoStopAfterTurn: true,
+        },
+        context,
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { id: string; status: string; providerSessionId: string | null } };
+      expect(data.thread.status).toBe("completed");
+      expect(data.thread.providerSessionId).toBeNull();
+      expect(provider.stopSession).toHaveBeenCalledWith("mock-session-1");
+      expect(threadService.getById(data.thread.id)?.status).toBe("completed");
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("auto-completes delegation threads after the first completed turn", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -204,7 +350,7 @@ describe("thread.control tool", () => {
     }
   });
 
-  it("keeps delivery threads resumable after the first completed turn", async () => {
+  it("marks delivery threads completed after the first turn while keeping them resumable", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
     try {
@@ -237,13 +383,14 @@ describe("thread.control tool", () => {
 
       expect(result.ok).toBe(true);
       const data = result.data as { thread: { id: string; status: string; providerSessionId: string | null } };
-      expect(data.thread.status).toBe("running");
+      expect(data.thread.status).toBe("completed");
       expect(data.thread.providerSessionId).toBe("mock-session-1");
       expect(provider.stopSession).not.toHaveBeenCalled();
 
       const stored = threadService.getById(data.thread.id);
-      expect(stored?.status).toBe("running");
+      expect(stored?.status).toBe("completed");
       expect(stored?.providerSessionId).toBe("mock-session-1");
+      expect(stored?.completedAt).toBeTruthy();
     } finally {
       sqlite.close();
     }
@@ -510,6 +657,7 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Missing provider",
+          prompt: "inspect ui",
         },
         makeContext(),
       );
@@ -539,6 +687,7 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Use live codex context",
+          prompt: "inspect ui",
         },
         makeContext("user-1", {
           providerId: "codex",
@@ -585,6 +734,7 @@ describe("thread.control tool", () => {
         {
           action: "create",
           title: "Use selected chat defaults",
+          prompt: "inspect ui",
         },
         makeContext(user.id),
       );
@@ -664,6 +814,7 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create_many",
+          prompt: "inspect ui",
           threads: [
             { title: "Thread A" },
             { title: "Thread B" },
@@ -702,6 +853,7 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create_many",
+          prompt: "inspect ui",
           threads: [
             { title: "Thread A" },
             { title: "Thread B" },
@@ -734,6 +886,7 @@ describe("thread.control tool", () => {
       const result = await tool.execute(
         {
           action: "create_many",
+          prompt: "inspect ui",
           threads: [
             { title: "Thread A" },
             { title: "Thread B" },

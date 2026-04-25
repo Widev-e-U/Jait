@@ -63,7 +63,6 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, SessionSwitcher, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
@@ -906,8 +905,8 @@ function ManagerThreadListItem({
   onDelete,
 }: ManagerThreadListItemProps) {
   const isMobile = useIsMobile()
+  const confirm = useConfirmDialog()
   const [deleting, setDeleting] = useState(false)
-  const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false)
   const showThreadActions = shouldRenderThreadActions({
     hasRepository: repo != null,
     threadKind: thread.kind,
@@ -918,6 +917,32 @@ function ManagerThreadListItem({
   })
   const stopThreadVisible = canStopThread(thread)
   const showKindBadge = thread.kind === 'delegation' || !isMobile
+  const handleDeleteClick = useCallback(async () => {
+    const confirmed = await confirm({
+      title: 'Delete thread?',
+      description: (
+        <div className="space-y-2">
+          <p>
+            Are you sure you want to delete this thread?
+          </p>
+          <p className="text-xs text-muted-foreground">
+            This removes the thread and its local worktree cleanup will run in the background.
+          </p>
+        </div>
+      ),
+      confirmLabel: 'Delete',
+      cancelLabel: 'Cancel',
+      variant: 'destructive',
+    })
+    if (!confirmed) return
+
+    setDeleting(true)
+    try {
+      await onDelete()
+    } finally {
+      setDeleting(false)
+    }
+  }, [confirm, onDelete])
 
   return (
     <div
@@ -1019,60 +1044,19 @@ function ManagerThreadListItem({
             <Square className="h-3 w-3" />
           </Button>
         )}
-        <Popover open={deleteConfirmOpen} onOpenChange={setDeleteConfirmOpen}>
-          <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-8 w-8 rounded-lg opacity-100 transition-opacity"
-              disabled={deleting}
-              onClick={(event) => event.stopPropagation()}
-              title="Delete thread"
-            >
-              {deleting ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
-            </Button>
-          </PopoverTrigger>
-          <PopoverContent
-            align="end"
-            className="w-56 p-2"
-            onClick={(event) => event.stopPropagation()}
-            onMouseDown={(event) => event.stopPropagation()}
-            onKeyDown={(event) => event.stopPropagation()}
-          >
-            <div className="space-y-2">
-              <div className="text-xs font-medium">Delete this thread?</div>
-              <div className="text-2xs leading-snug text-muted-foreground">
-                This removes the thread and its local worktree cleanup will run in the background.
-              </div>
-              <div className="flex justify-end gap-1.5">
-                <Button
-                  variant="ghost"
-                  size="sm"
-                  className="h-7 rounded-md px-2 text-xs"
-                  disabled={deleting}
-                  onClick={() => setDeleteConfirmOpen(false)}
-                >
-                  Cancel
-                </Button>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  className="h-7 rounded-md px-2 text-xs"
-                  disabled={deleting}
-                  onClick={() => {
-                    setDeleting(true)
-                    onDelete().finally(() => {
-                      setDeleting(false)
-                      setDeleteConfirmOpen(false)
-                    })
-                  }}
-                >
-                  Delete
-                </Button>
-              </div>
-            </div>
-          </PopoverContent>
-        </Popover>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-lg opacity-100 transition-opacity"
+          disabled={deleting}
+          onClick={(event) => {
+            event.stopPropagation()
+            void handleDeleteClick()
+          }}
+          title="Delete thread"
+        >
+          {deleting ? <SpinnerIcon className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+        </Button>
       </div>
     </div>
   )

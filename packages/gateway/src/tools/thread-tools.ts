@@ -37,9 +37,13 @@ interface ThreadControlInput {
   kind?: "delivery" | "delegation";
   workingDirectory?: string;
   branch?: string;
+  prompt?: string;
   message?: string;
   attachments?: string[];
   start?: boolean;
+  detach?: boolean;
+  autoStopAfterTurn?: boolean;
+  timeoutMinutes?: number;
   threads?: ThreadCreateSpec[];
   requestId?: string;
   approved?: boolean;
@@ -65,8 +69,12 @@ interface ThreadCreateSpec {
   branch?: string;
   sessionId?: string;
   start?: boolean;
+  prompt?: string;
   message?: string;
   attachments?: string[];
+  detach?: boolean;
+  autoStopAfterTurn?: boolean;
+  timeoutMinutes?: number;
 }
 
 interface ThreadControlGit {
@@ -97,6 +105,14 @@ interface StartThreadResult {
   thread?: ThreadRow;
 }
 
+interface StartThreadOptions {
+  message?: string;
+  attachments?: string[];
+  detach?: boolean;
+  autoStopAfterTurn?: boolean;
+  timeoutMinutes?: number;
+}
+
 interface ProviderResolution {
   providerId?: ProviderId;
   error?: string;
@@ -123,6 +139,21 @@ function normalizeThreadProviderId(value: unknown): ProviderId | null {
     default:
       return null;
   }
+}
+
+function normalizePrompt(message?: string, prompt?: string): string | undefined {
+  const value = typeof prompt === "string" && prompt.trim() ? prompt : message;
+  if (typeof value !== "string") return undefined;
+  const trimmed = value.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function normalizeTimeoutMs(timeoutMinutes: number | undefined, defaultMinutes: number | undefined): number | undefined {
+  const minutes = typeof timeoutMinutes === "number" && Number.isFinite(timeoutMinutes)
+    ? timeoutMinutes
+    : defaultMinutes;
+  if (minutes === undefined || minutes <= 0) return undefined;
+  return Math.max(1, Math.floor(minutes * 60_000));
 }
 
 export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefinition<ThreadControlInput> {
@@ -209,11 +240,14 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
   const startThread = async (
     context: ToolContext,
     thread: ThreadRow,
-    message?: string,
-    attachments?: string[],
+    options: StartThreadOptions = {},
   ): Promise<StartThreadResult> => {
+    const message = normalizePrompt(options.message);
     if (thread.status === "running" && thread.providerSessionId) {
       return { ok: false, message: "Thread is already running" };
+    }
+    if (!message) {
+      return { ok: false, message: "start requires non-empty `prompt`." };
     }
 
     const resolvedProvider = resolveStoredThreadProvider(thread.providerId, context);
@@ -222,7 +256,9 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     }
     const effectiveProviderId = resolvedProvider.providerId;
     const effectiveThread = thread;
-    const autoFinishAfterFirstTurn = effectiveThread.kind === "delegation" && typeof message === "string" && message.trim().length > 0;
+    const autoFinishAfterFirstTurn = effectiveThread.kind === "delegation" || options.autoStopAfterTurn === true;
+    const detach = options.detach === true || context.requestedBy === "scheduler";
+    const timeoutMs = normalizeTimeoutMs(options.timeoutMinutes, context.requestedBy === "scheduler" ? 240 : undefined);
 
     const provider = deps.providerRegistry.get(effectiveProviderId);
     if (!provider) {
@@ -247,7 +283,21 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         mcpServers,
       });
 
-      const unsubscribe = provider.onEvent((event: ProviderEvent) => {
+      let timeout: ReturnType<typeof setTimeout> | undefined;
+      let unsubscribed = false;
+      let unsubscribe: (() => void) | undefined;
+      const cleanup = () => {
+        if (timeout) {
+          clearTimeout(timeout);
+          timeout = undefined;
+        }
+        if (unsubscribe && !unsubscribed) {
+          unsubscribed = true;
+          unsubscribe();
+        }
+      };
+
+      unsubscribe = provider.onEvent((event: ProviderEvent) => {
         if (event.sessionId !== session.id) {
           return;
         }
@@ -273,11 +323,11 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             deps.threadService.markCompleted(effectiveThread.id);
           }
           broadcastThreadEvent(effectiveThread.id, "status", { status: "completed" });
-          unsubscribe();
+          cleanup();
         } else if (event.type === "session.error") {
           deps.threadService.markError(effectiveThread.id, event.error);
           broadcastThreadEvent(effectiveThread.id, "status", { status: "error", error: event.error });
-          unsubscribe();
+          cleanup();
         } else if (event.type === "turn.started") {
           // Re-assert running when a new turn begins
           const cur = deps.threadService.getById(effectiveThread.id);
@@ -285,49 +335,86 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             deps.threadService.update(effectiveThread.id, { status: "running", error: null, completedAt: null });
             broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
           }
-        } else if (event.type === "turn.completed" && autoFinishAfterFirstTurn) {
-          void provider.stopSession(session.id).catch(() => {
-            // Best effort: delegation threads should not linger if the provider
-            // leaves the session open after answering the first task.
-          });
-          deps.threadService.markCompletedAndClearSession(effectiveThread.id);
+        } else if (event.type === "turn.completed") {
+          if (autoFinishAfterFirstTurn) {
+            void provider.stopSession(session.id).catch(() => {
+              // Best effort: one-shot threads should not linger if the provider
+              // leaves the session open after answering the first task.
+            });
+            deps.threadService.markCompletedAndClearSession(effectiveThread.id);
+            cleanup();
+          } else {
+            deps.threadService.markCompleted(effectiveThread.id);
+          }
           broadcastThreadEvent(effectiveThread.id, "status", { status: "completed" });
-          unsubscribe();
         }
       });
+
+      if (timeoutMs) {
+        timeout = setTimeout(() => {
+          void provider.stopSession(session.id).catch(() => {});
+          const activity = deps.threadService.addActivity(
+            effectiveThread.id,
+            "session",
+            `Thread stopped after ${Math.round(timeoutMs / 60_000)} minute timeout`,
+            { timeoutMs },
+          );
+          broadcastThreadEvent(effectiveThread.id, "activity", { activity });
+          deps.threadService.markInterrupted(effectiveThread.id);
+          broadcastThreadEvent(effectiveThread.id, "status", { status: "interrupted" });
+          cleanup();
+        }, timeoutMs);
+        if (typeof timeout === "object" && "unref" in timeout && typeof timeout.unref === "function") {
+          timeout.unref();
+        }
+      }
 
       deps.threadService.markRunning(effectiveThread.id, session.id);
       broadcastThreadEvent(effectiveThread.id, "status", { status: "running" });
 
       const historyReplayPrompt = buildThreadHistoryReplayPrompt(deps.threadService, effectiveThread.id);
 
-      if (message) {
-        const userActivity = deps.threadService.addActivity(effectiveThread.id, "message", message.slice(0, 500), { role: "user" });
-        broadcastThreadEvent(effectiveThread.id, "activity", { activity: userActivity });
+      const userActivity = deps.threadService.addActivity(effectiveThread.id, "message", message.slice(0, 500), { role: "user" });
+      broadcastThreadEvent(effectiveThread.id, "activity", { activity: userActivity });
 
-        // Run thread router for the first turn
-        let turnMessage = message;
-        if (historyReplayPrompt) {
-          turnMessage = `${historyReplayPrompt}\n\n${turnMessage}`;
-        }
-        if (deps.skillRegistry) {
-          const availableSkills = deps.skillRegistry.listEnabled();
-          const routingPlan = routeThread({
-            message,
-            availableSkills,
-            pinnedSkillIds: effectiveThread.skillIds ? (typeof effectiveThread.skillIds === "string" ? JSON.parse(effectiveThread.skillIds) : effectiveThread.skillIds) : null,
-            kind: effectiveThread.kind as "delivery" | "delegation",
-          });
-          deps.threadService.update(effectiveThread.id, { routingPlan });
-          broadcastThreadEvent(effectiveThread.id, "updated", { thread: deps.threadService.getById(effectiveThread.id) });
-          turnMessage = `${formatRoutingPlanForPrompt(routingPlan, message.length)}\n\n${message}`;
-        }
+      // Run thread router for the first turn
+      let turnMessage = message;
+      if (historyReplayPrompt) {
+        turnMessage = `${historyReplayPrompt}\n\n${turnMessage}`;
+      }
+      if (deps.skillRegistry) {
+        const availableSkills = deps.skillRegistry.listEnabled();
+        const routingPlan = routeThread({
+          message,
+          availableSkills,
+          pinnedSkillIds: effectiveThread.skillIds ? (typeof effectiveThread.skillIds === "string" ? JSON.parse(effectiveThread.skillIds) : effectiveThread.skillIds) : null,
+          kind: effectiveThread.kind as "delivery" | "delegation",
+        });
+        deps.threadService.update(effectiveThread.id, { routingPlan });
+        broadcastThreadEvent(effectiveThread.id, "updated", { thread: deps.threadService.getById(effectiveThread.id) });
+        turnMessage = `${formatRoutingPlanForPrompt(routingPlan, message.length)}\n\n${message}`;
+      }
 
-        await provider.sendTurn(session.id, turnMessage, attachments);
+      const sendTurn = async () => {
+        try {
+          await provider.sendTurn(session.id, turnMessage, options.attachments);
+        } catch (err) {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          deps.threadService.markError(effectiveThread.id, errorMessage);
+          broadcastThreadEvent(effectiveThread.id, "status", { status: "error", error: errorMessage });
+          cleanup();
+          if (!detach) throw err;
+        }
+      };
+
+      if (detach) {
+        void sendTurn();
+      } else {
+        await sendTurn();
       }
 
       const updated = deps.threadService.getById(effectiveThread.id) ?? effectiveThread;
-      return { ok: true, message: "Thread started", thread: updated };
+      return { ok: true, message: detach ? "Thread started in background" : "Thread started", thread: updated };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       deps.threadService.markError(effectiveThread.id, errorMessage);
@@ -340,7 +427,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     name: ToolName.ThreadControl,
     description:
       "Control agent threads end-to-end: create/list/update/delete threads, run them in parallel, " +
-      "send turns, stop/interrupt, and create pull requests with direct links.",
+      "send turns, stop/interrupt, and create pull requests with direct links. " +
+      "Threads have two kinds: delivery threads are user-owned work items that can be completed, resumed, reviewed, and used to create PRs; " +
+      "delegation threads are helper/sub-agent tasks that auto-finish after one turn and cannot create PRs. " +
+      "Creating or starting a thread requires a non-empty prompt. Scheduled jobs should create delivery threads with detach=true so the scheduler returns after dispatching the turn.",
     tier: "standard",
     category: "agent",
     source: "builtin",
@@ -372,16 +462,42 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         title: { type: "string", description: "Thread title (create/update)." },
         model: { type: "string", description: "Optional provider model." },
         runtimeMode: { type: "string", enum: ["full-access", "supervised"], description: "Execution mode for thread runs." },
-        kind: { type: "string", enum: ["delivery", "delegation"], description: "Thread kind. Delegation threads are helper workers and do not create PRs." },
+        kind: {
+          type: "string",
+          enum: ["delivery", "delegation"],
+          description:
+            "Thread kind. Use delivery for user-owned work that can be reviewed, resumed, merged, or turned into a PR. " +
+            "Use delegation for helper/sub-agent work; delegation threads auto-finish after one turn and cannot create PRs.",
+        },
         workingDirectory: { type: "string", description: "Working directory for the thread." },
         branch: { type: "string", description: "Git branch metadata for the thread." },
-        message: { type: "string", description: "Initial or follow-up user message for start/send." },
+        prompt: {
+          type: "string",
+          description: "Required prompt for create/start/send. Prefer this over `message`; `message` is kept as a backward-compatible alias.",
+        },
+        message: { type: "string", description: "Backward-compatible alias for `prompt`." },
         attachments: {
           type: "array",
           description: "Optional attachments for provider sendTurn.",
           items: { type: "string" },
         },
-        start: { type: "boolean", description: "For create/create_many: auto-start thread(s) after creation." },
+        start: { type: "boolean", description: "For create/create_many: auto-start thread(s) after creation. Requires `prompt`." },
+        detach: {
+          type: "boolean",
+          description:
+            "Return after dispatching the first turn instead of waiting for provider.sendTurn. " +
+            "Use true for scheduled/cron-created delivery threads so the job creates a normal user-visible thread without blocking the scheduler. Scheduler-triggered starts detach automatically.",
+        },
+        autoStopAfterTurn: {
+          type: "boolean",
+          description:
+            "Stop the provider session and clear resumability after the first turn completes. " +
+            "Delegation threads always do this. Leave false for normal delivery threads that the user may review, resume, merge, or delete later.",
+        },
+        timeoutMinutes: {
+          type: "number",
+          description: "Maximum runtime before stopping the provider session. Scheduler-triggered starts default to 240 minutes.",
+        },
         threads: {
           type: "array",
           description: "For create_many: array of thread specs to create in one call.",
@@ -396,8 +512,12 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               branch: { type: "string" },
               sessionId: { type: "string" },
               start: { type: "boolean" },
+              prompt: { type: "string" },
               message: { type: "string" },
               attachments: { type: "array", items: { type: "string" } },
+              detach: { type: "boolean" },
+              autoStopAfterTurn: { type: "boolean" },
+              timeoutMinutes: { type: "number" },
             },
             required: ["title"],
           },
@@ -444,6 +564,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
           }
 
           case "create": {
+            const prompt = normalizePrompt(input.message, input.prompt);
+            if (!prompt) {
+              return { ok: false, message: "create requires non-empty `prompt`." };
+            }
             const resolvedProvider = resolveProviderId(context);
             if (!resolvedProvider.providerId) {
               return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
@@ -464,10 +588,18 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             broadcastThreadEvent(thread.id, "created", { thread });
 
             if (!input.start) {
+              const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
+              broadcastThreadEvent(thread.id, "activity", { activity });
               return { ok: true, message: "Thread created", data: { thread } };
             }
 
-            const started = await startThread(context, thread, input.message, input.attachments);
+            const started = await startThread(context, thread, {
+              message: prompt,
+              attachments: input.attachments,
+              detach: input.detach,
+              autoStopAfterTurn: input.autoStopAfterTurn,
+              timeoutMinutes: input.timeoutMinutes,
+            });
             if (!started.ok) {
               return {
                 ok: false,
@@ -486,6 +618,13 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!input.threads || input.threads.length === 0) {
               return { ok: false, message: "create_many requires non-empty `threads`." };
             }
+            const missingPrompt = input.threads.find((spec) => {
+              const prompt = normalizePrompt(spec.message, spec.prompt) ?? normalizePrompt(input.message, input.prompt);
+              return !prompt;
+            });
+            if (missingPrompt) {
+              return { ok: false, message: `create_many requires non-empty prompt for thread '${missingPrompt.title}'.` };
+            }
 
             const validatedSpecs = input.threads.map((spec) => ({
               spec,
@@ -502,6 +641,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             const created = validatedSpecs.map(({ spec, resolvedProvider }) => {
               const selectedProviderId = resolvedProvider.providerId!;
               const selectedDefaults = resolveSelectedThreadDefaults(context);
+              const prompt = (normalizePrompt(spec.message, spec.prompt) ?? normalizePrompt(input.message, input.prompt))!;
               const thread = deps.threadService.create({
                 userId,
                 sessionId: spec.sessionId ?? input.sessionId,
@@ -514,18 +654,19 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                 branch: spec.branch ?? input.branch,
               });
               broadcastThreadEvent(thread.id, "created", { thread });
-              return { thread, spec };
+              return { thread, spec, prompt };
             });
 
             const startTargets = created.filter(({ spec }) => spec.start === true || input.start === true);
             const startResults = await Promise.all(
-              startTargets.map(async ({ thread, spec }) => {
-                const started = await startThread(
-                  context,
-                  thread,
-                  spec.message ?? input.message,
-                  spec.attachments ?? input.attachments,
-                );
+              startTargets.map(async ({ thread, spec, prompt }) => {
+                const started = await startThread(context, thread, {
+                  message: prompt,
+                  attachments: spec.attachments ?? input.attachments,
+                  detach: spec.detach ?? input.detach,
+                  autoStopAfterTurn: spec.autoStopAfterTurn ?? input.autoStopAfterTurn,
+                  timeoutMinutes: spec.timeoutMinutes ?? input.timeoutMinutes,
+                });
                 return {
                   threadId: thread.id,
                   ok: started.ok,
@@ -539,6 +680,11 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             const threadById = new Map(created.map((entry) => [entry.thread.id, entry.thread]));
             for (const started of startResults) {
               threadById.set(started.threadId, started.thread);
+            }
+            for (const { thread, prompt, spec } of created) {
+              if (spec.start === true || input.start === true) continue;
+              const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
+              broadcastThreadEvent(thread.id, "activity", { activity });
             }
             const threads = [...threadById.values()];
 
@@ -611,9 +757,17 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
           case "start": {
             if (!input.threadId) return { ok: false, message: "start requires `threadId`." };
+            const prompt = normalizePrompt(input.message, input.prompt);
+            if (!prompt) return { ok: false, message: "start requires non-empty `prompt`." };
             const thread = getAccessibleThread(input.threadId, userId);
             if (!thread) return { ok: false, message: "Thread not found." };
-            const started = await startThread(context, thread, input.message, input.attachments);
+            const started = await startThread(context, thread, {
+              message: prompt,
+              attachments: input.attachments,
+              detach: input.detach,
+              autoStopAfterTurn: input.autoStopAfterTurn,
+              timeoutMinutes: input.timeoutMinutes,
+            });
             return {
               ok: started.ok,
               message: started.message,
@@ -623,7 +777,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
           case "send": {
             if (!input.threadId) return { ok: false, message: "send requires `threadId`." };
-            if (!input.message?.trim()) return { ok: false, message: "send requires non-empty `message`." };
+            const prompt = normalizePrompt(input.message, input.prompt);
+            if (!prompt) return { ok: false, message: "send requires non-empty `prompt`." };
             const thread = getAccessibleThread(input.threadId, userId);
             if (!thread) return { ok: false, message: "Thread not found." };
             if (!thread.providerSessionId) {
@@ -635,8 +790,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
             deps.threadService.update(thread.id, { status: "running", error: null, completedAt: null });
             broadcastThreadEvent(thread.id, "status", { status: "running" });
-            await provider.sendTurn(thread.providerSessionId, input.message, input.attachments);
-            const activity = deps.threadService.addActivity(thread.id, "message", input.message.slice(0, 500), { role: "user" });
+            await provider.sendTurn(thread.providerSessionId, prompt, input.attachments);
+            const activity = deps.threadService.addActivity(thread.id, "message", prompt.slice(0, 500), { role: "user" });
             broadcastThreadEvent(thread.id, "activity", { activity });
             return { ok: true, message: "Turn sent", data: { threadId: thread.id } };
           }
