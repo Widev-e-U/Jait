@@ -14,6 +14,9 @@ import type {
   CliProviderAdapter,
   ProviderId,
   ProviderInfo,
+  ProviderAuthStatus,
+  ProviderLoginResult,
+  ProviderLogoutResult,
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
@@ -22,6 +25,7 @@ import type {
 import type { WsControlPlane } from "../ws.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import { mapCodexNotification } from "./codex-event-mapper.js";
+import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
 
 export class RemoteCliProvider implements CliProviderAdapter {
   readonly id: ProviderId;
@@ -42,6 +46,7 @@ export class RemoteCliProvider implements CliProviderAdapter {
       description: `${providerId} running on remote device ${nodeId}`,
       available: true,
       modes: ["full-access", "supervised"],
+      auth: NO_PROVIDER_AUTH,
     };
 
     // Listen for events forwarded from the remote node
@@ -68,6 +73,22 @@ export class RemoteCliProvider implements CliProviderAdapter {
       this.info.unavailableReason = `Provider ${this.id} not available on device ${this.nodeId}`;
     }
     return this.info.available;
+  }
+
+  async getAuthStatus(): Promise<ProviderAuthStatus> {
+    return {
+      ...NO_PROVIDER_AUTH,
+      authenticated: null,
+      detail: "Remote provider login is managed on the remote device.",
+    };
+  }
+
+  async startLogin(): Promise<ProviderLoginResult> {
+    return unsupportedLogin(this.id, "Remote provider login is managed on the remote device.");
+  }
+
+  async logout(): Promise<ProviderLogoutResult> {
+    return unsupportedLogout(this.id, "Remote provider login is managed on the remote device.");
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {

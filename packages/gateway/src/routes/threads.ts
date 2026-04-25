@@ -1749,9 +1749,14 @@ export function registerThreadRoutes(
     if (!authUser) return;
 
     const providers = providerRegistry.list();
-    // Check availability in parallel
-    await Promise.all(
-      providers.map((p) => p.checkAvailability().catch(() => false)),
+    const providerSnapshots = await Promise.all(
+      providers.map(async (p) => {
+        await p.checkAvailability().catch(() => false);
+        const auth = await p.getAuthStatus?.().catch(() => p.info.auth
+          ? { ...p.info.auth, authenticated: null, detail: "Failed to check provider auth status." }
+          : undefined);
+        return { provider: p, auth };
+      }),
     );
 
     // Collect remote provider info from connected filesystem nodes
@@ -1769,16 +1774,73 @@ export function registerThreadRoutes(
     }
 
     return {
-      providers: providers.map((p) => ({
+      providers: providerSnapshots.map(({ provider: p, auth }) => ({
         id: p.id,
         name: p.info.name,
         description: p.info.description,
         available: p.info.available,
         unavailableReason: p.info.unavailableReason,
         modes: p.info.modes,
+        auth: auth ?? p.info.auth,
       })),
       remoteProviders,
     };
+  });
+
+  /** Get provider auth status */
+  app.get("/api/providers/:id/auth/status", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    const { id } = request.params as { id: string };
+    const provider = providerRegistry.get(id as ProviderId);
+    if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
+    if (!provider.getAuthStatus) {
+      return reply.status(501).send({ error: `Provider ${id} does not support auth status` });
+    }
+    return provider.getAuthStatus();
+  });
+
+  /** Start provider login */
+  app.post("/api/providers/:id/auth/login", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    const { id } = request.params as { id: string };
+    const provider = providerRegistry.get(id as ProviderId);
+    if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
+    if (!provider.startLogin) {
+      return reply.status(501).send({ error: `Provider ${id} does not support login` });
+    }
+    const result = await provider.startLogin();
+    if (!result.ok && result.status === "unsupported") {
+      return reply.status(501).send(result);
+    }
+    if (!result.ok) {
+      return reply.status(500).send(result);
+    }
+    return result;
+  });
+
+  /** Log out provider */
+  app.post("/api/providers/:id/auth/logout", async (request, reply) => {
+    const authUser = await requireAuth(request, reply, config.jwtSecret);
+    if (!authUser) return;
+
+    const { id } = request.params as { id: string };
+    const provider = providerRegistry.get(id as ProviderId);
+    if (!provider) return reply.status(404).send({ error: `Unknown provider: ${id}` });
+    if (!provider.logout) {
+      return reply.status(501).send({ error: `Provider ${id} does not support logout` });
+    }
+    const result = await provider.logout();
+    if (!result.ok && result.status === "unsupported") {
+      return reply.status(501).send(result);
+    }
+    if (!result.ok) {
+      return reply.status(500).send(result);
+    }
+    return result;
   });
 
   /** List models for a specific provider */

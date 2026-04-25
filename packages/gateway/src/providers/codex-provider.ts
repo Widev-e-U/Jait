@@ -23,12 +23,21 @@ import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderAuthStatus,
+  ProviderLoginResult,
+  ProviderLogoutResult,
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
 } from "./contracts.js";
 import { mapCodexNotification } from "./codex-event-mapper.js";
+import {
+  DEVICE_PROVIDER_AUTH,
+  killChildTree as killAuthChildTree,
+  runAuthCommand,
+  startDeviceLoginCommand,
+} from "./provider-auth.js";
 
 // ── JSON-RPC types ───────────────────────────────────────────────────
 
@@ -80,11 +89,13 @@ export class CodexProvider implements CliProviderAdapter {
     description: "OpenAI Codex CLI agent with sandboxed execution and MCP support",
     available: false,
     modes: ["full-access", "supervised"],
+    auth: DEVICE_PROVIDER_AUTH,
   };
 
   private sessions = new Map<string, CodexSessionState>();
   private emitter = new EventEmitter();
   private codexPath: string | null = null;
+  private authLoginProcess: ChildProcess | null = null;
 
   async checkAvailability(): Promise<boolean> {
     try {
@@ -144,6 +155,50 @@ export class CodexProvider implements CliProviderAdapter {
     } catch {
       return false;
     }
+  }
+
+  async getAuthStatus(): Promise<ProviderAuthStatus> {
+    const authenticated = !!process.env.OPENAI_API_KEY || this.checkCodexAuthFile();
+    return {
+      ...DEVICE_PROVIDER_AUTH,
+      authenticated,
+      detail: authenticated ? "Codex credentials are configured." : "Codex is not authenticated.",
+    };
+  }
+
+  async startLogin(): Promise<ProviderLoginResult> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    const { result, child } = await startDeviceLoginCommand({
+      providerId: this.id,
+      label: "Codex",
+      commandLine: this.codexPath ?? "codex",
+      args: ["login", "--device-auth"],
+      timeoutMs: 30_000,
+    });
+    if (child) {
+      this.authLoginProcess = child;
+      child.on("exit", () => {
+        if (this.authLoginProcess === child) this.authLoginProcess = null;
+        void this.checkAvailability();
+      });
+    }
+    return result;
+  }
+
+  async logout(): Promise<ProviderLogoutResult> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    const result = await runAuthCommand(this.id, this.codexPath ?? "codex", ["logout"]);
+    await this.checkAvailability().catch(() => false);
+    return {
+      ...result,
+      message: result.ok ? "Codex logout completed." : result.message,
+    };
   }
 
   /**

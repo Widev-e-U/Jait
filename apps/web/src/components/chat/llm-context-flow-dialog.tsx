@@ -338,18 +338,18 @@ function TraceRowView({ row, onExpandChange }: { row: TraceRow; onExpandChange?:
 
   if (row.kind === 'round') {
     return (
-      <div className="rounded-md border border-border bg-background px-3 py-2">
-        <div className="flex flex-wrap items-center gap-2">
+      <div className="min-w-0 overflow-hidden rounded-md border border-border bg-background px-3 py-2">
+        <div className="flex min-w-0 flex-wrap items-center gap-2">
           <span className="rounded-md bg-foreground px-2 py-1 text-xs font-semibold text-background">
             Round {row.round.round}
           </span>
-          <span className="text-xs text-muted-foreground">{row.round.model}</span>
-          <span className="text-xs text-muted-foreground">{new Date(row.round.createdAt).toLocaleString()}</span>
+          <span className="min-w-0 break-words text-xs text-muted-foreground">{row.round.model}</span>
+          <span className="min-w-0 break-words text-xs text-muted-foreground">{new Date(row.round.createdAt).toLocaleString()}</span>
         </div>
-        <div className="mt-2 flex flex-wrap gap-2 text-xs text-muted-foreground">
+        <div className="mt-2 flex min-w-0 flex-wrap gap-2 text-xs text-muted-foreground">
           <span>{row.messageCount} messages sent</span>
           <span>{row.toolCount} tool schemas available</span>
-          {row.round.tool_choice ? <span>tool_choice: {row.round.tool_choice}</span> : null}
+          {row.round.tool_choice ? <span className="min-w-0 break-words">tool_choice: {row.round.tool_choice}</span> : null}
         </div>
         <RoundMetricsBar metrics={row.round.metrics} />
       </div>
@@ -508,16 +508,16 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="grid h-[95vh] sm:h-[85vh] max-w-[min(1200px,96vw)] grid-rows-[auto_minmax(0,1fr)] p-0">
+      <DialogContent showCloseButton={false} className="grid h-[95vh] max-w-[min(1200px,96vw)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0 sm:h-[85vh]">
         <DialogHeader className="border-b px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2 overflow-hidden">
+          <div className="flex min-w-0 items-center gap-2">
             <DialogTitle className="shrink-0 text-sm font-semibold">LLM Context Flow</DialogTitle>
             <DialogDescription className="min-w-0 flex-1 truncate text-xs">
               {contextFlow
                 ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} · ${contextFlow.rounds.length} round${contextFlow.rounds.length === 1 ? '' : 's'}`
                 : 'No context snapshot available'}
             </DialogDescription>
-            <div className="ml-auto flex shrink-0 items-center gap-1">
+            <div className="-my-1 ml-auto flex shrink-0 items-center gap-1 p-1">
               <Button
                 type="button"
                 variant={mode === 'trace' ? 'default' : 'outline'}

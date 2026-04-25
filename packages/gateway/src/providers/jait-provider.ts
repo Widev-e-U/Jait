@@ -25,11 +25,15 @@ import type { ToolRegistry } from "../tools/registry.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderAuthStatus,
+  ProviderLoginResult,
+  ProviderLogoutResult,
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
 } from "./contracts.js";
+import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
 
 interface JaitSessionState {
   session: ProviderSession;
@@ -70,6 +74,7 @@ export class JaitProvider implements CliProviderAdapter {
     description: "Jait's native agent loop using OpenAI-compatible APIs with full tool access",
     available: true, // Always available — it's the built-in provider
     modes: ["full-access", "supervised"],
+    auth: NO_PROVIDER_AUTH,
   };
 
   private emitter = new EventEmitter();
@@ -84,6 +89,22 @@ export class JaitProvider implements CliProviderAdapter {
 
   async listModels(): Promise<ProviderModelInfo[]> {
     return JAIT_MODELS;
+  }
+
+  async getAuthStatus(): Promise<ProviderAuthStatus> {
+    return {
+      ...NO_PROVIDER_AUTH,
+      authenticated: null,
+      detail: "Jait uses API keys configured in Jait settings rather than a CLI login.",
+    };
+  }
+
+  async startLogin(): Promise<ProviderLoginResult> {
+    return unsupportedLogin(this.id, "Jait uses API keys configured in Jait settings rather than a CLI login.");
+  }
+
+  async logout(): Promise<ProviderLogoutResult> {
+    return unsupportedLogout(this.id, "Jait uses API keys configured in Jait settings rather than a CLI login.");
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {

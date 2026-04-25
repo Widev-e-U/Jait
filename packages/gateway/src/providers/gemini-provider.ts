@@ -20,11 +20,15 @@ import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderAuthStatus,
+  ProviderLoginResult,
+  ProviderLogoutResult,
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
 } from "./contracts.js";
+import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
 
 // ── Internal session state ───────────────────────────────────────────
 
@@ -54,6 +58,7 @@ export class GeminiProvider implements CliProviderAdapter {
     description: "Google Gemini CLI agent with agentic coding and MCP support",
     available: false,
     modes: ["full-access", "supervised"],
+    auth: NO_PROVIDER_AUTH,
   };
 
   private sessions = new Map<string, GeminiSessionState>();
@@ -86,6 +91,25 @@ export class GeminiProvider implements CliProviderAdapter {
       this.info.unavailableReason = "Failed to check Gemini CLI availability";
       return false;
     }
+  }
+
+  async getAuthStatus(): Promise<ProviderAuthStatus> {
+    const authenticated = !!process.env.GEMINI_API_KEY?.trim() || !!process.env.GOOGLE_API_KEY?.trim() || this.hasGeminiConfig();
+    return {
+      ...NO_PROVIDER_AUTH,
+      authenticated,
+      detail: authenticated
+        ? "Gemini credentials are configured."
+        : "This Gemini CLI version does not expose a device-login command; run `gemini` once or set GEMINI_API_KEY.",
+    };
+  }
+
+  async startLogin(): Promise<ProviderLoginResult> {
+    return unsupportedLogin(this.id, "This Gemini CLI version does not expose a device-login command. Run `gemini` once in a terminal or set GEMINI_API_KEY.");
+  }
+
+  async logout(): Promise<ProviderLogoutResult> {
+    return unsupportedLogout(this.id, "Gemini CLI logout is not available from this installed CLI version.");
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {

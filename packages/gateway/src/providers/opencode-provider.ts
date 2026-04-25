@@ -19,11 +19,20 @@ import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderAuthStatus,
+  ProviderLoginResult,
+  ProviderLogoutResult,
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
 } from "./contracts.js";
+import {
+  DEVICE_PROVIDER_AUTH,
+  killChildTree as killAuthChildTree,
+  runAuthCommand,
+  startDeviceLoginCommand,
+} from "./provider-auth.js";
 
 // ── Internal session state ───────────────────────────────────────────
 
@@ -50,11 +59,13 @@ export class OpenCodeProvider implements CliProviderAdapter {
     description: "OpenCode CLI agent with multi-provider model support",
     available: false,
     modes: ["full-access", "supervised"],
+    auth: DEVICE_PROVIDER_AUTH,
   };
 
   private sessions = new Map<string, OpenCodeSessionState>();
   private emitter = new EventEmitter();
   private opencodePath: string | null = null;
+  private authLoginProcess: ChildProcess | null = null;
 
   async checkAvailability(): Promise<boolean> {
     try {
@@ -88,6 +99,58 @@ export class OpenCodeProvider implements CliProviderAdapter {
       this.info.unavailableReason = "Failed to check OpenCode CLI availability";
       return false;
     }
+  }
+
+  async getAuthStatus(): Promise<ProviderAuthStatus> {
+    const status = await runAuthCommand(this.id, this.opencodePath ?? "opencode", ["auth", "list"], 10_000);
+    const envConfigured = !!(
+      process.env["ANTHROPIC_API_KEY"] ||
+      process.env["OPENAI_API_KEY"] ||
+      process.env["GOOGLE_API_KEY"] ||
+      process.env["OPENROUTER_API_KEY"] ||
+      process.env["AWS_ACCESS_KEY_ID"]
+    );
+    const authenticated = envConfigured || status.ok;
+    return {
+      ...DEVICE_PROVIDER_AUTH,
+      authenticated,
+      detail: authenticated ? "OpenCode credentials are configured." : status.rawOutput ?? "OpenCode is not authenticated.",
+    };
+  }
+
+  async startLogin(): Promise<ProviderLoginResult> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    const { result, child } = await startDeviceLoginCommand({
+      providerId: this.id,
+      label: "OpenCode",
+      commandLine: this.opencodePath ?? "opencode",
+      args: ["auth", "login"],
+      timeoutMs: 30_000,
+    });
+    if (child) {
+      this.authLoginProcess = child;
+      child.on("exit", () => {
+        if (this.authLoginProcess === child) this.authLoginProcess = null;
+        void this.checkAvailability();
+      });
+    }
+    return result;
+  }
+
+  async logout(): Promise<ProviderLogoutResult> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    const result = await runAuthCommand(this.id, this.opencodePath ?? "opencode", ["auth", "logout"]);
+    await this.checkAvailability().catch(() => false);
+    return {
+      ...result,
+      message: result.ok ? "OpenCode logout completed." : result.message,
+    };
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {

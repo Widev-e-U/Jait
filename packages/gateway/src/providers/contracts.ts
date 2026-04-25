@@ -27,6 +27,41 @@ export interface ProviderInfo {
   unavailableReason?: string;
   /** Supported runtime modes */
   modes: RuntimeMode[];
+  /** Authentication actions available for this provider. */
+  auth?: ProviderAuthCapabilities;
+}
+
+// ── Provider authentication ─────────────────────────────────────────
+
+export interface ProviderAuthCapabilities {
+  login: boolean;
+  logout: boolean;
+  /** Login can produce a browser verification URL and user code. */
+  deviceCode: boolean;
+}
+
+export interface ProviderAuthStatus extends ProviderAuthCapabilities {
+  authenticated: boolean | null;
+  detail?: string;
+  username?: string;
+}
+
+export interface ProviderLoginResult {
+  ok: boolean;
+  status: "started" | "completed" | "unsupported" | "error";
+  providerId: ProviderId;
+  message: string;
+  verificationUri?: string;
+  userCode?: string;
+  rawOutput?: string;
+}
+
+export interface ProviderLogoutResult {
+  ok: boolean;
+  status: "completed" | "unsupported" | "error";
+  providerId: ProviderId;
+  message: string;
+  rawOutput?: string;
 }
 
 // ── Runtime modes ────────────────────────────────────────────────────
@@ -100,6 +135,23 @@ export interface CliProviderAdapter {
    * Returns an empty array if listing is not supported.
    */
   listModels?(): Promise<ProviderModelInfo[]>;
+
+  /**
+   * Return current auth state plus supported auth actions.
+   */
+  getAuthStatus?(): Promise<ProviderAuthStatus>;
+
+  /**
+   * Start provider login. Device-login implementations should return the
+   * verification URL and user code as soon as the CLI emits them while leaving
+   * the CLI process alive to complete the login in the background.
+   */
+  startLogin?(): Promise<ProviderLoginResult>;
+
+  /**
+   * Log out from the provider CLI.
+   */
+  logout?(): Promise<ProviderLogoutResult>;
 
   /**
    * Start a provider session for a given thread.

@@ -22,11 +22,20 @@ import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderAuthStatus,
+  ProviderLoginResult,
+  ProviderLogoutResult,
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
 } from "./contracts.js";
+import {
+  DEVICE_PROVIDER_AUTH,
+  killChildTree as killAuthChildTree,
+  runAuthCommand,
+  startDeviceLoginCommand,
+} from "./provider-auth.js";
 
 // ── Internal session state ───────────────────────────────────────────
 
@@ -66,11 +75,13 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
     description: "Anthropic Claude Code CLI agent with agentic coding and MCP support",
     available: false,
     modes: ["full-access", "supervised"],
+    auth: DEVICE_PROVIDER_AUTH,
   };
 
   private sessions = new Map<string, ClaudeSessionState>();
   private emitter = new EventEmitter();
   private claudePath: string | null = null;
+  private authLoginProcess: ChildProcess | null = null;
 
   async checkAvailability(): Promise<boolean> {
     try {
@@ -105,6 +116,52 @@ export class ClaudeCodeProvider implements CliProviderAdapter {
       this.info.unavailableReason = "Failed to check Claude Code CLI availability";
       return false;
     }
+  }
+
+  async getAuthStatus(): Promise<ProviderAuthStatus> {
+    const status = await runAuthCommand(this.id, this.claudePath ?? "claude", ["auth", "status"], 10_000);
+    const envConfigured = !!process.env.ANTHROPIC_API_KEY?.trim();
+    const authenticated = envConfigured || status.ok;
+    return {
+      ...DEVICE_PROVIDER_AUTH,
+      authenticated,
+      detail: authenticated ? "Claude Code credentials are configured." : status.rawOutput ?? "Claude Code is not authenticated.",
+    };
+  }
+
+  async startLogin(): Promise<ProviderLoginResult> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    const { result, child } = await startDeviceLoginCommand({
+      providerId: this.id,
+      label: "Claude Code",
+      commandLine: this.claudePath ?? "claude",
+      args: ["auth", "login", "--claudeai"],
+      timeoutMs: 30_000,
+    });
+    if (child) {
+      this.authLoginProcess = child;
+      child.on("exit", () => {
+        if (this.authLoginProcess === child) this.authLoginProcess = null;
+        void this.checkAvailability();
+      });
+    }
+    return result;
+  }
+
+  async logout(): Promise<ProviderLogoutResult> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    const result = await runAuthCommand(this.id, this.claudePath ?? "claude", ["auth", "logout"]);
+    await this.checkAvailability().catch(() => false);
+    return {
+      ...result,
+      message: result.ok ? "Claude Code logout completed." : result.message,
+    };
   }
 
   /**

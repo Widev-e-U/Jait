@@ -21,11 +21,20 @@ import { uuidv7 } from "../db/uuidv7.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
+  ProviderAuthStatus,
+  ProviderLoginResult,
+  ProviderLogoutResult,
   ProviderModelInfo,
   ProviderSession,
   ProviderEvent,
   StartSessionOptions,
 } from "./contracts.js";
+import {
+  DEVICE_PROVIDER_AUTH,
+  killChildTree as killAuthChildTree,
+  runAuthCommand,
+  startDeviceLoginCommand,
+} from "./provider-auth.js";
 
 // ── Internal session state ───────────────────────────────────────────
 
@@ -55,11 +64,13 @@ export class CopilotProvider implements CliProviderAdapter {
     description: "GitHub Copilot CLI agent with multi-model and MCP support",
     available: false,
     modes: ["full-access", "supervised"],
+    auth: DEVICE_PROVIDER_AUTH,
   };
 
   private sessions = new Map<string, CopilotSessionState>();
   private emitter = new EventEmitter();
   private copilotPath: string | null = null;
+  private authLoginProcess: ChildProcess | null = null;
 
   async checkAvailability(): Promise<boolean> {
     try {
@@ -87,6 +98,50 @@ export class CopilotProvider implements CliProviderAdapter {
       this.info.unavailableReason = "Failed to check Copilot CLI availability";
       return false;
     }
+  }
+
+  async getAuthStatus(): Promise<ProviderAuthStatus> {
+    const status = await runAuthCommand(this.id, "gh", ["auth", "status"], 10_000);
+    return {
+      ...DEVICE_PROVIDER_AUTH,
+      authenticated: status.ok,
+      detail: status.ok ? "GitHub credentials are configured for Copilot." : status.rawOutput ?? "GitHub CLI is not authenticated.",
+    };
+  }
+
+  async startLogin(): Promise<ProviderLoginResult> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    const { result, child } = await startDeviceLoginCommand({
+      providerId: this.id,
+      label: "GitHub Copilot",
+      commandLine: "gh",
+      args: ["auth", "login", "--hostname", "github.com", "--git-protocol", "https", "--web", "--clipboard"],
+      timeoutMs: 30_000,
+    });
+    if (child) {
+      this.authLoginProcess = child;
+      child.on("exit", () => {
+        if (this.authLoginProcess === child) this.authLoginProcess = null;
+        void this.checkAvailability();
+      });
+    }
+    return result;
+  }
+
+  async logout(): Promise<ProviderLogoutResult> {
+    if (this.authLoginProcess) {
+      killAuthChildTree(this.authLoginProcess);
+      this.authLoginProcess = null;
+    }
+    const result = await runAuthCommand(this.id, "gh", ["auth", "logout", "--hostname", "github.com"]);
+    await this.checkAvailability().catch(() => false);
+    return {
+      ...result,
+      message: result.ok ? "GitHub Copilot logout completed." : result.message,
+    };
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {

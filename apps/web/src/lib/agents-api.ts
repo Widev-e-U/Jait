@@ -59,6 +59,34 @@ export interface ProviderInfo {
   available: boolean
   unavailableReason?: string
   modes: RuntimeMode[]
+  auth?: ProviderAuthStatus
+}
+
+export interface ProviderAuthStatus {
+  login: boolean
+  logout: boolean
+  deviceCode: boolean
+  authenticated: boolean | null
+  detail?: string
+  username?: string
+}
+
+export interface ProviderLoginResult {
+  ok: boolean
+  status: 'started' | 'completed' | 'unsupported' | 'error'
+  providerId: ProviderId
+  message: string
+  verificationUri?: string
+  userCode?: string
+  rawOutput?: string
+}
+
+export interface ProviderLogoutResult {
+  ok: boolean
+  status: 'completed' | 'unsupported' | 'error'
+  providerId: ProviderId
+  message: string
+  rawOutput?: string
 }
 
 export interface RemoteProviderInfo {
@@ -268,6 +296,50 @@ export class AgentsApi {
     this._providersInflight = null
     this._providersCachedAt = 0
     return this.listProviders()
+  }
+
+  async getProviderAuthStatus(providerId: ProviderId): Promise<ProviderAuthStatus> {
+    const res = await fetch(`${API_URL}/api/providers/${providerId}/auth/status`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to get provider auth status: ${res.statusText}`)
+    return res.json() as Promise<ProviderAuthStatus>
+  }
+
+  async startProviderLogin(providerId: ProviderId): Promise<ProviderLoginResult> {
+    const res = await fetch(`${API_URL}/api/providers/${providerId}/auth/login`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({}),
+    })
+    const data = await res.json().catch(() => null) as ProviderLoginResult | { error?: string } | null
+    if (!res.ok) {
+      const message = data && 'message' in data && typeof data.message === 'string'
+        ? data.message
+        : data && 'error' in data && typeof data.error === 'string'
+          ? data.error
+          : `Failed to start provider login: ${res.statusText}`
+      throw new Error(message)
+    }
+    return data as ProviderLoginResult
+  }
+
+  async logoutProvider(providerId: ProviderId): Promise<ProviderLogoutResult> {
+    const res = await fetch(`${API_URL}/api/providers/${providerId}/auth/logout`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify({}),
+    })
+    const data = await res.json().catch(() => null) as ProviderLogoutResult | { error?: string } | null
+    if (!res.ok) {
+      const message = data && 'message' in data && typeof data.message === 'string'
+        ? data.message
+        : data && 'error' in data && typeof data.error === 'string'
+          ? data.error
+          : `Failed to log out provider: ${res.statusText}`
+      throw new Error(message)
+    }
+    return data as ProviderLogoutResult
   }
 
   private _modelsInflight = new Map<string, Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }>>()
