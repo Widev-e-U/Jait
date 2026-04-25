@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { createTerminalRunTool, detectInteractivePrompt } from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
+import type { TerminalSurface } from "./surfaces/terminal.js";
 
 function makeContext() {
   return {
@@ -10,6 +11,37 @@ function makeContext() {
     workspaceRoot: process.cwd(),
     requestedBy: "test",
   };
+}
+
+function makePromptFallbackTool(chunks: string[], shell = "/bin/bash") {
+  let listener: ((data: string) => void) | null = null;
+  const writes: string[] = [];
+  const surface = {
+    id: "term-existing",
+    type: "terminal",
+    state: "running",
+    touch() {},
+    addOutputListener(cb: (data: string) => void) {
+      listener = cb;
+    },
+    removeOutputListener() {
+      listener = null;
+    },
+    write(data: string) {
+      writes.push(data);
+      if (data.includes("\x03")) return;
+      chunks.forEach((chunk, index) => {
+        setTimeout(() => listener?.(chunk), index * 10);
+      });
+    },
+    snapshot() {
+      return { metadata: { shell } };
+    },
+  } as unknown as TerminalSurface;
+  const registry = {
+    getSurface: () => surface,
+  } as unknown as SurfaceRegistry;
+  return { tool: createTerminalRunTool(registry), writes };
 }
 
 describe("terminal.run tool status reporting", () => {
@@ -49,6 +81,45 @@ describe("terminal.run tool status reporting", () => {
     expect(result.ok).toBe(false);
     expect(result.message).toContain("timed out");
     expect((result.data as any).timedOut).toBe(true);
+  });
+
+  it("completes when a non-OSC shell prompt returns", async () => {
+    const { tool } = makePromptFallbackTool([
+      "rg\r\nCommand 'rg' not found, but can be installed with:\r\nsudo apt install ripgrep\r\njakob@movable-base:~/jait$ ",
+    ]);
+
+    const result = await tool.execute({ command: "rg", terminalId: "term-existing", timeout: 1000 }, makeContext());
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("exit code 127");
+    expect((result.data as any).timedOut).toBe(false);
+    expect((result.data as any).output).toContain("Command 'rg' not found");
+  });
+
+  it("captures late output that arrives after prompt fallback starts settling", async () => {
+    const { tool } = makePromptFallbackTool([
+      "echo hi\r\nhi\r\njakob@movable-base:~/jait$ ",
+      "\r\nlate formatter output",
+    ]);
+
+    const result = await tool.execute({ command: "echo hi", terminalId: "term-existing", timeout: 1000 }, makeContext());
+
+    expect(result.ok).toBe(true);
+    expect((result.data as any).timedOut).toBe(false);
+    expect((result.data as any).output).toContain("hi");
+    expect((result.data as any).output).toContain("late formatter output");
+    expect((result.data as any).output).not.toContain("jakob@movable-base");
+  });
+
+  it("still times out when no OSC marker or shell prompt returns", async () => {
+    const { tool, writes } = makePromptFallbackTool(["running without prompt\r\n"]);
+
+    const result = await tool.execute({ command: "long-running", terminalId: "term-existing", timeout: 20 }, makeContext());
+
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain("timed out");
+    expect((result.data as any).timedOut).toBe(true);
+    expect(writes).toContain("\x03\r");
   });
 });
 

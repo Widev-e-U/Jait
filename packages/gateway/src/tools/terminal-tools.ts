@@ -60,6 +60,32 @@ function cleanChunk(s: string): string {
   return out;
 }
 
+function isPowerShellShell(shell: string): boolean {
+  return /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(shell);
+}
+
+function hasShellPrompt(rawOutput: string, powershell: boolean): boolean {
+  const cleaned = stripAnsi(rawOutput).replace(/\r/g, "");
+  const lines = cleaned
+    .split("\n")
+    .map((line) => line.replace(/^[^\x07]*\x07/, "").trim())
+    .filter(Boolean);
+  const lastLine = lines[lines.length - 1] ?? "";
+  if (powershell) return /^PS .+?>/.test(lastLine);
+  return /^[^@\n]+@[^:]+:.*[$#]$/.test(lastLine);
+}
+
+function inferFallbackExitCode(rawOutput: string): number {
+  const cleaned = stripAnsi(rawOutput).replace(/\r/g, "");
+  if (/command (?:'[^']+'\s+)?not found|not recognized as (?:an internal|the name of a cmdlet)|No such file or directory/i.test(cleaned)) {
+    return 127;
+  }
+  if (/permission denied|access is denied/i.test(cleaned)) {
+    return 126;
+  }
+  return 0;
+}
+
 export function detectInteractivePrompt(output: string): boolean {
   if (!output) return false;
   return INTERACTIVE_PROMPT_PATTERNS.some((pattern) => pattern.test(output));
@@ -191,12 +217,14 @@ function executeInTerminal(
   surface: TerminalSurface,
   command: string,
   timeoutMs: number,
+  shell: string,
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
 ): Promise<{ output: string; exitCode: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
     let raw = "";
     let settled = false;
+    const powershell = isPowerShellShell(shell);
 
     // Cached D-marker result so we only scan for it once
     let dMatch: { exitCode: number; end: number } | null = null;
@@ -205,6 +233,7 @@ function executeInTerminal(
     // output from PowerShell's deferred formatting pipeline before
     // calling finish().  Each new PTY chunk resets the timer.
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
+    let settleExitCode: number | null = null;
 
     const listener = (data: string) => {
       raw += data;
@@ -222,7 +251,7 @@ function executeInTerminal(
       // the timer — more data just arrived that we want to capture.
       if (settleTimer) {
         clearTimeout(settleTimer);
-        settleTimer = setTimeout(() => finish(false, dMatch!.exitCode), 50);
+        settleTimer = setTimeout(() => finish(false, settleExitCode), 50);
         return;
       }
 
@@ -242,7 +271,17 @@ function executeInTerminal(
       // prompt markers.  Start a settle timer: if no more data arrives
       // within 50 ms the output is considered complete.
       if (dMatch && OSC_PROMPT_END_RE.test(raw.slice(dMatch.end))) {
-        settleTimer = setTimeout(() => finish(false, dMatch!.exitCode), 50);
+        settleExitCode = dMatch.exitCode;
+        settleTimer = setTimeout(() => finish(false, settleExitCode), 50);
+        return;
+      }
+
+      // Some sessions have a working interactive shell but no OSC 633
+      // completion markers.  A returned prompt is still enough to know a
+      // simple command has finished, so fall back to prompt detection.
+      if (!dMatch && hasShellPrompt(raw, powershell)) {
+        settleExitCode = inferFallbackExitCode(raw);
+        settleTimer = setTimeout(() => finish(false, settleExitCode), 100);
       }
     };
 
@@ -300,10 +339,10 @@ function executeInTerminal(
       }
 
       // Remove the prompt line at the end (e.g. "PS E:\path> ")
-      if (lines.length > 0) {
-        const lastLine = lines[lines.length - 1]!.trim();
-        if (/^PS .+?>/.test(lastLine)) {
-          lines.pop();
+      for (let i = lines.length - 1; i >= 0; i--) {
+        const line = lines[i]!.trim();
+        if (/^PS .+?>/.test(line) || /^[^@\n]+@[^:]+:.*[$#]$/.test(line)) {
+          lines.splice(i, 1);
         }
       }
 
@@ -452,6 +491,7 @@ export function createTerminalRunTool(
           surface,
           command,
           timeout,
+          String(surface.snapshot().metadata?.shell ?? ""),
           context.onOutputChunk,
           context.signal,
         );
