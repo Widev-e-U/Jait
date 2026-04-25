@@ -24,15 +24,3 @@ export function createUserMessageEditSubmission(
     displaySegments,
   }
 }
-
-export function isUserMessageEditUnchanged(
-  text: string,
-  currentText: string,
-  previousSegments?: UserMessageSegment[] | null,
-): boolean {
-  const submission = createUserMessageEditSubmission(text, previousSegments)
-  if (!submission) return false
-
-  return submission.text === currentText.trim()
-    && JSON.stringify(submission.displaySegments) === JSON.stringify(previousSegments ?? [])
-}

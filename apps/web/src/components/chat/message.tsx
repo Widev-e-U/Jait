@@ -24,7 +24,7 @@ import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { Reasoning } from './reasoning'
-import { createUserMessageEditSubmission, isUserMessageEditUnchanged } from './message-edit'
+import { createUserMessageEditSubmission } from './message-edit'
 import { PromptInput, type PromptInputHandle } from './prompt-input'
 import { AgentToolCallWrapper, ToolCallGroup, type ToolCallInfo } from './tool-call-card'
 import { LlmContextFlowDialog } from './llm-context-flow-dialog'
@@ -624,10 +624,6 @@ function MessageInner({
     if (!canEdit || !messageId || !onEditMessage || isSavingEdit) return
     const submission = createUserMessageEditSubmission(nextText ?? editDraft, nextSegments ?? editSegments)
     if (!submission) return
-    if (isUserMessageEditUnchanged(submission.text, userDisplayText, userDisplaySegments)) {
-      setIsEditing(false)
-      return
-    }
 
     setOptimisticUserDisplayText(submission.text)
     setOptimisticUserDisplaySegments(submission.displaySegments)
@@ -655,8 +651,6 @@ function MessageInner({
     messageFromEnd,
     messageIndex,
     onEditMessage,
-    userDisplaySegments,
-    userDisplayText,
   ])
 
   const sendFromMessage = async (nextContent: string, nextSegments?: UserMessageSegment[]) => {

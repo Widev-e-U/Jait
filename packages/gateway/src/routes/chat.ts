@@ -2100,7 +2100,7 @@ export function registerChatRoutes(
         .where(eq(messagesTable.sessionId, sessionId))
         .orderBy(messagesTable.createdAt)
         .all();
-      const rowsToDelete = rows.slice(targetVisibleIndex);
+      const rowsToDelete = rows.slice(Math.max(0, target.historyIndex - 1));
       for (const row of rowsToDelete) {
         db.delete(messagesTable).where(eq(messagesTable.id, row.id)).run();
       }
