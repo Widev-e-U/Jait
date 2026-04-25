@@ -50,7 +50,7 @@ export function registerVoiceRoutes(
     };
   });
 
-  // ── Wyoming/Whisper audio transcription via Home Assistant ──────
+  // ── Audio transcription providers ───────────────────────────────
   app.post("/api/voice/transcribe-audio", async (request, reply) => {
     if (!config || !users) {
       return reply.status(501).send({ error: "NOT_CONFIGURED", details: "Voice audio transcription not available" });
@@ -67,8 +67,8 @@ export function registerVoiceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", details: "audioBase64 is required" });
     }
 
-    const sttProvider = typeof body["provider"] === "string" ? body["provider"] : "wyoming";
     const settings = users.getSettings(authUser.id);
+    const sttProvider = typeof body["provider"] === "string" ? body["provider"] : settings.sttProvider;
 
     if (sttProvider === "whisper") {
       // ── Local Faster Whisper server transcription ─────────────
@@ -93,6 +93,63 @@ export function registerVoiceRoutes(
         const msg = err instanceof Error ? err.message : "Unknown error";
         return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: msg });
       }
+    }
+
+    if (sttProvider === "gpt") {
+      const apiKey = settings.apiKeys["OPENAI_API_KEY"]?.trim() || config.openaiApiKey;
+      const baseUrl = settings.apiKeys["OPENAI_BASE_URL"]?.trim() || config.openaiBaseUrl;
+      const model = settings.apiKeys["OPENAI_TRANSCRIBE_MODEL"]?.trim() || "gpt-4o-mini-transcribe";
+
+      if (!apiKey) {
+        return reply.status(400).send({
+          error: "NOT_CONFIGURED",
+          details: "OPENAI_API_KEY must be set in Settings → API keys or environment",
+        });
+      }
+
+      try {
+        const text = await voice.transcribeViaGpt({ audioBase64, apiKey, baseUrl, model });
+        if (!text) {
+          return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: "No text returned from GPT transcription" });
+        }
+
+        voice.transcribe({ sessionId, transcript: text });
+        return { text };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: msg });
+      }
+    }
+
+    if (sttProvider === "elevenlabs") {
+      const apiKey = settings.apiKeys["ELEVENLABS_API_KEY"]?.trim() || process.env["ELEVENLABS_API_KEY"] || "";
+      const model = settings.apiKeys["ELEVENLABS_STT_MODEL"]?.trim() || process.env["ELEVENLABS_STT_MODEL"] || "scribe_v2";
+      const languageCode = settings.apiKeys["ELEVENLABS_LANGUAGE_CODE"]?.trim() || process.env["ELEVENLABS_LANGUAGE_CODE"] || undefined;
+      const endpoint = settings.apiKeys["ELEVENLABS_STT_URL"]?.trim() || process.env["ELEVENLABS_STT_URL"] || undefined;
+
+      if (!apiKey) {
+        return reply.status(400).send({
+          error: "NOT_CONFIGURED",
+          details: "ELEVENLABS_API_KEY must be set in Settings → API keys or environment",
+        });
+      }
+
+      try {
+        const text = await voice.transcribeViaElevenLabs({ audioBase64, apiKey, model, languageCode, endpoint });
+        if (!text) {
+          return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: "No text returned from ElevenLabs STT" });
+        }
+
+        voice.transcribe({ sessionId, transcript: text });
+        return { text };
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
+        return reply.status(502).send({ error: "TRANSCRIPTION_FAILED", details: msg });
+      }
+    }
+
+    if (sttProvider !== "wyoming") {
+      return reply.status(400).send({ error: "VALIDATION_ERROR", details: "Unsupported STT provider" });
     }
 
     // ── Wyoming / Home Assistant STT (default) ──────────────────

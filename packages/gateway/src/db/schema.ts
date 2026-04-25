@@ -60,7 +60,7 @@ export const userSettings = sqliteTable("user_settings", {
   theme: text("theme").notNull().default("system"), // 'light' | 'dark' | 'system'
   apiKeys: text("api_keys"), // JSON object
   disabledTools: text("disabled_tools"), // JSON string[] of disabled tool names
-  sttProvider: text("stt_provider").notNull().default("whisper"), // 'whisper' | 'wyoming'
+  sttProvider: text("stt_provider").notNull().default("whisper"), // 'whisper' | 'wyoming' | 'gpt' | 'elevenlabs'
   chatProvider: text("chat_provider").notNull().default("jait"), // 'jait' | 'codex' | 'claude-code'
   jaitBackend: text("jait_backend").notNull().default("openai"), // 'openai' | 'openrouter'
   recentModels: text("recent_models"), // JSON string[] of recently used model ids

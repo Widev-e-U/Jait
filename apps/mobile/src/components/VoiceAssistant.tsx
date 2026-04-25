@@ -22,7 +22,7 @@ import { designTokens } from '@jait/ui-shared'
  *  - Response is displayed (and optionally spoken back via TTS)
  *
  * This screen uses the gateway /api/voice/transcribe-audio endpoint
- * so STT runs on the server (Whisper/Wyoming), not on the phone.
+ * so STT runs on the server, not on the phone.
  */
 
 export interface VoiceAssistantProps {
@@ -32,8 +32,8 @@ export interface VoiceAssistantProps {
   token: string | null
   /** Session ID for the voice conversation */
   sessionId?: string
-  /** STT provider: "whisper" or "wyoming" */
-  sttProvider?: 'whisper' | 'wyoming'
+  /** STT provider configured on the gateway */
+  sttProvider?: 'whisper' | 'wyoming' | 'gpt' | 'elevenlabs'
 }
 
 interface ConversationItem {

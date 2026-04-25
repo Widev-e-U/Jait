@@ -5245,7 +5245,7 @@ function App() {
 
     if (audioBlob.size === 0) return
 
-    if (settings.stt_provider === 'wyoming' || settings.stt_provider === 'whisper') {
+    if (settings.stt_provider === 'wyoming' || settings.stt_provider === 'whisper' || settings.stt_provider === 'gpt' || settings.stt_provider === 'elevenlabs') {
       // Convert to WAV and send to backend
       setVoiceTranscribing(true)
       try {

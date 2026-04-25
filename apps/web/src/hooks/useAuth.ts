@@ -5,7 +5,7 @@ import { getApiUrl } from '@/lib/gateway-url'
 const API_URL = getApiUrl()
 
 export type ThemeMode = 'light' | 'dark' | 'system'
-export type SttProvider = 'wyoming' | 'whisper'
+export type SttProvider = 'wyoming' | 'whisper' | 'gpt' | 'elevenlabs'
 export type ChatProvider = 'jait' | 'codex' | 'claude-code'
 export type JaitBackend = 'openai' | 'openrouter' | 'ollama'
 

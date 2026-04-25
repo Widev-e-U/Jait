@@ -26,7 +26,7 @@ function clearAuthCookie(reply: FastifyReply): void {
 }
 
 const THEME_VALUES = new Set<ThemeMode>(["light", "dark", "system"]);
-const STT_PROVIDER_VALUES = new Set<SttProvider>(["wyoming", "whisper"]);
+const STT_PROVIDER_VALUES = new Set<SttProvider>(["wyoming", "whisper", "gpt", "elevenlabs"]);
 const CHAT_PROVIDER_VALUES = new Set<ChatProvider>(["jait", "codex", "claude-code"]);
 const JAIT_BACKEND_VALUES = new Set<JaitBackend>(["openai", "openrouter", "ollama"]);
 
@@ -242,7 +242,12 @@ export function registerAuthRoutes(
       OPENAI_API_KEY: "OPENAI_API_KEY",
       OPENAI_BASE_URL: "OPENAI_BASE_URL",
       OPENAI_MODEL: "OPENAI_MODEL",
+      OPENAI_TRANSCRIBE_MODEL: "OPENAI_TRANSCRIBE_MODEL",
       OPENAI_WEB_SEARCH_MODEL: "OPENAI_WEB_SEARCH_MODEL",
+      ELEVENLABS_API_KEY: "ELEVENLABS_API_KEY",
+      ELEVENLABS_STT_MODEL: "ELEVENLABS_STT_MODEL",
+      ELEVENLABS_STT_URL: "ELEVENLABS_STT_URL",
+      ELEVENLABS_LANGUAGE_CODE: "ELEVENLABS_LANGUAGE_CODE",
       BRAVE_API_KEY: "BRAVE_API_KEY",
       PERPLEXITY_API_KEY: "PERPLEXITY_API_KEY",
       OPENROUTER_API_KEY: "OPENROUTER_API_KEY",

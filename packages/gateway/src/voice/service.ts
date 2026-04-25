@@ -114,6 +114,54 @@ export class VoiceService {
     return data.text ?? null;
   }
 
+  async transcribeViaGpt(input: {
+    audioBase64: string;
+    apiKey: string;
+    baseUrl: string;
+    model: string;
+  }): Promise<string | null> {
+    const url = `${input.baseUrl.replace(/\/+$/, "")}/audio/transcriptions`;
+    const form = new FormData();
+    const audioBuffer = Buffer.from(input.audioBase64, "base64");
+    form.append("file", new Blob([audioBuffer], { type: "audio/wav" }), "audio.wav");
+    form.append("model", input.model);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${input.apiKey}` },
+      body: form,
+    });
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as { text?: string };
+    return data.text ?? null;
+  }
+
+  async transcribeViaElevenLabs(input: {
+    audioBase64: string;
+    apiKey: string;
+    model: string;
+    languageCode?: string;
+    endpoint?: string;
+  }): Promise<string | null> {
+    const url = (input.endpoint || "https://api.elevenlabs.io/v1/speech-to-text").replace(/\/+$/, "");
+    const form = new FormData();
+    const audioBuffer = Buffer.from(input.audioBase64, "base64");
+    form.append("file", new Blob([audioBuffer], { type: "audio/wav" }), "audio.wav");
+    form.append("model_id", input.model);
+    if (input.languageCode) form.append("language_code", input.languageCode);
+
+    const res = await fetch(url, {
+      method: "POST",
+      headers: { "xi-api-key": input.apiKey },
+      body: form,
+    });
+
+    if (!res.ok) return null;
+    const data = (await res.json()) as { text?: string };
+    return data.text ?? null;
+  }
+
   /**
    * Forward audio to a Home Assistant Wyoming/Whisper STT endpoint.
    * Returns the transcribed text or null on failure.

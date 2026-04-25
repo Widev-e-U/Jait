@@ -38,7 +38,7 @@ interface ApiFieldGroup {
 }
 
 const API_FIELD_GROUPS: ApiFieldGroup[] = [
-  { label: 'OpenAI / Jait', fields: ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
+  { label: 'OpenAI / Jait', fields: ['OPENAI_API_KEY', 'OPENAI_BASE_URL', 'OPENAI_MODEL', 'OPENAI_TRANSCRIBE_MODEL', 'OPENAI_WEB_SEARCH_MODEL'] },
   { label: 'Ollama', fields: ['OLLAMA_URL', 'OLLAMA_MODEL'] },
   { label: 'Perplexity', fields: ['PERPLEXITY_API_KEY', 'PERPLEXITY_MODEL', 'PERPLEXITY_OPENROUTER_MODEL'] },
   { label: 'OpenRouter', fields: ['OPENROUTER_API_KEY'] },
@@ -46,7 +46,7 @@ const API_FIELD_GROUPS: ApiFieldGroup[] = [
   { label: 'Google Gemini', fields: ['GEMINI_API_KEY', 'GEMINI_MODEL'] },
   { label: 'Moonshot / Kimi', fields: ['MOONSHOT_API_KEY', 'KIMI_BASE_URL', 'KIMI_MODEL'] },
   { label: 'Brave Search', fields: ['BRAVE_API_KEY'] },
-  { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY'] },
+  { label: 'Speech / Home Assistant', fields: ['WHISPER_URL', 'HA_URL', 'HA_TOKEN', 'HA_STT_ENTITY', 'ELEVENLABS_API_KEY', 'ELEVENLABS_STT_MODEL', 'ELEVENLABS_STT_URL', 'ELEVENLABS_LANGUAGE_CODE'] },
 ]
 
 const API_KEY_FIELDS = API_FIELD_GROUPS.flatMap((g) => g.fields) as unknown as readonly string[]
@@ -60,6 +60,7 @@ const FIELD_ICON: Record<string, React.ComponentType<{ size?: number; className?
   OPENROUTER: OpenRouter,
   XAI: XAI,
   GEMINI: Gemini,
+  ELEVENLABS: Key as React.ComponentType<{ size?: number; className?: string }>,
   MOONSHOT: Moonshot,
   KIMI: Kimi,
   GROK: Grok,
@@ -332,12 +333,17 @@ export function SettingsPage({
     jaitBackend,
   )
   const showSpeechSection = matchesSearch(
-    'speech stt input microphone whisper wyoming home assistant transcription',
+    'speech stt input microphone whisper wyoming home assistant transcription gpt openai elevenlabs scribe',
     sttProvider,
     draft.WHISPER_URL,
     draft.HA_URL,
     draft.HA_TOKEN,
     draft.HA_STT_ENTITY,
+    draft.OPENAI_TRANSCRIBE_MODEL,
+    draft.ELEVENLABS_API_KEY,
+    draft.ELEVENLABS_STT_MODEL,
+    draft.ELEVENLABS_STT_URL,
+    draft.ELEVENLABS_LANGUAGE_CODE,
   )
   const filteredApiFields = API_KEY_FIELDS.filter((field) => matchesSearch(
     field,
@@ -683,6 +689,8 @@ export function SettingsPage({
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="whisper">Faster Whisper (lokal)</SelectItem>
+                    <SelectItem value="gpt">GPT (OpenAI)</SelectItem>
+                    <SelectItem value="elevenlabs">ElevenLabs Scribe</SelectItem>
                     <SelectItem value="wyoming">Wyoming / Whisper (Home Assistant)</SelectItem>
                   </SelectContent>
                 </Select>
@@ -701,6 +709,20 @@ export function SettingsPage({
                   <p className="text-xs text-muted-foreground">
                     Configure your Home Assistant Wyoming/Whisper STT integration.
                     Set these values in the API keys section below: <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_URL</code>, <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_TOKEN</code>, and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">HA_STT_ENTITY</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">stt.faster_whisper</code>).
+                  </p>
+                </div>
+              )}
+              {sttProvider === 'gpt' && (
+                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
+                  <p className="text-xs text-muted-foreground">
+                    Uses OpenAI audio transcription. Set <code className="rounded bg-muted px-1 py-0.5 text-2xs">OPENAI_API_KEY</code> and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">OPENAI_TRANSCRIBE_MODEL</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">gpt-4o-mini-transcribe</code>).
+                  </p>
+                </div>
+              )}
+              {sttProvider === 'elevenlabs' && (
+                <div className="max-w-sm space-y-3 border-l-2 border-primary/20 pl-4">
+                  <p className="text-xs text-muted-foreground">
+                    Uses ElevenLabs Speech to Text. Set <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_API_KEY</code> and optionally <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_STT_MODEL</code> (defaults to <code className="rounded bg-muted px-1 py-0.5 text-2xs">scribe_v2</code>) and <code className="rounded bg-muted px-1 py-0.5 text-2xs">ELEVENLABS_LANGUAGE_CODE</code>.
                   </p>
                 </div>
               )}
