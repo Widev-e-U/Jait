@@ -36,6 +36,17 @@ function lastId(items: { id: number }[]): number | null {
   return items.length > 0 ? items[items.length - 1]?.id ?? null : null
 }
 
+function isSameRemoteBrowser(
+  previous: PreviewRemoteBrowserLike | null | undefined,
+  next: PreviewRemoteBrowserLike | null | undefined,
+): boolean {
+  return (previous?.containerName ?? null) === (next?.containerName ?? null)
+    && (previous?.novncUrl ?? null) === (next?.novncUrl ?? null)
+    && (previous?.novncPort ?? null) === (next?.novncPort ?? null)
+    && (previous?.vncPort ?? null) === (next?.vncPort ?? null)
+    && (previous?.startedAt ?? null) === (next?.startedAt ?? null)
+}
+
 export function deriveManagedPreviewSessionId(sessionId: string | null | undefined): string | null {
   const trimmed = sessionId?.trim()
   if (!trimmed) return null
@@ -59,8 +70,7 @@ export function isSamePreviewSession(
     && previous.browserId === next.browserId
     && previous.processId === next.processId
     && previous.containerId === next.containerId
-    && (previous.remoteBrowser?.containerName ?? null) === (next.remoteBrowser?.containerName ?? null)
-    && (previous.remoteBrowser?.novncUrl ?? null) === (next.remoteBrowser?.novncUrl ?? null)
+    && isSameRemoteBrowser(previous.remoteBrowser, next.remoteBrowser)
     && previous.lastError === next.lastError
     && previous.updatedAt === next.updatedAt
     && previous.logs.length === next.logs.length

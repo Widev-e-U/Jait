@@ -13,6 +13,13 @@ function createSession(overrides: Partial<PreviewSessionLike> = {}): PreviewSess
     browserId: 'browser-1',
     processId: 1234,
     containerId: null,
+    remoteBrowser: {
+      containerName: 'live-view',
+      novncUrl: '/noVNC/vnc_lite.html?path=api/live-view/6080/websockify',
+      novncPort: 6080,
+      vncPort: 5900,
+      startedAt: '2026-03-21T00:00:00.000Z',
+    },
     lastError: null,
     updatedAt: '2026-03-21T00:00:00.000Z',
     logs: [{ id: 1 }, { id: 2 }],
@@ -42,6 +49,28 @@ describe('isSamePreviewSession', () => {
   it('detects status changes as meaningful', () => {
     const previous = createSession()
     const next = createSession({ status: 'error', lastError: 'process exited' })
+    expect(isSamePreviewSession(previous, next)).toBe(false)
+  })
+
+  it('detects remote browser port changes as meaningful', () => {
+    const previous = createSession()
+    const next = createSession({
+      remoteBrowser: {
+        ...previous.remoteBrowser!,
+        novncPort: 6081,
+      },
+    })
+    expect(isSamePreviewSession(previous, next)).toBe(false)
+  })
+
+  it('detects remote browser restarts as meaningful', () => {
+    const previous = createSession()
+    const next = createSession({
+      remoteBrowser: {
+        ...previous.remoteBrowser!,
+        startedAt: '2026-03-21T00:05:00.000Z',
+      },
+    })
     expect(isSamePreviewSession(previous, next)).toBe(false)
   })
 })
