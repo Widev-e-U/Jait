@@ -22,7 +22,34 @@ function isLikelyWorkspaceFilePath(path: string, fragment: string): boolean {
   if (/^L\d+(?:C\d+)?$/i.test(fragment)) return true
 
   const baseName = normalized.split('/').pop() ?? ''
-  return /\.[A-Za-z0-9]+$/.test(baseName)
+  return /\.[A-Za-z0-9]+(?::\d+(?::\d+)?)?$/.test(baseName)
+}
+
+function extractColonLocation(path: string, fragment: string): WorkspaceLinkTarget | null {
+  if (fragment) return null
+
+  const normalized = path.replace(/\\/g, '/')
+  const slashIndex = normalized.lastIndexOf('/')
+  const baseName = slashIndex >= 0 ? normalized.slice(slashIndex + 1) : normalized
+  const baseMatch = baseName.match(/^(.*?):(\d+)(?::(\d+))?$/)
+  if (!baseMatch) return null
+
+  const candidatePath = slashIndex >= 0
+    ? `${path.slice(0, slashIndex + 1)}${baseMatch[1] ?? ''}`
+    : (baseMatch[1] ?? '')
+
+  if (!isAbsoluteWorkspacePath(candidatePath) || !isLikelyWorkspaceFilePath(candidatePath, `L${baseMatch[2]}`)) {
+    return null
+  }
+
+  const target: WorkspaceLinkTarget = {
+    path: candidatePath,
+    line: Number.parseInt(baseMatch[2]!, 10),
+  }
+  if (baseMatch[3]) {
+    target.column = Number.parseInt(baseMatch[3], 10)
+  }
+  return target
 }
 
 export function parseWorkspaceLinkTarget(href?: string | null): WorkspaceLinkTarget | null {
@@ -60,6 +87,10 @@ export function parseWorkspaceLinkTarget(href?: string | null): WorkspaceLinkTar
   } catch {
     return null
   }
+
+  const colonLocationTarget = extractColonLocation(decodedPath, fragment)
+  if (colonLocationTarget) return colonLocationTarget
+
   if (!isAbsoluteWorkspacePath(decodedPath)) return null
 
   const target: WorkspaceLinkTarget = { path: decodedPath }

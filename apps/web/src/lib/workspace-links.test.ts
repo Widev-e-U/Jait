@@ -28,12 +28,31 @@ describe('workspace-links', () => {
       path: '/home/user/project/apps/web/src/components/chat/message.tsx',
       line: 116,
     })
+    expect(parseWorkspaceLinkTarget('E:/Jait/apps/web/src/App.tsx:58:4')).toEqual({
+      path: 'E:/Jait/apps/web/src/App.tsx',
+      line: 58,
+      column: 4,
+    })
+    expect(parseWorkspaceLinkTarget('/workspace/Jait/apps/web/src/App.tsx:10')).toEqual({
+      path: '/workspace/Jait/apps/web/src/App.tsx',
+      line: 10,
+    })
+    expect(parseWorkspaceLinkTarget('https://example.jait.dev/home/user/project/apps/web/src/components/chat/message.tsx:116')).toEqual({
+      path: '/home/user/project/apps/web/src/components/chat/message.tsx',
+      line: 116,
+    })
     expect(parseWorkspaceLinkTarget('https://example.com')).toBeNull()
   })
 
   it('returns null for malformed percent-encoded paths instead of throwing', () => {
     expect(parseWorkspaceLinkTarget('/workspace/Jait/apps/web/src/%E0%A4%A.tsx#L10')).toBeNull()
     expect(parseWorkspaceLinkTarget('https://example.jait.dev/workspace/%E0%A4%A.tsx#L10')).toBeNull()
+  })
+
+  it('does not misread numeric path suffixes as line numbers for non-file paths', () => {
+    expect(parseWorkspaceLinkTarget('/workspace/Jait/releases/2026')).toEqual({
+      path: '/workspace/Jait/releases/2026',
+    })
   })
 
   it('checks whether a path is inside the current workspace', () => {
