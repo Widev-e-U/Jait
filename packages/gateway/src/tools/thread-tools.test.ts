@@ -263,6 +263,48 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("generates scheduler-created delivery thread titles from the prompt when no title is provided", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async (sessionId, prompt) => {
+        if (prompt.includes("Reply with ONLY a short task title")) {
+          provider.emit({ type: "message", sessionId, role: "assistant", content: "Nightly Quality Sweep" });
+          provider.emit({ type: "turn.completed", sessionId });
+        }
+      });
+      providerRegistry.register(provider);
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          kind: "delivery",
+          start: true,
+          prompt: "run scheduled quality task",
+        },
+        { ...context, requestedBy: "scheduler" },
+      );
+
+      expect(result.ok).toBe(true);
+      expect(provider.sendTurn).toHaveBeenCalledTimes(2);
+      expect(provider.sendTurn).toHaveBeenLastCalledWith("mock-session-1", "run scheduled quality task", undefined);
+      const data = result.data as { thread: { title: string } };
+      expect(data.thread.title).toBe("Nightly Quality Sweep");
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("creates a managed worktree branch for scheduler-created delivery threads", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

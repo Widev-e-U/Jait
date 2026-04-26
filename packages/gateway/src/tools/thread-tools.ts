@@ -1,12 +1,14 @@
 import { existsSync } from "node:fs";
 import type { WsEventType } from "@jait/shared";
-import type { ProviderId, ProviderEvent } from "../providers/contracts.js";
+import type { AppConfig } from "../config.js";
+import type { CliProviderAdapter, ProviderId, ProviderEvent } from "../providers/contracts.js";
 import { extractTodoResultItems } from "../providers/todo-result.js";
 import type { ProviderRegistry } from "../providers/registry.js";
 import { GitService, cleanupWorktreeRemoteAware, type GitStackedAction, type GitStepResult } from "../services/git.js";
 import type { SessionStateService } from "../services/session-state.js";
 import { resolveThreadSelectionDefaults } from "../services/thread-defaults.js";
 import { buildThreadHistoryReplayPrompt } from "../services/thread-history.js";
+import { generateTitleViaApi, generateTitleViaTurn, normalizeGeneratedThreadTitle } from "../services/thread-title.js";
 import type { ThreadRow, ThreadService } from "../services/threads.js";
 import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
@@ -104,6 +106,7 @@ export interface ThreadControlToolDeps {
   skillRegistry?: SkillRegistry;
   ws?: WsControlPlane;
   mcpConfig?: { host: string; port: number };
+  config?: AppConfig;
   gitService?: ThreadControlGit;
 }
 
@@ -119,6 +122,7 @@ interface StartThreadOptions {
   detach?: boolean;
   autoStopAfterTurn?: boolean;
   timeoutMinutes?: number;
+  generateTitleFromPrompt?: boolean;
 }
 
 interface ProviderResolution {
@@ -306,6 +310,41 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     return thread;
   };
 
+  const generateAndApplyThreadTitle = async (
+    context: ToolContext,
+    thread: ThreadRow,
+    provider: CliProviderAdapter,
+    providerId: ProviderId,
+    providerSessionId: string,
+    task: string,
+  ): Promise<void> => {
+    const titleTask = task.trim();
+    if (!titleTask) return;
+
+    try {
+      let generatedTitle = "";
+      if (providerId === "codex" || providerId === "claude-code") {
+        const raw = await generateTitleViaTurn(provider, providerSessionId, titleTask);
+        generatedTitle = normalizeGeneratedThreadTitle(raw, "");
+      } else if (deps.config) {
+        const settings = context.userId ? deps.userService?.getSettings(context.userId) : undefined;
+        generatedTitle = await generateTitleViaApi({
+          task: titleTask,
+          config: deps.config,
+          apiKeys: settings?.apiKeys,
+          model: thread.model ?? undefined,
+          jaitBackend: providerId === "jait" ? settings?.jaitBackend : undefined,
+        });
+      }
+
+      if (!generatedTitle) return;
+      const updated = deps.threadService.update(thread.id, { title: generatedTitle });
+      if (updated) broadcastThreadEvent(thread.id, "updated", { thread: updated });
+    } catch {
+      // Scheduled title generation is best-effort; the actual job must still run.
+    }
+  };
+
   const startThread = async (
     context: ToolContext,
     thread: ThreadRow,
@@ -353,6 +392,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         model: effectiveThread.model ?? context.model ?? undefined,
         mcpServers,
       });
+
+      if (options.generateTitleFromPrompt) {
+        await generateAndApplyThreadTitle(context, effectiveThread, provider, effectiveProviderId, session.id, rawMessage);
+      }
 
       let timeout: ReturnType<typeof setTimeout> | undefined;
       let unsubscribed = false;
@@ -650,7 +693,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             let thread = deps.threadService.create({
               userId,
               sessionId: input.sessionId,
-              title: input.title?.trim() || "New Thread",
+              title: input.title?.trim() || normalizeGeneratedThreadTitle(prompt, "New Thread"),
               providerId: selectedProviderId,
               model: input.model ?? selectedDefaults.model,
               runtimeMode: input.runtimeMode ?? selectedDefaults.runtimeMode ?? "full-access",
@@ -688,6 +731,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               detach: input.detach,
               autoStopAfterTurn: input.autoStopAfterTurn,
               timeoutMinutes: input.timeoutMinutes,
+              generateTitleFromPrompt: context.requestedBy === "scheduler" && input.kind === "delivery" && !input.title?.trim(),
             });
             if (!started.ok) {
               return {

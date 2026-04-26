@@ -56,6 +56,11 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
   return value && typeof value === "object" ? value as Record<string, unknown> : undefined;
 }
 
+function withoutThreadTitle(payload: Record<string, unknown> | undefined): Record<string, unknown> {
+  const { title: _title, ...rest } = payload ?? {};
+  return rest;
+}
+
 function getJobMeta(input: unknown): JobMeta {
   const record = asRecord(input);
   const meta = asRecord(record?.["__jaitJobMeta"]);
@@ -75,12 +80,13 @@ function mapJob(job: ScheduledJobRecord): ApiScheduledJob {
   const jobType = meta.jobType ?? "system_job";
   const baseInput = asRecord(job.input) ?? {};
   const { __jaitJobMeta: _ignored, ...payloadInput } = baseInput;
+  const agentPayload = withoutThreadTitle(payloadInput);
   const payload = jobType === "system_job"
     ? {
         command: job.toolName,
         args: payloadInput,
       }
-    : (Object.keys(payloadInput).length > 0 ? payloadInput : null);
+    : (Object.keys(agentPayload).length > 0 ? agentPayload : null);
   return {
     id: job.id,
     user_id: job.userId,
@@ -224,9 +230,8 @@ export function registerJobRoutes(
       }
       toolName = "thread.control";
       input = {
-        ...(payload ?? {}),
+        ...withoutThreadTitle(payload),
         action: "create",
-        title: description ?? name,
         kind: "delivery",
         prompt,
         providerId: provider,
@@ -309,9 +314,8 @@ export function registerJobRoutes(
       }
       nextToolName = "thread.control";
       nextPayload = {
-        ...(payload ?? existingPayload),
+        ...withoutThreadTitle(payload ?? existingPayload),
         action: "create",
-        title: nextMeta.description ?? existing.name,
         kind: "delivery",
         prompt: nextPrompt,
         providerId: nextMeta.provider,

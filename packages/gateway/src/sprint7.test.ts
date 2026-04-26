@@ -109,7 +109,6 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
       workspaceRoot: "/workspace/Jait",
       input: expect.objectContaining({
         action: "create",
-        title: "nightly fix",
         kind: "delivery",
         workingDirectory: "/workspace/Jait",
         providerId: "codex",
@@ -119,6 +118,53 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
         prompt: "Run the nightly fix",
       }),
     }));
+    const execution = executeTool.mock.calls[0]?.[0] as { input?: Record<string, unknown> };
+    expect(execution.input).not.toHaveProperty("title");
+
+    sqlite.close();
+  });
+
+  it("strips saved titles from scheduled thread.control agent jobs", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { thread: { id: "thread-1" } } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    const job = scheduler.create({
+      name: "saved-agent-task",
+      cron: "* * * * *",
+      toolName: "thread.control",
+      input: {
+        action: "create",
+        title: "old fixed title",
+        kind: "delivery",
+        prompt: "Run the scheduled fix",
+        start: true,
+        detach: true,
+        __jaitJobMeta: {
+          jobType: "agent_task",
+          provider: "codex",
+        },
+      },
+      sessionId: "s1",
+      workspaceRoot: "/workspace/Jait",
+    });
+
+    await scheduler.trigger(job.id);
+
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: "thread.control",
+      input: expect.objectContaining({
+        action: "create",
+        kind: "delivery",
+        prompt: "Run the scheduled fix",
+        start: true,
+        detach: true,
+      }),
+    }));
+    const execution = executeTool.mock.calls[0]?.[0] as { input?: Record<string, unknown> };
+    expect(execution.input).not.toHaveProperty("title");
 
     sqlite.close();
   });

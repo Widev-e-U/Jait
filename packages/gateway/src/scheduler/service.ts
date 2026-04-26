@@ -116,7 +116,7 @@ function isScheduledAgentTask(input: unknown): boolean {
 function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExecution {
   const toolName = normalizeToolName(job.toolName);
   const input = job.input;
-  if (toolName !== ToolName.AgentSpawn || !isScheduledAgentTask(input)) {
+  if (!isScheduledAgentTask(input)) {
     return {
       toolName,
       input,
@@ -127,13 +127,39 @@ function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExec
   }
 
   const record = asRecord(input) ?? {};
+  const { title: _title, ...inputWithoutTitle } = record;
+
+  if (toolName === ToolName.ThreadControl) {
+    return {
+      toolName: ToolName.ThreadControl,
+      input: {
+        ...inputWithoutTitle,
+        action: "create",
+        kind: "delivery",
+        workingDirectory: typeof inputWithoutTitle["workingDirectory"] === "string"
+          ? inputWithoutTitle["workingDirectory"]
+          : job.workspaceRoot,
+        start: true,
+        detach: true,
+      },
+      sessionId: job.sessionId,
+      workspaceRoot: job.workspaceRoot,
+      userId: job.userId,
+    };
+  }
+
+  if (toolName !== ToolName.AgentSpawn) {
+    return {
+      toolName,
+      input: inputWithoutTitle,
+      sessionId: job.sessionId,
+      workspaceRoot: job.workspaceRoot,
+      userId: job.userId,
+    };
+  }
+
   const meta = asRecord(record["__jaitJobMeta"]) ?? {};
   const prompt = typeof record["prompt"] === "string" ? record["prompt"] : "";
-  const description = typeof record["description"] === "string"
-    ? record["description"]
-    : typeof meta["description"] === "string"
-      ? meta["description"]
-      : job.name;
   const model = typeof meta["model"] === "string" ? meta["model"] : undefined;
   const providerId = typeof meta["provider"] === "string" ? meta["provider"] : undefined;
 
@@ -141,7 +167,6 @@ function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExec
     toolName: ToolName.ThreadControl,
     input: {
       action: "create",
-      title: description || job.name,
       kind: "delivery",
       workingDirectory: job.workspaceRoot,
       providerId,

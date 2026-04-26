@@ -336,6 +336,7 @@ export function createToolRegistry(
         skillRegistry: deps.skillRegistry,
         ws: deps.ws,
         mcpConfig: deps.threadMcpConfig,
+        config: deps.config,
       }),
     );
   }

@@ -37,14 +37,15 @@ describe("job routes", () => {
         prompt: "Lies den Repo-Status und schreibe ein Daily.",
         provider: "codex",
         model: "gpt-5-codex",
-        payload: { allowedTools: "file.list,file.read" },
+        payload: { allowedTools: "file.list,file.read", title: "fixed cron title" },
       },
     });
 
     expect(createResponse.statusCode).toBe(201);
-    const created = createResponse.json() as { id: string; tool_name: string; prompt: string | null };
+    const created = createResponse.json() as { id: string; tool_name: string; prompt: string | null; payload: Record<string, unknown> | null };
     expect(created.tool_name).toBe("thread.control");
     expect(created.prompt).toBe("Lies den Repo-Status und schreibe ein Daily.");
+    expect(created.payload).not.toHaveProperty("title");
 
     const triggerResponse = await app.inject({
       method: "POST",
@@ -65,6 +66,7 @@ describe("job routes", () => {
         detach: true,
       },
     });
+    expect((executeTool.mock.calls[0]?.[0] as { input?: Record<string, unknown> }).input).not.toHaveProperty("title");
 
     await app.close();
     sqlite.close();
