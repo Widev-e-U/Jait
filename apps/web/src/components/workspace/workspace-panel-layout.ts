@@ -11,7 +11,7 @@ export function getDesktopWorkspacePanelStyle({
   treeSize: number
   maxCollapsed?: boolean
 }): React.CSSProperties {
-  const baseWidth = !showTree && !showEditor ? 0 : !showTree ? Math.max(panelSize - treeSize, 300) : !showEditor ? treeSize : panelSize
+  const baseWidth = !showTree && !showEditor ? 0 : !showTree ? Math.max(panelSize - treeSize, 300) : panelSize
 
   if (maxCollapsed) {
     return {

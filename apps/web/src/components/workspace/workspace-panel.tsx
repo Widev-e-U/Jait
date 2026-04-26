@@ -5201,7 +5201,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   return (
     <aside
       className={cn(
-        'bg-muted/20 flex min-h-0',
+        'relative bg-muted/20 flex min-h-0',
         panel.maxCollapsed ? 'flex-1' : 'shrink-0',
         tabMaximized ? 'z-30 border-r shadow-2xl' : !panel.maxCollapsed && showEditorProp && 'border-r',
       )}
@@ -5218,8 +5218,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       {/* File explorer pane */}
       {showTreeProp && !tabMaximized && !panel.collapsed && (
       <div
-        className={`border-r bg-background transition-colors flex flex-col shrink-0 overflow-hidden`}
-        style={{ width: tree.collapsed ? 0 : tree.size }}
+        className={cn(
+          'border-r bg-background transition-colors flex flex-col overflow-hidden',
+          showEditorProp ? 'shrink-0' : 'flex-1 min-w-0',
+        )}
+        style={showEditorProp ? { width: tree.collapsed ? 0 : tree.size } : undefined}
       >
       {effectiveShowTree && (<>
         {/* Tab bar: Files | Source Control */}
@@ -6177,9 +6180,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       )}
 
       {/* Resize handle: panel ↔ chat (right edge) */}
-      {showEditorProp && (
+      {(showEditorProp || showTreeProp) && (
       <div
-        className={`${tabMaximized && !panel.collapsed
+        className={`${!showEditorProp || (tabMaximized && !panel.collapsed)
           ? 'absolute right-0 inset-y-0 w-2 z-30'
           : panel.collapsed
             ? 'absolute left-0 inset-y-0 w-2 z-30'
