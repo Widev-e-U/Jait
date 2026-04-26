@@ -45,7 +45,13 @@ export function buildNoVncViewerUrl(options: NoVncSessionOptions): string {
   const websocketUrl = normalizeUrl(options.websocketUrl)
   if (!websocketUrl) return viewerUrl
 
-  const params = new URLSearchParams()
+  const [baseUrl = viewerUrl, existingHash = ''] = viewerUrl.split('#')
+  const useQueryParams = usesQueryParams(baseUrl)
+  const existingQueryIndex = baseUrl.indexOf('?')
+  const path = existingQueryIndex >= 0 ? baseUrl.slice(0, existingQueryIndex) : baseUrl
+  const existingQuery = existingQueryIndex >= 0 ? baseUrl.slice(existingQueryIndex + 1) : ''
+  const params = new URLSearchParams(useQueryParams ? existingQuery : existingHash)
+
   params.set('autoconnect', 'true')
   params.set('path', websocketUrl)
 
@@ -64,10 +70,8 @@ export function buildNoVncViewerUrl(options: NoVncSessionOptions): string {
 
   if (options.bell != null) params.set('bell', options.bell ? '1' : '0')
 
-  const baseUrl = viewerUrl.split('#')[0] ?? viewerUrl
-  if (usesQueryParams(baseUrl)) {
-    const separator = baseUrl.includes('?') ? '&' : '?'
-    return `${baseUrl}${separator}${params.toString()}`
+  if (useQueryParams) {
+    return `${path}?${params.toString()}`
   }
   return `${baseUrl}#${params.toString()}`
 }

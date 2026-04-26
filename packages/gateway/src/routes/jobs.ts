@@ -222,11 +222,18 @@ export function registerJobRoutes(
       if (!prompt) {
         return reply.status(400).send({ detail: "prompt is required for agent_task" });
       }
-      toolName = "agent.spawn";
+      toolName = "thread.control";
       input = {
         ...(payload ?? {}),
+        action: "create",
+        title: description ?? name,
+        kind: "delivery",
         prompt,
-        description: description ?? name,
+        providerId: provider,
+        model,
+        workingDirectory: process.cwd(),
+        start: true,
+        detach: true,
       };
     }
 
@@ -300,11 +307,18 @@ export function registerJobRoutes(
       if (!nextPrompt) {
         return reply.status(400).send({ detail: "prompt is required for agent_task" });
       }
-      nextToolName = "agent.spawn";
+      nextToolName = "thread.control";
       nextPayload = {
         ...(payload ?? existingPayload),
+        action: "create",
+        title: nextMeta.description ?? existing.name,
+        kind: "delivery",
         prompt: nextPrompt,
-        description: nextMeta.description ?? existing.name,
+        providerId: nextMeta.provider,
+        model: nextMeta.model,
+        workingDirectory: existing.workspaceRoot,
+        start: true,
+        detach: true,
       };
     }
 

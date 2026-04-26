@@ -54,7 +54,12 @@ export function parseWorkspaceLinkTarget(href?: string | null): WorkspaceLinkTar
     }
   }
 
-  const decodedPath = decodeURIComponent(pathPart)
+  let decodedPath: string
+  try {
+    decodedPath = decodeURIComponent(pathPart)
+  } catch {
+    return null
+  }
   if (!isAbsoluteWorkspacePath(decodedPath)) return null
 
   const target: WorkspaceLinkTarget = { path: decodedPath }

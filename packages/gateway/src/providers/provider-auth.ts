@@ -27,7 +27,63 @@ export function unsupportedLogout(providerId: ProviderId, message: string): Prov
 }
 
 export function parseCommandLine(commandLine: string): { command: string; args: string[] } {
-  const parts = commandLine.trim().split(/\s+/).filter(Boolean);
+  const parts: string[] = [];
+  let current = "";
+  let quote: "'" | '"' | null = null;
+
+  const trimmed = commandLine.trim();
+  for (let i = 0; i < trimmed.length; i += 1) {
+    const char = trimmed[i]!;
+    const next = trimmed[i + 1];
+
+    if (char === "\\") {
+      if (quote === "'") {
+        current += char;
+      } else if (quote === '"') {
+        if (next === '"' || next === "\\") {
+          current += next;
+          i += 1;
+        } else {
+          current += char;
+        }
+      } else if (next && (/\s/.test(next) || next === "'" || next === '"' || next === "\\")) {
+        current += next;
+        i += 1;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (quote) {
+      if (char === quote) {
+        quote = null;
+      } else {
+        current += char;
+      }
+      continue;
+    }
+
+    if (char === "'" || char === '"') {
+      quote = char;
+      continue;
+    }
+
+    if (/\s/.test(char)) {
+      if (current) {
+        parts.push(current);
+        current = "";
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current) {
+    parts.push(current);
+  }
+
   return {
     command: parts[0] ?? "",
     args: parts.slice(1),

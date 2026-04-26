@@ -56,9 +56,11 @@ export function readPersistedSelectedRepoId(): string | null {
 export function persistSelectedRepoId(repoId: string | null, localPath?: string | null): void {
   if (typeof window === 'undefined') return
   try {
-    if (repoId) {
+    const normalizedRepoId = repoId?.trim() || null
+
+    if (normalizedRepoId) {
       window.localStorage.setItem(SELECTED_REPO_STORAGE_KEY, JSON.stringify({
-        repoId,
+        repoId: normalizedRepoId,
         localPath: localPath?.trim() || null,
       }))
     } else {

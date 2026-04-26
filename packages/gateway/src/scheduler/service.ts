@@ -3,6 +3,7 @@ import type { JaitDB } from "../db/index.js";
 import { scheduledJobs } from "../db/schema.js";
 import { uuidv7 } from "../db/uuidv7.js";
 import type { ToolResult } from "../tools/contracts.js";
+import { ToolName } from "../tools/tool-names.js";
 
 export interface SchedulerToolExecution {
   toolName: string;
@@ -101,6 +102,58 @@ function normalizeToolName(name: string): string {
   const firstUnderscore = trimmed.indexOf("_");
   if (firstUnderscore === -1) return trimmed;
   return `${trimmed.slice(0, firstUnderscore)}.${trimmed.slice(firstUnderscore + 1)}`;
+}
+
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === "object" ? value as Record<string, unknown> : undefined;
+}
+
+function isScheduledAgentTask(input: unknown): boolean {
+  const meta = asRecord(asRecord(input)?.["__jaitJobMeta"]);
+  return meta?.["jobType"] === "agent_task";
+}
+
+function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExecution {
+  const toolName = normalizeToolName(job.toolName);
+  const input = job.input;
+  if (toolName !== ToolName.AgentSpawn || !isScheduledAgentTask(input)) {
+    return {
+      toolName,
+      input,
+      sessionId: job.sessionId,
+      workspaceRoot: job.workspaceRoot,
+      userId: job.userId,
+    };
+  }
+
+  const record = asRecord(input) ?? {};
+  const meta = asRecord(record["__jaitJobMeta"]) ?? {};
+  const prompt = typeof record["prompt"] === "string" ? record["prompt"] : "";
+  const description = typeof record["description"] === "string"
+    ? record["description"]
+    : typeof meta["description"] === "string"
+      ? meta["description"]
+      : job.name;
+  const model = typeof meta["model"] === "string" ? meta["model"] : undefined;
+  const providerId = typeof meta["provider"] === "string" ? meta["provider"] : undefined;
+
+  return {
+    toolName: ToolName.ThreadControl,
+    input: {
+      action: "create",
+      title: description || job.name,
+      kind: "delivery",
+      workingDirectory: job.workspaceRoot,
+      providerId,
+      model,
+      start: true,
+      detach: true,
+      prompt,
+    },
+    sessionId: job.sessionId,
+    workspaceRoot: job.workspaceRoot,
+    userId: job.userId,
+  };
 }
 
 function mapJob(row: typeof scheduledJobs.$inferSelect): ScheduledJobRecord {
@@ -223,13 +276,7 @@ export class SchedulerService {
     }
 
     const actionId = uuidv7();
-    const result = await this.options.executeTool({
-      toolName: normalizeToolName(job.toolName),
-      input: job.input,
-      sessionId: job.sessionId,
-      workspaceRoot: job.workspaceRoot,
-      userId: job.userId,
-    });
+    const result = await this.options.executeTool(normalizeScheduledExecution(job));
 
     this.options.db.update(scheduledJobs).set({
       lastRunAt: runAt.toISOString(),

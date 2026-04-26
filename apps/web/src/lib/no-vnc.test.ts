@@ -28,6 +28,22 @@ describe('noVNC helpers', () => {
     })).toBe('/noVNC/vnc_lite.html?autoconnect=true&path=ws%3A%2F%2F127.0.0.1%3A5900&quality=9&compression=0')
   })
 
+  it('preserves existing query params on vnc_lite viewers when adding websocket config', () => {
+    expect(buildNoVncViewerUrl({
+      viewerUrl: '/noVNC/vnc_lite.html?logging=debug&resize=remote',
+      websocketUrl: 'wss://example.test/websockify',
+      quality: 4,
+    })).toBe('/noVNC/vnc_lite.html?logging=debug&resize=remote&autoconnect=true&path=wss%3A%2F%2Fexample.test%2Fwebsockify&quality=4')
+  })
+
+  it('preserves existing hash params on classic vnc viewers when adding websocket config', () => {
+    expect(buildNoVncViewerUrl({
+      viewerUrl: '/noVNC/vnc.html?theme=dark#logging=debug&resize=remote',
+      websocketUrl: 'wss://example.test/websockify',
+      scaleViewport: false,
+    })).toBe('/noVNC/vnc.html?theme=dark#logging=debug&resize=remote&autoconnect=true&path=wss%3A%2F%2Fexample.test%2Fwebsockify&scale=0')
+  })
+
   it('recognizes websocket and viewer urls', () => {
     expect(isWebSocketUrl('ws://127.0.0.1:5900')).toBe(true)
     expect(isNoVncViewerUrl('/noVNC/vnc.html')).toBe(true)

@@ -77,6 +77,52 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     sqlite.close();
   });
 
+  it("routes legacy scheduled agent.spawn jobs through thread.control isolation", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { thread: { id: "thread-1" } } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    const job = scheduler.create({
+      name: "legacy-agent-task",
+      cron: "* * * * *",
+      toolName: "agent.spawn",
+      input: {
+        prompt: "Run the nightly fix",
+        description: "nightly fix",
+        __jaitJobMeta: {
+          jobType: "agent_task",
+          provider: "codex",
+          model: "gpt-5-codex",
+        },
+      },
+      sessionId: "s1",
+      workspaceRoot: "/workspace/Jait",
+    });
+
+    await scheduler.trigger(job.id);
+
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: "thread.control",
+      sessionId: "s1",
+      workspaceRoot: "/workspace/Jait",
+      input: expect.objectContaining({
+        action: "create",
+        title: "nightly fix",
+        kind: "delivery",
+        workingDirectory: "/workspace/Jait",
+        providerId: "codex",
+        model: "gpt-5-codex",
+        start: true,
+        detach: true,
+        prompt: "Run the nightly fix",
+      }),
+    }));
+
+    sqlite.close();
+  });
+
   it("matches zero-padded cron fields and avoids duplicate execution within one minute", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

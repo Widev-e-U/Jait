@@ -1,7 +1,35 @@
 import { describe, expect, it } from "vitest";
-import { extractDeviceAuthDetails, stripAnsi } from "./provider-auth.js";
+import { extractDeviceAuthDetails, parseCommandLine, stripAnsi } from "./provider-auth.js";
 
 describe("provider auth helpers", () => {
+  it("parses quoted command paths and quoted default arguments", () => {
+    expect(parseCommandLine(`"/Applications/Codex CLI/codex" login --profile "QA Team"`)).toEqual({
+      command: "/Applications/Codex CLI/codex",
+      args: ["login", "--profile", "QA Team"],
+    });
+  });
+
+  it("preserves escaped quotes inside double-quoted arguments", () => {
+    expect(parseCommandLine(`codex login --message "Use \\\"staging\\\" profile"`)).toEqual({
+      command: "codex",
+      args: ["login", "--message", `Use "staging" profile`],
+    });
+  });
+
+  it("preserves Windows path separators in quoted command paths", () => {
+    expect(parseCommandLine(`"C:\\Program Files\\Codex\\codex.exe" login`)).toEqual({
+      command: "C:\\Program Files\\Codex\\codex.exe",
+      args: ["login"],
+    });
+  });
+
+  it("preserves Windows path separators in unquoted arguments", () => {
+    expect(parseCommandLine(`codex login --config C:\\Users\\Jakob\\.codex\\auth.json`)).toEqual({
+      command: "codex",
+      args: ["login", "--config", "C:\\Users\\Jakob\\.codex\\auth.json"],
+    });
+  });
+
   it("extracts verification URL and user code from device login output", () => {
     const details = extractDeviceAuthDetails([
       "Open https://auth.openai.com/activate in your browser",

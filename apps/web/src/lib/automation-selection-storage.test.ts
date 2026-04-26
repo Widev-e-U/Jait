@@ -86,10 +86,28 @@ describe('automation selection storage', () => {
     }))
   })
 
+  it('trims persisted repo selections before writing to storage', () => {
+    persistSelectedRepoId(' repo-456 ', ' /work/repo-456 ')
+
+    expect(localStorageMap.get(SELECTED_REPO_STORAGE_KEY)).toBe(JSON.stringify({
+      repoId: 'repo-456',
+      localPath: '/work/repo-456',
+    }))
+  })
+
   it('clears persisted selection when repo id is null', () => {
     localStorageMap.set(SELECTED_REPO_STORAGE_KEY, 'repo-789')
 
     persistSelectedRepoId(null)
+
+    expect(localStorageMap.has(SELECTED_REPO_STORAGE_KEY)).toBe(false)
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith(SELECTED_REPO_STORAGE_KEY)
+  })
+
+  it('clears persisted selection when repo id is blank after trimming', () => {
+    localStorageMap.set(SELECTED_REPO_STORAGE_KEY, 'repo-789')
+
+    persistSelectedRepoId('   ', '/work/repo-789')
 
     expect(localStorageMap.has(SELECTED_REPO_STORAGE_KEY)).toBe(false)
     expect(localStorageMock.removeItem).toHaveBeenCalledWith(SELECTED_REPO_STORAGE_KEY)

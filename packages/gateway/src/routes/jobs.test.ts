@@ -12,7 +12,7 @@ async function authHeader(jwtSecret: string, userId: string) {
 }
 
 describe("job routes", () => {
-  it("creates and triggers agent_task automations via agent.spawn", async () => {
+  it("creates and triggers agent_task automations as isolated delivery threads", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
 
@@ -35,13 +35,15 @@ describe("job routes", () => {
         job_type: "agent_task",
         description: "create daily summary",
         prompt: "Lies den Repo-Status und schreibe ein Daily.",
+        provider: "codex",
+        model: "gpt-5-codex",
         payload: { allowedTools: "file.list,file.read" },
       },
     });
 
     expect(createResponse.statusCode).toBe(201);
     const created = createResponse.json() as { id: string; tool_name: string; prompt: string | null };
-    expect(created.tool_name).toBe("agent.spawn");
+    expect(created.tool_name).toBe("thread.control");
     expect(created.prompt).toBe("Lies den Repo-Status und schreibe ein Daily.");
 
     const triggerResponse = await app.inject({
@@ -53,11 +55,14 @@ describe("job routes", () => {
     expect(triggerResponse.statusCode).toBe(200);
     expect(executeTool).toHaveBeenCalledOnce();
     expect(executeTool.mock.calls[0]?.[0]).toMatchObject({
-      toolName: "agent.spawn",
+      toolName: "thread.control",
       input: {
+        action: "create",
+        kind: "delivery",
         prompt: "Lies den Repo-Status und schreibe ein Daily.",
-        description: "create daily summary",
-        allowedTools: "file.list,file.read",
+        providerId: "codex",
+        start: true,
+        detach: true,
       },
     });
 

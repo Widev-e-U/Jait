@@ -20,6 +20,7 @@ import { createThreadControlTool } from "./thread-tools.js";
 
 class MockThreadProvider implements CliProviderAdapter {
   readonly info: ProviderInfo;
+  lastStartOptions: StartSessionOptions | null = null;
   readonly stopSession = vi.fn(async (): Promise<void> => {
     return;
   });
@@ -44,6 +45,7 @@ class MockThreadProvider implements CliProviderAdapter {
   }
 
   async startSession(options: StartSessionOptions): Promise<ProviderSession> {
+    this.lastStartOptions = options;
     const sessionId = "mock-session-1";
     this.emitter.emit("event", { type: "session.started", sessionId } satisfies ProviderEvent);
     return {
@@ -314,6 +316,105 @@ describe("thread.control tool", () => {
       expect(data.thread.workingDirectory).toBe(`/tmp/jait-worktrees/${data.thread.branch!.replace(/\//g, "-")}`);
       expect(createWorktree).toHaveBeenCalledWith(process.cwd(), "main", data.thread.branch);
       expect(threadService.getById(data.thread.id)?.workingDirectory).toBe(data.thread.workingDirectory);
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("uses an explicit provider override when scheduler-created thread jobs include one", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "jait");
+      const providerRegistry = new ProviderRegistry();
+      providerRegistry.register(new MockThreadProvider("codex"));
+      providerRegistry.register(new MockThreadProvider("jait"));
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Cron provider override",
+          kind: "delivery",
+          providerId: "codex",
+          start: true,
+          prompt: "run scheduled task",
+        },
+        { ...context, requestedBy: "scheduler" },
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { providerId: string } };
+      expect(data.thread.providerId).toBe("codex");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("rewrites scheduler delivery prompts to use managed worktree paths", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async () => new Promise<void>(() => {}));
+      providerRegistry.register(provider);
+
+      const workspaceRoot = process.cwd();
+      const worktreePath = "/tmp/jait-worktrees/jait-abcdef12";
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService,
+        sessionState,
+        gitService: {
+          runStackedAction: async (): Promise<GitStepResult> => ({
+            commit: { status: "skipped_no_changes" },
+            push: { status: "skipped_not_requested" },
+            branch: { status: "skipped_not_requested" },
+            pr: { status: "skipped_not_requested" },
+          }),
+          isRepo: async () => true,
+          getPreferredRemote: async () => "origin",
+          getRemoteUrl: async () => "git@github.com:Widev-e-U/Jait.git",
+          resolveDefaultBranch: async () => "main",
+          createWorktree: async (_cwd: string, _baseBranch: string, newBranch: string) => ({
+            path: worktreePath,
+            branch: newBranch,
+          }),
+        },
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Cron task",
+          kind: "delivery",
+          workingDirectory: workspaceRoot,
+          start: true,
+          prompt: `<system>\nWorkspace: ${workspaceRoot}\n</system>\n\nWork in ${workspaceRoot}\nRun the code quality rotation.`,
+        },
+        { ...context, requestedBy: "scheduler", workspaceRoot },
+      );
+
+      expect(result.ok).toBe(true);
+      expect(provider.lastStartOptions?.workingDirectory).toBe(worktreePath);
+      const sentPrompt = provider.sendTurn.mock.calls[0]?.[1] ?? "";
+      expect(sentPrompt).toContain("Jait created this scheduled delivery thread in an isolated git worktree.");
+      expect(sentPrompt).toContain(
+        `Use this working directory for all file reads, edits, commands, tests, commits, and relative paths: ${worktreePath}`,
+      );
+      expect(sentPrompt).toContain(`Workspace: ${worktreePath}`);
+      expect(sentPrompt).toContain(`Work in ${worktreePath}`);
+      expect(sentPrompt).not.toContain(`Workspace: ${workspaceRoot}`);
+      expect(sentPrompt).not.toContain(`Work in ${workspaceRoot}`);
     } finally {
       sqlite.close();
     }

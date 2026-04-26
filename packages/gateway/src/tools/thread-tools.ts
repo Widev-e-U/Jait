@@ -33,6 +33,7 @@ interface ThreadControlInput {
   threadId?: string;
   sessionId?: string;
   title?: string;
+  providerId?: string;
   model?: string;
   runtimeMode?: "full-access" | "supervised";
   kind?: "delivery" | "delegation";
@@ -63,6 +64,7 @@ interface ThreadControlInput {
 
 interface ThreadCreateSpec {
   title: string;
+  providerId?: string;
   model?: string;
   runtimeMode?: "full-access" | "supervised";
   kind?: "delivery" | "delegation";
@@ -162,6 +164,32 @@ function normalizeTimeoutMs(timeoutMinutes: number | undefined, defaultMinutes: 
   return Math.max(1, Math.floor(minutes * 60_000));
 }
 
+function normalizeSchedulerDeliveryPrompt(message: string, thread: ThreadRow, context: ToolContext): string {
+  const worktreePath = thread.workingDirectory?.trim();
+  const workspaceRoot = context.workspaceRoot?.trim();
+  if (context.requestedBy !== "scheduler" || thread.kind !== "delivery" || !worktreePath) {
+    return message;
+  }
+
+  const rewrittenMessage = workspaceRoot && workspaceRoot !== worktreePath
+    ? message.split(workspaceRoot).join(worktreePath)
+    : message;
+  const originalPathLine = workspaceRoot && workspaceRoot !== worktreePath
+    ? `Do not modify the scheduler source workspace directly: ${workspaceRoot}`
+    : "Do not modify any other checkout unless explicitly asked.";
+
+  return [
+    "<jaitManagedWorktree>",
+    "Jait created this scheduled delivery thread in an isolated git worktree.",
+    `Use this working directory for all file reads, edits, commands, tests, commits, and relative paths: ${worktreePath}`,
+    originalPathLine,
+    "If any earlier instruction mentions a different workspace path, treat this managed worktree as the active workspace.",
+    "</jaitManagedWorktree>",
+    "",
+    rewrittenMessage,
+  ].join("\n");
+}
+
 export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefinition<ThreadControlInput> {
   const gitService = deps.gitService ?? new GitService();
 
@@ -229,12 +257,17 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
   const resolveProviderId = (
     context: ToolContext,
+    requestedProviderId?: unknown,
   ): ProviderResolution => {
-    const selectedProvider = resolveSelectedThreadDefaults(context).providerId;
     const resolveRegisteredProvider = (providerId: ProviderId, label: string): ProviderResolution =>
       deps.providerRegistry.get(providerId)
         ? { providerId }
         : { error: `${label} '${providerId}' is not registered on this gateway.` };
+    const requestedProvider = normalizeThreadProviderId(requestedProviderId);
+    if (requestedProvider) {
+      return resolveRegisteredProvider(requestedProvider, "The requested provider");
+    }
+    const selectedProvider = resolveSelectedThreadDefaults(context).providerId;
 
     if (!selectedProvider) {
       return {
@@ -278,11 +311,11 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     thread: ThreadRow,
     options: StartThreadOptions = {},
   ): Promise<StartThreadResult> => {
-    const message = normalizePrompt(options.message);
+    const rawMessage = normalizePrompt(options.message);
     if (thread.status === "running" && thread.providerSessionId) {
       return { ok: false, message: "Thread is already running" };
     }
-    if (!message) {
+    if (!rawMessage) {
       return { ok: false, message: "start requires non-empty `prompt`." };
     }
 
@@ -300,6 +333,8 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     if (!provider) {
       return { ok: false, message: `Provider '${effectiveProviderId}' not found` };
     }
+
+    const message = normalizeSchedulerDeliveryPrompt(rawMessage, effectiveThread, context);
 
     const available = await provider.checkAvailability();
     if (!available) {
@@ -496,6 +531,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
         threadId: { type: "string", description: "Thread ID for thread-specific actions." },
         sessionId: { type: "string", description: "Optional session filter or session assignment on create." },
         title: { type: "string", description: "Thread title (create/update)." },
+        providerId: { type: "string", description: "Optional provider override for create/create_many." },
         model: { type: "string", description: "Optional provider model." },
         runtimeMode: { type: "string", enum: ["full-access", "supervised"], description: "Execution mode for thread runs." },
         kind: {
@@ -541,6 +577,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             type: "object",
             properties: {
               title: { type: "string" },
+              providerId: { type: "string" },
               model: { type: "string" },
               runtimeMode: { type: "string", enum: ["full-access", "supervised"] },
               kind: { type: "string", enum: ["delivery", "delegation"] },
@@ -604,7 +641,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
             if (!prompt) {
               return { ok: false, message: "create requires non-empty `prompt`." };
             }
-            const resolvedProvider = resolveProviderId(context);
+            const resolvedProvider = resolveProviderId(context, input.providerId);
             if (!resolvedProvider.providerId) {
               return { ok: false, message: resolvedProvider.error ?? "Unable to resolve a provider for this thread." };
             }
@@ -680,7 +717,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
 
             const validatedSpecs = input.threads.map((spec) => ({
               spec,
-              resolvedProvider: resolveProviderId(context),
+              resolvedProvider: resolveProviderId(context, spec.providerId ?? input.providerId),
             }));
             const firstResolutionError = validatedSpecs.find(({ resolvedProvider }) => !resolvedProvider.providerId);
             if (firstResolutionError) {
