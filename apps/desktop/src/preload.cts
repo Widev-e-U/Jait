@@ -145,6 +145,10 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
   credentialClear: (key: string) =>
     ipcRenderer.invoke("credential:clear", key) as Promise<{ ok: boolean }>,
 
+  /** Read plain text from the native desktop clipboard */
+  readClipboardText: () =>
+    ipcRenderer.invoke("clipboard:read-text") as Promise<string>,
+
   // ── Auto-update API ────────────────────────────────────────────────
   /** Check for application updates */
   checkForUpdate: () =>

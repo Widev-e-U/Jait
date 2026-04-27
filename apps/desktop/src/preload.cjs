@@ -30,6 +30,8 @@ contextBridge.exposeInMainWorld("jaitDesktop", {
     getRoots: () => ipcRenderer.invoke(allowedIpcChannels.invoke[7]),
     /** Open a detached workspace window. */
     openWorkspaceWindow: (opts) => ipcRenderer.invoke(allowedIpcChannels.invoke[8], opts),
+    /** Read plain text from the native desktop clipboard */
+    readClipboardText: () => ipcRenderer.invoke("clipboard:read-text"),
     /** Listen for screen-share commands from main process (tray, etc.) */
     onScreenShareStart: (callback) => ipcRenderer.on(allowedIpcChannels.on[0], callback),
     onScreenShareStop: (callback) => ipcRenderer.on(allowedIpcChannels.on[1], callback),

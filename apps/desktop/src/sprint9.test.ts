@@ -80,5 +80,6 @@ describe("sprint9 desktop app", () => {
   test("preload IPC allow list includes desktop and gateway channels", () => {
     expect(allowedIpcChannels.invoke).toContain("terminal:start");
     expect(allowedIpcChannels.on).toContain("gateway:event");
+    expect(allowedIpcChannels.invoke).toContain("clipboard:read-text");
   });
 });

@@ -5,7 +5,7 @@
  * inside an Electron BrowserWindow. Shares the exact same UI as @jait/web.
  */
 
-import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage } from "electron";
+import { app, BrowserWindow, ipcMain, Tray, Menu, nativeImage, session, shell, Notification, safeStorage, clipboard } from "electron";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { readFileSync, writeFileSync, mkdirSync, existsSync, statSync } from "node:fs";
@@ -298,6 +298,9 @@ ipcMain.handle("window:maximize", () => {
   else mainWindow?.maximize();
 });
 ipcMain.handle("window:close", () => mainWindow?.close());
+
+// ── Clipboard IPC ────────────────────────────────────────────────────
+ipcMain.handle("clipboard:read-text", () => clipboard.readText());
 
 // ── Desktop settings IPC ──────────────────────────────────────────────
 ipcMain.handle("desktop:get-setting", (_event, key: string, defaultValue?: unknown) => {

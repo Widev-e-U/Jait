@@ -1,10 +1,23 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getTerminalContextMenuPosition,
   handleTerminalContextMenuAction,
+  isTerminalPasteShortcut,
   pasteClipboardEventTextIntoTerminal,
   pasteClipboardTextIntoTerminal,
+  shouldUseTerminalCustomContextMenu,
+  shouldSuppressTerminalPasteControlData,
 } from './terminal-view'
+
+const originalWindow = globalThis.window
+
+afterEach(() => {
+  if (originalWindow === undefined) {
+    Reflect.deleteProperty(globalThis, 'window')
+  } else {
+    globalThis.window = originalWindow
+  }
+})
 
 describe('pasteClipboardTextIntoTerminal', () => {
   it('sends non-empty clipboard text', async () => {
@@ -36,6 +49,36 @@ describe('pasteClipboardTextIntoTerminal', () => {
     }, sendInput)).resolves.toBe(false)
 
     expect(sendInput).not.toHaveBeenCalled()
+  })
+
+  it('uses the desktop clipboard bridge when available', async () => {
+    const sendInput = vi.fn()
+    const browserClipboard = { readText: vi.fn().mockResolvedValue('browser clipboard') }
+    globalThis.window = {
+      jaitDesktop: {
+        readClipboardText: vi.fn().mockResolvedValue('desktop clipboard'),
+      },
+    } as unknown as Window & typeof globalThis
+
+    await expect(pasteClipboardTextIntoTerminal(browserClipboard, sendInput)).resolves.toBe(true)
+
+    expect(sendInput).toHaveBeenCalledWith('desktop clipboard')
+    expect(browserClipboard.readText).not.toHaveBeenCalled()
+  })
+
+  it('falls back to the browser clipboard when the desktop bridge fails', async () => {
+    const sendInput = vi.fn()
+    const browserClipboard = { readText: vi.fn().mockResolvedValue('browser clipboard') }
+    globalThis.window = {
+      jaitDesktop: {
+        readClipboardText: vi.fn().mockRejectedValue(new Error('blocked')),
+      },
+    } as unknown as Window & typeof globalThis
+
+    await expect(pasteClipboardTextIntoTerminal(browserClipboard, sendInput)).resolves.toBe(true)
+
+    expect(sendInput).toHaveBeenCalledWith('browser clipboard')
+    expect(browserClipboard.readText).toHaveBeenCalledTimes(1)
   })
 })
 
@@ -139,6 +182,82 @@ describe('pasteClipboardEventTextIntoTerminal', () => {
     expect(pasted).toBe(false)
     expect(preventDefault).not.toHaveBeenCalled()
     expect(sendInput).not.toHaveBeenCalled()
+  })
+
+  it('falls back to text clipboard data when text/plain is unavailable', () => {
+    const sendInput = vi.fn()
+    const preventDefault = vi.fn()
+
+    const pasted = pasteClipboardEventTextIntoTerminal({
+      clipboardData: {
+        getData: vi.fn((type: string) => type === 'text' ? 'echo fallback' : ''),
+      } as unknown as DataTransfer,
+      preventDefault,
+    }, sendInput)
+
+    expect(pasted).toBe(true)
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(sendInput).toHaveBeenCalledWith('echo fallback')
+  })
+})
+
+describe('isTerminalPasteShortcut', () => {
+  it('accepts ctrl+v and cmd+v keydown shortcuts', () => {
+    expect(isTerminalPasteShortcut({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    })).toBe(true)
+
+    expect(isTerminalPasteShortcut({
+      type: 'keydown',
+      key: 'V',
+      ctrlKey: false,
+      metaKey: true,
+      altKey: false,
+      shiftKey: false,
+    })).toBe(true)
+  })
+
+  it('rejects modified or non-keydown shortcuts', () => {
+    expect(isTerminalPasteShortcut({
+      type: 'keyup',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: false,
+      shiftKey: false,
+    })).toBe(false)
+
+    expect(isTerminalPasteShortcut({
+      type: 'keydown',
+      key: 'v',
+      ctrlKey: true,
+      metaKey: false,
+      altKey: true,
+      shiftKey: false,
+    })).toBe(false)
+  })
+})
+
+describe('shouldSuppressTerminalPasteControlData', () => {
+  it('suppresses raw ctrl+v data immediately after a paste shortcut', () => {
+    expect(shouldSuppressTerminalPasteControlData('\x16', 1000, 1100)).toBe(true)
+  })
+
+  it('allows normal input and stale ctrl+v data', () => {
+    expect(shouldSuppressTerminalPasteControlData('v', 1000, 1100)).toBe(false)
+    expect(shouldSuppressTerminalPasteControlData('\x16', 1000, 1300)).toBe(false)
+  })
+})
+
+describe('shouldUseTerminalCustomContextMenu', () => {
+  it('uses the custom context menu only when the desktop bridge is present', () => {
+    expect(shouldUseTerminalCustomContextMenu(true)).toBe(true)
+    expect(shouldUseTerminalCustomContextMenu(false)).toBe(false)
   })
 })
 

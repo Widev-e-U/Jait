@@ -14,6 +14,7 @@ const WS_URL = getWsUrl()
 const TERMINAL_CONTEXT_MENU_WIDTH = 140
 const TERMINAL_CONTEXT_MENU_HEIGHT = 72
 const TERMINAL_CONTEXT_MENU_MARGIN = 8
+const PASTE_SHORTCUT_SUPPRESS_MS = 250
 
 export interface TerminalInfo {
   id: string
@@ -58,14 +59,23 @@ export async function pasteClipboardTextIntoTerminal(
   clipboard: Pick<Clipboard, 'readText'> | null | undefined,
   sendInput: (text: string) => void,
 ): Promise<boolean> {
-  if (!clipboard?.readText) return false
+  const desktopClipboard = typeof window !== 'undefined' ? window.jaitDesktop?.readClipboardText : undefined
+  if (!desktopClipboard && !clipboard?.readText) return false
   try {
-    const text = await clipboard.readText()
+    const text = desktopClipboard ? await desktopClipboard() : await clipboard!.readText()
     if (!text) return false
     sendInput(text)
     return true
   } catch {
-    return false
+    if (!clipboard?.readText) return false
+    try {
+      const text = await clipboard.readText()
+      if (!text) return false
+      sendInput(text)
+      return true
+    } catch {
+      return false
+    }
   }
 }
 
@@ -109,11 +119,25 @@ export function pasteClipboardEventTextIntoTerminal(
   event: Pick<ClipboardEvent, 'clipboardData' | 'preventDefault'>,
   sendInput: (text: string) => void,
 ): boolean {
-  const text = event.clipboardData?.getData('text/plain')
+  const text = event.clipboardData?.getData('text/plain') || event.clipboardData?.getData('text')
   if (!text) return false
   event.preventDefault()
   sendInput(text)
   return true
+}
+
+export function isTerminalPasteShortcut(event: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey' | 'type'>): boolean {
+  if (event.type !== 'keydown') return false
+  if (event.altKey || event.shiftKey) return false
+  return (event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'v'
+}
+
+export function shouldSuppressTerminalPasteControlData(data: string, pasteShortcutAt: number, now: number): boolean {
+  return data === '\x16' && now - pasteShortcutAt >= 0 && now - pasteShortcutAt <= PASTE_SHORTCUT_SUPPRESS_MS
+}
+
+export function shouldUseTerminalCustomContextMenu(hasDesktopBridge: boolean): boolean {
+  return hasDesktopBridge
 }
 
 export function useTerminals(token?: string | null) {
@@ -249,6 +273,31 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     term.loadAddon(linksAddon)
     term.open(containerRef.current)
 
+    const sendTerminalInput = (data: string) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data }))
+      }
+    }
+    let pasteShortcutAt = 0
+    let pasteEventAt = 0
+    let pasteFallbackTimer: ReturnType<typeof setTimeout> | null = null
+
+    const schedulePasteFallback = () => {
+      if (pasteFallbackTimer) clearTimeout(pasteFallbackTimer)
+      pasteFallbackTimer = setTimeout(() => {
+        pasteFallbackTimer = null
+        if (pasteEventAt >= pasteShortcutAt) return
+        void pasteClipboardTextIntoTerminal(navigator.clipboard, sendTerminalInput)
+      }, 30)
+    }
+
+    term.attachCustomKeyEventHandler((event) => {
+      if (!isTerminalPasteShortcut(event)) return true
+      pasteShortcutAt = Date.now()
+      schedulePasteFallback()
+      return true
+    })
+
     const emitSelectionReference = () => {
       const selection = term.getSelection().trim()
       if (!selection) {
@@ -354,9 +403,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
 
     // Forward user input to the terminal via WS
     term.onData((data) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data }))
-      }
+      if (shouldSuppressTerminalPasteControlData(data, pasteShortcutAt, Date.now())) return
+      sendTerminalInput(data)
     })
 
     // Forward resize events
@@ -388,8 +436,13 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       window.setTimeout(emitSelectionReference, 0)
     }
     const handleContextMenu = (event: MouseEvent) => {
-      event.preventDefault()
       const selection = term.getSelection()
+      if (!shouldUseTerminalCustomContextMenu(!!window.jaitDesktop)) {
+        term.focus()
+        setContextMenu(null)
+        return
+      }
+      event.preventDefault()
       const pos = getTerminalContextMenuPosition(event.clientX, event.clientY, window.innerWidth, window.innerHeight)
       setContextMenu({
         left: pos.left,
@@ -398,11 +451,9 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       })
     }
     const handlePaste = (event: ClipboardEvent) => {
-      pasteClipboardEventTextIntoTerminal(event, (text) => {
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
-        }
-      })
+      if (pasteClipboardEventTextIntoTerminal(event, sendTerminalInput)) {
+        pasteEventAt = Date.now()
+      }
     }
     rootEl.addEventListener('mouseup', handleMouseUp)
     rootEl.addEventListener('keyup', handleKeyUp)
@@ -412,6 +463,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     return () => {
       disposed = true
       clearTimeout(focusRetryId)
+      if (pasteFallbackTimer) clearTimeout(pasteFallbackTimer)
       clearReconnectTimer()
       if (typeof document !== 'undefined') {
         document.removeEventListener('visibilitychange', handleVisibilityChange)

@@ -30,6 +30,7 @@ interface JaitDesktop {
   setTitleBarOverlay: (opts: { color?: string; symbolColor?: string; height?: number }) => Promise<void>
   getSetting: (key: string, defaultValue?: unknown) => Promise<unknown>
   setSetting: (key: string, value: unknown) => Promise<{ ok: boolean }>
+  readClipboardText: () => Promise<string>
 
   // Auto-update
   checkForUpdate: () => Promise<{ updateAvailable: boolean; version?: string; error?: string }>
