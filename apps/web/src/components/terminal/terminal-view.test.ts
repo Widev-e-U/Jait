@@ -1,5 +1,10 @@
 import { describe, expect, it, vi } from 'vitest'
-import { handleTerminalContextMenuAction, pasteClipboardTextIntoTerminal } from './terminal-view'
+import {
+  getTerminalContextMenuPosition,
+  handleTerminalContextMenuAction,
+  pasteClipboardEventTextIntoTerminal,
+  pasteClipboardTextIntoTerminal,
+} from './terminal-view'
 
 describe('pasteClipboardTextIntoTerminal', () => {
   it('sends non-empty clipboard text', async () => {
@@ -100,5 +105,53 @@ describe('handleTerminalContextMenuAction', () => {
 
     expect(clipboard.writeText).toHaveBeenCalledWith(multiline)
     expect(sendInput).not.toHaveBeenCalled()
+  })
+})
+
+describe('pasteClipboardEventTextIntoTerminal', () => {
+  it('sends clipboard text from a paste event', () => {
+    const sendInput = vi.fn()
+    const preventDefault = vi.fn()
+
+    const pasted = pasteClipboardEventTextIntoTerminal({
+      clipboardData: {
+        getData: vi.fn().mockReturnValue('echo from event'),
+      } as unknown as DataTransfer,
+      preventDefault,
+    }, sendInput)
+
+    expect(pasted).toBe(true)
+    expect(preventDefault).toHaveBeenCalledTimes(1)
+    expect(sendInput).toHaveBeenCalledWith('echo from event')
+  })
+
+  it('ignores paste events without text', () => {
+    const sendInput = vi.fn()
+    const preventDefault = vi.fn()
+
+    const pasted = pasteClipboardEventTextIntoTerminal({
+      clipboardData: {
+        getData: vi.fn().mockReturnValue(''),
+      } as unknown as DataTransfer,
+      preventDefault,
+    }, sendInput)
+
+    expect(pasted).toBe(false)
+    expect(preventDefault).not.toHaveBeenCalled()
+    expect(sendInput).not.toHaveBeenCalled()
+  })
+})
+
+describe('getTerminalContextMenuPosition', () => {
+  it('keeps the menu below the click when there is room', () => {
+    expect(getTerminalContextMenuPosition(100, 100, 400, 400)).toEqual({ left: 100, top: 100 })
+  })
+
+  it('flips the menu upward near the bottom of the viewport', () => {
+    expect(getTerminalContextMenuPosition(100, 390, 400, 400)).toEqual({ left: 100, top: 318 })
+  })
+
+  it('clamps the menu inside the viewport horizontally', () => {
+    expect(getTerminalContextMenuPosition(390, 100, 400, 400)).toEqual({ left: 252, top: 100 })
   })
 })

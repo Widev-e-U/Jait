@@ -11,6 +11,9 @@ import { ChevronDown, Copy, ClipboardPaste } from 'lucide-react'
 
 const GATEWAY = getApiUrl()
 const WS_URL = getWsUrl()
+const TERMINAL_CONTEXT_MENU_WIDTH = 140
+const TERMINAL_CONTEXT_MENU_HEIGHT = 72
+const TERMINAL_CONTEXT_MENU_MARGIN = 8
 
 export interface TerminalInfo {
   id: string
@@ -83,6 +86,34 @@ export async function handleTerminalContextMenuAction(
   }
 
   return await pasteClipboardTextIntoTerminal(clipboard, sendInput) ? 'pasted' : 'noop'
+}
+
+export function getTerminalContextMenuPosition(
+  clientX: number,
+  clientY: number,
+  viewportWidth: number,
+  viewportHeight: number,
+  menuWidth = TERMINAL_CONTEXT_MENU_WIDTH,
+  menuHeight = TERMINAL_CONTEXT_MENU_HEIGHT,
+): { left: number; top: number } {
+  const maxLeft = Math.max(TERMINAL_CONTEXT_MENU_MARGIN, viewportWidth - menuWidth - TERMINAL_CONTEXT_MENU_MARGIN)
+  const left = Math.min(Math.max(clientX, TERMINAL_CONTEXT_MENU_MARGIN), maxLeft)
+  const fitsBelow = clientY + menuHeight + TERMINAL_CONTEXT_MENU_MARGIN <= viewportHeight
+  const preferredTop = fitsBelow ? clientY : clientY - menuHeight
+  const maxTop = Math.max(TERMINAL_CONTEXT_MENU_MARGIN, viewportHeight - menuHeight - TERMINAL_CONTEXT_MENU_MARGIN)
+  const top = Math.min(Math.max(preferredTop, TERMINAL_CONTEXT_MENU_MARGIN), maxTop)
+  return { left, top }
+}
+
+export function pasteClipboardEventTextIntoTerminal(
+  event: Pick<ClipboardEvent, 'clipboardData' | 'preventDefault'>,
+  sendInput: (text: string) => void,
+): boolean {
+  const text = event.clipboardData?.getData('text/plain')
+  if (!text) return false
+  event.preventDefault()
+  sendInput(text)
+  return true
 }
 
 export function useTerminals(token?: string | null) {
@@ -192,7 +223,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const wsRef = useRef<WebSocket | null>(null)
   const lastSelectionKeyRef = useRef<string | null>(null)
   const resolvedTheme = useResolvedTheme()
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; hasSelection: boolean } | null>(null)
+  const [contextMenu, setContextMenu] = useState<{ left: number; top: number; hasSelection: boolean } | null>(null)
 
   useImperativeHandle(ref, () => ({
     focus() {
@@ -359,16 +390,24 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     const handleContextMenu = (event: MouseEvent) => {
       event.preventDefault()
       const selection = term.getSelection()
-      const rect = rootEl.getBoundingClientRect()
+      const pos = getTerminalContextMenuPosition(event.clientX, event.clientY, window.innerWidth, window.innerHeight)
       setContextMenu({
-        x: event.clientX - rect.left,
-        y: event.clientY - rect.top,
+        left: pos.left,
+        top: pos.top,
         hasSelection: !!selection.trim(),
+      })
+    }
+    const handlePaste = (event: ClipboardEvent) => {
+      pasteClipboardEventTextIntoTerminal(event, (text) => {
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
+        }
       })
     }
     rootEl.addEventListener('mouseup', handleMouseUp)
     rootEl.addEventListener('keyup', handleKeyUp)
     rootEl.addEventListener('contextmenu', handleContextMenu, { capture: true })
+    rootEl.addEventListener('paste', handlePaste, { capture: true })
 
     return () => {
       disposed = true
@@ -381,6 +420,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       rootEl.removeEventListener('mouseup', handleMouseUp)
       rootEl.removeEventListener('keyup', handleKeyUp)
       rootEl.removeEventListener('contextmenu', handleContextMenu, { capture: true })
+      rootEl.removeEventListener('paste', handlePaste, { capture: true })
       closeSocket()
       term.dispose()
       termRef.current = null
@@ -438,8 +478,8 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       <div ref={containerRef} className="h-full w-full" style={{ minHeight: 0 }} />
       {contextMenu && (
         <div
-          className="absolute z-50 min-w-[140px] rounded-md border border-border bg-popover py-1 shadow-md"
-          style={{ left: contextMenu.x, top: contextMenu.y }}
+          className="fixed z-50 min-w-[140px] rounded-md border border-border bg-popover py-1 shadow-md"
+          style={{ left: contextMenu.left, top: contextMenu.top }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           <button
@@ -529,7 +569,7 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
           }}
           onClick={() => onSelect(t.id)}
           onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') onSelect(t.id) }}
-          className={`group flex items-center gap-1.5 h-6 px-2.5 text-xs rounded-sm border transition-colors cursor-pointer ${
+          className={`group flex items-center gap-1.5 h-6 px-2.5 text-xs rounded-sm border cursor-pointer ${
             activeTerminalId === t.id
               ? 'bg-background text-foreground border-border shadow-sm'
               : 'text-muted-foreground border-transparent hover:text-foreground hover:bg-background/50 hover:border-border'
@@ -552,7 +592,7 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
       <div className="flex items-center">
         <button
           onClick={() => onCreate()}
-          className="px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          className="px-2 py-1 text-sm text-muted-foreground hover:text-foreground"
           aria-label="New terminal"
         >
           +
@@ -569,7 +609,7 @@ export function TerminalTabs({ terminals, activeTerminalId, onSelect, onCreate, 
               if (rect) setMenuPos({ top: rect.bottom + 4, left: rect.left })
               setShowShellMenu(true)
             }}
-            className="px-0.5 py-1 text-muted-foreground hover:text-foreground transition-colors"
+            className="px-0.5 py-1 text-muted-foreground hover:text-foreground"
             aria-label="Select shell type"
           >
             <ChevronDown className="h-3 w-3" />
