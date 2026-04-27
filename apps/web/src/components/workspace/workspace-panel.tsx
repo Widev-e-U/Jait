@@ -687,17 +687,18 @@ function useDragResize(
   max: number,
   direction: 'horizontal' | 'vertical' = 'horizontal',
   storageKey?: string,
-  options?: { snapCollapse?: boolean; snapMaxCollapse?: boolean; snapMaxSize?: number },
+  options?: { snapCollapse?: boolean; snapMaxCollapse?: boolean; snapMaxSize?: number; minStoredSize?: number },
 ) {
   const snapCollapse = options?.snapCollapse ?? false
   const snapMaxCollapse = options?.snapMaxCollapse ?? false
   const snapMaxSize = options?.snapMaxSize ?? max
+  const minStoredSize = options?.minStoredSize ?? min
   const [size, setSize] = useState(() => {
     if (!storageKey || typeof window === 'undefined') return initial
     const raw = window.localStorage.getItem(storageKey)
     const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
     if (!Number.isFinite(parsed)) return initial
-    return Math.min(max, Math.max(min, parsed))
+    return Math.min(max, Math.max(min, minStoredSize, parsed))
   })
   const [collapsed, setCollapsed] = useState(false)
   const [maxCollapsed, setMaxCollapsed] = useState(false)
@@ -1151,11 +1152,12 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const panelMax = Math.max(400, viewportWidth - sidebarWidth - minChatWidth)
   const panelFullWidth = Math.max(panelMax, viewportWidth - sidebarWidth)
-  const initialPanel = Math.round((viewportWidth - sidebarWidth) * (4 / 6))
+  const initialPanel = panelMax
   const panel = useDragResize(initialPanel, 400, panelMax, 'horizontal', 'workspacePanelWidth', {
     snapCollapse: true,
     snapMaxCollapse: true,
     snapMaxSize: panelFullWidth,
+    minStoredSize: initialPanel,
   })
 
   // Notify parent when collapse state changes (layout effects prevent one-frame flash)
