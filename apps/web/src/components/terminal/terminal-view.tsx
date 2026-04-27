@@ -136,8 +136,8 @@ export function shouldSuppressTerminalPasteControlData(data: string, pasteShortc
   return data === '\x16' && now - pasteShortcutAt >= 0 && now - pasteShortcutAt <= PASTE_SHORTCUT_SUPPRESS_MS
 }
 
-export function shouldUseTerminalCustomContextMenu(hasDesktopBridge: boolean): boolean {
-  return hasDesktopBridge
+export function shouldUseTerminalCustomContextMenu(_hasDesktopBridge: boolean): boolean {
+  return true
 }
 
 export function useTerminals(token?: string | null) {

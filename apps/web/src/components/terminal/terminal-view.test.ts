@@ -255,9 +255,9 @@ describe('shouldSuppressTerminalPasteControlData', () => {
 })
 
 describe('shouldUseTerminalCustomContextMenu', () => {
-  it('uses the custom context menu only when the desktop bridge is present', () => {
+  it('always shows the custom context menu', () => {
     expect(shouldUseTerminalCustomContextMenu(true)).toBe(true)
-    expect(shouldUseTerminalCustomContextMenu(false)).toBe(false)
+    expect(shouldUseTerminalCustomContextMenu(false)).toBe(true)
   })
 })
 
