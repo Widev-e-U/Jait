@@ -690,12 +690,16 @@ export function useAutomation(enabled = true) {
       runtimeMode: RuntimeMode = 'full-access',
       model?: string | null,
       metadata: ThreadMessageMetadata = {},
+      repositoryId?: string | null,
     ) => {
       if (!text.trim()) return
       const targetThread = threadId
         ? threads.find((thread) => thread.id === threadId) ?? null
         : selectedThread
-      const targetRepo = targetThread ? getRepositoryForThread(targetThread) : selectedRepo
+      const repositoryOverride = repositoryId
+        ? repositories.find((repository) => repository.id === repositoryId) ?? null
+        : null
+      const targetRepo = targetThread ? getRepositoryForThread(targetThread) : repositoryOverride ?? selectedRepo
 
       if (targetThread && targetThread.providerSessionId && targetThread.status !== 'running') {
         // Follow-up turn — session is alive and previous turn completed
@@ -841,12 +845,12 @@ export function useAutomation(enabled = true) {
         })()
       }
     },
-    [confirm, getRuntimeInfoForRepository, getRepositoryForThread, hydrateThreadRuntime, refresh, selectedRepo, selectedThread, threads],
+    [confirm, getRuntimeInfoForRepository, getRepositoryForThread, hydrateThreadRuntime, refresh, repositories, selectedRepo, selectedThread, threads],
   )
 
   const handleSend = useCallback(
-    async (text: string, providerId: ProviderId = 'jait', runtimeMode: RuntimeMode = 'full-access', model?: string | null, metadata?: ThreadMessageMetadata) => {
-      await sendThreadMessage(selectedThread?.id ?? null, text, providerId, runtimeMode, model, metadata)
+    async (text: string, providerId: ProviderId = 'jait', runtimeMode: RuntimeMode = 'full-access', model?: string | null, metadata?: ThreadMessageMetadata, repositoryId?: string | null) => {
+      await sendThreadMessage(selectedThread?.id ?? null, text, providerId, runtimeMode, model, metadata, repositoryId)
     },
     [selectedThread?.id, sendThreadMessage],
   )

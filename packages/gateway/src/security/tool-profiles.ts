@@ -41,6 +41,7 @@ const MINIMAL: ToolPermission[] = [
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("thread.control", "dangerous", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
+  perm("workspace.assign_repository", "none", "low", "Assign an existing or detected repository to a workspace."),
 ];
 
 // ── Coding Profile ───────────────────────────────────────────────────
@@ -64,6 +65,7 @@ const CODING: ToolPermission[] = [
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
+  perm("workspace.assign_repository", "none", "low", "Assign an existing or detected repository to a workspace."),
 ];
 
 // ── Full Profile ─────────────────────────────────────────────────────
@@ -87,6 +89,7 @@ const FULL: ToolPermission[] = [
   perm("network.scan", "none", "low", "Scan the local network for reachable devices."),
   perm("thread.control", "once", "high", "Create, run, or modify agent threads."),
   perm("gateway.redeploy", "always", "high", "Redeploy the running gateway process."),
+  perm("workspace.assign_repository", "none", "low", "Assign an existing or detected repository to a workspace."),
 ];
 
 // ── Profile Map ──────────────────────────────────────────────────────

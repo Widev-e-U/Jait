@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect, useMemo } from 'react'
 import { getApiUrl } from '@/lib/gateway-url'
+import type { AutomationRepo } from '@/lib/agents-api'
 
 const API_URL = getApiUrl()
 const WORKSPACE_LIST_LIMIT = 10
@@ -31,6 +32,14 @@ export interface CreateWorkspaceOptions {
   title?: string
   rootPath?: string | null
   nodeId?: string | null
+}
+
+export interface WorkspaceRepositoryAssignmentResponse {
+  workspace: WorkspaceRecord
+  repo: AutomationRepo
+  assigned: boolean
+  skipped: boolean
+  created: boolean
 }
 
 function authHeaders(token?: string | null): Record<string, string> {
@@ -290,6 +299,41 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     }
   }, [onLoginRequired, token])
 
+  const assignWorkspaceRepository = useCallback(async (workspaceId: string, repoId?: string | null): Promise<WorkspaceRepositoryAssignmentResponse | null> => {
+    if (!token) {
+      onLoginRequired?.()
+      return null
+    }
+    try {
+      const response = await fetch(`${API_URL}/api/workspaces/${workspaceId}/repository`, {
+        method: 'POST',
+        headers: { ...authHeaders(token), 'Content-Type': 'application/json' },
+        body: JSON.stringify(repoId ? { repoId } : {}),
+      })
+      if (response.status === 401) {
+        onLoginRequired?.()
+        return null
+      }
+      if (!response.ok) return null
+      const data = await response.json() as Omit<WorkspaceRepositoryAssignmentResponse, 'workspace'> & {
+        workspace: Omit<WorkspaceRecord, 'sessions'> & { sessions?: WorkspaceSession[] }
+      }
+      let nextWorkspace!: WorkspaceRecord
+      setWorkspaces((prev) => prev.map((workspace) => {
+        if (workspace.id !== data.workspace.id) return workspace
+        nextWorkspace = { ...data.workspace, sessions: data.workspace.sessions ?? workspace.sessions }
+        return nextWorkspace
+      }))
+      return {
+        ...data,
+        workspace: nextWorkspace ?? { ...data.workspace, sessions: data.workspace.sessions ?? [] },
+      }
+    } catch (err) {
+      console.error('Failed to assign workspace repository:', err)
+      return null
+    }
+  }, [onLoginRequired, token])
+
   const removeWorkspace = useCallback(async (workspaceId: string) => {
     if (!token) {
       onLoginRequired?.()
@@ -447,6 +491,7 @@ export function useWorkspaces(token?: string | null, onLoginRequired?: () => voi
     fetchWorkspaces,
     createWorkspace,
     updateWorkspace,
+    assignWorkspaceRepository,
     createSession,
     switchWorkspace,
     switchSession,

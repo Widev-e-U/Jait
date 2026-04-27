@@ -29,6 +29,7 @@ export {
   createCronUpdateTool,
 } from "./cron-tools.js";
 export { createGatewayStatusTool } from "./gateway-tools.js";
+export { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 export {
   createBrowserNavigateTool,
@@ -144,6 +145,7 @@ import {
   createCronUpdateTool,
 } from "./cron-tools.js";
 import { createGatewayStatusTool } from "./gateway-tools.js";
+import { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 import {
   createBrowserNavigateTool,
@@ -192,6 +194,9 @@ import type { ProviderRegistry } from "../providers/registry.js";
 import type { PreviewService } from "../services/preview.js";
 import type { ArchitectureDiagramService } from "../services/architecture-diagrams.js";
 import type { SecretInputService } from "../services/secret-input.js";
+import type { WorkspaceService } from "../services/workspaces.js";
+import type { RepositoryService } from "../services/repositories.js";
+import type { GitService } from "../services/git.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -220,6 +225,9 @@ export interface ToolRegistryDeps {
   providerRegistry?: ProviderRegistry;
   userService?: UserService;
   sessionState?: SessionStateService;
+  workspaceService?: WorkspaceService;
+  repoService?: RepositoryService;
+  gitService?: GitService;
   maintenanceService?: import("../services/maintenance.js").MaintenanceService;
   notifications?: import("../services/notifications.js").NotificationService;
   /** Graceful shutdown callback — needed by the redeploy tool */
@@ -301,6 +309,17 @@ export function createToolRegistry(
         startedAt: deps.startedAt ?? Date.now(),
         scheduler: deps.scheduler,
         hooks: deps.hooks,
+      }),
+    );
+  }
+
+  if (deps.workspaceService && deps.repoService) {
+    tools.register(
+      createWorkspaceAssignRepositoryTool({
+        workspaceService: deps.workspaceService,
+        repoService: deps.repoService,
+        gitService: deps.gitService,
+        ws: deps.ws,
       }),
     );
   }

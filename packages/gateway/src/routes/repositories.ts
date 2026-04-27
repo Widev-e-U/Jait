@@ -10,6 +10,9 @@
 import type { FastifyInstance } from "fastify";
 import type { AppConfig } from "../config.js";
 import type { RepositoryService } from "../services/repositories.js";
+import type { WorkspaceService } from "../services/workspaces.js";
+import { GitService } from "../services/git.js";
+import { autoAssignWorkspaceRepositories } from "../services/workspace-repositories.js";
 import type { UserService } from "../services/users.js";
 import type { WsControlPlane } from "../ws.js";
 import { requireAuth } from "../security/http-auth.js";
@@ -22,6 +25,8 @@ export interface RepoRouteDeps {
   repoService: RepositoryService;
   userService?: UserService;
   ws?: WsControlPlane;
+  workspaceService?: WorkspaceService;
+  gitService?: GitService;
 }
 
 export function registerRepoRoutes(
@@ -29,7 +34,8 @@ export function registerRepoRoutes(
   config: AppConfig,
   deps: RepoRouteDeps,
 ): void {
-  const { repoService, userService, ws } = deps;
+  const { repoService, userService, ws, workspaceService } = deps;
+  const gitService = workspaceService ? (deps.gitService ?? new GitService()) : undefined;
 
   /** Broadcast a repo event over WS to all clients */
   function broadcastRepoEvent(event: string, data: unknown): void {
@@ -52,6 +58,15 @@ export function registerRepoRoutes(
   app.get("/api/repos", async (request, reply) => {
     const user = await requireAuth(request, reply, config.jwtSecret);
     if (!user) return;
+    if (workspaceService && gitService) {
+      await autoAssignWorkspaceRepositories({
+        workspaceService,
+        repoService,
+        gitService,
+        userId: user.id,
+        ws,
+      });
+    }
     const repos = repoService.list(user.id);
     return { repos };
   });

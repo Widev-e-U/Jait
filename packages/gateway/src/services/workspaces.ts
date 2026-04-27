@@ -11,11 +11,31 @@ export interface CreateWorkspaceParams {
   metadata?: Record<string, unknown>;
 }
 
+type WorkspaceRow = typeof workspaces.$inferSelect;
+
 function fallbackWorkspaceTitle(rootPath?: string | null, fallback = "Untitled Workspace"): string {
   const normalized = rootPath?.trim();
   if (!normalized) return fallback;
   const parts = normalized.replace(/[\\/]+$/, "").split(/[\\/]/).filter(Boolean);
   return parts[parts.length - 1] || fallback;
+}
+
+export function parseWorkspaceMetadata(workspace: Pick<WorkspaceRow, "metadata"> | null | undefined): Record<string, unknown> {
+  if (!workspace?.metadata) return {};
+  try {
+    const parsed = JSON.parse(workspace.metadata) as unknown;
+    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
+      ? parsed as Record<string, unknown>
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+export function getWorkspaceRepositoryId(workspace: Pick<WorkspaceRow, "metadata"> | null | undefined): string | null {
+  const metadata = parseWorkspaceMetadata(workspace);
+  const value = metadata["repositoryId"] ?? metadata["repoId"];
+  return typeof value === "string" && value.trim() ? value.trim() : null;
 }
 
 export class WorkspaceService {
@@ -140,6 +160,15 @@ export class WorkspaceService {
       .set(set)
       .where(userId ? and(eq(workspaces.id, id), eq(workspaces.userId, userId)) : eq(workspaces.id, id))
       .run();
+  }
+
+  assignRepository(id: string, repositoryId: string, userId?: string) {
+    const workspace = this.getById(id, userId);
+    if (!workspace) return undefined;
+    const metadata = parseWorkspaceMetadata(workspace);
+    metadata["repositoryId"] = repositoryId;
+    this.update(id, { metadata }, userId);
+    return this.getById(id, userId);
   }
 
   archive(id: string, userId?: string) {

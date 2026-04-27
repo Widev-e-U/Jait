@@ -1,3 +1,6 @@
+import { mkdtempSync, mkdirSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { beforeEach, afterEach, describe, expect, it } from "vitest";
 import { loadConfig } from "../config.js";
 import { createServer } from "../server.js";
@@ -5,6 +8,8 @@ import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "../services/sessions.js";
 import { WorkspaceService } from "../services/workspaces.js";
 import { WorkspaceStateService } from "../services/workspace-state.js";
+import { RepositoryService } from "../services/repositories.js";
+import { GitService } from "../services/git.js";
 import { UserService } from "../services/users.js";
 import { AuditWriter } from "../services/audit.js";
 import { signAuthToken } from "../security/http-auth.js";
@@ -26,6 +31,14 @@ describe("workspace routes", () => {
   let app: Awaited<ReturnType<typeof createServer>>;
   let sqlite: Awaited<ReturnType<typeof openDatabase>>["sqlite"];
   let userService: UserService;
+  const tempRoots: string[] = [];
+
+  function makeGitWorkspaceRoot() {
+    const root = mkdtempSync(join(tmpdir(), "jait-workspace-route-"));
+    tempRoots.push(root);
+    mkdirSync(join(root, ".git"));
+    return root;
+  }
 
   beforeEach(async () => {
     const opened = await openDatabase(":memory:");
@@ -34,6 +47,7 @@ describe("workspace routes", () => {
     const sessionService = new SessionService(opened.db);
     const workspaceService = new WorkspaceService(opened.db);
     const workspaceState = new WorkspaceStateService(opened.db);
+    const repoService = new RepositoryService(opened.db);
     userService = new UserService(opened.db);
     const audit = new AuditWriter(opened.db);
 
@@ -43,6 +57,8 @@ describe("workspace routes", () => {
       sessionService,
       workspaceService,
       workspaceState,
+      repoService,
+      gitService: new GitService(),
       userService,
       audit,
     });
@@ -51,6 +67,9 @@ describe("workspace routes", () => {
   afterEach(async () => {
     await app.close();
     sqlite.close();
+    for (const root of tempRoots.splice(0)) {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 
   it("creates workspace-less sessions and groups explicit workspace sessions", async () => {
@@ -216,5 +235,45 @@ describe("workspace routes", () => {
       headers,
     });
     expect(deleteSeededRes.statusCode).toBe(409);
+  });
+
+  it("auto-registers git workspace repositories and exposes manual assignment", async () => {
+    const user = userService.createUser("repo-workspace-user", "password123");
+    const headers = await authHeaders(user.id, user.username, testConfig.jwtSecret);
+    const rootPath = makeGitWorkspaceRoot();
+
+    const createWorkspaceRes = await app.inject({
+      method: "POST",
+      url: "/api/workspaces",
+      headers,
+      payload: { title: "Route Repo", rootPath },
+    });
+    expect(createWorkspaceRes.statusCode).toBe(201);
+    const workspace = JSON.parse(createWorkspaceRes.body) as { id: string; metadata: string | null };
+    const metadata = JSON.parse(workspace.metadata ?? "{}") as { repositoryId?: string };
+    expect(metadata.repositoryId).toBeTruthy();
+
+    const reposRes = await app.inject({
+      method: "GET",
+      url: "/api/repos",
+      headers,
+    });
+    expect(reposRes.statusCode).toBe(200);
+    const reposBody = JSON.parse(reposRes.body) as { repos: Array<{ id: string; localPath: string }> };
+    expect(reposBody.repos).toContainEqual(expect.objectContaining({
+      id: metadata.repositoryId,
+      localPath: rootPath,
+    }));
+
+    const assignRes = await app.inject({
+      method: "POST",
+      url: `/api/workspaces/${workspace.id}/repository`,
+      headers,
+      payload: {},
+    });
+    expect(assignRes.statusCode).toBe(200);
+    const assignBody = JSON.parse(assignRes.body) as { skipped: boolean; repo: { id: string } };
+    expect(assignBody.skipped).toBe(true);
+    expect(assignBody.repo.id).toBe(metadata.repositoryId);
   });
 });

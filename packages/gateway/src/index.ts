@@ -53,6 +53,7 @@ import { PreviewService } from "./services/preview.js";
 import { setNetworkScanDb } from "./tools/network-tools.js";
 import { ArchitectureDiagramService } from "./services/architecture-diagrams.js";
 import { WorkspaceService } from "./services/workspaces.js";
+import { autoAssignWorkspaceRepositories } from "./services/workspace-repositories.js";
 import { AssistantProfileService } from "./services/assistant-profiles.js";
 import { PluginManager } from "./plugins/manager.js";
 import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
@@ -94,6 +95,7 @@ async function main() {
   }
 
   const repoService = new RepositoryService(db);
+  const gitService = new GitService();
   const planService = new PlanService(db);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
@@ -317,6 +319,9 @@ async function main() {
     providerRegistry,
     userService,
     sessionState,
+    workspaceService,
+    repoService,
+    gitService,
     maintenanceService,
     notifications,
     previewService,
@@ -449,6 +454,9 @@ async function main() {
     threadService,
     providerRegistry,
     userService,
+    workspaceService,
+    repoService,
+    gitService,
     maintenanceService,
     notifications,
     config,
@@ -458,6 +466,20 @@ async function main() {
     secretInputService,
   });
   console.log(`Tools registered: ${toolRegistry.listNames().join(", ")}`);
+
+  try {
+    const workspaceRepoAssignments = await autoAssignWorkspaceRepositories({
+      workspaceService,
+      repoService,
+      gitService,
+      ws,
+    });
+    if (workspaceRepoAssignments.length > 0) {
+      console.log(`Auto-assigned ${workspaceRepoAssignments.length} workspace repos`);
+    }
+  } catch (err) {
+    console.error("Workspace repo auto-assignment failed:", err);
+  }
 
   scheduler.start(30_000);
   threadReviewSync.start();
@@ -614,6 +636,7 @@ async function main() {
     providerRegistry,
     previewService,
     architectureDiagramService,
+    gitService,
     secretInputService,
     pluginManager,
     skillRegistry,

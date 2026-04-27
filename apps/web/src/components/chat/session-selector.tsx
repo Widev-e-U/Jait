@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare } from 'lucide-react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -7,6 +7,8 @@ import type { WorkspaceRecord, WorkspaceSession } from '@/hooks/useWorkspaces'
 import type { SessionInfo } from '@/hooks/useChat'
 import type { FsNode } from '@jait/shared'
 import { buildWorkspaceDragPayload, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
+import type { AutomationRepository } from '@/lib/automation-repositories'
+import { getWorkspaceRepository } from '@/lib/workspace-repositories'
 
 interface SessionSelectorProps {
   workspaces: WorkspaceRecord[]
@@ -22,10 +24,12 @@ interface SessionSelectorProps {
   onCreateWorkspace: () => void
   onRemoveWorkspace: (workspaceId: string) => void
   onChangeDirectory: (workspaceId: string) => void
+  onAssignRepository?: (workspaceId: string) => void
   onShowMore?: () => void
   onShowFewer?: () => void
   sessionInfo?: SessionInfo | null
   nodes?: FsNode[]
+  repositories?: AutomationRepository[]
 }
 
 function isNodeOffline(nodeId: string | null, onlineNodeIds: Set<string>): boolean {
@@ -71,10 +75,12 @@ export function SessionSelector({
   onCreateWorkspace,
   onRemoveWorkspace,
   onChangeDirectory,
+  onAssignRepository,
   onShowMore,
   onShowFewer,
   sessionInfo,
   nodes = [],
+  repositories = [],
 }: SessionSelectorProps) {
   // Derive online node IDs from the nodes prop (already fetched by App.tsx)
   const onlineNodeIds = useMemo(
@@ -126,6 +132,7 @@ export function SessionSelector({
                     ? nodes.find((n) => n.id === workspace.nodeId)
                     : null
                   const offline = isNodeOffline(workspace.nodeId, onlineNodeIds)
+                  const repository = getWorkspaceRepository(workspace, repositories)
                   return (
                     <div
                       key={workspace.id}
@@ -162,6 +169,12 @@ export function SessionSelector({
                           <span className="shrink-0">·</span>
                           <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
                         </div>
+                        {repository && (
+                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
+                            <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                            <span className="truncate">{repository.name}</span>
+                          </div>
+                        )}
                         {offline && (
                           <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
                             <WifiOff className="h-2.5 w-2.5 shrink-0" />
@@ -190,6 +203,28 @@ export function SessionSelector({
                         )}
                       </div>
                       <div className="flex shrink-0 self-start gap-0.5">
+                        {onAssignRepository && (
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                aria-label={repository ? `Repository: ${repository.name}` : 'Assign repository'}
+                                disabled={!workspace.rootPath}
+                                className={`h-5.5 w-5.5 shrink-0 opacity-100 transition-opacity sm:opacity-0 sm:group-hover:opacity-100 ${
+                                  repository ? 'text-primary hover:text-primary' : 'text-muted-foreground hover:text-foreground'
+                                }`}
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onAssignRepository(workspace.id)
+                                }}
+                              >
+                                <GitBranch className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent side="right">{repository ? `Repository: ${repository.name}` : 'Assign repository'}</TooltipContent>
+                          </Tooltip>
+                        )}
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <Button

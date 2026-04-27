@@ -40,6 +40,7 @@ export const ToolName = {
 
   // ── Gateway ──
   GatewayStatus: "gateway.status",
+  WorkspaceAssignRepository: "workspace.assign_repository",
 
   // ── Screen share ──
   ScreenShare: "screen.share",

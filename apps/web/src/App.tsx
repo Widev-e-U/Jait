@@ -130,6 +130,7 @@ import {
   getDefaultFloatingScreenSharePosition,
 } from '@/lib/floating-screen-share'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
+import { getWorkspaceRepositoryId, getWorkspaceRepository } from '@/lib/workspace-repositories'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
@@ -1883,6 +1884,7 @@ function App() {
     createSession,
     createWorkspace,
     updateWorkspace,
+    assignWorkspaceRepository,
     switchWorkspace,
     switchSession,
     fetchArchivedSessions,
@@ -2035,6 +2037,24 @@ function App() {
   // ── Automation / Manager mode state ───────────────────────────────
   const automation = useAutomation()
   automationRefreshRef.current = automation.refresh
+  const activeWorkspaceRepositoryId = useMemo(
+    () => getWorkspaceRepositoryId(activeWorkspaceRecord),
+    [activeWorkspaceRecord],
+  )
+  const activeWorkspaceRepository = useMemo(
+    () => getWorkspaceRepository(activeWorkspaceRecord, automation.repositories),
+    [activeWorkspaceRecord, automation.repositories],
+  )
+  const handleAssignWorkspaceRepository = useCallback(async (workspaceId: string) => {
+    const result = await assignWorkspaceRepository(workspaceId)
+    if (!result) {
+      toast.error('No repository could be assigned. Make sure the workspace folder contains .git.')
+      return
+    }
+    await automation.refresh()
+    automation.setSelectedRepoId(result.repo.id)
+    toast.success(result.skipped ? `Repository already assigned: ${result.repo.name}` : `Assigned repository: ${result.repo.name}`)
+  }, [assignWorkspaceRepository, automation.refresh, automation.setSelectedRepoId])
 
   // Convert thread activities → ChatMessage[] for Message rendering
   const automationMessages = useMemo(
@@ -2057,6 +2077,13 @@ function App() {
     () => (selectedThreadRepo ? automation.getRuntimeInfoForRepository(selectedThreadRepo) : null),
     [automation.getRuntimeInfoForRepository, selectedThreadRepo],
   )
+  const threadTargetRepo = viewMode === 'developer' && sendTarget === 'thread' && activeWorkspaceRepository
+    ? activeWorkspaceRepository
+    : automation.selectedRepo
+  const threadTargetRepoRuntime = useMemo(
+    () => (threadTargetRepo ? automation.getRuntimeInfoForRepository(threadTargetRepo) : null),
+    [automation.getRuntimeInfoForRepository, threadTargetRepo],
+  )
   const activeManagerThreads = useMemo(
     () => managerThreads.filter((thread) => thread.status === 'running'),
     [managerThreads],
@@ -2066,10 +2093,10 @@ function App() {
     () => (automation.selectedThread ? managerMessageQueues[automation.selectedThread.id] ?? [] : []),
     [automation.selectedThread, managerMessageQueues],
   )
-  const canTargetThread = automation.selectedRepo != null
-  const selectedRepoOffline = selectedRepoRuntime != null && !selectedRepoRuntime.online && !selectedRepoRuntime.loading
+  const canTargetThread = threadTargetRepo != null
+  const selectedRepoOffline = threadTargetRepoRuntime != null && !threadTargetRepoRuntime.online && !threadTargetRepoRuntime.loading
   const threadComposerDisabled = automation.creating || !canTargetThread || selectedRepoOffline
-  const threadPlaceholder = !automation.selectedRepo
+  const threadPlaceholder = !threadTargetRepo
     ? 'Select a repository to start a thread...'
     : selectedRepoOffline
       ? 'Repository is offline...'
@@ -2079,6 +2106,22 @@ function App() {
   const developerPlaceholder = sendTarget === 'thread'
     ? threadPlaceholder
     : 'Ask anything...'
+
+  useEffect(() => {
+    if (viewMode !== 'developer' || sendTarget !== 'thread') return
+    if (!activeWorkspaceRepositoryId) return
+    if (!automation.repositories.some((repo) => repo.id === activeWorkspaceRepositoryId)) return
+    if (automation.selectedRepoId !== activeWorkspaceRepositoryId) {
+      automation.setSelectedRepoId(activeWorkspaceRepositoryId)
+    }
+  }, [
+    activeWorkspaceRepositoryId,
+    automation.repositories,
+    automation.selectedRepoId,
+    automation.setSelectedRepoId,
+    sendTarget,
+    viewMode,
+  ])
 
 
   // Detect Electron platform and listen for maximize/unmaximize (custom titlebar)
@@ -3472,6 +3515,7 @@ function App() {
     if (changeDirectoryWorkspaceId) {
       setChangeDirectoryWorkspaceId(null)
       await updateWorkspace(changeDirectoryWorkspaceId, { rootPath: path, nodeId })
+      void automation.refresh()
       return
     }
     const workspace = await createWorkspace({ rootPath: path, nodeId })
@@ -3485,13 +3529,14 @@ function App() {
     const nextOpen = options?.openEditor ?? workspacePickerMode === 'editor'
     showWorkspaceRef.current = nextOpen
     await openRemoteWorkspaceOnGateway(path, nodeId, session.id)
+    void automation.refresh()
     setShowWorkspace(nextOpen)
     if (nextOpen && isMobile) {
       const nextLayout = showMobileWorkspacePane('editor')
       applyWorkspaceLayout(nextLayout, { immediateSync: true })
     }
     setSavedWorkspace({ open: nextOpen, remotePath: path, nodeId })
-  }, [applyWorkspaceLayout, changeDirectoryWorkspaceId, createSession, createWorkspace, isMobile, updateWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
+  }, [applyWorkspaceLayout, automation.refresh, changeDirectoryWorkspaceId, createSession, createWorkspace, isMobile, updateWorkspace, openRemoteWorkspaceOnGateway, setSavedWorkspace, workspacePickerMode])
 
   const reopenPersistedWorkspace = useCallback(async (
     path: string,
@@ -4629,6 +4674,7 @@ function App() {
         displaySegments: nextDisplaySegments,
         attachments: prepared.attachments,
       },
+      threadTargetRepo?.id ?? undefined,
     )
   }
 
@@ -5095,6 +5141,8 @@ function App() {
         chatProvider,
         chatProvider !== 'jait' ? chatProviderRuntimeMode : undefined,
         cliModel ?? undefined,
+        undefined,
+        threadTargetRepo?.id ?? undefined,
       )
       return
     }
@@ -5130,7 +5178,7 @@ function App() {
       model: cliModel ?? undefined,
       onLoginRequired: () => setShowLoginDialog(true),
     })
-  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, managerMessageQueues, messageQueue.length, sendMessage, sendTarget, token, viewMode])
+  }, [activeSessionId, automation.handleSend, automation.selectedThread, chatMode, chatProvider, chatProviderRuntimeMode, cliModel, createSession, enqueueManagerMessage, enqueueMessage, ensureSessionTitle, isLoading, managerMessageQueues, messageQueue.length, sendMessage, sendTarget, threadTargetRepo?.id, token, viewMode])
 
   // ── Push-to-talk voice recording state ─────────────────────────
   const [voiceRecording, setVoiceRecording] = useState(false)
@@ -5461,7 +5509,7 @@ function App() {
   const developerThreadToolbarRepoPicker = sendTarget === 'thread' ? (
     <ManagerRepoPicker
       repositories={automation.repositories}
-      selectedRepo={automation.selectedRepo}
+      selectedRepo={threadTargetRepo}
       disabled={automation.creating}
       getRuntimeInfo={automation.getRuntimeInfoForRepository}
       onSelect={automation.setSelectedRepoId}
@@ -6691,10 +6739,12 @@ function App() {
                     onCreateWorkspace={handleCreateWorkspace}
                     onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
                     onChangeDirectory={handleChangeDirectory}
+                    onAssignRepository={(workspaceId) => { void handleAssignWorkspaceRepository(workspaceId) }}
                     onShowMore={showMoreWorkspaces}
                     onShowFewer={showFewerWorkspaces}
                     sessionInfo={sessionInfo}
                     nodes={fsNodes}
+                    repositories={automation.repositories}
                   />
                 </aside>
               )}
@@ -7252,7 +7302,7 @@ function App() {
                     onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                     cliModel={cliModel}
                     onCliModelChange={handleCliModelChange}
-                    repoRuntime={sendTarget === 'thread' ? selectedRepoRuntime : null}
+                    repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
                     onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
                     availableFiles={availableFilesForMention}
                     onSearchFiles={handleSearchFiles}
@@ -7408,7 +7458,7 @@ function App() {
                       onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
                       cliModel={cliModel}
                       onCliModelChange={handleCliModelChange}
-                      repoRuntime={sendTarget === 'thread' ? selectedRepoRuntime : null}
+                      repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
                       onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
                       availableFiles={availableFilesForMention}
                       onSearchFiles={handleSearchFiles}

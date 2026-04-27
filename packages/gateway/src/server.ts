@@ -69,6 +69,7 @@ import type { SessionStateService } from "./services/session-state.js";
 import type { WorkspaceStateService } from "./services/workspace-state.js";
 import type { ThreadService } from "./services/threads.js";
 import type { RepositoryService } from "./services/repositories.js";
+import type { GitService } from "./services/git.js";
 import type { PlanService } from "./services/plans.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { SqliteDatabase } from "./db/sqlite-shim.js";
@@ -116,7 +117,7 @@ export interface ServerDeps {
   notifications?: import("./services/notifications.js").NotificationService;
   providerRegistry?: ProviderRegistry;
   shutdown?: () => Promise<void>;
-  gitService?: import("./routes/threads.js").ThreadRouteDeps["gitService"];
+  gitService?: GitService;
   previewService?: import("./services/preview.js").PreviewService;
   architectureDiagramService?: import("./services/architecture-diagrams.js").ArchitectureDiagramService;
   secretInputService?: SecretInputService;
@@ -169,7 +170,11 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     registerSessionRoutes(app, config, deps.sessionService, deps.audit, deps.hooks, deps.sessionState, deps.workspaceService);
   }
   if (deps.workspaceService && deps.sessionService) {
-    registerWorkspaceEntityRoutes(app, config, deps.workspaceService, deps.sessionService, deps.workspaceState);
+    registerWorkspaceEntityRoutes(app, config, deps.workspaceService, deps.sessionService, deps.workspaceState, {
+      repoService: deps.repoService,
+      gitService: deps.gitService,
+      ws: deps.ws,
+    });
   }
   if (deps.assistantProfileService) {
     registerAssistantProfileRoutes(app, config, deps.assistantProfileService);
@@ -274,6 +279,8 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       repoService: deps.repoService,
       userService: deps.userService,
       ws: deps.ws,
+      workspaceService: deps.workspaceService,
+      gitService: deps.gitService,
     });
   }
 
