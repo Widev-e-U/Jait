@@ -35,6 +35,7 @@ import type { ReferencedFile } from './prompt-input'
 import { parseWorkspaceLinkTarget } from '@/lib/workspace-links'
 import { resolveChatImageUrl } from '@/lib/chat-image-url'
 import type { ResponseStyle } from '@jait/shared'
+import { hasRenderableUserMessageContent } from './message-render-state'
 import {
   JAIT_REF_MIME,
   buildFallbackUserMessageSegments,
@@ -486,6 +487,12 @@ function MessageInner({
       ))
     return fromSegments.length > 0 ? fromSegments : (attachmentsProp ?? [])
   }, [attachmentsProp, isUser, optimisticUserDisplaySegments, userDisplaySegments])
+  const hasUserRenderableContent = isUser && hasRenderableUserMessageContent({
+    content,
+    userDisplayText: optimisticUserDisplayText ?? userDisplayText,
+    userDisplaySegments: optimisticUserDisplaySegments ?? userDisplaySegments,
+    imageAttachmentCount: userImageAttachments.length,
+  })
   const copyTimerRef = useRef<number | null>(null)
   const userBubbleRef = useRef<HTMLDivElement | null>(null)
   const editPromptInputRef = useRef<PromptInputHandle | null>(null)
@@ -837,7 +844,7 @@ function MessageInner({
               )
             )}
 
-            {content ? (
+            {hasUserRenderableContent || content ? (
               isUser ? (
                 isEditing ? (
                   <div className="w-full max-w-3xl" onClick={(event) => event.stopPropagation()}>

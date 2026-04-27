@@ -168,6 +168,12 @@ function normalizeTimeoutMs(timeoutMinutes: number | undefined, defaultMinutes: 
   return Math.max(1, Math.floor(minutes * 60_000));
 }
 
+function shouldGenerateSchedulerThreadTitle(title: unknown): boolean {
+  if (typeof title !== "string") return true;
+  const normalized = title.trim().toLowerCase();
+  return !normalized || normalized === "jait code quality rotation";
+}
+
 function normalizeSchedulerDeliveryPrompt(message: string, thread: ThreadRow, context: ToolContext): string {
   const worktreePath = thread.workingDirectory?.trim();
   const workspaceRoot = context.workspaceRoot?.trim();
@@ -364,7 +370,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     }
     const effectiveProviderId = resolvedProvider.providerId;
     const effectiveThread = thread;
-    const autoFinishAfterFirstTurn = effectiveThread.kind === "delegation" || options.autoStopAfterTurn === true;
+    const autoFinishAfterFirstTurn =
+      effectiveThread.kind === "delegation" ||
+      options.autoStopAfterTurn === true ||
+      context.requestedBy === "scheduler";
     const detach = options.detach === true || context.requestedBy === "scheduler";
     const timeoutMs = normalizeTimeoutMs(options.timeoutMinutes, context.requestedBy === "scheduler" ? 240 : undefined);
 
@@ -731,7 +740,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
               detach: input.detach,
               autoStopAfterTurn: input.autoStopAfterTurn,
               timeoutMinutes: input.timeoutMinutes,
-              generateTitleFromPrompt: context.requestedBy === "scheduler" && input.kind === "delivery" && !input.title?.trim(),
+              generateTitleFromPrompt:
+                context.requestedBy === "scheduler" &&
+                input.kind === "delivery" &&
+                shouldGenerateSchedulerThreadTitle(input.title),
             });
             if (!started.ok) {
               return {
@@ -826,6 +838,10 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
                   detach: spec.detach ?? input.detach,
                   autoStopAfterTurn: spec.autoStopAfterTurn ?? input.autoStopAfterTurn,
                   timeoutMinutes: spec.timeoutMinutes ?? input.timeoutMinutes,
+                  generateTitleFromPrompt:
+                    context.requestedBy === "scheduler" &&
+                    (spec.kind === "delivery" || input.kind === "delivery") &&
+                    shouldGenerateSchedulerThreadTitle(spec.title ?? input.title),
                 });
                 return {
                   threadId: thread.id,

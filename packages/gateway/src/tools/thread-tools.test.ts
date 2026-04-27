@@ -263,6 +263,48 @@ describe("thread.control tool", () => {
     }
   });
 
+  it("auto-completes scheduler-started delivery threads after their first turn", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async () => {
+        provider.emit({ type: "turn.completed", sessionId: "mock-session-1" });
+      });
+      providerRegistry.register(provider);
+
+      const threadService = new ThreadService(db);
+      const tool = createThreadControlTool({
+        threadService,
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Cron task",
+          kind: "delivery",
+          start: true,
+          prompt: "run scheduled quality task",
+        },
+        { ...context, requestedBy: "scheduler" },
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { id: string; status: string; providerSessionId: string | null } };
+      expect(data.thread.status).toBe("completed");
+      expect(data.thread.providerSessionId).toBeNull();
+      expect(provider.stopSession).toHaveBeenCalledWith("mock-session-1");
+      expect(threadService.getById(data.thread.id)?.status).toBe("completed");
+    } finally {
+      sqlite.close();
+    }
+  });
+
   it("generates scheduler-created delivery thread titles from the prompt when no title is provided", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);
@@ -300,6 +342,47 @@ describe("thread.control tool", () => {
       expect(provider.sendTurn).toHaveBeenLastCalledWith("mock-session-1", "run scheduled quality task", undefined);
       const data = result.data as { thread: { title: string } };
       expect(data.thread.title).toBe("Nightly Quality Sweep");
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it("generates scheduler-created delivery thread titles when the job uses the default rotation title", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+    try {
+      const { userService, sessionState, context } = createSelectedProviderContext(db, "codex");
+      const providerRegistry = new ProviderRegistry();
+      const provider = new MockThreadProvider("codex");
+      provider.sendTurn.mockImplementation(async (sessionId, prompt) => {
+        if (prompt.includes("Reply with ONLY a short task title")) {
+          provider.emit({ type: "message", sessionId, role: "assistant", content: "Focused Regression Coverage" });
+          provider.emit({ type: "turn.completed", sessionId });
+        }
+      });
+      providerRegistry.register(provider);
+
+      const tool = createThreadControlTool({
+        threadService: new ThreadService(db),
+        providerRegistry,
+        userService,
+        sessionState,
+      });
+
+      const result = await tool.execute(
+        {
+          action: "create",
+          title: "Jait code quality rotation",
+          kind: "delivery",
+          start: true,
+          prompt: "add targeted regression coverage for thread title generation",
+        },
+        { ...context, requestedBy: "scheduler" },
+      );
+
+      expect(result.ok).toBe(true);
+      const data = result.data as { thread: { title: string } };
+      expect(data.thread.title).toBe("Focused Regression Coverage");
     } finally {
       sqlite.close();
     }
