@@ -27,6 +27,27 @@ describe('cron utils', () => {
     expect(getNextRunTime('*/15 * * * *')?.toISOString()).toBe('2026-04-25T11:00:00.000Z')
   })
 
+  it('returns the next minute for every-minute schedules', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-25T10:05:30.000Z'))
+
+    expect(getNextRunTime('* * * * *')?.toISOString()).toBe('2026-04-25T10:06:00.000Z')
+  })
+
+  it('returns the next top-of-hour run for hourly schedules', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-25T10:05:30.000Z'))
+
+    expect(getNextRunTime('0 * * * *')?.toISOString()).toBe('2026-04-25T11:00:00.000Z')
+  })
+
+  it('returns the next stepped hour run for every-2-hours schedules', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-25T11:05:30.000Z'))
+
+    expect(getNextRunTime('0 */2 * * *')?.toISOString()).toBe('2026-04-25T12:00:00.000Z')
+  })
+
   it('normalizes repeated whitespace before storing or parsing cron expressions', () => {
     expect(normalizeCronExpression('  */5   *  * *   *  ')).toBe('*/5 * * * *')
   })
