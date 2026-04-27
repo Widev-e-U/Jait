@@ -156,6 +156,12 @@ export function getNextRunTime(cron: string): Date | null {
     const [minute, hour] = parts
     
     // For simple cases, calculate next occurrence
+    if (minute === '*' && hour === '*') {
+      const next = new Date(now)
+      next.setMinutes(now.getMinutes() + 1, 0, 0)
+      return next
+    }
+
     if (minute.startsWith('*/')) {
       const step = parseInt(minute.slice(2))
       const next = new Date(now)
@@ -173,10 +179,43 @@ export function getNextRunTime(cron: string): Date | null {
       }
       return next
     }
+
+    if (minute !== '*' && hour === '*') {
+      const targetMinute = parseInt(minute)
+      if (Number.isNaN(targetMinute)) return null
+
+      const next = new Date(now)
+      next.setMinutes(targetMinute, 0, 0)
+      if (next <= now) {
+        next.setHours(next.getHours() + 1)
+      }
+      return next
+    }
+
+    if (minute !== '*' && hour.startsWith('*/')) {
+      const targetMinute = parseInt(minute)
+      const hourStep = parseInt(hour.slice(2))
+      if (Number.isNaN(targetMinute) || Number.isNaN(hourStep) || hourStep <= 0) return null
+
+      const next = new Date(now)
+      next.setMinutes(targetMinute, 0, 0)
+
+      const currentHour = now.getHours()
+      const remainder = currentHour % hourStep
+      let nextHour = remainder === 0 ? currentHour : currentHour + (hourStep - remainder)
+      next.setHours(nextHour)
+
+      if (next <= now) {
+        nextHour += hourStep
+        next.setHours(nextHour)
+      }
+      return next
+    }
     
     if (minute !== '*' && hour !== '*') {
       const targetMinute = parseInt(minute)
       const targetHour = parseInt(hour)
+      if (Number.isNaN(targetMinute) || Number.isNaN(targetHour)) return null
       const next = new Date(now)
       next.setHours(targetHour)
       next.setMinutes(targetMinute)
