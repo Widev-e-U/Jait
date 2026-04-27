@@ -96,10 +96,11 @@ async function npmRedeploy(
   // ── 1. Capture current version ────────────────────────────────────
   let oldVersion = "unknown";
   try {
-    oldVersion = execSync(
-      "node -e \"process.stdout.write(require('@jait/gateway/package.json').version)\"",
-      { encoding: "utf8", timeout: 10_000, windowsHide: true },
+    const raw = execSync(
+      "npm list -g @jait/gateway --depth=0 --json",
+      { encoding: "utf8", timeout: 10_000, windowsHide: true, stdio: "pipe" },
     );
+    oldVersion = (JSON.parse(raw) as { dependencies?: Record<string, { version?: string }> }).dependencies?.["@jait/gateway"]?.version ?? "unknown";
   } catch {
     // non-critical
   }
@@ -121,10 +122,11 @@ async function npmRedeploy(
   // ── 3. Read new version ───────────────────────────────────────────
   let newVersion = "unknown";
   try {
-    newVersion = execSync(
-      "node -e \"process.stdout.write(require('@jait/gateway/package.json').version)\"",
-      { encoding: "utf8", timeout: 10_000, windowsHide: true },
+    const raw = execSync(
+      "npm list -g @jait/gateway --depth=0 --json",
+      { encoding: "utf8", timeout: 10_000, windowsHide: true, stdio: "pipe" },
     );
+    newVersion = (JSON.parse(raw) as { dependencies?: Record<string, { version?: string }> }).dependencies?.["@jait/gateway"]?.version ?? "unknown";
   } catch {
     // non-critical
   }

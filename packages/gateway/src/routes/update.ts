@@ -69,10 +69,11 @@ export function registerUpdateRoutes(
       // 2. Read newly installed version
       let newVersion = version;
       try {
-        newVersion = execSync(
-          "node -e \"process.stdout.write(require('@jait/gateway/package.json').version)\"",
-          { encoding: "utf8", timeout: 10_000, windowsHide: true },
+        const raw = execSync(
+          "npm list -g @jait/gateway --depth=0 --json",
+          { encoding: "utf8", timeout: 10_000, windowsHide: true, stdio: "pipe" },
         );
+        newVersion = (JSON.parse(raw) as { dependencies?: Record<string, { version?: string }> }).dependencies?.["@jait/gateway"]?.version ?? version;
       } catch { /* best effort */ }
 
       // 3. Schedule restart after response is sent
