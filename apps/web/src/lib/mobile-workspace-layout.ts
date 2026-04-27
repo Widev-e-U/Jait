@@ -7,7 +7,13 @@ export function normalizeHydratedWorkspaceLayout(
   layout: WorkspaceLayoutState,
   isMobile: boolean,
 ): WorkspaceLayoutState {
-  if (!isMobile || !layout.editor) return layout
+  if (!isMobile) {
+    return !layout.tree && !layout.editor
+      ? { tree: false, editor: true }
+      : layout
+  }
+
+  if (!layout.editor) return layout
 
   return {
     tree: layout.tree,

@@ -39,4 +39,8 @@ describe('mobile workspace layout', () => {
   it('keeps hydrated editor state on desktop', () => {
     expect(normalizeHydratedWorkspaceLayout({ tree: false, editor: true }, false)).toEqual({ tree: false, editor: true })
   })
+
+  it('uses the editor as the desktop fallback when hydrated panes are both closed', () => {
+    expect(normalizeHydratedWorkspaceLayout({ tree: false, editor: false }, false)).toEqual({ tree: false, editor: true })
+  })
 })
