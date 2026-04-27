@@ -1,4 +1,4 @@
-import { memo, useMemo, useEffect, useRef, useState, useCallback } from 'react'
+import { memo, useMemo, useEffect, useRef, useState, useCallback, type ReactNode } from 'react'
 import { markdownLookBack } from '@llm-ui/markdown'
 import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
@@ -79,6 +79,7 @@ interface MessageProps {
   /** Active chat provider. Non-Jait providers still use inline tool groups. */
   provider?: ProviderId
   onOpenTerminal?: (terminalId: string | null) => void
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
   onEditMessage?: (
     messageId: string,
     newContent: string,
@@ -428,6 +429,7 @@ function MessageInner({
   preferLlmUi,
   provider,
   onOpenTerminal,
+  renderInlineSecretPrompt,
   onEditMessage,
   editComposer,
   onOpenPath,
@@ -771,6 +773,7 @@ function MessageInner({
                         isStreaming={!!isStreaming && i === segments.length - 1}
                         onOpenTerminal={onOpenTerminal}
                         onOpenDiff={onOpenDiff}
+                        renderInlineSecretPrompt={renderInlineSecretPrompt}
                       />
                     ) : (
                       <ToolCallGroup
@@ -779,6 +782,7 @@ function MessageInner({
                         collapsible={followedByText}
                         onOpenTerminal={onOpenTerminal}
                         onOpenDiff={onOpenDiff}
+                        renderInlineSecretPrompt={renderInlineSecretPrompt}
                       />
                     )
                   ) : null
@@ -820,6 +824,7 @@ function MessageInner({
                   isStreaming={isStreaming}
                   onOpenTerminal={onOpenTerminal}
                   onOpenDiff={onOpenDiff}
+                  renderInlineSecretPrompt={renderInlineSecretPrompt}
                 />
               ) : (
                 <ToolCallGroup
@@ -827,6 +832,7 @@ function MessageInner({
                   collapsible={provider !== 'jait'}
                   onOpenTerminal={onOpenTerminal}
                   onOpenDiff={onOpenDiff}
+                  renderInlineSecretPrompt={renderInlineSecretPrompt}
                 />
               )
             )}
