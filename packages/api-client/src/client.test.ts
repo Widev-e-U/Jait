@@ -110,6 +110,25 @@ describe("@jait/api-client", () => {
       }
     });
 
+    it("preserves custom stream error messages", async () => {
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({
+        ok: true,
+        body: sseStream([
+          'data: {"type":"error","message":"Quota exceeded"}',
+        ]),
+      });
+
+      try {
+        const client = makeClient();
+        await expect(
+          client.sendMessage("s1", "hi", () => {}, () => {}),
+        ).rejects.toThrow("Quota exceeded");
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
     it("ignores non-data lines in SSE stream", async () => {
       const deltas: string[] = [];
       const originalFetch = globalThis.fetch;
@@ -155,6 +174,34 @@ describe("@jait/api-client", () => {
         const client = makeClient();
         await client.sendMessage("s1", "hi", (d) => deltas.push(d), () => {});
         expect(deltas).toEqual(["A", "B"]);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    });
+
+    it("processes a final SSE event without a trailing newline", async () => {
+      const deltas: string[] = [];
+      const doneCalled = vi.fn();
+      const encoder = new TextEncoder();
+      const stream = new ReadableStream<Uint8Array>({
+        start(controller) {
+          controller.enqueue(
+            encoder.encode(
+              'data: {"type":"token","content":"tail"}\ndata: {"type":"done"}',
+            ),
+          );
+          controller.close();
+        },
+      });
+
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = vi.fn().mockResolvedValue({ ok: true, body: stream });
+
+      try {
+        const client = makeClient();
+        await client.sendMessage("s1", "hi", (d) => deltas.push(d), doneCalled);
+        expect(deltas).toEqual(["tail"]);
+        expect(doneCalled).toHaveBeenCalledOnce();
       } finally {
         globalThis.fetch = originalFetch;
       }

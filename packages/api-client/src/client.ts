@@ -69,6 +69,37 @@ export class JaitClient {
     const reader = res.body.getReader();
     const decoder = new TextDecoder();
     let buffer = "";
+    const processLine = (
+      line: string,
+      onDelta: (delta: string) => void,
+      onDone: () => void,
+    ) => {
+      if (!line.startsWith("data: ")) return;
+
+      let data: {
+        type?: string;
+        content?: string;
+        message?: string;
+        session_id?: string;
+      };
+
+      try {
+        data = JSON.parse(line.slice(6)) as {
+          type?: string;
+          content?: string;
+          message?: string;
+          session_id?: string;
+        };
+      } catch {
+        return;
+      }
+
+      if (data.type === "token" && data.content) onDelta(data.content);
+      if (data.type === "done") onDone();
+      if (data.type === "error") {
+        throw new Error(data.message ?? "Stream error");
+      }
+    };
 
     while (true) {
       const { done, value } = await reader.read();
@@ -79,24 +110,12 @@ export class JaitClient {
       buffer = lines.pop() ?? "";
 
       for (const line of lines) {
-        if (!line.startsWith("data: ")) continue;
-        try {
-          const data = JSON.parse(line.slice(6)) as {
-            type?: string;
-            content?: string;
-            message?: string;
-            session_id?: string;
-          };
-          if (data.type === "token" && data.content) onDelta(data.content);
-          if (data.type === "done") onDone();
-          if (data.type === "error") {
-            throw new Error(data.message ?? "Stream error");
-          }
-        } catch (err) {
-          if (err instanceof Error && err.message !== "Stream error") continue;
-          throw err;
-        }
+        processLine(line, onDelta, onDone);
       }
+    }
+
+    if (buffer) {
+      processLine(buffer, onDelta, onDone);
     }
   }
 
