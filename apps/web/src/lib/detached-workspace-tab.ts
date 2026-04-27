@@ -31,19 +31,38 @@ function getStorageKey(id: string): string {
 }
 
 export function saveDetachedWorkspaceTab(payload: DetachedWorkspaceTabPayload): void {
-  localStorage.setItem(getStorageKey(payload.id), JSON.stringify(payload))
+  try {
+    localStorage.setItem(getStorageKey(payload.id), JSON.stringify(payload))
+  } catch {
+    // Ignore blocked or full storage and keep the current tab usable.
+  }
 }
 
 export function loadDetachedWorkspaceTab(id: string): DetachedWorkspaceTabPayload | null {
-  const raw = localStorage.getItem(getStorageKey(id))
+  const storageKey = getStorageKey(id)
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(storageKey)
+  } catch {
+    return null
+  }
   if (!raw) return null
   try {
     return JSON.parse(raw) as DetachedWorkspaceTabPayload
   } catch {
+    try {
+      localStorage.removeItem(storageKey)
+    } catch {
+      // Ignore storage cleanup failures.
+    }
     return null
   }
 }
 
 export function clearDetachedWorkspaceTab(id: string): void {
-  localStorage.removeItem(getStorageKey(id))
+  try {
+    localStorage.removeItem(getStorageKey(id))
+  } catch {
+    // Ignore blocked storage and continue closing the tab view.
+  }
 }
