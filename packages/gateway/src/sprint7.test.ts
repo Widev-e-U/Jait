@@ -194,6 +194,30 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     sqlite.close();
   });
 
+  it("runs jobs whose cron expressions use weekday ranges accepted by the web app", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { ran: true } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    scheduler.create({
+      name: "weekday-morning-report",
+      cron: "0 9 * * 1-5",
+      toolName: "gateway.status",
+      input: {},
+      sessionId: "s1",
+      workspaceRoot: "/workspace/Jait",
+    });
+
+    await scheduler.tick(new Date("2026-03-02T09:00:00.000Z"));
+    await scheduler.tick(new Date("2026-03-08T09:00:00.000Z"));
+
+    expect(executeTool).toHaveBeenCalledTimes(1);
+
+    sqlite.close();
+  });
+
   it("fires wildcard hook listeners for lifecycle events", () => {
     const hooks = new HookBus();
     const surfaceHandler = vi.fn();
