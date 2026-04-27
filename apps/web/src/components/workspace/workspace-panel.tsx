@@ -4131,10 +4131,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   )
 
   const renderCommitActions = (mobile = false) => (
-    <div className="flex items-center gap-1.5">
+    <div className={cn(
+      'flex items-center',
+      mobile ? 'gap-1.5' : 'overflow-hidden rounded-md shadow-sm',
+    )}>
       <Button
         size="sm"
-        className={cn(mobile ? 'h-8 rounded-md px-2.5 text-xs' : 'h-6 gap-1 rounded-r-none px-1.5 text-xs')}
+        className={cn(
+          mobile
+            ? 'h-8 rounded-md px-2.5 text-xs'
+            : 'h-6 gap-1 rounded-r-none px-2 text-xs shadow-none',
+        )}
         onClick={() => {
           if (primaryGitAction === 'sync') {
             void handleGitSync()
@@ -4160,7 +4167,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             variant={mobile ? 'secondary' : 'default'}
             size="sm"
             className={cn(
-              mobile ? 'h-8 rounded-md px-2' : 'h-6 rounded-l-none border-l border-primary-foreground/20 px-1.5',
+              mobile
+                ? 'h-8 rounded-md px-2'
+                : 'h-6 w-6 rounded-l-none border-l border-primary-foreground/25 px-0 shadow-none',
             )}
             disabled={gitActionBusy}
             title="More commit actions"
@@ -4169,7 +4178,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <ChevronDown className="h-3.5 w-3.5" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent align="start" className="w-44">
+        <DropdownMenuContent side="bottom" align="end" sideOffset={4} className="w-44">
           <DropdownMenuItem onSelect={() => { void handleGitAction('commit') }} className="gap-2" disabled={!canRunCommitAction}>
             <GitCommit className="h-3.5 w-3.5" />
             Commit
