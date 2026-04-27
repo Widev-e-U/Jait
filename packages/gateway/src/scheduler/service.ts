@@ -44,7 +44,7 @@ const MINUTE_MS = 60_000;
 
 /**
  * Match a single cron field against a value.
- * Supports: "*" (any), exact number, comma lists, and step syntax.
+ * Supports: "*" (any), exact number, comma lists, ranges, and step syntax.
  */
 function matchCronField(field: string, value: number): boolean {
   if (field === "*") return true;
@@ -56,6 +56,13 @@ function matchCronField(field: string, value: number): boolean {
   // Comma-separated list: 1,15,30
   if (field.includes(",")) {
     return field.split(",").some((v) => Number.parseInt(v.trim(), 10) === value);
+  }
+  // Range syntax: N-M
+  if (field.includes("-")) {
+    const [startRaw, endRaw] = field.split("-", 2);
+    const start = Number.parseInt(startRaw?.trim() ?? "", 10);
+    const end = Number.parseInt(endRaw?.trim() ?? "", 10);
+    return !Number.isNaN(start) && !Number.isNaN(end) && start <= end && value >= start && value <= end;
   }
   // Exact match
   return Number.parseInt(field, 10) === value;
