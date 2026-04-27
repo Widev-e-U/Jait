@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef, useMemo, type FocusEvent } from 'react'
+import { useState, useEffect, useCallback, useRef, useMemo, type FocusEvent, type ReactNode } from 'react'
 import {
   ArrowLeft,
   ArrowUpCircle,
@@ -66,7 +66,7 @@ import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import { Conversation, Message, PromptInput, SessionSelector, SessionSwitcher, Suggestions, TodoList, MessageQueue, FilesChanged } from '@/components/chat'
-import type { ReferencedFile, PromptInputHandle, ChangedFile, TodoItem } from '@/components/chat'
+import type { ReferencedFile, PromptInputHandle, ChangedFile, TodoItem, ToolCallInfo } from '@/components/chat'
 import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import type { ChatAttachment } from '@/hooks/useChat'
 import type { QueuedMessage as QueuedChatMessage } from '@/components/chat/message-queue'
@@ -135,6 +135,7 @@ import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatUiState } from '@/lib/developer-chat-state'
+import { normalizeToolName } from '@/lib/tool-call-body'
 import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from '@/lib/todo-state'
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
@@ -176,17 +177,28 @@ interface SecretInputRequest {
 
 const INLINE_SECRET_REQUESTERS = new Set(['ssh.run', 'ssh.session.start', 'elevated.run'])
 
-function SecretInputPrompt({ token, sessionId }: { token: string | null; sessionId: string | null }) {
+function shouldRenderSecretRequestInline(request: SecretInputRequest | null): boolean {
+  if (!request) return false
+  return INLINE_SECRET_REQUESTERS.has(request.requestedBy ?? '')
+    || request.title === 'SSH password'
+    || request.title === 'Administrator password'
+}
+
+function secretRequestMatchesTool(request: SecretInputRequest | null, tool: string): boolean {
+  if (!shouldRenderSecretRequestInline(request)) return false
+  if (request?.requestedBy && request.requestedBy === tool) return true
+  if (request?.title === 'SSH password') return tool === 'ssh.run' || tool === 'ssh.session.start'
+  if (request?.title === 'Administrator password') return tool === 'elevated.run'
+  return false
+}
+
+function useSecretInputPrompt({ token, sessionId }: { token: string | null; sessionId: string | null }) {
   const [requests, setRequests] = useState<SecretInputRequest[]>([])
   const [value, setValue] = useState('')
   const [submitting, setSubmitting] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const activeRequest = requests[0] ?? null
-  const renderInline = activeRequest
-    ? INLINE_SECRET_REQUESTERS.has(activeRequest.requestedBy ?? '')
-      || activeRequest.title === 'SSH password'
-      || activeRequest.title === 'Administrator password'
-    : false
+  const renderInline = shouldRenderSecretRequestInline(activeRequest)
 
   const authHeaders = useCallback((contentType = false) => {
     const headers: Record<string, string> = {}
@@ -274,26 +286,87 @@ function SecretInputPrompt({ token, sessionId }: { token: string | null; session
     }
   }, [activeRequest, authHeaders])
 
-  if (!activeRequest) return null
+  const form = activeRequest ? (
+    <SecretInputForm
+      request={activeRequest}
+      value={value}
+      onValueChange={setValue}
+      submitting={submitting}
+      showPassword={showPassword}
+      onShowPasswordChange={setShowPassword}
+      onSubmit={submitSecret}
+      onCancel={cancelSecret}
+      showTitle={renderInline}
+    />
+  ) : null
 
-  const content = (
+  const dialog = activeRequest && !renderInline ? (
+    <Dialog open onOpenChange={(open) => { if (!open) void cancelSecret() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{activeRequest.title}</DialogTitle>
+          <DialogDescription>
+            Enter the secret to continue.
+          </DialogDescription>
+        </DialogHeader>
+        {form}
+      </DialogContent>
+    </Dialog>
+  ) : null
+
+  return {
+    activeRequest,
+    renderInline,
+    form,
+    dialog,
+  }
+}
+
+function SecretInputForm({
+  request,
+  value,
+  onValueChange,
+  submitting,
+  showPassword,
+  onShowPasswordChange,
+  onSubmit,
+  onCancel,
+  showTitle = false,
+}: {
+  request: SecretInputRequest
+  value: string
+  onValueChange: (value: string) => void
+  submitting: boolean
+  showPassword: boolean
+  onShowPasswordChange: (value: boolean | ((prev: boolean) => boolean)) => void
+  onSubmit: () => Promise<void>
+  onCancel: () => Promise<void>
+  showTitle?: boolean
+}) {
+  return (
     <div className="space-y-3">
+      {showTitle && (
+        <div className="space-y-0.5">
+          <p className="text-sm font-medium text-foreground">{request.title}</p>
+          <p className="text-[11px] text-muted-foreground">This prompt is attached to the running tool call.</p>
+        </div>
+      )}
       <div className="space-y-1">
         <p className="text-sm text-muted-foreground">
-          {activeRequest.prompt ?? 'Enter the secret to continue.'} The value goes directly to the local gateway and is not sent to the model.
+          {request.prompt ?? 'Enter the secret to continue.'} The value goes directly to the local gateway and is not sent to the model.
         </p>
       </div>
       <div className="relative">
-        <Label htmlFor="secret-input">Secret</Label>
+        <Label htmlFor={`secret-input-${request.id}`}>Secret</Label>
         <Input
-          id="secret-input"
+          id={`secret-input-${request.id}`}
           type={showPassword ? 'text' : 'password'}
           autoComplete="current-password"
           placeholder="Password"
           value={value}
-          onChange={(event) => setValue(event.target.value)}
+          onChange={(event) => onValueChange(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === 'Enter') void submitSecret()
+            if (event.key === 'Enter') void onSubmit()
           }}
           className="pr-9"
           autoFocus
@@ -303,48 +376,16 @@ function SecretInputPrompt({ token, sessionId }: { token: string | null; session
           tabIndex={-1}
           className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
           onMouseDown={(e) => e.preventDefault()}
-          onClick={() => setShowPassword((prev) => !prev)}
+          onClick={() => onShowPasswordChange((prev) => !prev)}
         >
-          {showPassword ? (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg>
-          ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>
-          )}
+          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
         </button>
       </div>
       <div className="flex justify-end gap-2">
-        <Button variant="outline" onClick={() => void cancelSecret()} disabled={submitting}>Cancel</Button>
-        <Button onClick={() => void submitSecret()} disabled={submitting || !value}>Submit</Button>
+        <Button variant="outline" onClick={() => void onCancel()} disabled={submitting}>Cancel</Button>
+        <Button onClick={() => void onSubmit()} disabled={submitting || !value}>Submit</Button>
       </div>
     </div>
-  )
-
-  if (renderInline) {
-    return (
-      <div className="fixed bottom-4 right-4 z-[120] w-[min(28rem,calc(100vw-2rem))] rounded-xl border bg-background p-4 shadow-2xl">
-        <div className="mb-3">
-          <p className="text-sm font-medium">{activeRequest.title}</p>
-          <p className="text-[11px] text-muted-foreground">
-            Inline secret prompt for SSH/elevated flow.
-          </p>
-        </div>
-        {content}
-      </div>
-    )
-  }
-
-  return (
-    <Dialog open onOpenChange={(open) => { if (!open) void cancelSecret() }}>
-      <DialogContent>
-        <DialogHeader>
-          <DialogTitle>{activeRequest.title}</DialogTitle>
-          <DialogDescription>
-            Enter the secret to continue.
-          </DialogDescription>
-        </DialogHeader>
-        {content}
-      </DialogContent>
-    </Dialog>
   )
 }
 
@@ -1861,6 +1902,15 @@ function App() {
   useEffect(() => {
     suppressWorkspaceAutoOpenRef.current = false
   }, [activeSessionId])
+
+  const secretInput = useSecretInputPrompt({ token, sessionId: activeSessionId })
+  const renderInlineSecretPrompt = useCallback((call: ToolCallInfo): ReactNode => {
+    if (!secretInput.renderInline || !secretInput.form) return null
+    if (call.status !== 'running' && call.status !== 'pending') return null
+    const normalizedTool = normalizeToolName(call.tool)
+    if (!secretRequestMatchesTool(secretInput.activeRequest, normalizedTool)) return null
+    return secretInput.form
+  }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline])
 
   const activeWorkspaceRecord = useMemo(
     () => workspaces.find((workspace) => workspace.id === activeWorkspaceId) ?? null,
@@ -6898,6 +6948,7 @@ function App() {
                           compact
                           preferLlmUi={false}
                           provider={automation.selectedThread?.providerId as ProviderId | undefined}
+                          renderInlineSecretPrompt={renderInlineSecretPrompt}
                           onOpenPath={handleOpenMessagePath}
                           onOpenDiff={handleChangedFileClick}
                         />
@@ -7250,6 +7301,7 @@ function App() {
                       preferLlmUi
                       provider={chatProvider}
                       onOpenTerminal={handleOpenTerminalFromToolCall}
+                      renderInlineSecretPrompt={renderInlineSecretPrompt}
                       onEditMessage={handleEditPreviousMessage}
                       editComposer={editComposerBag}
                       onOpenPath={handleOpenMessagePath}
@@ -7830,7 +7882,7 @@ function App() {
           onSelect={(path, nodeId) => { void automation.handleFolderSelected(path, nodeId) }}
         />
 
-        <SecretInputPrompt token={token} sessionId={activeSessionId} />
+        {secretInput.dialog}
 
         {/* Strategy editor modal */}
         {strategyRepo && (

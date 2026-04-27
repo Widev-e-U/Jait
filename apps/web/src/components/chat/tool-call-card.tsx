@@ -1,4 +1,4 @@
-import { memo, useEffect, useMemo, useRef, useState } from 'react'
+import { memo, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Terminal, CheckCircle2, XCircle, Loader2, ChevronRight, FileText, Globe, Monitor, Server, ExternalLink, Search, ListTodo, Bot, Zap, BookOpen } from 'lucide-react'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
 import { Dialog, DialogContent } from '@/components/ui/dialog'
@@ -1293,6 +1293,8 @@ interface ToolCallCardProps {
   childCalls?: ToolCallInfo[]
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
+  inlineSecretPrompt?: ReactNode
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
   hideTopConnector?: boolean
   hideBottomConnector?: boolean
 }
@@ -1377,6 +1379,8 @@ function ToolCallCardInner({
   childCalls,
   onOpenTerminal,
   onOpenDiff,
+  inlineSecretPrompt,
+  renderInlineSecretPrompt,
   hideTopConnector = false,
   hideBottomConnector = false,
 }: ToolCallCardProps) {
@@ -1405,6 +1409,8 @@ function ToolCallCardInner({
   const canOpenTerminal = isTerminalCreationCall(call)
   const terminalId = canOpenTerminal ? getStructuredTerminalId(call) : null
   const runningHint = getRunningHint(normalizedTool, normalizedArgs)
+  const resolvedInlineSecretPrompt = inlineSecretPrompt ?? renderInlineSecretPrompt?.(call) ?? null
+  const hasInlineSecretPrompt = resolvedInlineSecretPrompt != null
   const isPending = call.status === 'pending'
   const filePath = getToolFilePath(normalizedTool, normalizedArgs, resultData, call.result?.message)?.trim() ?? ''
   const showFileSummary = !!filePath && isEditLikeTool(normalizedTool)
@@ -1594,7 +1600,13 @@ function ToolCallCardInner({
         )}
         <div className="divide-y divide-border/30">
           {childCalls.map((child) => (
-            <ToolCallCard key={child.callId} call={child} onOpenTerminal={onOpenTerminal} onOpenDiff={onOpenDiff} />
+            <ToolCallCard
+              key={child.callId}
+              call={child}
+              onOpenTerminal={onOpenTerminal}
+              onOpenDiff={onOpenDiff}
+              renderInlineSecretPrompt={renderInlineSecretPrompt}
+            />
           ))}
         </div>
         {call.result?.message && (call.status === 'success' || call.status === 'error') && (
@@ -1749,6 +1761,13 @@ function ToolCallCardInner({
           {bodyContent}
         </div>
       )}
+      {hasInlineSecretPrompt && (
+        <div className="ml-7 mr-3 mb-2 border-l border-border/40 pl-4">
+          <div className="rounded-lg border border-yellow-500/25 bg-yellow-500/[0.04] p-3">
+            {resolvedInlineSecretPrompt}
+          </div>
+        </div>
+      )}
     </Collapsible>
   )
 }
@@ -1768,6 +1787,7 @@ interface ToolCallGroupProps {
   collapsible?: boolean
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
 }
 
 /**
@@ -1783,7 +1803,7 @@ export function shouldInitiallyCollapseToolCallGroup(calls: ToolCallInfo[], coll
   return completedCalls.length >= MIN_CALLS_TO_COLLAPSE && completedCalls.length === calls.length
 }
 
-function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: ToolCallGroupProps) {
+function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt }: ToolCallGroupProps) {
   const [showAll, setShowAll] = useState(false)
   const [groupOpen, setGroupOpen] = useState(() => !shouldInitiallyCollapseToolCallGroup(calls, collapsible))
   const prevAllDoneRef = useRef(false)
@@ -1877,6 +1897,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
           childCalls={childMap.get(call.callId)}
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
+          renderInlineSecretPrompt={renderInlineSecretPrompt}
           hideTopConnector={index === 0}
           hideBottomConnector={index === arr.length - 1 && visibleCompleted.length === 0 && activeCalls.length === 0}
         />
@@ -1888,6 +1909,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
           childCalls={childMap.get(call.callId)}
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
+          renderInlineSecretPrompt={renderInlineSecretPrompt}
           hideTopConnector={showAll ? false : index === 0}
           hideBottomConnector={index === visibleCompleted.length - 1 && activeCalls.length === 0}
         />
@@ -1899,6 +1921,7 @@ function ToolCallGroupInner({ calls, collapsible, onOpenTerminal, onOpenDiff }: 
           childCalls={childMap.get(call.callId)}
           onOpenTerminal={onOpenTerminal}
           onOpenDiff={onOpenDiff}
+          renderInlineSecretPrompt={renderInlineSecretPrompt}
           hideTopConnector={completedCalls.length === 0 && index === 0}
           hideBottomConnector={index === activeCalls.length - 1}
         />
@@ -1921,6 +1944,7 @@ export const ToolCallGroup = memo(
   (prevProps, nextProps) =>
     prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
     prevProps.onOpenDiff === nextProps.onOpenDiff &&
+    prevProps.renderInlineSecretPrompt === nextProps.renderInlineSecretPrompt &&
     prevProps.collapsible === nextProps.collapsible &&
     areToolCallListsEqual(prevProps.calls, nextProps.calls),
 )
@@ -1934,6 +1958,7 @@ interface AgentToolCallWrapperProps {
   isStreaming?: boolean
   onOpenTerminal?: (terminalId: string | null) => void
   onOpenDiff?: (filePath: string) => void
+  renderInlineSecretPrompt?: (call: ToolCallInfo) => ReactNode
 }
 
 export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[], isStreaming?: boolean): boolean {
@@ -1941,7 +1966,7 @@ export function shouldInitiallyCollapseAgentToolCallWrapper(calls: ToolCallInfo[
   return calls.length > 0 && calls.every(c => c.status !== 'running' && c.status !== 'pending')
 }
 
-function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, onOpenTerminal, onOpenDiff }: AgentToolCallWrapperProps) {
+function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, onOpenTerminal, onOpenDiff, renderInlineSecretPrompt }: AgentToolCallWrapperProps) {
   const [open, setOpen] = useState(() => !shouldInitiallyCollapseAgentToolCallWrapper(calls, isStreaming))
   const [showAll, setShowAll] = useState(false)
   const [now, setNow] = useState(() => Date.now())
@@ -2038,6 +2063,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
                 childCalls={childMap.get(call.callId)}
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
+                renderInlineSecretPrompt={renderInlineSecretPrompt}
                 hideTopConnector={index === 0}
                 hideBottomConnector={index === arr.length - 1 && visibleCompleted.length === 0 && activeCalls.length === 0}
               />
@@ -2049,6 +2075,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
                 childCalls={childMap.get(call.callId)}
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
+                renderInlineSecretPrompt={renderInlineSecretPrompt}
                 hideTopConnector={showAll ? false : index === 0}
                 hideBottomConnector={index === visibleCompleted.length - 1 && activeCalls.length === 0}
               />
@@ -2060,6 +2087,7 @@ function AgentToolCallWrapperInner({ provider: _provider, calls, isStreaming, on
                 childCalls={childMap.get(call.callId)}
                 onOpenTerminal={onOpenTerminal}
                 onOpenDiff={onOpenDiff}
+                renderInlineSecretPrompt={renderInlineSecretPrompt}
                 hideTopConnector={completedCalls.length === 0 && index === 0}
                 hideBottomConnector={index === activeCalls.length - 1}
               />
@@ -2078,6 +2106,7 @@ export const AgentToolCallWrapper = memo(
     prevProps.isStreaming === nextProps.isStreaming &&
     prevProps.onOpenTerminal === nextProps.onOpenTerminal &&
     prevProps.onOpenDiff === nextProps.onOpenDiff &&
+    prevProps.renderInlineSecretPrompt === nextProps.renderInlineSecretPrompt &&
     areToolCallListsEqual(prevProps.calls, nextProps.calls),
 )
 AgentToolCallWrapper.displayName = 'AgentToolCallWrapper'
