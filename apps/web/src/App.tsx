@@ -144,6 +144,7 @@ import {
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
 } from '@/lib/mobile-workspace-layout'
+import { toggleDesktopWorkspaceTreeVisibility } from '@/components/workspace/workspace-panel-layout'
 import {
   getMobileWorkspaceActiveTarget,
   isMobileWorkspaceTargetActive,
@@ -3349,7 +3350,12 @@ function App() {
       applyWorkspaceLayout(nextLayout, { immediateSync: true })
       return
     }
-    setShowWorkspaceTree(prev => !prev)
+    const nextLayout = toggleDesktopWorkspaceTreeVisibility({
+      tree: showWorkspaceTree,
+      editor: showWorkspaceEditor,
+    })
+    setShowWorkspaceTree(nextLayout.tree)
+    setShowWorkspaceEditor(nextLayout.editor)
   }, [applyWorkspaceLayout, isMobile, showWorkspaceTree, showWorkspaceEditor])
 
   const toggleWorkspaceEditor = useCallback(() => {

@@ -25,3 +25,19 @@ export function getDesktopWorkspacePanelStyle({
     maxWidth: '70vw',
   }
 }
+
+export interface WorkspacePaneVisibility {
+  tree: boolean
+  editor: boolean
+}
+
+export function toggleDesktopWorkspaceTreeVisibility(
+  layout: WorkspacePaneVisibility,
+): WorkspacePaneVisibility {
+  const nextTree = !layout.tree
+
+  return {
+    tree: nextTree,
+    editor: nextTree ? layout.editor : true,
+  }
+}

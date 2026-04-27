@@ -5252,7 +5252,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </button>
           <div className="flex-1" />
           <button
-            onClick={() => tree.collapse()}
+            onClick={() => {
+              if (!showEditorProp && onToggleEditor) onToggleEditor()
+              tree.collapse()
+            }}
             className="flex h-7 items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded px-1 hover:bg-muted"
           >
             <EyeOff className="h-3 w-3" />
