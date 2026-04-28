@@ -121,6 +121,7 @@ import {
   resolvePersistedSelectedRepoId,
   type PersistedSelectedRepo,
 } from '@/lib/automation-selection-storage'
+import { resolveDeveloperThreadRepoAutoSelect } from '@/lib/developer-thread-repo-selection'
 
 import { Badge } from '@/components/ui/badge'
 import { getApiUrl, getStoredGatewayUrl, getWsUrl, setStoredGatewayUrl, isGatewayConfigured } from '@/lib/gateway-url'
@@ -2087,9 +2088,7 @@ function App() {
     () => (selectedThreadRepo ? automation.getRuntimeInfoForRepository(selectedThreadRepo) : null),
     [automation.getRuntimeInfoForRepository, selectedThreadRepo],
   )
-  const threadTargetRepo = viewMode === 'developer' && sendTarget === 'thread' && activeWorkspaceRepository
-    ? activeWorkspaceRepository
-    : automation.selectedRepo
+  const threadTargetRepo = automation.selectedRepo
   const threadTargetRepoRuntime = useMemo(
     () => (threadTargetRepo ? automation.getRuntimeInfoForRepository(threadTargetRepo) : null),
     [automation.getRuntimeInfoForRepository, threadTargetRepo],
@@ -2117,14 +2116,26 @@ function App() {
     ? threadPlaceholder
     : 'Ask anything...'
 
+  const developerThreadRepoAutoSelectRef = useRef<string | null>(null)
+
   useEffect(() => {
-    if (viewMode !== 'developer' || sendTarget !== 'thread') return
-    if (!activeWorkspaceRepositoryId) return
-    if (!automation.repositories.some((repo) => repo.id === activeWorkspaceRepositoryId)) return
-    if (automation.selectedRepoId !== activeWorkspaceRepositoryId) {
-      automation.setSelectedRepoId(activeWorkspaceRepositoryId)
+    const nextSelection = resolveDeveloperThreadRepoAutoSelect({
+      viewMode,
+      sendTarget,
+      workspaceId: activeWorkspaceId,
+      workspaceRepoId: activeWorkspaceRepositoryId,
+      repositories: automation.repositories,
+      lastAppliedKey: developerThreadRepoAutoSelectRef.current,
+    })
+
+    if (!nextSelection) return
+
+    developerThreadRepoAutoSelectRef.current = nextSelection.nextAppliedKey
+    if (nextSelection.repoId && automation.selectedRepoId !== nextSelection.repoId) {
+      automation.setSelectedRepoId(nextSelection.repoId)
     }
   }, [
+    activeWorkspaceId,
     activeWorkspaceRepositoryId,
     automation.repositories,
     automation.selectedRepoId,
@@ -5578,7 +5589,7 @@ function App() {
   ) : null
   const developerComposerControlRow = viewMode === 'developer' ? (
     <div className={`${isMobile ? 'overflow-hidden px-0.5' : 'overflow-x-auto px-1'}`}>
-      <div className={`${isMobile ? 'flex w-full min-w-0 gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
+      <div className={`${isMobile ? 'flex w-full min-w-0 items-center gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
         <div className={`${isMobile ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>
           {sendTarget === 'thread' ? (
             developerThreadToolbarRepoPicker
@@ -5620,14 +5631,16 @@ function App() {
             )
           )}
         </div>
-        <div className={isMobile ? 'shrink-0' : 'justify-self-center'}>
-          <SendTargetSelector
-            target={sendTarget}
-            onChange={setSendTarget}
-            disabled={developerChatUiState.disableSendTargetSelector}
-          />
-        </div>
-        <div className={`${isMobile ? 'flex max-w-[6rem] shrink-0 items-center gap-1 overflow-hidden' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
+        {!isMobile && (
+          <div className="justify-self-center">
+            <SendTargetSelector
+              target={sendTarget}
+              onChange={setSendTarget}
+              disabled={developerChatUiState.disableSendTargetSelector}
+            />
+          </div>
+        )}
+        <div className={`${isMobile ? 'ml-auto flex shrink-0 items-center gap-2' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
           {sendTarget !== 'thread' && (
             <button
               type="button"
@@ -5637,8 +5650,17 @@ function App() {
               New chat
             </button>
           )}
+          {isMobile && (
+            <div className="shrink-0">
+              <SendTargetSelector
+                target={sendTarget}
+                onChange={setSendTarget}
+                disabled={developerChatUiState.disableSendTargetSelector}
+              />
+            </div>
+          )}
           {remainingPrompts !== null && (
-            <span className={`${isMobile ? 'min-w-0 shrink truncate' : 'shrink-0'} text-xs text-muted-foreground`}>{remainingPrompts} remaining</span>
+            <span className={`${isMobile ? 'hidden' : 'shrink-0'} text-xs text-muted-foreground`}>{remainingPrompts} remaining</span>
           )}
         </div>
       </div>
