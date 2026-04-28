@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import type { GitStatusResult } from '@/lib/git-api'
 import {
   getThreadDiffRequest,
+  shouldRefreshThreadChangeTotals,
   shouldRenderThreadActions,
   shouldShowThreadChangesButton,
   shouldUseRecordedBranchDiff,
@@ -103,6 +104,19 @@ describe('getThreadDiffRequest', () => {
 
   it('returns no branch-scoped diff request when the thread branch is missing', () => {
     expect(getThreadDiffRequest('main', null, 'open')).toEqual({})
+  })
+})
+
+describe('shouldRefreshThreadChangeTotals', () => {
+  it('freezes change totals while PR creation is in flight', () => {
+    expect(shouldRefreshThreadChangeTotals('creating')).toBe(false)
+  })
+
+  it('refreshes change totals outside the transient PR creation state', () => {
+    expect(shouldRefreshThreadChangeTotals(null)).toBe(true)
+    expect(shouldRefreshThreadChangeTotals('open')).toBe(true)
+    expect(shouldRefreshThreadChangeTotals('merged')).toBe(true)
+    expect(shouldRefreshThreadChangeTotals('closed')).toBe(true)
   })
 })
 
