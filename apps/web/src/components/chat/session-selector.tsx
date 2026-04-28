@@ -1,5 +1,5 @@
-import { useMemo } from 'react'
-import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch } from 'lucide-react'
+import { useMemo, useState } from 'react'
+import { Folder, FolderOpen, FolderInput, Monitor, Plus, Smartphone, Globe, Archive, WifiOff, Loader2, MessageSquare, GitBranch, Search } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -87,16 +87,52 @@ export function SessionSelector({
     () => new Set(nodes.filter((n) => !n.isGateway).map((n) => n.id)),
     [nodes],
   )
+  const [searchQuery, setSearchQuery] = useState('')
+  const normalizedSearchQuery = searchQuery.trim().toLowerCase()
+
+  const filteredWorkspaces = useMemo(() => {
+    if (!normalizedSearchQuery) return workspaces
+    return workspaces.filter((workspace) => {
+      const repository = getWorkspaceRepository(workspace, repositories)
+      const remoteNode = workspace.nodeId && workspace.nodeId !== 'gateway'
+        ? nodes.find((n) => n.id === workspace.nodeId)
+        : null
+      const terms = [
+        workspace.title,
+        workspace.rootPath,
+        repository?.name,
+        remoteNode?.name,
+        ...workspace.sessions.flatMap((session) => [session.name, session.workspacePath]),
+      ]
+      return terms.some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
+    })
+  }, [nodes, normalizedSearchQuery, repositories, workspaces])
+
+  const filteredPersonalSessions = useMemo(() => {
+    if (!normalizedSearchQuery) return personalSessions
+    return personalSessions.filter((session) => (
+      [session.name, session.workspacePath]
+        .some((term) => term?.toLowerCase().includes(normalizedSearchQuery))
+    ))
+  }, [normalizedSearchQuery, personalSessions])
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex h-[35px] shrink-0 items-center justify-between px-3 border-b">
-        <span className="text-xs font-medium text-muted-foreground">
-          Chats &amp; Workspaces
-        </span>
+      <div className="flex h-[35px] shrink-0 items-center gap-2 px-2.5 border-b">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 rounded-md bg-muted/60 px-2 py-1">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            placeholder="Search chats and workspaces"
+            aria-label="Search chats and workspaces"
+            className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          />
+        </div>
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon" className="h-6 w-6" onClick={onCreateWorkspace}>
+            <Button variant="ghost" size="icon" className="h-6 w-6 shrink-0" onClick={onCreateWorkspace}>
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
@@ -126,7 +162,12 @@ export function SessionSelector({
                     </button>
                   </p>
                 )}
-                {workspaces.map((workspace) => {
+                {workspaces.length > 0 && filteredWorkspaces.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    No matching workspaces.
+                  </p>
+                )}
+                {filteredWorkspaces.map((workspace) => {
                   const isActiveWorkspace = workspace.id === activeWorkspaceId
                   const remoteNode = workspace.nodeId && workspace.nodeId !== 'gateway'
                     ? nodes.find((n) => n.id === workspace.nodeId)
@@ -263,7 +304,7 @@ export function SessionSelector({
                     </div>
                   )
                 })}
-                {hasMoreWorkspaces && onShowMore && (
+                {!normalizedSearchQuery && hasMoreWorkspaces && onShowMore && (
                   <button
                     className="w-full px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
                     onClick={onShowMore}
@@ -271,7 +312,7 @@ export function SessionSelector({
                     Show more workspaces
                   </button>
                 )}
-                {showFewerWorkspaces && onShowFewer && (
+                {!normalizedSearchQuery && showFewerWorkspaces && onShowFewer && (
                   <button
                     className="w-full px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
                     onClick={onShowFewer}
@@ -313,7 +354,12 @@ export function SessionSelector({
                     )}
                   </p>
                 )}
-                {personalSessions.map((session) => {
+                {personalSessions.length > 0 && filteredPersonalSessions.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center py-4">
+                    No matching personal chats.
+                  </p>
+                )}
+                {filteredPersonalSessions.map((session) => {
                   const isActive = activeWorkspaceId === null && session.id === activeSessionId
                   return (
                     <div
