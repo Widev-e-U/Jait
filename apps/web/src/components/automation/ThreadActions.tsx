@@ -8,7 +8,12 @@ import { toast } from 'sonner'
 import { GitDiffViewer } from './GitDiffViewer'
 import { GhSetupDialog } from './GhSetupDialog'
 import { useIsMobile } from '@/hooks/useIsMobile'
-import { getThreadDiffRequest, shouldShowThreadChangesButton, shouldUseRecordedBranchDiff } from './thread-actions-state'
+import {
+  getThreadDiffRequest,
+  shouldRefreshThreadChangeTotals,
+  shouldShowThreadChangesButton,
+  shouldUseRecordedBranchDiff,
+} from './thread-actions-state'
 
 interface ThreadActionsProps {
   /** Thread id to persist PR metadata after creation/open. */
@@ -80,6 +85,8 @@ export function ThreadActions({
 
   useEffect(() => {
     let cancelled = false
+    if (!shouldRefreshThreadChangeTotals(prState)) return
+
     const useRecordedBranchDiff = shouldUseRecordedBranchDiff(branch, prState)
     const diffRequest = getThreadDiffRequest(baseBranch, branch, prState)
 

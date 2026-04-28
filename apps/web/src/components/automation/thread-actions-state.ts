@@ -22,6 +22,10 @@ export function getThreadDiffRequest(
   return { baseBranch }
 }
 
+export function shouldRefreshThreadChangeTotals(prState: ThreadPrState): boolean {
+  return prState !== 'creating'
+}
+
 export function shouldShowThreadChangesButton(
   gitStatus: GitStatusResult | null,
   threadBranch: string | null | undefined,
