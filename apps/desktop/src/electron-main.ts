@@ -44,8 +44,11 @@ let openedFolder = getOpenedFolderPath();
 const startHidden = process.argv.includes("--hidden");
 
 let mainWindow: BrowserWindow | null = null;
+let splashWindow: BrowserWindow | null = null;
+let splashShownAt = 0;
 let tray: Tray | null = null;
 const detachedPreviewWindows = new Set<BrowserWindow>();
+const SPLASH_MIN_VISIBLE_MS = 1100;
 
 // ── Persistent settings ───────────────────────────────────────────────
 const settingsPath = path.join(app.getPath("userData"), "desktop-settings.json");
@@ -78,6 +81,214 @@ function shouldQuitOnClose(): boolean {
 }
 
 let isQuitting = false;
+
+// ── Native launch splash ─────────────────────────────────────────────
+function getSplashHtml(): string {
+  return `<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="Content-Security-Policy" content="default-src 'none'; style-src 'unsafe-inline';" />
+    <style>
+      html,
+      body {
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        overflow: hidden;
+        background: #09090b;
+        color: #fff;
+        -webkit-app-region: drag;
+      }
+
+      body {
+        display: grid;
+        place-items: center;
+      }
+
+      .splash {
+        position: relative;
+        display: grid;
+        place-items: center;
+        width: 100%;
+        height: 100%;
+      }
+
+      .glow {
+        position: absolute;
+        width: 8.75rem;
+        height: 8.75rem;
+        border-radius: 9999px;
+        background: radial-gradient(circle, rgba(96, 165, 250, 0.22), rgba(96, 165, 250, 0));
+        animation: glow 2.4s ease-in-out infinite;
+      }
+
+      svg {
+        position: relative;
+        width: 11rem;
+        height: 11rem;
+        filter: drop-shadow(0 24px 32px rgba(0, 0, 0, 0.36));
+      }
+
+      .part {
+        transform-box: fill-box;
+        transform-origin: center;
+        animation-duration: 920ms;
+        animation-fill-mode: forwards;
+        animation-timing-function: cubic-bezier(0.18, 0.92, 0.26, 1.18);
+      }
+
+      .chevron {
+        animation-name: fly-chevron;
+      }
+
+      .stem {
+        animation-name: fly-stem;
+      }
+
+      body.closing {
+        animation: close 220ms ease forwards;
+      }
+
+      @keyframes fly-chevron {
+        0% {
+          opacity: 0;
+          transform: translate(-92vw, 36vh) rotate(-18deg) scale(0.84);
+        }
+        68% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 1;
+          transform: translate(0, 0) rotate(0) scale(1);
+        }
+      }
+
+      @keyframes fly-stem {
+        0% {
+          opacity: 0;
+          transform: translate(88vw, -38vh) rotate(14deg) scale(0.84);
+        }
+        68% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 1;
+          transform: translate(0, 0) rotate(0) scale(1);
+        }
+      }
+
+      @keyframes glow {
+        0%,
+        100% {
+          opacity: 0.64;
+          transform: scale(0.94);
+        }
+        50% {
+          opacity: 1;
+          transform: scale(1.08);
+        }
+      }
+
+      @keyframes close {
+        to {
+          opacity: 0;
+          transform: scale(0.98);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="splash" aria-label="Loading Jait">
+      <div class="glow"></div>
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" aria-hidden="true">
+        <g class="part chevron">
+          <path
+            d="M318 372 L430 486 L318 600"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="88"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+        <g class="part stem">
+          <path
+            d="M610 258 L610 642 C610 734 549 796 455 796 C393 796 338 766 299 715"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="88"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+          />
+        </g>
+      </svg>
+    </div>
+  </body>
+</html>`;
+}
+
+function createSplashWindow(): BrowserWindow | null {
+  if (startHidden) return null;
+
+  splashShownAt = Date.now();
+  const win = new BrowserWindow({
+    width: 360,
+    height: 360,
+    resizable: false,
+    maximizable: false,
+    minimizable: false,
+    frame: false,
+    show: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    backgroundColor: "#09090b",
+    icon: path.join(__dirname, "..", "assets", "icon.png"),
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true,
+    },
+  });
+
+  win.once("ready-to-show", () => {
+    if (!win.isDestroyed()) win.show();
+  });
+  win.on("closed", () => {
+    if (splashWindow === win) splashWindow = null;
+  });
+  void win.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(getSplashHtml())}`);
+  return win;
+}
+
+async function closeSplashWindowAfterMinimum(): Promise<void> {
+  const win = splashWindow;
+  if (!win || win.isDestroyed()) return;
+
+  const elapsed = Date.now() - splashShownAt;
+  const remaining = Math.max(0, SPLASH_MIN_VISIBLE_MS - elapsed);
+  await new Promise((resolve) => setTimeout(resolve, remaining));
+  if (win.isDestroyed()) return;
+
+  try {
+    await win.webContents.executeJavaScript("document.body.classList.add('closing')", true);
+    await new Promise((resolve) => setTimeout(resolve, 220));
+  } catch {
+    // If the splash document is already gone, just close the window.
+  }
+
+  if (!win.isDestroyed()) win.close();
+}
+
+async function showMainWindowWhenReady(win: BrowserWindow): Promise<void> {
+  if (startHidden || win.isDestroyed()) return;
+  win.maximize();
+  await closeSplashWindowAfterMinimum();
+  if (win.isDestroyed()) return;
+  win.show();
+  win.focus();
+  if (IS_DEV) win.webContents.openDevTools({ mode: "bottom" });
+}
 
 // ── Single instance lock ──────────────────────────────────────────────
 // Ensures only one Jait window is open. Second launches pass their argv
@@ -149,11 +360,7 @@ function createMainWindow(): BrowserWindow {
 
   // Graceful show once ready — start maximized (or hidden for auto-start)
   win.once("ready-to-show", () => {
-    if (startHidden) return; // launched via auto-start — stay in tray
-    win.maximize();
-    win.show();
-    win.focus();
-    if (IS_DEV) win.webContents.openDevTools({ mode: "bottom" });
+    void showMainWindowWhenReady(win);
   });
 
   // Intercept close to minimize to tray (unless setting says quit)
@@ -2258,6 +2465,7 @@ app.whenReady().then(async () => {
     }
   });
 
+  splashWindow = createSplashWindow();
   mainWindow = createMainWindow();
   await loadApp(mainWindow);
   createTray();
@@ -2266,6 +2474,7 @@ app.whenReady().then(async () => {
   app.on("activate", () => {
     // macOS: re-create window when dock icon is clicked
     if (BrowserWindow.getAllWindows().length === 0) {
+      splashWindow = createSplashWindow();
       mainWindow = createMainWindow();
       void loadApp(mainWindow);
     }
