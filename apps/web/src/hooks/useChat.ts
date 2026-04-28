@@ -33,6 +33,10 @@ function createOptimisticMessageId(prefix: 'user' | 'assistant'): string {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+export function getVisibleChangedFiles(changedFiles: ChangedFile[], isSwitchingSession: boolean): ChangedFile[] {
+  return isSwitchingSession ? [] : changedFiles
+}
+
 function isTransientConnectionError(error: unknown): boolean {
   if (!(error instanceof Error)) return false
   if (error.name === 'AbortError') return false
@@ -312,6 +316,7 @@ export function useChat(
       isLoadingHistory: true,
       error: null,
     }))
+    if (!preserveExistingMessages) setChangedFiles([])
     setContextUsage(null)
 
     // Connect to the stream-resume SSE endpoint.
@@ -1041,7 +1046,7 @@ export function useChat(
                       ? data.data as Record<string, unknown>
                       : undefined
                     const filePath = getToolFilePath(toolName, tc.args ?? {}, resultData, data.message as string | undefined) ?? ''
-                    if (filePath) {
+                    if (filePath && !isStale()) {
                       const fileName = filePath.split('/').pop() ?? filePath
                       setChangedFiles(prev => {
                         if (prev.some(f => f.path === filePath)) return prev
@@ -1097,11 +1102,13 @@ export function useChat(
               // AI reported a file change
               const filePath = data.path as string
               const fileName = data.name as string
-              setChangedFiles(prev => {
-                const existing = prev.find(f => f.path === filePath)
-                if (existing) return prev
-                return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
-              })
+              if (!isStale()) {
+                setChangedFiles(prev => {
+                  const existing = prev.find(f => f.path === filePath)
+                  if (existing) return prev
+                  return [...prev, { path: filePath, name: fileName, state: 'undecided' as const }]
+                })
+              }
             } else if (data.type === 'done') {
               completed = true
               flushPendingMessageUpdates()
@@ -1696,7 +1703,7 @@ export function useChat(
     hitMaxRounds: state.hitMaxRounds,
     pendingPlan,
     todoList,
-    changedFiles,
+    changedFiles: getVisibleChangedFiles(changedFiles, isSwitchingSession),
     messageQueue,
     completionCount,
     contextUsage,
