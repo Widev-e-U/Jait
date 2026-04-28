@@ -15,5 +15,11 @@ export function subscribePreviewSession(fn: PreviewSessionListener): () => void 
 }
 
 export function emitPreviewSession(session: Record<string, unknown>): void {
-  for (const fn of listeners) fn(session)
+  for (const fn of listeners) {
+    try {
+      fn(session)
+    } catch (error) {
+      console.error('Failed to deliver preview session event.', error)
+    }
+  }
 }
