@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import { mkdtemp, writeFile, rm, chmod, mkdir } from "node:fs/promises";
+import { mkdtemp, writeFile, readFile, rm, chmod, mkdir } from "node:fs/promises";
 import { execSync } from "node:child_process";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -110,5 +110,44 @@ describe("runStackedAction – unstage on commit failure", () => {
     expect(result.pull.status).toBe("skipped_no_upstream");
     expect(result.push.status).toBe("pushed");
     expect(result.upstreamBranch).toBe("origin/master");
+  });
+
+  it("retries version bump pushes after a stale non-fast-forward rejection", { timeout: 15_000 }, async () => {
+    const bareRemote = await mkdtemp(join(tmpdir(), "git-version-bump-remote-"));
+    const collaboratorDir = await mkdtemp(join(tmpdir(), "git-version-bump-peer-"));
+    try {
+      git(bareRemote, "init --bare");
+      git(repoDir, `remote add origin "${bareRemote}"`);
+
+      await writeFile(join(repoDir, "package.json"), `${JSON.stringify({ name: "retry-test", version: "1.0.0" }, null, 2)}\n`);
+      git(repoDir, "add package.json");
+      git(repoDir, "commit -m \"chore: add package\"");
+      git(repoDir, "push -u origin HEAD");
+
+      git(collaboratorDir, `clone "${bareRemote}" .`);
+      git(collaboratorDir, "config user.email test@test.com");
+      git(collaboratorDir, "config user.name Test");
+      await writeFile(join(collaboratorDir, "README.md"), "collaborator change\n");
+      git(collaboratorDir, "add README.md");
+      git(collaboratorDir, "commit -m \"docs: add readme\"");
+      git(collaboratorDir, "push origin HEAD");
+
+      const result = await svc.runVersionBumpCommitPushFlow(repoDir);
+      const branch = git(repoDir, "rev-parse --abbrev-ref HEAD");
+
+      expect(result.version.previousVersion).toBe("1.0.0");
+      expect(result.version.nextVersion).toBe("1.0.1");
+      expect(result.sync.status).toBe("skipped_up_to_date");
+      expect(result.git.commit.status).toBe("created");
+      expect(result.git.push.status).toBe("pushed");
+
+      const packageJson = JSON.parse(await readFile(join(repoDir, "package.json"), "utf-8")) as { version: string };
+      expect(packageJson.version).toBe("1.0.1");
+      expect(git(repoDir, `show origin/${branch}:README.md`)).toBe("collaborator change");
+      expect(git(repoDir, `show origin/${branch}:package.json`)).toContain("\"version\": \"1.0.1\"");
+    } finally {
+      await rm(collaboratorDir, { recursive: true, force: true });
+      await rm(bareRemote, { recursive: true, force: true });
+    }
   });
 });
