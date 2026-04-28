@@ -459,12 +459,20 @@ export async function selectInitialBrowserPage<T extends { isClosed?: () => bool
   const pages = context.pages?.().filter((candidate) => !isBrowserPageClosed(candidate)) ?? [];
   const blankPage = pages.find((candidate) => {
     try {
-      return candidate.url?.() === "about:blank";
+      return isReusableBootstrapPageUrl(candidate.url?.());
     } catch {
       return false;
     }
   });
   return blankPage ?? await context.newPage();
+}
+
+function isReusableBootstrapPageUrl(url: string | undefined): boolean {
+  const normalized = url?.trim().toLowerCase();
+  return normalized === "about:blank"
+    || normalized === "chrome://newtab/"
+    || normalized === "chrome://new-tab-page/"
+    || normalized === "edge://newtab/";
 }
 
 function isBrowserPageClosed(page: { isClosed?: () => boolean } | null | undefined): boolean {

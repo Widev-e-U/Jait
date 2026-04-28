@@ -81,12 +81,20 @@ async function selectInitialPage(context) {
     : [];
   const blankPage = pages.find((candidate) => {
     try {
-      return typeof candidate.url === "function" && candidate.url() === "about:blank";
+      return typeof candidate.url === "function" && isReusableBootstrapPageUrl(candidate.url());
     } catch {
       return false;
     }
   });
   return blankPage || await context.newPage();
+}
+
+function isReusableBootstrapPageUrl(url) {
+  const normalized = String(url || "").trim().toLowerCase();
+  return normalized === "about:blank"
+    || normalized === "chrome://newtab/"
+    || normalized === "chrome://new-tab-page/"
+    || normalized === "edge://newtab/";
 }
 
 function isPageClosed(page) {
