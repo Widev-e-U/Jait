@@ -81,6 +81,19 @@ describe("selectInitialBrowserPage", () => {
     expect(newPage).not.toHaveBeenCalled();
   });
 
+  it("reuses an existing Chromium new-tab bootstrap page", async () => {
+    const newTabPage = { url: () => "chrome://new-tab-page/" };
+    const appPage = { url: () => "http://127.0.0.1:8000/" };
+    const newPage = vi.fn().mockResolvedValue({ url: () => "about:blank" });
+
+    await expect(selectInitialBrowserPage({
+      pages: () => [newTabPage, appPage],
+      newPage,
+    })).resolves.toBe(newTabPage);
+
+    expect(newPage).not.toHaveBeenCalled();
+  });
+
   it("opens a page when there is no reusable blank page", async () => {
     const createdPage = { url: () => "about:blank" };
     const newPage = vi.fn().mockResolvedValue(createdPage);
