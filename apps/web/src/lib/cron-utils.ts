@@ -27,6 +27,13 @@ export function normalizeCronExpression(cron: string): string {
   return cron.trim().split(/\s+/).join(' ')
 }
 
+function parseCronInteger(value: string): number | null {
+  if (!/^\d+$/.test(value)) return null
+
+  const parsed = Number.parseInt(value, 10)
+  return Number.isNaN(parsed) ? null : parsed
+}
+
 /**
  * Parse a cron expression into human-readable format
  */
@@ -60,8 +67,8 @@ export function describeCron(cron: string): string {
   // Day of week
   if (weekday !== '*') {
     const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-    const dayNum = parseInt(weekday)
-    if (!isNaN(dayNum) && dayNum >= 0 && dayNum <= 6) {
+    const dayNum = parseCronInteger(weekday)
+    if (dayNum !== null && dayNum >= 0 && dayNum <= 6) {
       descriptions.push(`on ${days[dayNum]}`)
     }
   }
@@ -75,8 +82,8 @@ export function describeCron(cron: string): string {
   if (month !== '*') {
     const months = ['', 'January', 'February', 'March', 'April', 'May', 'June', 
                     'July', 'August', 'September', 'October', 'November', 'December']
-    const monthNum = parseInt(month)
-    if (!isNaN(monthNum) && monthNum >= 1 && monthNum <= 12) {
+    const monthNum = parseCronInteger(month)
+    if (monthNum !== null && monthNum >= 1 && monthNum <= 12) {
       descriptions.push(`in ${months[monthNum]}`)
     }
   }
@@ -119,27 +126,31 @@ function isValidCronPart(part: string, min: number, max: number): boolean {
   
   // Step values: */5
   if (part.startsWith('*/')) {
-    const step = parseInt(part.slice(2))
-    return !isNaN(step) && step > 0 && step <= max
+    const step = parseCronInteger(part.slice(2))
+    return step !== null && step > 0 && step <= max
   }
   
   // Range: 1-5
   if (part.includes('-')) {
-    const [start, end] = part.split('-').map(Number)
-    return !isNaN(start) && !isNaN(end) && start >= min && end <= max && start <= end
+    const segments = part.split('-')
+    if (segments.length !== 2) return false
+
+    const start = parseCronInteger(segments[0] ?? '')
+    const end = parseCronInteger(segments[1] ?? '')
+    return start !== null && end !== null && start >= min && end <= max && start <= end
   }
   
   // List: 1,2,3
   if (part.includes(',')) {
     return part.split(',').every(p => {
-      const num = parseInt(p)
-      return !isNaN(num) && num >= min && num <= max
+      const num = parseCronInteger(p)
+      return num !== null && num >= min && num <= max
     })
   }
   
   // Simple number
-  const num = parseInt(part)
-  return !isNaN(num) && num >= min && num <= max
+  const num = parseCronInteger(part)
+  return num !== null && num >= min && num <= max
 }
 
 /**
@@ -163,7 +174,9 @@ export function getNextRunTime(cron: string): Date | null {
     }
 
     if (minute.startsWith('*/')) {
-      const step = parseInt(minute.slice(2))
+      const step = parseCronInteger(minute.slice(2))
+      if (step === null || step <= 0) return null
+
       const next = new Date(now)
       const nextMinute = Math.ceil(now.getMinutes() / step) * step
       if (nextMinute >= 60) {
@@ -181,8 +194,8 @@ export function getNextRunTime(cron: string): Date | null {
     }
 
     if (minute !== '*' && hour === '*') {
-      const targetMinute = parseInt(minute)
-      if (Number.isNaN(targetMinute)) return null
+      const targetMinute = parseCronInteger(minute)
+      if (targetMinute === null) return null
 
       const next = new Date(now)
       next.setMinutes(targetMinute, 0, 0)
@@ -193,9 +206,9 @@ export function getNextRunTime(cron: string): Date | null {
     }
 
     if (minute !== '*' && hour.startsWith('*/')) {
-      const targetMinute = parseInt(minute)
-      const hourStep = parseInt(hour.slice(2))
-      if (Number.isNaN(targetMinute) || Number.isNaN(hourStep) || hourStep <= 0) return null
+      const targetMinute = parseCronInteger(minute)
+      const hourStep = parseCronInteger(hour.slice(2))
+      if (targetMinute === null || hourStep === null || hourStep <= 0) return null
 
       const next = new Date(now)
       next.setMinutes(targetMinute, 0, 0)
@@ -213,9 +226,9 @@ export function getNextRunTime(cron: string): Date | null {
     }
     
     if (minute !== '*' && hour !== '*') {
-      const targetMinute = parseInt(minute)
-      const targetHour = parseInt(hour)
-      if (Number.isNaN(targetMinute) || Number.isNaN(targetHour)) return null
+      const targetMinute = parseCronInteger(minute)
+      const targetHour = parseCronInteger(hour)
+      if (targetMinute === null || targetHour === null) return null
       const next = new Date(now)
       next.setHours(targetHour)
       next.setMinutes(targetMinute)
