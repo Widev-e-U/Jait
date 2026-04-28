@@ -14,6 +14,7 @@ import type { SessionInfo, ChatAttachment } from '@/hooks/useChat'
 import { FileIcon, FolderIcon } from '@/components/icons/file-icons'
 import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
+import { shouldQueuePromptSubmit } from '@/lib/prompt-submit-routing'
 import { JAIT_TERMINAL_REF_MIME, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
 import {
   JAIT_REF_MIME,
@@ -1172,19 +1173,19 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
       const nextSegments = el ? getComposerSegments(el) : normalizeUserMessageSegments(segments)
       const hasStructuredRefs = nextSegments.some((segment) => segment.type !== 'text' && segment.type !== 'image')
       if (!(text || chips.length > 0 || hasStructuredRefs || attachments.length > 0)) return
-      if (isLoading && onQueue) {
+      if (shouldQueuePromptSubmit({ isLoading, sendTarget, hasQueueHandler: Boolean(onQueue) }) && onQueue) {
         onQueue(chips, attachments, nextSegments)
         setAttachments([])
         resetComposer()
         return
       }
-      if (!isLoading) {
+      if (!isLoading || sendTarget === 'thread') {
         onSubmit(chips, attachments, nextSegments)
         setAttachments([])
         resetComposer()
       }
     }
-  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, onQueue, onSubmit, attachments, segments, resetComposer, restoreSnapshot])
+  }, [mentionOpen, searchResults, mentionIndex, insertMention, value, isLoading, sendTarget, onQueue, onSubmit, attachments, segments, resetComposer, restoreSnapshot])
 
   const readFileAsAttachment = useCallback((file: File): Promise<ChatAttachment> => {
     return new Promise((resolve, reject) => {
@@ -1671,7 +1672,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               <Square className="h-3.5 w-3.5 fill-current" />
             </Button>
           )}
-          {isLoading && sendTarget !== 'thread' && onQueue ? (
+          {shouldQueuePromptSubmit({ isLoading, sendTarget, hasQueueHandler: Boolean(onQueue) }) && onQueue ? (
             <Button
               type="button"
               size="icon"

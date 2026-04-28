@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 
 import { shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
+import { shouldQueuePromptSubmit } from '@/lib/prompt-submit-routing'
 import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
 
@@ -60,6 +61,24 @@ describe('shouldSyncComposerDraft', () => {
       undefined,
       localSegments,
     )).toBe(false)
+  })
+})
+
+describe('shouldQueuePromptSubmit', () => {
+  it('does not queue Enter submits in developer thread mode while agent chat is loading', () => {
+    expect(shouldQueuePromptSubmit({
+      isLoading: true,
+      sendTarget: 'thread',
+      hasQueueHandler: true,
+    })).toBe(false)
+  })
+
+  it('queues agent-mode submits while the current agent chat is loading', () => {
+    expect(shouldQueuePromptSubmit({
+      isLoading: true,
+      sendTarget: 'agent',
+      hasQueueHandler: true,
+    })).toBe(true)
   })
 })
 
