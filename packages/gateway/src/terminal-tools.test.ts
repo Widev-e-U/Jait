@@ -96,6 +96,20 @@ describe("terminal.run tool status reporting", () => {
     expect((result.data as any).output).toContain("Command 'rg' not found");
   });
 
+  it("completes when a zsh-style path prompt returns", async () => {
+    const { tool } = makePromptFallbackTool([
+      "pwd\r\n/home/jakob/jait\r\n~/jait % ",
+    ], "/bin/zsh");
+
+    const result = await tool.execute({ command: "pwd", terminalId: "term-existing", timeout: 1000 }, makeContext());
+
+    expect(result.ok).toBe(true);
+    expect(result.message).toContain("exit code 0");
+    expect((result.data as any).timedOut).toBe(false);
+    expect((result.data as any).output).toContain("/home/jakob/jait");
+    expect((result.data as any).output).not.toContain("~/jait %");
+  });
+
   it("captures late output that arrives after prompt fallback starts settling", async () => {
     const { tool } = makePromptFallbackTool([
       "echo hi\r\nhi\r\njakob@movable-base:~/jait$ ",

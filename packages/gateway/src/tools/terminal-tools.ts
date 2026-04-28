@@ -64,15 +64,23 @@ function isPowerShellShell(shell: string): boolean {
   return /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(shell);
 }
 
-function hasShellPrompt(rawOutput: string, powershell: boolean): boolean {
+function isShellPromptLine(line: string, shell: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (isPowerShellShell(shell)) return /^PS .+?>/.test(trimmed);
+  if (/^[^@\n]+@[^:]+:.*[$#]$/.test(trimmed)) return true;
+  if (/^(?:~|\/|\.{1,2}(?:\/|$)|[A-Za-z]:[\\/]).*[$#%]$/.test(trimmed)) return true;
+  return /^[A-Za-z][A-Za-z0-9_.-]*\s*[%$#]$/.test(trimmed);
+}
+
+function hasShellPrompt(rawOutput: string, shell: string): boolean {
   const cleaned = stripAnsi(rawOutput).replace(/\r/g, "");
   const lines = cleaned
     .split("\n")
     .map((line) => line.replace(/^[^\x07]*\x07/, "").trim())
     .filter(Boolean);
   const lastLine = lines[lines.length - 1] ?? "";
-  if (powershell) return /^PS .+?>/.test(lastLine);
-  return /^[^@\n]+@[^:]+:.*[$#]$/.test(lastLine);
+  return isShellPromptLine(lastLine, shell);
 }
 
 function inferFallbackExitCode(rawOutput: string): number {
@@ -224,7 +232,6 @@ function executeInTerminal(
   return new Promise((resolve) => {
     let raw = "";
     let settled = false;
-    const powershell = isPowerShellShell(shell);
 
     // Cached D-marker result so we only scan for it once
     let dMatch: { exitCode: number; end: number } | null = null;
@@ -279,7 +286,7 @@ function executeInTerminal(
       // Some sessions have a working interactive shell but no OSC 633
       // completion markers.  A returned prompt is still enough to know a
       // simple command has finished, so fall back to prompt detection.
-      if (!dMatch && hasShellPrompt(raw, powershell)) {
+      if (!dMatch && hasShellPrompt(raw, shell)) {
         settleExitCode = inferFallbackExitCode(raw);
         settleTimer = setTimeout(() => finish(false, settleExitCode), 100);
       }
@@ -341,7 +348,7 @@ function executeInTerminal(
       // Remove the prompt line at the end (e.g. "PS E:\path> ")
       for (let i = lines.length - 1; i >= 0; i--) {
         const line = lines[i]!.trim();
-        if (/^PS .+?>/.test(line) || /^[^@\n]+@[^:]+:.*[$#]$/.test(line)) {
+        if (isShellPromptLine(line, shell)) {
           lines.splice(i, 1);
         }
       }

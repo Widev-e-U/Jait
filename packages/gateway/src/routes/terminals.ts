@@ -29,15 +29,23 @@ function isPowerShellShell(shell: string): boolean {
   return /(^|[\\/])(pwsh|powershell)(\.exe)?$/i.test(shell);
 }
 
-function hasShellPrompt(rawOutput: string, powershell: boolean): boolean {
+function isShellPromptLine(line: string, shell: string): boolean {
+  const trimmed = line.trim();
+  if (!trimmed) return false;
+  if (isPowerShellShell(shell)) return /^PS .+?>/.test(trimmed);
+  if (/^[^@\n]+@[^:]+:.*[$#]$/.test(trimmed)) return true;
+  if (/^(?:~|\/|\.{1,2}(?:\/|$)|[A-Za-z]:[\\/]).*[$#%]$/.test(trimmed)) return true;
+  return /^[A-Za-z][A-Za-z0-9_.-]*\s*[%$#]$/.test(trimmed);
+}
+
+function hasShellPrompt(rawOutput: string, shell: string): boolean {
   const cleaned = stripAnsi(rawOutput).replace(/\r/g, "");
   const lines = cleaned
     .split("\n")
     .map((line) => line.replace(/^[^\x07]*\x07/, "").trim())
     .filter(Boolean);
   const lastLine = lines[lines.length - 1] ?? "";
-  if (powershell) return /^PS .+?>/.test(lastLine);
-  return /^[^@\n]+@[^:]+:.*[$#]$/.test(lastLine);
+  return isShellPromptLine(lastLine, shell);
 }
 
 function inferFallbackExitCode(rawOutput: string): number {
@@ -238,7 +246,7 @@ export function registerTerminalRoutes(
             return;
           }
 
-          if (hasShellPrompt(raw, powershell)) {
+          if (hasShellPrompt(raw, shell)) {
             settleTimer = setTimeout(() => finish(false, inferFallbackExitCode(raw)), 100);
           }
         };
@@ -300,7 +308,7 @@ export function registerTerminalRoutes(
           // Remove the prompt line at the end.
           if (lines.length > 0) {
             const lastLine = lines[lines.length - 1]!.replace(/^[^\x07]*\x07/, "").trim();
-            if (/^PS .+?>/.test(lastLine) || /^[^@\n]+@[^:]+:.*[$#]$/.test(lastLine)) {
+            if (isShellPromptLine(lastLine, shell)) {
               lines.pop();
             }
           }
