@@ -7152,7 +7152,7 @@ function App() {
                       <div className="flex-1 overflow-y-auto">
                         <div className="mx-auto w-full max-w-3xl">
 
-                          <div className="flex h-[35px] items-center justify-between border-b px-2.5 sm:px-3">
+                          <div className="sticky top-0 z-10 flex h-[35px] items-center justify-between border-b bg-background px-2.5 sm:px-3">
                             <div className="flex items-center gap-3">
                               <span className="text-sm font-medium">Threads</span>
                               <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-2xs">
