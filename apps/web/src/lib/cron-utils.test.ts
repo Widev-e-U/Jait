@@ -66,4 +66,31 @@ describe('cron utils', () => {
   it('keeps cron validation working for normalized whitespace variants', () => {
     expect(validateCron(' 0   18 * * * ').valid).toBe(true)
   })
+
+  it('rejects malformed numeric fields instead of partially parsing them', () => {
+    expect(validateCron('5foo * * * *')).toEqual({
+      valid: false,
+      error: 'Invalid minute: 5foo',
+    })
+    expect(validateCron('*/5bar * * * *')).toEqual({
+      valid: false,
+      error: 'Invalid minute: */5bar',
+    })
+    expect(validateCron('0 9-10x * * *')).toEqual({
+      valid: false,
+      error: 'Invalid hour: 9-10x',
+    })
+    expect(validateCron('0 9,10x * * *')).toEqual({
+      valid: false,
+      error: 'Invalid hour: 9,10x',
+    })
+  })
+
+  it('returns null for malformed schedules when computing next run times', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-25T10:05:30.000Z'))
+
+    expect(getNextRunTime('*/5bar * * * *')).toBeNull()
+    expect(getNextRunTime('0 9x * * *')).toBeNull()
+  })
 })
