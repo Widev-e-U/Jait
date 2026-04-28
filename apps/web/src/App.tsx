@@ -669,8 +669,8 @@ function ManagerRepoRuntimeMeta({
   )
 
   return (
-    <div className={`flex flex-wrap items-center gap-1 text-2xs text-muted-foreground ${className}`.trim()}>
-      <span>{runtime.locationLabel}</span>
+    <div className={`flex min-w-0 flex-wrap items-center gap-1 text-2xs text-muted-foreground ${className}`.trim()}>
+      <span className="min-w-0 max-w-full truncate">{runtime.locationLabel}</span>
       {runtime.loading ? (
         <SpinnerIcon className="h-3 w-3 animate-spin text-muted-foreground" />
       ) : !runtime.online && (
@@ -694,6 +694,8 @@ interface ManagerRepoPickerProps {
   repositories: AutomationRepository[]
   selectedRepo: AutomationRepository | null
   disabled?: boolean
+  compact?: boolean
+  className?: string
   getRuntimeInfo: (repo: AutomationRepository) => RepositoryRuntimeInfo
   onSelect: (repoId: string) => void
   onAddRepository: () => void
@@ -703,6 +705,8 @@ function ManagerRepoPicker({
   repositories,
   selectedRepo,
   disabled = false,
+  compact = false,
+  className = '',
   getRuntimeInfo,
   onSelect,
   onAddRepository,
@@ -710,26 +714,32 @@ function ManagerRepoPicker({
   return (
     <DropdownMenu>
       <DropdownMenuTrigger asChild>
-        <Button variant="outline" size="sm" className="h-8 gap-1.5 rounded-lg px-2 text-xs" disabled={disabled}>
+        <Button
+          variant="outline"
+          size="sm"
+          className={`h-8 min-w-0 max-w-full gap-1.5 rounded-lg px-2 text-xs ${className}`.trim()}
+          disabled={disabled}
+          title={selectedRepo ? selectedRepo.name : 'Select repository'}
+        >
           <FolderOpen className="h-3.5 w-3.5 shrink-0" />
-          <span className="max-w-[140px] truncate">
+          <span className={`min-w-0 truncate ${compact ? 'max-w-[8rem]' : 'max-w-[140px]'}`}>
             {selectedRepo ? selectedRepo.name : 'Select repository'}
           </span>
           <ChevronDown className="h-3 w-3 shrink-0 text-muted-foreground" />
         </Button>
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" side="top" className="w-64">
+      <DropdownMenuContent align="start" side="top" className="w-64 max-w-[calc(100vw-1rem)]">
         <DropdownMenuLabel>Repository</DropdownMenuLabel>
         {repositories.map((repo) => {
           const runtime = getRuntimeInfo(repo)
           return (
-            <DropdownMenuItem key={repo.id} onSelect={() => onSelect(repo.id)}>
-              <div className="flex min-w-0 items-start gap-2">
+            <DropdownMenuItem key={repo.id} onSelect={() => onSelect(repo.id)} className="min-w-0">
+              <div className="flex min-w-0 w-full items-start gap-2">
                 <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0" />
                 <div className="min-w-0 flex-1">
                   <div className="flex min-w-0 items-center gap-2">
-                    <span className="truncate">{repo.name}</span>
-                    <span className="text-2xs text-muted-foreground">{repo.defaultBranch}</span>
+                    <span className="min-w-0 truncate">{repo.name}</span>
+                    <span className="shrink-0 text-2xs text-muted-foreground">{repo.defaultBranch}</span>
                     {repo.source === 'shared' && (
                       <Badge variant="outline" className="h-4 px-1 py-0 text-2xs">
                         Shared
@@ -5511,6 +5521,8 @@ function App() {
       repositories={automation.repositories}
       selectedRepo={threadTargetRepo}
       disabled={automation.creating}
+      compact={isMobile}
+      className={isMobile ? 'w-full' : ''}
       getRuntimeInfo={automation.getRuntimeInfoForRepository}
       onSelect={automation.setSelectedRepoId}
       onAddRepository={handleFolderPickerOpen}
@@ -5565,9 +5577,9 @@ function App() {
     </div>
   ) : null
   const developerComposerControlRow = viewMode === 'developer' ? (
-    <div className={`overflow-x-auto ${isMobile ? 'px-0.5' : 'px-1'}`}>
-      <div className={`grid min-w-max grid-cols-[1fr_auto_1fr] items-center whitespace-nowrap ${isMobile ? 'gap-2' : 'gap-3'}`}>
-        <div className="flex min-w-0 flex-1 items-center gap-2">
+    <div className={`${isMobile ? 'overflow-hidden px-0.5' : 'overflow-x-auto px-1'}`}>
+      <div className={`${isMobile ? 'flex w-full min-w-0 gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
+        <div className={`${isMobile ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>
           {sendTarget === 'thread' ? (
             developerThreadToolbarRepoPicker
           ) : (
@@ -5583,27 +5595,39 @@ function App() {
             />
           )}
           {approveAllInSession && (
-            <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-600 dark:text-green-400">
-              Auto-approved
+            isMobile ? (
               <button
                 type="button"
                 onClick={handleClearApproveAll}
-                className="rounded-full p-0.5 hover:bg-green-500/20 transition-colors"
-                title="Clear approve all"
+                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-green-500/10 text-green-600 transition-colors hover:bg-green-500/20 dark:text-green-400"
+                title="Auto-approved. Clear approve all"
+                aria-label="Auto-approved. Clear approve all"
               >
-                <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                <CheckCircle2 className="h-3.5 w-3.5" />
               </button>
-            </span>
+            ) : (
+              <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-green-500/10 px-2 py-0.5 text-xs text-green-600 dark:text-green-400">
+                Auto-approved
+                <button
+                  type="button"
+                  onClick={handleClearApproveAll}
+                  className="rounded-full p-0.5 hover:bg-green-500/20 transition-colors"
+                  title="Clear approve all"
+                >
+                  <svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </span>
+            )
           )}
         </div>
-        <div className="justify-self-center">
+        <div className={isMobile ? 'shrink-0' : 'justify-self-center'}>
           <SendTargetSelector
             target={sendTarget}
             onChange={setSendTarget}
             disabled={developerChatUiState.disableSendTargetSelector}
           />
         </div>
-        <div className="flex shrink-0 items-center justify-self-end gap-2">
+        <div className={`${isMobile ? 'flex max-w-[6rem] shrink-0 items-center gap-1 overflow-hidden' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
           {sendTarget !== 'thread' && (
             <button
               type="button"
@@ -5614,7 +5638,7 @@ function App() {
             </button>
           )}
           {remainingPrompts !== null && (
-            <span className="shrink-0 text-xs text-muted-foreground">{remainingPrompts} remaining</span>
+            <span className={`${isMobile ? 'min-w-0 shrink truncate' : 'shrink-0'} text-xs text-muted-foreground`}>{remainingPrompts} remaining</span>
           )}
         </div>
       </div>
@@ -7131,12 +7155,14 @@ function App() {
                             repoRuntime={selectedRepoRuntime}
                             onMoveToGateway={handleMoveRepoToGateway}
                           />
-                          <div className="overflow-x-auto px-1 pt-3">
-                            <div className="flex min-w-max items-center gap-2 whitespace-nowrap">
+                          <div className={`${isMobile ? 'overflow-hidden' : 'overflow-x-auto'} px-1 pt-3`}>
+                            <div className={`${isMobile ? 'flex min-w-0 items-center gap-2' : 'flex min-w-max items-center gap-2 whitespace-nowrap'}`}>
                               <ManagerRepoPicker
                                 repositories={automation.repositories}
                                 selectedRepo={automation.selectedRepo}
                                 disabled={automation.creating}
+                                compact={isMobile}
+                                className={isMobile ? 'flex-1' : ''}
                                 getRuntimeInfo={automation.getRuntimeInfoForRepository}
                                 onSelect={automation.setSelectedRepoId}
                                 onAddRepository={() => automation.setFolderPickerOpen(true)}
