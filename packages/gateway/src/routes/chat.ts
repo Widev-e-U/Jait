@@ -72,23 +72,10 @@ interface LlmContextFlow {
   note?: string;
 }
 
-function formatExternalProviderFirstTurn(systemPrompt: string, userContent: string): string {
-  return [
-    "Jait session instructions:",
-    "<system>",
-    systemPrompt,
-    "</system>",
-    "",
-    "User request:",
-    userContent,
-  ].join("\n");
-}
-
 function buildExternalProviderContextFlow(
   requestProvider: string,
   model: string | undefined,
   setupMessage: string,
-  systemPrompt: string | null,
   userContent: string,
   sentAt: string,
   note: string,
@@ -96,9 +83,6 @@ function buildExternalProviderContextFlow(
   const messages: Array<{ role: "system" | "user"; content: string }> = [
     { role: "system", content: setupMessage },
   ];
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
   messages.push({ role: "user", content: userContent });
 
   return {
@@ -1618,13 +1602,12 @@ export function registerChatRoutes(
           }
         });
 
-        // ── Prepend skills context on the first turn of a new CLI session ──
+        // Keep provider turns provider-native: do not paste Jait's internal
+        // system prompt into external CLIs, whose own tool/system context is
+        // managed by the provider process plus MCP configuration.
         const responseStyleBlock = getResponseStyleInstructions(responseStyle);
-        const currentSystemPrompt = history[0]?.role === "system" ? history[0].content : null;
         let cliContent = content;
-        if (isNewCliSession && currentSystemPrompt) {
-          cliContent = formatExternalProviderFirstTurn(currentSystemPrompt, content);
-        } else if (responseStyleBlock) {
+        if (responseStyleBlock) {
           cliContent = `<responseStyle>\n${responseStyleBlock}\n</responseStyle>\n\n${cliContent}`;
         }
 
@@ -1639,16 +1622,16 @@ export function registerChatRoutes(
             `session=${isNewCliSession ? "new" : "reused"}`,
             `remote=${isRemote}`,
             `mcpServers=${JSON.stringify(mcpServers)}`,
-            "Provider-native hidden system prompts may still exist inside the CLI provider and are not visible to Jait.",
+            "Jait did not paste its internal system prompt into this provider turn.",
+            "Provider-native hidden system prompts may exist inside the CLI provider and are not visible to Jait.",
           ].join("\n");
           const cliContextFlow = buildExternalProviderContextFlow(
             requestProvider,
             typeof body["model"] === "string" ? body["model"] : undefined,
             setupContent,
-            currentSystemPrompt,
-            content,
+            cliContent,
             sentAt,
-            "CLI providers keep their own session context. This captures the Jait setup metadata, the current Jait session system prompt, and the user turn content. On reused CLI sessions, the system prompt is shown for inspection even though it was only sent when Jait initialized or recovered the provider session.",
+            "CLI providers keep their own session context. This captures the Jait setup metadata and the exact user turn text Jait sent to the CLI provider.",
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
           safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);
@@ -1668,12 +1651,8 @@ export function registerChatRoutes(
           providerSessionId = freshSession.id;
           activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider });
           console.log(`[chat/cli] Recovered with new ${requestProvider}/${runtimeMode} session ${providerSessionId}`);
-          // Fresh session — re-inject skills context
-          const refreshedSystemPrompt = history[0]?.role === "system" ? history[0].content : null;
           let recoveryContent = content;
-          if (refreshedSystemPrompt) {
-            recoveryContent = formatExternalProviderFirstTurn(refreshedSystemPrompt, content);
-          } else if (responseStyleBlock) {
+          if (responseStyleBlock) {
             recoveryContent = `<responseStyle>\n${responseStyleBlock}\n</responseStyle>\n\n${recoveryContent}`;
           }
           const sentAt = new Date().toISOString();
@@ -1685,16 +1664,16 @@ export function registerChatRoutes(
             "session=new",
             `remote=${isRemote}`,
             `mcpServers=${JSON.stringify(mcpServers)}`,
-            "Provider-native hidden system prompts may still exist inside the CLI provider and are not visible to Jait.",
+            "Jait did not paste its internal system prompt into this provider turn.",
+            "Provider-native hidden system prompts may exist inside the CLI provider and are not visible to Jait.",
           ].join("\n");
           const cliContextFlow = buildExternalProviderContextFlow(
             requestProvider,
             typeof body["model"] === "string" ? body["model"] : undefined,
             setupContent,
-            refreshedSystemPrompt,
-            content,
+            recoveryContent,
             sentAt,
-            "CLI providers keep their own session context. This captures the Jait recovery setup metadata, the Jait system prompt when Jait sent it, and the user turn content.",
+            "CLI providers keep their own session context. This captures the Jait recovery setup metadata and the exact user turn text Jait sent to the CLI provider.",
           );
           contextFlowJson = JSON.stringify(cliContextFlow);
           safeWrite(`data: ${JSON.stringify({ type: "context_flow", ...cliContextFlow })}\n\n`);

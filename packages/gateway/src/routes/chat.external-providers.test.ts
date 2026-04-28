@@ -182,7 +182,7 @@ describe("chat external provider runtime mode selection", () => {
     await app.close();
   });
 
-  it("includes the Jait system prompt in the first external-provider turn and context trace", { timeout: 30_000 }, async () => {
+  it("does not send the Jait system prompt in the first external-provider turn", { timeout: 30_000 }, async () => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(provider);
@@ -205,18 +205,19 @@ describe("chat external provider runtime mode selection", () => {
 
     const firstTurnMessage = provider.sendTurn.mock.calls[0]?.[1];
     expect(typeof firstTurnMessage).toBe("string");
-    expect(firstTurnMessage).toContain("Jait session instructions:");
-    expect(firstTurnMessage).toContain("use the todo tool even if you are operating through an external or CLI provider");
-    expect(firstTurnMessage).toContain("User request:");
-    expect(firstTurnMessage).toContain("fix the bug");
+    expect(firstTurnMessage).toBe("fix the bug");
+    expect(firstTurnMessage).not.toContain("Jait session instructions:");
+    expect(firstTurnMessage).not.toContain("use the todo tool even if you are operating through an external or CLI provider");
+    expect(firstTurnMessage).not.toContain("<available_skills>");
 
     expect(response.body).toContain("\"type\":\"context_flow\"");
-    expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
+    expect(response.body).toContain("Jait did not paste its internal system prompt into this provider turn.");
+    expect(response.body).not.toContain("use the todo tool even if you are operating through an external or CLI provider");
 
     await app.close();
   });
 
-  it("includes the Jait system prompt in external-provider context trace for reused sessions", { timeout: 30_000 }, async () => {
+  it("does not include the Jait system prompt in external-provider context trace for reused sessions", { timeout: 30_000 }, async () => {
     const provider = new MockChatProvider();
     const providerRegistry = new ProviderRegistry();
     providerRegistry.register(provider);
@@ -255,8 +256,9 @@ describe("chat external provider runtime mode selection", () => {
     expect(secondTurnMessage).toBe("second turn");
     expect(response.body).toContain("session=reused");
     expect(response.body).toContain("\"role\":\"system\"");
-    expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
-    expect(response.body).toContain("shown for inspection even though it was only sent");
+    expect(response.body).toContain("Jait did not paste its internal system prompt into this provider turn.");
+    expect(response.body).not.toContain("use the todo tool even if you are operating through an external or CLI provider");
+    expect(response.body).not.toContain("shown for inspection even though it was only sent");
 
     await app.close();
   });
