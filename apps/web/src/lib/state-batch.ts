@@ -37,7 +37,7 @@ export function fetchStateBatched(
   key: string,
   token: string,
 ): Promise<unknown> {
-  const batchKey = `${entityType}:${entityId}`
+  const batchKey = `${entityType}:${entityId}:${token}`
   let entry = pending.get(batchKey)
 
   if (!entry) {
