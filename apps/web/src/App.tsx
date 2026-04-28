@@ -131,7 +131,7 @@ import {
   getDefaultFloatingScreenSharePosition,
 } from '@/lib/floating-screen-share'
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
-import { getWorkspaceRepositoryId, getWorkspaceRepository } from '@/lib/workspace-repositories'
+import { getWorkspaceRepositoryId } from '@/lib/workspace-repositories'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
 import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
@@ -2051,10 +2051,6 @@ function App() {
   const activeWorkspaceRepositoryId = useMemo(
     () => getWorkspaceRepositoryId(activeWorkspaceRecord),
     [activeWorkspaceRecord],
-  )
-  const activeWorkspaceRepository = useMemo(
-    () => getWorkspaceRepository(activeWorkspaceRecord, automation.repositories),
-    [activeWorkspaceRecord, automation.repositories],
   )
   const handleAssignWorkspaceRepository = useCallback(async (workspaceId: string) => {
     const result = await assignWorkspaceRepository(workspaceId)
