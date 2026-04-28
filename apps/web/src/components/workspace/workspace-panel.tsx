@@ -5030,10 +5030,32 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   <Loader2 className="h-4 w-4 animate-spin" />
                   Loading...
                 </div>
-              ) : activeTab?.type === 'file' && activeTab.content ? (
-                <pre className="text-xs leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
-                  <code>{activeTab.content}</code>
-                </pre>
+              ) : activeTab?.type === 'file' ? (
+                <ReviewableEditor
+                  key={activeTab.id}
+                  path={activeTab.path}
+                  language={activeTab.language ?? 'plaintext'}
+                  value={activeTab.content ?? ''}
+                  originalContent={activeTab.originalContent}
+                  theme={monacoThemeName}
+                  readOnly={!isEditableWorkspaceTab(activeTab)}
+                  onChange={(value) => handleTabContentChange(activeTab.id, value)}
+                  onReferenceSelection={(selection, startLine, endLine) => handleEditorSelectionReference({
+                    id: activeTab.id,
+                    name: getEditorTabTitle(activeTab),
+                    path: activeTab.path,
+                    content: activeTab.content ?? '',
+                    language: activeTab.language ?? 'plaintext',
+                  }, selection, startLine, endLine)}
+                  onApplyReview={async (resultContent) => {
+                    await onApplyDiff?.(activeTab.path, resultContent)
+                    setOpenTabs((prev) => prev.map((tab) => (
+                      tab.id === activeTab.id
+                        ? { ...tab, content: resultContent, modifiedContent: resultContent, savedContent: resultContent, originalContent: null, isDirty: false }
+                        : tab
+                    )))
+                  }}
+                />
               ) : editorFile ? (
                 <pre className="text-xs leading-relaxed p-2 font-mono whitespace-pre overflow-x-auto text-foreground">
                   <code>{editorFile.content}</code>
