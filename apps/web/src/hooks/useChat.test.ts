@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { shouldResumeChatSession } from '@/hooks/useChat'
+import { getVisibleChangedFiles, shouldResumeChatSession } from '@/hooks/useChat'
 
 describe('shouldResumeChatSession', () => {
   it('resumes when a stream was active', () => {
@@ -47,5 +47,19 @@ describe('shouldResumeChatSession', () => {
       isLoadingHistory: false,
       messageCount: 2,
     })).toBe(false)
+  })
+})
+
+describe('getVisibleChangedFiles', () => {
+  const changedFiles = [
+    { path: '/workspace/app.ts', name: 'app.ts', state: 'undecided' as const },
+  ]
+
+  it('hides file review prompts while switching sessions', () => {
+    expect(getVisibleChangedFiles(changedFiles, true)).toEqual([])
+  })
+
+  it('keeps file review prompts for the active hydrated session', () => {
+    expect(getVisibleChangedFiles(changedFiles, false)).toBe(changedFiles)
   })
 })
