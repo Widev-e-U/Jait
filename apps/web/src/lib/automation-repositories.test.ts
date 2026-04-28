@@ -90,6 +90,27 @@ describe('automation repositories', () => {
     expect(inferSharedRepositories([thread], [repository])).toEqual([])
   })
 
+  it('keeps merged PR threads associated after their worktree is cleared', () => {
+    const repository: AutomationRepository = {
+      id: 'repo-1',
+      name: 'Jait',
+      defaultBranch: 'main',
+      localPath: '/home/user/code/Jait',
+      forgeUrl: 'git@github.com:Widev-e-U/Jait.git',
+      source: 'local',
+    }
+    const thread = makeThread({
+      title: 'Nightly Quality Sweep',
+      workingDirectory: null,
+      prUrl: 'https://github.com/Widev-e-U/Jait/pull/42',
+      prState: 'merged',
+    })
+
+    expect(inferThreadRepositoryName(thread)).toBe('Jait')
+    expect(threadBelongsToRepository(thread, repository)).toBe(true)
+    expect(inferSharedRepositories([thread], [repository])).toEqual([])
+  })
+
   it('reports remote CLI providers for a repository host device', () => {
     const repository: AutomationRepository = {
       id: 'repo-2',
