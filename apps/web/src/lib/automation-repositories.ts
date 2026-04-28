@@ -1,6 +1,7 @@
 import type { AgentThread, AutomationRepo, ProviderId, ProviderInfo, RemoteProviderInfo } from './agents-api'
 
 export type AutomationRepositorySource = 'local' | 'shared'
+export type ThreadRepositoryReference = Pick<AgentThread, 'title' | 'workingDirectory'> & Partial<Pick<AgentThread, 'prUrl'>>
 
 export interface AutomationRepository {
   id: string
@@ -60,17 +61,87 @@ function extractWorktreeRepoName(path?: string | null): string | null {
   return parts[worktreesIndex + 1] ?? null
 }
 
-export function inferThreadRepositoryName(thread: Pick<AgentThread, 'title' | 'workingDirectory'>): string | null {
+interface RepositoryUrlIdentity {
+  host: string
+  path: string
+  name: string
+}
+
+function stripGitSuffix(value: string): string {
+  return value.replace(/\.git$/i, '')
+}
+
+function normalizeRepositoryPath(pathname: string): string | null {
+  let parts = pathname.split('/').filter(Boolean)
+  if (parts.length === 0) return null
+
+  const azureGitIndex = parts.indexOf('_git')
+  if (azureGitIndex >= 0 && parts[azureGitIndex + 1]) {
+    parts = [...parts.slice(0, azureGitIndex), parts[azureGitIndex + 1]]
+  } else {
+    const gitlabMergeRequestIndex = parts.findIndex((part, index) => part === '-' && parts[index + 1] === 'merge_requests')
+    const reviewMarkerIndex = gitlabMergeRequestIndex >= 0
+      ? gitlabMergeRequestIndex
+      : parts.findIndex((part) => part === 'pull' || part === 'pulls' || part === 'pullrequest' || part === 'pull-requests' || part === 'merge_requests')
+
+    if (reviewMarkerIndex > 0) {
+      parts = parts.slice(0, reviewMarkerIndex)
+    }
+  }
+
+  const last = parts[parts.length - 1]
+  if (!last) return null
+  parts[parts.length - 1] = stripGitSuffix(last)
+
+  return parts.join('/')
+}
+
+function parseRepositoryUrl(value?: string | null): RepositoryUrlIdentity | null {
+  const raw = value?.trim()
+  if (!raw) return null
+
+  const scpLike = raw.match(/^git@([^:]+):(.+)$/)
+  if (scpLike) {
+    const path = normalizeRepositoryPath(scpLike[2] ?? '')
+    if (!path) return null
+    const segments = path.split('/')
+    return { host: (scpLike[1] ?? '').toLowerCase(), path, name: segments[segments.length - 1] ?? path }
+  }
+
+  try {
+    const url = new URL(raw)
+    const path = normalizeRepositoryPath(url.pathname)
+    if (!path) return null
+    const segments = path.split('/')
+    return { host: url.hostname.toLowerCase(), path, name: segments[segments.length - 1] ?? path }
+  } catch {
+    return null
+  }
+}
+
+function sameRepositoryUrl(left: RepositoryUrlIdentity | null, right: RepositoryUrlIdentity | null): boolean {
+  return Boolean(left && right && left.host === right.host && left.path.toLowerCase() === right.path.toLowerCase())
+}
+
+function repositoryUrlIdentities(repository: Partial<Pick<AutomationRepository, 'forgeUrl' | 'githubUrl'>>): RepositoryUrlIdentity[] {
+  return [
+    parseRepositoryUrl(repository.forgeUrl),
+    parseRepositoryUrl(repository.githubUrl),
+  ].filter((identity): identity is RepositoryUrlIdentity => Boolean(identity))
+}
+
+export function inferThreadRepositoryName(thread: ThreadRepositoryReference): string | null {
   return (
     extractTaggedRepoName(thread.title) ??
     extractWorktreeRepoName(thread.workingDirectory) ??
+    parseRepositoryUrl(thread.prUrl)?.name ??
     (thread.workingDirectory ? folderName(thread.workingDirectory) : null)
   )
 }
 
 export function threadBelongsToRepository(
-  thread: Pick<AgentThread, 'title' | 'workingDirectory'>,
-  repository: Pick<AutomationRepository, 'name' | 'localPath'>,
+  thread: ThreadRepositoryReference,
+  repository: Pick<AutomationRepository, 'name' | 'localPath'> & Partial<Pick<AutomationRepository, 'forgeUrl' | 'githubUrl'>>,
 ): boolean {
   const repoName = repository.name.trim().toLowerCase()
   const threadRepoName = inferThreadRepositoryName(thread)?.toLowerCase()
@@ -83,6 +154,11 @@ export function threadBelongsToRepository(
 
   const worktreeRepoName = extractWorktreeRepoName(thread.workingDirectory)?.toLowerCase()
   if (worktreeRepoName && worktreeRepoName === repoName) {
+    return true
+  }
+
+  const threadPrRepo = parseRepositoryUrl(thread.prUrl)
+  if (threadPrRepo && repositoryUrlIdentities(repository).some((repoUrl) => sameRepositoryUrl(threadPrRepo, repoUrl))) {
     return true
   }
 
