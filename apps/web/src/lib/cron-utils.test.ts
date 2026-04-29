@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { describeCron, getNextRunTime, normalizeCronExpression, validateCron } from './cron-utils'
+import { describeCron, formatRelativeTime, getNextRunTime, normalizeCronExpression, validateCron } from './cron-utils'
 
 describe('cron utils', () => {
   afterEach(() => {
@@ -92,5 +92,26 @@ describe('cron utils', () => {
 
     expect(getNextRunTime('*/5bar * * * *')).toBeNull()
     expect(getNextRunTime('0 9x * * *')).toBeNull()
+  })
+
+  it('does not round relative times up before the next hour boundary', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-25T10:00:00.000Z'))
+
+    expect(formatRelativeTime(new Date('2026-04-25T10:59:30.000Z'))).toBe('in 59m')
+  })
+
+  it('does not round relative times up before the next day boundary', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-25T10:00:00.000Z'))
+
+    expect(formatRelativeTime(new Date('2026-04-26T09:59:59.000Z'))).toBe('in 23h')
+  })
+
+  it('shows now for sub-minute future times', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date('2026-04-25T10:00:00.000Z'))
+
+    expect(formatRelativeTime(new Date('2026-04-25T10:00:59.000Z'))).toBe('now')
   })
 })
