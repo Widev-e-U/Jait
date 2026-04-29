@@ -139,6 +139,7 @@ export function ReviewableEditor({
         options={{
           readOnly,
           minimap: { enabled: false },
+          'semanticHighlighting.enabled': true,
           fontSize: 13,
           automaticLayout: true,
         }}

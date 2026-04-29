@@ -1321,17 +1321,14 @@ function App() {
   const [architectureRequest, setArchitectureRequest] = useState<{ key: number } | null>(null)
   const architectureRenderRequestIdRef = useRef<string | null>(null)
   const loadedArchitectureWorkspaceRef = useRef<string | null>(null)
-  const [terminalHeight, setTerminalHeight] = useState(240)
+  const defaultTerminalHeight = 360
+  const [terminalHeight, setTerminalHeight] = useState(defaultTerminalHeight)
   const [terminalFullscreen, setTerminalFullscreen] = useState(false)
-  const terminalHeightBeforeFullscreenRef = useRef(240)
+  const terminalHeightBeforeFullscreenRef = useRef(defaultTerminalHeight)
   const [terminalColumnWidth, setTerminalColumnWidth] = useState(480)
-  const [_chatWidth, _setChatWidth] = useState<number | null>(() => {
-    if (typeof window === 'undefined') return null
-    const raw = window.localStorage.getItem('jait:chatPanelWidth')
-    const parsed = raw ? Number.parseInt(raw, 10) : Number.NaN
-    return Number.isFinite(parsed) ? parsed : null
-  })
-  void _chatWidth; void _setChatWidth // TODO: remove when chat resize is wired
+  const [chatMeasuredWidth, setChatMeasuredWidth] = useState<number | null>(null)
+  const chatPanelRef = useRef<HTMLDivElement | null>(null)
+  const chatPanelResizeObserverRef = useRef<ResizeObserver | null>(null)
   const [floatingSSPos, setFloatingSSPos] = useState<{ x: number; y: number }>({ x: -1, y: -1 })
   const [floatingSSSize, setFloatingSSSize] = useState<{ w: number; h: number }>({ w: 420, h: 320 })
   const floatingDragRef = useRef<{ pointerId: number; startX: number; startY: number; posX: number; posY: number } | null>(null)
@@ -1513,6 +1510,35 @@ function App() {
   const [fsWatcherVersion, setFsWatcherVersion] = useState(0)
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
+  const shouldUseCompactDeveloperComposer =
+    viewMode === 'developer' &&
+    currentView === 'chat' &&
+    showDesktopWorkspace &&
+    !chatCollapsed
+  const compactDeveloperComposer = isMobile || (shouldUseCompactDeveloperComposer && (chatMeasuredWidth ?? 640) < 560)
+  const setChatPanelElement = useCallback((el: HTMLDivElement | null) => {
+    chatPanelResizeObserverRef.current?.disconnect()
+    chatPanelResizeObserverRef.current = null
+    chatPanelRef.current = el
+
+    if (!el || typeof ResizeObserver === 'undefined') {
+      setChatMeasuredWidth(null)
+      return
+    }
+
+    const updateWidth = () => {
+      setChatMeasuredWidth(Math.round(el.getBoundingClientRect().width))
+    }
+
+    updateWidth()
+    const observer = new ResizeObserver(updateWidth)
+    observer.observe(el)
+    chatPanelResizeObserverRef.current = observer
+  }, [])
+
+  useEffect(() => {
+    return () => chatPanelResizeObserverRef.current?.disconnect()
+  }, [])
   const showWorkspaceEditorPanel = useCallback(() => {
     if (isMobile) {
       const nextLayout = showMobileWorkspacePane('editor')
@@ -2376,7 +2402,7 @@ function App() {
   }, [cancelRequest])
 
   // ── Unified workspace UI state (single DB row) ─────────────────────
-  const [workspaceUI, setWorkspaceUI] = useWorkspaceState<WorkspaceUIState>(
+  const [workspaceUI, setWorkspaceUI, loadingWorkspaceUI] = useWorkspaceState<WorkspaceUIState>(
     activeWorkspaceId, 'workspace.ui', token,
   )
   const workspaceUIRef = useRef<WorkspaceUIState | null>(null)
@@ -2407,7 +2433,7 @@ function App() {
     updateWorkspaceUI('preview', v)
   }, [updateWorkspaceUI])
 
-  const loadingWorkspaceLayout = !workspaceUI && !!activeWorkspaceId && !!token
+  const loadingWorkspaceLayout = loadingWorkspaceUI && !!activeWorkspaceId && !!token
   const setSavedWorkspaceLayout = useCallback((v: { tree: boolean; editor: boolean } | null, options?: { immediate?: boolean }) => {
     updateWorkspaceUI('layout', v, options)
   }, [updateWorkspaceUI])
@@ -2451,6 +2477,8 @@ function App() {
   const [workspaceTabsState, setWorkspaceTabsState] = useState<WorkspaceTabsState | null>(null)
   const [workspaceStateReady, setWorkspaceStateReady] = useState(false)
   const [managerRepoStateReady, setManagerRepoStateReady] = useState(false)
+  const workspaceUiRestoreKeyRef = useRef<string | null>(null)
+  const workspaceSurfaceFallbackKeyRef = useRef<string | null>(null)
 
   const normalizedSavedManagerSelectedRepo = useMemo(
     () => normalizePersistedSelectedRepo(savedManagerSelectedRepo),
@@ -2460,6 +2488,8 @@ function App() {
   useEffect(() => {
     setWorkspaceTabsState(null)
     setWorkspaceStateReady(false)
+    workspaceUiRestoreKeyRef.current = null
+    workspaceSurfaceFallbackKeyRef.current = null
   }, [activeWorkspaceId])
 
   useEffect(() => {
@@ -2575,52 +2605,243 @@ function App() {
     if (!pending) {
       // No stashed WS state to apply — if the workspace record is loaded,
       // we know there's nothing deferred and can unblock persisting.
-      if (activeWorkspaceRecord) setWorkspaceStateReady(true)
+      if (activeWorkspaceRecord && !loadingWorkspaceUI && !workspaceUI) setWorkspaceStateReady(true)
       return
     }
     if (!activeWorkspaceRecord) return
+    if (!activeSessionId) return
     if (pending.workspaceId !== activeWorkspaceId) return
 
     const { ui } = pending
+    let cancelled = false
 
-    // Apply workspace panel
-    const wp = ui.panel
-    if (wp) {
-      const savedPath = wp.remotePath?.trim() || null
-      const recordedPath = activeWorkspaceRecord.rootPath?.trim() || null
-      const restoredPath = recordedPath || savedPath
-      if (restoredPath) {
-        suppressNextUiSync('workspace.panel')
-        const pathMatchesRecord = Boolean(savedPath && recordedPath && savedPath === recordedPath)
+    const applyPendingWorkspaceUI = async () => {
+      // Apply workspace panel
+      const wp = ui.panel
+      if (wp) {
+        const savedPath = wp.remotePath?.trim() || null
+        const recordedPath = activeWorkspaceRecord.rootPath?.trim() || null
+        const restoredPath = recordedPath || savedPath
+        if (restoredPath) {
+          const requestedNodeId = activeWorkspaceRecord.nodeId ?? wp.nodeId ?? 'gateway'
+          suppressNextUiSync('workspace.panel')
+          showWorkspaceRef.current = wp.open === true
+          setShowWorkspace(wp.open === true)
+
+          try {
+            const response = activeSessionId
+              ? await fetch(`${API_URL}/api/workspace/open`, {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
+                })
+              : null
+            if (response && !response.ok) throw new Error('Failed to open workspace')
+            const data = response
+              ? await response.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
+              : null
+            if (cancelled) return
+            setActiveWorkspace({
+              surfaceId: data?.surfaceId ?? wp.surfaceId ?? '',
+              workspaceRoot: data?.workspaceRoot ?? restoredPath,
+              nodeId: data?.nodeId || requestedNodeId,
+            })
+          } catch (error) {
+            if (cancelled) return
+            console.error('Failed to restore workspace editor:', error)
+            setActiveWorkspace({
+              surfaceId: wp.surfaceId ?? '',
+              workspaceRoot: restoredPath,
+              nodeId: requestedNodeId,
+            })
+          }
+        }
+      }
+
+      // Re-apply workspace tabs — the reset effect
+      // (setWorkspaceTabsState(null) on activeWorkspaceId change) may have
+      // wiped the value that handleFullState set if the session state loaded
+      // (changing activeWorkspaceId) after the WS push arrived.
+      if (ui.tabs) setWorkspaceTabsState(ui.tabs)
+
+      // Apply dev preview
+      const dp = ui.preview
+      if (dp) {
+        const nextTarget = getPersistablePreviewTarget(dp.target)
+        if (nextTarget) setDevPreviewTarget(nextTarget)
+        if (dp.open && ui.panel?.open === true && nextTarget) {
+          routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
+        }
+      }
+
+      pendingWsWorkspaceStateRef.current = null
+      if (!cancelled) setWorkspaceStateReady(true)
+    }
+
+    void applyPendingWorkspaceUI()
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeSessionId, activeWorkspaceRecord, activeWorkspaceId, loadingWorkspaceUI, pendingWsVersion, routePreviewToWorkspace, workspaceUI]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!activeWorkspaceId || !token || !activeSessionId) return
+    if (loadingWorkspaceUI) return
+    if (!activeWorkspaceRecord) return
+    if (pendingWsWorkspaceStateRef.current?.workspaceId === activeWorkspaceId) return
+
+    if (!workspaceUI) {
+      setWorkspaceStateReady(true)
+      return
+    }
+
+    const restoreKey = `${activeWorkspaceId}:${JSON.stringify(workspaceUI)}`
+    if (workspaceUiRestoreKeyRef.current === restoreKey) {
+      if (!workspaceStateReady) setWorkspaceStateReady(true)
+      return
+    }
+    workspaceUiRestoreKeyRef.current = restoreKey
+
+    let cancelled = false
+
+    const applyWorkspaceUI = async () => {
+      const ui = workspaceUI
+
+      if (ui.layout) {
+        suppressNextUiSync('workspace.layout')
+        const hydratedLayout = normalizeHydratedWorkspaceLayout({
+          tree: ui.layout.tree !== false,
+          editor: ui.layout.editor !== false,
+        }, isMobile)
+        setShowWorkspaceTree(hydratedLayout.tree)
+        setShowWorkspaceEditor(hydratedLayout.editor)
+      }
+
+      if (ui.tabs) setWorkspaceTabsState(ui.tabs)
+
+      const wp = ui.panel
+      if (wp) {
+        const savedPath = wp.remotePath?.trim() || null
+        const recordedPath = activeWorkspaceRecord.rootPath?.trim() || null
+        const restoredPath = recordedPath || savedPath
+        const shouldOpen = wp.open === true
+        showWorkspaceRef.current = shouldOpen
+        setShowWorkspace(shouldOpen)
+
+        if (restoredPath) {
+          const requestedNodeId = activeWorkspaceRecord.nodeId ?? wp.nodeId ?? 'gateway'
+          suppressNextUiSync('workspace.panel')
+          try {
+            const response = await fetch(`${API_URL}/api/workspace/open`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
+            })
+            if (!response.ok) throw new Error('Failed to open workspace')
+            const data = await response.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
+            if (cancelled) return
+            setActiveWorkspace({
+              surfaceId: data.surfaceId,
+              workspaceRoot: data.workspaceRoot,
+              nodeId: data.nodeId || requestedNodeId,
+            })
+          } catch (error) {
+            if (cancelled) return
+            console.error('Failed to restore workspace editor:', error)
+            setActiveWorkspace({
+              surfaceId: wp.surfaceId ?? '',
+              workspaceRoot: restoredPath,
+              nodeId: requestedNodeId,
+            })
+          }
+        }
+      } else {
+        showWorkspaceRef.current = false
+        setShowWorkspace(false)
+      }
+
+      const dp = ui.preview
+      if (dp) {
+        const nextTarget = getPersistablePreviewTarget(dp.target)
+        if (nextTarget) setDevPreviewTarget(nextTarget)
+        if (dp.open && ui.panel?.open === true && nextTarget) {
+          routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
+        }
+      }
+
+      if (!cancelled) setWorkspaceStateReady(true)
+    }
+
+    void applyWorkspaceUI()
+
+    return () => {
+      cancelled = true
+    }
+  }, [
+    activeSessionId,
+    activeWorkspaceId,
+    activeWorkspaceRecord,
+    isMobile,
+    loadingWorkspaceUI,
+    routePreviewToWorkspace,
+    suppressNextUiSync,
+    token,
+    workspaceStateReady,
+    workspaceUI,
+  ])
+
+  useEffect(() => {
+    if (!activeWorkspaceId || !activeSessionId || !activeWorkspaceRecord?.rootPath) return
+    if (activeWorkspace) return
+    if (!showWorkspace) return
+    if (!workspaceStateReady && loadingWorkspaceUI) return
+
+    const workspaceRoot = activeWorkspaceRecord.rootPath.trim()
+    if (!workspaceRoot) return
+    const requestedNodeId = activeWorkspaceRecord.nodeId ?? 'gateway'
+    const restoreKey = `${activeWorkspaceId}:${activeSessionId}:${workspaceRoot}:${requestedNodeId}`
+    if (workspaceSurfaceFallbackKeyRef.current === restoreKey) return
+    workspaceSurfaceFallbackKeyRef.current = restoreKey
+
+    let cancelled = false
+    void fetch(`${API_URL}/api/workspace/open`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ path: workspaceRoot, sessionId: activeSessionId, nodeId: requestedNodeId }),
+    })
+      .then(async (response) => {
+        if (!response.ok) throw new Error('Failed to open workspace')
+        return response.json() as Promise<{ surfaceId: string; workspaceRoot: string; nodeId?: string }>
+      })
+      .then((data) => {
+        if (cancelled) return
         setActiveWorkspace({
-          surfaceId: pathMatchesRecord ? (wp.surfaceId ?? '') : '',
-          workspaceRoot: restoredPath,
-          nodeId: activeWorkspaceRecord.nodeId ?? wp.nodeId,
+          surfaceId: data.surfaceId,
+          workspaceRoot: data.workspaceRoot,
+          nodeId: data.nodeId || requestedNodeId,
         })
-        showWorkspaceRef.current = wp.open === true
-        setShowWorkspace(wp.open === true)
-      }
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error('Failed to recover workspace editor surface:', error)
+          workspaceSurfaceFallbackKeyRef.current = null
+        }
+      })
+
+    return () => {
+      cancelled = true
     }
-
-    // Re-apply workspace tabs — the reset effect
-    // (setWorkspaceTabsState(null) on activeWorkspaceId change) may have
-    // wiped the value that handleFullState set if the session state loaded
-    // (changing activeWorkspaceId) after the WS push arrived.
-    if (ui.tabs) setWorkspaceTabsState(ui.tabs)
-
-    // Apply dev preview
-    const dp = ui.preview
-    if (dp) {
-      const nextTarget = getPersistablePreviewTarget(dp.target)
-      if (nextTarget) setDevPreviewTarget(nextTarget)
-      if (dp.open && ui.panel?.open === true && nextTarget) {
-        routePreviewToWorkspace(nextTarget, dp.workspaceRoot ?? null)
-      }
-    }
-
-    pendingWsWorkspaceStateRef.current = null
-    setWorkspaceStateReady(true)
-  }, [activeWorkspaceRecord, activeWorkspaceId, pendingWsVersion, routePreviewToWorkspace]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [
+    activeSessionId,
+    activeWorkspace,
+    activeWorkspaceId,
+    activeWorkspaceRecord?.nodeId,
+    activeWorkspaceRecord?.rootPath,
+    loadingWorkspaceUI,
+    showWorkspace,
+    workspaceStateReady,
+  ])
 
   const mobileWorkspaceInitKeyRef = useRef<string | null>(null)
   useEffect(() => {
@@ -3084,7 +3305,7 @@ function App() {
   }, [activeSessionId, sendUIState, setSavedWorkspaceLayout])
 
   useEffect(() => {
-    if (activeWorkspaceId && token && loadingWorkspaceLayout) return
+    if (activeWorkspaceId && token && (!workspaceStateReady || loadingWorkspaceLayout)) return
     const layout = { tree: showWorkspaceTree, editor: showWorkspaceEditor }
     const serialized = JSON.stringify(layout)
     if (serialized === prevWorkspaceLayoutPayloadRef.current) return
@@ -3094,7 +3315,7 @@ function App() {
       if (consumeSuppressedUiSync('workspace.layout')) return
       sendUIState('workspace.layout', layout, activeSessionId)
     }
-  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token, activeSessionId, consumeSuppressedUiSync, sendUIState])
+  }, [showWorkspaceTree, showWorkspaceEditor, setSavedWorkspaceLayout, activeWorkspaceId, loadingWorkspaceLayout, token, activeSessionId, consumeSuppressedUiSync, sendUIState, workspaceStateReady])
 
   const prevChatModePayloadRef = useRef<string | null>(null)
   const prevFooterMenuPayloadRef = useRef<string | null>(null)
@@ -5523,13 +5744,24 @@ function App() {
   // ── Memoised edit-composer bag (prevents every Message from re-rendering) ──
   const handleVoiceStop = useCallback(() => { void stopRecordingAndTranscribe() }, [stopRecordingAndTranscribe])
   const handleFolderPickerOpen = useCallback(() => { automation.setFolderPickerOpen(true) }, [automation.setFolderPickerOpen])
+  const developerChatPanelStyle: React.CSSProperties = chatCollapsed
+    ? {
+        flex: '0 0 0px',
+        width: 0,
+        minWidth: 0,
+        visibility: 'hidden',
+      }
+    : {
+        flex: '1 1 0%',
+        minWidth: 0,
+      }
   const developerThreadToolbarRepoPicker = sendTarget === 'thread' ? (
     <ManagerRepoPicker
       repositories={automation.repositories}
       selectedRepo={threadTargetRepo}
       disabled={automation.creating}
-      compact={isMobile}
-      className={isMobile ? 'w-full' : ''}
+      compact={compactDeveloperComposer}
+      className={compactDeveloperComposer ? 'w-full' : ''}
       getRuntimeInfo={automation.getRuntimeInfoForRepository}
       onSelect={automation.setSelectedRepoId}
       onAddRepository={handleFolderPickerOpen}
@@ -5584,9 +5816,9 @@ function App() {
     </div>
   ) : null
   const developerComposerControlRow = viewMode === 'developer' ? (
-    <div className={`${isMobile ? 'overflow-hidden px-0.5' : 'overflow-x-auto px-1'}`}>
-      <div className={`${isMobile ? 'flex w-full min-w-0 items-center gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
-        <div className={`${isMobile ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>
+    <div className={`${compactDeveloperComposer ? 'overflow-hidden px-0.5' : 'overflow-x-auto px-1'}`}>
+      <div className={`${compactDeveloperComposer ? 'flex w-full min-w-0 items-center gap-2' : 'grid min-w-max grid-cols-[1fr_auto_1fr] gap-3 whitespace-nowrap'} items-center`}>
+        <div className={`${compactDeveloperComposer ? 'flex min-w-0 flex-1 items-center gap-1 overflow-hidden' : 'flex min-w-0 flex-1 items-center gap-2'}`}>
           {sendTarget === 'thread' ? (
             developerThreadToolbarRepoPicker
           ) : (
@@ -5602,7 +5834,7 @@ function App() {
             />
           )}
           {approveAllInSession && (
-            isMobile ? (
+            compactDeveloperComposer ? (
               <button
                 type="button"
                 onClick={handleClearApproveAll}
@@ -5627,7 +5859,7 @@ function App() {
             )
           )}
         </div>
-        {!isMobile && (
+        {!compactDeveloperComposer && (
           <div className="justify-self-center">
             <SendTargetSelector
               target={sendTarget}
@@ -5636,7 +5868,7 @@ function App() {
             />
           </div>
         )}
-        <div className={`${isMobile ? 'ml-auto flex shrink-0 items-center gap-2' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
+        <div className={`${compactDeveloperComposer ? 'ml-auto flex shrink-0 items-center gap-2' : 'flex shrink-0 items-center justify-self-end gap-2'}`}>
           {sendTarget !== 'thread' && (
             <button
               type="button"
@@ -5646,17 +5878,18 @@ function App() {
               New chat
             </button>
           )}
-          {isMobile && (
+          {compactDeveloperComposer && (
             <div className="shrink-0">
               <SendTargetSelector
                 target={sendTarget}
                 onChange={setSendTarget}
                 disabled={developerChatUiState.disableSendTargetSelector}
+                compact
               />
             </div>
           )}
           {remainingPrompts !== null && (
-            <span className={`${isMobile ? 'hidden' : 'shrink-0'} text-xs text-muted-foreground`}>{remainingPrompts} remaining</span>
+            <span className={`${compactDeveloperComposer ? 'hidden' : 'shrink-0'} text-xs text-muted-foreground`}>{remainingPrompts} remaining</span>
           )}
         </div>
       </div>
@@ -7267,13 +7500,9 @@ function App() {
               </div>
             ) : developerChatHydrating ? (
               <div
-                className="flex flex-col min-h-0 min-w-0 overflow-hidden"
-                style={{
-                  flex: chatCollapsed ? '0 0 0px' : '1 1 0%',
-                  width: chatCollapsed ? 0 : undefined,
-                  minWidth: chatCollapsed ? 0 : undefined,
-                  visibility: chatCollapsed ? 'hidden' : undefined,
-                }}
+                ref={setChatPanelElement}
+                className="relative flex flex-col min-h-0 min-w-0 overflow-hidden"
+                style={developerChatPanelStyle}
               >
                 {!chatCollapsed && (
                   <Conversation
@@ -7290,14 +7519,11 @@ function App() {
               </div>
             ) : !hasMessages ? (
               <div
-                className={`flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'} ${isMobile ? 'pt-12' : ''}`}
-                style={{
-                  flex: chatCollapsed ? '0 0 0px' : undefined,
-                  width: chatCollapsed ? 0 : undefined,
-                  minWidth: chatCollapsed ? 0 : undefined,
-                  visibility: chatCollapsed ? 'hidden' : undefined,
-                }}
-              >                <div className="w-full max-w-3xl space-y-8">
+                ref={setChatPanelElement}
+                className={`relative flex-1 min-w-0 flex flex-col items-center justify-center overflow-hidden ${chatCollapsed ? '' : 'px-4'} ${isMobile ? 'pt-12' : ''}`}
+                style={developerChatPanelStyle}
+              >
+                <div className="w-full max-w-3xl space-y-8">
                   <div className="text-center">
                     <h1 className="text-3xl font-semibold tracking-tight">Jait</h1>
                     <p className="text-base text-muted-foreground mt-1">Just Another Intelligent Tool</p>
@@ -7361,13 +7587,9 @@ function App() {
               </div>
             ) : (
               <div
-                className="flex flex-col min-h-0 min-w-0 overflow-hidden"
-                style={{
-                  flex: chatCollapsed ? '0 0 0px' : '1 1 0%',
-                  width: chatCollapsed ? 0 : undefined,
-                  minWidth: chatCollapsed ? 0 : undefined,
-                  visibility: chatCollapsed ? 'hidden' : undefined,
-                }}
+                ref={setChatPanelElement}
+                className="relative flex flex-col min-h-0 min-w-0 overflow-hidden"
+                style={developerChatPanelStyle}
               >
 
                 {!chatCollapsed && (<>

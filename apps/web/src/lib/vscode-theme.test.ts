@@ -1,4 +1,4 @@
-import { buildStoredVsCodeTheme } from './vscode-theme'
+import { BUILT_IN_DARK_PLUS_MONACO_THEME_NAME, buildStoredVsCodeTheme, registerBuiltInMonacoThemes, type MonacoStandaloneThemeData } from './vscode-theme'
 
 describe('buildStoredVsCodeTheme', () => {
   it('parses commented theme JSON and flattens token scopes', () => {
@@ -57,5 +57,32 @@ describe('buildStoredVsCodeTheme', () => {
 
     expect(theme.colorMode).toBe('light')
     expect(theme.monacoThemeData.base).toBe('vs')
+  })
+})
+
+describe('registerBuiltInMonacoThemes', () => {
+  it('registers the bundled VS Code Dark Plus theme for Monaco', () => {
+    const defineTheme = vi.fn()
+
+    registerBuiltInMonacoThemes({ editor: { defineTheme } })
+
+    expect(defineTheme).toHaveBeenCalledWith(BUILT_IN_DARK_PLUS_MONACO_THEME_NAME, expect.objectContaining({
+      base: 'vs-dark',
+      inherit: false,
+      colors: expect.objectContaining({
+        'editor.background': '#1E1E1E',
+        'editor.foreground': '#D4D4D4',
+      }),
+    }))
+
+    const theme = defineTheme.mock.calls[0]?.[1] as MonacoStandaloneThemeData
+    expect(theme.rules).toEqual(expect.arrayContaining([
+      { token: 'comment', foreground: '6a9955' },
+      { token: 'entity.name.function', foreground: 'dcdcaa' },
+      { token: 'identifier.function', foreground: 'DCDCAA' },
+      { token: 'function', foreground: 'DCDCAA' },
+      { token: 'class', foreground: '4EC9B0' },
+      { token: 'keyword.control', foreground: '569cd6' },
+    ]))
   })
 })

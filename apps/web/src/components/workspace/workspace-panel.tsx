@@ -311,9 +311,15 @@ async function remoteScanDir(dirPath: string, surfaceId?: string | null): Promis
 }
 
 async function remoteReadFile(filePath: string, surfaceId?: string | null): Promise<string> {
-  let url = `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}`
-  if (surfaceId) url += `&surfaceId=${encodeURIComponent(surfaceId)}`
-  const res = await fetch(url)
+  const read = async (targetSurfaceId?: string | null) => {
+    let url = `${API_URL}/api/workspace/read?path=${encodeURIComponent(filePath)}`
+    if (targetSurfaceId) url += `&surfaceId=${encodeURIComponent(targetSurfaceId)}`
+    return fetch(url)
+  }
+  let res = await read(surfaceId)
+  if (!res.ok && surfaceId) {
+    res = await read()
+  }
   if (!res.ok) throw new Error(`Failed to read file: ${res.statusText}`)
   const data = (await res.json()) as { content: string; size: number }
   if (data.size > 2 * 1024 * 1024) return '// File too large to preview'
@@ -1136,6 +1142,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const rootDirHandle = useRef<FileSystemDirectoryHandle | null>(null)
   /** When non-null, we're in remote (server-backed) mode */
   const [remoteRoot, setRemoteRoot] = useState<string | null>(null)
+  const [remoteTreeLoading, setRemoteTreeLoading] = useState(false)
+  const [remoteTreeError, setRemoteTreeError] = useState<string | null>(null)
+  const lastRemoteOpenKeyRef = useRef<string | null>(null)
   /** Ref to the desktop tab scroll container — used to auto-reveal the active tab */
   const tabScrollRef = useRef<HTMLDivElement | null>(null)
 
@@ -1146,7 +1155,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // Underestimating it lets the workspace panel steal space from the chat column,
   // which can clip sidebar/chat actions at narrower desktop widths.
   const sidebarWidth = 304
-  const minChatWidth = 320 // minimum chat column width to prevent squishing
+  const minChatWidth = 90 // compact composer layout keeps the chat usable when slim
   const minEditorWidth = 200 // minimum editor pane width when tree is visible
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
 
@@ -2400,8 +2409,18 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   /* ---- Open remote (server-backed) workspace ---- */
   const handleOpenRemoteWorkspace = useCallback(async (rootPath: string) => {
+    const openKey = `${rootPath}::${surfaceId ?? ''}`
+    lastRemoteOpenKeyRef.current = openKey
+    setRemoteTreeLoading(true)
+    setRemoteTreeError(null)
     try {
-      const children = await remoteScanDir(rootPath, surfaceId)
+      let children: LazyNode[]
+      try {
+        children = await remoteScanDir(rootPath, surfaceId)
+      } catch (err) {
+        if (!surfaceId) throw err
+        children = await remoteScanDir(rootPath)
+      }
       rootDirHandle.current = null // no local handle in remote mode
       setRemoteRoot(rootPath)
       setLazyTree(children)
@@ -2410,6 +2429,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       setPreviewContent(null)
     } catch (err) {
       console.error('Failed to open remote workspace:', err)
+      setRemoteRoot(rootPath)
+      setLazyTree([])
+      setRemoteTreeError(err instanceof Error ? err.message : 'Failed to open workspace')
+    } finally {
+      setRemoteTreeLoading(false)
     }
   }, [surfaceId])
 
@@ -2418,12 +2442,17 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (!autoOpenRemotePath) {
       // Clear stale remote root when workspace is deselected / switched
       if (remoteRoot) setRemoteRoot(null)
+      lastRemoteOpenKeyRef.current = null
+      setRemoteTreeLoading(false)
+      setRemoteTreeError(null)
       return
     }
     // Re-open if the root changed, or if we have the right root but the tree is empty (failed/stale load)
     if (remoteRoot === autoOpenRemotePath && lazyTree.length > 0) return
+    const openKey = `${autoOpenRemotePath}::${surfaceId ?? ''}`
+    if (lastRemoteOpenKeyRef.current === openKey && (remoteTreeLoading || remoteRoot === autoOpenRemotePath)) return
     handleOpenRemoteWorkspace(autoOpenRemotePath)
-  }, [autoOpenRemotePath, handleOpenRemoteWorkspace, lazyTree.length]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [autoOpenRemotePath, handleOpenRemoteWorkspace, lazyTree.length, remoteRoot, remoteTreeLoading, surfaceId])
 
   /* ---- Read file by path (for @ mention selection) ---- */
   const handleReadFileByPath = useCallback(async (path: string): Promise<WorkspaceFile | null> => {
@@ -4826,7 +4855,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
               {!hasNativeTree && !hasExtFiles && (
                 <div className="p-3 flex flex-col items-center gap-2">
-                  <p className="text-sm text-muted-foreground text-center">No files loaded yet. The workspace opens automatically when the agent works with files.</p>
+                  <p className="text-sm text-muted-foreground text-center">
+                    {remoteTreeLoading
+                      ? 'Loading workspace files...'
+                      : remoteTreeError
+                        ? `Could not load files: ${remoteTreeError}`
+                        : 'No files loaded yet. The workspace opens automatically when the agent works with files.'}
+                  </p>
                 </div>
               )}
             </div>
@@ -4986,6 +5021,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   renderSideBySide={false}
                   options={{
                     minimap: { enabled: false },
+                    'semanticHighlighting.enabled': true,
                     lineNumbers: 'on',
                     wordWrap: 'on',
                     scrollBeyondLastLine: false,
@@ -5415,7 +5451,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
             {!hasNativeTree && !hasExtFiles && (
               <div className="p-3 flex flex-col items-center gap-2">
-                <p className="text-xs text-muted-foreground">No files loaded yet. The workspace opens automatically when the agent works with files.</p>
+                <p className="text-xs text-muted-foreground">
+                  {remoteTreeLoading
+                    ? 'Loading workspace files...'
+                    : remoteTreeError
+                      ? `Could not load files: ${remoteTreeError}`
+                      : 'No files loaded yet. The workspace opens automatically when the agent works with files.'}
+                </p>
               </div>
             )}
           </div>
@@ -5861,6 +5903,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             options={{
               readOnly: true,
               minimap: { enabled: false },
+              'semanticHighlighting.enabled': true,
               fontSize: 13,
               automaticLayout: true,
             }}

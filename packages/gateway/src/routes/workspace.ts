@@ -187,11 +187,18 @@ async function runWorkspaceSearch(
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
  */
-function findFsSurface(registry: SurfaceRegistry, surfaceId?: string): AnyFsSurface | null {
+function findFsSurface(registry: SurfaceRegistry, surfaceId?: string, targetPath?: string): AnyFsSurface | null {
   if (surfaceId) {
     const s = registry.getSurface(surfaceId);
     if (s && (s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running") return s;
-    return null;
+    if (!targetPath) return null;
+  }
+  if (targetPath) {
+    for (const s of registry.listSurfaces()) {
+      if (!((s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running")) continue;
+      if (s.isPathAllowed(targetPath)) return s;
+    }
+    if (surfaceId) return null;
   }
   // Find the first running filesystem surface
   for (const s of registry.listSurfaces()) {
@@ -205,7 +212,7 @@ function findFsSurfaceWithBackup(
   filePath: string,
   preferredSurfaceId?: string,
 ): AnyFsSurface | null {
-  const preferred = findFsSurface(registry, preferredSurfaceId);
+  const preferred = findFsSurface(registry, preferredSurfaceId, filePath);
   if (preferred?.hasBackup(filePath)) return preferred;
 
   for (const s of registry.listSurfaces()) {
@@ -220,7 +227,7 @@ function findFsSurfaceWithBackup(
 export function registerWorkspaceRoutes(
   app: FastifyInstance,
   surfaceRegistry: SurfaceRegistry,
-  _sessionState?: SessionStateService,
+  sessionState?: SessionStateService,
   sessionService?: SessionService,
   ws?: WsControlPlane,
   workspaceService?: WorkspaceService,
@@ -345,8 +352,27 @@ export function registerWorkspaceRoutes(
       if (workspaceId) workspaceService?.touch(workspaceId);
     } catch { /* best effort */ }
 
+    const panelState = { open: true, remotePath: workspacePath, surfaceId, nodeId };
+    if (sessionId && sessionState) {
+      sessionState.set(sessionId, { "workspace.panel": panelState });
+    }
     if (workspaceId && workspaceState) {
-      workspaceState.set(workspaceId, { "workspace.panel": { open: true, remotePath: workspacePath, surfaceId, nodeId } });
+      const existing = workspaceState.get(workspaceId, ["workspace.ui"])["workspace.ui"] as {
+        panel?: unknown;
+        tabs?: unknown;
+        layout?: unknown;
+        terminal?: unknown;
+        preview?: unknown;
+      } | null | undefined;
+      workspaceState.set(workspaceId, {
+        "workspace.ui": {
+          panel: panelState,
+          tabs: existing?.tabs ?? null,
+          layout: existing?.layout ?? null,
+          terminal: existing?.terminal ?? null,
+          preview: existing?.preview ?? null,
+        },
+      });
     }
 
     return { surfaceId, workspaceRoot: workspacePath, nodeId, workspaceId };
@@ -355,7 +381,7 @@ export function registerWorkspaceRoutes(
   // GET /api/workspace/list?path=&surfaceId= — list directory entries
   app.get("/api/workspace/list", async (req, reply) => {
     const { path: dirPath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId);
+    const fs = findFsSurface(surfaceRegistry, surfaceId, dirPath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -377,7 +403,7 @@ export function registerWorkspaceRoutes(
   // GET /api/workspace/read?path=&surfaceId= — read a file
   app.get("/api/workspace/read", async (req, reply) => {
     const { path: filePath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId);
+    const fs = findFsSurface(surfaceRegistry, surfaceId, filePath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -436,7 +462,7 @@ export function registerWorkspaceRoutes(
   // GET /api/workspace/stat?path=&surfaceId= — stat a file or directory
   app.get("/api/workspace/stat", async (req, reply) => {
     const { path: targetPath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId);
+    const fs = findFsSurface(surfaceRegistry, surfaceId, targetPath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -485,7 +511,7 @@ export function registerWorkspaceRoutes(
   // GET /api/workspace/backup?path= — get the original (backed-up) content of a file
   app.get("/api/workspace/backup", async (req, reply) => {
     const { path: filePath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId);
+    const fs = findFsSurface(surfaceRegistry, surfaceId, filePath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -524,7 +550,7 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId, filePath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -586,7 +612,7 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId, targetPath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -620,7 +646,7 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "newName must not contain path separators" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId, targetPath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -646,7 +672,7 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "srcPath and destDir are required" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId, srcPath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -671,7 +697,7 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId, filePath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -696,7 +722,7 @@ export function registerWorkspaceRoutes(
       return reply.status(400).send({ error: "VALIDATION_ERROR", message: "path is required" });
     }
 
-    const fs = findFsSurface(surfaceRegistry, body?.surfaceId);
+    const fs = findFsSurface(surfaceRegistry, body?.surfaceId, dirPath);
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }

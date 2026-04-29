@@ -163,6 +163,7 @@ export function DetachedTabView({ detachedTabId }: { detachedTabId: string }) {
             onChange={(value) => setFileContent(value ?? '')}
             options={{
               minimap: { enabled: false },
+              'semanticHighlighting.enabled': true,
               fontSize: 13,
               automaticLayout: true,
             }}

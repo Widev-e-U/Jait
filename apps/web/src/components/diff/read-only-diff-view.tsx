@@ -60,6 +60,7 @@ export function ReadOnlyDiffView({
     readOnly: true,
     renderSideBySide,
     minimap: { enabled: false },
+    'semanticHighlighting.enabled': true,
     fontSize: 13,
     automaticLayout: true,
     scrollBeyondLastLine: false,

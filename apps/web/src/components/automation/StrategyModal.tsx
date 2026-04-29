@@ -155,6 +155,7 @@ export function StrategyModal({ open, onOpenChange, repoId, repoName }: Strategy
                 onChange={(value) => setStrategy(value ?? '')}
                 options={{
                   minimap: { enabled: false },
+                  'semanticHighlighting.enabled': true,
                   lineNumbers: 'off',
                   wordWrap: 'on',
                   fontSize: 13,

@@ -15,6 +15,7 @@ import { openDatabase, migrateDatabase } from "../db/index.js";
 import { SessionService } from "../services/sessions.js";
 import { SessionStateService } from "../services/session-state.js";
 import { WorkspaceService } from "../services/workspaces.js";
+import { WorkspaceStateService } from "../services/workspace-state.js";
 import { SurfaceRegistry, FileSystemSurfaceFactory } from "../surfaces/index.js";
 import { WsControlPlane } from "../ws.js";
 import { UserService } from "../services/users.js";
@@ -34,6 +35,7 @@ describe("POST /api/workspace/open", () => {
   let surfaceRegistry: SurfaceRegistry;
   let sessions: SessionService;
   let workspaces: WorkspaceService;
+  let workspaceState: WorkspaceStateService;
   let users: UserService;
   let writableTestRoot: string;
   let writableTestFile: string;
@@ -47,6 +49,7 @@ describe("POST /api/workspace/open", () => {
     sessionState = new SessionStateService(db);
     users = new UserService(db);
     workspaces = new WorkspaceService(db);
+    workspaceState = new WorkspaceStateService(db);
     surfaceRegistry = new SurfaceRegistry();
     surfaceRegistry.register(new FileSystemSurfaceFactory());
 
@@ -82,6 +85,7 @@ describe("POST /api/workspace/open", () => {
       workspaceService: workspaces,
       surfaceRegistry,
       sessionState,
+      workspaceState,
       ws,
     });
 
@@ -150,6 +154,48 @@ describe("POST /api/workspace/open", () => {
       open: true,
       remotePath: TEST_DIR,
       surfaceId,
+      nodeId: "gateway",
+    });
+  });
+
+  it("should persist unified workspace UI state for reload restore", async () => {
+    const user = users.createUser(`workspace-state-${Date.now()}`, "password123");
+    const workspace = workspaces.create({
+      userId: user.id,
+      title: "jait",
+      rootPath: TEST_DIR,
+      nodeId: "gateway",
+    });
+    const session = sessions.create({
+      userId: user.id,
+      workspaceId: workspace.id,
+      workspacePath: TEST_DIR,
+      name: "Current chat",
+    });
+    workspaceState.set(workspace.id, {
+      "workspace.ui": {
+        panel: { open: false, remotePath: TEST_DIR, surfaceId: "old-surface", nodeId: "gateway" },
+        tabs: { remoteRoot: TEST_DIR, tabs: [], activePath: null, activePreview: null },
+        layout: { tree: false, editor: true },
+        terminal: { open: true },
+        preview: null,
+      },
+    });
+
+    const openRes = await fetch(`${address}/api/workspace/open`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ path: TEST_DIR, sessionId: session.id }),
+    });
+    const { surfaceId } = (await openRes.json()) as { surfaceId: string };
+
+    const state = workspaceState.get(workspace.id, ["workspace.ui"]);
+    expect(state["workspace.ui"]).toEqual({
+      panel: { open: true, remotePath: TEST_DIR, surfaceId, nodeId: "gateway" },
+      tabs: { remoteRoot: TEST_DIR, tabs: [], activePath: null, activePreview: null },
+      layout: { tree: false, editor: true },
+      terminal: { open: true },
+      preview: null,
     });
   });
 
@@ -318,6 +364,7 @@ describe("POST /api/workspace/open", () => {
       open: true,
       remotePath: TEST_DIR,
       surfaceId,
+      nodeId: "gateway",
     });
   });
 

@@ -1,5 +1,5 @@
 import { useSyncExternalStore } from 'react'
-import { buildStoredVsCodeTheme, registerBuiltInMonacoThemes, registerMonacoTheme, type StoredVsCodeTheme } from './vscode-theme'
+import { buildStoredVsCodeTheme, ensureBuiltInDarkPlusTextMateTheme, registerBuiltInMonacoThemes, registerMonacoTheme, type StoredVsCodeTheme } from './vscode-theme'
 
 interface VsCodeThemeStoreState {
   importedThemes: StoredVsCodeTheme[]
@@ -93,7 +93,12 @@ export function removeVsCodeTheme(themeId: string): void {
 
 export function ensureActiveMonacoTheme(monaco: { editor?: { defineTheme?: (name: string, data: unknown) => void } } | null | undefined): void {
   registerBuiltInMonacoThemes(monaco as Parameters<typeof registerBuiltInMonacoThemes>[0])
-  registerMonacoTheme(monaco as Parameters<typeof registerMonacoTheme>[0], getActiveVsCodeTheme())
+  const activeTheme = getActiveVsCodeTheme()
+  if (activeTheme) {
+    registerMonacoTheme(monaco as Parameters<typeof registerMonacoTheme>[0], activeTheme)
+  } else {
+    ensureBuiltInDarkPlusTextMateTheme(monaco)
+  }
 }
 
 function hashString(input: string): string {
