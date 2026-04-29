@@ -5,6 +5,11 @@ export interface PersistedSelectedRepo {
   localPath: string | null
 }
 
+function normalizeRepositoryPathForComparison(path: string): string {
+  const normalized = path.trim().replace(/\\/g, '/').replace(/\/+$/, '')
+  return /^[A-Za-z]:\//.test(normalized) ? normalized.toLowerCase() : normalized
+}
+
 export function normalizePersistedSelectedRepo(value: unknown): PersistedSelectedRepo {
   if (value && typeof value === 'object' && !Array.isArray(value)) {
     const parsed = value as { repoId?: unknown, localPath?: unknown }
@@ -80,7 +85,8 @@ export function resolvePersistedSelectedRepoId<T extends { id: string, localPath
   }
 
   if (persisted.localPath) {
-    return repositories.find((repo) => repo.localPath === persisted.localPath)?.id ?? null
+    const persistedPath = normalizeRepositoryPathForComparison(persisted.localPath)
+    return repositories.find((repo) => normalizeRepositoryPathForComparison(repo.localPath) === persistedPath)?.id ?? null
   }
 
   return null

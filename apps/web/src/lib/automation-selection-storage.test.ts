@@ -133,6 +133,26 @@ describe('automation selection storage', () => {
     })).toBe('repo-9')
   })
 
+  it('matches persisted local paths across slash and trailing-slash differences', () => {
+    expect(resolvePersistedSelectedRepoId([
+      { id: 'repo-1', localPath: '/work/one/' },
+      { id: 'repo-9', localPath: '/work/two' },
+    ], {
+      repoId: 'repo-2',
+      localPath: '\\work\\one',
+    })).toBe('repo-1')
+  })
+
+  it('matches persisted Windows local paths case-insensitively', () => {
+    expect(resolvePersistedSelectedRepoId([
+      { id: 'repo-1', localPath: 'C:/Users/Jakob/Projects/Jait' },
+      { id: 'repo-9', localPath: 'D:/Other/repo' },
+    ], {
+      repoId: 'repo-2',
+      localPath: 'c:\\users\\jakob\\projects\\jait\\',
+    })).toBe('repo-1')
+  })
+
   it('keeps the current selection while repositories are still loading', () => {
     expect(resolveSelectedRepoIdForRepositories(
       [],
