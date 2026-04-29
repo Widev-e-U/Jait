@@ -663,6 +663,7 @@ async function executeOneToolCall(opts: ExecuteOneOptions): Promise<{
 
     // Only retry transient failures, not logical errors
     if (!isTransientFailure(result.message)) break;
+    if (attempt >= maxRetries) break;
 
     retryCount = attempt + 1;
   }
@@ -742,6 +743,11 @@ function isTransientFailure(message: string): boolean {
     lower.includes("unavailable")
   );
 }
+
+export const __testUtils = {
+  executeOneToolCall,
+  isTransientFailure,
+};
 
 // ── Tool executor type ───────────────────────────────────────────────
 
