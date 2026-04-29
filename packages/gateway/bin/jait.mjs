@@ -44,6 +44,7 @@ const ENV_PATH = join(JAIT_DIR, ".env");
 const LOG_PATH = join(JAIT_DIR, "gateway.log");
 const ERR_LOG_PATH = join(JAIT_DIR, "gateway.err.log");
 const PID_PATH = join(JAIT_DIR, "jait.pid");
+const LEGACY_PID_PATH = join(JAIT_DIR, "gateway.pid");
 
 function systemdUnitDir() {
   return join(homedir(), ".config", "systemd", "user");
@@ -122,6 +123,30 @@ function runSilent(cmd) {
   return run(cmd, { silent: true }).trim();
 }
 
+function cleanupPidFile(pidPath) {
+  try { unlinkSync(pidPath); } catch {}
+}
+
+function getTrackedProcess() {
+  for (const pidPath of [PID_PATH, LEGACY_PID_PATH]) {
+    if (!existsSync(pidPath)) continue;
+
+    const pid = readFileSync(pidPath, "utf8").trim();
+    if (!pid) {
+      cleanupPidFile(pidPath);
+      continue;
+    }
+
+    if (isProcessRunning(pid)) {
+      return { pid, pidPath };
+    }
+
+    cleanupPidFile(pidPath);
+  }
+
+  return null;
+}
+
 // ── Cross-platform commands ─────────────────────────────────────────
 
 function healthCheck(port) {
@@ -146,21 +171,53 @@ function healthCheck(port) {
   });
 }
 
+function isPortReachable(port) {
+  return new Promise((resolveP) => {
+    const socket = createConnection({ host: "127.0.0.1", port: Number(port) }, () => {
+      socket.destroy();
+      resolveP(true);
+    });
+
+    socket.on("error", () => resolveP(false));
+    socket.setTimeout(1000, () => {
+      socket.destroy();
+      resolveP(false);
+    });
+  });
+}
+
+function sleep(ms) {
+  return new Promise((resolveP) => setTimeout(resolveP, ms));
+}
+
+async function waitForBackgroundStart(pid, port, { timeoutMs = 5000, pollMs = 250 } = {}) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (!isProcessRunning(pid)) {
+      return { ok: false, reason: "exit" };
+    }
+
+    const health = await healthCheck(port);
+    if (health) {
+      return { ok: true, health };
+    }
+
+    await sleep(pollMs);
+  }
+
+  if (!isProcessRunning(pid)) {
+    return { ok: false, reason: "exit" };
+  }
+
+  return { ok: false, reason: "timeout" };
+}
+
 async function cmdStatus(port) {
   printBanner();
   port = port || process.env.PORT || "8000";
 
-  // Check PID file
-  let pid = null;
-  if (existsSync(PID_PATH)) {
-    pid = readFileSync(PID_PATH, "utf8").trim();
-    const alive = isProcessRunning(pid);
-    if (!alive) {
-      // Stale PID file
-      try { unlinkSync(PID_PATH); } catch {}
-      pid = null;
-    }
-  }
+  const tracked = getTrackedProcess();
+  const pid = tracked?.pid ?? null;
 
   const health = await healthCheck(port);
   if (health) {
@@ -171,10 +228,14 @@ async function cmdStatus(port) {
     console.log(`  Healthy:  ${health.healthy ? "yes" : "no"}`);
     console.log(`  Uptime:   ${health.uptime}s`);
   } else {
+    const reachable = await isPortReachable(port);
     console.log(`  Status:   not running`);
     console.log(`  Port:     ${port} (checked)`);
     if (pid) {
       console.log(`  PID:      ${pid} (process exists but not responding)`);
+    } else if (reachable) {
+      console.log(`  Health:   timed out on /health`);
+      console.log(`  Note:     another process is listening on port ${port}`);
     }
   }
   console.log("");
@@ -237,19 +298,32 @@ function isProcessRunning(pid) {
   }
 }
 
-function cmdStart(cliFlags) {
+async function cmdStart(cliFlags) {
   printBanner();
+  const port = cliFlags.port || process.env.PORT || "8000";
+
   // Check if already running
-  if (existsSync(PID_PATH)) {
-    const pid = readFileSync(PID_PATH, "utf8").trim();
-    if (isProcessRunning(pid)) {
-      console.log(`  Jait is already running (PID ${pid}).`);
+  const tracked = getTrackedProcess();
+  if (tracked) {
+    if (await healthCheck(port)) {
+      console.log(`  Jait is already running (PID ${tracked.pid}).`);
       console.log(`  Run 'jait stop' first, or 'jait status' for details.`);
       console.log("");
       process.exit(1);
     }
-    // Stale PID file
-    try { unlinkSync(PID_PATH); } catch {}
+
+    console.error(`  A tracked Jait process already exists (PID ${tracked.pid}) but is not healthy.`);
+    console.error(`  Run 'jait stop' or inspect ${LOG_PATH} before starting a new instance.`);
+    console.log("");
+    process.exit(1);
+  }
+
+  if (await isPortReachable(port)) {
+    console.error(`  Port ${port} is already in use.`);
+    console.error(`  A gateway or another process is listening but not responding to /health.`);
+    console.error(`  Stop the existing process or start Jait on a different port with 'jait start --port <port>'.`);
+    console.log("");
+    process.exit(1);
   }
 
   mkdirSync(JAIT_DIR, { recursive: true });
@@ -273,6 +347,20 @@ function cmdStart(cliFlags) {
   writeFileSync(PID_PATH, String(child.pid), "utf8");
   child.unref();
 
+  const started = await waitForBackgroundStart(child.pid, port);
+  if (!started.ok) {
+    cleanupPidFile(PID_PATH);
+    console.error(`  Jait failed to become healthy on port ${port}.`);
+    if (started.reason === "exit") {
+      console.error(`  The background process exited during startup.`);
+    } else {
+      console.error(`  The background process did not answer /health within 5 seconds.`);
+    }
+    console.error(`  Logs: ${LOG_PATH}`);
+    console.log("");
+    process.exit(1);
+  }
+
   console.log(`  Jait started in background (PID ${child.pid}).`);
   console.log(`  Logs: ${LOG_PATH}`);
   console.log(`  Run 'jait status' to check health.`);
@@ -282,20 +370,14 @@ function cmdStart(cliFlags) {
 
 function cmdStop() {
   printBanner();
-  if (!existsSync(PID_PATH)) {
+  const tracked = getTrackedProcess();
+  if (!tracked) {
     console.log("  Jait is not running (no PID file found).");
     console.log("");
     process.exit(1);
   }
 
-  const pid = readFileSync(PID_PATH, "utf8").trim();
-
-  if (!isProcessRunning(pid)) {
-    console.log(`  Process ${pid} is not running (stale PID file).`);
-    try { unlinkSync(PID_PATH); } catch {}
-    console.log("");
-    process.exit(0);
-  }
+  const { pid, pidPath } = tracked;
 
   try {
     if (platform() === "win32") {
@@ -308,7 +390,7 @@ function cmdStop() {
     console.error(`  Failed to stop process ${pid}: ${err.message}`);
   }
 
-  try { unlinkSync(PID_PATH); } catch {}
+  cleanupPidFile(pidPath);
   console.log("");
 }
 
@@ -596,7 +678,7 @@ if (args[0] === "status") {
 
 if (args[0] === "start") {
   parseSubcommandFlags(1);
-  cmdStart(flags);
+  await cmdStart(flags);
   process.exit(0);
 }
 
