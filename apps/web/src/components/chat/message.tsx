@@ -606,7 +606,7 @@ function MessageInner({
 
   const canEdit = isUser && !!messageId && !!onEditMessage
   const canRetry = canEdit
-  const showStreamingIndicator = isStreaming && !thinking && !content.trim()
+  const showStreamingIndicator = isStreaming && !thinking && !(typeof content === 'string' ? content : '').trim()
   const canCopyMessage = isUser || !isStreaming
 
   const startEditing = useCallback(() => {

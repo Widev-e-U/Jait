@@ -2220,7 +2220,7 @@ export function registerChatRoutes(
           const msg: UIMsg = {
             id: `${sessionId}-${i}`,
             role: r.role as "user" | "assistant",
-            content: r.content,
+            content: typeof r.content === "string" ? r.content : String(r.content ?? ""),
           };
           if (r.toolCalls) {
             try { msg.toolCalls = JSON.parse(r.toolCalls); } catch { /* ignore */ }

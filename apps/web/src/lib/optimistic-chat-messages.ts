@@ -12,7 +12,7 @@ export interface OptimisticUserMessageLike {
 function getUserRenderSignature(message: OptimisticUserMessageLike): string | null {
   if (message.role !== 'user') return null
   const hasDisplaySegments = Array.isArray(message.displaySegments) && message.displaySegments.length > 0
-  const normalizedContent = message.content.trim()
+  const normalizedContent = (typeof message.content === 'string' ? message.content : '').trim()
   const normalizedDisplay = typeof message.displayContent === 'string'
     ? message.displayContent.trim()
     : ''

@@ -449,7 +449,8 @@ export function useChat(
                 }>
                 const snapshotStreaming = data.streaming as boolean
                 const msgs: ChatMessage[] = rawMsgs.map(m => {
-                  const msg: ChatMessage = { id: m.id, role: m.role, content: m.content, contextFlow: m.contextFlow, thinking: m.thinking }
+                  const safeContent = typeof m.content === 'string' ? m.content : (Array.isArray(m.content) ? (m.content as Array<{type?: string; text?: string}>).filter(p => p.type === 'text').map(p => p.text ?? '').join('') : String(m.content ?? ''))
+                  const msg: ChatMessage = { id: m.id, role: m.role, content: safeContent, contextFlow: m.contextFlow, thinking: m.thinking }
                   if (m.role === 'user' && m.segments && m.segments.length > 0) {
                     msg.displaySegments = parseUserMessageSegments(m.segments)
                     msg.displayContent = userMessageTextFromSegments(msg.displaySegments)
