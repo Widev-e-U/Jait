@@ -212,8 +212,45 @@ describe("chat external provider runtime mode selection", () => {
     expect(firstTurnMessage).toContain("fix the bug");
 
     expect(response.body).toContain("\"type\":\"context_flow\"");
-    expect(response.body).toContain("Jait pasted its current system prompt into this new provider session turn.");
+    expect(response.body).toContain("Jait pasted its external-provider system prompt into this new provider session turn.");
     expect(response.body).toContain("use the todo tool even if you are operating through an external or CLI provider");
+
+    await app.close();
+  });
+
+  it("sends the full external-provider prompt even when the Jait backend is Ollama", { timeout: 30_000 }, async () => {
+    const provider = new MockChatProvider();
+    const providerRegistry = new ProviderRegistry();
+    providerRegistry.register(provider);
+    const app = await createServer({
+      ...testConfig,
+      llmProvider: "ollama",
+      ollamaModel: "llama3.2",
+    }, { providerRegistry });
+    const headers = await authHeaders();
+
+    const response = await app.inject({
+      method: "POST",
+      url: "/api/chat",
+      headers,
+      payload: {
+        content: "fix the bug",
+        sessionId: "chat-ollama-cli-system-prompt-session",
+        provider: "codex",
+        runtimeMode: "full-access",
+      },
+    });
+
+    expect(response.statusCode).toBe(200);
+
+    const firstTurnMessage = provider.sendTurn.mock.calls[0]?.[1];
+    expect(typeof firstTurnMessage).toBe("string");
+    expect(firstTurnMessage).toContain("Jait session instructions:");
+    expect(firstTurnMessage).toContain("You are operating inside Jait, a tool-centric coding workspace and gateway.");
+    expect(firstTurnMessage).toContain("Use `jait.terminal` for direct terminal execution in Jait");
+    expect(firstTurnMessage).toContain("The live preview is a controllable browser session.");
+    expect(firstTurnMessage).toContain("Use the edit tool to modify files precisely.");
+    expect(firstTurnMessage).not.toContain("You are an expert coding agent. Use tools to read, edit, search files and run commands.");
 
     await app.close();
   });

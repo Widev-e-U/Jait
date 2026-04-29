@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import type { ThemeMode } from '@/hooks/useAuth'
-import { applyThemeToDocument } from '@/lib/vscode-theme'
+import { BUILT_IN_DARK_PLUS_MONACO_THEME_NAME, applyThemeToDocument } from '@/lib/vscode-theme'
 import { useVsCodeThemeStore } from '@/lib/vscode-theme-store'
 
 type BaseThemeMode = ThemeMode | 'light' | 'dark'
@@ -24,7 +24,7 @@ export function useConfiguredTheme(baseMode: BaseThemeMode) {
   }, [])
 
   const resolvedTheme = activeTheme?.colorMode ?? (baseMode === 'dark' || (baseMode === 'system' && systemPrefersDark) ? 'dark' : 'light')
-  const monacoThemeName = activeTheme?.monacoThemeName ?? (resolvedTheme === 'dark' ? 'vs-dark' : 'vs')
+  const monacoThemeName = activeTheme?.monacoThemeName ?? (resolvedTheme === 'dark' ? BUILT_IN_DARK_PLUS_MONACO_THEME_NAME : 'vs')
 
   useEffect(() => {
     applyThemeToDocument({

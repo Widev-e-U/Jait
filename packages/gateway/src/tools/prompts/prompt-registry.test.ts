@@ -26,6 +26,22 @@ describe("buildSystemPrompt", () => {
     expect(prompt).toContain("You are working in the workspace: /tmp/project");
   });
 
+  it("keeps local model prompts compact", () => {
+    const prompt = buildSystemPrompt("agent", {
+      model: "llama3.2",
+      baseUrl: "http://localhost:11434/v1",
+      backend: "ollama",
+    }, {
+      workspaceRoot: "/tmp/project",
+      backend: "ollama",
+    });
+
+    expect(prompt).not.toContain("<jaitExternalProvider>");
+    expect(prompt).not.toContain("You are operating inside Jait, a tool-centric coding workspace.");
+    expect(prompt).toContain("Use Markdown in responses. Wrap filenames and symbols in backticks.");
+    expect(prompt).toContain("Workspace: /tmp/project");
+  });
+
   it("injects enabled skills into the system prompt", () => {
     const skills: Skill[] = [
       {

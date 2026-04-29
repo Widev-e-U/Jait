@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react'
+import { BUILT_IN_DARK_PLUS_MONACO_THEME_NAME } from '@/lib/vscode-theme'
 
 function readThemeName(): string {
   if (typeof document === 'undefined') return 'vs'
   const root = document.documentElement
-  return root.dataset.monacoTheme ?? (root.classList.contains('dark') ? 'vs-dark' : 'vs')
+  return root.dataset.monacoTheme ?? (root.classList.contains('dark') ? BUILT_IN_DARK_PLUS_MONACO_THEME_NAME : 'vs')
 }
 
 export function useEditorThemeName(): string {
