@@ -84,11 +84,10 @@ export async function handleTerminalContextMenuAction(
   selection: string,
   sendInput: (text: string) => void,
 ): Promise<'copied' | 'pasted' | 'noop'> {
-  const trimmedSelection = selection.trim()
-  if (trimmedSelection) {
+  if (selection.trim()) {
     if (!clipboard?.writeText) return 'noop'
     try {
-      await clipboard.writeText(trimmedSelection)
+      await clipboard.writeText(selection)
       return 'copied'
     } catch {
       return 'noop'

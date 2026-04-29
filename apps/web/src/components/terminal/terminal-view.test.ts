@@ -149,6 +149,20 @@ describe('handleTerminalContextMenuAction', () => {
     expect(clipboard.writeText).toHaveBeenCalledWith(multiline)
     expect(sendInput).not.toHaveBeenCalled()
   })
+
+  it('preserves selected whitespace when copying terminal text', async () => {
+    const sendInput = vi.fn()
+    const clipboard = {
+      readText: vi.fn(),
+      writeText: vi.fn().mockResolvedValue(undefined),
+    }
+
+    const selection = '  indented value  \n'
+    await expect(handleTerminalContextMenuAction(clipboard, selection, sendInput)).resolves.toBe('copied')
+
+    expect(clipboard.writeText).toHaveBeenCalledWith(selection)
+    expect(sendInput).not.toHaveBeenCalled()
+  })
 })
 
 describe('pasteClipboardEventTextIntoTerminal', () => {
