@@ -23,7 +23,7 @@ import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getDesktopWorkspacePanelStyle } from './workspace-panel-layout'
-import { getSourceControlChangeCount } from './source-control-summary'
+import { getSourceControlChangeCount, mergeSourceControlWorkingTreeFiles } from './source-control-summary'
 import {
   PreviewMetricsPanel,
   type PreviewInspectInteractiveElement,
@@ -4032,31 +4032,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const stagedFiles = gitStatus?.index.files ?? []
   const workingTreeFiles = useMemo(() => {
     const statusFiles = gitStatus?.workingTree.files ?? []
-    if (workingTreeDiffEntries.length === 0) return statusFiles
-
-    const statusByPath = new Map(statusFiles.map((file) => [normalizePath(file.path), file] as const))
-    const usedPaths = new Set<string>()
-    const merged = workingTreeDiffEntries.map((entry) => {
-      const normalizedEntryPath = normalizePath(entry.path)
-      const statusMatch = statusByPath.get(normalizedEntryPath)
-      usedPaths.add(normalizedEntryPath)
-      return statusMatch ?? {
-        path: entry.path,
-        insertions: 0,
-        deletions: 0,
-        status: entry.status,
-      }
-    })
-
-    for (const file of statusFiles) {
-      const normalizedPath = normalizePath(file.path)
-      if (!usedPaths.has(normalizedPath)) {
-        merged.push(file)
-      }
-    }
-
-    return merged
-  }, [gitStatus?.workingTree.files, workingTreeDiffEntries])
+    return mergeSourceControlWorkingTreeFiles(statusFiles, workingTreeDiffEntries, stagedFiles)
+  }, [gitStatus?.workingTree.files, stagedFiles, workingTreeDiffEntries])
   const stagedTree = useMemo(
     () => buildSourceControlTree(stagedFiles.map((file) => ({
       path: file.path,

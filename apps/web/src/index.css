@@ -47,70 +47,48 @@
     color-scheme: dark;
 
     /*
-     * ── Dark-theme global config ───────────────────────────────────
-     * Tweak --dark-hue / --dark-sat to shift the whole palette's tint.
-     * Lightness steps (L0→L5) control the surface staircase; widen
-     * or narrow them to taste.  Every semantic token below references
-     * these primitives, so one change propagates everywhere.
-     *
-     *  Layer       Lightness   Used for
-     *  ─────────── ────────── ─────────────────────────────
-     *  L0  base       5%      page background
-     *  L1  raised    10%      cards, popovers
-     *  L2  surface   15%      secondary, muted, accent fills
-     *  L3  overlay   20%      elevated overlays, hover fills
-     *  L4  border    24%      borders, inputs
-     *  L5  subtle    32%      subtle dividers, scrollbar thumb
+     * Built-in dark mode tracks VS Code Dark+ so the app shell and
+     * Monaco's default vs-dark editor palette feel like one system.
      */
-    --dark-hue: 220;
-    --dark-sat: 12%;
+    --background:          0 0% 12%;      /* #1E1E1E */
+    --foreground:          0 0% 83%;      /* #D4D4D4 */
+    --card:                240 1% 15%;    /* #252526 */
+    --card-foreground:     0 0% 80%;      /* #CCCCCC */
+    --popover:             240 1% 15%;    /* #252526 */
+    --popover-foreground:  0 0% 80%;      /* #CCCCCC */
 
-    /* ── Surface primitives ──────────────────────────────────────── */
-    --background:          var(--dark-hue) var(--dark-sat) 5%;
-    --foreground:          210 20% 96%;
-    --card:                var(--dark-hue) var(--dark-sat) 10%;
-    --card-foreground:     210 20% 96%;
-    --popover:             var(--dark-hue) var(--dark-sat) 10%;
-    --popover-foreground:  210 20% 96%;
-
-    /* ── Brand / interactive ─────────────────────────────────────── */
-    --primary:             217 91% 60%;
+    --primary:             204 100% 40%;  /* #007ACC */
     --primary-foreground:  0 0% 100%;
-    --destructive:         0 63% 32%;
-    --destructive-foreground: 0 0% 96%;
-    --ring:                217 91% 60%;
+    --destructive:         0 89% 62%;     /* #F44747 */
+    --destructive-foreground: 0 0% 100%;
+    --ring:                204 100% 40%;  /* #007ACC */
 
-    /* ── Neutral fills ───────────────────────────────────────────── */
-    --secondary:           var(--dark-hue) var(--dark-sat) 15%;
-    --secondary-foreground: 210 20% 96%;
-    --muted:               var(--dark-hue) var(--dark-sat) 15%;
-    --muted-foreground:    215 12% 52%;
-    --accent:              var(--dark-hue) var(--dark-sat) 18%;
-    --accent-foreground:   210 20% 96%;
+    --secondary:           0 0% 18%;      /* #2D2D2D */
+    --secondary-foreground: 0 0% 73%;     /* #BBBBBB */
+    --muted:               0 0% 18%;      /* #2D2D2D */
+    --muted-foreground:    0 0% 65%;      /* #A6A6A6 */
+    --accent:              195 5% 17%;    /* #2A2D2E */
+    --accent-foreground:   0 0% 80%;      /* #CCCCCC */
 
-    /* ── Edges ───────────────────────────────────────────────────── */
-    --border:              var(--dark-hue) var(--dark-sat) 24%;
-    --input:               var(--dark-hue) var(--dark-sat) 24%;
+    --border:              0 0% 27%;      /* #454545 */
+    --input:               240 1% 19%;    /* #303031 */
 
-    /* ── Scrollbar ───────────────────────────────────────────────── */
-    --scrollbar-track:     var(--dark-hue) var(--dark-sat) 8%;
-    --scrollbar-thumb:     var(--dark-hue) var(--dark-sat) 32%;
-    --scrollbar-thumb-hover: var(--dark-hue) 10% 44%;
+    --scrollbar-track:     0 0% 12%;      /* #1E1E1E */
+    --scrollbar-thumb:     0 0% 25%;      /* #404040 */
+    --scrollbar-thumb-hover: 0 0% 44%;    /* #707070 */
 
-    /* ── Toasts ──────────────────────────────────────────────────── */
-    --toast-bg:            var(--dark-hue) var(--dark-sat) 12% / 0.97;
-    --toast-border:        var(--dark-hue) var(--dark-sat) 28% / 0.94;
+    --toast-bg:            240 1% 15% / 0.97;
+    --toast-border:        0 0% 27% / 0.94;
     --toast-shadow: 0 24px 60px -30px hsl(0 0% 0% / 0.72), 0 12px 28px -20px hsl(0 0% 0% / 0.54);
-    --toast-success-accent: 142 50% 50%;
-    --toast-info-accent:   214 90% 67%;
-    --toast-warning-accent: 38 92% 58%;
-    --toast-error-accent:  0 72% 60%;
+    --toast-success-accent: 159 71% 30%;  /* #16825D */
+    --toast-info-accent:   204 100% 40%;  /* #007ACC */
+    --toast-warning-accent: 48 100% 50%;  /* #FFCC00 */
+    --toast-error-accent:  10 86% 70%;    /* #F48771 */
 
-    /* ── Context indicator category colors — brighter for dark bg ─ */
-    --ctx-system: #818cf8;
-    --ctx-history: #60a5fa;
-    --ctx-tool-results: #fbbf24;
-    --ctx-tools: #a78bfa;
+    --ctx-system: #007ACC;
+    --ctx-history: #4FC1FF;
+    --ctx-tool-results: #D7BA7D;
+    --ctx-tools: #C586C0;
   }
 }
 
