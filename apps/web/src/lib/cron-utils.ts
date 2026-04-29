@@ -253,12 +253,14 @@ export function getNextRunTime(cron: string): Date | null {
 export function formatRelativeTime(date: Date): string {
   const now = new Date()
   const diffMs = date.getTime() - now.getTime()
-  const diffMins = Math.round(diffMs / 60000)
-  const diffHours = Math.round(diffMs / 3600000)
-  const diffDays = Math.round(diffMs / 86400000)
-  
-  if (diffMins < 1) return 'now'
+  if (diffMs < 60_000) return 'now'
+
+  const diffMins = Math.floor(diffMs / 60000)
   if (diffMins < 60) return `in ${diffMins}m`
+
+  const diffHours = Math.floor(diffMs / 3600000)
   if (diffHours < 24) return `in ${diffHours}h`
+
+  const diffDays = Math.floor(diffMs / 86400000)
   return `in ${diffDays}d`
 }
