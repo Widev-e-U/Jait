@@ -111,6 +111,12 @@ const ALLOWED_SHELLS: Record<string, string[]> = {
   darwin: ["/bin/zsh", "/bin/bash", "/bin/sh"],
 };
 
+/** Known Git Bash installation paths on Windows (checked in order). */
+const GIT_BASH_CANDIDATES = [
+  "C:\\Program Files\\Git\\bin\\bash.exe",
+  "C:\\Program Files (x86)\\Git\\bin\\bash.exe",
+];
+
 export function availableShells(): { shell: string; label: string }[] {
   const plat = platform();
   const candidates = ALLOWED_SHELLS[plat] ?? ALLOWED_SHELLS.linux!;
@@ -126,6 +132,15 @@ export function availableShells(): { shell: string; label: string }[] {
       shells.push({ shell, label: name });
     } catch {
       // not available
+    }
+  }
+  // On Windows, also probe known Git Bash locations (not found via `where`)
+  if (plat === "win32") {
+    for (const gitBash of GIT_BASH_CANDIDATES) {
+      if (existsSync(gitBash) && !shells.some((s) => s.shell === gitBash)) {
+        shells.push({ shell: gitBash, label: "bash (Git)" });
+        break;
+      }
     }
   }
   return shells;
@@ -257,13 +272,15 @@ export class TerminalSurface implements Surface {
         shellArgs = platform() === "win32" ? ["-NoProfile"] : [];
       }
 
+      // Git Bash (MSYS2/Cygwin-based) does not work well with ConPTY.
+      const isGitBash = /Git[/\\].*bash\.exe$/i.test(this.shell);
       const pty = spawnPty(this.shell, shellArgs, {
         name: "xterm-256color",
         cols: this._cols,
         rows: this._rows,
         cwd: input.workspaceRoot,
         env: { ...process.env, TERM: "xterm-256color", ...this.extraEnv },
-        ...(platform() === "win32" ? { useConpty: true } : {}),
+        ...(platform() === "win32" ? { useConpty: !isGitBash } : {}),
       });
 
       this._pty = pty;

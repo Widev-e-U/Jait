@@ -246,6 +246,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const fitRef = useRef<FitAddon | null>(null)
   const wsRef = useRef<WebSocket | null>(null)
   const lastSelectionKeyRef = useRef<string | null>(null)
+  const rightClickSelectionRef = useRef<string>('')
   const resolvedTheme = useResolvedTheme()
   const [contextMenu, setContextMenu] = useState<{ left: number; top: number; hasSelection: boolean } | null>(null)
 
@@ -435,14 +436,24 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
     const handleKeyUp = () => {
       window.setTimeout(emitSelectionReference, 0)
     }
+    // Snapshot selection on right-click mousedown (capture phase) before xterm.js
+    // can clear it or swallow the event (e.g. when mouse tracking is active in bash).
+    const handleRightMouseDown = (event: MouseEvent) => {
+      if (event.button !== 2) return
+      rightClickSelectionRef.current = term.getSelection()
+      // Prevent xterm.js from processing the right-click (which can clear
+      // selection or consume the event when mouse tracking is enabled).
+      event.stopPropagation()
+    }
     const handleContextMenu = (event: MouseEvent) => {
-      const selection = term.getSelection()
       if (!shouldUseTerminalCustomContextMenu(!!window.jaitDesktop)) {
         term.focus()
         setContextMenu(null)
         return
       }
       event.preventDefault()
+      event.stopPropagation()
+      const selection = rightClickSelectionRef.current || term.getSelection()
       const pos = getTerminalContextMenuPosition(event.clientX, event.clientY, window.innerWidth, window.innerHeight)
       setContextMenu({
         left: pos.left,
@@ -455,6 +466,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
         pasteEventAt = Date.now()
       }
     }
+    rootEl.addEventListener('mousedown', handleRightMouseDown, { capture: true })
     rootEl.addEventListener('mouseup', handleMouseUp)
     rootEl.addEventListener('keyup', handleKeyUp)
     rootEl.addEventListener('contextmenu', handleContextMenu, { capture: true })
@@ -469,6 +481,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
         document.removeEventListener('visibilitychange', handleVisibilityChange)
       }
       resizeObserver.disconnect()
+      rootEl.removeEventListener('mousedown', handleRightMouseDown, { capture: true })
       rootEl.removeEventListener('mouseup', handleMouseUp)
       rootEl.removeEventListener('keyup', handleKeyUp)
       rootEl.removeEventListener('contextmenu', handleContextMenu, { capture: true })
@@ -490,10 +503,11 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
   const handleCopy = useCallback(() => {
     const term = termRef.current
     if (!term) return
-    const selection = term.getSelection().trim()
+    const selection = (rightClickSelectionRef.current || term.getSelection()).trim()
     if (selection && navigator.clipboard?.writeText) {
       void navigator.clipboard.writeText(selection)
     }
+    rightClickSelectionRef.current = ''
     setContextMenu(null)
     term.focus()
   }, [])
@@ -508,6 +522,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
         ws.send(JSON.stringify({ type: 'terminal.input', terminalId, data: text }))
       }
     })
+    rightClickSelectionRef.current = ''
     setContextMenu(null)
     term.focus()
   }, [terminalId])
@@ -519,6 +534,7 @@ export const TerminalView = forwardRef<TerminalViewHandle, TerminalViewProps>(fu
       onMouseDown={(e) => {
         // Close context menu on any click outside it
         if (contextMenu) {
+          rightClickSelectionRef.current = ''
           setContextMenu(null)
         }
         // Only focus terminal if user clicked directly on the terminal area

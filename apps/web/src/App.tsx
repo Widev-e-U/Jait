@@ -6856,7 +6856,7 @@ function App() {
                     {!terminalFullscreen && (
                       <div
                         onMouseDown={handleTerminalDragStart}
-                        className="absolute inset-x-0 top-0 h-1.5 cursor-row-resize hover:bg-primary/30 transition-colors z-10"
+                        className="absolute inset-x-0 top-0 h-1.5 cursor-row-resize hover:bg-primary/30 transition-colors z-20"
                       />
                     )}
                     <div className="relative shrink-0">
@@ -6869,7 +6869,7 @@ function App() {
                         onDetach={handleDetachTerminal}
                         availableShells={terminalShells}
                       />
-                      <div className="absolute right-0 top-0 bottom-0 flex items-center gap-1 pr-2 pl-3 bg-gradient-to-l from-background via-background to-transparent z-10">
+                      <div className="absolute right-0 top-0 bottom-px flex items-center gap-1 pr-2 pl-3 bg-background z-[9]">
                         {showDesktopWorkspace && (
                         <button
                           onClick={() => {
