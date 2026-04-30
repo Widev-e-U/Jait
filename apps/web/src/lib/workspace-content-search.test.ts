@@ -43,8 +43,10 @@ describe('searchWorkspaceContent', () => {
     ])
   })
 
-  it('skips hidden and ignored directories', async () => {
+  it('searches hidden files and non-ignored hidden directories while skipping ignored directories', async () => {
     const root = dir('', [
+      file('.env.example', 'architecture diagram'),
+      dir('.jait', [file('bootstrap.md', 'architecture diagram')]),
       dir('.git', [file('config', 'architecture diagram')]),
       dir('node_modules', [file('pkg.js', 'architecture diagram')]),
       dir('src', [file('visible.ts', 'architecture diagram')]),
@@ -53,6 +55,8 @@ describe('searchWorkspaceContent', () => {
     const matches = await searchWorkspaceContent(root, 'architecture diagram', 10)
 
     expect(matches).toEqual([
+      { file: '.env.example', line: 1, content: 'architecture diagram' },
+      { file: '.jait/bootstrap.md', line: 1, content: 'architecture diagram' },
       { file: 'src/visible.ts', line: 1, content: 'architecture diagram' },
     ])
   })
