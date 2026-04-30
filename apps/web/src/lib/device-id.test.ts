@@ -114,6 +114,20 @@ describe('generateDeviceId (sync)', () => {
     const id = generateDeviceId()
     expect(id).toMatch(/^capacitor-/)
   })
+
+  it('falls back to an in-memory ID when localStorage access throws', async () => {
+    localStorageMock.getItem.mockImplementationOnce(() => {
+      throw new Error('storage blocked')
+    })
+    localStorageMock.setItem.mockImplementationOnce(() => {
+      throw new Error('storage blocked')
+    })
+
+    const { generateDeviceId } = await loadModule()
+    const id = generateDeviceId()
+
+    expect(id).toMatch(/^web-/)
+  })
 })
 
 describe('initDeviceId (async)', () => {
@@ -146,6 +160,20 @@ describe('initDeviceId (async)', () => {
       localStorageMap.clear()
       const second = await initDeviceId()
       expect(second).toBe(first)
+    })
+
+    it('generates an ID when localStorage is unavailable', async () => {
+      localStorageMock.getItem.mockImplementationOnce(() => {
+        throw new Error('storage blocked')
+      })
+      localStorageMock.setItem.mockImplementationOnce(() => {
+        throw new Error('storage blocked')
+      })
+
+      const { initDeviceId } = await loadModule()
+      const id = await initDeviceId()
+
+      expect(id).toMatch(/^web-/)
     })
   })
 
@@ -214,6 +242,19 @@ describe('initDeviceId (async)', () => {
       localStorageMap.clear()
       const syncId = generateDeviceId()
       expect(syncId).toBe('electron-persistent-id')
+    })
+
+    it('returns the persisted Electron ID even when localStorage sync throws', async () => {
+      mockGetSetting.mockResolvedValue('electron-persisted-abc123')
+      localStorageMock.setItem.mockImplementationOnce(() => {
+        throw new Error('storage blocked')
+      })
+
+      const { initDeviceId } = await loadModule()
+      const id = await initDeviceId()
+
+      expect(id).toBe('electron-persisted-abc123')
+      expect(mockSetSetting).not.toHaveBeenCalled()
     })
   })
 })
