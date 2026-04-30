@@ -35,6 +35,7 @@ export function useWorkspaceState<T>(
   const [loading, setLoading] = useState(false)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestRef = useRef<T | null>(null)
+  const localWriteVersionRef = useRef(0)
 
   useEffect(() => {
     if (!workspaceId || !token) {
@@ -45,13 +46,16 @@ export function useWorkspaceState<T>(
     // Reset immediately so stale values from the previous workspace are not
     // consumed before the fetch for the new workspace completes.
     setValueLocal(null)
+    latestRef.current = null
 
     let cancelled = false
+    const fetchVersion = localWriteVersionRef.current
     setLoading(true)
 
     fetchStateBatched('workspaces', workspaceId, key, token!)
       .then((val) => {
         if (cancelled) return
+        if (fetchVersion !== localWriteVersionRef.current) return
         const next = val as T | null
         setValueLocal(next)
         latestRef.current = next
@@ -69,6 +73,7 @@ export function useWorkspaceState<T>(
   }, [workspaceId, key, token])
 
   const setValue = useCallback((next: T | null, options?: { immediate?: boolean }) => {
+    localWriteVersionRef.current += 1
     setValueLocal(next)
     latestRef.current = next
 

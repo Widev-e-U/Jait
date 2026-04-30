@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Shield, ShieldAlert, ShieldCheck, ShieldX, Clock, Terminal, FileText, Info } from 'lucide-react'
 import { getApiUrl, getWsUrl } from '@/lib/gateway-url'
 
@@ -51,6 +51,9 @@ export interface ConsentDecisionInfo {
 
 export function useConsentQueue(sessionId?: string | null) {
   const [queue, setQueue] = useState<ConsentRequestInfo[]>([])
+  const refreshRef = useRef<() => Promise<void>>(async () => {})
+  const sessionIdRef = useRef<string | null | undefined>(sessionId)
+  sessionIdRef.current = sessionId
 
   // Fetch pending consent requests
   const refresh = useCallback(async () => {
@@ -65,18 +68,26 @@ export function useConsentQueue(sessionId?: string | null) {
       // gateway down
     }
   }, [sessionId])
+  refreshRef.current = refresh
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
 
   // Listen for WS events
   useEffect(() => {
+    let disposed = false
     const ws = new WebSocket(WS_URL)
 
     ws.onmessage = (event) => {
+      if (disposed) return
       try {
         const msg = JSON.parse(event.data) as { type: string; payload: unknown }
 
         if (msg.type === 'consent.required') {
           const request = msg.payload as ConsentRequestInfo
-          if (!sessionId || request.sessionId === sessionId) {
+          const currentSessionId = sessionIdRef.current
+          if (!currentSessionId || request.sessionId === currentSessionId) {
             setQueue((prev) => [...prev, request])
           }
         }
@@ -90,10 +101,31 @@ export function useConsentQueue(sessionId?: string | null) {
       }
     }
 
-    ws.onopen = () => refresh()
+    ws.onopen = () => {
+      if (!disposed) void refreshRef.current()
+    }
 
-    return () => ws.close()
-  }, [refresh, sessionId])
+    return () => {
+      disposed = true
+      ws.onopen = () => {
+        try {
+          ws.close()
+        } catch {
+          // ignore close races during React dev remounts
+        }
+      }
+      ws.onmessage = null
+      ws.onerror = null
+      ws.onclose = null
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.close()
+        } catch {
+          // ignore close races during React dev remounts
+        }
+      }
+    }
+  }, [])
 
   const approve = useCallback(async (requestId: string) => {
     try {

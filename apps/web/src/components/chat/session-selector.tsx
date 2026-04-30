@@ -202,20 +202,25 @@ export function SessionSelector({
                         <Folder className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                       )}
                       <div className="min-w-0 overflow-hidden">
-                        <div className="truncate text-xs font-medium">
-                          {workspace.title || 'Untitled Workspace'}
+                        <div className="flex min-w-0 items-center gap-1 overflow-hidden">
+                          <span className="min-w-0 truncate text-xs font-medium">
+                            {workspace.title || 'Untitled Workspace'}
+                          </span>
+                          {repository && (
+                            <>
+                              <span className="shrink-0 text-2xs text-muted-foreground">·</span>
+                              <span className="flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
+                                <GitBranch className="h-2.5 w-2.5 shrink-0" />
+                                <span className="truncate">{repository.name}</span>
+                              </span>
+                            </>
+                          )}
                         </div>
                         <div className="flex min-w-0 items-center gap-1 overflow-hidden text-2xs text-muted-foreground">
                           <span className="min-w-0 truncate">{workspace.rootPath || 'No folder linked'}</span>
                           <span className="shrink-0">·</span>
                           <span className="shrink-0">{formatTime(workspace.lastActiveAt)}</span>
                         </div>
-                        {repository && (
-                          <div className="mt-0.5 flex min-w-0 items-center gap-1 text-2xs text-muted-foreground">
-                            <GitBranch className="h-2.5 w-2.5 shrink-0" />
-                            <span className="truncate">{repository.name}</span>
-                          </div>
-                        )}
                         {offline && (
                           <div className="mt-0.5 flex items-center gap-1 text-2xs text-orange-500">
                             <WifiOff className="h-2.5 w-2.5 shrink-0" />

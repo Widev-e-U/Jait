@@ -170,6 +170,8 @@ const VOICE_LEVEL_BAR_COUNT = 28
 const VOICE_LEVEL_FLOOR = 0.05
 
 type AvailableFileForMention = { path: string; name: string; kind?: 'file' | 'dir' }
+type ActiveWorkspaceState = { surfaceId: string; workspaceRoot: string; nodeId?: string } | null
+const VIEW_MODE_STORAGE_KEY = 'jait.viewMode'
 
 function areAvailableFilesEqual(a: AvailableFileForMention[], b: AvailableFileForMention[]) {
   if (a.length !== b.length) return false
@@ -180,6 +182,41 @@ function areAvailableFilesEqual(a: AvailableFileForMention[], b: AvailableFileFo
       && file.name === other.name
       && file.kind === other.kind
   })
+}
+
+function areActiveWorkspacesEqual(a: ActiveWorkspaceState, b: ActiveWorkspaceState) {
+  return a?.surfaceId === b?.surfaceId
+    && a?.workspaceRoot === b?.workspaceRoot
+    && (a?.nodeId ?? 'gateway') === (b?.nodeId ?? 'gateway')
+}
+
+function getWorkspaceUiRestoreKey(workspaceId: string, ui: WorkspaceUIState) {
+  const panel = ui.panel
+    ? {
+        open: ui.panel.open,
+        remotePath: ui.panel.remotePath,
+        nodeId: ui.panel.nodeId,
+      }
+    : null
+  return JSON.stringify({
+    workspaceId,
+    panel,
+    tabs: ui.tabs,
+    layout: ui.layout,
+    terminal: ui.terminal,
+    preview: ui.preview,
+  })
+}
+
+
+function areWorkspaceUiValuesEqual(a: unknown, b: unknown) {
+  return JSON.stringify(a ?? null) === JSON.stringify(b ?? null)
+}
+
+function readStoredViewMode(): ViewMode {
+  if (typeof window === 'undefined') return 'developer'
+  const value = window.localStorage.getItem(VIEW_MODE_STORAGE_KEY)
+  return value === 'manager' ? 'manager' : 'developer'
 }
 
 interface SecretInputRequest {
@@ -1307,10 +1344,6 @@ function App() {
   const [chatCollapsed, setChatCollapsed] = useState(false)
   const workspaceRestoreRef = useRef<(() => void) | null>(null)
   const closeWorkspacePanelRef = useRef<(() => void) | null>(null)
-
-  const handleWorkspaceCollapsedChange = useCallback((collapsed: boolean) => {
-    if (collapsed) closeWorkspacePanelRef.current?.()
-  }, [])
   const suppressWorkspaceAutoOpenRef = useRef(false)
   const [devPreviewTarget, setDevPreviewTarget] = useState<string | null>(null)
   const [workspacePreviewRequest, setWorkspacePreviewRequest] = useState<{ target?: string | null; key: number } | null>(null)
@@ -1324,7 +1357,10 @@ function App() {
   const [showWorkspaceTree, setShowWorkspaceTree] = useState(true)
   const [showWorkspaceEditor, setShowWorkspaceEditor] = useState(true)
   const [mobileTreeTab, setMobileTreeTab] = useState<'files' | 'git'>('files')
-  const [activeWorkspace, setActiveWorkspace] = useState<{ surfaceId: string; workspaceRoot: string; nodeId?: string } | null>(null)
+  const [activeWorkspace, setActiveWorkspace] = useState<ActiveWorkspaceState>(null)
+  const setActiveWorkspaceIfChanged = useCallback((next: ActiveWorkspaceState) => {
+    setActiveWorkspace((prev) => areActiveWorkspacesEqual(prev, next) ? prev : next)
+  }, [])
   const activeWorkspaceRef = useRef(activeWorkspace)
   activeWorkspaceRef.current = activeWorkspace
   const [showDebugPanel, setShowDebugPanel] = useState(() => localStorage.getItem('showDebugPanel') === 'true')
@@ -1359,7 +1395,7 @@ function App() {
     () => loadLegacyCliModelsByProvider('jait')
   )
   const cliModel = cliModelsByProvider[chatProvider] ?? null
-  const [viewMode, setViewMode] = useState<ViewMode>('developer')
+  const [viewMode, setViewMode] = useState<ViewMode>(() => readStoredViewMode())
   const prevViewModeRef = useRef<ViewMode>(viewMode)
   const [loginUsername, setLoginUsername] = useState('')
   const [loginPassword, setLoginPassword] = useState('')
@@ -2206,9 +2242,6 @@ function App() {
     workspaceId: string
     ui: WorkspaceUIState
   } | null>(null)
-  // Bumped when the ref is set so the deferred effect re-runs even if
-  // activeWorkspaceRecord was already available before the WS push arrived.
-  const [pendingWsVersion, setPendingWsVersion] = useState(0)
 
   const suppressNextUiSync = useCallback((key: string) => {
     suppressedUiSyncKeysRef.current.add(key)
@@ -2433,14 +2466,17 @@ function App() {
     key: K, value: WorkspaceUIState[K], options?: { immediate?: boolean },
   ) => {
     const prev = workspaceUIRef.current ?? { panel: null, tabs: null, layout: null, terminal: null, preview: null }
+    if (areWorkspaceUiValuesEqual(prev[key], value)) return
+    if (key === 'panel' || key === 'layout') {
+          }
     const next = { ...prev, [key]: value }
     workspaceUIRef.current = next
     setWorkspaceUI(next, options)
-  }, [setWorkspaceUI])
+  }, [activeWorkspaceId, setWorkspaceUI])
 
   // Derived convenience setters matching previous per-key API
   const setSavedWorkspace = useCallback((v: { open: boolean; remotePath: string; surfaceId?: string; nodeId?: string } | null, options?: { immediate?: boolean }) => {
-    updateWorkspaceUI('panel', v, options)
+    updateWorkspaceUI('panel', v, { immediate: options?.immediate ?? true })
   }, [updateWorkspaceUI])
 
   const setSavedTerminal = useCallback((v: { open: boolean } | null, options?: { immediate?: boolean }) => {
@@ -2453,7 +2489,7 @@ function App() {
 
   const loadingWorkspaceLayout = loadingWorkspaceUI && !!activeWorkspaceId && !!token
   const setSavedWorkspaceLayout = useCallback((v: { tree: boolean; editor: boolean } | null, options?: { immediate?: boolean }) => {
-    updateWorkspaceUI('layout', v, options)
+    updateWorkspaceUI('layout', v, { immediate: options?.immediate ?? true })
   }, [updateWorkspaceUI])
 
   const setSavedWorkspaceTabs = useCallback((v: WorkspaceTabsState | null) => {
@@ -2504,7 +2540,7 @@ function App() {
   )
 
   useEffect(() => {
-    setWorkspaceTabsState(null)
+        setWorkspaceTabsState(null)
     setWorkspaceStateReady(false)
     workspaceUiRestoreKeyRef.current = null
     workspaceSurfaceFallbackKeyRef.current = null
@@ -2608,8 +2644,8 @@ function App() {
   // Reset active workspace state when switching workspaces so the editor
   // doesn't keep showing the previous workspace's directory.
   useEffect(() => {
-    setActiveWorkspace(null)
-  }, [activeWorkspaceId])
+    setActiveWorkspaceIfChanged(null)
+  }, [activeWorkspaceId, setActiveWorkspaceIfChanged])
 
   // ── Persistent session state for changed files ─────────────────────
   type SavedChangedFile = ChangedFile | { path: string; name: string; state?: 'undecided' | 'accepted' | 'rejected' | null }
@@ -2623,7 +2659,9 @@ function App() {
     if (!pending) {
       // No stashed WS state to apply — if the workspace record is loaded,
       // we know there's nothing deferred and can unblock persisting.
-      if (activeWorkspaceRecord && !loadingWorkspaceUI && !workspaceUI) setWorkspaceStateReady(true)
+      if (activeWorkspaceRecord && !loadingWorkspaceUI && !workspaceUI) {
+                setWorkspaceStateReady(true)
+      }
       return
     }
     if (!activeWorkspaceRecord) return
@@ -2634,7 +2672,7 @@ function App() {
     let cancelled = false
 
     const applyPendingWorkspaceUI = async () => {
-      // Apply workspace panel
+            // Apply workspace panel
       const wp = ui.panel
       if (wp) {
         const savedPath = wp.remotePath?.trim() || null
@@ -2645,33 +2683,43 @@ function App() {
           suppressNextUiSync('workspace.panel')
           showWorkspaceRef.current = wp.open === true
           setShowWorkspace(wp.open === true)
-
-          try {
-            const response = activeSessionId
-              ? await fetch(`${API_URL}/api/workspace/open`, {
-                  method: 'POST',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
-                })
-              : null
-            if (response && !response.ok) throw new Error('Failed to open workspace')
-            const data = response
-              ? await response.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
-              : null
-            if (cancelled) return
-            setActiveWorkspace({
-              surfaceId: data?.surfaceId ?? wp.surfaceId ?? '',
-              workspaceRoot: data?.workspaceRoot ?? restoredPath,
-              nodeId: data?.nodeId || requestedNodeId,
-            })
-          } catch (error) {
-            if (cancelled) return
-            console.error('Failed to restore workspace editor:', error)
-            setActiveWorkspace({
-              surfaceId: wp.surfaceId ?? '',
-              workspaceRoot: restoredPath,
-              nodeId: requestedNodeId,
-            })
+          
+          const currentWorkspace = activeWorkspaceRef.current
+          const currentNodeId = currentWorkspace?.nodeId ?? 'gateway'
+          if (
+            currentWorkspace?.workspaceRoot === restoredPath
+            && currentNodeId === requestedNodeId
+            && currentWorkspace.surfaceId
+          ) {
+            setActiveWorkspaceIfChanged(currentWorkspace)
+          } else {
+            try {
+              const response = activeSessionId
+                ? await fetch(`${API_URL}/api/workspace/open`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
+                  })
+                : null
+              if (response && !response.ok) throw new Error('Failed to open workspace')
+              const data = response
+                ? await response.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
+                : null
+              if (cancelled) return
+              setActiveWorkspaceIfChanged({
+                surfaceId: data?.surfaceId ?? wp.surfaceId ?? '',
+                workspaceRoot: data?.workspaceRoot ?? restoredPath,
+                nodeId: data?.nodeId || requestedNodeId,
+              })
+            } catch (error) {
+              if (cancelled) return
+              console.error('Failed to restore workspace editor:', error)
+              setActiveWorkspaceIfChanged({
+                surfaceId: wp.surfaceId ?? '',
+                workspaceRoot: restoredPath,
+                nodeId: requestedNodeId,
+              })
+            }
           }
         }
       }
@@ -2693,7 +2741,9 @@ function App() {
       }
 
       pendingWsWorkspaceStateRef.current = null
-      if (!cancelled) setWorkspaceStateReady(true)
+      if (!cancelled) {
+                setWorkspaceStateReady(true)
+      }
     }
 
     void applyPendingWorkspaceUI()
@@ -2701,7 +2751,7 @@ function App() {
     return () => {
       cancelled = true
     }
-  }, [activeSessionId, activeWorkspaceRecord, activeWorkspaceId, loadingWorkspaceUI, pendingWsVersion, routePreviewToWorkspace, workspaceUI]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeSessionId, activeWorkspaceRecord, activeWorkspaceId, loadingWorkspaceUI, routePreviewToWorkspace, workspaceUI]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!activeWorkspaceId || !token || !activeSessionId) return
@@ -2710,11 +2760,11 @@ function App() {
     if (pendingWsWorkspaceStateRef.current?.workspaceId === activeWorkspaceId) return
 
     if (!workspaceUI) {
-      setWorkspaceStateReady(true)
+            setWorkspaceStateReady(true)
       return
     }
 
-    const restoreKey = `${activeWorkspaceId}:${JSON.stringify(workspaceUI)}`
+    const restoreKey = getWorkspaceUiRestoreKey(activeWorkspaceId, workspaceUI)
     if (workspaceUiRestoreKeyRef.current === restoreKey) {
       if (!workspaceStateReady) setWorkspaceStateReady(true)
       return
@@ -2725,14 +2775,14 @@ function App() {
 
     const applyWorkspaceUI = async () => {
       const ui = workspaceUI
-
+      
       if (ui.layout) {
         suppressNextUiSync('workspace.layout')
         const hydratedLayout = normalizeHydratedWorkspaceLayout({
           tree: ui.layout.tree !== false,
           editor: ui.layout.editor !== false,
         }, isMobile)
-        setShowWorkspaceTree(hydratedLayout.tree)
+                setShowWorkspaceTree(hydratedLayout.tree)
         setShowWorkspaceEditor(hydratedLayout.editor)
       }
 
@@ -2746,38 +2796,48 @@ function App() {
         const shouldOpen = wp.open === true
         showWorkspaceRef.current = shouldOpen
         setShowWorkspace(shouldOpen)
-
+        
         if (restoredPath) {
           const requestedNodeId = activeWorkspaceRecord.nodeId ?? wp.nodeId ?? 'gateway'
           suppressNextUiSync('workspace.panel')
-          try {
-            const response = await fetch(`${API_URL}/api/workspace/open`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
-            })
-            if (!response.ok) throw new Error('Failed to open workspace')
-            const data = await response.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
-            if (cancelled) return
-            setActiveWorkspace({
-              surfaceId: data.surfaceId,
-              workspaceRoot: data.workspaceRoot,
-              nodeId: data.nodeId || requestedNodeId,
-            })
-          } catch (error) {
-            if (cancelled) return
-            console.error('Failed to restore workspace editor:', error)
-            setActiveWorkspace({
-              surfaceId: wp.surfaceId ?? '',
-              workspaceRoot: restoredPath,
-              nodeId: requestedNodeId,
-            })
+          const currentWorkspace = activeWorkspaceRef.current
+          const currentNodeId = currentWorkspace?.nodeId ?? 'gateway'
+          if (
+            currentWorkspace?.workspaceRoot === restoredPath
+            && currentNodeId === requestedNodeId
+            && currentWorkspace.surfaceId
+          ) {
+            setActiveWorkspaceIfChanged(currentWorkspace)
+          } else {
+            try {
+              const response = await fetch(`${API_URL}/api/workspace/open`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: restoredPath, sessionId: activeSessionId, nodeId: requestedNodeId }),
+              })
+              if (!response.ok) throw new Error('Failed to open workspace')
+              const data = await response.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
+              if (cancelled) return
+              setActiveWorkspaceIfChanged({
+                surfaceId: data.surfaceId,
+                workspaceRoot: data.workspaceRoot,
+                nodeId: data.nodeId || requestedNodeId,
+              })
+            } catch (error) {
+              if (cancelled) return
+              console.error('Failed to restore workspace editor:', error)
+              setActiveWorkspaceIfChanged({
+                surfaceId: wp.surfaceId ?? '',
+                workspaceRoot: restoredPath,
+                nodeId: requestedNodeId,
+              })
+            }
           }
         }
       } else {
         showWorkspaceRef.current = false
         setShowWorkspace(false)
-      }
+              }
 
       const dp = ui.preview
       if (dp) {
@@ -2788,7 +2848,9 @@ function App() {
         }
       }
 
-      if (!cancelled) setWorkspaceStateReady(true)
+      if (!cancelled) {
+                setWorkspaceStateReady(true)
+      }
     }
 
     void applyWorkspaceUI()
@@ -2822,6 +2884,7 @@ function App() {
     if (workspaceSurfaceFallbackKeyRef.current === restoreKey) return
     workspaceSurfaceFallbackKeyRef.current = restoreKey
 
+    
     let cancelled = false
     void fetch(`${API_URL}/api/workspace/open`, {
       method: 'POST',
@@ -2834,7 +2897,7 @@ function App() {
       })
       .then((data) => {
         if (cancelled) return
-        setActiveWorkspace({
+                setActiveWorkspaceIfChanged({
           surfaceId: data.surfaceId,
           workspaceRoot: data.workspaceRoot,
           nodeId: data.nodeId || requestedNodeId,
@@ -2881,25 +2944,9 @@ function App() {
     suppressNextUiSync(key)
     switch (key) {
       case 'workspace.panel':
-        if (!value) {
-          showWorkspaceRef.current = false
-          setShowWorkspace(false)
-          break
-        }
-        if (value && typeof value === 'object' && !Array.isArray(value)) {
-          const panel = value as { open?: boolean; remotePath?: string; surfaceId?: string; nodeId?: string }
-          const workspaceRoot = panel.remotePath?.trim() || activeWorkspace?.workspaceRoot || null
-          if (workspaceRoot) {
-            setActiveWorkspace({
-              surfaceId: panel.surfaceId ?? activeWorkspace?.surfaceId ?? '',
-              workspaceRoot,
-              nodeId: panel.nodeId ?? activeWorkspace?.nodeId,
-            })
-          }
-          const isOpen = panel.open === true
-          showWorkspaceRef.current = isOpen
-          setShowWorkspace(isOpen)
-        }
+        // Legacy session-scoped panel sync is intentionally ignored. Workspace
+        // panel visibility is restored from workspace.ui; applying this older
+        // channel can fight the workspace-scoped state and toggle forever.
         break
       case 'workspace.layout':
         if (value && typeof value === 'object' && !Array.isArray(value)) {
@@ -3057,7 +3104,11 @@ function App() {
 
     const cv = state['chat.view']
     if (cv === 'developer' || cv === 'manager') {
-      setViewMode(cv)
+      const storedViewMode = readStoredViewMode()
+      if (storedViewMode === cv) {
+        setViewMode(cv)
+      } else {
+              }
     }
 
     // Todo list
@@ -3094,44 +3145,13 @@ function App() {
     }
 
     // ── Workspace-scoped state (bundled inside _workspace envelope) ──
-    // All workspace UI state is stored under a single `workspace.ui` key.
-    // Simple fields are applied immediately; fields that depend on
-    // activeWorkspaceRecord are stashed for deferred application.
+    // The workspace state hook is authoritative for workspace.ui. The
+    // full-state packet can arrive after REST hydration and may contain an
+    // older panel/layout snapshot, which would close the editor after reload.
     const wsEnvelope = state._workspace as { id: string; state: Record<string, unknown> } | null | undefined
     if (wsEnvelope?.id && wsEnvelope.state) {
-      const ui = wsEnvelope.state['workspace.ui'] as WorkspaceUIState | null | undefined
-
-      if (ui) {
-        // Terminal panel
-        if (ui.terminal?.open) {
-          setShowTerminal(true)
-        } else {
-          setShowTerminal(false)
-        }
-
-        // Workspace tabs
-        if (ui.tabs) setWorkspaceTabsState(ui.tabs)
-
-        // Workspace layout
-        if (ui.layout) {
-          suppressNextUiSync('workspace.layout')
-          const hydratedLayout = normalizeHydratedWorkspaceLayout({
-            tree: ui.layout.tree !== false,
-            editor: ui.layout.editor !== false,
-          }, isMobile)
-          setShowWorkspaceTree(hydratedLayout.tree)
-          setShowWorkspaceEditor(hydratedLayout.editor)
-        }
-
-        // Stash the full UI state for deferred panel + preview application
-        pendingWsWorkspaceStateRef.current = {
-          workspaceId: wsEnvelope.id,
-          ui,
-        }
-        setPendingWsVersion(v => v + 1)
-      }
-    }
-  }, [setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync, isMobile])
+          }
+  }, [activeWorkspaceId, setTodoList, setChangedFiles, setMessageQueueState, chatProvider, suppressNextUiSync])
 
   const loadArchitectureDiagramForWorkspace = useCallback((workspaceRoot: string, signal?: AbortSignal) => {
     return fetch(`${API_URL}/api/architecture?workspaceRoot=${encodeURIComponent(workspaceRoot)}`, {
@@ -3182,17 +3202,11 @@ function App() {
     }, [architectureFilePath, loadArchitectureDiagramForWorkspace]),
     listeners: {
       'workspace.open': useCallback((data: WorkspaceOpenData) => {
-        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
-        const state = { open: showWorkspaceRef.current, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
-        setSavedWorkspace(state)
-      }, [setSavedWorkspace]),
+        setActiveWorkspaceIfChanged({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
+      }, [setActiveWorkspaceIfChanged]),
       'workspace.close': useCallback(() => {
-        showWorkspaceRef.current = false
-        setShowWorkspace(false)
-        setActiveWorkspace(null)
-        setShowArchitecture(false)
-        setSavedWorkspace(null)
-      }, [setSavedWorkspace]),
+        setActiveWorkspaceIfChanged(null)
+      }, [setActiveWorkspaceIfChanged]),
       'terminal.focus': useCallback((data: TerminalFocusData) => {
         setCurrentView('chat')
         setShowTerminal(true)
@@ -3248,7 +3262,7 @@ function App() {
   }, [sendArchitectureRenderResult])
 
   const handleWorkspaceTabsStateChange = useCallback((state: WorkspaceTabsState | null) => {
-    setWorkspaceTabsState(state)
+    setWorkspaceTabsState((prev) => areWorkspaceUiValuesEqual(prev, state) ? prev : state)
     setSavedWorkspaceTabs(state)
   }, [setSavedWorkspaceTabs])
 
@@ -3289,7 +3303,13 @@ function App() {
 
   const prevWorkspacePanelPayloadRef = useRef<string | null>(null)
   useEffect(() => {
-    if (activeWorkspaceId && token && !workspaceStateReady) return
+    if (activeWorkspaceId && token && !workspaceStateReady) {
+            return
+    }
+    const hasHydratedWorkspaceRecord = Boolean(activeWorkspaceId && token && activeWorkspaceRecord?.rootPath?.trim())
+    if (hasHydratedWorkspaceRecord && !activeWorkspace && workspaceUI?.panel?.open === true) {
+            return
+    }
     const panel = activeWorkspace
       ? {
           open: showWorkspace,
@@ -3301,12 +3321,8 @@ function App() {
     const serialized = JSON.stringify(panel)
     if (serialized === prevWorkspacePanelPayloadRef.current) return
     prevWorkspacePanelPayloadRef.current = serialized
-    setSavedWorkspace(panel)
-    if (activeSessionId) {
-      if (consumeSuppressedUiSync('workspace.panel')) return
-      sendUIState('workspace.panel', panel, activeSessionId)
-    }
-  }, [activeSessionId, activeWorkspace, activeWorkspaceId, consumeSuppressedUiSync, sendUIState, setSavedWorkspace, showWorkspace, token, workspaceStateReady])
+        setSavedWorkspace(panel)
+  }, [activeWorkspace, activeWorkspaceId, activeWorkspaceRecord?.rootPath, setSavedWorkspace, showWorkspace, token, workspaceStateReady, workspaceUI?.panel?.open])
 
   const prevWorkspaceLayoutPayloadRef = useRef<string | null>(null)
   const applyWorkspaceLayout = useCallback((
@@ -3326,12 +3342,14 @@ function App() {
   }, [activeSessionId, sendUIState, setSavedWorkspaceLayout])
 
   useEffect(() => {
-    if (activeWorkspaceId && token && (!workspaceStateReady || loadingWorkspaceLayout)) return
+    if (activeWorkspaceId && token && (!workspaceStateReady || loadingWorkspaceLayout)) {
+            return
+    }
     const layout = { tree: showWorkspaceTree, editor: showWorkspaceEditor }
     const serialized = JSON.stringify(layout)
     if (serialized === prevWorkspaceLayoutPayloadRef.current) return
     prevWorkspaceLayoutPayloadRef.current = serialized
-    setSavedWorkspaceLayout(layout)
+        setSavedWorkspaceLayout(layout)
     if (activeSessionId) {
       if (consumeSuppressedUiSync('workspace.layout')) return
       sendUIState('workspace.layout', layout, activeSessionId)
@@ -3524,6 +3542,7 @@ function App() {
 
   useEffect(() => {
     prevViewModeRef.current = viewMode
+    window.localStorage.setItem(VIEW_MODE_STORAGE_KEY, viewMode)
   }, [viewMode])
 
   useEffect(() => {
@@ -3635,15 +3654,12 @@ function App() {
     }
     if (nextPanel) {
       setSavedWorkspace(nextPanel, { immediate: true })
-      if (activeSessionId) {
-        sendUIState('workspace.panel', nextPanel, activeSessionId)
-      }
     }
     // Don't clear showArchitecture or architectureRequest — they should
     // persist so architecture restores when the editor is reopened
     // (same behavior as preview). Only explicit close via the header
     // button should dismiss them.
-  }, [activeSessionId, activeWorkspace, applyWorkspaceLayout, isMobile, sendUIState, setSavedWorkspace])
+  }, [activeWorkspace, applyWorkspaceLayout, isMobile, setSavedWorkspace])
   closeWorkspacePanelRef.current = closeWorkspacePanel
 
   const toggleWorkspaceTree = useCallback(() => {
@@ -3666,7 +3682,7 @@ function App() {
       applyWorkspaceLayout(nextLayout, { immediateSync: true })
       return
     }
-    setShowWorkspaceEditor(prev => !prev)
+    applyWorkspaceLayout({ tree: showWorkspaceTree, editor: !showWorkspaceEditor }, { immediateSync: true })
   }, [applyWorkspaceLayout, isMobile, showWorkspaceTree, showWorkspaceEditor])
 
   const showMobileWorkspaceTreeTab = useCallback((tab: 'files' | 'git') => {
@@ -3743,7 +3759,7 @@ function App() {
         if (!res.ok) return
         const data = await res.json() as { surfaceId: string; workspaceRoot: string; nodeId?: string }
         const resolvedNodeId = data.nodeId || workspace.nodeId || undefined
-        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: resolvedNodeId })
+        setActiveWorkspaceIfChanged({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: resolvedNodeId })
         showWorkspaceRef.current = true
         setShowWorkspace(true)
         setSavedWorkspace({ open: true, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: resolvedNodeId })
@@ -4098,7 +4114,7 @@ function App() {
         if (!openRes.ok || cancelled) return
         const data = (await openRes.json()) as { surfaceId: string; workspaceRoot: string; nodeId?: string }
         if (cancelled) return
-        setActiveWorkspace({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
+        setActiveWorkspaceIfChanged({ surfaceId: data.surfaceId, workspaceRoot: data.workspaceRoot, nodeId: data.nodeId })
         const state = { open: showWorkspaceRef.current, remotePath: data.workspaceRoot, surfaceId: data.surfaceId, nodeId: data.nodeId }
         setSavedWorkspace(state)
       } catch { /* network error — ignore, panel will show error naturally */ }
@@ -7071,7 +7087,7 @@ function App() {
                       name="Editor workspace"
                       variant="section"
                       className="flex-1 min-h-0"
-                      resetKeys={[activeWorkspace?.workspaceRoot, activeWorkspace?.surfaceId, showWorkspaceTree, showWorkspaceEditor, mobileTreeTab]}
+                      resetKeys={[activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor, mobileTreeTab]}
                     >
                       <WorkspacePanel
                         ref={workspaceRef}
@@ -7114,7 +7130,6 @@ function App() {
                         onApplyDiff={handleApplyWorkspaceDiff}
                         provider={chatProvider}
                         cliModel={cliModel}
-                        onCollapsedChange={handleWorkspaceCollapsedChange}
                         onMaxCollapsedChange={setChatCollapsed}
                         restoreRef={workspaceRestoreRef}
                       />
@@ -7247,7 +7262,7 @@ function App() {
                   name="Editor workspace"
                   variant="section"
                   className="h-full min-h-0"
-                  resetKeys={[activeWorkspace?.workspaceRoot, activeWorkspace?.surfaceId, showWorkspaceTree, showWorkspaceEditor, mobileTreeTab]}
+                  resetKeys={[activeWorkspace?.workspaceRoot, showWorkspaceTree, showWorkspaceEditor, mobileTreeTab]}
                 >
                   <WorkspacePanel
                     ref={workspaceRef}

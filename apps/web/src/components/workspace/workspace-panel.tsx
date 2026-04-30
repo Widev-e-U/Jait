@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useState, useCallback, useRef, forwardRef, useImperativeHandle, memo, type Dispatch, type SetStateAction } from 'react'
 import Editor from '@monaco-editor/react'
 import { AlertCircle, Boxes, ChevronDown, ChevronRight, CloudUpload, Copy, Download, Edit3, ExternalLink, EyeOff, Expand, FilePlus, FolderOpen, FolderPlus, FolderTree, GitBranch, GitCommit, Globe, List, Loader2, MessageSquare, Minimize2, Minus, MoreVertical, Play, Plus, RefreshCw, Save, Search, Settings2, Sparkles, Square, Trash2, Undo2, Upload, X } from 'lucide-react'
 import { gitApi as gitApiImport, type GitStatusResult, type FileDiffEntry, type GitStackedAction } from '@/lib/git-api'
@@ -693,6 +693,14 @@ function releasePointerCaptureIfHeld(target: Element | null, pointerId: number) 
   }
 }
 
+function updateBooleanState(setter: Dispatch<SetStateAction<boolean>>, next: boolean) {
+  setter((prev) => (prev === next ? prev : next))
+}
+
+function updateNumberState(setter: Dispatch<SetStateAction<number>>, next: number) {
+  setter((prev) => (prev === next ? prev : next))
+}
+
 /* ------------------------------------------------------------------ */
 /*  Drag resize hook                                                   */
 /* ------------------------------------------------------------------ */
@@ -734,7 +742,12 @@ function useDragResize(
 
   // Clamp size when constraints change
   useEffect(() => {
-    if (!collapsed && !maxCollapsed) setSize((prev) => Math.min(max, Math.max(min, prev)))
+    if (!collapsed && !maxCollapsed) {
+      setSize((prev) => {
+        const next = Math.min(max, Math.max(min, prev))
+        return prev === next ? prev : next
+      })
+    }
   }, [min, max, collapsed, maxCollapsed])
   const cleanupRef = useRef<(() => void) | null>(null)
 
@@ -749,34 +762,34 @@ function useDragResize(
 
   const restore = useCallback(() => {
     const restored = Math.min(max, Math.max(min, cachedSizeRef.current))
-    setSize(restored)
-    setCollapsed(false)
-    setMaxCollapsed(false)
+    updateNumberState(setSize, restored)
+    updateBooleanState(setCollapsed, false)
+    updateBooleanState(setMaxCollapsed, false)
   }, [min, max])
 
   const collapse = useCallback(() => {
     if (!collapsed) {
       cachedSizeRef.current = size
-      setCollapsed(true)
-      setMaxCollapsed(false)
-      setSize(0)
+      updateBooleanState(setCollapsed, true)
+      updateBooleanState(setMaxCollapsed, false)
+      updateNumberState(setSize, 0)
     }
   }, [collapsed, size])
 
   const applyPending = useCallback((nextSize: number | null) => {
     if (nextSize === null) return
     if (nextSize === SNAP_MIN) {
-      setCollapsed(true)
-      setMaxCollapsed(false)
-      setSize(0)
+      updateBooleanState(setCollapsed, true)
+      updateBooleanState(setMaxCollapsed, false)
+      updateNumberState(setSize, 0)
     } else if (nextSize === SNAP_MAX) {
-      setMaxCollapsed(true)
-      setCollapsed(false)
-      setSize(snapMaxSize)
+      updateBooleanState(setMaxCollapsed, true)
+      updateBooleanState(setCollapsed, false)
+      updateNumberState(setSize, snapMaxSize)
     } else {
-      setCollapsed(false)
-      setMaxCollapsed(false)
-      setSize(nextSize)
+      updateBooleanState(setCollapsed, false)
+      updateBooleanState(setMaxCollapsed, false)
+      updateNumberState(setSize, nextSize)
     }
   }, [snapMaxSize])
 
@@ -1166,7 +1179,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // Underestimating it lets the workspace panel steal space from the chat column,
   // which can clip sidebar/chat actions at narrower desktop widths.
   const sidebarWidth = 304
-  const minChatWidth = 90 // compact composer layout keeps the chat usable when slim
+  const minChatWidth = 310
   const minEditorWidth = 200 // minimum editor pane width when tree is visible
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
 
