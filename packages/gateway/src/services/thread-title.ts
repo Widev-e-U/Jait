@@ -88,7 +88,7 @@ export function normalizeGeneratedThreadTitle(raw: string, fallback: string): st
 
   let title = singleLine
     .replace(/^title\s*:\s*/i, "")
-    .replace(/^[-*•\d.)\s]+/, "")
+    .replace(/^(?:[-*•]\s+|\d+[.)]\s+)/, "")
     .replace(/^["'`]+|["'`]+$/g, "")
     .replace(/\s+/g, " ")
     .trim();

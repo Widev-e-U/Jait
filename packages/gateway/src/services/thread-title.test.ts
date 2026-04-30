@@ -23,6 +23,11 @@ describe("thread-title helpers", () => {
     );
   });
 
+  it("preserves meaningful leading digits while stripping list prefixes", () => {
+    expect(normalizeGeneratedThreadTitle("3D viewer crash fix", "Fallback")).toBe("3D viewer crash fix");
+    expect(normalizeGeneratedThreadTitle("1. Fix workspace reload loop", "Fallback")).toBe("Fix workspace reload loop");
+  });
+
   it("falls back when the provider returns no usable title", () => {
     expect(normalizeGeneratedThreadTitle(" \n ", "Fallback title")).toBe("Fallback title");
   });
