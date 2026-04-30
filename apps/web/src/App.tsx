@@ -53,6 +53,7 @@ import {
 import { Avatar, AvatarFallback } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { ErrorBoundary } from '@/components/error-boundary'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -167,6 +168,19 @@ const API_URL = getApiUrl()
 const WS_URL = getWsUrl()
 const VOICE_LEVEL_BAR_COUNT = 28
 const VOICE_LEVEL_FLOOR = 0.05
+
+type AvailableFileForMention = { path: string; name: string; kind?: 'file' | 'dir' }
+
+function areAvailableFilesEqual(a: AvailableFileForMention[], b: AvailableFileForMention[]) {
+  if (a.length !== b.length) return false
+  return a.every((file, index) => {
+    const other = b[index]
+    return other
+      && file.path === other.path
+      && file.name === other.name
+      && file.kind === other.kind
+  })
+}
 
 interface SecretInputRequest {
   id: string
@@ -1408,7 +1422,10 @@ function App() {
   const [gatewayError, setGatewayError] = useState<string | null>(null)
   const [workspaceFiles, setWorkspaceFiles] = useState<WorkspaceFile[]>([])
   const [activeWorkspaceFileId, setActiveWorkspaceFileId] = useState<string | null>(null)
-  const [availableFilesForMention, setAvailableFilesForMention] = useState<{ path: string; name: string; kind?: 'file' | 'dir' }[]>([])
+  const [availableFilesForMention, setAvailableFilesForMention] = useState<AvailableFileForMention[]>([])
+  const handleAvailableFilesForMentionChange = useCallback((files: AvailableFileForMention[]) => {
+    setAvailableFilesForMention((prev) => areAvailableFilesEqual(prev, files) ? prev : files)
+  }, [])
   const [folderPickerOpen, setFolderPickerOpen] = useState(false)
   const [workspacePickerMode, setWorkspacePickerMode] = useState<'workspace' | 'editor'>('workspace')
   const [changeDirectoryWorkspaceId, setChangeDirectoryWorkspaceId] = useState<string | null>(null)
@@ -6872,39 +6889,45 @@ function App() {
 
         {currentView === 'jobs' ? (
           <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
-            <JobsPage />
+            <ErrorBoundary name="Jobs" variant="section" className="min-h-full" resetKeys={[currentView]}>
+              <JobsPage />
+            </ErrorBoundary>
           </div>
         ) : currentView === 'network' ? (
           <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
-            <NetworkPanel token={token} sessionId={activeSessionId ?? 'default'} />
+            <ErrorBoundary name="Network" variant="section" className="min-h-full" resetKeys={[currentView, token, activeSessionId]}>
+              <NetworkPanel token={token} sessionId={activeSessionId ?? 'default'} />
+            </ErrorBoundary>
           </div>
         ) : currentView === 'settings' ? (
           <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
-            <SettingsPage
-              username={user?.username ?? ''}
-              token={token}
-              apiKeys={settings.api_keys}
-              onSaveApiKeys={handleSaveApiKeys}
-              sttProvider={settings.stt_provider}
-              onSttProviderChange={async (next: SttProvider) => {
-                await updateSettings({ stt_provider: next })
-              }}
-              jaitBackend={settings.jait_backend ?? 'openai'}
-              onJaitBackendChange={async (next) => {
-                await updateSettings({ jait_backend: next })
-              }}
-              onClearArchive={handleClearArchive}
-              onClearArchivedWorkspaces={handleClearArchivedWorkspaces}
-              onFetchArchivedWorkspaces={fetchArchivedWorkspaces}
-              onRestoreWorkspace={handleRestoreWorkspace}
-              activityEvents={activityEvents}
-              updateInfo={updateInfo}
-              updateChecking={updateChecking}
-              onCheckUpdate={() => { void handleCheckUpdate() }}
-              onApplyUpdate={() => { void handleApplyUpdate() }}
-              updateApplying={updateApplying}
-              platform={appPlatform}
-            />
+            <ErrorBoundary name="Settings" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
+              <SettingsPage
+                username={user?.username ?? ''}
+                token={token}
+                apiKeys={settings.api_keys}
+                onSaveApiKeys={handleSaveApiKeys}
+                sttProvider={settings.stt_provider}
+                onSttProviderChange={async (next: SttProvider) => {
+                  await updateSettings({ stt_provider: next })
+                }}
+                jaitBackend={settings.jait_backend ?? 'openai'}
+                onJaitBackendChange={async (next) => {
+                  await updateSettings({ jait_backend: next })
+                }}
+                onClearArchive={handleClearArchive}
+                onClearArchivedWorkspaces={handleClearArchivedWorkspaces}
+                onFetchArchivedWorkspaces={fetchArchivedWorkspaces}
+                onRestoreWorkspace={handleRestoreWorkspace}
+                activityEvents={activityEvents}
+                updateInfo={updateInfo}
+                updateChecking={updateChecking}
+                onCheckUpdate={() => { void handleCheckUpdate() }}
+                onApplyUpdate={() => { void handleApplyUpdate() }}
+                updateApplying={updateApplying}
+                platform={appPlatform}
+              />
+            </ErrorBoundary>
           </div>
         ) : (
           <div className={`flex flex-1 min-h-0 overflow-hidden ${isMobile ? 'flex-col relative' : ''}`}>
@@ -7000,27 +7023,29 @@ function App() {
                   onBlur={handleSidebarBlur}
                   className={`overflow-hidden outline-none ${isMobile ? 'fixed right-[3.25rem] top-1/2 z-50 h-[min(28rem,80vh)] w-[min(20rem,calc(100vw-5rem))] -translate-y-1/2 rounded-xl border bg-background shadow-2xl' : 'w-64 border-r shrink-0'}`}
                 >
-                  <SessionSelector
-                    workspaces={workspaces}
-                    personalSessions={personalSessions}
-                    activeWorkspaceId={activeWorkspaceId}
-                    activeSessionId={activeSessionId}
-                    loading={workspacesLoading}
-                    hasMoreWorkspaces={hasMoreWorkspaces}
-                    showFewerWorkspaces={workspaces.length > workspaceListLimit}
-                    onSelectWorkspace={handleSwitchWorkspace}
-                    onSelectPersonalSession={(sessionId) => { if (isMobile) setShowSidebar(false); switchSession(null, sessionId) }}
-                    onNewPersonalSession={() => { if (isMobile) setShowSidebar(false); void createSession(null) }}
-                    onCreateWorkspace={handleCreateWorkspace}
-                    onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
-                    onChangeDirectory={handleChangeDirectory}
-                    onAssignRepository={(workspaceId) => { void handleAssignWorkspaceRepository(workspaceId) }}
-                    onShowMore={showMoreWorkspaces}
-                    onShowFewer={showFewerWorkspaces}
-                    sessionInfo={sessionInfo}
-                    nodes={fsNodes}
-                    repositories={automation.repositories}
-                  />
+                  <ErrorBoundary name="Workspace sidebar" variant="section" className="h-full" resetKeys={[activeWorkspaceId, activeSessionId, workspaces.length, personalSessions.length]}>
+                    <SessionSelector
+                      workspaces={workspaces}
+                      personalSessions={personalSessions}
+                      activeWorkspaceId={activeWorkspaceId}
+                      activeSessionId={activeSessionId}
+                      loading={workspacesLoading}
+                      hasMoreWorkspaces={hasMoreWorkspaces}
+                      showFewerWorkspaces={workspaces.length > workspaceListLimit}
+                      onSelectWorkspace={handleSwitchWorkspace}
+                      onSelectPersonalSession={(sessionId) => { if (isMobile) setShowSidebar(false); switchSession(null, sessionId) }}
+                      onNewPersonalSession={() => { if (isMobile) setShowSidebar(false); void createSession(null) }}
+                      onCreateWorkspace={handleCreateWorkspace}
+                      onRemoveWorkspace={(workspaceId) => { void handleRemoveWorkspace(workspaceId) }}
+                      onChangeDirectory={handleChangeDirectory}
+                      onAssignRepository={(workspaceId) => { void handleAssignWorkspaceRepository(workspaceId) }}
+                      onShowMore={showMoreWorkspaces}
+                      onShowFewer={showFewerWorkspaces}
+                      sessionInfo={sessionInfo}
+                      nodes={fsNodes}
+                      repositories={automation.repositories}
+                    />
+                  </ErrorBoundary>
                 </aside>
               )}
 
@@ -7038,50 +7063,57 @@ function App() {
                 )}
                 {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showDesktopWorkspace && (
                   <div className="flex min-h-0 flex-1">
-                    <WorkspacePanel
-                      ref={workspaceRef}
-                      autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
-                      surfaceId={activeWorkspace?.surfaceId ?? null}
-                      files={workspaceFiles}
-                      activeFileId={activeWorkspaceFileId}
-                      onActiveFileChange={setActiveWorkspaceFileId}
-                      onFileDrop={(files) => { void handleFileDrop(files) }}
-                      onReferenceFile={handleReferenceFile}
-                      onReferenceSelection={handleReferenceFileSelection}
-                      onReferencePreviewElement={handleReferencePreviewElement}
-                      onAvailableFilesChange={setAvailableFilesForMention}
-                      showTree={showWorkspaceTree}
-                      showEditor={showWorkspaceEditor}
-                      onToggleTree={toggleWorkspaceTree}
-                      onToggleEditor={toggleWorkspaceEditor}
-                      changedPaths={changedPaths}
-                      fsWatcherVersion={fsWatcherVersion}
-                      sourceControlRefreshSignal={sourceControlRefreshSignal}
-                      savedTabsState={workspaceTabsState}
-                      stateReady={workspaceStateReady}
-                      previewRequest={workspacePreviewRequest}
-                      onTabsStateChange={handleWorkspaceTabsStateChange}
-                      onPreviewOpenChange={handleWorkspacePreviewOpenChange}
-                      previewSessionId={activeSessionId}
-                      previewToken={token}
-                      previewWorkspaceRoot={previewWorkspaceRoot}
-                      previewInitialTarget={devPreviewTarget}
-                      architectureDiagram={architectureDiagram}
-                      architectureGenerating={architectureGenerating}
-                      architectureRequest={architectureRequest}
-                      onArchitectureOpenChange={setShowArchitecture}
-                      onArchitectureRenderResult={handleArchitectureRenderResult}
-                      onGenerateArchitecture={() => {
-                        setArchitectureGenerating(true)
-                        handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
-                      }}
-                      onApplyDiff={handleApplyWorkspaceDiff}
-                      provider={chatProvider}
-                      cliModel={cliModel}
-                      onCollapsedChange={handleWorkspaceCollapsedChange}
-                      onMaxCollapsedChange={setChatCollapsed}
-                      restoreRef={workspaceRestoreRef}
-                    />
+                    <ErrorBoundary
+                      name="Editor workspace"
+                      variant="section"
+                      className="flex-1 min-h-0"
+                      resetKeys={[activeWorkspace?.workspaceRoot, activeWorkspace?.surfaceId, showWorkspaceTree, showWorkspaceEditor, mobileTreeTab]}
+                    >
+                      <WorkspacePanel
+                        ref={workspaceRef}
+                        autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
+                        surfaceId={activeWorkspace?.surfaceId ?? null}
+                        files={workspaceFiles}
+                        activeFileId={activeWorkspaceFileId}
+                        onActiveFileChange={setActiveWorkspaceFileId}
+                        onFileDrop={(files) => { void handleFileDrop(files) }}
+                        onReferenceFile={handleReferenceFile}
+                        onReferenceSelection={handleReferenceFileSelection}
+                        onReferencePreviewElement={handleReferencePreviewElement}
+                        onAvailableFilesChange={handleAvailableFilesForMentionChange}
+                        showTree={showWorkspaceTree}
+                        showEditor={showWorkspaceEditor}
+                        onToggleTree={toggleWorkspaceTree}
+                        onToggleEditor={toggleWorkspaceEditor}
+                        changedPaths={changedPaths}
+                        fsWatcherVersion={fsWatcherVersion}
+                        sourceControlRefreshSignal={sourceControlRefreshSignal}
+                        savedTabsState={workspaceTabsState}
+                        stateReady={workspaceStateReady}
+                        previewRequest={workspacePreviewRequest}
+                        onTabsStateChange={handleWorkspaceTabsStateChange}
+                        onPreviewOpenChange={handleWorkspacePreviewOpenChange}
+                        previewSessionId={activeSessionId}
+                        previewToken={token}
+                        previewWorkspaceRoot={previewWorkspaceRoot}
+                        previewInitialTarget={devPreviewTarget}
+                        architectureDiagram={architectureDiagram}
+                        architectureGenerating={architectureGenerating}
+                        architectureRequest={architectureRequest}
+                        onArchitectureOpenChange={setShowArchitecture}
+                        onArchitectureRenderResult={handleArchitectureRenderResult}
+                        onGenerateArchitecture={() => {
+                          setArchitectureGenerating(true)
+                          handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                        }}
+                        onApplyDiff={handleApplyWorkspaceDiff}
+                        provider={chatProvider}
+                        cliModel={cliModel}
+                        onCollapsedChange={handleWorkspaceCollapsedChange}
+                        onMaxCollapsedChange={setChatCollapsed}
+                        restoreRef={workspaceRestoreRef}
+                      />
+                    </ErrorBoundary>
                   </div>
                 )}
                 {viewMode === 'developer' && showTerminal && !isMobile && currentView === 'chat' && (
@@ -7137,14 +7169,16 @@ function App() {
                       </div>
                     </div>
                     {activeTerminalId ? (
-                      <TerminalView
-                        ref={terminalViewRef}
-                        terminalId={activeTerminalId}
-                        className="flex-1 min-h-0"
-                        token={token}
-                        workspaceRoot={activeWorkspaceRoot ?? undefined}
-                        onReferenceSelection={handleReferenceTerminalSelection}
-                      />
+                      <ErrorBoundary name="Terminal" variant="section" className="flex-1 min-h-0" resetKeys={[activeTerminalId, activeWorkspaceRoot]}>
+                        <TerminalView
+                          ref={terminalViewRef}
+                          terminalId={activeTerminalId}
+                          className="flex-1 min-h-0"
+                          token={token}
+                          workspaceRoot={activeWorkspaceRoot ?? undefined}
+                          onReferenceSelection={handleReferenceTerminalSelection}
+                        />
+                      </ErrorBoundary>
                     ) : (
                       <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
                         <button
@@ -7180,14 +7214,16 @@ function App() {
                   </button>
                 </div>
                 {activeTerminalId ? (
-                  <TerminalView
-                    ref={terminalViewRef}
-                    terminalId={activeTerminalId}
-                    className="flex-1 min-h-0"
-                    token={token}
-                    workspaceRoot={activeWorkspaceRoot ?? undefined}
-                    onReferenceSelection={handleReferenceTerminalSelection}
-                  />
+                  <ErrorBoundary name="Terminal" variant="section" className="flex-1 min-h-0" resetKeys={[activeTerminalId, activeWorkspaceRoot]}>
+                    <TerminalView
+                      ref={terminalViewRef}
+                      terminalId={activeTerminalId}
+                      className="flex-1 min-h-0"
+                      token={token}
+                      workspaceRoot={activeWorkspaceRoot ?? undefined}
+                      onReferenceSelection={handleReferenceTerminalSelection}
+                    />
+                  </ErrorBoundary>
                 ) : (
                   <div className="flex items-center justify-center flex-1 text-sm text-muted-foreground">
                     <button
@@ -7202,49 +7238,56 @@ function App() {
             )}
             {(viewMode === 'developer' || (viewMode === 'manager' && automation.selectedThread)) && showMobileWorkspaceFullscreen && (
               <section className={`flex-1 min-h-0 overflow-hidden border-b bg-background ${viewMode === 'manager' ? '' : 'pt-16'}`}>
-                <WorkspacePanel
-                  ref={workspaceRef}
-                  autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
-                  surfaceId={activeWorkspace?.surfaceId ?? null}
-                  files={workspaceFiles}
-                  activeFileId={activeWorkspaceFileId}
-                  onActiveFileChange={setActiveWorkspaceFileId}
-                  onFileDrop={(files) => { void handleFileDrop(files) }}
-                  onReferenceFile={handleReferenceFile}
-                  onReferenceSelection={handleReferenceFileSelection}
-                  onReferencePreviewElement={handleReferencePreviewElement}
-                  onAvailableFilesChange={setAvailableFilesForMention}
-                  showTree={showWorkspaceTree}
-                  showEditor={showWorkspaceEditor}
-                  onToggleTree={toggleWorkspaceTree}
-                  onToggleEditor={toggleWorkspaceEditor}
-                  treeTab={mobileTreeTab}
-                  onTreeTabChange={setMobileTreeTab}
-                  changedPaths={changedPaths}
-                  sourceControlRefreshSignal={sourceControlRefreshSignal}
-                  isMobile
-                  savedTabsState={workspaceTabsState}
-                  stateReady={workspaceStateReady}
-                  previewRequest={workspacePreviewRequest}
-                  onTabsStateChange={handleWorkspaceTabsStateChange}
-                  onPreviewOpenChange={handleWorkspacePreviewOpenChange}
-                  previewSessionId={activeSessionId}
-                  previewToken={token}
-                  previewWorkspaceRoot={previewWorkspaceRoot}
-                  previewInitialTarget={devPreviewTarget}
-                  architectureDiagram={architectureDiagram}
-                  architectureGenerating={architectureGenerating}
-                  architectureRequest={architectureRequest}
-                  onArchitectureOpenChange={setShowArchitecture}
-                  onArchitectureRenderResult={handleArchitectureRenderResult}
-                  onGenerateArchitecture={() => {
-                    setArchitectureGenerating(true)
-                    handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
-                  }}
-                  onApplyDiff={handleApplyWorkspaceDiff}
-                  provider={chatProvider}
-                  cliModel={cliModel}
-                />
+                <ErrorBoundary
+                  name="Editor workspace"
+                  variant="section"
+                  className="h-full min-h-0"
+                  resetKeys={[activeWorkspace?.workspaceRoot, activeWorkspace?.surfaceId, showWorkspaceTree, showWorkspaceEditor, mobileTreeTab]}
+                >
+                  <WorkspacePanel
+                    ref={workspaceRef}
+                    autoOpenRemotePath={activeWorkspace?.workspaceRoot ?? null}
+                    surfaceId={activeWorkspace?.surfaceId ?? null}
+                    files={workspaceFiles}
+                    activeFileId={activeWorkspaceFileId}
+                    onActiveFileChange={setActiveWorkspaceFileId}
+                    onFileDrop={(files) => { void handleFileDrop(files) }}
+                    onReferenceFile={handleReferenceFile}
+                    onReferenceSelection={handleReferenceFileSelection}
+                    onReferencePreviewElement={handleReferencePreviewElement}
+                    onAvailableFilesChange={handleAvailableFilesForMentionChange}
+                    showTree={showWorkspaceTree}
+                    showEditor={showWorkspaceEditor}
+                    onToggleTree={toggleWorkspaceTree}
+                    onToggleEditor={toggleWorkspaceEditor}
+                    treeTab={mobileTreeTab}
+                    onTreeTabChange={setMobileTreeTab}
+                    changedPaths={changedPaths}
+                    sourceControlRefreshSignal={sourceControlRefreshSignal}
+                    isMobile
+                    savedTabsState={workspaceTabsState}
+                    stateReady={workspaceStateReady}
+                    previewRequest={workspacePreviewRequest}
+                    onTabsStateChange={handleWorkspaceTabsStateChange}
+                    onPreviewOpenChange={handleWorkspacePreviewOpenChange}
+                    previewSessionId={activeSessionId}
+                    previewToken={token}
+                    previewWorkspaceRoot={previewWorkspaceRoot}
+                    previewInitialTarget={devPreviewTarget}
+                    architectureDiagram={architectureDiagram}
+                    architectureGenerating={architectureGenerating}
+                    architectureRequest={architectureRequest}
+                    onArchitectureOpenChange={setShowArchitecture}
+                    onArchitectureRenderResult={handleArchitectureRenderResult}
+                    onGenerateArchitecture={() => {
+                      setArchitectureGenerating(true)
+                      handleSuggestion('Analyze the workspace architecture and generate a mermaid diagram using the architecture.generate tool. Include all major modules, their relationships, data flow, and external dependencies.')
+                    }}
+                    onApplyDiff={handleApplyWorkspaceDiff}
+                    provider={chatProvider}
+                    cliModel={cliModel}
+                  />
+                </ErrorBoundary>
               </section>
             )}
 
@@ -7254,37 +7297,39 @@ function App() {
                 {automation.selectedThread ? (
                   <>
 
-                    <Conversation
-                      key={automation.selectedThread?.id ?? 'manager-empty'}
-                      className="min-h-0 flex-1 border-b"
-                      loading={automation.loadingActivities}
-                      loadingLabel="Loading activity"
-                      messageContents={automationMessages.map((msg) => msg.content)}
-                    >
-                      {automationMessages.length === 0 && !automation.loadingActivities && (
-                        <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
-                      )}
-                      {automationMessages.map((msg, idx) => (
-                        <Message
-                          key={msg.id}
-                          messageId={msg.id}
-                          messageIndex={idx}
-                          messageFromEnd={automationMessages.length - 1 - idx}
-                          role={msg.role}
-                          content={msg.content}
-                          contextFlow={msg.contextFlow}
-                          toolCalls={msg.toolCalls}
-                          segments={msg.segments}
-                          isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
-                          compact
-                          preferLlmUi={false}
-                          provider={automation.selectedThread?.providerId as ProviderId | undefined}
-                          renderInlineSecretPrompt={renderInlineSecretPrompt}
-                          onOpenPath={handleOpenMessagePath}
-                          onOpenDiff={handleChangedFileClick}
-                        />
-                      ))}
-                    </Conversation>
+                    <ErrorBoundary name="Thread activity" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[automation.selectedThread?.id, automationMessages.length]}>
+                      <Conversation
+                        key={automation.selectedThread?.id ?? 'manager-empty'}
+                        className="min-h-0 flex-1 border-b"
+                        loading={automation.loadingActivities}
+                        loadingLabel="Loading activity"
+                        messageContents={automationMessages.map((msg) => msg.content)}
+                      >
+                        {automationMessages.length === 0 && !automation.loadingActivities && (
+                          <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
+                        )}
+                        {automationMessages.map((msg, idx) => (
+                          <Message
+                            key={msg.id}
+                            messageId={msg.id}
+                            messageIndex={idx}
+                            messageFromEnd={automationMessages.length - 1 - idx}
+                            role={msg.role}
+                            content={msg.content}
+                            contextFlow={msg.contextFlow}
+                            toolCalls={msg.toolCalls}
+                            segments={msg.segments}
+                            isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
+                            compact
+                            preferLlmUi={false}
+                            provider={automation.selectedThread?.providerId as ProviderId | undefined}
+                            renderInlineSecretPrompt={renderInlineSecretPrompt}
+                            onOpenPath={handleOpenMessagePath}
+                            onOpenDiff={handleChangedFileClick}
+                          />
+                        ))}
+                      </Conversation>
+                    </ErrorBoundary>
                     <div className="shrink-0 py-3 px-4">
                       <div className="mx-auto max-w-3xl">
                         {automation.error && (
@@ -7306,37 +7351,39 @@ function App() {
                         {automation.selectedThreadTodos.length > 0 && (
                           <TodoList items={automation.selectedThreadTodos} className="mb-2" />
                         )}
-                        <PromptInput
-                          ref={promptInputRef}
-                          draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
-                          value={inputValueRef.current}
-                          syncKey={inputVersion}
-                          onChange={handleInputChange}
-                          onSubmit={handleSubmit}
-                          onQueue={handleManagerQueue}
-                          onStop={() => { if (automation.selectedThread) void automation.handleStop(automation.selectedThread.id) }}
-                          isLoading={automation.selectedThread?.status === 'running'}
-                          disabled={automation.creating}
-                          placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
-                          onVoiceInput={handleVoiceInput}
-                          voiceRecording={voiceRecording}
-                          voiceLevels={voiceLevels}
-                          voiceTranscribing={voiceTranscribing}
-                          onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                          responseStyle={chatResponseStyle}
-                          onResponseStyleChange={handleChatResponseStyleChange}
-                          provider={chatProvider}
-                          onProviderChange={handleChatProviderChange}
-                          providerRuntimeMode={chatProviderRuntimeMode}
-                          onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
-                          cliModel={cliModel}
-                          onCliModelChange={handleCliModelChange}
-                          repoRuntime={selectedThreadRepoRuntime}
-                          onMoveToGateway={handleMoveRepoToGateway}
-                          availableFiles={availableFilesForMention}
-                          onSearchFiles={handleSearchFiles}
-                          workspaceOpen={showWorkspace}
-                        />
+                        <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
+                          <PromptInput
+                            ref={promptInputRef}
+                            draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
+                            value={inputValueRef.current}
+                            syncKey={inputVersion}
+                            onChange={handleInputChange}
+                            onSubmit={handleSubmit}
+                            onQueue={handleManagerQueue}
+                            onStop={() => { if (automation.selectedThread) void automation.handleStop(automation.selectedThread.id) }}
+                            isLoading={automation.selectedThread?.status === 'running'}
+                            disabled={automation.creating}
+                            placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
+                            onVoiceInput={handleVoiceInput}
+                            voiceRecording={voiceRecording}
+                            voiceLevels={voiceLevels}
+                            voiceTranscribing={voiceTranscribing}
+                            onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                            responseStyle={chatResponseStyle}
+                            onResponseStyleChange={handleChatResponseStyleChange}
+                            provider={chatProvider}
+                            onProviderChange={handleChatProviderChange}
+                            providerRuntimeMode={chatProviderRuntimeMode}
+                            onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
+                            cliModel={cliModel}
+                            onCliModelChange={handleCliModelChange}
+                            repoRuntime={selectedThreadRepoRuntime}
+                            onMoveToGateway={handleMoveRepoToGateway}
+                            availableFiles={availableFilesForMention}
+                            onSearchFiles={handleSearchFiles}
+                            workspaceOpen={showWorkspace}
+                          />
+                        </ErrorBoundary>
                         <div className="flex items-center gap-2 px-1 mt-1.5">
                           {selectedThreadRepoRuntime && (
                             <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />
@@ -7380,32 +7427,34 @@ function App() {
                               <span className="min-w-0 break-words">{automation.error}</span>
                             </div>
                           )}
-                          <PromptInput
-                          ref={promptInputRef}
-                          draftStateKey={`manager:${automation.selectedRepo?.id ?? 'repo-draft'}`}
-                          value={inputValueRef.current}
-                          syncKey={inputVersion}
-                          onChange={handleInputChange}
-                          onSubmit={handleSubmit}
-                          disabled={threadComposerDisabled}
-                          controlsDisabled={automation.creating || selectedRepoOffline}
-                          placeholder={threadPlaceholder}
-                          onVoiceInput={handleVoiceInput}
-                          voiceRecording={voiceRecording}
-                          voiceLevels={voiceLevels}
-                          voiceTranscribing={voiceTranscribing}
-                          onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                          responseStyle={chatResponseStyle}
-                          onResponseStyleChange={handleChatResponseStyleChange}
-                          provider={chatProvider}
-                          onProviderChange={handleChatProviderChange}
-                            providerRuntimeMode={chatProviderRuntimeMode}
-                            onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
-                            cliModel={cliModel}
-                            onCliModelChange={handleCliModelChange}
-                            repoRuntime={selectedRepoRuntime}
-                            onMoveToGateway={handleMoveRepoToGateway}
-                          />
+                          <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedRepo?.id, inputVersion]}>
+                            <PromptInput
+                              ref={promptInputRef}
+                              draftStateKey={`manager:${automation.selectedRepo?.id ?? 'repo-draft'}`}
+                              value={inputValueRef.current}
+                              syncKey={inputVersion}
+                              onChange={handleInputChange}
+                              onSubmit={handleSubmit}
+                              disabled={threadComposerDisabled}
+                              controlsDisabled={automation.creating || selectedRepoOffline}
+                              placeholder={threadPlaceholder}
+                              onVoiceInput={handleVoiceInput}
+                              voiceRecording={voiceRecording}
+                              voiceLevels={voiceLevels}
+                              voiceTranscribing={voiceTranscribing}
+                              onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                              responseStyle={chatResponseStyle}
+                              onResponseStyleChange={handleChatResponseStyleChange}
+                              provider={chatProvider}
+                              onProviderChange={handleChatProviderChange}
+                              providerRuntimeMode={chatProviderRuntimeMode}
+                              onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
+                              cliModel={cliModel}
+                              onCliModelChange={handleCliModelChange}
+                              repoRuntime={selectedRepoRuntime}
+                              onMoveToGateway={handleMoveRepoToGateway}
+                            />
+                          </ErrorBoundary>
                           <div className={`${isMobile ? 'overflow-hidden' : 'overflow-x-auto'} px-1 pt-3`}>
                             <div className={`${isMobile ? 'flex min-w-0 items-center gap-2' : 'flex min-w-max items-center gap-2 whitespace-nowrap'}`}>
                               <ManagerRepoPicker
@@ -7505,16 +7554,18 @@ function App() {
                 style={developerChatPanelStyle}
               >
                 {!chatCollapsed && (
-                  <Conversation
-                    key={activeSessionId ?? 'developer-loading'}
-                    className="min-h-0 flex-1 border-b"
-                    compact={showDesktopWorkspace}
-                    loading
-                    loadingLabel="Loading chat"
-                    messageContents={[]}
-                  >
-                    {null}
-                  </Conversation>
+                  <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, showDesktopWorkspace]}>
+                    <Conversation
+                      key={activeSessionId ?? 'developer-loading'}
+                      className="min-h-0 flex-1 border-b"
+                      compact={showDesktopWorkspace}
+                      loading
+                      loadingLabel="Loading chat"
+                      messageContents={[]}
+                    >
+                      {null}
+                    </Conversation>
+                  </ErrorBoundary>
                 )}
               </div>
             ) : !hasMessages ? (
@@ -7542,46 +7593,48 @@ function App() {
                   {developerChatUiState.showTodoList && (
                     <TodoList items={todoList} onClear={() => setTodoList([])} />
                   )}
-                  <PromptInput
-                    ref={promptInputRef}
-                    draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
-                    value={inputValueRef.current}
-                    syncKey={inputVersion}
-                    segments={inputSegments}
-                    onChange={handleInputChange}
-                    onSubmit={handleSubmit}
-                    onStop={handleCancelRequest}
-                    onQueue={handleQueue}
-                    isLoading={isLoading}
-                    placeholder={developerPlaceholder}
-                    onVoiceInput={handleVoiceInput}
-                    voiceRecording={voiceRecording}
-                    voiceLevels={voiceLevels}
-                    voiceTranscribing={voiceTranscribing}
-                    onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                    mode={chatMode}
-                    onModeChange={setChatMode}
-                    responseStyle={chatResponseStyle}
-                    onResponseStyleChange={handleChatResponseStyleChange}
-                    sendTarget={sendTarget}
-                    onSendTargetChange={setSendTarget}
-                    showSendTargetSelector={false}
-                    provider={chatProvider}
-                    onProviderChange={handleChatProviderChange}
-                    providerRuntimeMode={chatProviderRuntimeMode}
-                    onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
-                    cliModel={cliModel}
-                    onCliModelChange={handleCliModelChange}
-                    repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
-                    onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
-                    availableFiles={availableFilesForMention}
-                    onSearchFiles={handleSearchFiles}
-                    workspaceOpen={showWorkspace}
-                    workspaceName={activeWorkspaceDisplayName}
-                    workspacePath={activeWorkspaceRoot}
-                    sessionInfo={sessionInfo}
-                    workspaceNodeId={activeWorkspace?.nodeId}
-                  />
+                  <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
+                    <PromptInput
+                      ref={promptInputRef}
+                      draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
+                      value={inputValueRef.current}
+                      syncKey={inputVersion}
+                      segments={inputSegments}
+                      onChange={handleInputChange}
+                      onSubmit={handleSubmit}
+                      onStop={handleCancelRequest}
+                      onQueue={handleQueue}
+                      isLoading={isLoading}
+                      placeholder={developerPlaceholder}
+                      onVoiceInput={handleVoiceInput}
+                      voiceRecording={voiceRecording}
+                      voiceLevels={voiceLevels}
+                      voiceTranscribing={voiceTranscribing}
+                      onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                      mode={chatMode}
+                      onModeChange={setChatMode}
+                      responseStyle={chatResponseStyle}
+                      onResponseStyleChange={handleChatResponseStyleChange}
+                      sendTarget={sendTarget}
+                      onSendTargetChange={setSendTarget}
+                      showSendTargetSelector={false}
+                      provider={chatProvider}
+                      onProviderChange={handleChatProviderChange}
+                      providerRuntimeMode={chatProviderRuntimeMode}
+                      onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
+                      cliModel={cliModel}
+                      onCliModelChange={handleCliModelChange}
+                      repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
+                      onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
+                      availableFiles={availableFilesForMention}
+                      onSearchFiles={handleSearchFiles}
+                      workspaceOpen={showWorkspace}
+                      workspaceName={activeWorkspaceDisplayName}
+                      workspacePath={activeWorkspaceRoot}
+                      sessionInfo={sessionInfo}
+                      workspaceNodeId={activeWorkspace?.nodeId}
+                    />
+                  </ErrorBoundary>
                   {developerComposerControlRow}
                 </div>
               </div>
@@ -7593,52 +7646,54 @@ function App() {
               >
 
                 {!chatCollapsed && (<>
-                <Conversation
-                  key={activeSessionId ?? 'developer-empty'}
-                  className="min-h-0 flex-1 border-b"
-                  compact={showDesktopWorkspace}
-                  loading={isLoadingHistory}
-                  loadingLabel="Loading chat"
-                  messageContents={messageContents}
-                >
-                  {messages.map((msg, idx) => (
-                    <Message
-                      key={msg.id}
-                      messageId={msg.id}
-                      messageIndex={idx}
-                      messageFromEnd={messages.length - 1 - idx}
-                      role={msg.role}
-                      content={msg.content}
-                      contextFlow={msg.contextFlow}
-                      displayContent={msg.displayContent}
-                      referencedFiles={msg.referencedFiles}
-                      displaySegments={msg.displaySegments}
-                      attachments={msg.attachments}
-                      thinking={msg.thinking}
-                      thinkingDuration={msg.thinkingDuration}
-                      toolCalls={msg.toolCalls}
-                      segments={msg.segments}
-                      isStreaming={isLoading && msg === messages[messages.length - 1]}
-                      compact={showWorkspace || showScreenShare || previewOpen}
-                      preferLlmUi
-                      provider={chatProvider}
-                      onOpenTerminal={handleOpenTerminalFromToolCall}
-                      renderInlineSecretPrompt={renderInlineSecretPrompt}
-                      onEditMessage={handleEditPreviousMessage}
-                      editComposer={editComposerBag}
-                      onOpenPath={handleOpenMessagePath}
-                      onOpenDiff={handleChangedFileClick}
-                    />
-                  ))}
-                  {messageQueue.length > 0 && (
-                    <MessageQueue
-                      items={messageQueue}
-                      onRemove={dequeueMessage}
-                      onEdit={updateQueueItem}
-                      onReorder={reorderQueueItem}
-                    />
-                  )}
-                </Conversation>
+                <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, messages.length, messageQueue.length, showDesktopWorkspace]}>
+                  <Conversation
+                    key={activeSessionId ?? 'developer-empty'}
+                    className="min-h-0 flex-1 border-b"
+                    compact={showDesktopWorkspace}
+                    loading={isLoadingHistory}
+                    loadingLabel="Loading chat"
+                    messageContents={messageContents}
+                  >
+                    {messages.map((msg, idx) => (
+                      <Message
+                        key={msg.id}
+                        messageId={msg.id}
+                        messageIndex={idx}
+                        messageFromEnd={messages.length - 1 - idx}
+                        role={msg.role}
+                        content={msg.content}
+                        contextFlow={msg.contextFlow}
+                        displayContent={msg.displayContent}
+                        referencedFiles={msg.referencedFiles}
+                        displaySegments={msg.displaySegments}
+                        attachments={msg.attachments}
+                        thinking={msg.thinking}
+                        thinkingDuration={msg.thinkingDuration}
+                        toolCalls={msg.toolCalls}
+                        segments={msg.segments}
+                        isStreaming={isLoading && msg === messages[messages.length - 1]}
+                        compact={showWorkspace || showScreenShare || previewOpen}
+                        preferLlmUi
+                        provider={chatProvider}
+                        onOpenTerminal={handleOpenTerminalFromToolCall}
+                        renderInlineSecretPrompt={renderInlineSecretPrompt}
+                        onEditMessage={handleEditPreviousMessage}
+                        editComposer={editComposerBag}
+                        onOpenPath={handleOpenMessagePath}
+                        onOpenDiff={handleChangedFileClick}
+                      />
+                    ))}
+                    {messageQueue.length > 0 && (
+                      <MessageQueue
+                        items={messageQueue}
+                        onRemove={dequeueMessage}
+                        onEdit={updateQueueItem}
+                        onReorder={reorderQueueItem}
+                      />
+                    )}
+                  </Conversation>
+                </ErrorBoundary>
 
                 <div className={`shrink-0 ${isMobile ? 'px-2 py-2' : `py-3 ${showDesktopWorkspace ? 'px-3' : 'px-4'}`}`}>
                   <div className="mx-auto w-full max-w-3xl space-y-1.5">
@@ -7693,47 +7748,49 @@ function App() {
                         />
                       )}
                     </div>
-                    <PromptInput
-                      ref={promptInputRef}
-                      draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
-                      value={inputValueRef.current}
-                      syncKey={inputVersion}
-                      segments={inputSegments}
-                      onChange={handleInputChange}
-                      onSubmit={handleSubmit}
-                      onStop={handleCancelRequest}
-                      onQueue={handleQueue}
-                      isLoading={isLoading}
-                      disabled={limitReached}
-                      placeholder={developerPlaceholder}
-                      onVoiceInput={handleVoiceInput}
-                      voiceRecording={voiceRecording}
-                      voiceLevels={voiceLevels}
-                      voiceTranscribing={voiceTranscribing}
-                      onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                      mode={chatMode}
-                      onModeChange={setChatMode}
-                      responseStyle={chatResponseStyle}
-                      onResponseStyleChange={handleChatResponseStyleChange}
-                      sendTarget={sendTarget}
-                      onSendTargetChange={setSendTarget}
-                      showSendTargetSelector={false}
-                      provider={chatProvider}
-                      onProviderChange={handleChatProviderChange}
-                      providerRuntimeMode={chatProviderRuntimeMode}
-                      onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
-                      cliModel={cliModel}
-                      onCliModelChange={handleCliModelChange}
-                      repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
-                      onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
-                      availableFiles={availableFilesForMention}
-                      onSearchFiles={handleSearchFiles}
-                      workspaceOpen={showWorkspace}
-                      workspaceName={activeWorkspaceDisplayName}
-                      workspacePath={activeWorkspaceRoot}
-                      sessionInfo={sessionInfo}
-                      workspaceNodeId={activeWorkspace?.nodeId}
-                    />
+                    <ErrorBoundary name="Chat composer" variant="section" resetKeys={[activeSessionId, inputVersion, sendTarget]}>
+                      <PromptInput
+                        ref={promptInputRef}
+                        draftStateKey={`developer:${activeSessionId ?? 'new-chat'}`}
+                        value={inputValueRef.current}
+                        syncKey={inputVersion}
+                        segments={inputSegments}
+                        onChange={handleInputChange}
+                        onSubmit={handleSubmit}
+                        onStop={handleCancelRequest}
+                        onQueue={handleQueue}
+                        isLoading={isLoading}
+                        disabled={limitReached}
+                        placeholder={developerPlaceholder}
+                        onVoiceInput={handleVoiceInput}
+                        voiceRecording={voiceRecording}
+                        voiceLevels={voiceLevels}
+                        voiceTranscribing={voiceTranscribing}
+                        onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                        mode={chatMode}
+                        onModeChange={setChatMode}
+                        responseStyle={chatResponseStyle}
+                        onResponseStyleChange={handleChatResponseStyleChange}
+                        sendTarget={sendTarget}
+                        onSendTargetChange={setSendTarget}
+                        showSendTargetSelector={false}
+                        provider={chatProvider}
+                        onProviderChange={handleChatProviderChange}
+                        providerRuntimeMode={chatProviderRuntimeMode}
+                        onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
+                        cliModel={cliModel}
+                        onCliModelChange={handleCliModelChange}
+                        repoRuntime={sendTarget === 'thread' ? threadTargetRepoRuntime : null}
+                        onMoveToGateway={sendTarget === 'thread' ? handleMoveRepoToGateway : undefined}
+                        availableFiles={availableFilesForMention}
+                        onSearchFiles={handleSearchFiles}
+                        workspaceOpen={showWorkspace}
+                        workspaceName={activeWorkspaceDisplayName}
+                        workspacePath={activeWorkspaceRoot}
+                        sessionInfo={sessionInfo}
+                        workspaceNodeId={activeWorkspace?.nodeId}
+                      />
+                    </ErrorBoundary>
                     {developerComposerControlRow}
                   </div>
                 </div>
@@ -7747,7 +7804,9 @@ function App() {
 
             {viewMode === 'developer' && showDebugPanel && (
               <div className="fixed top-14 right-0 bottom-0 w-[420px] border-l z-50 shadow-xl">
-                <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
+                <ErrorBoundary name="Debug panel" variant="section" className="h-full" resetKeys={[showDebugPanel, activeSessionId]}>
+                  <SSEDebugPanel onClose={() => setShowDebugPanel(false)} />
+                </ErrorBoundary>
               </div>
             )}
 
@@ -8299,7 +8358,9 @@ function App() {
                 <X className="h-3 w-3" />
               </Button>
             </div>
-            <ScreenSharePanel screenShare={screenShare} />
+            <ErrorBoundary name="Screen share" variant="section" className="flex-1 min-h-0" resetKeys={[showScreenShare]}>
+              <ScreenSharePanel screenShare={screenShare} />
+            </ErrorBoundary>
             {/* Resize handle */}
             <div
               className="absolute bottom-0 right-0 w-3 h-3 cursor-nwse-resize opacity-50 hover:opacity-100"

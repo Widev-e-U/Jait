@@ -44,6 +44,8 @@ export interface WorkspaceFile {
   language: string
 }
 
+type AvailableFileForMention = { path: string; name: string; kind?: 'file' | 'dir' }
+
 interface WorkspacePanelProps {
   /** Files that were added externally (drag-drop, tool calls, etc.) */
   files: WorkspaceFile[]
@@ -53,7 +55,7 @@ interface WorkspacePanelProps {
   onReferenceFile: (file: WorkspaceFile) => void
   onReferenceSelection?: (file: WorkspaceFile, selection: string, startLine: number, endLine: number) => void
   /** Called whenever the set of browsable files changes (for @ mention) */
-  onAvailableFilesChange?: (files: { path: string; name: string; kind?: 'file' | 'dir' }[]) => void
+  onAvailableFilesChange?: (files: AvailableFileForMention[]) => void
   /** When set, automatically open a remote (server-backed) workspace at this path */
   autoOpenRemotePath?: string | null
   /** Surface ID for the active workspace (ensures REST calls target the right surface) */
@@ -208,6 +210,10 @@ function describeGitAutoFetchMode(mode: GitAutoFetchMode): string {
   if (mode === 'all') return 'Auto-fetch: all remotes'
   if (mode === true) return 'Auto-fetch: default remote'
   return 'Auto-fetch: off'
+}
+
+function availableFilesSignature(files: AvailableFileForMention[]) {
+  return JSON.stringify(files)
 }
 
 /* ------------------------------------------------------------------ */
@@ -1195,6 +1201,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   const [treeVersion, setTreeVersion] = useState(0)
   const bumpTree = useCallback(() => setTreeVersion((v) => v + 1), [])
+  const lastAvailableFilesReportRef = useRef<{
+    callback?: WorkspacePanelProps['onAvailableFilesChange']
+    signature: string
+  } | null>(null)
   const [tabMaximized, setTabMaximized] = useState(false)
 
   // ── Git status state ──
@@ -1987,8 +1997,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
 
   // Report available files up whenever the tree changes
   useEffect(() => {
-    if (!onAvailableFilesChange) return
-    const collected: { path: string; name: string; kind?: 'file' | 'dir' }[] = []
+    if (!onAvailableFilesChange) {
+      lastAvailableFilesReportRef.current = null
+      return
+    }
+    const collected: AvailableFileForMention[] = []
     const walk = (nodes: LazyNode[]) => {
       for (const n of nodes) {
         if (n.kind === 'file') {
@@ -2006,6 +2019,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         collected.push({ path: f.path, name: f.name })
       }
     }
+    const signature = availableFilesSignature(collected)
+    const previous = lastAvailableFilesReportRef.current
+    if (previous?.callback === onAvailableFilesChange && previous.signature === signature) return
+    lastAvailableFilesReportRef.current = { callback: onAvailableFilesChange, signature }
     onAvailableFilesChange(collected)
   }, [lazyTree, treeVersion, files, onAvailableFilesChange])
   const activeExtFile = useMemo(() => files.find((f) => f.id === activeFileId) ?? null, [files, activeFileId])
