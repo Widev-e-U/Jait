@@ -397,4 +397,37 @@ describe("POST /api/workspace/open", () => {
     const updatedWorkspace = workspaces.getById(workspace.id, user.id);
     expect(updatedWorkspace?.rootPath).toBe("/home/jakob/jait");
   });
+
+  it("should read from the surface that allows the path when the requested surface is stale", async () => {
+    const firstRoot = await mkdtemp(join(tmpdir(), "jait-workspace-first-"));
+    const secondRoot = await mkdtemp(join(tmpdir(), "jait-workspace-second-"));
+    const secondFile = join(secondRoot, "AGENTS.md");
+    await writeFile(secondFile, "workspace instructions", "utf-8");
+
+    try {
+      const firstOpen = await fetch(`${address}/api/workspace/open`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: firstRoot, sessionId: `first-${Date.now()}` }),
+      });
+      const { surfaceId: staleSurfaceId } = (await firstOpen.json()) as { surfaceId: string };
+
+      await fetch(`${address}/api/workspace/open`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ path: secondRoot, sessionId: `second-${Date.now()}` }),
+      });
+
+      const readRes = await fetch(
+        `${address}/api/workspace/read?path=${encodeURIComponent(secondFile)}&surfaceId=${encodeURIComponent(staleSurfaceId)}`,
+      );
+
+      expect(readRes.ok).toBe(true);
+      const data = (await readRes.json()) as { content: string };
+      expect(data.content).toBe("workspace instructions");
+    } finally {
+      await rm(firstRoot, { recursive: true, force: true });
+      await rm(secondRoot, { recursive: true, force: true });
+    }
+  });
 });

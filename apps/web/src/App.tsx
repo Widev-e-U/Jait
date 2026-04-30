@@ -1525,6 +1525,7 @@ function App() {
     })
   }, []) // eslint-disable-line react-hooks/exhaustive-deps
   const [fsWatcherVersion, setFsWatcherVersion] = useState(0)
+  const [fsWatcherPayload, setFsWatcherPayload] = useState<FsChangesPayload | null>(null)
   const showDesktopWorkspace = !isMobile && showWorkspace
   const showMobileWorkspace = isMobile && showWorkspace
   const shouldUseCompactDeveloperComposer =
@@ -3155,6 +3156,9 @@ function App() {
     onThreadEvent: automation.handleThreadEvent,
     onConnectionStateChange: handleUiConnectionStateChange,
     onFsChanges: useCallback((payload: FsChangesPayload) => {
+      const activeSurfaceId = activeWorkspaceRef.current?.surfaceId ?? null
+      if (payload.surfaceId && activeSurfaceId && payload.surfaceId !== activeSurfaceId) return
+      setFsWatcherPayload(payload)
       setFsWatcherVersion(v => v + 1)
       const workspaceRoot = activeWorkspaceRef.current?.workspaceRoot?.trim() || null
       if (!workspaceRoot || loadedArchitectureWorkspaceRef.current !== workspaceRoot) return
@@ -7087,6 +7091,7 @@ function App() {
                         onToggleEditor={toggleWorkspaceEditor}
                         changedPaths={changedPaths}
                         fsWatcherVersion={fsWatcherVersion}
+                        fsWatcherPayload={fsWatcherPayload}
                         sourceControlRefreshSignal={sourceControlRefreshSignal}
                         savedTabsState={workspaceTabsState}
                         stateReady={workspaceStateReady}
@@ -7263,6 +7268,8 @@ function App() {
                     treeTab={mobileTreeTab}
                     onTreeTabChange={setMobileTreeTab}
                     changedPaths={changedPaths}
+                    fsWatcherVersion={fsWatcherVersion}
+                    fsWatcherPayload={fsWatcherPayload}
                     sourceControlRefreshSignal={sourceControlRefreshSignal}
                     isMobile
                     savedTabsState={workspaceTabsState}

@@ -24,6 +24,8 @@ import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getDesktopWorkspacePanelStyle } from './workspace-panel-layout'
 import { getSourceControlChangeCount, mergeSourceControlWorkingTreeFiles } from './source-control-summary'
+import type { FsChangesPayload } from '@jait/shared'
+import { fsChangesIncludeFile } from './workspace-fs-changes'
 import {
   PreviewMetricsPanel,
   type PreviewInspectInteractiveElement,
@@ -80,6 +82,8 @@ interface WorkspacePanelProps {
   changedPaths?: string[]
   /** Incremented by the server's native file watcher to signal external FS changes */
   fsWatcherVersion?: number
+  /** Latest native file watcher payload. Used to refresh only affected active files. */
+  fsWatcherPayload?: FsChangesPayload | null
   /** Incremented when an agent turn completes and Source Control should refresh */
   sourceControlRefreshSignal?: number
   /** Persisted editor tab state for this session/workspace */
@@ -1119,6 +1123,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   onTreeTabChange,
   changedPaths,
   fsWatcherVersion,
+  fsWatcherPayload,
   sourceControlRefreshSignal,
   savedTabsState,
   stateReady,
@@ -1867,8 +1872,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     }
     refetchExpanded().catch(() => { /* best effort */ })
 
-    // Also re-fetch the currently open file in case it was modified externally
-    if (activeNativePath && remoteRoot) {
+    // Re-fetch the currently open file only when the watcher says that file changed.
+    // The mtime poll below still catches missed or payload-less changes.
+    if (activeNativePath && remoteRoot && fsChangesIncludeFile(fsWatcherPayload, remoteRoot, activeNativePath)) {
       remoteReadFile(activeNativePath, surfaceId).then(
         (content) => {
           setPreviewContent(content)

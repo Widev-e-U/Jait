@@ -187,10 +187,18 @@ async function runWorkspaceSearch(
 /**
  * Find the first running filesystem surface, optionally filtering by ID.
  */
-function findFsSurface(registry: SurfaceRegistry, surfaceId?: string, targetPath?: string): AnyFsSurface | null {
+function findFsSurface(
+  registry: SurfaceRegistry,
+  surfaceId?: string,
+  targetPath?: string,
+  options?: { fallbackWhenTargetDisallowed?: boolean },
+): AnyFsSurface | null {
   if (surfaceId) {
     const s = registry.getSurface(surfaceId);
-    if (s && (s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running") return s;
+    if (s && (s instanceof FileSystemSurface || s instanceof RemoteFileSystemSurface) && s.state === "running") {
+      if (!targetPath || s.isPathAllowed(targetPath)) return s;
+      if (!options?.fallbackWhenTargetDisallowed) return s;
+    }
     if (!targetPath) return null;
   }
   if (targetPath) {
@@ -381,7 +389,7 @@ export function registerWorkspaceRoutes(
   // GET /api/workspace/list?path=&surfaceId= — list directory entries
   app.get("/api/workspace/list", async (req, reply) => {
     const { path: dirPath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId, dirPath);
+    const fs = findFsSurface(surfaceRegistry, surfaceId, dirPath, { fallbackWhenTargetDisallowed: true });
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -403,7 +411,7 @@ export function registerWorkspaceRoutes(
   // GET /api/workspace/read?path=&surfaceId= — read a file
   app.get("/api/workspace/read", async (req, reply) => {
     const { path: filePath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId, filePath);
+    const fs = findFsSurface(surfaceRegistry, surfaceId, filePath, { fallbackWhenTargetDisallowed: true });
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -462,7 +470,7 @@ export function registerWorkspaceRoutes(
   // GET /api/workspace/stat?path=&surfaceId= — stat a file or directory
   app.get("/api/workspace/stat", async (req, reply) => {
     const { path: targetPath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId, targetPath);
+    const fs = findFsSurface(surfaceRegistry, surfaceId, targetPath, { fallbackWhenTargetDisallowed: true });
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
@@ -511,7 +519,7 @@ export function registerWorkspaceRoutes(
   // GET /api/workspace/backup?path= — get the original (backed-up) content of a file
   app.get("/api/workspace/backup", async (req, reply) => {
     const { path: filePath, surfaceId } = req.query as { path?: string; surfaceId?: string };
-    const fs = findFsSurface(surfaceRegistry, surfaceId, filePath);
+    const fs = findFsSurface(surfaceRegistry, surfaceId, filePath, { fallbackWhenTargetDisallowed: true });
     if (!fs) {
       return reply.status(404).send({ error: "NO_WORKSPACE", message: "No filesystem surface is running" });
     }
