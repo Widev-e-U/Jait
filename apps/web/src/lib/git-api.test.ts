@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest'
 import { isMissingGitIdentityError } from './git-errors'
 
 describe('isMissingGitIdentityError', () => {
-  it('matches missing git author identity errors', () => {
+  it('matches missing git identity errors for both author and committer flows', () => {
     expect(isMissingGitIdentityError(new Error('Author identity unknown'))).toBe(true)
+    expect(isMissingGitIdentityError(new Error('Committer identity unknown'))).toBe(true)
     expect(isMissingGitIdentityError(new Error('fatal: unable to auto-detect email address'))).toBe(true)
+    expect(isMissingGitIdentityError(new Error('fatal: no email was given and auto-detection is disabled'))).toBe(true)
+    expect(isMissingGitIdentityError(new Error('fatal: no name was given and auto-detection is disabled'))).toBe(true)
     expect(isMissingGitIdentityError('Please tell me who you are.')).toBe(true)
   })
 
