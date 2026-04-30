@@ -19,6 +19,22 @@ function makeDeviceId(platform: string): string {
   return `${platform}-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
 }
 
+function readStoredDeviceId(storageKey: string): string | null {
+  try {
+    return localStorage.getItem(storageKey)
+  } catch {
+    return null
+  }
+}
+
+function persistDeviceId(storageKey: string, deviceId: string): void {
+  try {
+    localStorage.setItem(storageKey, deviceId)
+  } catch {
+    // Storage can be unavailable in sandboxed browsers or privacy-constrained contexts.
+  }
+}
+
 /**
  * Initialise the device ID asynchronously.
  *
@@ -40,11 +56,11 @@ export async function initDeviceId(): Promise<string> {
     if (persisted) {
       _cachedDeviceId = persisted
       // Keep localStorage in sync for immediate reads
-      localStorage.setItem(storageKey, persisted)
+      persistDeviceId(storageKey, persisted)
       return persisted
     }
     // Migrate from localStorage if present (upgrade path)
-    const fromStorage = localStorage.getItem(storageKey)
+    const fromStorage = readStoredDeviceId(storageKey)
     if (fromStorage) {
       _cachedDeviceId = fromStorage
       await desktop.setSetting(settingsKey, fromStorage)
@@ -53,20 +69,20 @@ export async function initDeviceId(): Promise<string> {
     // Generate new
     const id = makeDeviceId(platform)
     _cachedDeviceId = id
-    localStorage.setItem(storageKey, id)
+    persistDeviceId(storageKey, id)
     await desktop.setSetting(settingsKey, id)
     return id
   }
 
   // Non-Electron: localStorage only
-  const stored = localStorage.getItem(storageKey)
+  const stored = readStoredDeviceId(storageKey)
   if (stored) {
     _cachedDeviceId = stored
     return stored
   }
   const id = makeDeviceId(platform)
   _cachedDeviceId = id
-  localStorage.setItem(storageKey, id)
+  persistDeviceId(storageKey, id)
   return id
 }
 
@@ -82,7 +98,7 @@ export function generateDeviceId(): string {
 
   const platform = detectPlatform()
   const storageKey = `jait-device-id-${platform}`
-  const stored = localStorage.getItem(storageKey)
+  const stored = readStoredDeviceId(storageKey)
   if (stored) {
     _cachedDeviceId = stored
     return stored
@@ -90,6 +106,6 @@ export function generateDeviceId(): string {
   // Fallback: generate and store (should only happen if initDeviceId wasn't called)
   const id = makeDeviceId(platform)
   _cachedDeviceId = id
-  localStorage.setItem(storageKey, id)
+  persistDeviceId(storageKey, id)
   return id
 }
