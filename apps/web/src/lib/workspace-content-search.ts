@@ -64,10 +64,10 @@ export async function searchWorkspaceContent(
       for await (const entry of dirHandle.values()) {
         if (signal?.aborted || matches.length >= limit) return true
         const entryName = entry.name
-        if (entryName.startsWith('.') || skipDirs.has(entryName)) continue
         const entryPath = prefix ? `${prefix}/${entryName}` : entryName
 
         if (entry.kind === 'directory') {
+          if (skipDirs.has(entryName)) continue
           const done = await walkDir(entry, entryPath)
           if (done) return true
           continue
