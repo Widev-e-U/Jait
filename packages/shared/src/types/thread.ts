@@ -141,6 +141,7 @@ export interface CreateThreadParams {
   skillIds?: string[] | null;
   workingDirectory?: string;
   branch?: string;
+  prBaseBranch?: string | null;
 }
 
 export interface UpdateThreadParams {

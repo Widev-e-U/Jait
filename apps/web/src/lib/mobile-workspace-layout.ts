@@ -13,12 +13,9 @@ export function normalizeHydratedWorkspaceLayout(
       : layout
   }
 
-  if (!layout.editor) return layout
-
-  return {
-    tree: layout.tree,
-    editor: false,
-  }
+  // On mobile, allow the hydrated layout as-is (including editor: true).
+  // Exclusive pane logic is handled by showMobileWorkspacePane/toggleMobileWorkspacePane.
+  return layout
 }
 
 export function collapseMobileWorkspace(): WorkspaceLayoutState {

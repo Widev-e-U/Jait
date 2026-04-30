@@ -87,12 +87,10 @@ export function ThreadActions({
     let cancelled = false
     if (!shouldRefreshThreadChangeTotals(prState)) return
 
-    const useRecordedBranchDiff = shouldUseRecordedBranchDiff(branch, prState)
-    const diffRequest = getThreadDiffRequest(baseBranch, branch, prState)
-
     const loadStatus = async () => {
       try {
-        const status = await gitApi.status(cwd, useRecordedBranchDiff ? undefined : branch ?? undefined)
+        const status = await gitApi.status(cwd, branch ?? undefined)
+        const diffRequest = getThreadDiffRequest(baseBranch, branch, prState, threadStatus, status)
         const diffStats = branch
           ? await gitApi.diffStats(cwd, diffRequest.baseBranch, diffRequest.branch).catch(() => null)
           : null
@@ -168,8 +166,8 @@ export function ThreadActions({
     (prUrl ? { url: prUrl, kind: 'created' as const } : null) ??
     (gitStatus?.pr?.url ? { url: gitStatus.pr.url, kind: 'created' as const } : null)
   const effectivePrState = prState === 'creating' && existingPrLink?.kind === 'created' ? 'open' : prState
-  const useRecordedBranchDiff = shouldUseRecordedBranchDiff(branch, effectivePrState)
-  const diffRequest = getThreadDiffRequest(baseBranch, branch, effectivePrState)
+  const useRecordedBranchDiff = shouldUseRecordedBranchDiff(branch, effectivePrState, threadStatus, gitStatus)
+  const diffRequest = getThreadDiffRequest(baseBranch, branch, effectivePrState, threadStatus, gitStatus)
   const creatingPr = effectivePrState === 'creating'
   const showChangesButton = useRecordedBranchDiff
     ? Boolean(changeTotals?.hasChanges)

@@ -245,6 +245,7 @@ export function createThreadControlTool(deps: ThreadControlToolDeps): ToolDefini
     return deps.threadService.update(thread.id, {
       workingDirectory: worktree.path,
       branch: worktree.branch,
+      prBaseBranch: defaultBranch,
     }) ?? thread;
   };
 

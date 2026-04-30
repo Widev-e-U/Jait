@@ -5335,6 +5335,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           <div className="flex-1" />
           <button
             onClick={() => {
+              if (onToggleTree) {
+                onToggleTree()
+                return
+              }
               if (!showEditorProp && onToggleEditor) onToggleEditor()
               tree.collapse()
             }}

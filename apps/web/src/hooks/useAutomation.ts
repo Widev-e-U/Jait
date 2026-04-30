@@ -780,18 +780,19 @@ export function useAutomation(enabled = true) {
         void (async () => {
           try {
             const branchName = generateBranchName()
+            const baseBranch = repo.defaultBranch
             let worktreePath: string | undefined
             try {
               const wt = await gitApi.createWorktree(
                 repo.localPath,
-                repo.defaultBranch,
+                baseBranch,
                 branchName,
               )
               worktreePath = wt.path
             } catch {
               // Worktree creation failed — fall back to branch in-place
               try {
-                await gitApi.createBranch(repo.localPath, branchName, repo.defaultBranch)
+                await gitApi.createBranch(repo.localPath, branchName, baseBranch)
               } catch { /* ignore */ }
             }
 
@@ -803,6 +804,7 @@ export function useAutomation(enabled = true) {
               kind: 'delivery',
               workingDirectory: worktreePath ?? repo.localPath,
               branch: branchName,
+              prBaseBranch: baseBranch,
             })
             try {
               await agentsApi.startThread(thread.id, {
