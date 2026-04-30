@@ -11,6 +11,17 @@ function normalizePath(path: string): string {
   return path.replace(/\\/g, '/').replace(/\/+$/, '')
 }
 
+function pathFromFileUrl(url: URL): string {
+  const pathname = url.pathname || '/'
+  const normalizedPathname = /^\/[A-Za-z]:\//.test(pathname)
+    ? pathname.slice(1)
+    : pathname
+  if (!url.hostname || url.hostname === 'localhost') {
+    return normalizedPathname
+  }
+  return `//${url.hostname}${normalizedPathname}`
+}
+
 export function isAbsoluteWorkspacePath(value: string): boolean {
   return WINDOWS_ABS_PATH_RE.test(value) || UNIX_ABS_PATH_RE.test(value)
 }
@@ -66,6 +77,9 @@ export function parseWorkspaceLinkTarget(href?: string | null): WorkspaceLinkTar
       pathPart = url.pathname
       fragment = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash
       if (!isLikelyWorkspaceFilePath(pathPart, fragment)) return null
+    } else if (url.protocol === 'file:') {
+      pathPart = pathFromFileUrl(url)
+      fragment = url.hash.startsWith('#') ? url.hash.slice(1) : url.hash
     } else {
       const hashIndex = trimmed.indexOf('#')
       if (hashIndex >= 0) {

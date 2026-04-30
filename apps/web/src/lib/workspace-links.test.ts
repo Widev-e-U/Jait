@@ -41,6 +41,15 @@ describe('workspace-links', () => {
       path: '/home/user/project/apps/web/src/components/chat/message.tsx',
       line: 116,
     })
+    expect(parseWorkspaceLinkTarget('file:///workspace/Jait/apps/web/src/App.tsx#L10')).toEqual({
+      path: '/workspace/Jait/apps/web/src/App.tsx',
+      line: 10,
+    })
+    expect(parseWorkspaceLinkTarget('file:///C:/Jait/apps/web/src/App.tsx#L58C4')).toEqual({
+      path: 'C:/Jait/apps/web/src/App.tsx',
+      line: 58,
+      column: 4,
+    })
     expect(parseWorkspaceLinkTarget('https://example.com')).toBeNull()
   })
 
