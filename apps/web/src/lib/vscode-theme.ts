@@ -79,6 +79,19 @@ export const BUILT_IN_DARK_PLUS_MONACO_THEME_NAME = 'dark-plus'
 const shikiMonacoInitialized = new WeakSet<object>()
 
 const BUNDLED_DARK_PLUS_THEME = darkPlusTheme as BundledVsCodeThemeDocument
+const JAIT_DARK_PLUS_COLOR_OVERRIDES: Record<string, string> = {
+  'editor.background': '#0B0C0E',
+  'editorGutter.background': '#0B0C0E',
+  'editorStickyScroll.background': '#0B0C0E',
+  'editorStickyScrollGutter.background': '#0B0C0E',
+  'minimap.background': '#0B0C0E',
+  'editor.lineHighlightBackground': '#151922',
+  'editorWidget.background': '#16181D',
+  'editorHoverWidget.background': '#16181D',
+  'editorWidget.border': '#363B44',
+  'editorHoverWidget.border': '#363B44',
+  'editorGroupHeader.tabsBackground': '#0B0C0E',
+}
 
 const BUILT_IN_DARK_PLUS_MONACO_THEME: MonacoStandaloneThemeData = {
   base: 'vs-dark',
@@ -87,7 +100,10 @@ const BUILT_IN_DARK_PLUS_MONACO_THEME: MonacoStandaloneThemeData = {
     ...buildMonacoRules(BUNDLED_DARK_PLUS_THEME.tokenColors ?? []),
     ...buildDarkPlusMonacoFallbackRules(),
   ],
-  colors: sanitizeColorMap(BUNDLED_DARK_PLUS_THEME.colors ?? {}),
+  colors: {
+    ...sanitizeColorMap(BUNDLED_DARK_PLUS_THEME.colors ?? {}),
+    ...JAIT_DARK_PLUS_COLOR_OVERRIDES,
+  },
 }
 
 export function getVsCodeThemeSearchTerms(): string[] {
@@ -122,6 +138,7 @@ export function ensureBuiltInDarkPlusTextMateTheme(monaco: unknown): void {
       langs: ['javascript', 'typescript', 'jsx', 'tsx', 'json', 'css', 'html', 'markdown', 'python', 'yaml', 'diff'],
     })
     shikiToMonaco(highlighter, monaco as never)
+    registerBuiltInMonacoThemes(monaco as Parameters<typeof registerBuiltInMonacoThemes>[0])
     const editor = (monaco as { editor?: MonacoEditorApi }).editor
     if (typeof document !== 'undefined' && document.documentElement.dataset.monacoTheme === BUILT_IN_DARK_PLUS_MONACO_THEME_NAME) {
       editor?.setTheme?.(BUILT_IN_DARK_PLUS_MONACO_THEME_NAME)

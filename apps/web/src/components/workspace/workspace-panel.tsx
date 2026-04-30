@@ -19,7 +19,7 @@ import { NoVncSessionView } from '@/components/remote/no-vnc-session-view'
 import { ReviewableEditor } from './reviewable-editor'
 import { cn } from '@/lib/utils'
 import { saveDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
-import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
+import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { searchWorkspaceContent } from '@/lib/workspace-content-search'
 import { canCommitAndPush, canSyncChanges, getPrimaryGitAction } from './workspace-git-actions'
 import { getDesktopWorkspacePanelStyle } from './workspace-panel-layout'
@@ -5735,7 +5735,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                   title={tab.path}
                 >
                   {/* Active tab bottom highlight */}
-                  {isActive && <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary" />}
+                  {isActive && <div className="absolute left-0 right-0 top-0 h-[2px] bg-primary" />}
                   {draggingTabId === tab.id && (
                     <div className="absolute inset-0 border border-primary/60 pointer-events-none" />
                   )}
@@ -5904,12 +5904,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
         ) : editorFile ? (
           <Editor
             height="100%"
-            beforeMount={ensureActiveMonacoTheme}
+            beforeMount={(monaco) => applyActiveMonacoTheme(monaco, monacoThemeName)}
             theme={monacoThemeName}
             path={editorFile.path}
             language={editorFile.language}
             value={editorFile.content}
-            onMount={(editor) => {
+            onMount={(editor, monaco) => {
+              applyActiveMonacoTheme(monaco, monacoThemeName)
               const emitSelectionReference = () => {
                 const model = editor.getModel?.()
                 const selection = editor.getSelection?.()

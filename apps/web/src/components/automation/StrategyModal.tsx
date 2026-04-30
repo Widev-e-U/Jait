@@ -16,7 +16,7 @@ import { useConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Loader2, Sparkles, Save, RotateCcw } from 'lucide-react'
 import { agentsApi } from '@/lib/agents-api'
 import { useEditorThemeName } from '@/hooks/use-editor-theme'
-import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
+import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 
 // ── Props ────────────────────────────────────────────────────────────
 
@@ -149,7 +149,7 @@ export function StrategyModal({ open, onOpenChange, repoId, repoName }: Strategy
               <Editor
                 height="55vh"
                 language="markdown"
-                beforeMount={ensureActiveMonacoTheme}
+                beforeMount={(monaco) => applyActiveMonacoTheme(monaco, monacoThemeName)}
                 theme={monacoThemeName}
                 value={strategy}
                 onChange={(value) => setStrategy(value ?? '')}

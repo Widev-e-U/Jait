@@ -70,8 +70,9 @@ describe('registerBuiltInMonacoThemes', () => {
       base: 'vs-dark',
       inherit: false,
       colors: expect.objectContaining({
-        'editor.background': '#1E1E1E',
+        'editor.background': '#0B0C0E',
         'editor.foreground': '#D4D4D4',
+        'editorWidget.background': '#16181D',
       }),
     }))
 

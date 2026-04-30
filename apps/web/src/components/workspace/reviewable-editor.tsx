@@ -3,7 +3,7 @@ import Editor from '@monaco-editor/react'
 import { Check, Undo2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { buildReviewHunks, computeMergedContent, getReviewAnchorLine, type ReviewHunk } from './review-hunks'
-import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
+import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 
 interface ReviewableEditorProps {
   path: string
@@ -29,6 +29,7 @@ export function ReviewableEditor({
   onReferenceSelection,
 }: ReviewableEditorProps) {
   const editorRef = useRef<any>(null)
+  const monacoRef = useRef<any>(null)
   const lastSelectionKeyRef = useRef<string | null>(null)
   const [hunks, setHunks] = useState<ReviewHunk[]>([])
   const [actionPositions, setActionPositions] = useState<Array<{ hunkIndex: number; top: number }>>([])
@@ -94,6 +95,12 @@ export function ReviewableEditor({
     )))
   }, [])
 
+  useEffect(() => {
+    const monaco = monacoRef.current
+    if (!monaco) return
+    applyActiveMonacoTheme(monaco, theme)
+  }, [theme])
+
   const emitSelectionReference = useCallback(() => {
     const editor = editorRef.current
     const model = editor?.getModel?.()
@@ -118,14 +125,16 @@ export function ReviewableEditor({
       <Editor
         key={path}
         height="100%"
-        beforeMount={ensureActiveMonacoTheme}
+        beforeMount={(monaco) => applyActiveMonacoTheme(monaco, theme)}
         theme={theme}
         path={path}
         language={language}
         value={value}
         onChange={onChange}
-        onMount={(editor) => {
+        onMount={(editor, monaco) => {
           editorRef.current = editor
+          monacoRef.current = monaco
+          applyActiveMonacoTheme(monaco, theme)
           const disposables = [
             editor.onDidScrollChange(() => updateActionPositions()),
             editor.onDidLayoutChange(() => updateActionPositions()),

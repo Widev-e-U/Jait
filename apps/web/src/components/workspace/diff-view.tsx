@@ -3,7 +3,7 @@ import { DiffEditor } from '@monaco-editor/react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, ChevronUp, Undo2, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { useEditorThemeName } from '@/hooks/use-editor-theme'
-import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
+import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { cn } from '@/lib/utils'
 import { buildReviewHunks, computeMergedContent, getReviewAnchorLine, type ReviewHunk } from './review-hunks'
 
@@ -96,6 +96,7 @@ export function DiffView({
   const handleMount = useCallback((editor: any, monaco: any) => {
     editorRef.current = editor
     monacoRef.current = monaco
+    applyActiveMonacoTheme(monaco, monacoThemeName)
     const modEditor = editor.getModifiedEditor()
     disposablesRef.current = [
       modEditor.onDidScrollChange(() => updateActionPositions()),
@@ -104,7 +105,11 @@ export function DiffView({
       editor.onDidUpdateDiff(() => updateActionPositions()),
     ]
     window.setTimeout(updateActionPositions, 0)
-  }, [updateActionPositions])
+  }, [monacoThemeName, updateActionPositions])
+
+  useEffect(() => {
+    applyActiveMonacoTheme(monacoRef.current, monacoThemeName)
+  }, [monacoThemeName])
 
   /* Dispose listeners and models before the DiffEditor unmounts */
   useEffect(() => {
@@ -309,7 +314,7 @@ export function DiffView({
           original={originalContent}
           modified={modifiedContent}
           language={language}
-          beforeMount={ensureActiveMonacoTheme}
+          beforeMount={(monaco) => applyActiveMonacoTheme(monaco, monacoThemeName)}
           theme={monacoThemeName}
           keepCurrentOriginalModel
           keepCurrentModifiedModel

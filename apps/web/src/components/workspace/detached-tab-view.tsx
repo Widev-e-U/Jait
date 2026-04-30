@@ -7,7 +7,7 @@ import { ReviewableEditor } from './reviewable-editor'
 import { Button } from '@/components/ui/button'
 import { getApiUrl } from '@/lib/gateway-url'
 import { clearDetachedWorkspaceTab, loadDetachedWorkspaceTab, type DetachedWorkspaceTabPayload } from '@/lib/detached-workspace-tab'
-import { ensureActiveMonacoTheme } from '@/lib/vscode-theme-store'
+import { applyActiveMonacoTheme } from '@/lib/vscode-theme-store'
 import { useConfiguredTheme } from '@/hooks/use-configured-theme'
 
 function resolveDetachedPreviewSrc(src: string | null | undefined): string | null {
@@ -155,7 +155,7 @@ export function DetachedTabView({ detachedTabId }: { detachedTabId: string }) {
         ) : (
           <Editor
             height="100%"
-            beforeMount={ensureActiveMonacoTheme}
+            beforeMount={(monaco) => applyActiveMonacoTheme(monaco, monacoThemeName)}
             theme={monacoThemeName}
             path={payload.tab.path}
             language={payload.tab.language ?? 'plaintext'}
