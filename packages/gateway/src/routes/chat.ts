@@ -1602,9 +1602,9 @@ export function registerChatRoutes(
                   if (sessionStateService) {
                     try {
                       const existing = sessionStateService.get(sessionId, ["changed_files"]);
-                      const files = Array.isArray(existing["changed_files"]) ? existing["changed_files"] as { path: string; name: string }[] : [];
+                      const files = Array.isArray(existing["changed_files"]) ? existing["changed_files"] as { path: string; name: string; state?: string }[] : [];
                       if (!files.some((f: { path: string }) => f.path === mutationPath)) {
-                        files.push({ path: mutationPath, name: editName });
+                        files.push({ path: mutationPath, name: editName, state: "undecided" });
                         sessionStateService.set(sessionId, { changed_files: files });
                       }
                     } catch { /* ignore */ }
@@ -1839,9 +1839,9 @@ export function registerChatRoutes(
             if (sessionStateService) {
               try {
                 const existing = sessionStateService.get(sessionId, ["changed_files"]);
-                const files = Array.isArray(existing["changed_files"]) ? existing["changed_files"] as { path: string; name: string }[] : [];
+                const files = Array.isArray(existing["changed_files"]) ? existing["changed_files"] as { path: string; name: string; state?: string }[] : [];
                 if (!files.some((f: { path: string }) => f.path === ev.path)) {
-                  files.push({ path: ev.path as string, name: (ev.name as string) ?? "" });
+                  files.push({ path: ev.path as string, name: (ev.name as string) ?? "", state: "undecided" });
                   sessionStateService.set(sessionId, { "changed_files": files });
                 }
               } catch { /* ignore */ }

@@ -104,6 +104,7 @@ import { useUICommands } from '@/hooks/useUICommands'
 import { useSessionState } from '@/hooks/useSessionState'
 import { useWorkspaceState } from '@/hooks/useWorkspaceState'
 import { useAutomation } from '@/hooks/useAutomation'
+import { normalizeChangedFiles } from '@/lib/changed-files'
 import { emitPreviewSession } from '@/lib/preview-events'
 import { ViewModeSelector } from '@/components/chat/view-mode-selector'
 import type { ViewMode } from '@/components/chat/view-mode-selector'
@@ -3022,7 +3023,7 @@ function App() {
       case 'changed_files': {
         // Full state sync of all changed files (including accept/reject decisions)
         if (Array.isArray(value)) {
-          setChangedFiles(value as ChangedFile[])
+          setChangedFiles(normalizeChangedFiles(value))
         } else if (value === null) {
           setChangedFiles([])
         }
@@ -3117,7 +3118,7 @@ function App() {
     // Changed files
     const cf = state['changed_files']
     if (Array.isArray(cf)) {
-      setChangedFiles(cf as ChangedFile[])
+      setChangedFiles(normalizeChangedFiles(cf))
     } else {
       setChangedFiles([])
     }
