@@ -475,6 +475,81 @@ export async function parseOpenAIStream(
     { id: string; type: "function"; function: { name: string; arguments: string } }
   >();
 
+  const processLine = (line: string) => {
+    const trimmed = line.trim();
+    if (!trimmed || !trimmed.startsWith("data: ")) return;
+    const payload = trimmed.slice(6);
+    if (payload === "[DONE]") return;
+
+    try {
+      const chunk = JSON.parse(payload);
+      const choice = chunk.choices?.[0];
+      if (!choice) return;
+
+      const delta = choice.delta;
+      if (!delta) return;
+
+      // Reasoning / thinking tokens (e.g. Gemma 4, DeepSeek R1 via Ollama)
+      const reasoningToken = delta.reasoning ?? delta.reasoning_content;
+      if (reasoningToken) {
+        thinkingText += reasoningToken;
+        onEvent?.({ type: "thinking", content: reasoningToken });
+      }
+
+      // Text content
+      if (delta.content) {
+        contentText += delta.content;
+        onEvent?.({ type: "token", content: delta.content });
+      }
+
+      // Tool calls (streamed incrementally)
+      if (delta.tool_calls) {
+        for (const tc of delta.tool_calls) {
+          const idx: number = tc.index ?? 0;
+          const isNew = !toolCallMap.has(idx);
+          if (isNew) {
+            toolCallMap.set(idx, {
+              id: tc.id ?? "",
+              type: "function",
+              function: { name: tc.function?.name ?? "", arguments: "" },
+            });
+          }
+          const existing = toolCallMap.get(idx)!;
+          if (tc.id) existing.id = tc.id;
+          if (!isNew && tc.function?.name) existing.function.name += tc.function.name;
+          if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
+
+          const callId = existing.id || `pending-${idx}`;
+          onEvent?.({
+            type: "tool_call_delta",
+            call_id: callId,
+            index: idx,
+            name_delta: tc.function?.name || undefined,
+            args_delta: tc.function?.arguments || undefined,
+          });
+        }
+      }
+
+      if (choice.finish_reason) {
+        finishReason = choice.finish_reason;
+      }
+
+      // Usage stats (sent in the final chunk by OpenAI-compatible APIs)
+      if (chunk.usage && typeof chunk.usage === "object") {
+        const u = chunk.usage;
+        if (typeof u.prompt_tokens === "number" && typeof u.completion_tokens === "number") {
+          usage = {
+            prompt_tokens: u.prompt_tokens,
+            completion_tokens: u.completion_tokens,
+            total_tokens: u.total_tokens ?? (u.prompt_tokens + u.completion_tokens),
+          };
+        }
+      }
+    } catch {
+      // partial JSON chunk — ignore
+    }
+  };
+
   while (true) {
     let readResult: { done: boolean; value?: Uint8Array };
     try {
@@ -484,85 +559,20 @@ export async function parseOpenAIStream(
       break;
     }
     const { done, value } = readResult;
-    if (done) break;
+    if (done) {
+      buffer += decoder.decode();
+      if (buffer.trim()) {
+        processLine(buffer);
+      }
+      break;
+    }
 
     buffer += decoder.decode(value, { stream: true });
     const lines = buffer.split("\n");
     buffer = lines.pop() || "";
 
     for (const line of lines) {
-      const trimmed = line.trim();
-      if (!trimmed || !trimmed.startsWith("data: ")) continue;
-      const payload = trimmed.slice(6);
-      if (payload === "[DONE]") continue;
-
-      try {
-        const chunk = JSON.parse(payload);
-        const choice = chunk.choices?.[0];
-        if (!choice) continue;
-
-        const delta = choice.delta;
-        if (!delta) continue;
-
-        // Reasoning / thinking tokens (e.g. Gemma 4, DeepSeek R1 via Ollama)
-        const reasoningToken = delta.reasoning ?? delta.reasoning_content;
-        if (reasoningToken) {
-          thinkingText += reasoningToken;
-          onEvent?.({ type: "thinking", content: reasoningToken });
-        }
-
-        // Text content
-        if (delta.content) {
-          contentText += delta.content;
-          onEvent?.({ type: "token", content: delta.content });
-        }
-
-        // Tool calls (streamed incrementally)
-        if (delta.tool_calls) {
-          for (const tc of delta.tool_calls) {
-            const idx: number = tc.index ?? 0;
-            const isNew = !toolCallMap.has(idx);
-            if (isNew) {
-              toolCallMap.set(idx, {
-                id: tc.id ?? "",
-                type: "function",
-                function: { name: tc.function?.name ?? "", arguments: "" },
-              });
-            }
-            const existing = toolCallMap.get(idx)!;
-            if (tc.id) existing.id = tc.id;
-            if (!isNew && tc.function?.name) existing.function.name += tc.function.name;
-            if (tc.function?.arguments) existing.function.arguments += tc.function.arguments;
-
-            const callId = existing.id || `pending-${idx}`;
-            onEvent?.({
-              type: "tool_call_delta",
-              call_id: callId,
-              index: idx,
-              name_delta: tc.function?.name || undefined,
-              args_delta: tc.function?.arguments || undefined,
-            });
-          }
-        }
-
-        if (choice.finish_reason) {
-          finishReason = choice.finish_reason;
-        }
-
-        // Usage stats (sent in the final chunk by OpenAI-compatible APIs)
-        if (chunk.usage && typeof chunk.usage === "object") {
-          const u = chunk.usage;
-          if (typeof u.prompt_tokens === "number" && typeof u.completion_tokens === "number") {
-            usage = {
-              prompt_tokens: u.prompt_tokens,
-              completion_tokens: u.completion_tokens,
-              total_tokens: u.total_tokens ?? (u.prompt_tokens + u.completion_tokens),
-            };
-          }
-        }
-      } catch {
-        // partial JSON chunk — ignore
-      }
+      processLine(line);
     }
   }
 
