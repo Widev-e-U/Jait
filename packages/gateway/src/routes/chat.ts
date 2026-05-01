@@ -343,7 +343,7 @@ const drainingQueuedSessions = new Set<string>();
 interface StreamingAccumulator {
   content: string;
   toolCalls: PersistedToolCall[];
-  segments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] }>;
+  segments: Array<{ type: "text"; content: string } | { type: "thinking"; content: string } | { type: "toolGroup"; callIds: string[] }>;
   thinking: string;
 }
 const sessionStreamingState = new Map<string, StreamingAccumulator>();
@@ -453,6 +453,12 @@ function accumulateToken(sessionId: string, token: string): void {
 function accumulateThinking(sessionId: string, content: string): void {
   const acc = getOrCreateAccumulator(sessionId);
   acc.thinking += content;
+  const last = acc.segments[acc.segments.length - 1];
+  if (last?.type === "thinking") {
+    acc.segments[acc.segments.length - 1] = { type: "thinking", content: last.content + content };
+  } else {
+    acc.segments.push({ type: "thinking", content });
+  }
 }
 
 /** Record a tool call start in the streaming accumulator */

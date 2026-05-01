@@ -39,6 +39,7 @@ export interface AgentMessage {
 /** Segment for interleaved rendering of text and tool calls */
 export type MessageSegment =
   | { type: "text"; content: string }
+  | { type: "thinking"; content: string }
   | { type: "toolGroup"; callIds: string[] };
 
 /** OpenAI function-calling tool schema */
@@ -1079,6 +1080,15 @@ export async function runAgentLoop(
     fullContent += contentText;
 
     // ── Track segments for interleaved rendering ──
+    if (thinkingText) {
+      const last = segments[segments.length - 1];
+      if (last?.type === "thinking") {
+        segments[segments.length - 1] = { type: "thinking", content: last.content + thinkingText };
+      } else {
+        segments.push({ type: "thinking", content: thinkingText });
+      }
+    }
+
     if (contentText) {
       const last = segments[segments.length - 1];
       if (last?.type === "text") {

@@ -407,7 +407,6 @@ function appendSegmentNode(
     parent.appendChild(createChipNode(segment, onRemove))
     return
   }
-  parent.appendChild(document.createTextNode(`[image:${segment.name}]`))
 }
 
 function insertSegmentsAtCursor(

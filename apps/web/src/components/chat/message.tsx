@@ -631,7 +631,7 @@ function MessageInner({
 
   const saveEditedMessage = useCallback(async (nextText?: string, nextSegments?: UserMessageSegment[]) => {
     if (!canEdit || !messageId || !onEditMessage || isSavingEdit) return
-    const submission = createUserMessageEditSubmission(nextText ?? editDraft, nextSegments ?? editSegments)
+    const submission = createUserMessageEditSubmission(nextText ?? editDraft, nextSegments ?? editSegments, userDisplaySegments)
     if (!submission) return
 
     setOptimisticUserDisplayText(submission.text)
@@ -750,12 +750,13 @@ function MessageInner({
   }
 
   const assistantActions = !isUser ? renderActions() : null
+  const hasThinkingSegment = !isUser && segments?.some((segment) => segment.type === 'thinking' && segment.content.trim())
 
   return (
     <>
     <AIMessage from={role} className={cn(compact ? 'py-2' : 'py-4')}>
       <div className={cn('min-w-0 max-w-[85%] space-y-2', isUser && 'order-1')}>
-        {!isUser && thinking && (
+        {!isUser && thinking && !hasThinkingSegment && (
           <Reasoning
             content={thinking}
             isStreaming={!!isStreaming && !content}
@@ -792,6 +793,17 @@ function MessageInner({
                         renderInlineSecretPrompt={renderInlineSecretPrompt}
                       />
                     )
+                  ) : null
+                }
+
+                if (seg.type === 'thinking') {
+                  return seg.content.trim() ? (
+                    <Reasoning
+                      key={`th-${i}`}
+                      content={seg.content}
+                      isStreaming={!!isStreaming && i === segments.length - 1}
+                      duration={thinkingDuration}
+                    />
                   ) : null
                 }
 

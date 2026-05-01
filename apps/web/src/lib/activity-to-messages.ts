@@ -350,6 +350,26 @@ export function activitiesToMessages(activities: ThreadActivity[]): ChatMessage[
         break
       }
 
+      case 'thinking': {
+        const text =
+          typeof payload.content === 'string' ? payload.content
+          : typeof payload.text === 'string' ? payload.text
+          : typeof payload.message === 'string' ? payload.message
+          : act.summary
+        if (text) {
+          const msg = ensureAssistant(act.id)
+          flushToolGroup()
+          msg.thinking = (msg.thinking ?? '') + text
+          const last = currentSegments[currentSegments.length - 1]
+          if (last?.type === 'thinking') {
+            last.content += text
+          } else {
+            currentSegments.push({ type: 'thinking', content: text })
+          }
+        }
+        break
+      }
+
       // ── Fallback for generic activity kinds ─────────────────────
       default: {
         // Try to extract meaningful text from payload

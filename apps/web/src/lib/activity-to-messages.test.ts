@@ -181,4 +181,39 @@ describe('activitiesToMessages', () => {
       tool: 'search',
     })
   })
+
+  it('keeps thinking activities in assistant segment order', () => {
+    const messages = activitiesToMessages([
+      {
+        id: 'a1',
+        threadId: 't1',
+        kind: 'thinking',
+        summary: 'considering tools',
+        payload: {},
+        createdAt: '2026-03-16T00:00:00.000Z',
+      },
+      {
+        id: 'a2',
+        threadId: 't1',
+        kind: 'tool.start',
+        summary: 'Using read',
+        payload: { callId: 'c1', tool: 'read', args: { path: 'README.md' } },
+        createdAt: '2026-03-16T00:00:01.000Z',
+      },
+      {
+        id: 'a3',
+        threadId: 't1',
+        kind: 'message',
+        summary: 'Done',
+        payload: { role: 'assistant', content: 'Done' },
+        createdAt: '2026-03-16T00:00:02.000Z',
+      },
+    ] as ThreadActivity[])
+
+    expect(messages[0]?.segments).toEqual([
+      { type: 'thinking', content: 'considering tools' },
+      { type: 'toolGroup', callIds: ['c1'] },
+      { type: 'text', content: 'Done' },
+    ])
+  })
 })
