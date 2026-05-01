@@ -80,7 +80,7 @@ export class SecretInputService {
   submit(requestId: string, value: string, userId?: string | null): boolean {
     const entry = this.pending.get(requestId);
     if (!entry) return false;
-    if (entry.request.userId && userId && entry.request.userId !== userId) return false;
+    if (entry.request.userId && entry.request.userId !== (userId ?? null)) return false;
     this.resolveRequest(requestId, value, "submitted");
     return true;
   }
@@ -88,7 +88,7 @@ export class SecretInputService {
   cancel(requestId: string, userId?: string | null): boolean {
     const entry = this.pending.get(requestId);
     if (!entry) return false;
-    if (entry.request.userId && userId && entry.request.userId !== userId) return false;
+    if (entry.request.userId && entry.request.userId !== (userId ?? null)) return false;
     this.resolveRequest(requestId, null, "cancelled");
     return true;
   }
