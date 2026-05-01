@@ -67,6 +67,17 @@ describe('shouldUseRecordedBranchDiff', () => {
     expect(shouldUseRecordedBranchDiff('jait/feature', 'closed')).toBe(true)
   })
 
+  it('uses the recorded branch diff for completed threads when not on a dirty worktree', () => {
+    expect(shouldUseRecordedBranchDiff('jait/feature', null, 'completed', gitStatus({ branch: 'main' }))).toBe(true)
+  })
+
+  it('keeps completed dirty worktrees in working-tree diff mode', () => {
+    expect(shouldUseRecordedBranchDiff('jait/feature', null, 'completed', gitStatus({
+      branch: 'jait/feature',
+      hasWorkingTreeChanges: true,
+    }))).toBe(false)
+  })
+
   it('does not use recorded branch diffs without a thread branch', () => {
     expect(shouldUseRecordedBranchDiff(null, 'open')).toBe(false)
   })
@@ -104,6 +115,20 @@ describe('getThreadDiffRequest', () => {
 
   it('returns no branch-scoped diff request when the thread branch is missing', () => {
     expect(getThreadDiffRequest('main', null, 'open')).toEqual({})
+  })
+
+  it('uses branch-scoped diff request for completed threads after leaving the worktree', () => {
+    expect(getThreadDiffRequest('main', 'jait/feature', null, 'completed', gitStatus({ branch: 'main' }))).toEqual({
+      baseBranch: 'main',
+      branch: 'jait/feature',
+    })
+  })
+
+  it('uses working-tree diff request for completed dirty worktrees', () => {
+    expect(getThreadDiffRequest('main', 'jait/feature', null, 'completed', gitStatus({
+      branch: 'jait/feature',
+      hasWorkingTreeChanges: true,
+    }))).toEqual({ baseBranch: 'main' })
   })
 })
 

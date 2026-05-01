@@ -106,6 +106,7 @@ export interface CreateThreadRequest {
   skillIds?: string[] | null
   workingDirectory?: string
   branch?: string
+  prBaseBranch?: string | null
 }
 
 export interface UpdateThreadRequest {

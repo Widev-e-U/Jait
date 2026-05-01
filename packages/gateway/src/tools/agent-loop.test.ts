@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   __testUtils,
   parseOpenAIStream,
+  fromOpenAIName,
   retryToolCall,
   ToolCallPriority,
   ToolCallQueue,
@@ -32,6 +33,15 @@ function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array>
     },
   }).getReader();
 }
+describe("OpenAI tool name conversion", () => {
+  it("maps multi-segment tool names while preserving leaf underscores", () => {
+    expect(fromOpenAIName("ssh_session_start")).toBe("ssh.session.start");
+    expect(fromOpenAIName("ssh_session_run")).toBe("ssh.session.run");
+    expect(fromOpenAIName("ssh_session_close")).toBe("ssh.session.close");
+    expect(fromOpenAIName("browser_sandbox_start")).toBe("browser.sandbox.start");
+    expect(fromOpenAIName("workspace_assign_repository")).toBe("workspace.assign_repository");
+  });
+});
 
 describe("ToolCallQueue.dequeueBatch", () => {
   it("keeps two consecutive parallel-safe calls sequential", () => {

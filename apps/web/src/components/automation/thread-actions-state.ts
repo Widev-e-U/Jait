@@ -5,18 +5,26 @@ export type ThreadPrState = 'creating' | 'open' | 'closed' | 'merged' | null | u
 export function shouldUseRecordedBranchDiff(
   threadBranch: string | null | undefined,
   prState: ThreadPrState,
+  threadStatus?: string,
+  gitStatus?: Pick<GitStatusResult, 'branch' | 'hasWorkingTreeChanges'> | null,
 ): boolean {
   if (!threadBranch) return false
-  return prState === 'creating' || prState === 'open' || prState === 'merged' || prState === 'closed'
+  if (prState === 'creating' || prState === 'open' || prState === 'merged' || prState === 'closed') return true
+  if (threadStatus === 'completed') {
+    return !(gitStatus?.branch === threadBranch && gitStatus.hasWorkingTreeChanges)
+  }
+  return false
 }
 
 export function getThreadDiffRequest(
   baseBranch: string,
   threadBranch: string | null | undefined,
   prState: ThreadPrState,
+  threadStatus?: string,
+  gitStatus?: Pick<GitStatusResult, 'branch' | 'hasWorkingTreeChanges'> | null,
 ): { baseBranch?: string; branch?: string } {
   if (!threadBranch) return {}
-  if (shouldUseRecordedBranchDiff(threadBranch, prState)) {
+  if (shouldUseRecordedBranchDiff(threadBranch, prState, threadStatus, gitStatus)) {
     return { baseBranch, branch: threadBranch }
   }
   return { baseBranch }

@@ -76,12 +76,12 @@ When the work is multi-step or would benefit from progress tracking, use the tod
 If the user asks to open, switch, or use a workspace, project, or repo, treat that as a Jait workspace action first. Prefer attaching or activating the matching Jait workspace before using shell commands to inspect the filesystem, and only open the editor when it helps with the task.
 If the user provides a referenced terminal ID, prefer the dedicated Jait terminal tool and pass that terminal ID so commands run in the exact terminal they pointed at.
 If the user provides a referenced workspace path, treat it as an explicit target workspace or working directory for your next actions instead of assuming the currently active one.
-When the user wants a preview, prefer the \`preview.start\` tool as the single end-to-end preview flow.
-Use \`preview.start\` to handle preview completely: attach to an existing local target when available, otherwise start the project, create the dedicated browser session, and expose the live preview.
-The live preview is a controllable browser session. After \`preview.start\`, use \`preview.inspect\`, \`preview.status\`, and \`browser.*\` tools such as \`browser.click\`, \`browser.type\`, \`browser.scroll\`, and \`browser.screenshot\` to inspect and interact with the same visible preview browser.
+When the user wants a preview, prefer the \`preview.open\` tool as the single end-to-end preview flow.
+Use \`preview.open\` to handle preview completely: attach to an existing local target when available, otherwise start the project, create the dedicated browser session, and expose the live preview.
+The live preview is a controllable browser session. After \`preview.open\`, use \`preview.inspect\`, \`preview.status\`, and \`browser.*\` tools such as \`browser.click\`, \`browser.type\`, \`browser.scroll\`, and \`browser.screenshot\` to inspect and interact with the same visible preview browser.
 Do not tell the user that browser tools cannot control the previewed browser unless a tool call fails with a specific blocking error.
-Do not manually stitch together preview setup with ad hoc browser steps unless \`preview.start\` is unavailable or has already failed.
-If \`preview.start\` fails, then fall back to opening the localhost URL directly in the browser surface.
+Do not manually stitch together preview setup with ad hoc browser steps unless \`preview.open\` is unavailable or has already failed.
+If \`preview.open\` fails, then fall back to opening the localhost URL directly in the browser surface.
 Use \`jait.terminal\` for direct terminal execution in Jait, especially when the user has referenced an existing terminal. It is the Jait terminal MCP tool and accepts terminal commands plus an optional terminal ID.
 When a Jait tool can verify or perform work directly, use it instead of guessing or simulating the result.
 Keep responses concise and execution-oriented: state what you are doing, perform the work, then report the outcome and any concrete blockers.

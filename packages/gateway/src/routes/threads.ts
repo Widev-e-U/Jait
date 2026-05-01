@@ -785,6 +785,7 @@ export function registerThreadRoutes(
       skillIds: parseSkillIds(body["skillIds"]),
       workingDirectory: typeof body["workingDirectory"] === "string" ? body["workingDirectory"] : undefined,
       branch: typeof body["branch"] === "string" ? body["branch"] : undefined,
+      prBaseBranch: typeof body["prBaseBranch"] === "string" ? body["prBaseBranch"] : body["prBaseBranch"] === null ? null : undefined,
     });
     broadcastThreadEvent(thread.id, "created", { thread });
     return reply.status(201).send(thread);
@@ -1492,7 +1493,9 @@ export function registerThreadRoutes(
       typeof body["commitMessage"] === "string"
         ? body["commitMessage"].trim() || undefined
         : undefined;
-    const baseBranch = typeof body["baseBranch"] === "string" ? body["baseBranch"] : undefined;
+    const requestedBaseBranch = typeof body["baseBranch"] === "string" ? body["baseBranch"].trim() : "";
+    const recordedBaseBranch = thread.prBaseBranch?.trim() ?? "";
+    const baseBranch = requestedBaseBranch || recordedBaseBranch || undefined;
     const githubToken = typeof body["githubToken"] === "string" ? body["githubToken"] : undefined;
 
     try {

@@ -145,7 +145,7 @@ describe("ssh tools for external providers", () => {
 });
 
 describe("ssh tools for Jait provider tool discovery", () => {
-  it("exposes SSH tools through the schema path without password parameters", () => {
+  it("exposes only ssh.run through the schema path without password parameters", () => {
     const tools = createToolRegistry(new SurfaceRegistry(), {
       secretInputService: new SecretInputService(),
     });
@@ -154,11 +154,10 @@ describe("ssh tools for Jait provider tool discovery", () => {
     const byName = new Map(schemas.map((schema) => [schema.function.name, schema]));
 
     expect(byName.has("ssh_run")).toBe(true);
-    expect(byName.has("ssh_session_start")).toBe(true);
-    expect(byName.has("ssh_session_run")).toBe(true);
-    expect(byName.has("ssh_session_close")).toBe(true);
+    expect(byName.has("ssh_session_start")).toBe(false);
+    expect(byName.has("ssh_session_run")).toBe(false);
+    expect(byName.has("ssh_session_close")).toBe(false);
     expect(byName.get("ssh_run")?.function.parameters).not.toHaveProperty("properties.password");
-    expect(byName.get("ssh_session_start")?.function.parameters).not.toHaveProperty("properties.password");
   });
 });
 

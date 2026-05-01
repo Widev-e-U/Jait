@@ -508,16 +508,18 @@ export function LlmContextFlowDialog({ open, onOpenChange, contextFlow, response
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent showCloseButton={false} className="grid h-[95vh] max-w-[min(1200px,96vw)] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0 sm:h-[85vh]">
+      <DialogContent showCloseButton={false} className="grid h-[95vh] w-[calc(100dvw-1rem)] max-w-[1200px] grid-rows-[auto_minmax(0,1fr)] overflow-hidden p-0 sm:h-[85vh] sm:w-[96vw]">
         <DialogHeader className="border-b px-3 py-2">
-          <div className="flex min-w-0 items-center gap-2">
-            <DialogTitle className="shrink-0 text-sm font-semibold">LLM Context Flow</DialogTitle>
-            <DialogDescription className="min-w-0 flex-1 truncate text-xs">
-              {contextFlow
-                ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} · ${contextFlow.rounds.length} round${contextFlow.rounds.length === 1 ? '' : 's'}`
-                : 'No context snapshot available'}
-            </DialogDescription>
-            <div className="-my-1 ml-auto flex shrink-0 items-center gap-1 p-1">
+          <div className="grid min-w-0 grid-cols-[minmax(0,1fr)_auto] items-center gap-2">
+            <div className="min-w-0">
+              <DialogTitle className="truncate text-sm font-semibold">LLM Context Flow</DialogTitle>
+              <DialogDescription className="truncate text-xs">
+                {contextFlow
+                  ? `${contextFlow.provider}${contextFlow.model ? ` / ${contextFlow.model}` : ''} · ${contextFlow.rounds.length} round${contextFlow.rounds.length === 1 ? '' : 's'}`
+                  : 'No context snapshot available'}
+              </DialogDescription>
+            </div>
+            <div className="-my-1 flex shrink-0 items-center gap-1 p-1">
               <Button
                 type="button"
                 variant={mode === 'trace' ? 'default' : 'outline'}

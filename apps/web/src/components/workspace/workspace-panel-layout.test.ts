@@ -27,14 +27,14 @@ describe('workspace panel desktop layout', () => {
     })
   })
 
-  it('keeps the configured panel width when the editor is hidden', () => {
+  it('shrinks to the tree width when the editor is hidden', () => {
     expect(getDesktopWorkspacePanelStyle({
       showTree: true,
       showEditor: false,
       panelSize: 720,
       treeSize: 260,
     })).toEqual({
-      width: 720,
+      width: 260,
       maxWidth: '70vw',
     })
   })

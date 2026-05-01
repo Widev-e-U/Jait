@@ -8,6 +8,8 @@ export interface SystemNotificationInput {
   includeToast?: boolean
 }
 
+type BrowserNotificationCtor = typeof Notification
+
 function hashCode(s: string): number {
   let h = 0
   for (let i = 0; i < s.length; i++) h = (Math.imul(31, h) + s.charCodeAt(i)) | 0
@@ -27,6 +29,29 @@ export function normalizeSystemNotification(input: SystemNotificationInput): (Sy
     ...input,
     title,
     body,
+  }
+}
+
+async function notifyWithBrowserApi(
+  NotificationCtor: BrowserNotificationCtor | undefined,
+  notif: {
+    id: string
+    title: string
+    body: string
+  },
+): Promise<void> {
+  if (!NotificationCtor) return
+
+  if (NotificationCtor.permission === 'granted') {
+    new NotificationCtor(notif.title, { body: notif.body, tag: notif.id })
+    return
+  }
+
+  if (NotificationCtor.permission === 'denied') return
+
+  const permission = await NotificationCtor.requestPermission()
+  if (permission === 'granted') {
+    new NotificationCtor(notif.title, { body: notif.body, tag: notif.id })
   }
 }
 
@@ -54,9 +79,14 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
       }
     }
   } | undefined)?.Plugins?.LocalNotifications
+  const browserNotification = 'Notification' in window ? window.Notification : undefined
 
   if (window.jaitDesktop?.notify) {
-    await window.jaitDesktop.notify({ title: notif.title, body: notif.body })
+    try {
+      await window.jaitDesktop.notify({ title: notif.title, body: notif.body })
+    } catch {
+      await notifyWithBrowserApi(browserNotification, notif)
+    }
   } else if (capacitorLocalNotifications) {
     try {
       const perm = await capacitorLocalNotifications.requestPermissions?.()
@@ -73,26 +103,10 @@ export async function triggerSystemNotification(input: SystemNotificationInput):
         throw new Error('notification permission denied')
       }
     } catch {
-      if ('Notification' in window) {
-        if (Notification.permission === 'granted') {
-          new Notification(notif.title, { body: notif.body, tag: notif.id })
-        } else if (Notification.permission !== 'denied') {
-          const perm = await Notification.requestPermission()
-          if (perm === 'granted') {
-            new Notification(notif.title, { body: notif.body, tag: notif.id })
-          }
-        }
-      }
+      await notifyWithBrowserApi(browserNotification, notif)
     }
-  } else if ('Notification' in window) {
-    if (Notification.permission === 'granted') {
-      new Notification(notif.title, { body: notif.body, tag: notif.id })
-    } else if (Notification.permission !== 'denied') {
-      const perm = await Notification.requestPermission()
-      if (perm === 'granted') {
-        new Notification(notif.title, { body: notif.body, tag: notif.id })
-      }
-    }
+  } else {
+    await notifyWithBrowserApi(browserNotification, notif)
   }
 
   if (notif.includeToast) {

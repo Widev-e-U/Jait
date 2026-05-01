@@ -139,7 +139,7 @@ import { gitApi } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatUiState } from '@/lib/developer-chat-state'
-import { normalizeToolName } from '@/lib/tool-call-body'
+import { getMcpToolLabel, normalizeToolArgs, normalizeToolName } from '@/lib/tool-call-body'
 import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from '@/lib/todo-state'
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
@@ -230,20 +230,29 @@ interface SecretInputRequest {
   status: 'pending' | 'submitted' | 'cancelled' | 'timeout'
 }
 
-const INLINE_SECRET_REQUESTERS = new Set(['ssh.run', 'ssh.session.start', 'elevated.run'])
+const INLINE_SECRET_REQUESTERS = new Set(['ssh.run', 'ssh.session.start', 'elevated.run', 'terminal.run', 'jait.terminal', 'execute'])
 
 function shouldRenderSecretRequestInline(request: SecretInputRequest | null): boolean {
   if (!request) return false
   return INLINE_SECRET_REQUESTERS.has(request.requestedBy ?? '')
     || request.title === 'SSH password'
     || request.title === 'Administrator password'
+    || request.title === 'Terminal input required'
 }
 
-function secretRequestMatchesTool(request: SecretInputRequest | null, tool: string): boolean {
+function secretRequestMatchesTool(request: SecretInputRequest | null, tool: string, args?: Record<string, unknown>): boolean {
   if (!shouldRenderSecretRequestInline(request)) return false
   if (request?.requestedBy && request.requestedBy === tool) return true
+  if (tool === 'mcp-tool' && args) {
+    const mcpLabel = getMcpToolLabel(normalizeToolArgs(tool, args))
+    const mcpTool = mcpLabel.title ? normalizeToolName(mcpLabel.title.replace(/^mcp__[^_]+__/, '')) : ''
+    if (request?.requestedBy && request.requestedBy === mcpTool) return true
+    if (request?.title === 'SSH password') return mcpTool === 'ssh.run' || mcpTool === 'ssh.session.start'
+    if (request?.title === 'Terminal input required') return mcpTool === 'terminal.run' || mcpTool === 'jait.terminal' || mcpTool === 'execute'
+  }
   if (request?.title === 'SSH password') return tool === 'ssh.run' || tool === 'ssh.session.start'
   if (request?.title === 'Administrator password') return tool === 'elevated.run'
+  if (request?.title === 'Terminal input required') return tool === 'terminal.run' || tool === 'jait.terminal' || tool === 'execute'
   return false
 }
 
@@ -2003,7 +2012,7 @@ function App() {
     if (!secretInput.renderInline || !secretInput.form) return null
     if (call.status !== 'running' && call.status !== 'pending') return null
     const normalizedTool = normalizeToolName(call.tool)
-    if (!secretRequestMatchesTool(secretInput.activeRequest, normalizedTool)) return null
+    if (!secretRequestMatchesTool(secretInput.activeRequest, normalizedTool, call.args)) return null
     return secretInput.form
   }, [secretInput.activeRequest, secretInput.form, secretInput.renderInline])
 
@@ -3332,6 +3341,10 @@ function App() {
   ) => {
     setShowWorkspaceTree(layout.tree)
     setShowWorkspaceEditor(layout.editor)
+    if (!layout.tree && !layout.editor) {
+      showWorkspaceRef.current = false
+      setShowWorkspace(false)
+    }
 
     if (!options?.immediateSync) return
 
@@ -3673,8 +3686,7 @@ function App() {
       tree: showWorkspaceTree,
       editor: showWorkspaceEditor,
     })
-    setShowWorkspaceTree(nextLayout.tree)
-    setShowWorkspaceEditor(nextLayout.editor)
+    applyWorkspaceLayout(nextLayout, { immediateSync: true })
   }, [applyWorkspaceLayout, isMobile, showWorkspaceTree, showWorkspaceEditor])
 
   const toggleWorkspaceEditor = useCallback(() => {
@@ -3823,7 +3835,7 @@ function App() {
     showWorkspaceRef.current = true
     setShowWorkspace(true)
     if (isMobile) {
-      applyWorkspaceLayout(collapseMobileWorkspace(), { immediateSync: true })
+      applyWorkspaceLayout(showMobileWorkspacePane('editor'), { immediateSync: true })
     } else {
       setShowWorkspaceTree(true)
       showWorkspaceEditorPanel()
@@ -4369,23 +4381,7 @@ function App() {
       setShowSidebar(false)
     }
 
-    const controlState = {
-      showWorkspace,
-      showTerminal,
-      showWorkspaceTree,
-      showWorkspaceEditor,
-      treeTab: mobileTreeTab,
-    }
-
-    if (isMobileWorkspaceTargetActive(controlState, target)) {
-      if (target === 'terminal') {
-        closeTerminalPanel()
-        return
-      }
-      closeWorkspacePanel()
-      return
-    }
-
+    // Simple switch: always navigate to the target, no toggle-off logic
     if (target === 'terminal') {
       setCurrentView('chat')
       closeWorkspacePanel()
@@ -4398,17 +4394,23 @@ function App() {
       closeTerminalPanel()
     }
 
-    if (!showWorkspace) {
-      await handleToggleEditor()
-    }
-
     if (target === 'editor') {
-      showMobileWorkspaceEditorTab()
+      if (!showWorkspace) {
+        // handleToggleEditor handles all workspace-opening logic including
+        // picker fallback; it calls showWorkspaceEditorPanel() internally on mobile
+        await handleToggleEditor()
+      } else {
+        showMobileWorkspaceEditorTab()
+      }
       return
     }
 
+    // files / git
+    if (!showWorkspace) {
+      await handleToggleEditor()
+    }
     showMobileWorkspaceTreeTab(target)
-  }, [closeTerminalPanel, closeWorkspacePanel, ensureActiveTerminal, handleToggleEditor, mobileTreeTab, openTerminalPanel, setCurrentView, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, showSidebar, showTerminal, showWorkspace, showWorkspaceEditor, showWorkspaceTree])
+  }, [closeTerminalPanel, closeWorkspacePanel, ensureActiveTerminal, handleToggleEditor, openTerminalPanel, setCurrentView, showMobileWorkspaceEditorTab, showMobileWorkspaceTreeTab, showSidebar, showTerminal, showWorkspace])
 
   const handleReferenceFile = useCallback((file: ReferencedFile) => {
     promptInputRef.current?.insertChip(file)
@@ -5087,12 +5089,13 @@ function App() {
     dequeueManagerMessage(thread.id, id)
     void (async () => {
       const branchName = `jait/${Math.random().toString(16).slice(2, 10)}`
+      const baseBranch = thread.branch ?? thread.prBaseBranch ?? repo.defaultBranch
       let worktreePath: string | undefined
       try {
-        const wt = await gitApi.createWorktree(repo.localPath, repo.defaultBranch, branchName)
+        const wt = await gitApi.createWorktree(repo.localPath, baseBranch, branchName)
         worktreePath = wt.path
       } catch {
-        try { await gitApi.createBranch(repo.localPath, branchName, repo.defaultBranch) } catch { /* ignore */ }
+        try { await gitApi.createBranch(repo.localPath, branchName, baseBranch) } catch { /* ignore */ }
       }
       const newThread = await agentsApi.createThread({
         title: `[${repo.name}] Generating title…`,
@@ -5102,6 +5105,7 @@ function App() {
         kind: 'delivery',
         workingDirectory: worktreePath ?? repo.localPath,
         branch: branchName,
+        prBaseBranch: baseBranch,
       })
       await agentsApi.startThread(newThread.id, {
         message: item.fullContent,
@@ -5815,7 +5819,7 @@ function App() {
       {!isManagerThread && (
         <>
           <Tooltip><TooltipTrigger asChild>
-            <Button variant={!showWorkspace && !showTerminal && !showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { if (showWorkspace) closeWorkspacePanel(); if (showTerminal) closeTerminalPanel(); if (showSidebar) setShowSidebar(false); setShowMobileToolbar(false) }} aria-label="Chat">
+            <Button variant={!showWorkspace && !showTerminal && !showSidebar ? 'secondary' : 'ghost'} size="sm" className="h-10 w-10 shrink-0 rounded-lg p-0" onClick={() => { closeWorkspacePanel(); closeTerminalPanel(); setShowSidebar(false); setShowMobileToolbar(false) }} aria-label="Chat">
               <MessageSquare className="h-5 w-5" />
             </Button>
           </TooltipTrigger><TooltipContent side="left">Chat</TooltipContent></Tooltip>
@@ -8320,12 +8324,13 @@ function App() {
               void (async () => {
                 const repo = planRepo!
                 const branchName = `jait/${Math.random().toString(16).slice(2, 10)}`
+                const baseBranch = repo.defaultBranch
                 let worktreePath: string | undefined
                 try {
-                  const wt = await gitApi.createWorktree(repo.localPath, repo.defaultBranch, branchName)
+                  const wt = await gitApi.createWorktree(repo.localPath, baseBranch, branchName)
                   worktreePath = wt.path
                 } catch {
-                  try { await gitApi.createBranch(repo.localPath, branchName, repo.defaultBranch) } catch { /* ignore */ }
+                  try { await gitApi.createBranch(repo.localPath, branchName, baseBranch) } catch { /* ignore */ }
                 }
                 const thread = await agentsApi.createThread({
                   title: `[${repo.name}] ${task.title}`,
@@ -8334,6 +8339,7 @@ function App() {
                   kind: 'delivery',
                   workingDirectory: worktreePath ?? repo.localPath,
                   branch: branchName,
+                  prBaseBranch: baseBranch,
                 })
                 await agentsApi.startThread(thread.id, {
                   message: task.description || task.title,

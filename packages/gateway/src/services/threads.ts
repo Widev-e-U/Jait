@@ -37,6 +37,7 @@ export interface CreateThreadParams {
   skillIds?: string[] | null;
   workingDirectory?: string;
   branch?: string;
+  prBaseBranch?: string | null;
 }
 
 export interface UpdateThreadParams {
@@ -138,6 +139,7 @@ export class ThreadService {
         skillIds: serializeSkillIds(params.skillIds) ?? null,
         workingDirectory: params.workingDirectory ?? null,
         branch: params.branch ?? null,
+        prBaseBranch: params.prBaseBranch ?? null,
         status: "idle",
         createdAt: now,
         updatedAt: now,

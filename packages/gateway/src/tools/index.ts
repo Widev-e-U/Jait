@@ -61,7 +61,6 @@ export { createMaintenanceRunTool } from "./maintenance-tools.js";
 export { createArchitectureTool } from "./architecture-tools.js";
 export {
   createPreviewOpenTool,
-  createPreviewStartTool,
   createPreviewStopTool,
   createPreviewRestartTool,
   createPreviewStatusTool,
@@ -167,9 +166,6 @@ import { createThreadControlTool } from "./thread-tools.js";
 import { createNetworkScanTool } from "./network-tools.js";
 import {
   createSshRunTool,
-  createSshSessionStartTool,
-  createSshSessionRunTool,
-  createSshSessionCloseTool,
 } from "./ssh-tools.js";
 import { createElevatedRunTool } from "./elevated-tools.js";
 import { createRedeployTool } from "./redeploy-tools.js";
@@ -177,7 +173,6 @@ import { createMaintenanceRunTool } from "./maintenance-tools.js";
 import { createArchitectureTool } from "./architecture-tools.js";
 import {
   createPreviewOpenTool,
-  createPreviewStartTool,
   createPreviewStopTool,
   createPreviewRestartTool,
   createPreviewStatusTool,
@@ -250,7 +245,7 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
   tools.register(createReadTool(surfaceRegistry));
   tools.register(createEditTool(surfaceRegistry));
-  tools.register(createExecuteTool(surfaceRegistry));
+  tools.register(createExecuteTool(surfaceRegistry, deps.secretInputService));
   tools.register(createSearchTool(surfaceRegistry));
   tools.register(createWebTool());
   tools.register(createTodoTool());
@@ -270,8 +265,8 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
 
   // Terminal tools (underlying implementations for core "execute")
-  tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws));
-  tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws));
+  tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService));
+  tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService));
   tools.register(createTerminalStreamTool(surfaceRegistry));
 
   // File tools (underlying implementations for core "read"/"edit")
@@ -380,7 +375,6 @@ export function createToolRegistry(
     tools.register(tool);
   }
   tools.register(createPreviewOpenTool(deps.ws, deps.sessionState, deps.previewService));
-  tools.register(createPreviewStartTool(deps.ws, deps.sessionState, deps.previewService));
   tools.register(createPreviewStopTool(deps.ws, deps.sessionState, deps.previewService));
   tools.register(createPreviewRestartTool(deps.previewService));
   tools.register(createPreviewStatusTool(deps.previewService));
@@ -394,9 +388,6 @@ export function createToolRegistry(
   tools.register(createNetworkScanTool());
   tools.register(createElevatedRunTool(deps.secretInputService));
   tools.register(createSshRunTool(deps.secretInputService));
-  tools.register(createSshSessionStartTool(deps.secretInputService));
-  tools.register(createSshSessionRunTool());
-  tools.register(createSshSessionCloseTool());
 
   // Architecture tools
   tools.register(createArchitectureTool(deps.ws, deps.architectureDiagramService));

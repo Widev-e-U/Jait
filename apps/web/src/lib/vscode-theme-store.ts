@@ -18,9 +18,25 @@ const listeners = new Set<() => void>()
 let state: VsCodeThemeStoreState = loadState()
 let storageListenerAttached = false
 
+function readLocalStorage(): Storage | null {
+  if (typeof window === 'undefined') return null
+  try {
+    return window.localStorage
+  } catch {
+    return null
+  }
+}
+
 function loadState(): VsCodeThemeStoreState {
-  if (typeof window === 'undefined' || !window.localStorage) return { importedThemes: [], activeThemeId: null }
-  const raw = window.localStorage.getItem(STORAGE_KEY)
+  const localStorage = readLocalStorage()
+  if (!localStorage) return { importedThemes: [], activeThemeId: null }
+
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(STORAGE_KEY)
+  } catch {
+    return { importedThemes: [], activeThemeId: null }
+  }
   if (!raw) return { importedThemes: [], activeThemeId: null }
   try {
     const parsed = JSON.parse(raw) as Partial<VsCodeThemeStoreState>
@@ -39,8 +55,13 @@ function loadState(): VsCodeThemeStoreState {
 
 function persist(nextState: VsCodeThemeStoreState): void {
   state = nextState
-  if (typeof window !== 'undefined' && window.localStorage) {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState))
+  const localStorage = readLocalStorage()
+  if (localStorage) {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(nextState))
+    } catch {
+      // Keep state in memory when browser storage is blocked or full.
+    }
   }
   for (const listener of listeners) listener()
 }

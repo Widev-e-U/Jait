@@ -19,6 +19,7 @@ import { uuidv7 } from "../db/uuidv7.js";
 import type { TerminalSurface } from "../surfaces/terminal.js";
 import { SandboxManager, type SandboxMountMode } from "../security/sandbox-manager.js";
 import type { WsControlPlane } from "../ws.js";
+import type { SecretInputService } from "../services/secret-input.js";
 import { writeFileSync, unlinkSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
@@ -33,6 +34,9 @@ const INTERACTIVE_PROMPT_PATTERNS = [
   /verification\s+code:\s*$/im,
   /press\s+enter\s+to\s+continue/i,
 ];
+const SECRET_INPUT_PROMPT_PATTERNS = INTERACTIVE_PROMPT_PATTERNS.filter(
+  (pattern) => !pattern.source.includes("press\\s+enter"),
+);
 
 // ── Session → terminal mapping ───────────────────────────────────
 
@@ -97,6 +101,16 @@ function inferFallbackExitCode(rawOutput: string): number {
 export function detectInteractivePrompt(output: string): boolean {
   if (!output) return false;
   return INTERACTIVE_PROMPT_PATTERNS.some((pattern) => pattern.test(output));
+}
+
+function getInteractivePromptLabel(output: string): string | null {
+  const cleaned = stripAnsi(output).replace(/\r/g, "");
+  const lines = cleaned.split("\n").map((line) => line.trim()).filter(Boolean);
+  for (let index = lines.length - 1; index >= 0; index -= 1) {
+    const line = lines[index]!;
+    if (SECRET_INPUT_PROMPT_PATTERNS.some((pattern) => pattern.test(line))) return line;
+  }
+  return SECRET_INPUT_PROMPT_PATTERNS.some((pattern) => pattern.test(cleaned)) ? "Terminal input required" : null;
 }
 
 /** Race a promise against an AbortSignal */
@@ -228,10 +242,13 @@ function executeInTerminal(
   shell: string,
   onChunk?: (chunk: string) => void,
   signal?: AbortSignal,
+  requestInteractiveSecret?: (prompt: string) => Promise<string | null>,
 ): Promise<{ output: string; exitCode: number | null; timedOut: boolean }> {
   return new Promise((resolve) => {
     let raw = "";
     let settled = false;
+    let promptRequestInFlight = false;
+    let promptAnswered = false;
 
     // Cached D-marker result so we only scan for it once
     let dMatch: { exitCode: number; end: number } | null = null;
@@ -241,6 +258,17 @@ function executeInTerminal(
     // calling finish().  Each new PTY chunk resets the timer.
     let settleTimer: ReturnType<typeof setTimeout> | null = null;
     let settleExitCode: number | null = null;
+
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    const armTimer = () => {
+      if (timeoutMs <= 0 || settled) return;
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(() => {
+        // Interrupt the running command + Enter for clean prompt
+        surface.write("\x03\r");
+        setTimeout(() => finish(true), 500);
+      }, timeoutMs);
+    };
 
     const listener = (data: string) => {
       raw += data;
@@ -253,6 +281,27 @@ function executeInTerminal(
       }
 
       if (settled) return;
+
+      if (requestInteractiveSecret && !promptRequestInFlight && !promptAnswered) {
+        const prompt = getInteractivePromptLabel(raw);
+        if (prompt) {
+          promptRequestInFlight = true;
+          if (timer) clearTimeout(timer);
+          void requestInteractiveSecret(prompt).then((secret) => {
+            if (settled) return;
+            promptRequestInFlight = false;
+            promptAnswered = true;
+            if (!secret) {
+              surface.write("\x03\r");
+              setTimeout(() => finish(false, null), 500);
+              return;
+            }
+            surface.write(`${secret}\r`);
+            armTimer();
+          });
+          return;
+        }
+      }
 
       // If we're in the settling phase (D+B already detected), reset
       // the timer — more data just arrived that we want to capture.
@@ -364,20 +413,12 @@ function executeInTerminal(
     // Listen BEFORE writing so we don't miss fast output
     surface.addOutputListener(listener);
 
-    // timeout <= 0 means no timeout (run until completion or abort)
-    const timer = timeoutMs > 0
-      ? setTimeout(() => {
-          // Interrupt the running command + Enter for clean prompt
-          surface.write("\x03\r");
-          setTimeout(() => finish(true), 500);
-        }, timeoutMs)
-      : null;
-
     const onAbort = () => {
       surface.write("\x03");
       setTimeout(() => finish(false, null), 500);
     };
     signal?.addEventListener("abort", onAbort, { once: true });
+    armTimer();
 
     // For multi-line commands, write to a temp .ps1 file and dot-source it.
     // PSReadLine treats each \n as a separate Enter keystroke — bracketed
@@ -420,6 +461,7 @@ export function createTerminalRunTool(
   registry: SurfaceRegistry,
   sandboxManager = new SandboxManager(),
   ws?: WsControlPlane,
+  secretInput?: SecretInputService,
 ): ToolDefinition<TerminalRunInput> {
   return {
     name: "terminal.run",
@@ -501,6 +543,16 @@ export function createTerminalRunTool(
           String(surface.snapshot().metadata?.shell ?? ""),
           context.onOutputChunk,
           context.signal,
+          secretInput
+            ? (prompt) => secretInput.requestSecret({
+                sessionId: context.sessionId,
+                userId: context.userId,
+                title: "Terminal input required",
+                prompt,
+                requestedBy: "terminal.run",
+                timeoutMs: 120_000,
+              })
+            : undefined,
         );
 
         const result = context.signal
@@ -566,8 +618,9 @@ export function createJaitTerminalTool(
   registry: SurfaceRegistry,
   sandboxManager = new SandboxManager(),
   ws?: WsControlPlane,
+  secretInput?: SecretInputService,
 ): ToolDefinition<TerminalRunInput> {
-  const base = createTerminalRunTool(registry, sandboxManager, ws);
+  const base = createTerminalRunTool(registry, sandboxManager, ws, secretInput);
   return {
     ...base,
     name: "jait.terminal",
