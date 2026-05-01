@@ -3,6 +3,7 @@ import { createTerminalRunTool, detectInteractivePrompt } from "./tools/terminal
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
 import type { TerminalSurface } from "./surfaces/terminal.js";
+import { SecretInputService } from "./services/secret-input.js";
 
 function makeContext() {
   return {
@@ -42,6 +43,51 @@ function makePromptFallbackTool(chunks: string[], shell = "/bin/bash") {
     getSurface: () => surface,
   } as unknown as SurfaceRegistry;
   return { tool: createTerminalRunTool(registry), writes };
+}
+
+function makeSecretPromptTool(secret = "remote-password") {
+  let listener: ((data: string) => void) | null = null;
+  const writes: string[] = [];
+  const requests: Array<{ title: string; prompt: string; requestedBy: string | null }> = [];
+  let service: SecretInputService;
+  service = new SecretInputService({
+    onRequest: (request) => {
+      requests.push({
+        title: request.title,
+        prompt: request.prompt,
+        requestedBy: request.requestedBy,
+      });
+      queueMicrotask(() => service.submit(request.id, secret, "user-1"));
+    },
+  });
+  const surface = {
+    id: "term-existing",
+    type: "terminal",
+    state: "running",
+    touch() {},
+    addOutputListener(cb: (data: string) => void) {
+      listener = cb;
+    },
+    removeOutputListener() {
+      listener = null;
+    },
+    write(data: string) {
+      writes.push(data);
+      if (data === "ssh jakob@host\r") {
+        queueMicrotask(() => listener?.("jakob@host's password: "));
+      }
+      if (data === `${secret}\r`) {
+        queueMicrotask(() => listener?.("\r\nconnected\r\n\x1b]633;D;0\x07\x1b]633;B\x07"));
+      }
+    },
+    snapshot() {
+      return { metadata: { shell: "/bin/bash" } };
+    },
+  } as unknown as TerminalSurface;
+  const registry = {
+    getSurface: () => surface,
+  } as unknown as SurfaceRegistry;
+  return { tool: createTerminalRunTool(registry, undefined, undefined, service), writes, requests };
 }
 
 describe("terminal.run tool status reporting", () => {
@@ -134,6 +180,24 @@ describe("terminal.run tool status reporting", () => {
     expect(result.message).toContain("timed out");
     expect((result.data as any).timedOut).toBe(true);
     expect(writes).toContain("\x03\r");
+  });
+
+  it("requests an inline secret when a terminal command asks for a password", async () => {
+    const { tool, writes, requests } = makeSecretPromptTool();
+
+    const result = await tool.execute({ command: "ssh jakob@host", terminalId: "term-existing", timeout: 1000 }, {
+      ...makeContext(),
+      userId: "user-1",
+    });
+
+    expect(result.ok).toBe(true);
+    expect((result.data as any).output).toContain("connected");
+    expect(writes).toContain("remote-password\r");
+    expect(requests).toEqual([{
+      title: "Terminal input required",
+      prompt: "jakob@host's password:",
+      requestedBy: "terminal.run",
+    }]);
   });
 });
 

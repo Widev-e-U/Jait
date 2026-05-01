@@ -245,7 +245,7 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
   tools.register(createReadTool(surfaceRegistry));
   tools.register(createEditTool(surfaceRegistry));
-  tools.register(createExecuteTool(surfaceRegistry));
+  tools.register(createExecuteTool(surfaceRegistry, deps.secretInputService));
   tools.register(createSearchTool(surfaceRegistry));
   tools.register(createWebTool());
   tools.register(createTodoTool());
@@ -265,8 +265,8 @@ export function createToolRegistry(
   // ════════════════════════════════════════════════════════════════════
 
   // Terminal tools (underlying implementations for core "execute")
-  tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws));
-  tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws));
+  tools.register(createTerminalRunTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService));
+  tools.register(createJaitTerminalTool(surfaceRegistry, undefined, deps.ws, deps.secretInputService));
   tools.register(createTerminalStreamTool(surfaceRegistry));
 
   // File tools (underlying implementations for core "read"/"edit")
