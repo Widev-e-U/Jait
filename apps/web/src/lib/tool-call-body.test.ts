@@ -1,7 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolImagePath, normalizeToolArgs, summarizeToolArguments } from './tool-call-body'
+import { canRenderEditDiff, getMcpToolLabel, getToolCallBodyKind, getToolFilePath, getToolImagePath, normalizeToolArgs, normalizeToolName, summarizeToolArguments } from './tool-call-body'
 
 describe('tool call body helpers', () => {
+  it('normalizes multi-segment tool names used by tool cards', () => {
+    expect(normalizeToolName('ssh_session_start')).toBe('ssh.session.start')
+    expect(normalizeToolName('ssh_session_run')).toBe('ssh.session.run')
+    expect(normalizeToolName('ssh_session_close')).toBe('ssh.session.close')
+    expect(normalizeToolName('browser_sandbox_start')).toBe('browser.sandbox.start')
+    expect(normalizeToolName('workspace_assign_repository')).toBe('workspace.assign_repository')
+  })
+
   it('does not force a diff view for codex edit calls that only provide a path', () => {
     expect(canRenderEditDiff('edit', { path: 'apps/web/src/App.tsx' })).toBe(false)
     expect(

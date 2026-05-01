@@ -1,8 +1,20 @@
 import { describe, expect, it, vi } from "vitest";
 import { createPreviewInspectTool, createPreviewOpenTool, createPreviewRestartTool } from "./preview-tools.js";
 import type { ToolContext } from "./contracts.js";
+import { buildToolSchemas } from "./agent-loop.js";
+import { createToolRegistry } from "./index.js";
+import { SurfaceRegistry } from "../surfaces/registry.js";
 
 describe("createPreviewOpenTool", () => {
+  it("exposes preview.open, not preview.start, through the schema path", () => {
+    const tools = createToolRegistry(new SurfaceRegistry());
+    const schemas = buildToolSchemas(tools);
+    const names = new Set(schemas.map((schema) => schema.function.name));
+
+    expect(names.has("preview_open")).toBe(true);
+    expect(names.has("preview_start")).toBe(false);
+  });
+
   it("starts a managed preview and broadcasts panel state", async () => {
     const sendUICommand = vi.fn();
     const broadcast = vi.fn();

@@ -347,6 +347,10 @@ export function toOpenAIName(name: string): string {
 }
 
 export function fromOpenAIName(name: string): string {
+  if (name === "browser_sandbox_start") return "browser.sandbox.start";
+  if (name === "ssh_session_start") return "ssh.session.start";
+  if (name === "ssh_session_run") return "ssh.session.run";
+  if (name === "ssh_session_close") return "ssh.session.close";
   const idx = name.indexOf("_");
   if (idx === -1) return name;
   return name.slice(0, idx) + "." + name.slice(idx + 1);
