@@ -22,6 +22,7 @@ import {
 } from "../tools/index.js";
 import type { ToolContext, ToolResult } from "../tools/contracts.js";
 import type { ToolRegistry } from "../tools/registry.js";
+import { SandboxManager } from "../security/sandbox-manager.js";
 import type {
   CliProviderAdapter,
   ProviderInfo,
@@ -34,6 +35,35 @@ import type {
   StartSessionOptions,
 } from "./contracts.js";
 import { NO_PROVIDER_AUTH, unsupportedLogin, unsupportedLogout } from "./provider-auth.js";
+
+const JAIT_SANDBOXED_COMMAND_TOOLS = new Set(["execute", "terminal.run", "jait.terminal"]);
+
+function shouldUseJaitThreadSandbox(toolName: string): boolean {
+  return JAIT_SANDBOXED_COMMAND_TOOLS.has(toolName);
+}
+
+export function prepareJaitThreadSandboxToolInput(toolName: string, input: unknown): unknown {
+  if (!shouldUseJaitThreadSandbox(toolName)) return input;
+  if (!input || typeof input !== "object" || Array.isArray(input)) {
+    return input;
+  }
+  return {
+    ...(input as Record<string, unknown>),
+    sandbox: true,
+    sandboxMountMode: "read-write",
+  };
+}
+
+function buildJaitThreadSandboxPrompt(): string {
+  return [
+    "<jaitThreadSandbox>",
+    "Jait native provider threads follow a Sandcastle-style local sandbox flow.",
+    "File operations target the thread working directory, which may be a managed git worktree.",
+    "Shell-command tools (`execute`, `terminal.run`, `jait.terminal`) are forced through a long-lived Jait Docker sandbox with the working directory mounted at /workspace.",
+    "Use relative paths or /workspace paths inside shell commands; host absolute workspace paths are remapped for shell commands.",
+    "</jaitThreadSandbox>",
+  ].join("\n");
+}
 
 interface JaitSessionState {
   session: ProviderSession;
@@ -51,6 +81,8 @@ interface JaitSessionState {
   currentTurnAbort?: AbortController;
   currentTurn?: Promise<void>;
   contextRounds?: LlmContextFlowRound[];
+  sandboxContainerName?: string;
+  sandboxStart?: Promise<string>;
 }
 
 export interface JaitProviderDeps {
@@ -64,6 +96,7 @@ export interface JaitProviderDeps {
     context: ToolContext,
     options?: { dryRun?: boolean; consentTimeoutMs?: number },
   ) => Promise<ToolResult>;
+  sandboxManager?: Pick<SandboxManager, "startCommandSandbox" | "stopContainer">;
 }
 
 export class JaitProvider implements CliProviderAdapter {
@@ -79,8 +112,11 @@ export class JaitProvider implements CliProviderAdapter {
 
   private emitter = new EventEmitter();
   private sessions = new Map<string, JaitSessionState>();
+  private sandboxManager: Pick<SandboxManager, "startCommandSandbox" | "stopContainer">;
 
-  constructor(private readonly deps: JaitProviderDeps) {}
+  constructor(private readonly deps: JaitProviderDeps) {
+    this.sandboxManager = deps.sandboxManager ?? new SandboxManager();
+  }
 
   async checkAvailability(): Promise<boolean> {
     this.info.available = true;
@@ -115,7 +151,7 @@ export class JaitProvider implements CliProviderAdapter {
       "agent",
       { model: llm.openaiModel, baseUrl: llm.openaiBaseUrl },
       { workspaceRoot: options.workingDirectory },
-    );
+    ) + `\n\n${buildJaitThreadSandboxPrompt()}`;
     const session: ProviderSession = {
       id: uuidv7(),
       providerId: "jait",
@@ -238,6 +274,12 @@ export class JaitProvider implements CliProviderAdapter {
       if (state.currentTurn) {
         await state.currentTurn.catch(() => {});
       }
+      const containerName = state.sandboxStart
+        ? await state.sandboxStart.catch(() => undefined)
+        : state.sandboxContainerName;
+      if (containerName) {
+        await this.sandboxManager.stopContainer(containerName).catch(() => {});
+      }
       this.emit({ type: "session.completed", sessionId });
     }
     this.sessions.delete(sessionId);
@@ -274,6 +316,19 @@ export class JaitProvider implements CliProviderAdapter {
     if (!this.deps.toolRegistry) {
       return { ok: false, message: "Tool registry not available" };
     }
+    const state = this.sessions.get(sessionId);
+    const toolInput = prepareJaitThreadSandboxToolInput(toolName, input);
+    let sandboxContainerName: string | undefined;
+    if (state && shouldUseJaitThreadSandbox(toolName)) {
+      try {
+        sandboxContainerName = await this.ensureThreadSandbox(state);
+      } catch (error) {
+        return {
+          ok: false,
+          message: error instanceof Error ? error.message : String(error),
+        };
+      }
+    }
     const context: ToolContext = {
       sessionId,
       actionId: uuidv7(),
@@ -284,16 +339,35 @@ export class JaitProvider implements CliProviderAdapter {
       providerId: auth?.providerId,
       model: auth?.model,
       runtimeMode: auth?.runtimeMode,
+      sandboxContainerName,
       onOutputChunk,
       signal,
     };
     try {
       return this.deps.toolExecutor
-        ? await this.deps.toolExecutor(toolName, input, context)
-        : await this.deps.toolRegistry.execute(toolName, input, context);
+        ? await this.deps.toolExecutor(toolName, toolInput, context)
+        : await this.deps.toolRegistry.execute(toolName, toolInput, context);
     } catch (error) {
       return { ok: false, message: error instanceof Error ? error.message : String(error) };
     }
+  }
+
+  private async ensureThreadSandbox(state: JaitSessionState): Promise<string> {
+    if (state.sandboxContainerName) return state.sandboxContainerName;
+    if (!state.sandboxStart) {
+      state.sandboxStart = this.sandboxManager.startCommandSandbox({
+        workspaceRoot: state.workingDirectory,
+        mountMode: "read-write",
+        networkEnabled: true,
+      }).then((result) => {
+        state.sandboxContainerName = result.containerName;
+        return result.containerName;
+      }).catch((error) => {
+        state.sandboxStart = undefined;
+        throw error;
+      });
+    }
+    return state.sandboxStart;
   }
 
   private forwardContextRound(sessionId: string, state: JaitSessionState, round: LlmContextFlowRound): void {

@@ -156,6 +156,7 @@ export interface BrowserDriver {
     vncPort: number;
     websockifyPort: number;
     novncUrl: string;
+    containerName?: string;
   };
 }
 
@@ -240,6 +241,7 @@ export class BrowserSurface implements Surface {
   private _lastUrl = "";
   private _lastTitle = "";
   private _actionCount = 0;
+  private _lastActivityAt = Date.now();
   private driver: BrowserDriver | null = null;
 
   onOutput?: (data: string) => void;
@@ -258,11 +260,16 @@ export class BrowserSurface implements Surface {
     return this._sessionId;
   }
 
+  get idleMs(): number {
+    return Math.max(0, Date.now() - this._lastActivityAt);
+  }
+
   async start(input: SurfaceStartInput): Promise<void> {
     if (this._state === "running") return;
     this._setState("starting");
     this._sessionId = input.sessionId;
     this._startedAt = new Date().toISOString();
+    this.touch();
 
     try {
       const factory = this.options.driverFactory ?? createPlaywrightDriver;
@@ -281,7 +288,7 @@ export class BrowserSurface implements Surface {
     this._setState("stopped");
   }
 
-  getLiveViewInfo(): { display: string; vncPort: number; websockifyPort: number; novncUrl: string } | null {
+  getLiveViewInfo(): { display: string; vncPort: number; websockifyPort: number; novncUrl: string; containerName?: string } | null {
     return this.driver?.liveView ?? null;
   }
 
@@ -296,23 +303,29 @@ export class BrowserSurface implements Surface {
         currentUrl: this._lastUrl || null,
         title: this._lastTitle || null,
         actionCount: this._actionCount,
+        idleMs: this.idleMs,
+        liveViewContainerName: this.driver?.liveView?.containerName ?? null,
       },
     };
   }
 
   async navigate(url: string, signal?: AbortSignal): Promise<BrowserPageSnapshot> {
+    this.touch();
     const driver = this.requireDriver();
     await driver.navigate(url, signal);
     this._actionCount++;
     const snap = await driver.snapshot(signal);
     this.captureSnapshotMeta(snap);
+    this.touch();
     this.onOutput?.(`navigate ${snap.url}`);
     return snap;
   }
 
   async describe(signal?: AbortSignal): Promise<string> {
+    this.touch();
     const snap = await this.requireDriver().snapshot(signal);
     this.captureSnapshotMeta(snap);
+    this.touch();
     const lines = [
       `URL: ${snap.url}`,
       `Title: ${snap.title || "(untitled)"}`,
@@ -344,15 +357,18 @@ export class BrowserSurface implements Surface {
     target?: BrowserTargetDiagnostics;
     metrics: BrowserPerformanceMetrics;
   }> {
+    this.touch();
     const driver = this.requireDriver();
     const snapshot = await driver.snapshot(signal);
     this.captureSnapshotMeta(snapshot);
     const target = selector ? await driver.diagnose(selector, signal) : undefined;
     const metrics = await driver.getMetrics(signal);
+    this.touch();
     return { snapshot, target, metrics };
   }
 
   async click(selector: string, signal?: AbortSignal): Promise<void> {
+    this.touch();
     try {
       await this.requireDriver().click(selector, signal);
     } catch (err) {
@@ -360,38 +376,54 @@ export class BrowserSurface implements Surface {
       throw enrichBrowserActionError("click", selector, err, diagnostics);
     }
     this._actionCount++;
+    this.touch();
   }
 
   async typeText(selector: string, text: string, signal?: AbortSignal): Promise<void> {
+    this.touch();
     await this.requireDriver().typeText(selector, text, signal);
     this._actionCount++;
+    this.touch();
   }
 
   async scroll(x: number, y: number, signal?: AbortSignal): Promise<void> {
+    this.touch();
     await this.requireDriver().scroll(x, y, signal);
     this._actionCount++;
+    this.touch();
   }
 
   async select(selector: string, value: string, signal?: AbortSignal): Promise<void> {
+    this.touch();
     await this.requireDriver().select(selector, value, signal);
     this._actionCount++;
+    this.touch();
   }
 
   async waitFor(selector: string, timeoutMs: number, signal?: AbortSignal): Promise<void> {
+    this.touch();
     await this.requireDriver().waitFor(selector, timeoutMs, signal);
     this._actionCount++;
+    this.touch();
   }
 
   async screenshot(path?: string, signal?: AbortSignal): Promise<string> {
+    this.touch();
     this._actionCount++;
-    return this.requireDriver().screenshot(path, signal);
+    const result = await this.requireDriver().screenshot(path, signal);
+    this.touch();
+    return result;
   }
 
   async getMetrics(signal?: AbortSignal): Promise<BrowserPerformanceMetrics> {
-    return this.requireDriver().getMetrics(signal);
+    this.touch();
+    const result = await this.requireDriver().getMetrics(signal);
+    this.touch();
+    return result;
   }
 
   getEvents(): BrowserRuntimeEvent[] {
+    this.touch();
     return this.requireDriver().getEvents();
   }
 
@@ -405,6 +437,10 @@ export class BrowserSurface implements Surface {
       throw new Error("Browser surface is not running");
     }
     return this.driver;
+  }
+
+  private touch(): void {
+    this._lastActivityAt = Date.now();
   }
 
   private async tryDiagnose(
@@ -1099,12 +1135,13 @@ async function createInProcessPlaywrightDriver(
     },
     liveView: liveViewSession
       ? {
-          display: liveViewSession.display,
-          vncPort: liveViewSession.vncPort,
-          websockifyPort: liveViewSession.websockifyPort,
-          novncUrl: liveViewSession.novncUrl,
-        }
-      : undefined,
+        display: liveViewSession.display,
+        vncPort: liveViewSession.vncPort,
+        websockifyPort: liveViewSession.websockifyPort,
+        novncUrl: liveViewSession.novncUrl,
+        containerName: liveViewSession.containerName,
+      }
+    : undefined,
   };
 
   return driver;
@@ -1405,12 +1442,13 @@ async function createNodeBridgePlaywrightDriver(
     },
     liveView: liveViewSession
       ? {
-          display: liveViewSession.display,
-          vncPort: liveViewSession.vncPort,
-          websockifyPort: liveViewSession.websockifyPort,
-          novncUrl: liveViewSession.novncUrl,
-        }
-      : undefined,
+        display: liveViewSession.display,
+        vncPort: liveViewSession.vncPort,
+        websockifyPort: liveViewSession.websockifyPort,
+        novncUrl: liveViewSession.novncUrl,
+        containerName: liveViewSession.containerName,
+      }
+    : undefined,
   };
 
   return driver;

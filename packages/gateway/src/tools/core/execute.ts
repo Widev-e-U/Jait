@@ -34,6 +34,10 @@ interface ExecuteInput {
   /** Execution timeout in ms (default 30000). Use 0 for no timeout.
    *  Be conservative — give enough time for the command to complete on a slow machine. */
   timeout?: number;
+  /** Run inside Docker sandbox container */
+  sandbox?: boolean;
+  /** Sandbox mount mode when sandbox is enabled */
+  sandboxMountMode?: "none" | "read-only" | "read-write";
 }
 
 export function createExecuteTool(registry: SurfaceRegistry, secretInput?: SecretInputService): ToolDefinition<ExecuteInput> {
@@ -80,6 +84,15 @@ export function createExecuteTool(registry: SurfaceRegistry, secretInput?: Secre
           type: "number",
           description: "Timeout in ms (default 30000). Use 0 for no timeout.",
         },
+        sandbox: {
+          type: "boolean",
+          description: "Run inside Docker sandbox container.",
+        },
+        sandboxMountMode: {
+          type: "string",
+          description: "Sandbox mount mode: none, read-only, read-write.",
+          enum: ["none", "read-only", "read-write"],
+        },
       },
       required: ["command", "explanation"],
     },
@@ -91,6 +104,8 @@ export function createExecuteTool(registry: SurfaceRegistry, secretInput?: Secre
           terminalId: input.terminalId,
           timeout: input.timeout,
           cwd: input.cwd,
+          sandbox: input.sandbox,
+          sandboxMountMode: input.sandboxMountMode,
           // Pass background flag if the inner tool supports it
           ...(input.isBackground != null ? { isBackground: input.isBackground } : {}),
         } as any,

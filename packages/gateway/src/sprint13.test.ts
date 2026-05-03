@@ -159,4 +159,54 @@ describe("Sprint 13 — Docker Sandboxing", () => {
     expect(commands.some((cmd) => cmd.includes("ps") && cmd.includes("--format"))).toBe(true);
     expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-browser-sb-old"))).toBe(true);
   });
+
+  it("cleans stale browser sandbox containers while preserving active ones", async () => {
+    const commands: string[][] = [];
+    const now = Date.now();
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      if (cmd.includes("ps")) {
+        return {
+          output: [
+            `jait-browser-sb-old\tignored\tjait.kind=browser-sandbox,jait.createdAt=${now - 2 * 60 * 60 * 1000}`,
+            `jait-browser-sb-active\tignored\tjait.kind=browser-sandbox,jait.createdAt=${now - 2 * 60 * 60 * 1000}`,
+            `jait-browser-sb-fresh\tignored\tjait.kind=browser-sandbox,jait.createdAt=${now}`,
+          ].join("\n"),
+          exitCode: 0,
+          timedOut: false,
+        };
+      }
+      return { output: "removed", exitCode: 0, timedOut: false };
+    });
+
+    const stopped = await manager.cleanupBrowserSandboxes({
+      maxAgeMs: 60 * 60 * 1000,
+      excludeNames: ["jait-browser-sb-active"],
+    });
+
+    expect(stopped).toEqual(["jait-browser-sb-old"]);
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-browser-sb-old"))).toBe(true);
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-browser-sb-active"))).toBe(false);
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-browser-sb-fresh"))).toBe(false);
+  });
+
+  it("cleans legacy browser sandboxes using Docker created timestamps", async () => {
+    const commands: string[][] = [];
+    const manager = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      if (cmd.includes("ps")) {
+        return {
+          output: "jait-browser-sb-legacy\t2026-04-29 20:00:10 +0000 UTC\t",
+          exitCode: 0,
+          timedOut: false,
+        };
+      }
+      return { output: "removed", exitCode: 0, timedOut: false };
+    });
+
+    const stopped = await manager.cleanupBrowserSandboxes({ maxAgeMs: 60 * 60 * 1000 });
+
+    expect(stopped).toEqual(["jait-browser-sb-legacy"]);
+    expect(commands.some((cmd) => cmd.join(" ").includes("rm -f jait-browser-sb-legacy"))).toBe(true);
+  });
 });

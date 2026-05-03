@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { resolveBrowserRuntimeMode, selectInitialBrowserPage } from "./browser.js";
+import { BrowserSurface, type BrowserDriver, resolveBrowserRuntimeMode, selectInitialBrowserPage } from "./browser.js";
 
 const originalPlatform = process.platform;
 const originalBunVersion = process.versions.bun;
@@ -33,6 +33,7 @@ function setBrowserRuntimeEnv(value: string): void {
 
 describe("resolveBrowserRuntimeMode", () => {
   afterEach(() => {
+    vi.useRealTimers();
     setPlatform(originalPlatform);
     setBunVersion(originalBunVersion);
     if (originalBrowserRuntime === undefined) {
@@ -64,6 +65,58 @@ describe("resolveBrowserRuntimeMode", () => {
     setBunVersion("1.2.0");
 
     expect(resolveBrowserRuntimeMode()).toBe("in-process");
+  });
+});
+
+describe("BrowserSurface idle tracking", () => {
+  it("reports idle age and live-view container metadata", async () => {
+    const now = vi.spyOn(Date, "now").mockReturnValue(0);
+    const close = vi.fn().mockResolvedValue(undefined);
+    const driver: BrowserDriver = {
+      navigate: vi.fn().mockResolvedValue(undefined),
+      click: vi.fn().mockResolvedValue(undefined),
+      typeText: vi.fn().mockResolvedValue(undefined),
+      scroll: vi.fn().mockResolvedValue(undefined),
+      select: vi.fn().mockResolvedValue(undefined),
+      waitFor: vi.fn().mockResolvedValue(undefined),
+      screenshot: vi.fn().mockResolvedValue("/tmp/screen.png"),
+      snapshot: vi.fn().mockResolvedValue({
+        url: "about:blank",
+        title: "Blank",
+        text: "",
+        elements: [],
+        activeElement: null,
+        dialogs: [],
+        obstruction: null,
+      }),
+      diagnose: vi.fn().mockResolvedValue({ selector: "#target", found: false }),
+      getMetrics: vi.fn().mockResolvedValue({ sampledAt: new Date().toISOString() }),
+      getEvents: vi.fn().mockReturnValue([]),
+      close,
+      liveView: {
+        display: "container:jait-browser-sb-test",
+        vncPort: 5900,
+        websockifyPort: 6080,
+        novncUrl: "http://127.0.0.1:6080/vnc_lite.html",
+        containerName: "jait-browser-sb-test",
+      },
+    };
+    const surface = new BrowserSurface("browser-test", {
+      driverFactory: async () => driver,
+    });
+
+    await surface.start({ sessionId: "session-1", workspaceRoot: "/workspace" });
+    now.mockReturnValue(5 * 60 * 1000);
+
+    expect(surface.idleMs).toBe(5 * 60 * 1000);
+    expect(surface.snapshot().metadata.liveViewContainerName).toBe("jait-browser-sb-test");
+
+    await surface.describe();
+    expect(surface.idleMs).toBe(0);
+
+    await surface.stop();
+    expect(close).toHaveBeenCalledOnce();
+    now.mockRestore();
   });
 });
 
