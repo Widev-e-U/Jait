@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType } from 'react'
 import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
@@ -125,7 +125,7 @@ export function ProviderModelSelector({
   } | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  const refreshProviders = (fresh = false) => {
+  const refreshProviders = useCallback((fresh = false) => {
     const request = fresh ? agentsApi.listProvidersFresh() : agentsApi.listProviders()
     request
       .then(({ providers, remoteProviders: remote }) => {
@@ -135,11 +135,11 @@ export function ProviderModelSelector({
         setRemoteProviders(remote)
       })
       .catch(() => {})
-  }
+  }, [])
 
   useEffect(() => {
     refreshProviders()
-  }, [])
+  }, [refreshProviders])
 
   const copyCode = async (providerId: ProviderId, code: string) => {
     try {
@@ -194,6 +194,44 @@ export function ProviderModelSelector({
       setAuthBusyProvider(null)
     }
   }
+
+  useEffect(() => {
+    if (!loginDialog || loginDialog.tone !== 'success') return
+
+    let stopped = false
+    let closeTimer: ReturnType<typeof window.setTimeout> | null = null
+    const interval = window.setInterval(() => {
+      void checkAuthStatus()
+    }, 2000)
+
+    async function checkAuthStatus() {
+      if (stopped || !loginDialog) return
+      try {
+        const authStatus = await agentsApi.getProviderAuthStatus(loginDialog.providerId)
+        if (stopped || authStatus.authenticated !== true) return
+
+        stopped = true
+        window.clearInterval(interval)
+        refreshProviders(true)
+        setLoginDialog((prev) => prev && prev.providerId === loginDialog.providerId
+          ? { ...prev, message: `${loginDialog.label} is logged in.` }
+          : prev)
+        closeTimer = window.setTimeout(() => {
+          setLoginDialog((prev) => prev && prev.providerId === loginDialog.providerId ? null : prev)
+        }, 900)
+      } catch {
+        // Keep the login dialog open; the next poll may succeed once the CLI writes credentials.
+      }
+    }
+
+    void checkAuthStatus()
+
+    return () => {
+      stopped = true
+      window.clearInterval(interval)
+      if (closeTimer) window.clearTimeout(closeTimer)
+    }
+  }, [loginDialog?.providerId, loginDialog?.tone, loginDialog?.label, refreshProviders])
 
   useEffect(() => {
     if (!open) return

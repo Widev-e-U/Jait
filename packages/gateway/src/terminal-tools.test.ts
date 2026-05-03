@@ -103,6 +103,50 @@ describe("terminal.run tool status reporting", () => {
     expect((result.data as any).timedOut).toBe(false);
   });
 
+  it("rewrites host workspace paths to the sandbox mount path", async () => {
+    const commands: string[][] = [];
+    const sandbox = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      return { output: "done", exitCode: 0, timedOut: false };
+    });
+    const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
+    const context = { ...makeContext(), workspaceRoot: "/home/jakob/jait" };
+
+    await tool.execute({ command: "cd /home/jakob/jait && bun test", sandbox: true }, context);
+
+    expect(commands[0]).toContain("cd /workspace && bun test");
+  });
+
+  it("executes sandbox commands inside a thread sandbox container when provided", async () => {
+    const commands: string[][] = [];
+    const sandbox = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      return { output: "done", exitCode: 0, timedOut: false };
+    });
+    const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
+    const context = { ...makeContext(), workspaceRoot: "/home/jakob/jait", sandboxContainerName: "jait-agent-sb-test" };
+
+    const result = await tool.execute({ command: "pwd", sandbox: true }, context);
+
+    expect(result.ok).toBe(true);
+    expect(commands[0]).toEqual(["docker", "exec", "-w", "/workspace", "jait-agent-sb-test", "bash", "-lc", "pwd"]);
+    expect((result.data as any).threadSandbox).toBe(true);
+  });
+
+  it("rewrites host paths before executing inside a thread sandbox container", async () => {
+    const commands: string[][] = [];
+    const sandbox = new SandboxManager(async (cmd) => {
+      commands.push(cmd);
+      return { output: "done", exitCode: 0, timedOut: false };
+    });
+    const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);
+    const context = { ...makeContext(), workspaceRoot: "/home/jakob/jait", sandboxContainerName: "jait-agent-sb-test" };
+
+    await tool.execute({ command: "cd /home/jakob/jait && bun test", sandbox: true }, context);
+
+    expect(commands[0]).toContain("cd /workspace && bun test");
+  });
+
   it("returns ok=false when sandbox exit code is non-zero", async () => {
     const sandbox = new SandboxManager(async () => ({ output: "error", exitCode: 1, timedOut: false }));
     const tool = createTerminalRunTool(new SurfaceRegistry(), sandbox);

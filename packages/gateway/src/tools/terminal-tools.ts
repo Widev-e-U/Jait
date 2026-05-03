@@ -27,6 +27,7 @@ import { tmpdir } from "node:os";
 // ── Constants ────────────────────────────────────────────────────
 
 const MAX_TERMINALS = 10;
+const SANDBOX_WORKSPACE_PATH = "/workspace";
 const INTERACTIVE_PROMPT_PATTERNS = [
   /\[sudo\]\s+password\s+for\s+[^:]+:/i,
   /password:\s*$/im,
@@ -96,6 +97,12 @@ function inferFallbackExitCode(rawOutput: string): number {
     return 126;
   }
   return 0;
+}
+
+export function rewriteWorkspacePathForSandboxCommand(command: string, workspaceRoot: string): string {
+  const root = workspaceRoot.trim();
+  if (!root) return command;
+  return command.split(root).join(SANDBOX_WORKSPACE_PATH);
 }
 
 export function detectInteractivePrompt(output: string): boolean {
@@ -488,20 +495,29 @@ export function createTerminalRunTool(
       const { command, timeout = 30000, terminalId: preferredId, isBackground } = input;
 
       if (input.sandbox) {
-        const result = await sandboxManager.runCommand({
-          command,
-          workspaceRoot: context.workspaceRoot,
-          timeoutMs: timeout,
-          mountMode: input.sandboxMountMode ?? "read-write",
-          networkEnabled: false,
-          memoryLimitMb: 512,
-          cpuLimit: "1.0",
-        });
+        const sandboxCommand = rewriteWorkspacePathForSandboxCommand(command, context.workspaceRoot);
+        const result = context.sandboxContainerName
+          ? await sandboxManager.execInContainer({
+              containerName: context.sandboxContainerName,
+              command: sandboxCommand,
+              timeoutMs: timeout,
+            })
+          : await sandboxManager.runCommand({
+              command: sandboxCommand,
+              workspaceRoot: context.workspaceRoot,
+              timeoutMs: timeout,
+              mountMode: input.sandboxMountMode ?? "read-write",
+              networkEnabled: false,
+              memoryLimitMb: 512,
+              cpuLimit: "1.0",
+            });
 
         return {
           ok: result.ok,
           message: result.ok
-            ? "Sandbox command completed (container isolated)"
+            ? context.sandboxContainerName
+              ? "Sandbox command completed (thread container isolated)"
+              : "Sandbox command completed (container isolated)"
             : result.timedOut
               ? `Sandbox command timed out after ${timeout}ms`
               : `Sandbox command failed (exit code ${result.exitCode ?? "unknown"})`,
@@ -511,6 +527,7 @@ export function createTerminalRunTool(
             timedOut: result.timedOut,
             sandbox: true,
             containerName: result.containerName,
+            threadSandbox: Boolean(context.sandboxContainerName),
             hostUnaffected: true,
           },
         };

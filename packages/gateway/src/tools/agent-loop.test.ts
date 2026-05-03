@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   __testUtils,
+  parseOpenAIStream,
   fromOpenAIName,
   retryToolCall,
   ToolCallPriority,
@@ -21,6 +22,17 @@ function toolCall(id: string, name = "file_read"): OpenAIToolCall {
   };
 }
 
+function streamReader(chunks: string[]): ReadableStreamDefaultReader<Uint8Array> {
+  const encoder = new TextEncoder();
+  return new ReadableStream<Uint8Array>({
+    start(controller) {
+      for (const chunk of chunks) {
+        controller.enqueue(encoder.encode(chunk));
+      }
+      controller.close();
+    },
+  }).getReader();
+}
 describe("OpenAI tool name conversion", () => {
   it("maps multi-segment tool names while preserving leaf underscores", () => {
     expect(fromOpenAIName("ssh_session_start")).toBe("ssh.session.start");
@@ -67,6 +79,41 @@ describe("ToolCallQueue.dequeueBatch", () => {
     expect(batch.map((item) => item.toolCall.id)).toEqual(["a", "b", "c"]);
     expect(queue.length).toBe(1);
     expect(queue.dequeueBatch(true).map((item) => item.toolCall.id)).toEqual(["d"]);
+  });
+});
+
+describe("parseOpenAIStream", () => {
+  it("processes the final buffered SSE event without a trailing newline", async () => {
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"content":"tail"}}]}\n',
+      'data: {"choices":[{"delta":{},"finish_reason":"stop"}],"usage":{"prompt_tokens":2,"completion_tokens":1,"total_tokens":3}}',
+    ]));
+
+    expect(parsed.contentText).toBe("tail");
+    expect(parsed.finishReason).toBe("stop");
+    expect(parsed.usage).toEqual({
+      prompt_tokens: 2,
+      completion_tokens: 1,
+      total_tokens: 3,
+    });
+  });
+
+  it("reassembles streamed tool call fragments in order", async () => {
+    const parsed = await parseOpenAIStream(streamReader([
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"call-1","function":{"name":"file","arguments":"{\\"path\\":\\""}}]}}]}\n',
+      'data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"name":".read","arguments":"a.ts\\"}"}}]}}]}',
+    ]));
+
+    expect(parsed.toolCalls).toEqual([
+      {
+        id: "call-1",
+        type: "function",
+        function: {
+          name: "file.read",
+          arguments: "{\"path\":\"a.ts\"}",
+        },
+      },
+    ]);
   });
 });
 

@@ -9,7 +9,7 @@ import { SessionService } from "./services/sessions.js";
 import { SessionStateService } from "./services/session-state.js";
 import { WorkspaceStateService } from "./services/workspace-state.js";
 import { AuditWriter } from "./services/audit.js";
-import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory } from "./surfaces/index.js";
+import { SurfaceRegistry, TerminalSurfaceFactory, FileSystemSurfaceFactory, RemoteFileSystemSurfaceFactory, BrowserSurfaceFactory, BrowserSurface } from "./surfaces/index.js";
 import type { SurfaceRegistrySnapshot } from "@jait/shared";
 import { createToolRegistry } from "./tools/index.js";
 import { SchedulerService } from "./scheduler/service.js";
@@ -24,6 +24,7 @@ import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 const { version: GATEWAY_VERSION } = require("../package.json") as { version: string };
 import { ConsentManager } from "./security/consent-manager.js";
+import { SandboxManager } from "./security/sandbox-manager.js";
 import { TrustEngine } from "./security/trust-engine.js";
 import { getProfile } from "./security/tool-profiles.js";
 import { ConsentAwareExecutor } from "./security/consent-executor.js";
@@ -57,6 +58,13 @@ import { autoAssignWorkspaceRepositories } from "./services/workspace-repositori
 import { AssistantProfileService } from "./services/assistant-profiles.js";
 import { PluginManager } from "./plugins/manager.js";
 import { ThreadReviewSyncService } from "./services/thread-review-sync.js";
+
+function parsePositiveIntegerEnv(name: string, fallback: number): number {
+  const raw = process.env[name]?.trim();
+  if (!raw) return fallback;
+  const parsed = Number.parseInt(raw, 10);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+}
 
 async function main() {
   const config = loadConfig();
@@ -144,6 +152,14 @@ async function main() {
   surfaceRegistry.register(new RemoteFileSystemSurfaceFactory(ws));
   console.log(`Surfaces registered: ${surfaceRegistry.registeredTypes.join(", ")}`);
   const previewService = new PreviewService(surfaceRegistry);
+  const browserSandboxManager = new SandboxManager();
+  const startupBrowserCleanup = await browserSandboxManager.cleanupBrowserSandboxes().catch((err) => {
+    console.warn("[browser] Failed to clean stale browser sandboxes on startup:", err instanceof Error ? err.message : err);
+    return [];
+  });
+  if (startupBrowserCleanup.length > 0) {
+    console.log(`[browser] Removed ${startupBrowserCleanup.length} stale browser sandbox container(s) from previous runs.`);
+  }
   previewService.onSessionChanged((session) => {
     ws.broadcastAll({
       type: "preview.session" as any,
@@ -884,6 +900,57 @@ async function main() {
   }, 60_000); // check every minute
   if (terminalReaperInterval.unref) terminalReaperInterval.unref();
 
+  const BROWSER_IDLE_MS = parsePositiveIntegerEnv("JAIT_BROWSER_IDLE_MS", 15 * 60 * 1000);
+  const BROWSER_STALE_SANDBOX_MS = parsePositiveIntegerEnv("JAIT_BROWSER_STALE_SANDBOX_MS", 60 * 60 * 1000);
+  const BROWSER_REAPER_INTERVAL_MS = parsePositiveIntegerEnv("JAIT_BROWSER_REAPER_INTERVAL_MS", 60 * 1000);
+  const PREVIEW_BROWSER_PREFIX = "preview-browser-";
+  let browserReaperRunning = false;
+  const reapBrowserResources = async () => {
+    if (browserReaperRunning) return;
+    browserReaperRunning = true;
+    try {
+      const browsers = surfaceRegistry
+        .listSurfaces()
+        .filter((s) => s.type === "browser" && s.state === "running") as BrowserSurface[];
+      const activeContainers = new Set<string>();
+      for (const browser of browsers) {
+        const liveView = browser.getLiveViewInfo();
+        if (liveView?.containerName) activeContainers.add(liveView.containerName);
+      }
+      for (const browser of browsers) {
+        if (browser.idleMs < BROWSER_IDLE_MS) continue;
+        const idleSeconds = Math.round(browser.idleMs / 1000);
+        console.log(`[browser] Stopping idle browser ${browser.id} (idle ${idleSeconds}s)`);
+        if (browser.id.startsWith(PREVIEW_BROWSER_PREFIX)) {
+          const sessionId = browser.id.slice(PREVIEW_BROWSER_PREFIX.length);
+          previewService.stop(sessionId).catch((err) =>
+            console.error(`Failed to stop idle preview browser ${browser.id}:`, err),
+          );
+        } else {
+          surfaceRegistry.stopSurface(browser.id, "browser idle timeout").catch((err) =>
+            console.error(`Failed to stop idle browser ${browser.id}:`, err),
+          );
+        }
+      }
+
+      const stopped = await browserSandboxManager.cleanupBrowserSandboxes({
+        maxAgeMs: BROWSER_STALE_SANDBOX_MS,
+        excludeNames: activeContainers,
+      });
+      if (stopped.length > 0) {
+        console.log(`[browser] Removed ${stopped.length} stale unmanaged browser sandbox container(s).`);
+      }
+    } catch (err) {
+      console.error("[browser] Browser resource reaper failed:", err);
+    } finally {
+      browserReaperRunning = false;
+    }
+  };
+  const browserReaperInterval = setInterval(() => {
+    void reapBrowserResources();
+  }, BROWSER_REAPER_INTERVAL_MS);
+  if (browserReaperInterval.unref) browserReaperInterval.unref();
+
   let shuttingDown = false;
   const shutdown = async () => {
     if (shuttingDown) return;
@@ -901,6 +968,8 @@ async function main() {
       await pluginManager.disposeAll();
       await previewService.stopAll();
       await surfaceRegistry.stopAll("shutdown");
+      clearInterval(browserReaperInterval);
+      clearInterval(terminalReaperInterval);
       scheduler.stop();
       threadReviewSync.stop();
       ws.stop();

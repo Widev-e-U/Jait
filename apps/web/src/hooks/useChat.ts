@@ -83,6 +83,7 @@ function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): Ch
  */
 export type MessageSegment =
   | { type: 'text'; content: string }
+  | { type: 'thinking'; content: string }
   | { type: 'toolGroup'; callIds: string[] }
 
 export interface LlmContextFlowRound {
@@ -358,6 +359,17 @@ export function useChat(
           return arr
         }
 
+        const withThinkingSegment = (segs: MessageSegment[] | undefined, text: string): MessageSegment[] => {
+          const arr = segs ? [...segs] : []
+          const last = arr[arr.length - 1]
+          if (last?.type === 'thinking') {
+            arr[arr.length - 1] = { type: 'thinking', content: last.content + text }
+          } else {
+            arr.push({ type: 'thinking', content: text })
+          }
+          return arr
+        }
+
         /** Immutably append a tool callId to a message's segments array */
         const withToolSegment = (segs: MessageSegment[] | undefined, callId: string): MessageSegment[] => {
           const arr = segs ? [...segs] : []
@@ -522,8 +534,10 @@ export function useChat(
                 batchSubscribeUpdate({ content: accumulatedContent, segments: accumulatedSegments ? [...accumulatedSegments] : undefined })
               } else if (data.type === 'thinking' && assistantId) {
                 // Batch thinking updates
-                accumulatedThinking += data.content as string
-                batchSubscribeUpdate({ thinking: accumulatedThinking })
+                const text = data.content as string
+                accumulatedThinking += text
+                accumulatedSegments = withThinkingSegment(accumulatedSegments, text)
+                batchSubscribeUpdate({ thinking: accumulatedThinking, segments: accumulatedSegments ? [...accumulatedSegments] : undefined })
               } else if (data.type === 'tool_call_delta' && assistantId) {
                 // Flush any pending content batch before tool updates
                 flushSubscribeUpdates()
@@ -960,7 +974,13 @@ export function useChat(
             if (data.type === 'thinking') {
               if (!thinkingStart) thinkingStart = Date.now()
               thinkingContent += data.content
-              updateMessage({ thinking: thinkingContent })
+              const last = segments[segments.length - 1]
+              if (last?.type === 'thinking') {
+                last.content += data.content as string
+              } else {
+                segments.push({ type: 'thinking', content: data.content as string })
+              }
+              updateMessage({ thinking: thinkingContent, segments: [...segments] })
             } else if (data.type === 'token') {
               if (thinkingStart && !thinkingDuration) {
                 thinkingDuration = Math.round((Date.now() - thinkingStart) / 1000)

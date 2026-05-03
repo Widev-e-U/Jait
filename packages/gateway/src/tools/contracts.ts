@@ -13,6 +13,8 @@ export interface ToolContext {
   providerId?: string;
   model?: string;
   runtimeMode?: string;
+  /** Optional long-lived sandbox container for provider-owned thread execution */
+  sandboxContainerName?: string;
   /** Optional callback for streaming tool output chunks (e.g. terminal) */
   onOutputChunk?: (chunk: string, metadata?: ToolOutputStreamMetadata) => void;
   /** Optional abort signal — when fired, the tool should stop as soon as possible */

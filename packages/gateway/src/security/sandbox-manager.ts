@@ -10,6 +10,7 @@ import { resolve } from "node:path";
  */
 let _containerBinary: string | null = null;
 const SANDBOX_BROWSER_IMAGE = "jait/sandbox-browser:app-window-v1";
+const BROWSER_SANDBOX_NAME_PREFIX = "jait-browser-sb-";
 
 function containerBinary(): string {
   if (_containerBinary) return _containerBinary;
@@ -46,6 +47,26 @@ export interface SandboxRunResult {
   containerName: string;
 }
 
+export interface SandboxSessionOptions {
+  workspaceRoot: string;
+  mountMode?: SandboxMountMode;
+  networkEnabled?: boolean;
+  memoryLimitMb?: number;
+  cpuLimit?: string;
+}
+
+export interface SandboxSessionResult {
+  containerName: string;
+  workspaceRoot: string;
+  sandboxWorkspaceRoot: string;
+}
+
+export interface SandboxExecOptions {
+  containerName: string;
+  command: string;
+  timeoutMs: number;
+}
+
 export interface SandboxBrowserOptions {
   workspaceRoot: string;
   novncPort?: number;
@@ -63,6 +84,11 @@ export interface SandboxBrowserResult {
   vncPort: number;
   novncPort: number;
   cdpUrl?: string;
+}
+
+export interface BrowserSandboxCleanupOptions {
+  maxAgeMs?: number;
+  excludeNames?: Iterable<string>;
 }
 
 interface ProcessResult {
@@ -115,6 +141,71 @@ export class SandboxManager {
     };
   }
 
+  async startCommandSandbox(options: SandboxSessionOptions): Promise<SandboxSessionResult> {
+    const workspaceRoot = resolve(options.workspaceRoot);
+    const mountMode = options.mountMode ?? "read-write";
+    const containerName = `jait-agent-sb-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+
+    const mountArgs = this.buildMountArgs(workspaceRoot, mountMode);
+    const networkArgs = options.networkEnabled === false ? ["--network", "none"] : [];
+    const memoryArgs = options.memoryLimitMb ? ["--memory", `${options.memoryLimitMb}m`] : [];
+    const cpuArgs = options.cpuLimit ? ["--cpus", options.cpuLimit] : [];
+
+    const cmd = [
+      containerBinary(),
+      "run",
+      "-d",
+      "--rm",
+      "--name",
+      containerName,
+      ...networkArgs,
+      ...memoryArgs,
+      ...cpuArgs,
+      ...mountArgs,
+      "-w",
+      "/workspace",
+      "jait/sandbox:latest",
+      "tail",
+      "-f",
+      "/dev/null",
+    ];
+
+    const result = await this.runProcess(cmd, 30_000);
+    if (result.exitCode !== 0) {
+      throw new Error(`Failed to start command sandbox: ${result.output}`);
+    }
+
+    return {
+      containerName,
+      workspaceRoot,
+      sandboxWorkspaceRoot: "/workspace",
+    };
+  }
+
+  async execInContainer(options: SandboxExecOptions): Promise<SandboxRunResult> {
+    const containerName = options.containerName.trim();
+    const timeoutMs = Math.max(1000, options.timeoutMs);
+    const cmd = [
+      containerBinary(),
+      "exec",
+      "-w",
+      "/workspace",
+      containerName,
+      "bash",
+      "-lc",
+      options.command,
+    ];
+
+    const result = await this.runProcess(cmd, timeoutMs);
+    return {
+      ok: !result.timedOut && result.exitCode === 0,
+      output: result.output,
+      exitCode: result.exitCode,
+      timedOut: result.timedOut,
+      containerName,
+    };
+  }
+
   async startBrowserSandbox(options: SandboxBrowserOptions): Promise<SandboxBrowserResult> {
     await this.ensureBrowserSandboxImage();
     const workspaceRoot = resolve(options.workspaceRoot);
@@ -127,7 +218,8 @@ export class SandboxManager {
       ? ["--add-host", `host.docker.internal:${await resolveHostGatewayValue(this.runProcess)}`]
       : [];
 
-    const containerName = `jait-browser-sb-${Date.now().toString(36)}`;
+    const containerName = `${BROWSER_SANDBOX_NAME_PREFIX}${Date.now().toString(36)}`;
+    const createdAt = String(Date.now());
     const cmd = [
       containerBinary(),
       "run",
@@ -135,6 +227,10 @@ export class SandboxManager {
       "--rm",
       "--name",
       containerName,
+      "--label",
+      "jait.kind=browser-sandbox",
+      "--label",
+      `jait.createdAt=${createdAt}`,
       ...networkArgs,
       ...hostGatewayArgs,
       ...mountArgs,
@@ -188,6 +284,36 @@ export class SandboxManager {
     ], 15_000);
   }
 
+  async cleanupBrowserSandboxes(options: BrowserSandboxCleanupOptions = {}): Promise<string[]> {
+    const excluded = new Set([...options.excludeNames ?? []].map((name) => name.trim()).filter(Boolean));
+    const list = await this.runProcess(
+      [containerBinary(), "ps", "--filter", `name=${BROWSER_SANDBOX_NAME_PREFIX}`, "--format", "{{.Names}}\t{{.CreatedAt}}\t{{.Labels}}"],
+      15_000,
+    );
+    if (list.exitCode !== 0) return [];
+
+    const now = Date.now();
+    const stopped: string[] = [];
+    const candidates = list.output
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => parseBrowserSandboxListing(line))
+      .filter((item): item is BrowserSandboxListing => Boolean(item))
+      .filter((item) => item.name.startsWith(BROWSER_SANDBOX_NAME_PREFIX) && !excluded.has(item.name))
+      .filter((item) => {
+        if (typeof options.maxAgeMs !== "number") return true;
+        const createdAtMs = parseBrowserSandboxCreatedAt(item.createdAt, item.labels);
+        return createdAtMs === null || now - createdAtMs >= options.maxAgeMs;
+      });
+
+    for (const candidate of candidates) {
+      await this.runProcess([containerBinary(), "rm", "-f", candidate.name], 15_000).catch(() => {});
+      stopped.push(candidate.name);
+    }
+    return stopped;
+  }
+
   private buildMountArgs(workspaceRoot: string, mode: SandboxMountMode): string[] {
     mkdirSync(workspaceRoot, { recursive: true });
     if (mode === "none") return [];
@@ -221,7 +347,7 @@ export class SandboxManager {
         return { name, portInfo };
       })
       .filter(({ name, portInfo }) =>
-        /^jait-browser-sb-/.test(name)
+        name.startsWith(BROWSER_SANDBOX_NAME_PREFIX)
         && [ports.novncPort, ports.vncPort, ports.cdpPort]
           .filter((value): value is number => typeof value === "number")
           .some((port) => new RegExp(`(^|[,: ])${port}->`).test(portInfo) || portInfo.includes(`:${port}->`)),
@@ -230,6 +356,47 @@ export class SandboxManager {
       await this.runProcess([containerBinary(), "rm", "-f", candidate.name], 15_000).catch(() => {});
     }
   }
+}
+
+interface BrowserSandboxListing {
+  name: string;
+  createdAt: string;
+  labels: string;
+}
+
+function parseBrowserSandboxListing(line: string): BrowserSandboxListing | null {
+  const [rawName, createdAt = "", labels = ""] = line.split("\t");
+  const name = rawName?.trim() ?? "";
+  if (!name) return null;
+  return { name, createdAt, labels };
+}
+
+function parseBrowserSandboxCreatedAt(createdAt: string, labels: string): number | null {
+  const labelCreatedAt = parseContainerLabels(labels).get("jait.createdAt");
+  if (labelCreatedAt) {
+    const parsed = Number.parseInt(labelCreatedAt, 10);
+    if (Number.isFinite(parsed)) return parsed;
+  }
+
+  const match = createdAt.match(/^(\d{4}-\d{2}-\d{2})\s+(\d{2}:\d{2}:\d{2})\s+([+-])(\d{2})(\d{2})/);
+  if (match) {
+    const [, date, time, sign, hours, minutes] = match;
+    const parsed = Date.parse(`${date}T${time}${sign}${hours}:${minutes}`);
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+
+  const parsed = Date.parse(createdAt);
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+function parseContainerLabels(labels: string): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const part of labels.split(",")) {
+    const index = part.indexOf("=");
+    if (index <= 0) continue;
+    result.set(part.slice(0, index).trim(), part.slice(index + 1).trim());
+  }
+  return result;
 }
 
 function isPortBindConflict(output: string): boolean {

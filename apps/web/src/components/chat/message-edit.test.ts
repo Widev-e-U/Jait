@@ -23,4 +23,23 @@ describe('message edit submission', () => {
   it('rejects blank edits', () => {
     expect(createUserMessageEditSubmission('   ')).toBeNull()
   })
+
+  it('preserves image segments that are not represented in the editable text', () => {
+    const editedSegments: UserMessageSegment[] = [
+      { type: 'text', text: 'Updated prompt' },
+    ]
+    const preservedSegments: UserMessageSegment[] = [
+      { type: 'text', text: 'Original prompt' },
+      { type: 'image', name: 'screen.png', mimeType: 'image/png', data: 'abc123' },
+    ]
+
+    expect(createUserMessageEditSubmission('Updated prompt', editedSegments, preservedSegments)).toEqual({
+      text: 'Updated prompt',
+      referencedFiles: [],
+      displaySegments: [
+        { type: 'text', text: 'Updated prompt' },
+        { type: 'image', name: 'screen.png', mimeType: 'image/png', data: 'abc123' },
+      ],
+    })
+  })
 })
