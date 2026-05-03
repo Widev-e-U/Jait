@@ -208,6 +208,8 @@ export interface AgentLoopOptions {
   onContext?: (round: LlmContextFlowRound) => void;
   /** Persistence callback — called when a final assistant message should be saved */
   onPersist?: (sessionId: string, role: string, content: string, toolCalls?: string, segments?: string, thinking?: string) => void;
+  /** Prior tool-call fingerprints from a previous run (e.g. Continue) — prevents re-issuing identical calls */
+  priorFingerprints?: Map<string, number>;
 }
 
 export interface AgentLoopResult {
@@ -221,6 +223,8 @@ export interface AgentLoopResult {
   aborted: boolean;
   /** Whether the loop was stopped because it hit the max rounds limit */
   hitMaxRounds: boolean;
+  /** Tool-call fingerprints accumulated during this run (for persistence across Continue) */
+  fingerprints: Map<string, number>;
   /** Plan data — only populated in plan mode */
   plan?: {
     id: string;
@@ -901,7 +905,7 @@ export async function runAgentLoop(
 
   // ── Loop health tracking ──
   /** Fingerprint → call count. Detects the model calling the same tool with identical args. */
-  const toolCallFingerprints = new Map<string, number>();
+  const toolCallFingerprints = new Map<string, number>(options.priorFingerprints ?? []);
   /** Consecutive rounds where no tool call succeeded — triggers early bail-out. */
   let consecutiveUnproductiveRounds = 0;
 
@@ -930,7 +934,7 @@ export async function runAgentLoop(
     // ── Check abort ──
     if (abort.signal.aborted) {
       log.info(`Agent loop cancelled for session ${sessionId} — stopping before round ${round}`);
-      return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false };
+      return { content: fullContent, executedToolCalls, segments, rounds: round, aborted: true, hitMaxRounds: false, fingerprints: toolCallFingerprints };
     }
 
     // ── Apply steering messages ──
@@ -1034,13 +1038,13 @@ export async function runAgentLoop(
         log.error(`LLM error ${response.status}: ${errText}`);
         const friendlyMessage = formatLLMError(response.status, errText);
         onEvent?.({ type: "error", message: friendlyMessage });
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints };
       }
 
       const reader = response.body?.getReader();
       if (!reader) {
         onEvent?.({ type: "error", message: "No response body from LLM" });
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints };
       }
 
       const parsed = await parseOpenAIStream(reader as any, onEvent);
@@ -1072,7 +1076,7 @@ export async function runAgentLoop(
     } catch (fetchErr) {
       if (abort.signal.aborted) {
         log.info(`Agent loop cancelled during LLM streaming (round ${round})`);
-        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false };
+        return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, fingerprints: toolCallFingerprints };
       }
       throw fetchErr;
     }
@@ -1264,7 +1268,7 @@ export async function runAgentLoop(
               });
             }
           }
-          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false };
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: true, hitMaxRounds: false, fingerprints: toolCallFingerprints };
         }
 
         const batch = queue.dequeueBatch(parallel);
@@ -1352,7 +1356,7 @@ export async function runAgentLoop(
           const bailMsg = "\n\n[Stopped: multiple consecutive rounds produced no successful results. The current approach isn't working — please try a different strategy.]";
           onEvent?.({ type: "token", content: bailMsg });
           fullContent += bailMsg;
-          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false };
+          return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints };
         }
       }
 
@@ -1381,7 +1385,7 @@ export async function runAgentLoop(
     const planResult = mode === "plan" && plannedActions.length > 0
       ? { id: planId, summary: contentText || "Plan ready for review.", actions: plannedActions }
       : undefined;
-    return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, plan: planResult };
+    return { content: fullContent, executedToolCalls, segments, rounds: round + 1, aborted: false, hitMaxRounds: false, fingerprints: toolCallFingerprints, plan: planResult };
   }
 
   // Hit max rounds
@@ -1393,7 +1397,7 @@ export async function runAgentLoop(
   const planResultMaxRounds = mode === "plan" && plannedActions.length > 0
     ? { id: planId, summary: fullContent, actions: plannedActions }
     : undefined;
-  return { content: fullContent, executedToolCalls, segments, rounds: maxRounds, aborted: false, hitMaxRounds: true, plan: planResultMaxRounds };
+  return { content: fullContent, executedToolCalls, segments, rounds: maxRounds, aborted: false, hitMaxRounds: true, fingerprints: toolCallFingerprints, plan: planResultMaxRounds };
 }
 
 // ── Retry API ────────────────────────────────────────────────────────

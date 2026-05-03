@@ -1143,7 +1143,7 @@ export function useChat(
                   promptCount: data.prompt_count,
                   remainingPrompts: data.remaining_prompts,
                   isLoading: false,
-                  hitMaxRounds: !!(data.hit_max_rounds),
+                  hitMaxRounds: !!(data.hit_max_rounds) || !!(data.has_timed_out_tools),
                   messages: isEmptyAssistant
                     ? prev.messages.filter(m => m.id !== assistantId)
                     : prev.messages.map(m =>

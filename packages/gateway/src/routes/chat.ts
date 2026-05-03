@@ -978,6 +978,8 @@ export function registerChatRoutes(
   const sessionExecutedToolCalls = new Map<string, ExecutedToolCall[]>();
   /** Plans produced by plan mode — keyed by session ID */
   const sessionPlans = new Map<string, { id: string; summary: string; actions: PlannedAction[] }>();
+  /** Tool-call fingerprints persisted across Continue turns — prevents identical re-calls */
+  const sessionFingerprints = new Map<string, Map<string, number>>();
 
   const steerActiveSession = async (sessionId: string, message: string): Promise<{ ok: boolean; reason?: string }> => {
     if (!message.trim()) return { ok: false, reason: "empty-message" };
@@ -1893,6 +1895,7 @@ export function registerChatRoutes(
               safeWrite(`data: ${JSON.stringify(event)}\n\n`);
             },
             onPersist: (sid, role, content, tc, seg, thinking) => persistMessage(sid, role, content, tc, seg, contextFlowJson, thinking),
+            priorFingerprints: sessionFingerprints.get(sessionId),
             log: app.log,
           },
           executeTool,
@@ -1909,6 +1912,8 @@ export function registerChatRoutes(
         }
         resultSegmentsJson = resultSegments.length > 0 ? JSON.stringify(resultSegments) : undefined;
         hitMaxRounds = result.hitMaxRounds;
+        // Persist fingerprints so a Continue turn reuses them
+        sessionFingerprints.set(sessionId, result.fingerprints);
 
         // Re-serialize contextFlow now that round metrics have been attached
         if (contextRounds.length > 0) {
@@ -2002,6 +2007,11 @@ export function registerChatRoutes(
       }
     }
 
+    // Detect whether any tool timed out during this turn
+    const hasTimedOutTools = (partialToolCalls ?? []).some(
+      (tc) => typeof tc.message === "string" && tc.message.includes("timed out"),
+    );
+
     // Final done event
     const doneEvent = {
       type: "done" as const,
@@ -2009,6 +2019,7 @@ export function registerChatRoutes(
       prompt_count: history.filter(m => m.role === "user").length,
       remaining_prompts: null,
       hit_max_rounds: hitMaxRounds,
+      has_timed_out_tools: hasTimedOutTools,
     };
     emitToSubscribers(sessionId, doneEvent);
     safeWrite(`data: ${JSON.stringify(doneEvent)}\n\n`);

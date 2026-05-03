@@ -35,6 +35,18 @@ const INTERACTIVE_PROMPT_PATTERNS = [
   /verification\s+code:\s*$/im,
   /press\s+enter\s+to\s+continue/i,
 ];
+
+/** Patterns that indicate a terminal pager (less, more, man) is waiting for input */
+const PAGER_PROMPT_PATTERNS = [
+  /\(END\)\s*$/m,
+  /press\s+RETURN/i,
+  /No\s+next\s+tag/i,
+  /Use\s+old\s+bottom/i,
+  /\.{3}skipping\.{3}/i,
+  /lines?\s+\d+-\d+/i,
+  // lone ":" at the very end of output (less default prompt)
+  /:\s*$/m,
+];
 const SECRET_INPUT_PROMPT_PATTERNS = INTERACTIVE_PROMPT_PATTERNS.filter(
   (pattern) => !pattern.source.includes("press\\s+enter"),
 );
@@ -108,6 +120,13 @@ export function rewriteWorkspacePathForSandboxCommand(command: string, workspace
 export function detectInteractivePrompt(output: string): boolean {
   if (!output) return false;
   return INTERACTIVE_PROMPT_PATTERNS.some((pattern) => pattern.test(output));
+}
+
+/** Detect if the output ends with a pager prompt (less/more/man) */
+export function detectPagerPrompt(output: string): boolean {
+  if (!output) return false;
+  const cleaned = stripAnsi(output).replace(/\r/g, "");
+  return PAGER_PROMPT_PATTERNS.some((pattern) => pattern.test(cleaned));
 }
 
 function getInteractivePromptLabel(output: string): string | null {
@@ -271,8 +290,13 @@ function executeInTerminal(
       if (timeoutMs <= 0 || settled) return;
       if (timer) clearTimeout(timer);
       timer = setTimeout(() => {
-        // Interrupt the running command + Enter for clean prompt
-        surface.write("\x03\r");
+        // If stuck in a pager (less/more), send 'q' to exit cleanly;
+        // otherwise send Ctrl+C + Enter for normal interrupt.
+        if (detectPagerPrompt(raw)) {
+          surface.write("q");
+        } else {
+          surface.write("\x03\r");
+        }
         setTimeout(() => finish(true), 500);
       }, timeoutMs);
     };
@@ -578,14 +602,17 @@ export function createTerminalRunTool(
 
         // 3. Build response
         const ok = !result.timedOut && result.exitCode === 0;
-        const needsInteraction = result.timedOut && detectInteractivePrompt(result.output);
+        const pagerDetected = result.timedOut && detectPagerPrompt(result.output);
+        const needsInteraction = result.timedOut && (detectInteractivePrompt(result.output) || pagerDetected);
         const reason = result.timedOut
           ? `timed out after ${timeout}ms`
           : result.exitCode == null
             ? "exit status unavailable"
             : `exit code ${result.exitCode}`;
         let message = ok ? "Command completed (exit code 0)" : `Command failed (${reason})`;
-        if (needsInteraction) {
+        if (pagerDetected) {
+          message += " [pager detected — auto-exited]";
+        } else if (needsInteraction) {
           message += " [user interaction required in terminal]";
         }
         if (isNew) message += ` [new terminal ${terminalId}]`;
