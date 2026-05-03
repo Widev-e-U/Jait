@@ -97,6 +97,9 @@ export interface ThreadInfo {
   executionNodeId: string | null;
   executionNodeName: string | null;
   routingPlan: RoutingPlan | null;
+  changeFiles: number | null;
+  changeInsertions: number | null;
+  changeDeletions: number | null;
   createdAt: string;
   updatedAt: string;
   completedAt: string | null;
@@ -157,6 +160,9 @@ export interface UpdateThreadParams {
   prTitle?: string | null;
   prBaseBranch?: string | null;
   prState?: "creating" | "open" | "closed" | "merged" | null;
+  changeFiles?: number | null;
+  changeInsertions?: number | null;
+  changeDeletions?: number | null;
 }
 
 // ── Thread WS events ────────────────────────────────────────────────

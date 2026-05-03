@@ -117,6 +117,40 @@ describe("parseOpenAIStream", () => {
   });
 });
 
+describe("repairToolCallHistory", () => {
+  it("inserts synthetic tool results before a user turn when a tool call was interrupted", () => {
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "assistant", content: "Checking", tool_calls: [toolCall("call-1", "execute")] },
+      { role: "user", content: "continue" },
+    ];
+
+    __testUtils.repairToolCallHistory(history);
+
+    expect(history.map((message) => message.role)).toEqual(["system", "assistant", "tool", "user"]);
+    expect(history[2]).toMatchObject({
+      role: "tool",
+      tool_call_id: "call-1",
+      name: "execute",
+    });
+  });
+
+  it("drops orphaned tool results left behind by context pruning", () => {
+    const history: AgentMessage[] = [
+      { role: "system", content: "system" },
+      { role: "tool", content: "{\"ok\":true}", tool_call_id: "orphan", name: "execute" },
+      { role: "user", content: "next" },
+    ];
+
+    __testUtils.repairToolCallHistory(history);
+
+    expect(history).toEqual([
+      { role: "system", content: "system" },
+      { role: "user", content: "next" },
+    ]);
+  });
+});
+
 describe("executeOneToolCall retry accounting", () => {
   it("tracks only actual retries when transient failures exhaust the budget", async () => {
     const events: string[] = [];

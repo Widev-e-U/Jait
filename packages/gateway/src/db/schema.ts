@@ -266,6 +266,9 @@ export const agentThreads = sqliteTable(
     executionNodeId: text("execution_node_id"),   // Id of the FsNode executing this thread
     executionNodeName: text("execution_node_name"), // Human-readable node name
     routingPlan: text("routing_plan"), // JSON RoutingPlan from thread router
+    changeFiles: integer("change_files"),   // persisted diff stats (files changed)
+    changeInsertions: integer("change_insertions"), // persisted diff stats (lines added)
+    changeDeletions: integer("change_deletions"),   // persisted diff stats (lines removed)
     createdAt: text("created_at").notNull(),
     updatedAt: text("updated_at").notNull(),
     completedAt: text("completed_at"),

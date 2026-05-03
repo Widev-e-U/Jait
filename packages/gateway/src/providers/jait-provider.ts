@@ -188,6 +188,15 @@ export class JaitProvider implements CliProviderAdapter {
     this.emit({ type: "turn.started", sessionId });
 
     const turnPromise = (async () => {
+      let streamedAssistantContent = "";
+      let persistedAssistantContent = "";
+      const flushStreamedAssistantMessage = () => {
+        if (!streamedAssistantContent) return;
+        this.emit({ type: "message", sessionId, role: "assistant", content: streamedAssistantContent });
+        persistedAssistantContent += streamedAssistantContent;
+        streamedAssistantContent = "";
+      };
+
       try {
         const userSettings = state.userId ? this.deps.userService?.getSettings(state.userId) : undefined;
         const disabledTools = userSettings?.disabledTools?.length
@@ -217,16 +226,25 @@ export class JaitProvider implements CliProviderAdapter {
             toolRegistry: this.deps.toolRegistry,
             disabledTools,
             mode: "agent",
-            onEvent: (event) => this.forwardAgentLoopEvent(sessionId, event),
+            onEvent: (event) => {
+              if (event.type === "token") {
+                streamedAssistantContent += event.content;
+              } else if (event.type === "tool_start") {
+                flushStreamedAssistantMessage();
+              }
+              this.forwardAgentLoopEvent(sessionId, event);
+            },
             onContext: (round) => this.forwardContextRound(sessionId, state, round),
           },
           (toolName, input, sid, auth, onOutputChunk, signal) =>
             this.executeTool(toolName, input, sid, auth, onOutputChunk, signal, state.workingDirectory),
         );
 
-        if (result.content) {
-          this.emit({ type: "message", sessionId, role: "assistant", content: result.content });
-        }
+        const remainingContent = result.content.startsWith(persistedAssistantContent)
+          ? result.content.slice(persistedAssistantContent.length)
+          : result.content;
+        streamedAssistantContent = remainingContent || streamedAssistantContent;
+        flushStreamedAssistantMessage();
 
         const session = this.sessions.get(sessionId)?.session;
         if (session) {
@@ -235,6 +253,7 @@ export class JaitProvider implements CliProviderAdapter {
         this.emit({ type: "turn.completed", sessionId });
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
+        flushStreamedAssistantMessage();
         const session = this.sessions.get(sessionId)?.session;
         if (session) {
           session.status = "error";

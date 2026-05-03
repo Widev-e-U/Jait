@@ -386,6 +386,58 @@ function isParallelSafe(toolName: string): boolean {
 
 // ── Serialize messages for OpenAI API ────────────────────────────────
 
+function syntheticMissingToolResult(toolCall: OpenAIToolCall): AgentMessage {
+  return {
+    role: "tool",
+    content: JSON.stringify({
+      ok: false,
+      message: "Tool call did not complete before the next turn. Continue from the available context.",
+    }),
+    tool_call_id: toolCall.id,
+    name: toolCall.function.name,
+  };
+}
+
+export function repairToolCallHistory(messages: AgentMessage[]): void {
+  const repaired: AgentMessage[] = [];
+  let pendingToolCalls: OpenAIToolCall[] = [];
+
+  const flushMissingToolResults = () => {
+    for (const toolCall of pendingToolCalls) {
+      repaired.push(syntheticMissingToolResult(toolCall));
+    }
+    pendingToolCalls = [];
+  };
+
+  for (const message of messages) {
+    if (message.role === "tool") {
+      const toolCallId = message.tool_call_id;
+      const pendingIndex = pendingToolCalls.findIndex((toolCall) => toolCall.id === toolCallId);
+      if (pendingIndex === -1) {
+        continue;
+      }
+      repaired.push(message);
+      pendingToolCalls.splice(pendingIndex, 1);
+      continue;
+    }
+
+    if (pendingToolCalls.length > 0) {
+      flushMissingToolResults();
+    }
+
+    repaired.push(message);
+    pendingToolCalls = message.role === "assistant" && message.tool_calls?.length
+      ? [...message.tool_calls]
+      : [];
+  }
+
+  if (pendingToolCalls.length > 0) {
+    flushMissingToolResults();
+  }
+
+  messages.splice(0, messages.length, ...repaired);
+}
+
 export function serializeMessages(messages: AgentMessage[]) {
   return messages.map((m) => {
     const msg: Record<string, unknown> = { role: m.role, content: m.content };
@@ -766,6 +818,7 @@ function isTransientFailure(message: string): boolean {
 export const __testUtils = {
   executeOneToolCall,
   isTransientFailure,
+  repairToolCallHistory,
 };
 
 // ── Tool executor type ───────────────────────────────────────────────
@@ -972,6 +1025,7 @@ export async function runAgentLoop(
         }
       }
     }
+    repairToolCallHistory(history);
 
     // ── LLM request ──
     const reqBody: Record<string, unknown> = {

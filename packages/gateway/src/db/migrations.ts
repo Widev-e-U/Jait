@@ -720,4 +720,15 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 031: Thread diff stats (persisted changes) ────────────────────
+  {
+    id: 31,
+    name: "agent_threads_diff_stats",
+    run(db) {
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN change_files INTEGER`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN change_insertions INTEGER`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE agent_threads ADD COLUMN change_deletions INTEGER`); } catch { /* exists */ }
+    },
+  },
+
 ];

@@ -41,7 +41,6 @@ import { routeThread, formatRoutingPlanForPrompt } from "../services/thread-rout
 import { buildThreadHistoryReplayPrompt } from "../services/thread-history.js";
 import {
   generateTitleViaTurn,
-  generateTitleViaApi,
   normalizeGeneratedThreadTitle,
 } from "../services/thread-title.js";
 import type { WsEventType, ThreadInfo, ThreadRegistrySnapshot } from "@jait/shared/types";
@@ -198,6 +197,11 @@ export interface ThreadRouteDeps {
       baseBranch?: string,
       githubToken?: string,
     ): Promise<GitStepResult>;
+    diffStats(
+      cwd: string,
+      baseBranch?: string,
+      branch?: string,
+    ): Promise<{ files: number; insertions: number; deletions: number; hasChanges: boolean }>;
   };
 }
 
@@ -323,6 +327,9 @@ export function registerThreadRoutes(
         executionNodeName: thread.executionNodeName ?? null,
         routingPlan: thread.routingPlan ?? null,
         skillIds: thread.skillIds,
+        changeFiles: thread.changeFiles ?? null,
+        changeInsertions: thread.changeInsertions ?? null,
+        changeDeletions: thread.changeDeletions ?? null,
         createdAt: thread.createdAt,
         updatedAt: thread.updatedAt,
         completedAt: thread.completedAt,
@@ -589,6 +596,7 @@ export function registerThreadRoutes(
         threadService.markCompleted(threadId);
         broadcastThreadStatus(threadId, "completed");
         void drainQueuedThreadMessages();
+        void persistThreadDiffStats(threadId);
         const unsubscribe = threadUnsubs.get(threadId);
         if (unsubscribe) {
           unsubscribe();
@@ -618,6 +626,7 @@ export function registerThreadRoutes(
             threadService.update(threadId, { status: "completed", error: null, completedAt: new Date().toISOString() });
             broadcastThreadStatus(threadId, "completed");
             void drainQueuedThreadMessages();
+            void persistThreadDiffStats(threadId);
           })
           .catch((error) => {
             threadService.markError(threadId, error instanceof Error ? error.message : String(error));
@@ -626,6 +635,28 @@ export function registerThreadRoutes(
           });
       }
     };
+  }
+
+  /** Compute git diff stats and persist them on the thread row. */
+  async function persistThreadDiffStats(threadId: string): Promise<void> {
+    const thread = threadService.getById(threadId);
+    if (!thread?.workingDirectory) return;
+    try {
+      const stats = await gitService.diffStats(
+        thread.workingDirectory,
+        thread.prBaseBranch || undefined,
+        thread.branch || undefined,
+      );
+      if (!stats.hasChanges) return;
+      threadService.update(threadId, {
+        changeFiles: stats.files,
+        changeInsertions: stats.insertions,
+        changeDeletions: stats.deletions,
+      });
+      broadcastThreadEvent(threadId, "updated", { thread: threadService.getById(threadId) });
+    } catch {
+      // Best-effort — don't let diff-stats failures block thread completion.
+    }
   }
 
   function isThreadSessionEvent(event: ProviderEvent, sessionId: string): boolean {
@@ -1150,37 +1181,42 @@ export function registerThreadRoutes(
       // with progress pushed via WS events.
       void (async () => {
         try {
-          // ── Title generation (via Codex turn) ─────────────────
+          // ── Title generation ──────────────────────────────
           if (titleTask.trim()) {
             suppressTitleTurnEvents = 1;
+            const titleActivity = threadService.addActivity(id, "activity", "Generating title…", {
+              action: "title_generation_start",
+              provider: providerId,
+            });
+            broadcastThreadEvent(id, "activity", { activity: titleActivity });
             try {
-              let generatedTitle: string;
-              if (providerId === "codex" || providerId === "claude-code") {
-                const raw = await generateTitleViaTurn(provider, session.id, titleTask);
-                generatedTitle = normalizeGeneratedThreadTitle(raw, "");
-              } else {
-                const settings = deps.userService?.getSettings(authUser.id);
-                generatedTitle = await generateTitleViaApi({
-                  task: titleTask,
-                  config,
-                  apiKeys: settings?.apiKeys,
-                  model: thread.model ?? undefined,
-                  jaitBackend: providerId === "jait" ? settings?.jaitBackend : undefined,
-                });
-              }
+              const raw = await generateTitleViaTurn(provider, session.id, titleTask);
+              const generatedTitle = normalizeGeneratedThreadTitle(raw, "");
               if (generatedTitle) {
                 const titleUpdated = threadService.update(id, {
                   title: `${titlePrefix}${generatedTitle}`.trim(),
                 });
                 if (titleUpdated) broadcastThreadEvent(id, "updated", { thread: titleUpdated });
+                const doneActivity = threadService.addActivity(id, "activity", `Title: ${generatedTitle}`, {
+                  action: "title_generation_done",
+                  title: generatedTitle,
+                });
+                broadcastThreadEvent(id, "activity", { activity: doneActivity });
               }
             } catch (titleErr) {
               // Title generation failed — leave the placeholder title.
               // Reset the counter so the real coding turn's turn.completed
               // isn't swallowed (the title turn never emitted one).
               suppressTitleTurnEvents = 0;
+              const errorMsg = titleErr instanceof Error ? titleErr.message : String(titleErr);
+              const failActivity = threadService.addActivity(id, "error", `Title generation failed: ${errorMsg}`, {
+                action: "title_generation_failed",
+                provider: providerId,
+                error: errorMsg,
+              });
+              broadcastThreadEvent(id, "activity", { activity: failActivity });
               app.log.warn(
-                { threadId: id, provider: providerId, error: String(titleErr) },
+                { threadId: id, provider: providerId, error: errorMsg },
                 "Thread title generation failed",
               );
             }

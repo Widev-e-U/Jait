@@ -38,6 +38,10 @@ interface ThreadActionsProps {
   threadKind?: ThreadKind
   /** Whether to render the PR status badge next to the buttons. */
   showStatusBadge?: boolean
+  /** Persisted diff stats from the thread row (prefer over live git calls when available). */
+  changeFiles?: number | null
+  changeInsertions?: number | null
+  changeDeletions?: number | null
 }
 
 function DiffCountLabel({ insertions, deletions }: { insertions: number; deletions: number }) {
@@ -60,6 +64,9 @@ export function ThreadActions({
   threadStatus,
   threadKind = 'delivery',
   showStatusBadge = true,
+  changeFiles,
+  changeInsertions,
+  changeDeletions,
 }: ThreadActionsProps) {
   const isMobile = useIsMobile()
   const [busy, setBusy] = useState(false)
@@ -90,12 +97,24 @@ export function ThreadActions({
     const loadStatus = async () => {
       try {
         const status = await gitApi.status(cwd, branch ?? undefined)
+        if (cancelled) return
+        setGitStatus(status)
+
+        // Prefer persisted diff stats from the thread row
+        if (changeFiles != null && changeInsertions != null && changeDeletions != null) {
+          setChangeTotals({
+            insertions: changeInsertions,
+            deletions: changeDeletions,
+            hasChanges: changeFiles > 0,
+          })
+          return
+        }
+
         const diffRequest = getThreadDiffRequest(baseBranch, branch, prState, threadStatus, status)
         const diffStats = branch
           ? await gitApi.diffStats(cwd, diffRequest.baseBranch, diffRequest.branch).catch(() => null)
           : null
         if (cancelled) return
-        setGitStatus(status)
         if (diffStats) {
           setChangeTotals({
             insertions: diffStats.insertions,
@@ -127,7 +146,7 @@ export function ThreadActions({
     return () => {
       cancelled = true
     }
-  }, [baseBranch, branch, cwd, threadStatus, prUrl, prState])
+  }, [baseBranch, branch, changeDeletions, changeFiles, changeInsertions, cwd, prState, prUrl, threadStatus])
 
   // ── CI checks polling ──────────────────────────────────────────────
   type ChecksStatus = 'pending' | 'passing' | 'failing' | null

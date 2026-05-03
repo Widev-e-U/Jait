@@ -4426,8 +4426,8 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <FileIcon filename={fileName} className={`${mobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
           </div>
           <div className="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
-            <span className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>{fileName}</span>
-            {dirPath ? <span className="truncate text-2xs text-muted-foreground">{dirPath}</span> : null}
+            <span className={`truncate shrink-0 max-w-[60%] ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>{fileName}</span>
+            {dirPath ? <span className="truncate flex-1 min-w-0 text-2xs text-muted-foreground">{dirPath}</span> : null}
           </div>
           <span className="w-16 shrink-0 text-right text-2xs text-muted-foreground">
             {node.entry.insertions > 0 && <span className="text-green-500">+{node.entry.insertions}</span>}

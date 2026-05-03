@@ -1142,6 +1142,9 @@ function ManagerThreadListItem({
               prState={prState}
               ghAvailable={ghAvailable}
               showStatusBadge={false}
+              changeFiles={thread.changeFiles}
+              changeInsertions={thread.changeInsertions}
+              changeDeletions={thread.changeDeletions}
             />
           </div>
         )}
@@ -1292,6 +1295,9 @@ function ManagerActiveThreadsMenu({
                         prState={prState}
                         ghAvailable={ghAvailable}
                         showStatusBadge={false}
+                        changeFiles={thread.changeFiles}
+                        changeInsertions={thread.changeInsertions}
+                        changeDeletions={thread.changeDeletions}
                       />
                     </div>
                   )}
@@ -6901,6 +6907,9 @@ function App() {
                             prState={(automation.selectedThread.id in automation.threadPrStates ? automation.threadPrStates[automation.selectedThread.id] : automation.selectedThread.prState) as 'creating' | 'open' | 'closed' | 'merged' | null | undefined}
                             ghAvailable={automation.ghAvailable}
                             showStatusBadge={!isMobile}
+                            changeFiles={automation.selectedThread.changeFiles}
+                            changeInsertions={automation.selectedThread.changeInsertions}
+                            changeDeletions={automation.selectedThread.changeDeletions}
                           />
                         </div>
                       )}

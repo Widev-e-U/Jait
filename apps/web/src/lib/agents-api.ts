@@ -38,6 +38,9 @@ export interface AgentThread {
   prState: 'creating' | 'open' | 'closed' | 'merged' | null
   executionNodeId: string | null
   executionNodeName: string | null
+  changeFiles: number | null
+  changeInsertions: number | null
+  changeDeletions: number | null
   createdAt: string
   updatedAt: string
   completedAt: string | null

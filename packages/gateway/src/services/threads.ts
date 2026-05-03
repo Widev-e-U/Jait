@@ -61,6 +61,9 @@ export interface UpdateThreadParams {
   executionNodeId?: string | null;
   executionNodeName?: string | null;
   routingPlan?: RoutingPlan | null;
+  changeFiles?: number | null;
+  changeInsertions?: number | null;
+  changeDeletions?: number | null;
 }
 
 export interface ThreadActivity {
@@ -221,6 +224,9 @@ export class ThreadService {
     if (params.executionNodeId !== undefined) updates.executionNodeId = params.executionNodeId;
     if (params.executionNodeName !== undefined) updates.executionNodeName = params.executionNodeName;
     if (params.routingPlan !== undefined) updates.routingPlan = params.routingPlan ? JSON.stringify(params.routingPlan) : null;
+    if (params.changeFiles !== undefined) updates.changeFiles = params.changeFiles;
+    if (params.changeInsertions !== undefined) updates.changeInsertions = params.changeInsertions;
+    if (params.changeDeletions !== undefined) updates.changeDeletions = params.changeDeletions;
     this.db
       .update(agentThreads)
       .set(updates)
