@@ -3841,7 +3841,7 @@ function App() {
     showWorkspaceRef.current = true
     setShowWorkspace(true)
     if (isMobile) {
-      applyWorkspaceLayout(showMobileWorkspacePane('editor'), { immediateSync: true })
+      applyWorkspaceLayout(collapseMobileWorkspace(), { immediateSync: true })
     } else {
       setShowWorkspaceTree(true)
       showWorkspaceEditorPanel()
@@ -4402,12 +4402,9 @@ function App() {
 
     if (target === 'editor') {
       if (!showWorkspace) {
-        // handleToggleEditor handles all workspace-opening logic including
-        // picker fallback; it calls showWorkspaceEditorPanel() internally on mobile
         await handleToggleEditor()
-      } else {
-        showMobileWorkspaceEditorTab()
       }
+      showMobileWorkspaceEditorTab()
       return
     }
 
