@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 
+import { getAttachmentDraftForKey, persistAttachmentDraft } from '@/lib/prompt-input-attachment-draft'
 import { shouldSyncComposerDraft } from '@/lib/prompt-input-draft'
 import { shouldQueuePromptSubmit } from '@/lib/prompt-submit-routing'
 import { normalizeUserMessageSegments, type UserMessageSegment } from '@/lib/user-message-segments'
+import type { ChatAttachment } from '@/hooks/useChat'
 import { getRootCaretOffsetAfterChipRemoval, shouldRemovePreviousChipOnBackspace } from './prompt-input-selection'
 
 function signature(value: string, segments: UserMessageSegment[] | undefined): string {
@@ -79,6 +81,47 @@ describe('shouldQueuePromptSubmit', () => {
       sendTarget: 'agent',
       hasQueueHandler: true,
     })).toBe(true)
+  })
+})
+
+describe('attachment draft state', () => {
+  const attachment: ChatAttachment = {
+    name: 'screenshot.png',
+    mimeType: 'image/png',
+    data: 'iVBORw0KGgo=',
+  }
+
+  it('preserves current attachments when moving a draft to a new key', () => {
+    const store = new Map<string, ChatAttachment[]>()
+    persistAttachmentDraft(store, 'developer:old-session', [attachment])
+
+    expect(getAttachmentDraftForKey({
+      store,
+      draftStateKey: 'developer:new-session',
+      previousDraftStateKey: 'developer:old-session',
+      currentAttachments: [attachment],
+    })).toEqual([attachment])
+  })
+
+  it('restores saved attachments for the destination key first', () => {
+    const store = new Map<string, ChatAttachment[]>()
+    const savedAttachment = { ...attachment, name: 'saved.txt', mimeType: 'text/plain' }
+    persistAttachmentDraft(store, 'developer:new-session', [savedAttachment])
+
+    expect(getAttachmentDraftForKey({
+      store,
+      draftStateKey: 'developer:new-session',
+      previousDraftStateKey: 'developer:old-session',
+      currentAttachments: [attachment],
+    })).toEqual([savedAttachment])
+  })
+
+  it('clears empty attachment drafts', () => {
+    const store = new Map<string, ChatAttachment[]>()
+    persistAttachmentDraft(store, 'developer:session', [attachment])
+    persistAttachmentDraft(store, 'developer:session', [])
+
+    expect(store.has('developer:session')).toBe(false)
   })
 })
 
