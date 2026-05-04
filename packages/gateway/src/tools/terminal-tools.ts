@@ -111,9 +111,19 @@ function inferFallbackExitCode(rawOutput: string): number {
   return 0;
 }
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
 export function rewriteWorkspacePathForSandboxCommand(command: string, workspaceRoot: string): string {
   const root = workspaceRoot.trim();
   if (!root) return command;
+  const escapedRoot = escapeRegExp(root);
+  const rootPattern = new RegExp(
+    `(?<![A-Za-z0-9._~\\\\/-])${escapedRoot}(?=$|[\\\\/\\s"'\\\`:;,|&()\\[\\]{}<>])`,
+    "g",
+  );
+  return command.replace(rootPattern, SANDBOX_WORKSPACE_PATH);
   let rewritten = "";
   let searchIndex = 0;
 
