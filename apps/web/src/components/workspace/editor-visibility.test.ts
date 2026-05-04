@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { collapseMobileWorkspace } from '@/lib/mobile-workspace-layout'
+import { collapseMobileWorkspace, showMobileWorkspacePane } from '@/lib/mobile-workspace-layout'
 
 describe('workspace editor reopen behavior', () => {
   it('reopening an existing desktop workspace restores the editor pane', () => {
@@ -66,5 +66,27 @@ describe('workspace editor reopen behavior', () => {
     expect(setShowWorkspace).toHaveBeenCalledWith(true)
     expect(applyWorkspaceLayout).toHaveBeenCalledWith({ tree: false, editor: false }, { immediateSync: true })
     expect(setSavedWorkspace).toHaveBeenCalledWith({ open: true, remotePath: '/repo' })
+  })
+
+  it('mobile editor toolbar selects the editor tab after reopening a collapsed workspace', async () => {
+    const applyWorkspaceLayout = vi.fn()
+    const handleToggleEditor = vi.fn(async () => {
+      applyWorkspaceLayout(collapseMobileWorkspace(), { immediateSync: true })
+    })
+
+    const showMobileWorkspaceEditorTab = () => {
+      applyWorkspaceLayout(showMobileWorkspacePane('editor'), { immediateSync: true })
+    }
+
+    const handleMobileEditorTargetAction = async () => {
+      await handleToggleEditor()
+      showMobileWorkspaceEditorTab()
+    }
+
+    await handleMobileEditorTargetAction()
+
+    expect(handleToggleEditor).toHaveBeenCalledOnce()
+    expect(applyWorkspaceLayout).toHaveBeenNthCalledWith(1, { tree: false, editor: false }, { immediateSync: true })
+    expect(applyWorkspaceLayout).toHaveBeenNthCalledWith(2, { tree: false, editor: true }, { immediateSync: true })
   })
 })
