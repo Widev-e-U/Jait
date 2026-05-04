@@ -1,6 +1,26 @@
 import { describe, expect, it } from 'vitest'
 
-import { getVisibleChangedFiles, shouldResumeChatSession } from '@/hooks/useChat'
+import { formatChatHttpError, getVisibleChangedFiles, shouldResumeChatSession } from '@/hooks/useChat'
+
+describe('formatChatHttpError', () => {
+  it('explains Codex image uploads that hit the gateway body limit', () => {
+    expect(formatChatHttpError(413, {
+      provider: 'codex',
+      attachments: [{ name: 'screen.png', mimeType: 'image/png', data: 'abc' }],
+    })).toBe('Codex cannot use image uploads in Jait yet, and this image is too large for the gateway to accept. Remove the image or reference it as a workspace file path instead.')
+  })
+
+  it('detects oversized image data stored in display segments', () => {
+    expect(formatChatHttpError(413, {
+      provider: 'codex',
+      displaySegments: [{ type: 'image', name: 'screen.png', mimeType: 'image/png', data: 'abc' }],
+    })).toContain('Codex cannot use image uploads')
+  })
+
+  it('keeps a generic fallback for non-image HTTP failures', () => {
+    expect(formatChatHttpError(500)).toBe('HTTP 500')
+  })
+})
 
 describe('shouldResumeChatSession', () => {
   it('resumes when a stream was active', () => {
