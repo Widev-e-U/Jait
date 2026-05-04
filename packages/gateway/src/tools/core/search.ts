@@ -26,6 +26,24 @@ const DEFAULT_MAX_RESULTS = 20;
 /** Search timeout in ms. */
 const SEARCH_TIMEOUT = 20_000;
 
+function isNoMatchesExit(err: unknown): err is { code?: number | string; stdout?: string } {
+  if (!err || typeof err !== "object") return false;
+  const code = (err as { code?: number | string }).code;
+  return code === 1 || code === "1";
+}
+
+async function runSearchCommand(cmd: string): Promise<string> {
+  try {
+    const { stdout } = await execAsync(cmd, { timeout: SEARCH_TIMEOUT, maxBuffer: 2 * 1024 * 1024 });
+    return stdout;
+  } catch (err) {
+    if (isNoMatchesExit(err)) {
+      return err.stdout ?? "";
+    }
+    throw err;
+  }
+}
+
 interface SearchInput {
   /** The search pattern (text or regex) */
   pattern: string;
@@ -167,7 +185,7 @@ async function searchContent(
     cmd += ` || grep -rn -i ${grepRegexp} --max-count=${limit} ${grepInclude} -- "${safePattern}" "${safeDir}" 2>/dev/null`;
   }
 
-  const { stdout } = await execAsync(cmd, { timeout: SEARCH_TIMEOUT, maxBuffer: 2 * 1024 * 1024 });
+  const stdout = await runSearchCommand(cmd);
   const lines = stdout.trim().split("\n").filter(Boolean).slice(0, limit);
 
   if (lines.length === 0) {
@@ -214,7 +232,7 @@ async function searchFiles(
     cmd = `find "${safeDir}" -type f -iname "*${safePattern}*" 2>/dev/null | head -n ${limit}`;
   }
 
-  const { stdout } = await execAsync(cmd, { timeout: SEARCH_TIMEOUT, maxBuffer: 2 * 1024 * 1024 });
+  const stdout = await runSearchCommand(cmd);
   const files = stdout.trim().split("\n").filter(Boolean).slice(0, limit);
 
   if (files.length === 0) {
