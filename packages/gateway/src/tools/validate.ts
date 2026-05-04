@@ -27,6 +27,97 @@ const TYPE_CHECKS: Record<string, (v: unknown) => boolean> = {
   object: (v) => typeof v === "object" && v !== null && !Array.isArray(v),
 };
 
+function formatPath(path: string): string {
+  return path === "$" ? "input" : path.replace(/^\$\./, "");
+}
+
+function coerceValue(expectedType: string, value: unknown): unknown {
+  if ((expectedType === "number" || expectedType === "integer") && typeof value === "string") {
+    const num = Number(value);
+    if (!Number.isNaN(num)) {
+      return num;
+    }
+  }
+
+  if (expectedType === "boolean" && typeof value === "string") {
+    if (value === "true") return true;
+    if (value === "false") return false;
+  }
+
+  if ((expectedType === "object" || expectedType === "array") && typeof value === "string") {
+    try {
+      const parsed = JSON.parse(value);
+      const checker = TYPE_CHECKS[expectedType];
+      if (checker?.(parsed)) {
+        return parsed;
+      }
+    } catch {
+      // Ignore JSON parse failures and report the type error below.
+    }
+  }
+
+  return value;
+}
+
+function validateSchemaValue(
+  schema: ToolParametersSchema["properties"][string],
+  value: unknown,
+  path: string,
+  errors: string[],
+): unknown {
+  const expectedType = schema.type;
+  const checker = TYPE_CHECKS[expectedType];
+  let current = value;
+
+  if (checker && !checker(current)) {
+    current = coerceValue(expectedType, current);
+
+    if (!checker(current)) {
+      errors.push(
+        `Property '${formatPath(path)}' expected type '${expectedType}', got '${typeof value}'`,
+      );
+      return current;
+    }
+
+    if (expectedType === "integer" && !Number.isInteger(current)) {
+      errors.push(`Property '${formatPath(path)}' must be an integer, got ${current}`);
+      return current;
+    }
+  }
+
+  if (schema.enum && schema.enum.length > 0 && !schema.enum.includes(String(current))) {
+    errors.push(
+      `Property '${formatPath(path)}' must be one of [${schema.enum.join(", ")}], got '${current}'`,
+    );
+  }
+
+  if (expectedType === "object" && schema.properties && TYPE_CHECKS.object(current)) {
+    const obj = current as Record<string, unknown>;
+
+    if (schema.required) {
+      for (const key of schema.required) {
+        if (!(key in obj) || obj[key] === undefined) {
+          errors.push(`Missing required property: ${formatPath(`${path}.${key}`)}`);
+        }
+      }
+    }
+
+    for (const [key, childSchema] of Object.entries(schema.properties)) {
+      const childValue = obj[key];
+      if (childValue === undefined || childValue === null) continue;
+      obj[key] = validateSchemaValue(childSchema, childValue, `${path}.${key}`, errors);
+    }
+  }
+
+  if (expectedType === "array" && schema.items && Array.isArray(current)) {
+    current = current.map((item, index) =>
+      validateSchemaValue(schema.items!, item, `${path}[${index}]`, errors),
+    );
+  }
+
+  return current;
+}
+
 /**
  * Validate an input value against a ToolParametersSchema.
  *
@@ -59,57 +150,7 @@ export function validateToolInput(
   for (const [key, propSchema] of Object.entries(schema.properties)) {
     const value = obj[key];
     if (value === undefined || value === null) continue; // skip optional absent
-
-    // Type check (with coercion attempt for strings→numbers from LLM)
-    const checker = TYPE_CHECKS[propSchema.type];
-    if (checker && !checker(value)) {
-      // Try coercing string→number if the schema expects a number
-      if (
-        (propSchema.type === "number" || propSchema.type === "integer") &&
-        typeof value === "string"
-      ) {
-        const num = Number(value);
-        if (!Number.isNaN(num)) {
-          (obj as Record<string, unknown>)[key] = num;
-          // Re-check integer constraint
-          if (propSchema.type === "integer" && !Number.isInteger(num)) {
-            errors.push(`Property '${key}' must be an integer, got ${num}`);
-          }
-          continue;
-        }
-      }
-      // Try coercing string→boolean
-      if (propSchema.type === "boolean" && typeof value === "string") {
-        if (value === "true") { (obj as Record<string, unknown>)[key] = true; continue; }
-        if (value === "false") { (obj as Record<string, unknown>)[key] = false; continue; }
-      }
-      // Try parsing JSON string→object/array
-      if (
-        (propSchema.type === "object" || propSchema.type === "array") &&
-        typeof value === "string"
-      ) {
-        try {
-          const parsed = JSON.parse(value);
-          if (checker(parsed)) {
-            (obj as Record<string, unknown>)[key] = parsed;
-            continue;
-          }
-        } catch { /* not valid JSON, fall through */ }
-      }
-      errors.push(
-        `Property '${key}' expected type '${propSchema.type}', got '${typeof value}'`,
-      );
-    }
-
-    // Enum check
-    if (propSchema.enum && propSchema.enum.length > 0) {
-      const current = obj[key]; // may have been coerced
-      if (!propSchema.enum.includes(String(current))) {
-        errors.push(
-          `Property '${key}' must be one of [${propSchema.enum.join(", ")}], got '${current}'`,
-        );
-      }
-    }
+    obj[key] = validateSchemaValue(propSchema, value, `$.${key}`, errors);
   }
 
   return { valid: errors.length === 0, errors };
