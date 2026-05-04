@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { createTerminalRunTool, detectInteractivePrompt } from "./tools/terminal-tools.js";
+import {
+  createTerminalRunTool,
+  detectInteractivePrompt,
+  rewriteWorkspacePathForSandboxCommand,
+} from "./tools/terminal-tools.js";
 import { SurfaceRegistry } from "./surfaces/registry.js";
 import { SandboxManager } from "./security/sandbox-manager.js";
 import type { TerminalSurface } from "./surfaces/terminal.js";
@@ -115,6 +119,22 @@ describe("terminal.run tool status reporting", () => {
     await tool.execute({ command: "cd /home/jakob/jait && bun test", sandbox: true }, context);
 
     expect(commands[0]).toContain("cd /workspace && bun test");
+  });
+
+  it("rewrites quoted workspace file paths to the sandbox mount path", () => {
+    const command = "cat '/home/jakob/jait/packages/gateway/src/tools/terminal-tools.ts'";
+
+    const rewritten = rewriteWorkspacePathForSandboxCommand(command, "/home/jakob/jait");
+
+    expect(rewritten).toBe("cat '/workspace/packages/gateway/src/tools/terminal-tools.ts'");
+  });
+
+  it("does not rewrite path prefixes that only partially match the workspace root", () => {
+    const command = "echo /home/jakob/jait-backup && cat /tmp/home/jakob/jait";
+
+    const rewritten = rewriteWorkspacePathForSandboxCommand(command, "/home/jakob/jait");
+
+    expect(rewritten).toBe(command);
   });
 
   it("executes sandbox commands inside a thread sandbox container when provided", async () => {
