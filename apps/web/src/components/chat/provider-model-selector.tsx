@@ -90,6 +90,14 @@ function saveRecentModel(modelId: string): void {
   localStorage.setItem(RECENT_MODELS_KEY, JSON.stringify(recents.slice(0, MAX_RECENTS)))
 }
 
+function blurActiveElement(): void {
+  if (typeof document === 'undefined') return
+  const activeElement = document.activeElement
+  if (activeElement instanceof HTMLElement) {
+    activeElement.blur()
+  }
+}
+
 export function ProviderModelSelector({
   provider,
   model,
@@ -236,8 +244,10 @@ export function ProviderModelSelector({
   useEffect(() => {
     if (!open) return
     setSearch('')
-    requestAnimationFrame(() => inputRef.current?.focus())
-  }, [open])
+    if (!isMobile) {
+      requestAnimationFrame(() => inputRef.current?.focus())
+    }
+  }, [open, isMobile])
 
   useEffect(() => {
     setModels([])
@@ -402,289 +412,330 @@ export function ProviderModelSelector({
     setOpen(false)
   }
 
-  return (
+  const handleOpenChange = useCallback((nextOpen: boolean) => {
+    if (nextOpen && isMobile) {
+      blurActiveElement()
+    }
+    setOpen(nextOpen)
+  }, [isMobile])
+
+  const triggerButton = (
+    <button
+      type="button"
+      disabled={disabled}
+      onClick={isMobile ? () => handleOpenChange(true) : undefined}
+      className={cn(
+        'flex h-8 items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-xs font-medium text-muted-foreground',
+        'hover:text-foreground hover:bg-muted/60 transition-colors',
+        'focus-visible:outline-none focus-visible:border-ring/60 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50',
+        'disabled:pointer-events-none disabled:opacity-50',
+        className,
+      )}
+      title={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}
+      aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}`}
+    >
+      <CurrentIcon className="h-4 w-4 shrink-0" />
+      {!compact && (
+        <>
+          <span>{currentProvider.label}</span>
+          <span className="max-w-[112px] truncate font-mono text-xs opacity-80">{displayModelLabel}</span>
+        </>
+      )}
+      {!compact && locationLabel && (
+        <span className="flex max-w-[72px] items-center gap-0.5 truncate text-2xs text-blue-500">
+          <Monitor className="h-3 w-3" />
+          {locationLabel}
+        </span>
+      )}
+      {loadingModels ? <Loader2 className="h-3 w-3 animate-spin opacity-70" /> : null}
+      <ChevronDown className="h-3 w-3 opacity-60" />
+    </button>
+  )
+
+  const selectorContent = (
     <>
-    <Popover open={open} onOpenChange={setOpen}>
-      <PopoverTrigger asChild disabled={disabled}>
-        <button
-          type="button"
-          className={cn(
-            'flex h-8 items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-xs font-medium text-muted-foreground',
-            'hover:text-foreground hover:bg-muted/60 transition-colors',
-            'focus-visible:outline-none focus-visible:border-ring/60 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50',
-            'disabled:pointer-events-none disabled:opacity-50',
-            className,
-          )}
-          title={`Provider: ${currentProvider.label} · Model: ${displayModelLabel}`}
-          aria-label={`Provider ${currentProvider.label}, model ${displayModelLabel}`}
-        >
-          <CurrentIcon className="h-4 w-4 shrink-0" />
-          {!compact && (
-            <>
-              <span>{currentProvider.label}</span>
-              <span className="max-w-[112px] truncate font-mono text-xs opacity-80">{displayModelLabel}</span>
-            </>
-          )}
-          {!compact && locationLabel && (
-            <span className="flex max-w-[72px] items-center gap-0.5 truncate text-2xs text-blue-500">
-              <Monitor className="h-3 w-3" />
-              {locationLabel}
-            </span>
-          )}
-          {loadingModels ? <Loader2 className="h-3 w-3 animate-spin opacity-70" /> : null}
-          <ChevronDown className="h-3 w-3 opacity-60" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent
-        align="start"
-        side={isMobile ? 'bottom' : 'top'}
-        collisionPadding={8}
-        className="flex w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
-        style={{
-          maxHeight: isMobile
-            ? 'min(32rem, calc(var(--radix-popover-content-available-height, 100dvh) - 0.75rem))'
-            : 'min(32rem, var(--radix-popover-content-available-height, 80dvh))',
-        }}
-      >
-        <div className="shrink-0 border-b px-3 py-2">
-          <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
+      <div className={cn('shrink-0 border-b px-3 py-2', isMobile && 'pr-12')}>
+        <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Providers</div>
+      </div>
+      {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && (
+        <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          Device is offline — only Jait (gateway) is available
         </div>
-        {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && (
-          <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-            Device is offline — only Jait (gateway) is available
-          </div>
-        )}
-        {scopedToRepo && repoLoading && (
-          <div className="flex shrink-0 items-center gap-1.5 border-b px-3 py-2 text-xs text-muted-foreground">
-            <Loader2 className="h-3 w-3 animate-spin" />
-            Connecting to device…
-          </div>
-        )}
-        {scopedToWorkspaceNode && !wsRemoteNode && (
-          <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
-            Device is offline — only Jait (gateway) is available
-          </div>
-        )}
-        <div className="min-h-24 max-h-56 shrink-0 overflow-y-auto p-1">
-          {providerEntries.map((entry) => {
-            const Icon = entry.icon
-            const active = entry.value === provider
-            const showLoginAction = Boolean(entry.auth?.login) && entry.auth?.authenticated !== true && !scopedToWorkspaceNode && (!scopedToRepo || repoIsGateway)
-            const loginBusy = authBusyProvider === entry.value
-            return (
-              <div key={entry.value} className={cn('rounded-sm', active && 'bg-accent/50')}>
-                <div className="flex items-start gap-1.5">
+      )}
+      {scopedToRepo && repoLoading && (
+        <div className="flex shrink-0 items-center gap-1.5 border-b px-3 py-2 text-xs text-muted-foreground">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          Connecting to device…
+        </div>
+      )}
+      {scopedToWorkspaceNode && !wsRemoteNode && (
+        <div className="shrink-0 border-b px-3 py-2 text-xs text-amber-600 dark:text-amber-400">
+          Device is offline — only Jait (gateway) is available
+        </div>
+      )}
+      <div className={cn('min-h-24 shrink-0 overflow-y-auto p-1', isMobile ? 'max-h-40' : 'max-h-56')}>
+        {providerEntries.map((entry) => {
+          const Icon = entry.icon
+          const active = entry.value === provider
+          const showLoginAction = Boolean(entry.auth?.login) && entry.auth?.authenticated !== true && !scopedToWorkspaceNode && (!scopedToRepo || repoIsGateway)
+          const loginBusy = authBusyProvider === entry.value
+          return (
+            <div key={entry.value} className={cn('rounded-sm', active && 'bg-accent/50')}>
+              <div className="flex items-start gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => handleProviderSelect(entry.value)}
+                  disabled={!entry.isAvailable}
+                  className={cn(
+                    'flex min-w-0 flex-1 items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
+                    'hover:bg-accent hover:text-accent-foreground',
+                    !entry.isAvailable && 'cursor-not-allowed opacity-60',
+                  )}
+                >
+                  <Icon className="mt-0.5 h-4 w-4 shrink-0" />
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
+                      {entry.label}
+                      {entry.isAvailable && entry.nodeLabel && (
+                        <span className="flex items-center gap-0.5 text-2xs text-muted-foreground">
+                          <Monitor className="h-3 w-3" />
+                          {entry.nodeLabel}
+                        </span>
+                      )}
+                      {!entry.isAvailable && (
+                        <span className="flex items-center gap-0.5 text-2xs text-destructive/80">
+                          <AlertTriangle className="h-3 w-3" />
+                          {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
+                        </span>
+                      )}
+                      {entry.auth && entry.auth.authenticated === true && (
+                        <span className="text-2xs text-emerald-600 dark:text-emerald-400">signed in</span>
+                      )}
+                    </div>
+                    <div className="text-xs leading-snug text-muted-foreground">
+                      {!entry.isAvailable && entry.reason ? entry.reason : entry.description}
+                    </div>
+                  </div>
+                  {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+                </button>
+                {showLoginAction && (
                   <button
                     type="button"
-                    onClick={() => handleProviderSelect(entry.value)}
-                    disabled={!entry.isAvailable}
-                    className={cn(
-                      'flex min-w-0 flex-1 items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
-                      'hover:bg-accent hover:text-accent-foreground',
-                      !entry.isAvailable && 'cursor-not-allowed opacity-60',
-                    )}
+                    title={`Login to ${entry.label}`}
+                    aria-label={`Login to ${entry.label}`}
+                    onClick={(event) => {
+                      event.preventDefault()
+                      event.stopPropagation()
+                      void startLogin(entry.value, entry.label)
+                    }}
+                    disabled={Boolean(authBusyProvider)}
+                    className="mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50"
                   >
-                    <Icon className="mt-0.5 h-4 w-4 shrink-0" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex flex-wrap items-center gap-1.5 text-sm font-medium">
-                        {entry.label}
-                        {entry.isAvailable && entry.nodeLabel && (
-                          <span className="flex items-center gap-0.5 text-2xs text-muted-foreground">
-                            <Monitor className="h-3 w-3" />
-                            {entry.nodeLabel}
-                          </span>
-                        )}
-                        {!entry.isAvailable && (
-                          <span className="flex items-center gap-0.5 text-2xs text-destructive/80">
-                            <AlertTriangle className="h-3 w-3" />
-                            {entry.reason ? summariseReason(entry.reason) : 'unavailable'}
-                          </span>
-                        )}
-                        {entry.auth && entry.auth.authenticated === true && (
-                          <span className="text-2xs text-emerald-600 dark:text-emerald-400">signed in</span>
-                        )}
-                      </div>
-                      <div className="text-xs leading-snug text-muted-foreground">
-                        {!entry.isAvailable && entry.reason ? entry.reason : entry.description}
-                      </div>
-                    </div>
-                    {active && <Check className="mt-0.5 h-4 w-4 shrink-0 text-primary" />}
+                    {loginBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
                   </button>
-                  {showLoginAction && (
-                    <button
-                      type="button"
-                      title={`Login to ${entry.label}`}
-                      aria-label={`Login to ${entry.label}`}
-                      onClick={(event) => {
-                        event.preventDefault()
-                        event.stopPropagation()
-                        void startLogin(entry.value, entry.label)
-                      }}
-                      disabled={Boolean(authBusyProvider)}
-                      className="mr-1 mt-2 inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md border border-border bg-background text-foreground transition-colors hover:bg-muted disabled:opacity-50"
-                    >
-                      {loginBusy ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <LogIn className="h-3.5 w-3.5" />}
-                    </button>
-                  )}
-                </div>
-              </div>
-            )
-          })}
-          {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && onMoveToGateway && (
-            <>
-              <div className="mx-2 my-1 border-t" />
-              <button
-                type="button"
-                onClick={onMoveToGateway}
-                className={cn(
-                  'flex w-full items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
-                  'hover:bg-accent hover:text-accent-foreground',
                 )}
-              >
-                <Server className="mt-0.5 h-4 w-4 shrink-0" />
-                <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium">Move to Gateway</div>
-                  <div className="text-xs leading-snug text-muted-foreground">Run this repo on the gateway server instead</div>
-                </div>
-              </button>
-            </>
-          )}
-        </div>
-
-        <>
-            <div className="shrink-0 border-y px-3 py-2">
-              <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
-            </div>
-            <div className="shrink-0 border-b px-3 py-2">
-              <div className="flex items-center gap-2">
-                <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                <input
-                  ref={inputRef}
-                  type="text"
-                  value={search}
-                  onChange={(event) => setSearch(event.target.value)}
-                  placeholder="Search models..."
-                  className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
-                />
               </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-1">
-              {recentModels.length > 0 && (
-                <>
-                  <div className="flex items-center gap-1.5 px-2 py-1.5">
-                    <Clock className="h-3 w-3 text-muted-foreground" />
-                    <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Recent</span>
-                  </div>
-                  {recentModels.map((entry) => (
-                    <ModelItem key={`recent-${entry.id}`} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
-                  ))}
-                  <div className="mx-2 my-1 border-t" />
-                </>
+          )
+        })}
+        {scopedToRepo && !repoIsGateway && !repoOnline && !repoLoading && onMoveToGateway && (
+          <>
+            <div className="mx-2 my-1 border-t" />
+            <button
+              type="button"
+              onClick={onMoveToGateway}
+              className={cn(
+                'flex w-full items-start gap-2.5 rounded-sm px-2 py-2 text-left transition-colors',
+                'hover:bg-accent hover:text-accent-foreground',
               )}
-              {!searchLower && recentModels.length > 0 && (
-                <div className="px-2 py-1.5">
-                  <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">All models</span>
-                </div>
-              )}
-              {loadingModels && (
-                <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  Loading models…
-                </div>
-              )}
-              {!loadingModels && (() => {
-                const hasGroups = nonRecentFiltered.some((m) => m.group)
-                if (!hasGroups) {
-                  return nonRecentFiltered.map((entry) => (
-                    <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
-                  ))
-                }
-                // Render models grouped by backend
-                const groups: { label: string; items: ModelDef[] }[] = []
-                const seen = new Set<string>()
-                for (const m of nonRecentFiltered) {
-                  const g = m.group || 'Other'
-                  if (!seen.has(g)) {
-                    seen.add(g)
-                    groups.push({ label: g, items: [] })
-                  }
-                  groups.find((gr) => gr.label === g)!.items.push(m)
-                }
-                return groups.map((g) => (
-                  <div key={g.label}>
-                    <div className="sticky top-0 z-10 bg-popover px-2 py-1.5">
-                      <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{g.label}</span>
-                    </div>
-                    {g.items.map((entry) => (
-                      <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
-                    ))}
-                  </div>
-                ))
-              })()}
-              {!loadingModels && filteredModels.length === 0 && (
-                <div className="px-3 py-4 text-center text-xs text-muted-foreground">
-                  {search ? `No models matching "${search}"` : 'No models available'}
-                </div>
-              )}
-            </div>
+            >
+              <Server className="mt-0.5 h-4 w-4 shrink-0" />
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium">Move to Gateway</div>
+                <div className="text-xs leading-snug text-muted-foreground">Run this repo on the gateway server instead</div>
+              </div>
+            </button>
           </>
-      </PopoverContent>
-    </Popover>
-    <Dialog open={Boolean(loginDialog)} onOpenChange={(next) => { if (!next) setLoginDialog(null) }}>
-      <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
-        <DialogHeader>
-          <DialogTitle>{loginDialog?.label ?? 'Provider'} login</DialogTitle>
-          <DialogDescription>
-            {loginDialog?.tone === 'loading'
-              ? loginDialog.message
-              : 'Use the device code below on the provider login page.'}
-          </DialogDescription>
-        </DialogHeader>
-        {loginDialog && (
-          <div className="space-y-4">
-            {loginDialog.tone !== 'loading' && (
-              <div className={cn(
-                'rounded-md border px-3 py-2 text-sm',
-                loginDialog.tone === 'success'
-                  ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
-                  : 'border-destructive/25 bg-destructive/10 text-destructive',
-              )}>
-                {loginDialog.message}
-              </div>
-            )}
-            {loginDialog.tone === 'loading' && (
-              <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Starting device login...
-              </div>
-            )}
-            {loginDialog.userCode && (
-              <div className="space-y-1.5">
-                <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Device code</div>
-                <div className="flex min-w-0 items-center gap-2">
-                  <code className="min-w-0 flex-1 rounded-md border bg-muted px-3 py-2 text-center font-mono text-lg font-semibold [overflow-wrap:anywhere]">
-                    {loginDialog.userCode}
-                  </code>
-                  <Button variant="outline" size="sm" onClick={() => void copyCode(loginDialog.providerId, loginDialog.userCode!)}>
-                    <Copy className="mr-1.5 h-3.5 w-3.5" />
-                    {loginDialog.copied ? 'Copied' : 'Copy'}
-                  </Button>
-                </div>
-              </div>
-            )}
+        )}
+      </div>
+
+      <div className="shrink-0 border-y px-3 py-2">
+        <div className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Models</div>
+      </div>
+      <div className="shrink-0 border-b px-3 py-2">
+        <div className="flex items-center gap-2">
+          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <input
+            ref={inputRef}
+            type="text"
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder="Search models..."
+            className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+          />
+        </div>
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-1">
+        {recentModels.length > 0 && (
+          <>
+            <div className="flex items-center gap-1.5 px-2 py-1.5">
+              <Clock className="h-3 w-3 text-muted-foreground" />
+              <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">Recent</span>
+            </div>
+            {recentModels.map((entry) => (
+              <ModelItem key={`recent-${entry.id}`} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
+            ))}
+            <div className="mx-2 my-1 border-t" />
+          </>
+        )}
+        {!searchLower && recentModels.length > 0 && (
+          <div className="px-2 py-1.5">
+            <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">All models</span>
           </div>
         )}
-        <DialogFooter className="gap-2 sm:gap-0">
-          <Button variant="outline" onClick={() => setLoginDialog(null)}>Close</Button>
-          {loginDialog?.verificationUri && (
-            <Button onClick={() => window.open(loginDialog.verificationUri, '_blank', 'noopener,noreferrer')}>
-              <ExternalLink className="mr-1.5 h-4 w-4" />
-              Open login page
-            </Button>
+        {loadingModels && (
+          <div className="flex items-center gap-2 px-3 py-3 text-xs text-muted-foreground">
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            Loading models…
+          </div>
+        )}
+        {!loadingModels && (() => {
+          const hasGroups = nonRecentFiltered.some((m) => m.group)
+          if (!hasGroups) {
+            return nonRecentFiltered.map((entry) => (
+              <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
+            ))
+          }
+          // Render models grouped by backend
+          const groups: { label: string; items: ModelDef[] }[] = []
+          const seen = new Set<string>()
+          for (const m of nonRecentFiltered) {
+            const g = m.group || 'Other'
+            if (!seen.has(g)) {
+              seen.add(g)
+              groups.push({ label: g, items: [] })
+            }
+            groups.find((gr) => gr.label === g)!.items.push(m)
+          }
+          return groups.map((g) => (
+            <div key={g.label}>
+              <div className="sticky top-0 z-10 bg-popover px-2 py-1.5">
+                <span className="text-2xs font-medium uppercase tracking-wider text-muted-foreground">{g.label}</span>
+              </div>
+              {g.items.map((entry) => (
+                <ModelItem key={entry.id} model={entry} selected={model === entry.id} onSelect={handleModelSelect} />
+              ))}
+            </div>
+          ))
+        })()}
+        {!loadingModels && filteredModels.length === 0 && (
+          <div className="px-3 py-4 text-center text-xs text-muted-foreground">
+            {search ? `No models matching "${search}"` : 'No models available'}
+          </div>
+        )}
+      </div>
+    </>
+  )
+
+  return (
+    <>
+      {isMobile ? (
+        <>
+          {triggerButton}
+          <Dialog open={open} onOpenChange={handleOpenChange}>
+            <DialogContent
+              showCloseButton
+              overlayClassName="bg-black/40"
+              onOpenAutoFocus={(event) => event.preventDefault()}
+              onCloseAutoFocus={(event) => event.preventDefault()}
+              className="!bottom-2 !top-auto !flex !max-w-none !translate-x-0 !translate-y-0 !gap-0 !overflow-hidden !rounded-lg !p-0 shadow-lg"
+              style={{
+                left: '0.5rem',
+                right: '0.5rem',
+                bottom: 'max(0.5rem, env(safe-area-inset-bottom))',
+                top: 'auto',
+                width: 'auto',
+                maxHeight: 'min(36rem, calc(100dvh - 1rem))',
+                transform: 'translateZ(0)',
+              }}
+            >
+              <DialogTitle className="sr-only">Provider and model</DialogTitle>
+              <DialogDescription className="sr-only">Choose a provider and model</DialogDescription>
+              {selectorContent}
+            </DialogContent>
+          </Dialog>
+        </>
+      ) : (
+        <Popover open={open} onOpenChange={handleOpenChange}>
+          <PopoverTrigger asChild disabled={disabled}>
+            {triggerButton}
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            side="top"
+            collisionPadding={8}
+            className="flex w-[min(22rem,calc(100vw-1rem))] flex-col overflow-hidden p-0"
+            style={{ maxHeight: 'min(32rem, var(--radix-popover-content-available-height, 80dvh))' }}
+          >
+            {selectorContent}
+          </PopoverContent>
+        </Popover>
+      )}
+      <Dialog open={Boolean(loginDialog)} onOpenChange={(next) => { if (!next) setLoginDialog(null) }}>
+        <DialogContent className="w-[calc(100vw-1.5rem)] max-w-md">
+          <DialogHeader>
+            <DialogTitle>{loginDialog?.label ?? 'Provider'} login</DialogTitle>
+            <DialogDescription>
+              {loginDialog?.tone === 'loading'
+                ? loginDialog.message
+                : 'Use the device code below on the provider login page.'}
+            </DialogDescription>
+          </DialogHeader>
+          {loginDialog && (
+            <div className="space-y-4">
+              {loginDialog.tone !== 'loading' && (
+                <div className={cn(
+                  'rounded-md border px-3 py-2 text-sm',
+                  loginDialog.tone === 'success'
+                    ? 'border-emerald-500/25 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300'
+                    : 'border-destructive/25 bg-destructive/10 text-destructive',
+                )}>
+                  {loginDialog.message}
+                </div>
+              )}
+              {loginDialog.tone === 'loading' && (
+                <div className="flex items-center gap-2 rounded-md border px-3 py-2 text-sm text-muted-foreground">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Starting device login...
+                </div>
+              )}
+              {loginDialog.userCode && (
+                <div className="space-y-1.5">
+                  <div className="text-xs font-medium uppercase tracking-wider text-muted-foreground">Device code</div>
+                  <div className="flex min-w-0 items-center gap-2">
+                    <code className="min-w-0 flex-1 rounded-md border bg-muted px-3 py-2 text-center font-mono text-lg font-semibold [overflow-wrap:anywhere]">
+                      {loginDialog.userCode}
+                    </code>
+                    <Button variant="outline" size="sm" onClick={() => void copyCode(loginDialog.providerId, loginDialog.userCode!)}>
+                      <Copy className="mr-1.5 h-3.5 w-3.5" />
+                      {loginDialog.copied ? 'Copied' : 'Copy'}
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </div>
           )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setLoginDialog(null)}>Close</Button>
+            {loginDialog?.verificationUri && (
+              <Button onClick={() => window.open(loginDialog.verificationUri, '_blank', 'noopener,noreferrer')}>
+                <ExternalLink className="mr-1.5 h-4 w-4" />
+                Open login page
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }
