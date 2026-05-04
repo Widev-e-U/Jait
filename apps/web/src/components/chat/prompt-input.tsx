@@ -16,6 +16,7 @@ import { useIsMobile } from '@/hooks/useIsMobile'
 import { cn } from '@/lib/utils'
 import { shouldQueuePromptSubmit } from '@/lib/prompt-submit-routing'
 import { JAIT_TERMINAL_REF_MIME, JAIT_WORKSPACE_REF_MIME } from '@/lib/jait-dnd'
+import { getAttachmentDraftForKey, persistAttachmentDraft } from '@/lib/prompt-input-attachment-draft'
 import {
   JAIT_REF_MIME,
   formatLineRange,
@@ -615,6 +616,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   )
   const fileInputRef = useRef<HTMLInputElement>(null)
   const draftSegmentsRef = useRef<UserMessageSegment[]>(normalizeUserMessageSegments(segments))
+  const attachmentsRef = useRef(attachments)
+  const previousDraftStateKeyRef = useRef(draftStateKey)
+  const skipNextAttachmentPersistRef = useRef(false)
   const lastAppliedDraftSignatureRef = useRef<string | null>(null)
 
   // Undo/redo stack for the composer (prevents browser native undo corruption)
@@ -677,17 +681,29 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const isSyncing = useRef(false)
 
   useEffect(() => {
-    if (!draftStateKey) return
-    setAttachments(attachmentDraftStore.get(draftStateKey) ?? [])
+    attachmentsRef.current = attachments
+  }, [attachments])
+
+  useEffect(() => {
+    const previousDraftStateKey = previousDraftStateKeyRef.current
+    previousDraftStateKeyRef.current = draftStateKey
+    const nextAttachments = getAttachmentDraftForKey({
+      store: attachmentDraftStore,
+      draftStateKey,
+      previousDraftStateKey,
+      currentAttachments: attachmentsRef.current,
+    })
+    skipNextAttachmentPersistRef.current = true
+    setAttachments(nextAttachments)
+    persistAttachmentDraft(attachmentDraftStore, draftStateKey, nextAttachments)
   }, [draftStateKey])
 
   useEffect(() => {
-    if (!draftStateKey) return
-    if (attachments.length === 0) {
-      attachmentDraftStore.delete(draftStateKey)
+    if (skipNextAttachmentPersistRef.current) {
+      skipNextAttachmentPersistRef.current = false
       return
     }
-    attachmentDraftStore.set(draftStateKey, attachments)
+    persistAttachmentDraft(attachmentDraftStore, draftStateKey, attachments)
   }, [draftStateKey, attachments])
 
   /** Remove a chip from the editable DOM and update isEmpty. */

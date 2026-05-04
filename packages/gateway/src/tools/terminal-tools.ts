@@ -124,6 +124,29 @@ export function rewriteWorkspacePathForSandboxCommand(command: string, workspace
     "g",
   );
   return command.replace(rootPattern, SANDBOX_WORKSPACE_PATH);
+  let rewritten = "";
+  let searchIndex = 0;
+
+  while (searchIndex < command.length) {
+    const matchIndex = command.indexOf(root, searchIndex);
+    if (matchIndex === -1) {
+      rewritten += command.slice(searchIndex);
+      break;
+    }
+
+    const beforeChar = matchIndex > 0 ? command[matchIndex - 1] : "";
+    const afterChar = command[matchIndex + root.length] ?? "";
+    const hasBoundaryBefore = matchIndex === 0 || !/[A-Za-z0-9_./\\~-]/.test(beforeChar);
+    const hasBoundaryAfter = !afterChar || /[\\/\s"'`:;|&)=,\]]/.test(afterChar);
+
+    rewritten += command.slice(searchIndex, matchIndex);
+    rewritten += hasBoundaryBefore && hasBoundaryAfter
+      ? SANDBOX_WORKSPACE_PATH
+      : command.slice(matchIndex, matchIndex + root.length);
+    searchIndex = matchIndex + root.length;
+  }
+
+  return rewritten;
 }
 
 export function detectInteractivePrompt(output: string): boolean {

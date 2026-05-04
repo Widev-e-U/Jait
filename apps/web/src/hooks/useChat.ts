@@ -206,6 +206,33 @@ export interface ChatAttachment {
   preview?: string
 }
 
+interface ChatHttpErrorContext {
+  provider?: string
+  attachments?: ChatAttachment[]
+  displaySegments?: UserMessageSegment[]
+}
+
+function hasImageAttachment(context: ChatHttpErrorContext): boolean {
+  return (
+    context.attachments?.some((attachment) => attachment.mimeType.toLowerCase().startsWith('image/')) ||
+    context.displaySegments?.some((segment) => segment.type === 'image') ||
+    false
+  )
+}
+
+export function formatChatHttpError(status: number, context: ChatHttpErrorContext = {}): string {
+  if (status === 413) {
+    if (context.provider === 'codex' && hasImageAttachment(context)) {
+      return 'Codex cannot use image uploads in Jait yet, and this image is too large for the gateway to accept. Remove the image or reference it as a workspace file path instead.'
+    }
+    if (hasImageAttachment(context)) {
+      return 'That image is too large for this chat request. Use a smaller image or reference it as a workspace file path instead.'
+    }
+    return 'That chat request is too large for the gateway. Remove large attachments or reference files from the workspace instead.'
+  }
+  return `HTTP ${status}`
+}
+
 interface SendMessageOptions {
   token?: string | null
   sessionId?: string | null  // explicit override — avoids stale-closure race after createSession
@@ -889,7 +916,13 @@ export function useChat(
         }
       }
 
-      if (!response.ok) throw new Error(`HTTP ${response.status}`)
+      if (!response.ok) {
+        throw new Error(formatChatHttpError(response.status, {
+          provider: options.provider,
+          attachments: options.attachments,
+          displaySegments: options.displaySegments,
+        }))
+      }
 
       const reader = response.body?.getReader()
       if (!reader) throw new Error('No response body')
