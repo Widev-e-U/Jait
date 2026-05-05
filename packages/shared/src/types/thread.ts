@@ -7,7 +7,7 @@
 
 // ── Provider identity ────────────────────────────────────────────────
 
-export type ProviderId = "jait" | "codex" | "claude-code" | "gemini" | "opencode" | "copilot";
+export type ProviderId = string;
 
 export interface ProviderInfo {
   id: ProviderId;

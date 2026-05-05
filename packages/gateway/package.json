@@ -1,6 +1,6 @@
 {
   "name": "@jait/gateway",
-  "version": "0.1.412",
+  "version": "0.1.414",
   "description": "Jait AI gateway — local-first AI coding agent with terminal, filesystem, and browser control",
   "author": "JakobWl",
   "type": "module",
@@ -42,6 +42,7 @@
     "node": ">=22.5.0"
   },
   "dependencies": {
+    "@agentclientprotocol/sdk": "^0.21.0",
     "@fastify/cookie": "^11.0.2",
     "@fastify/cors": "^11.0.0",
     "@fastify/static": "^9.0.0",
@@ -58,7 +59,8 @@
     "node-pty": "^1.1.0",
     "pino": "^9.6.0",
     "playwright": "^1.58.2",
-    "ws": "^8.18.0"
+    "ws": "^8.18.0",
+    "zod": "^4.0.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0",

@@ -197,10 +197,8 @@ export function inferSharedRepositories(
 }
 
 function toProviderId(value: string): ProviderId | null {
-  if (value === 'jait' || value === 'codex' || value === 'claude-code') {
-    return value
-  }
-  return null
+  const trimmed = value.trim()
+  return trimmed ? trimmed : null
 }
 
 function dedupeProviders(values: Iterable<string>): ProviderId[] {

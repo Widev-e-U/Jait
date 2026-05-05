@@ -11,6 +11,5 @@ export type {
 } from "./contracts.js";
 export { ProviderRegistry } from "./registry.js";
 export { JaitProvider } from "./jait-provider.js";
-export { CodexProvider } from "./codex-provider.js";
-export { ClaudeCodeProvider } from "./claude-code-provider.js";
+export { AcpProvider, loadAcpProviderConfigs, type AcpProviderConfig } from "./acp-provider.js";
 export { RemoteCliProvider } from "./remote-cli-provider.js";

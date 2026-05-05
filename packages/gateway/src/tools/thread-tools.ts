@@ -132,24 +132,14 @@ interface ProviderResolution {
 
 function normalizeThreadProviderId(value: unknown): ProviderId | null {
   if (typeof value !== "string") return null;
-  switch (value.trim().toLowerCase()) {
+  const normalized = value.trim().toLowerCase();
+  switch (normalized) {
     case "openai":
       return "codex";
     case "anthropic":
       return "claude-code";
-    case "google":
-      return "gemini";
-    case "github":
-      return "copilot";
-    case "jait":
-    case "codex":
-    case "claude-code":
-    case "gemini":
-    case "opencode":
-    case "copilot":
-      return value.trim().toLowerCase() as ProviderId;
     default:
-      return null;
+      return normalized || null;
   }
 }
 

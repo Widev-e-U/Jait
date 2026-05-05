@@ -54,9 +54,6 @@ const require = createRequire(import.meta.url);
 const PROVIDER_COMMANDS = [
   { id: "codex", command: "codex" },
   { id: "claude-code", command: "claude" },
-  { id: "gemini", command: "gemini" },
-  { id: "opencode", command: "opencode" },
-  { id: "copilot", command: "copilot" },
 ] as const;
 
 export function resolveDoctorEnvCandidates(options: Pick<RunDoctorOptions, "cwd" | "envPath" | "jaitDir">): string[] {

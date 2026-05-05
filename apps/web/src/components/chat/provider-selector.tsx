@@ -3,12 +3,10 @@
  * Follows the same pattern as ModeSelector.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo, type ComponentType } from 'react'
 import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, LogIn, LogOut, Copy, ExternalLink } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
-import Gemini from '@lobehub/icons/es/Gemini'
-import Copilot from '@lobehub/icons/es/Copilot'
 
 /** Inline Jait logo icon — matches the header SVG. */
 const JaitIcon = ({ className }: { className?: string }) => (
@@ -49,15 +47,15 @@ interface ProviderSelectorProps {
 /** Wrap @lobehub/icons so they conform to the same {className} interface as lucide icons. */
 const OpenAIIcon = ({ className }: { className?: string }) => <OpenAI size={16} className={className} />
 const ClaudeIcon = ({ className }: { className?: string }) => <Claude size={16} className={className} />
-const GeminiIcon = ({ className }: { className?: string }) => <Gemini size={16} className={className} />
-const CopilotIcon = ({ className }: { className?: string }) => <Copilot size={16} className={className} />
 
-const PROVIDER_DEFS: Array<{
+interface ProviderDef {
   value: ProviderId
   label: string
-  icon: React.ComponentType<{ className?: string }>
+  icon: ComponentType<{ className?: string }>
   description: string
-}> = [
+}
+
+const PROVIDER_DEFS: ProviderDef[] = [
   {
     value: 'jait',
     label: 'Jait',
@@ -76,25 +74,19 @@ const PROVIDER_DEFS: Array<{
     icon: ClaudeIcon,
     description: 'Anthropic Claude Code CLI — coding agent with MCP tools',
   },
-  {
-    value: 'gemini',
-    label: 'Gemini CLI',
-    icon: GeminiIcon,
-    description: 'Google Gemini CLI — coding agent',
-  },
-  {
-    value: 'opencode',
-    label: 'OpenCode',
-    icon: Bot,
-    description: 'OpenCode CLI — open-source coding agent',
-  },
-  {
-    value: 'copilot',
-    label: 'Copilot',
-    icon: CopilotIcon,
-    description: 'GitHub Copilot CLI — coding agent',
-  },
 ]
+
+const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
+
+function providerDefFromInfo(info: ProviderInfo): ProviderDef {
+  const known = PROVIDER_DEF_BY_ID.get(info.id)
+  return known ?? {
+    value: info.id,
+    label: info.name || info.id,
+    icon: Bot,
+    description: info.description,
+  }
+}
 
 /** Turn a long unavailableReason into a short badge label. */
 function summariseReason(reason: string): string {
@@ -106,6 +98,7 @@ function summariseReason(reason: string): string {
 
 export function ProviderSelector({ provider, onChange, disabled, className, iconOnly = false, repoRuntime, onMoveToGateway, sessionInfo, workspaceNodeId }: ProviderSelectorProps) {
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
+  const [localProviders, setLocalProviders] = useState<ProviderInfo[]>([])
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
   const [authBusy, setAuthBusy] = useState<{ providerId: ProviderId; action: 'login' | 'logout' } | null>(null)
   const [authMessage, setAuthMessage] = useState<{
@@ -124,6 +117,7 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
         const map: Record<string, ProviderInfo> = {}
         for (const p of providers) map[p.id] = p
         setProviderStatus(map)
+        setLocalProviders(providers)
         setRemoteProviders(remote)
       })
       .catch(() => {/* ignore */})
@@ -230,7 +224,63 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
   const wsRemoteNode = wsNodeIsRemote ? remoteProviders.find((n) => n.nodeId === workspaceNodeId) : undefined
   const scopedToWorkspaceNode = wsNodeIsRemote && !scopedToRepo
 
-  const current = PROVIDER_DEFS.find((p) => p.value === provider) ?? PROVIDER_DEFS[0]
+  const providerEntries = useMemo(() => {
+    const source = localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS
+    return source.map((item) => {
+      const status = providerStatus[item.value]
+      const auth = status?.auth
+
+      let isAvailable: boolean
+      let reason: string | undefined
+      let remoteNode: RemoteProviderInfo | undefined
+      let nodeLabel: string | undefined
+
+      if (scopedToRepo) {
+        if (item.value === 'jait') {
+          isAvailable = true
+          nodeLabel = 'Gateway'
+        } else if (repoIsGateway) {
+          isAvailable = status?.available !== false
+          reason = status?.unavailableReason
+          nodeLabel = 'Gateway'
+        } else if (repoLoading) {
+          isAvailable = false
+          reason = 'Checking device…'
+        } else if (!repoOnline) {
+          isAvailable = false
+          reason = 'Device is offline'
+        } else {
+          isAvailable = repoAvailable.includes(item.value)
+          reason = isAvailable ? undefined : 'Not available on this device'
+          nodeLabel = repoRuntime?.locationLabel ?? 'device'
+        }
+      } else if (scopedToWorkspaceNode) {
+        if (item.value === 'jait') {
+          isAvailable = true
+          nodeLabel = 'Gateway'
+        } else if (!wsRemoteNode) {
+          isAvailable = false
+          reason = 'Device is offline'
+        } else {
+          isAvailable = wsRemoteNode.providers.includes(item.value)
+          reason = isAvailable ? undefined : 'Not available on this device'
+          nodeLabel = wsRemoteNode.nodeName
+        }
+      } else {
+        const isLocallyAvailable = status?.available !== false
+        reason = status?.unavailableReason
+        remoteNode = !isLocallyAvailable
+          ? remoteProviders.find((remote) => remote.providers.includes(item.value))
+          : undefined
+        isAvailable = isLocallyAvailable || !!remoteNode
+        nodeLabel = !status?.available && remoteNode ? remoteNode.nodeName : 'Gateway'
+      }
+
+      return { ...item, isAvailable, reason, nodeLabel, auth }
+    })
+  }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToWorkspaceNode, wsRemoteNode])
+
+  const current = providerEntries.find((p) => p.value === provider) ?? providerEntries[0] ?? PROVIDER_DEFS[0]
   const CurrentIcon = current.icon
 
   // Determine location label for the trigger button
@@ -294,65 +344,13 @@ export function ProviderSelector({ provider, onChange, disabled, className, icon
             <DropdownMenuSeparator />
           </>
         )}
-        {PROVIDER_DEFS.map((p) => {
+        {providerEntries.map((p) => {
           const Icon = p.icon
           const isActive = provider === p.value
-          const status = providerStatus[p.value]
-          const auth = status?.auth
-
-          let isAvailable: boolean
-          let reason: string | undefined
-          let remoteNode: RemoteProviderInfo | undefined
-          let nodeLabel: string | undefined
-
-          if (scopedToRepo) {
-            // Jait always runs on the gateway
-            if (p.value === 'jait') {
-              isAvailable = true
-              nodeLabel = 'Gateway'
-            } else if (repoIsGateway) {
-              // Gateway-hosted repo: use local gateway availability
-              isAvailable = status?.available !== false
-              reason = status?.unavailableReason
-              nodeLabel = 'Gateway'
-            } else if (repoLoading) {
-              // Still loading — disable CLI providers
-              isAvailable = false
-              reason = 'Checking device…'
-            } else if (!repoOnline) {
-              // Device offline — CLI providers unavailable
-              isAvailable = false
-              reason = 'Device is offline'
-            } else {
-              // Device online — only show providers the device reports
-              isAvailable = repoAvailable.includes(p.value)
-              reason = isAvailable ? undefined : 'Not available on this device'
-              nodeLabel = repoRuntime?.locationLabel ?? 'device'
-            }
-          } else if (scopedToWorkspaceNode) {
-            // Developer mode with workspace on remote device
-            if (p.value === 'jait') {
-              isAvailable = true
-              nodeLabel = 'Gateway'
-            } else if (!wsRemoteNode) {
-              // Node is offline
-              isAvailable = false
-              reason = 'Device is offline'
-            } else {
-              isAvailable = wsRemoteNode.providers.includes(p.value)
-              reason = isAvailable ? undefined : 'Not available on this device'
-              nodeLabel = wsRemoteNode.nodeName
-            }
-          } else {
-            // Unscoped (chat mode) — original logic
-            const isLocallyAvailable = status?.available !== false
-            reason = status?.unavailableReason
-            remoteNode = !isLocallyAvailable
-              ? remoteProviders.find((r) => r.providers.includes(p.value))
-              : undefined
-            isAvailable = isLocallyAvailable || !!remoteNode
-            nodeLabel = !status?.available && remoteNode ? remoteNode.nodeName : 'Gateway'
-          }
+          const auth = p.auth
+          const isAvailable = p.isAvailable
+          const reason = p.reason
+          const nodeLabel = p.nodeLabel
 
           const showLocalAuthActions = Boolean(auth?.login || auth?.logout) && !scopedToWorkspaceNode && (!scopedToRepo || repoIsGateway)
           const busyForProvider = authBusy?.providerId === p.value ? authBusy.action : null

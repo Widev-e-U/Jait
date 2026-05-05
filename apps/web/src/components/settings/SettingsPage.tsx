@@ -85,9 +85,6 @@ const PROVIDER_LABELS: Record<ProviderId, string> = {
   jait: 'Jait',
   codex: 'Codex',
   'claude-code': 'Claude Code',
-  gemini: 'Gemini CLI',
-  opencode: 'OpenCode',
-  copilot: 'Copilot',
 }
 
 export interface UpdateInfo {

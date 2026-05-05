@@ -37,12 +37,8 @@ import { ThreadService } from "./services/threads.js";
 import { RepositoryService } from "./services/repositories.js";
 import { PlanService } from "./services/plans.js";
 import { ProviderRegistry } from "./providers/registry.js";
-import { CodexProvider } from "./providers/codex-provider.js";
-import { ClaudeCodeProvider } from "./providers/claude-code-provider.js";
 import { JaitProvider } from "./providers/jait-provider.js";
-import { GeminiProvider } from "./providers/gemini-provider.js";
-import { OpenCodeProvider } from "./providers/opencode-provider.js";
-import { CopilotProvider } from "./providers/copilot-provider.js";
+import { AcpProvider, loadAcpProviderConfigs } from "./providers/acp-provider.js";
 import { VoiceAssistantService } from "./voice-assistant/service.js";
 import { verifyAuthToken } from "./security/http-auth.js";
 import { WorkspaceWatcher } from "./services/workspace-watcher.js";
@@ -108,11 +104,9 @@ async function main() {
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
-  providerRegistry.register(new CodexProvider());
-  providerRegistry.register(new ClaudeCodeProvider());
-  providerRegistry.register(new GeminiProvider());
-  providerRegistry.register(new OpenCodeProvider());
-  providerRegistry.register(new CopilotProvider());
+  for (const acpProvider of loadAcpProviderConfigs()) {
+    providerRegistry.register(new AcpProvider(acpProvider));
+  }
 
   // Surface registry — register all surface factories
   const surfaceRegistry = new SurfaceRegistry();

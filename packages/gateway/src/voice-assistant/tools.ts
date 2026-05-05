@@ -151,7 +151,7 @@ async function resolveLocation(deps: VoiceToolDeps): Promise<ResolvedLocation | 
   }
 }
 
-const PROVIDER_IDS: ProviderId[] = ["jait", "codex", "claude-code", "gemini", "opencode", "copilot"];
+const PROVIDER_IDS: ProviderId[] = ["jait", "codex", "claude-code"];
 const DEFAULT_AGENT_TIMEOUT_MS = 45_000;
 
 function normalizeProviderId(value: unknown): ProviderId | null {
@@ -324,7 +324,7 @@ const listThreads: VoiceTool = {
   schema: {
     type: "function",
     name: "list_threads",
-    description: "List agent threads (Claude Code, Codex, Gemini CLI, etc.) with status. Use when the user asks about running agents or tasks.",
+    description: "List agent threads with status. Use when the user asks about running agents or tasks.",
     parameters: { type: "object", properties: {}, required: [] },
   },
   execute: async (_args, deps) => {
@@ -510,7 +510,7 @@ const sendToThread: VoiceTool = {
   schema: {
     type: "function",
     name: "send_to_agent",
-    description: "Send a task to a CLI coding agent (Claude Code, Codex, Gemini CLI, Copilot). Creates a new thread. Use when the user wants to delegate a coding or automation task.",
+    description: "Send a task to a coding agent. Creates a new thread. Use when the user wants to delegate a coding or automation task.",
     parameters: {
       type: "object",
       properties: {
@@ -518,7 +518,7 @@ const sendToThread: VoiceTool = {
         provider: {
           type: "string",
           description: "Which agent to use",
-          enum: ["claude-code", "codex", "gemini", "copilot"],
+          enum: ["claude-code", "codex"],
         },
       },
       required: ["message"],

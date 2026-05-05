@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ComponentType }
 import { Bot, ChevronDown, Check, AlertTriangle, Server, Loader2, Monitor, Clock, Search, LogIn, Copy, ExternalLink } from 'lucide-react'
 import OpenAI from '@lobehub/icons/es/OpenAI'
 import Claude from '@lobehub/icons/es/Claude'
-import Gemini from '@lobehub/icons/es/Gemini'
-import Copilot from '@lobehub/icons/es/Copilot'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Button } from '@/components/ui/button'
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog'
@@ -22,8 +20,6 @@ const JaitIcon = ({ className }: { className?: string }) => (
 
 const OpenAIIcon = ({ className }: { className?: string }) => <OpenAI size={16} className={className} />
 const ClaudeIcon = ({ className }: { className?: string }) => <Claude size={16} className={className} />
-const GeminiIcon = ({ className }: { className?: string }) => <Gemini size={16} className={className} />
-const CopilotIcon = ({ className }: { className?: string }) => <Copilot size={16} className={className} />
 
 interface ModelDef {
   id: string
@@ -58,10 +54,19 @@ const PROVIDER_DEFS: ProviderDef[] = [
   { value: 'jait', label: 'Jait', icon: JaitIcon, description: 'Native Jait agent loop with full tool access' },
   { value: 'codex', label: 'Codex', icon: OpenAIIcon, description: 'OpenAI Codex CLI — coding agent with MCP tools' },
   { value: 'claude-code', label: 'Claude Code', icon: ClaudeIcon, description: 'Anthropic Claude Code CLI — coding agent with MCP tools' },
-  { value: 'gemini', label: 'Gemini CLI', icon: GeminiIcon, description: 'Google Gemini CLI — coding agent' },
-  { value: 'opencode', label: 'OpenCode', icon: Bot, description: 'OpenCode CLI — open-source coding agent' },
-  { value: 'copilot', label: 'Copilot', icon: CopilotIcon, description: 'GitHub Copilot CLI — coding agent' },
 ]
+
+const PROVIDER_DEF_BY_ID = new Map(PROVIDER_DEFS.map((item) => [item.value, item]))
+
+function providerDefFromInfo(info: ProviderInfo): ProviderDef {
+  const known = PROVIDER_DEF_BY_ID.get(info.id)
+  return known ?? {
+    value: info.id,
+    label: info.name || info.id,
+    icon: Bot,
+    description: info.description,
+  }
+}
 
 const RECENT_MODELS_KEY = 'jait-recent-models'
 const MAX_RECENTS = 5
@@ -116,6 +121,7 @@ export function ProviderModelSelector({
   const [open, setOpen] = useState(false)
   const [search, setSearch] = useState('')
   const [providerStatus, setProviderStatus] = useState<Record<string, ProviderInfo>>({})
+  const [localProviders, setLocalProviders] = useState<ProviderInfo[]>([])
   const [remoteProviders, setRemoteProviders] = useState<RemoteProviderInfo[]>([])
   const [models, setModels] = useState<ModelDef[]>([])
   const [recentIds, setRecentIds] = useState<string[]>([])
@@ -140,6 +146,7 @@ export function ProviderModelSelector({
         const map: Record<string, ProviderInfo> = {}
         for (const item of providers) map[item.id] = item
         setProviderStatus(map)
+        setLocalProviders(providers)
         setRemoteProviders(remote)
       })
       .catch(() => {})
@@ -299,7 +306,8 @@ export function ProviderModelSelector({
   const scopedToWorkspaceNode = wsNodeIsRemote && !scopedToRepo
 
   const providerEntries = useMemo(() => {
-    return PROVIDER_DEFS.map((item) => {
+    const source = localProviders.length > 0 ? localProviders.map(providerDefFromInfo) : PROVIDER_DEFS
+    return source.map((item) => {
       const status = providerStatus[item.value]
       let isAvailable: boolean
       let reason: string | undefined
@@ -348,7 +356,7 @@ export function ProviderModelSelector({
 
       return { ...item, isAvailable, reason, nodeLabel, auth: status?.auth }
     })
-  }, [providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToWorkspaceNode, wsRemoteNode])
+  }, [localProviders, providerStatus, remoteProviders, scopedToRepo, repoIsGateway, repoLoading, repoOnline, repoAvailable, repoRuntime?.locationLabel, scopedToWorkspaceNode, wsRemoteNode])
 
   const currentProvider = providerEntries.find((item) => item.value === provider) ?? providerEntries[0]!
   const CurrentIcon = currentProvider.icon

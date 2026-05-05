@@ -1,9 +1,8 @@
 /**
  * Shared mapping from raw Codex CLI JSON-RPC notifications to ProviderEvents.
  *
- * Used by both the local CodexProvider and the RemoteCliProvider so that the
- * same set of event methods is handled regardless of whether the child process
- * is local or proxied via WS.
+ * Used by the RemoteCliProvider so gateway event handling stays aligned with
+ * Codex sessions proxied via WS.
  */
 
 import type { ProviderEvent } from "./contracts.js";

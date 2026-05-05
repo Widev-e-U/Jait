@@ -47,8 +47,6 @@ import type { WsEventType, ThreadInfo, ThreadRegistrySnapshot } from "@jait/shar
 import type { ProviderModelInfo } from "../providers/contracts.js";
 import { interventionRunResumeRegistry } from "../services/intervention-run-resume.js";
 
-const KNOWN_PROVIDER_IDS = new Set<ProviderId>(["jait", "codex", "claude-code", "gemini", "opencode", "copilot"]);
-
 function parseSkillIds(value: unknown): string[] | null | undefined {
   if (value === undefined) return undefined;
   if (value === null) return null;
@@ -79,43 +77,26 @@ function resolveThreadProviderId(
     if (!userSelectedProvider) {
       return { error: "No selected provider is configured for this user." };
     }
-    if (!KNOWN_PROVIDER_IDS.has(userSelectedProvider)) {
-      return {
-        error: `The current selected provider '${userSelectedProvider}' is not supported on this gateway.`,
-      };
-    }
     return { providerId: userSelectedProvider };
   };
 
   if (requestedProvider === "jait") {
-    if (KNOWN_PROVIDER_IDS.has("jait")) return { providerId: "jait" };
-    return { error: "Provider 'jait' is not supported on this gateway." };
+    return { providerId: "jait" };
   }
 
   if (requestedProvider) {
-    if (KNOWN_PROVIDER_IDS.has(requestedProvider)) {
-      return { providerId: requestedProvider };
-    }
-    return { error: `Provider '${requestedProvider}' is not supported on this gateway.` };
+    return { providerId: requestedProvider };
   }
 
-  if (userSelectedProvider && KNOWN_PROVIDER_IDS.has(userSelectedProvider)) {
+  if (userSelectedProvider) {
     return { providerId: userSelectedProvider };
   }
 
-  const invalidFallback = fallbackProvider && !KNOWN_PROVIDER_IDS.has(fallbackProvider)
-    ? fallbackProvider
-    : null;
-  if (invalidFallback) {
-    return { error: `Provider '${invalidFallback}' is not supported on this gateway.` };
-  }
-
   if (fallbackProvider === "jait") {
-    if (KNOWN_PROVIDER_IDS.has("jait")) return { providerId: "jait" };
-    return { error: "Provider 'jait' is not supported on this gateway." };
+    return { providerId: "jait" };
   }
 
-  if (fallbackProvider && KNOWN_PROVIDER_IDS.has(fallbackProvider)) {
+  if (fallbackProvider) {
     return { providerId: fallbackProvider };
   }
 
@@ -251,15 +232,7 @@ function parseQueuedThreadMessagesState(raw: unknown): QueuedThreadMessagesState
         attachments: Array.isArray(record["attachments"])
           ? record["attachments"].filter((attachment): attachment is string => typeof attachment === "string")
           : undefined,
-        providerId:
-          record["providerId"] === "jait" ||
-          record["providerId"] === "codex" ||
-          record["providerId"] === "claude-code" ||
-          record["providerId"] === "gemini" ||
-          record["providerId"] === "opencode" ||
-          record["providerId"] === "copilot"
-            ? record["providerId"]
-            : undefined,
+        providerId: typeof record["providerId"] === "string" && record["providerId"] ? record["providerId"] : undefined,
         runtimeMode: record["runtimeMode"] === "supervised" || record["runtimeMode"] === "full-access"
           ? record["runtimeMode"]
           : undefined,
