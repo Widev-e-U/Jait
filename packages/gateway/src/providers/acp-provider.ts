@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync } from "node:fs";
 import { homedir } from "node:os";
 import { isAbsolute, join } from "node:path";
 import { Readable, Writable } from "node:stream";
@@ -287,12 +287,30 @@ export class AcpProvider implements CliProviderAdapter {
       return unsupportedLogout(this.id, "Auth is managed by the ACP agent.");
     }
 
-    const probe = await this.probeAcpAuth();
+    const probe = await this.probeAcpAuth().catch(() => null);
     try {
+      if (probe?.initialized.agentCapabilities?.auth?.logout) {
+        await probe.connection.unstable_logout({}).catch(() => {});
+      }
+      // Always delete the local Codex auth file for Codex providers — this is the
+      // source of truth that checkProviderAuthenticated() reads, regardless of whether
+      // the ACP logout RPC succeeded or even ran.
+      if (this.id === "codex") {
+        const authPath = getCodexAuthPath();
+        if (existsSync(authPath)) rmSync(authPath, { force: true });
+        return {
+          ok: true,
+          status: "completed",
+          providerId: this.id,
+          message: `${this.info.name} logout completed.`,
+        };
+      }
+      if (!probe) {
+        return unsupportedLogout(this.id, "Could not connect to ACP agent.");
+      }
       if (!probe.initialized.agentCapabilities?.auth?.logout) {
         return unsupportedLogout(this.id, "ACP agent did not advertise logout support.");
       }
-      await probe.connection.unstable_logout({});
       return {
         ok: true,
         status: "completed",
@@ -300,7 +318,7 @@ export class AcpProvider implements CliProviderAdapter {
         message: `${this.info.name} logout completed.`,
       };
     } finally {
-      probe.child.kill();
+      probe?.child.kill();
       await this.checkAvailability().catch(() => false);
     }
   }
