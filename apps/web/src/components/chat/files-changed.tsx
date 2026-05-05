@@ -82,11 +82,9 @@ export function FilesChanged({
         >
           <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')} />
           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
-          <span className="truncate text-xs font-medium">
-            {expanded ? `Files changed (${files.length})` : 'Files changed'}
-          </span>
-          {!expanded && hasDiffCounts && <DiffCount insertions={insertions} deletions={deletions} />}
-          {!expanded && collapsedCountLabel && (
+          <span className="truncate text-xs font-medium">Files changed</span>
+          {hasDiffCounts && <DiffCount insertions={insertions} deletions={deletions} />}
+          {collapsedCountLabel && (
             <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">
               {collapsedCountLabel}
             </span>
@@ -97,7 +95,7 @@ export function FilesChanged({
             </span>
           )}
         </button>
-        {expanded && undecided > 0 && (
+        {undecided > 0 && (
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
               size={compactActions ? 'icon' : 'sm'}
