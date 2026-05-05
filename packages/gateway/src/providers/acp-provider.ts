@@ -117,6 +117,8 @@ export class AcpProvider implements CliProviderAdapter {
   private readonly emitter = new EventEmitter();
   private authLoginProcess: ChildProcess | null = null;
   private cachedModels: ProviderModelInfo[] | null = null;
+  private cachedAuthStatus: { status: ProviderAuthStatus; expiresAt: number } | null = null;
+  private authProbeInFlight: Promise<ProviderAuthStatus> | null = null;
 
   constructor(config: AcpProviderConfig) {
     this.id = config.id;
@@ -196,25 +198,45 @@ export class AcpProvider implements CliProviderAdapter {
       return { ...NO_PROVIDER_AUTH, authenticated: null, detail: "Auth is managed by the ACP agent." };
     }
 
+    // Return cached result if still fresh (30s TTL).
+    const now = Date.now();
+    if (this.cachedAuthStatus && now < this.cachedAuthStatus.expiresAt) {
+      return this.cachedAuthStatus.status;
+    }
+
+    // Deduplicate concurrent callers — only one probe at a time.
+    if (this.authProbeInFlight) return this.authProbeInFlight;
+
+    this.authProbeInFlight = this._computeAuthStatus().finally(() => {
+      this.authProbeInFlight = null;
+    });
+    return this.authProbeInFlight;
+  }
+
+  private async _computeAuthStatus(): Promise<ProviderAuthStatus> {
     // If authenticated via env-var API key, skip the ACP probe entirely.
     // The key can't be revoked from the UI, so login/logout are both unavailable.
     if (this.id === "codex" && Boolean(process.env.OPENAI_API_KEY?.trim())) {
-      return {
+      const status: ProviderAuthStatus = {
         login: false,
         logout: false,
         deviceCode: false,
         authenticated: true,
         detail: "Authenticated via OPENAI_API_KEY environment variable. Manage the key directly to change access.",
       };
+      this.cachedAuthStatus = { status, expiresAt: Date.now() + 30_000 };
+      return status;
     }
     if (this.id === "claude-code" && Boolean(process.env.ANTHROPIC_API_KEY?.trim())) {
-      return {
+      const status: ProviderAuthStatus = {
         login: false,
         logout: false,
         deviceCode: false,
         authenticated: true,
         detail: "Authenticated via ANTHROPIC_API_KEY environment variable. Manage the key directly to change access.",
       };
+      this.cachedAuthStatus = { status, expiresAt: Date.now() + 30_000 };
+      return status;
     }
 
     const probe = await this.probeAcpAuth().catch(() => null);
@@ -225,13 +247,15 @@ export class AcpProvider implements CliProviderAdapter {
     // Only offer logout when authenticated via a revocable credential (auth file).
     // If authenticated purely via an env-var API key, logout is a no-op from the UI.
     const logout = acpLogout && (this.id === "codex" ? this.isCodexAuthFile() : authenticated === true);
-    return {
+    const result: ProviderAuthStatus = {
       login,
       logout,
       deviceCode: false,
       authenticated,
       detail: probe ? formatAcpAuthDetail(this.info.name, authenticated) : "Could not read ACP authentication capabilities.",
     };
+    this.cachedAuthStatus = { status: result, expiresAt: Date.now() + 30_000 };
+    return result;
   }
 
   async startLogin(): Promise<ProviderLoginResult> {
@@ -261,6 +285,7 @@ export class AcpProvider implements CliProviderAdapter {
       child.on("exit", () => {
         if (this.authLoginProcess === child) this.authLoginProcess = null;
         this.cachedModels = null;
+        this.cachedAuthStatus = null; // invalidate so next /api/providers reflects new state
         void this.checkAvailability();
       });
       return {
@@ -333,6 +358,7 @@ export class AcpProvider implements CliProviderAdapter {
       if (this.id === "codex") {
         const authPath = getCodexAuthPath();
         if (existsSync(authPath)) rmSync(authPath, { force: true });
+        this.cachedAuthStatus = null; // invalidate cache
         return {
           ok: true,
           status: "completed",
@@ -637,6 +663,9 @@ export class AcpProvider implements CliProviderAdapter {
           },
         }),
         spawnError,
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error("ACP auth probe timed out after 5s")), 5_000)
+        ),
       ]);
       return { child, connection, initialized, authMethods: initialized.authMethods ?? [] };
     } catch (error) {
