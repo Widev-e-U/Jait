@@ -342,7 +342,7 @@ describe("remote provider e2e flow", () => {
     expect(startCalls[0]!.params.mcpServers).toEqual([
       expect.objectContaining({
         name: "jait",
-        transport: "sse",
+        transport: "http",
         url: expect.stringMatching(/\/mcp\?sessionId=.*workspaceRoot=/),
       }),
     ]);
