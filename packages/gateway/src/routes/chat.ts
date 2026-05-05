@@ -1658,6 +1658,26 @@ export function registerChatRoutes(
           cliContent = `<responseStyle>\n${responseStyleBlock}\n</responseStyle>\n\n${cliContent}`;
         }
 
+        // Register the turn-completion listener BEFORE sending so we never
+        // miss a synchronous turn.completed emitted inside sendTurn().
+        let turnDoneResolve: (() => void) | null = null;
+        const turnDonePromise = new Promise<void>((resolve) => { turnDoneResolve = resolve; });
+        const checkDone = cliProvider!.onEvent((event: ProviderEvent) => {
+          if (event.sessionId !== providerSessionId) return;
+          if (event.type === "session.completed" || event.type === "session.error" || event.type === "turn.completed") {
+            if (event.type === "session.error") {
+              activeCliSessions.delete(sessionId);
+            }
+            checkDone();
+            turnDoneResolve?.();
+          }
+        });
+        streamAbort.signal.addEventListener("abort", () => {
+          cliProvider!.interruptTurn(providerSessionId).catch(() => {});
+          checkDone();
+          turnDoneResolve?.();
+        });
+
         // Send the turn — with recovery if the cached session died between messages
         try {
           const sentAt = new Date().toISOString();
@@ -1691,6 +1711,9 @@ export function registerChatRoutes(
           // Session likely died (process exited) — start a fresh one
           console.warn(`[chat/cli] sendTurn failed on cached session, recovering:`, sendErr);
           activeCliSessions.delete(sessionId);
+          // Unsubscribe stale listener before recovery creates a new session
+          checkDone();
+
           const freshSession = await cliProvider.startSession({
             threadId: sessionId,
             workingDirectory: cliWsRoot,
@@ -1701,6 +1724,19 @@ export function registerChatRoutes(
           providerSessionId = freshSession.id;
           activeCliSessions.set(sessionId, { providerId: requestProvider, runtimeMode, providerSessionId, provider: cliProvider });
           console.log(`[chat/cli] Recovered with new ${requestProvider}/${runtimeMode} session ${providerSessionId}`);
+
+          // Re-register listener for the new session
+          const checkDone2 = cliProvider!.onEvent((event: ProviderEvent) => {
+            if (event.sessionId !== providerSessionId) return;
+            if (event.type === "session.completed" || event.type === "session.error" || event.type === "turn.completed") {
+              if (event.type === "session.error") {
+                activeCliSessions.delete(sessionId);
+              }
+              checkDone2();
+              turnDoneResolve?.();
+            }
+          });
+
           const refreshedSystemPrompt = buildCliProviderSystemPrompt(
             requestProvider,
             typeof body["model"] === "string" ? body["model"] : undefined,
@@ -1736,28 +1772,9 @@ export function registerChatRoutes(
           await cliProvider.sendTurn(providerSessionId, recoveryContent);
         }
 
-        // Wait for turn completion or error
-        await new Promise<void>((resolve) => {
-          const checkDone = cliProvider!.onEvent((event: ProviderEvent) => {
-            if (event.sessionId !== providerSessionId) {
-              return;
-            }
-            if (event.type === "session.completed" || event.type === "session.error" || event.type === "turn.completed") {
-              // If the session errored, invalidate the cache so the next message creates a fresh one
-              if (event.type === "session.error") {
-                activeCliSessions.delete(sessionId);
-              }
-              checkDone();
-              resolve();
-            }
-          });
-
-          // Also abort if client disconnects
-          streamAbort.signal.addEventListener("abort", () => {
-            cliProvider!.interruptTurn(providerSessionId).catch(() => {});
-            resolve();
-          });
-        });
+        // Wait for the turn-completion event (may already be resolved if
+        // turn.completed fired synchronously inside sendTurn)
+        await turnDonePromise;
 
         unsubscribe();
         fullContent = contentChunks.join("");

@@ -74,13 +74,19 @@ class JaitAcpClient implements Client {
     private readonly provider: AcpProvider,
     private readonly sessionId: string,
     private readonly approvals: Map<string, PendingApproval>,
+    private readonly runtimeMode?: string,
   ) {}
 
   async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
-    const requestId = uuidv7();
     const allowOptionId = params.options.find((option) => option.kind.startsWith("allow"))?.optionId ?? params.options[0]?.optionId ?? "allow";
     const rejectOptionId = params.options.find((option) => option.kind.startsWith("reject"))?.optionId ?? params.options.at(-1)?.optionId ?? "reject";
 
+    // In full-access mode, auto-approve all tool requests without prompting.
+    if (this.runtimeMode === "full-access") {
+      return { optionId: allowOptionId };
+    }
+
+    const requestId = uuidv7();
     const response = new Promise<RequestPermissionResponse>((resolve) => {
       this.approvals.set(requestId, { allowOptionId, rejectOptionId, resolve });
     });
@@ -110,6 +116,7 @@ export class AcpProvider implements CliProviderAdapter {
   private readonly sessions = new Map<string, AcpSessionState>();
   private readonly emitter = new EventEmitter();
   private authLoginProcess: ChildProcess | null = null;
+  private cachedModels: ProviderModelInfo[] | null = null;
 
   constructor(config: AcpProviderConfig) {
     this.id = config.id;
@@ -150,7 +157,38 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   async listModels(): Promise<ProviderModelInfo[]> {
-    return [];
+    if (this.cachedModels) return this.cachedModels;
+
+    try {
+      const probe = await this.probeAcpAuth();
+      try {
+        const newSession = await probe.connection.newSession({
+          cwd: process.cwd(),
+          mcpServers: [],
+        });
+
+        const models: ProviderModelInfo[] = [];
+        const modelState = newSession.models;
+        if (modelState && modelState.availableModels?.length) {
+          for (const model of modelState.availableModels) {
+            models.push({
+              id: model.modelId,
+              name: model.name,
+              description: model.description ?? undefined,
+              isDefault: model.modelId === modelState.currentModelId,
+            });
+          }
+        }
+
+        await probe.connection.closeSession?.({ sessionId: newSession.sessionId }).catch(() => {});
+        this.cachedModels = models;
+        return models;
+      } finally {
+        probe.child.kill();
+      }
+    } catch {
+      return [];
+    }
   }
 
   async getAuthStatus(): Promise<ProviderAuthStatus> {
@@ -198,6 +236,7 @@ export class AcpProvider implements CliProviderAdapter {
       this.authLoginProcess = child;
       child.on("exit", () => {
         if (this.authLoginProcess === child) this.authLoginProcess = null;
+        this.cachedModels = null;
         void this.checkAvailability();
       });
       return {
@@ -215,6 +254,7 @@ export class AcpProvider implements CliProviderAdapter {
       .finally(() => {
         if (this.authLoginProcess === child) this.authLoginProcess = null;
         child.kill();
+        this.cachedModels = null;
         void this.checkAvailability();
       });
 
@@ -280,7 +320,10 @@ export class AcpProvider implements CliProviderAdapter {
       cwd: options.workingDirectory,
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, ...this.config.env, ...options.env },
+      shell: true,
     });
+
+    child.on("error", () => {}); // prevent unhandled ENOENT on Windows
 
     child.stderr?.on("data", (chunk: Buffer) => {
       const text = chunk.toString("utf8").trim();
@@ -297,7 +340,7 @@ export class AcpProvider implements CliProviderAdapter {
     );
     const connection = new ClientSideConnection((agent) => {
       capturedAgent = agent;
-      return new JaitAcpClient(this, sessionId, approvals);
+      return new JaitAcpClient(this, sessionId, approvals, options.mode);
     }, stream);
 
     child.once("exit", (code, signal) => {
@@ -510,6 +553,12 @@ export class AcpProvider implements CliProviderAdapter {
       cwd: process.cwd(),
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, ...this.config.env },
+      shell: true,
+    });
+
+    // Prevent unhandled 'error' events from crashing the process (e.g. ENOENT on Windows)
+    const spawnError = new Promise<never>((_, reject) => {
+      child.on("error", (err) => reject(err));
     });
 
     const stream = ndJsonStream(
@@ -524,15 +573,18 @@ export class AcpProvider implements CliProviderAdapter {
     }), stream);
 
     try {
-      const initialized = await connection.initialize({
-        protocolVersion: PROTOCOL_VERSION,
-        clientInfo: { name: "Jait", version: "0.1" },
-        clientCapabilities: {
-          auth: { terminal: true },
-          fs: { readTextFile: false, writeTextFile: false },
-          terminal: false,
-        },
-      });
+      const initialized = await Promise.race([
+        connection.initialize({
+          protocolVersion: PROTOCOL_VERSION,
+          clientInfo: { name: "Jait", version: "0.1" },
+          clientCapabilities: {
+            auth: { terminal: true },
+            fs: { readTextFile: false, writeTextFile: false },
+            terminal: false,
+          },
+        }),
+        spawnError,
+      ]);
       return { child, connection, initialized, authMethods: initialized.authMethods ?? [] };
     } catch (error) {
       child.kill();
