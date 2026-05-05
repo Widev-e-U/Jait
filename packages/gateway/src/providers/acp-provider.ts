@@ -2,7 +2,7 @@ import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
 import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import { Readable, Writable } from "node:stream";
 import {
   ClientSideConnection,
@@ -320,7 +320,7 @@ export class AcpProvider implements CliProviderAdapter {
       cwd: options.workingDirectory,
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, ...this.config.env, ...options.env },
-      shell: true,
+      shell: needsShell(this.config.command),
     });
 
     child.on("error", () => {}); // prevent unhandled ENOENT on Windows
@@ -553,7 +553,7 @@ export class AcpProvider implements CliProviderAdapter {
       cwd: process.cwd(),
       stdio: ["pipe", "pipe", "pipe"],
       env: { ...process.env, ...this.config.env },
-      shell: true,
+      shell: needsShell(this.config.command),
     });
 
     // Prevent unhandled 'error' events from crashing the process (e.g. ENOENT on Windows)
@@ -591,6 +591,15 @@ export class AcpProvider implements CliProviderAdapter {
       throw error;
     }
   }
+}
+
+/**
+ * On Windows, bare command names like `npx` or `codex` resolve to `.cmd` wrappers
+ * that require the shell to execute. Absolute or relative paths are real executables
+ * and must NOT go through shell (cmd.exe would mangle complex arguments).
+ */
+function needsShell(command: string): boolean {
+  return process.platform === "win32" && !isAbsolute(command) && !command.includes("/") && !command.includes("\\");
 }
 
 function chooseAcpAuthMethod(methods: AuthMethod[]): AuthMethod | null {
