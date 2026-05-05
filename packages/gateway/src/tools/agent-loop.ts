@@ -40,7 +40,8 @@ export interface AgentMessage {
 export type MessageSegment =
   | { type: "text"; content: string }
   | { type: "thinking"; content: string }
-  | { type: "toolGroup"; callIds: string[] };
+  | { type: "toolGroup"; callIds: string[] }
+  | { type: "error"; content: string };
 
 /** OpenAI function-calling tool schema */
 export interface OpenAIToolSchema {

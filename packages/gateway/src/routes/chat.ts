@@ -1471,7 +1471,9 @@ export function registerChatRoutes(
 
         // ── Accumulate tool calls + segments for persistence ──
         const cliToolCalls: PersistedToolCall[] = turnSkillToolCall ? [{ ...turnSkillToolCall }] : [];
-        const cliSegments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] }> = [];
+        const cliSegments: Array<{ type: "text"; content: string } | { type: "toolGroup"; callIds: string[] } | { type: "error"; content: string }> = [];
+        /** Error message from a session.error event — persisted instead of normal content. */
+        let sessionError: string | null = null;
         /** Track the current pending tool-group callIds (batched between text tokens) */
         let pendingToolGroup: string[] = turnSkillToolCall ? [turnSkillToolCall.callId] : [];
         let lastSegmentWasText = false;
@@ -1639,7 +1641,9 @@ export function registerChatRoutes(
               }
               break;
             case "session.error":
+              sessionError = event.error;
               safeWrite(`data: ${JSON.stringify({ type: "error", message: event.error })}\n\n`);
+              emitToSubscribers(sessionId, { type: "error", message: event.error });
               break;
           }
         });
@@ -1792,13 +1796,24 @@ export function registerChatRoutes(
         resultSegmentsJson = cliSegJson;
 
         // Persist assistant message with tool calls and segments
-        history.push({
-          role: "assistant",
-          content: fullContent,
-          uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined,
-          contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
-        });
-        persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson);
+        if (sessionError) {
+          // A session.error was received — persist the error message so it's visible on reload.
+          const errSegJson = JSON.stringify([{ type: "error", content: sessionError }]);
+          history.push({
+            role: "assistant",
+            content: sessionError,
+            contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
+          });
+          persistMessage(sessionId, "assistant", sessionError, undefined, errSegJson, contextFlowJson);
+        } else {
+          history.push({
+            role: "assistant",
+            content: fullContent,
+            uiToolCalls: cliToolCalls.length > 0 ? cliToolCalls : undefined,
+            contextFlow: contextFlowJson ? JSON.parse(contextFlowJson) as LlmContextFlow : undefined,
+          });
+          persistMessage(sessionId, "assistant", fullContent, cliTcJson, cliSegJson, contextFlowJson);
+        }
 
         // Session stays alive for the next turn — do NOT stop it.
         // It will be cleaned up on session error, provider switch, or server shutdown.
@@ -1973,6 +1988,10 @@ export function registerChatRoutes(
       if (!wasCancelled && (fullContent || partialToolCalls.length > 0)) {
         const tcJson = partialToolCalls.length > 0 ? JSON.stringify(partialToolCalls) : undefined;
         persistMessage(sessionId, "assistant", fullContent || "", tcJson, resultSegmentsJson, contextFlowJson);
+      } else if (!wasCancelled) {
+        // No partial content — persist the error message itself so it's visible on reload.
+        const errMsg2 = err instanceof Error ? err.message : `Failed to reach ${providerLabel}`;
+        persistMessage(sessionId, "assistant", errMsg2, undefined, JSON.stringify([{ type: "error", content: errMsg2 }]), contextFlowJson);
       }
 
       const errMsg = wasCancelled

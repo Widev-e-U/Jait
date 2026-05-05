@@ -1,10 +1,11 @@
-import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { AcpProvider, loadAcpProviderConfigs } from "./acp-provider.js";
 
 const originalCodexHome = process.env.CODEX_HOME;
+const originalOpenAiApiKey = process.env.OPENAI_API_KEY;
 
 const fakeAcpAgentScript = `
 process.stdin.setEncoding("utf8");
@@ -34,11 +35,48 @@ process.stdin.on("data", (chunk) => {
 });
 `;
 
+const fakeAcpAuthRequiredScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: {},
+          authMethods: []
+        }
+      }) + "\\n");
+    } else if (request.method === "session/new") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        error: { code: -32000, message: "Authentication required" }
+      }) + "\\n");
+    }
+  }
+});
+`;
+
 afterEach(() => {
   if (originalCodexHome === undefined) {
     delete process.env.CODEX_HOME;
   } else {
     process.env.CODEX_HOME = originalCodexHome;
+  }
+  if (originalOpenAiApiKey === undefined) {
+    delete process.env.OPENAI_API_KEY;
+  } else {
+    process.env.OPENAI_API_KEY = originalOpenAiApiKey;
   }
 });
 
@@ -61,6 +99,7 @@ describe("AcpProvider auth", () => {
   it("reports Codex ACP auth from CODEX_HOME credentials", async () => {
     const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
     process.env.CODEX_HOME = codexHome;
+    delete process.env.OPENAI_API_KEY;
     writeFileSync(join(codexHome, "auth.json"), JSON.stringify({ tokens: { access_token: "token" } }));
 
     try {
@@ -81,6 +120,53 @@ describe("AcpProvider auth", () => {
     } finally {
       rmSync(codexHome, { recursive: true, force: true });
     }
+  });
+
+  it("keeps Codex logout available when env API key and local credentials coexist", async () => {
+    const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
+    const authPath = join(codexHome, "auth.json");
+    process.env.CODEX_HOME = codexHome;
+    process.env.OPENAI_API_KEY = "env-key";
+    writeFileSync(authPath, JSON.stringify({ tokens: { access_token: "token" } }));
+
+    try {
+      const provider = new AcpProvider({
+        id: "codex",
+        name: "Codex",
+        description: "Codex via ACP",
+        command: process.execPath,
+        args: ["-e", fakeAcpAgentScript],
+      });
+
+      await expect(provider.getAuthStatus()).resolves.toMatchObject({
+        login: false,
+        logout: true,
+        deviceCode: false,
+        authenticated: true,
+      });
+
+      await expect(provider.logout()).resolves.toMatchObject({
+        ok: true,
+        status: "completed",
+      });
+      expect(existsSync(authPath)).toBe(false);
+    } finally {
+      rmSync(codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it("falls back to known Codex models when ACP model discovery fails", async () => {
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAuthRequiredScript],
+    });
+
+    await expect(provider.listModels()).resolves.toEqual(expect.arrayContaining([
+      expect.objectContaining({ id: "gpt-5-codex", isDefault: true }),
+    ]));
   });
 
   it("exposes ACP-managed auth for custom ACP providers by default", () => {

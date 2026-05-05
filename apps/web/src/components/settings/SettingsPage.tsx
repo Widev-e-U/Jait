@@ -87,6 +87,12 @@ const PROVIDER_LABELS: Record<string, string> = {
   'claude-code': 'Claude Code',
 }
 
+function isProviderAccount(provider: ProviderInfo): boolean {
+  const auth = provider.auth
+  if (provider.id === 'jait' || !auth) return false
+  return auth.login || auth.logout || auth.authenticated !== null
+}
+
 export interface UpdateInfo {
   currentVersion: string
   latestVersion: string
@@ -184,7 +190,7 @@ export function SettingsPage({
     setProviderAccountsLoading(true)
     try {
       const { providers } = await agentsApi.listProvidersFresh()
-      setProviderAccounts(providers.filter((provider) => Boolean(provider.auth?.login || provider.auth?.logout)))
+      setProviderAccounts(providers.filter(isProviderAccount))
     } catch {
       setProviderAccounts([])
     } finally {

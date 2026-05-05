@@ -89,6 +89,7 @@ export type MessageSegment =
   | { type: 'text'; content: string }
   | { type: 'thinking'; content: string }
   | { type: 'toolGroup'; callIds: string[] }
+  | { type: 'error'; content: string }
 
 export interface LlmContextFlowRound {
   round: number
@@ -788,10 +789,20 @@ export function useChat(
                   }
                 })
               } else if (data.type === 'error') {
+                const errorMsg = data.message as string
                 setState(prev => ({
                   ...prev,
                   isLoading: false,
-                  error: data.message as string,
+                  error: errorMsg,
+                  messages: [
+                    ...prev.messages,
+                    {
+                      id: crypto.randomUUID(),
+                      role: 'assistant' as const,
+                      content: errorMsg,
+                      segments: [{ type: 'error' as const, content: errorMsg }],
+                    },
+                  ],
                 }))
               }
             } catch (parseErr) {
@@ -1275,17 +1286,28 @@ export function useChat(
       if (directStreamSessionRef.current === requestSessionId) directStreamSessionRef.current = null
       if (!isStale()) {
         const transientConnectionError = isTransientConnectionError(error)
+        const errorMessage = transientConnectionError
+          ? TRANSIENT_CONNECTION_MESSAGE
+          : error instanceof Error ? error.message : 'An error occurred'
         setState(prev => ({
           ...prev,
           isLoading: false,
-          error: transientConnectionError
-            ? TRANSIENT_CONNECTION_MESSAGE
-            : error instanceof Error ? error.message : 'An error occurred',
-          messages: prev.messages.filter(m =>
-            options.queued
-              ? m.id !== assistantId && m.id !== userMessage.id
-              : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
-          ),
+          error: errorMessage,
+          messages: transientConnectionError || options.queued
+            ? prev.messages.filter(m =>
+                options.queued
+                  ? m.id !== assistantId && m.id !== userMessage.id
+                  : !(m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0))
+              )
+            : prev.messages.map(m =>
+                m.id === assistantId && !m.content && !m.thinking && (!m.toolCalls || m.toolCalls.length === 0)
+                  ? {
+                      ...m,
+                      content: errorMessage,
+                      segments: [{ type: 'error' as const, content: errorMessage }],
+                    }
+                  : m
+              ),
         }))
         if (transientConnectionError && requestSessionId) {
           window.setTimeout(() => {

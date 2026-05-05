@@ -42,6 +42,8 @@ import {
 
 type AcpProviderAuthKind = "acp";
 
+const ACP_PROBE_TIMEOUT_MS = process.platform === "win32" ? 20_000 : 5_000;
+
 export interface AcpProviderConfig {
   id: ProviderId;
   name: string;
@@ -164,10 +166,13 @@ export class AcpProvider implements CliProviderAdapter {
     try {
       const probe = await this.probeAcpAuth();
       try {
-        const newSession = await probe.connection.newSession({
-          cwd: process.cwd(),
-          mcpServers: [],
-        });
+        const newSession = await withTimeout(
+          probe.connection.newSession({
+            cwd: process.cwd(),
+            mcpServers: [],
+          }),
+          ACP_PROBE_TIMEOUT_MS,
+        );
 
         const models: ProviderModelInfo[] = [];
         const modelState = newSession.models;
@@ -183,13 +188,16 @@ export class AcpProvider implements CliProviderAdapter {
         }
 
         await probe.connection.closeSession?.({ sessionId: newSession.sessionId }).catch(() => {});
+        if (models.length === 0) {
+          models.push(...fallbackProviderModels(this.id));
+        }
         this.cachedModels = models;
         return models;
       } finally {
         probe.child.kill();
       }
     } catch {
-      return [];
+      return fallbackProviderModels(this.id);
     }
   }
 
@@ -215,44 +223,42 @@ export class AcpProvider implements CliProviderAdapter {
 
   private async _computeAuthStatus(): Promise<ProviderAuthStatus> {
     // If authenticated via env-var API key, skip the ACP probe entirely.
-    // The key can't be revoked from the UI, so login/logout are both unavailable.
-    if (this.id === "codex" && Boolean(process.env.OPENAI_API_KEY?.trim())) {
-      const status: ProviderAuthStatus = {
-        login: false,
-        logout: false,
-        deviceCode: false,
-        authenticated: true,
-        detail: "Authenticated via OPENAI_API_KEY environment variable. Manage the key directly to change access.",
-      };
-      this.cachedAuthStatus = { status, expiresAt: Date.now() + 30_000 };
-      return status;
-    }
+    // The key can't be revoked from the UI, but local CLI credentials can be.
     if (this.id === "claude-code" && Boolean(process.env.ANTHROPIC_API_KEY?.trim())) {
+      const cliAuthenticated = await this.getProviderCliAuthenticated();
+      const logout = cliAuthenticated === true;
       const status: ProviderAuthStatus = {
         login: false,
-        logout: false,
+        logout,
         deviceCode: false,
         authenticated: true,
-        detail: "Authenticated via ANTHROPIC_API_KEY environment variable. Manage the key directly to change access.",
+        detail: logout
+          ? "Authenticated via ANTHROPIC_API_KEY environment variable and local Claude Code credentials. Logout clears the local Claude Code credentials."
+          : "Authenticated via ANTHROPIC_API_KEY environment variable. Manage the key directly to change access.",
       };
       this.cachedAuthStatus = { status, expiresAt: Date.now() + 30_000 };
       return status;
     }
 
+    const providerCliAuthenticated = await this.getProviderCliAuthenticated();
     const probe = await this.probeAcpAuth().catch(() => null);
     const login = (probe?.authMethods.length ?? 0) > 0;
     const acpLogout = Boolean(probe?.initialized.agentCapabilities?.auth?.logout);
     probe?.child.kill();
-    const authenticated = await this.checkProviderAuthenticated();
+    const authenticated = this.id === "codex"
+      ? await this.checkProviderAuthenticated()
+      : providerCliAuthenticated ?? await this.checkProviderAuthenticated();
     // Only offer logout when authenticated via a revocable credential (auth file).
     // If authenticated purely via an env-var API key, logout is a no-op from the UI.
-    const logout = acpLogout && (this.id === "codex" ? this.isCodexAuthFile() : authenticated === true);
+    const logout = this.id === "codex" ? (providerCliAuthenticated === true || this.hasCodexAuthFile()) : authenticated === true && (acpLogout || this.hasProviderCliLogout());
     const result: ProviderAuthStatus = {
       login,
       logout,
       deviceCode: false,
       authenticated,
-      detail: probe ? formatAcpAuthDetail(this.info.name, authenticated) : "Could not read ACP authentication capabilities.",
+      detail: probe
+        ? formatAcpAuthDetail(this.info.name, authenticated)
+        : formatCliAuthDetail(this.info.name, authenticated, logout),
     };
     this.cachedAuthStatus = { status: result, expiresAt: Date.now() + 30_000 };
     return result;
@@ -304,6 +310,7 @@ export class AcpProvider implements CliProviderAdapter {
         if (this.authLoginProcess === child) this.authLoginProcess = null;
         child.kill();
         this.cachedModels = null;
+        this.cachedAuthStatus = null; // invalidate so next /api/providers reflects new state
         void this.checkAvailability();
       });
 
@@ -317,7 +324,8 @@ export class AcpProvider implements CliProviderAdapter {
 
   private async checkProviderAuthenticated(): Promise<boolean | null> {
     if (this.id === "codex") {
-      return Boolean(process.env.OPENAI_API_KEY?.trim()) || checkCodexAuthFile();
+      const cliAuthenticated = await this.getProviderCliAuthenticated();
+      return cliAuthenticated === true || checkCodexAuthFile();
     }
     if (this.id === "claude-code") {
       const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000).catch(() => null);
@@ -326,14 +334,29 @@ export class AcpProvider implements CliProviderAdapter {
     return null;
   }
 
+  private async getProviderCliAuthenticated(): Promise<boolean | null> {
+    if (this.id === "codex") {
+      const status = await runAuthCommand(this.id, "codex", ["login", "status"], 10_000).catch(() => null);
+      return status ? status.ok : null;
+    }
+    if (this.id === "claude-code") {
+      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000).catch(() => null);
+      return status ? status.ok : null;
+    }
+    return null;
+  }
+
+  private hasProviderCliLogout(): boolean {
+    return this.id === "codex" || this.id === "claude-code";
+  }
+
   /**
-   * Returns true only when Codex is authenticated via the local auth.json file
-   * (OAuth token), NOT via OPENAI_API_KEY env var. This determines whether
-   * a logout action is meaningful (env vars cannot be revoked from the UI).
+   * Returns true when Codex has local auth.json credentials that can be cleared
+   * from the UI. Env-var API keys are handled separately because they are not
+   * revocable by Jait.
    */
-  private isCodexAuthFile(): boolean {
+  private hasCodexAuthFile(): boolean {
     if (this.id !== "codex") return false;
-    if (process.env.OPENAI_API_KEY?.trim()) return false; // env var takes precedence; can't logout
     return checkCodexAuthFile();
   }
 
@@ -356,8 +379,10 @@ export class AcpProvider implements CliProviderAdapter {
       // source of truth that checkProviderAuthenticated() reads, regardless of whether
       // the ACP logout RPC succeeded or even ran.
       if (this.id === "codex") {
-        const authPath = getCodexAuthPath();
-        if (existsSync(authPath)) rmSync(authPath, { force: true });
+        if (!process.env.CODEX_HOME) {
+          await runAuthCommand(this.id, "codex", ["logout"], 20_000).catch(() => null);
+        }
+        removeCodexAuthFiles();
         this.cachedAuthStatus = null; // invalidate cache
         return {
           ok: true,
@@ -367,9 +392,35 @@ export class AcpProvider implements CliProviderAdapter {
         };
       }
       if (!probe) {
+        if (this.id === "claude-code") {
+          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000);
+          this.cachedAuthStatus = null;
+          return result.ok
+            ? {
+                ok: true,
+                status: "completed",
+                providerId: this.id,
+                message: `${this.info.name} logout completed.`,
+                rawOutput: result.rawOutput,
+              }
+            : result;
+        }
         return unsupportedLogout(this.id, "Could not connect to ACP agent.");
       }
       if (!probe.initialized.agentCapabilities?.auth?.logout) {
+        if (this.id === "claude-code") {
+          const result = await runAuthCommand(this.id, "claude", ["auth", "logout"], 20_000);
+          this.cachedAuthStatus = null;
+          return result.ok
+            ? {
+                ok: true,
+                status: "completed",
+                providerId: this.id,
+                message: `${this.info.name} logout completed.`,
+                rawOutput: result.rawOutput,
+              }
+            : result;
+        }
         return unsupportedLogout(this.id, "ACP agent did not advertise logout support.");
       }
       return {
@@ -664,7 +715,7 @@ export class AcpProvider implements CliProviderAdapter {
         }),
         spawnError,
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error("ACP auth probe timed out after 5s")), 5_000)
+          setTimeout(() => reject(new Error(`ACP auth probe timed out after ${ACP_PROBE_TIMEOUT_MS / 1000}s`)), ACP_PROBE_TIMEOUT_MS)
         ),
       ]);
       return { child, connection, initialized, authMethods: initialized.authMethods ?? [] };
@@ -703,9 +754,37 @@ function formatAcpAuthDetail(providerName: string, authenticated: boolean | null
   return `${providerName} authentication is managed through ACP.`;
 }
 
-function getCodexAuthPath(): string {
-  const codexHome = process.env.CODEX_HOME ?? join(homedir(), ".codex");
-  return join(codexHome, "auth.json");
+function formatCliAuthDetail(providerName: string, authenticated: boolean | null, logout: boolean): string {
+  if (authenticated === true && logout) return `${providerName} credentials are configured. Logout is available through the provider CLI.`;
+  if (authenticated === true) return `${providerName} credentials are configured, but Jait could not find a logout method.`;
+  if (authenticated === false) return `${providerName} credentials are not configured.`;
+  return `Could not read ${providerName} authentication capabilities.`;
+}
+
+function fallbackProviderModels(providerId: ProviderId): ProviderModelInfo[] {
+  if (providerId === "codex") {
+    return [
+      { id: "gpt-5-codex", name: "GPT-5 Codex", description: "Codex CLI coding model", isDefault: true },
+      { id: "gpt-5", name: "GPT-5", description: "OpenAI GPT-5" },
+      { id: "o3", name: "o3", description: "OpenAI reasoning model" },
+    ];
+  }
+  if (providerId === "claude-code") {
+    return [
+      { id: "sonnet", name: "Sonnet", description: "Claude Code default Sonnet alias", isDefault: true },
+      { id: "opus", name: "Opus", description: "Claude Code Opus alias" },
+    ];
+  }
+  return [];
+}
+
+function getCodexAuthPaths(): string[] {
+  if (process.env.CODEX_HOME) return [join(process.env.CODEX_HOME, "auth.json")];
+  return [
+    join(homedir(), ".codex", "auth.json"),
+    process.env.USERPROFILE ? join(process.env.USERPROFILE, ".codex", "auth.json") : undefined,
+    process.env.HOME ? join(process.env.HOME, ".codex", "auth.json") : undefined,
+  ].filter((path, index, paths): path is string => Boolean(path) && paths.indexOf(path) === index);
 }
 
 function readCodexAuthFile(): {
@@ -713,18 +792,20 @@ function readCodexAuthFile(): {
   tokens?: { access_token?: string | null };
   [key: string]: unknown;
 } | null {
-  try {
-    const authPath = getCodexAuthPath();
-    if (!existsSync(authPath)) return null;
-    const raw = readFileSync(authPath, "utf-8");
-    return JSON.parse(raw) as {
-      OPENAI_API_KEY?: string | null;
-      tokens?: { access_token?: string | null };
-      [key: string]: unknown;
-    };
-  } catch {
-    return null;
+  for (const authPath of getCodexAuthPaths()) {
+    try {
+      if (!existsSync(authPath)) continue;
+      const raw = readFileSync(authPath, "utf-8");
+      return JSON.parse(raw) as {
+        OPENAI_API_KEY?: string | null;
+        tokens?: { access_token?: string | null };
+        [key: string]: unknown;
+      };
+    } catch {
+      continue;
+    }
   }
+  return null;
 }
 
 function checkCodexAuthFile(): boolean {
@@ -736,6 +817,12 @@ function checkCodexAuthFile(): boolean {
     return false;
   } catch {
     return false;
+  }
+}
+
+function removeCodexAuthFiles(): void {
+  for (const authPath of getCodexAuthPaths()) {
+    if (existsSync(authPath)) rmSync(authPath, { force: true });
   }
 }
 

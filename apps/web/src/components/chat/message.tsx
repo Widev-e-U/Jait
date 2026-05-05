@@ -4,7 +4,7 @@ import { useLLMOutput, type LLMOutputComponent } from '@llm-ui/react'
 import ReactMarkdown, { type Components } from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { codeToHtml } from 'shiki/bundle/web'
-import { Check, Copy, Eye, Pencil, RotateCcw, X } from 'lucide-react'
+import { Check, Copy, Eye, Pencil, RotateCcw, X, AlertTriangle } from 'lucide-react'
 import {
   CodeBlock,
   CodeBlockActions,
@@ -805,6 +805,15 @@ function MessageInner({
                       duration={thinkingDuration}
                     />
                   ) : null
+                }
+
+                if (seg.type === 'error') {
+                  return (
+                    <div key={`err-${i}`} className="flex items-start gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3 py-2.5 text-sm text-red-600 dark:text-red-400">
+                      <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0" />
+                      <span className="min-w-0 break-words">{seg.content}</span>
+                    </div>
+                  )
                 }
 
                 return (typeof seg.content === 'string' && seg.content.trim()) ? (
