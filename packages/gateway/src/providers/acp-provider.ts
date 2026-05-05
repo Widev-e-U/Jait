@@ -83,7 +83,7 @@ class JaitAcpClient implements Client {
 
     // In full-access mode, auto-approve all tool requests without prompting.
     if (this.runtimeMode === "full-access") {
-      return { optionId: allowOptionId };
+      return { outcome: { outcome: "selected", optionId: allowOptionId } };
     }
 
     const requestId = uuidv7();
