@@ -1179,7 +1179,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // Underestimating it lets the workspace panel steal space from the chat column,
   // which can clip sidebar/chat actions at narrower desktop widths.
   const sidebarWidth = 304
-  const minChatWidth = 310
+  const minChatWidth = 600
   const minEditorWidth = 200 // minimum editor pane width when tree is visible
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
 
@@ -4444,9 +4444,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <GitStatusBadge status={fileStatus} className={mobile ? 'text-2xs' : undefined} />
             <FileIcon filename={fileName} className={`${mobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
           </div>
-          <div className="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
-            <span className={`truncate shrink-0 max-w-[60%] ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>{fileName}</span>
-            {dirPath ? <span className="truncate flex-1 min-w-0 text-2xs text-muted-foreground">{dirPath}</span> : null}
+          <div className="source-control-label">
+            <span className={cn('source-control-label-name', fileStatus === 'D' && 'line-through text-muted-foreground')}>{fileName}</span>
+            {dirPath ? <span className="source-control-label-description">{dirPath}</span> : null}
           </div>
           <span className="w-16 shrink-0 text-right text-2xs text-muted-foreground">
             {node.entry.insertions > 0 && <span className="text-green-500">+{node.entry.insertions}</span>}
@@ -4586,11 +4586,11 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       <GitStatusBadge status={fileStatus} className={mobile ? 'text-2xs' : undefined} />
                       <FileIcon filename={fileName} className={`${mobile ? 'h-4 w-4' : 'h-3.5 w-3.5'} shrink-0`} />
                     </div>
-                    <div className="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
-                      <span className={`truncate ${fileStatus === 'D' ? 'line-through text-muted-foreground' : ''}`}>
+                    <div className="source-control-label">
+                      <span className={cn('source-control-label-name', fileStatus === 'D' && 'line-through text-muted-foreground')}>
                         {fileName}
                       </span>
-                      {dirPath ? <span className="truncate text-2xs text-muted-foreground">{dirPath}</span> : null}
+                      {dirPath ? <span className="source-control-label-description">{dirPath}</span> : null}
                     </div>
                     <span className="w-16 shrink-0 text-right text-2xs text-muted-foreground">
                       {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}

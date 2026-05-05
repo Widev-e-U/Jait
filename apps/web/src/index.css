@@ -279,6 +279,23 @@
   .ui-inline-action-danger {
     @apply inline-flex items-center gap-1 rounded-md px-2 py-1 text-xs font-medium text-destructive transition-colors hover:bg-destructive/10;
   }
+
+  .source-control-label {
+    @apply min-w-0 overflow-hidden text-ellipsis whitespace-nowrap;
+  }
+
+  .source-control-label-name {
+    color: inherit;
+    white-space: pre;
+  }
+
+  .source-control-label-description {
+    @apply text-muted-foreground;
+    margin-left: 0.5em;
+    font-size: 0.9em;
+    opacity: 0.7;
+    white-space: pre;
+  }
 }
 
 /* Touch-device variant: show elements that are hover-only on pointer devices */
