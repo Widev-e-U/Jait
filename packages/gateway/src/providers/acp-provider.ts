@@ -198,9 +198,12 @@ export class AcpProvider implements CliProviderAdapter {
 
     const probe = await this.probeAcpAuth().catch(() => null);
     const login = (probe?.authMethods.length ?? 0) > 0;
-    const logout = Boolean(probe?.initialized.agentCapabilities?.auth?.logout);
+    const acpLogout = Boolean(probe?.initialized.agentCapabilities?.auth?.logout);
     probe?.child.kill();
     const authenticated = await this.checkProviderAuthenticated();
+    // Only offer logout when authenticated via a revocable credential (auth file).
+    // If authenticated purely via an env-var API key, logout is a no-op from the UI.
+    const logout = acpLogout && (this.id === "codex" ? this.isCodexAuthFile() : authenticated === true);
     return {
       login,
       logout,
@@ -275,6 +278,17 @@ export class AcpProvider implements CliProviderAdapter {
       return Boolean(process.env.ANTHROPIC_API_KEY?.trim()) || Boolean(status?.ok);
     }
     return null;
+  }
+
+  /**
+   * Returns true only when Codex is authenticated via the local auth.json file
+   * (OAuth token), NOT via OPENAI_API_KEY env var. This determines whether
+   * a logout action is meaningful (env vars cannot be revoked from the UI).
+   */
+  private isCodexAuthFile(): boolean {
+    if (this.id !== "codex") return false;
+    if (process.env.OPENAI_API_KEY?.trim()) return false; // env var takes precedence; can't logout
+    return checkCodexAuthFile();
   }
 
   async logout(): Promise<ProviderLogoutResult> {
