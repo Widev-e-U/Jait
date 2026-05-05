@@ -47,7 +47,7 @@ export function ViewModeSelector({ mode, onChange, disabled, className, compact 
       role="tablist"
       aria-label="View mode"
       className={cn(
-        'relative inline-grid h-8 grid-cols-2 rounded-lg bg-muted/40 p-0.5',
+        'relative inline-grid h-10 grid-cols-2 rounded-lg bg-muted/40 p-0.5 sm:h-8',
         compact ? 'border-0' : 'border border-border/70',
         'shadow-sm transition-colors',
         disabled && 'pointer-events-none opacity-50',
@@ -79,7 +79,7 @@ export function ViewModeSelector({ mode, onChange, disabled, className, compact 
               'relative z-10 flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium',
               'transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-              compact ? 'w-9' : 'min-w-[5.75rem]',
+              compact ? 'w-10 sm:w-9' : 'min-w-[5.75rem]',
             )}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />

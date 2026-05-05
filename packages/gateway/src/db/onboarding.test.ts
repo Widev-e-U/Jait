@@ -80,8 +80,9 @@ describe("fresh onboarding", () => {
       "id", "user_id", "session_id", "title", "provider_id",
       "model", "runtime_mode", "kind", "working_directory", "branch",
       "status", "provider_session_id", "error", "pr_url", "pr_number",
-      "pr_title", "pr_state", "execution_node_id", "execution_node_name",
-      "created_at", "updated_at", "completed_at",
+      "pr_title", "pr_base_branch", "pr_state", "execution_node_id", "execution_node_name",
+      "skill_ids", "routing_plan", "change_files", "change_insertions",
+      "change_deletions", "created_at", "updated_at", "completed_at",
     ];
 
     for (const col of expectedColumns) {

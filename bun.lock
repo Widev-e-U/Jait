@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "jait",
@@ -57,7 +58,7 @@
     },
     "apps/web": {
       "name": "@jait/web",
-      "version": "0.1.177",
+      "version": "0.1.208",
       "dependencies": {
         "@capacitor/filesystem": "^6.0.0",
         "@chenglou/pretext": "^0.0.4",
@@ -148,7 +149,7 @@
     },
     "packages/gateway": {
       "name": "@jait/gateway",
-      "version": "0.1.318",
+      "version": "0.1.410",
       "bin": {
         "jait": "./bin/jait.mjs",
       },

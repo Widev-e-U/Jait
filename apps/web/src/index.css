@@ -287,3 +287,26 @@
     opacity: 0.8;
   }
 }
+
+@media (hover: none), (pointer: coarse) {
+  button,
+  [role='button'],
+  [role='tab'] {
+    min-height: 2.5rem;
+    touch-action: manipulation;
+  }
+
+  button[aria-label],
+  [role='button'][aria-label],
+  [role='tab'],
+  .ui-inline-action,
+  .ui-inline-action-danger {
+    min-width: 2.5rem;
+  }
+
+  .ui-inline-action,
+  .ui-inline-action-danger {
+    min-height: 2.5rem;
+    padding-inline: 0.625rem;
+  }
+}

@@ -115,6 +115,9 @@ export function verifySchema(sqlite: SqliteDatabase) {
       execution_node_name: "TEXT",
       skill_ids: "TEXT",
       routing_plan: "TEXT",
+      change_files: "INTEGER",
+      change_insertions: "INTEGER",
+      change_deletions: "INTEGER",
     },
     user_settings: {
       disabled_tools: "TEXT",

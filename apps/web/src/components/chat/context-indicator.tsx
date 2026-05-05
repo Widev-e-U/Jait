@@ -23,10 +23,7 @@ interface ContextIndicatorProps {
  */
 export function ContextIndicator({ usage }: ContextIndicatorProps) {
   const [dialogOpen, setDialogOpen] = useState(false)
-
-  if (!usage || usage.limit <= 0) return null
-
-  const pct = Math.round(usage.ratio * 100)
+  const pct = usage && usage.limit > 0 ? Math.round(usage.ratio * 100) : 0
 
   // Category percentages (of total used)
   const categories = useMemo(() => {
@@ -67,6 +64,8 @@ export function ContextIndicator({ usage }: ContextIndicatorProps) {
     if (n >= 1000) return `${(n / 1000).toFixed(1)}k`
     return String(n)
   }
+
+  if (!usage || usage.limit <= 0) return null
 
   return (
     <>

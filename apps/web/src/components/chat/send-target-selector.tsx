@@ -43,7 +43,7 @@ export function SendTargetSelector({ target, onChange, disabled, className, comp
       role="tablist"
       aria-label="Send target"
       className={cn(
-        'relative inline-grid h-8 grid-cols-2 rounded-lg border border-border/70 bg-muted/40 p-0.5',
+        'relative inline-grid h-10 grid-cols-2 rounded-lg border border-border/70 bg-muted/40 p-0.5 sm:h-8',
         'shadow-sm transition-colors',
         disabled && 'pointer-events-none opacity-50',
         className,
@@ -71,7 +71,7 @@ export function SendTargetSelector({ target, onChange, disabled, className, comp
               'relative z-10 flex min-w-0 items-center justify-center gap-1.5 rounded-md px-2 text-xs font-medium',
               'transition-colors duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
               isActive ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-              iconOnly ? 'w-9' : 'min-w-[5.25rem]',
+              iconOnly ? 'w-10 sm:w-9' : 'min-w-[5.25rem]',
             )}
           >
             <Icon className="h-3.5 w-3.5 shrink-0" />

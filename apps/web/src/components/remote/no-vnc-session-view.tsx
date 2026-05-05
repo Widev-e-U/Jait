@@ -319,7 +319,7 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
         <div className="pointer-events-auto flex items-start gap-2">
           <button
             type="button"
-            className="flex h-7 w-7 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow backdrop-blur-sm transition-colors hover:bg-background"
+            className="flex h-10 w-10 items-center justify-center rounded-full bg-background/90 text-muted-foreground shadow backdrop-blur-sm transition-colors hover:bg-background sm:h-7 sm:w-7"
             onClick={toggleHint}
             aria-expanded={isHintExpanded}
             aria-label={isHintExpanded ? 'Hide pan and zoom help' : 'Show pan and zoom help'}
@@ -345,27 +345,27 @@ function ZoomPanWrapper({ children, overlay, controls }: { children: ReactNode; 
         </div>
       ) : null}
       {/* Floating controls — always accessible */}
-      <div className="absolute bottom-2 right-2 z-20 flex items-center gap-0.5 rounded bg-background/90 px-1.5 py-1 text-xs text-muted-foreground shadow">
+      <div className="absolute bottom-2 right-2 z-20 flex items-center gap-1 rounded bg-background/90 px-2 py-1.5 text-sm text-muted-foreground shadow sm:gap-0.5 sm:px-1.5 sm:py-1 sm:text-xs">
         <button
           type="button"
-          className={`rounded px-1.5 py-0.5 ${navigating ? 'bg-primary/15 text-primary' : 'hover:bg-muted'}`}
+          className={`min-h-10 rounded px-2 sm:min-h-0 sm:px-1.5 sm:py-0.5 ${navigating ? 'bg-primary/15 text-primary' : 'hover:bg-muted'}`}
           onClick={toggleMode}
           title={navigating ? 'Switch to interact mode (click VNC)' : 'Switch to navigate mode (scroll to zoom)'}
         >
           {navigating ? '🔍 Navigate' : '👆 Interact'}
         </button>
         <span className="mx-0.5 text-border">│</span>
-        <button type="button" className="rounded px-1 hover:bg-muted" onClick={zoomOut} title="Zoom out">
+        <button type="button" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomOut} title="Zoom out">
           −
         </button>
         <span className="min-w-[3ch] text-center tabular-nums">{Math.round(zoom * 100)}%</span>
-        <button type="button" className="rounded px-1 hover:bg-muted" onClick={zoomIn} title="Zoom in">
+        <button type="button" className="min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0" onClick={zoomIn} title="Zoom in">
           +
         </button>
         {isTransformed ? (
           <button
             type="button"
-            className="ml-0.5 rounded px-1 hover:bg-muted"
+            className="ml-0.5 min-h-10 min-w-10 rounded px-1 hover:bg-muted sm:min-h-0 sm:min-w-0"
             onClick={resetView}
             title="Reset view (double-click)"
           >

@@ -4257,44 +4257,55 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     filePath: string,
     actions: 'stage' | 'unstage',
     mobile = false,
-  ) => (
-    <span
-      className={`flex shrink-0 items-center justify-end gap-0.5 ${
-        mobile ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100'
-      }`}
-    >
-      {actions === 'stage' ? (
-        <button
-          type="button"
-          className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
-          onClick={(e) => { e.stopPropagation(); void handleStageFile(filePath) }}
-          title="Stage file (git add)"
-        >
-          <Plus className="h-3 w-3" />
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
-          onClick={(e) => { e.stopPropagation(); void handleUnstageFile(filePath) }}
-          title="Unstage file"
-        >
-          <Minus className="h-3 w-3" />
-        </button>
-      )}
-      <button
-        type="button"
-        className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-red-500"
-        onClick={(e) => {
-          e.stopPropagation()
-          setDiscardConfirm((prev) => prev?.kind === 'file' && prev.path === filePath ? null : { kind: 'file', path: filePath })
-        }}
-        title="Discard changes"
+  ) => {
+    const actionButtonClassName = cn(
+      'rounded text-muted-foreground hover:bg-background',
+      mobile ? 'flex h-10 w-10 items-center justify-center' : 'p-0.5',
+    )
+    const iconClassName = mobile ? 'h-4 w-4' : 'h-3 w-3'
+
+    return (
+      <span
+        className={`flex shrink-0 items-center justify-end ${mobile ? 'gap-1' : 'gap-0.5'} ${
+          mobile ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100'
+        }`}
       >
-        <Undo2 className="h-3 w-3" />
-      </button>
-    </span>
-  ), [handleStageFile, handleUnstageFile])
+        {actions === 'stage' ? (
+          <button
+            type="button"
+            className={cn(actionButtonClassName, 'hover:text-foreground')}
+            onClick={(e) => { e.stopPropagation(); void handleStageFile(filePath) }}
+            title="Stage file (git add)"
+            aria-label="Stage file"
+          >
+            <Plus className={iconClassName} />
+          </button>
+        ) : (
+          <button
+            type="button"
+            className={cn(actionButtonClassName, 'hover:text-foreground')}
+            onClick={(e) => { e.stopPropagation(); void handleUnstageFile(filePath) }}
+            title="Unstage file"
+            aria-label="Unstage file"
+          >
+            <Minus className={iconClassName} />
+          </button>
+        )}
+        <button
+          type="button"
+          className={cn(actionButtonClassName, 'hover:text-red-500')}
+          onClick={(e) => {
+            e.stopPropagation()
+            setDiscardConfirm((prev) => prev?.kind === 'file' && prev.path === filePath ? null : { kind: 'file', path: filePath })
+          }}
+          title="Discard changes"
+          aria-label="Discard changes"
+        >
+          <Undo2 className={iconClassName} />
+        </button>
+      </span>
+    )
+  }, [handleStageFile, handleUnstageFile])
 
   const renderSourceControlFolderActions = useCallback((
     folderPath: string,
@@ -4305,40 +4316,47 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (filePaths.length === 0) return null
 
     const uniquePaths = [...new Set(filePaths)]
+    const actionButtonClassName = cn(
+      'rounded text-muted-foreground hover:bg-background',
+      mobile ? 'flex h-10 w-10 items-center justify-center' : 'p-0.5',
+    )
+    const iconClassName = mobile ? 'h-4 w-4' : 'h-3 w-3'
     return (
       <span
-        className={`flex shrink-0 items-center justify-end gap-0.5 ${
+        className={`flex shrink-0 items-center justify-end ${mobile ? 'gap-1' : 'gap-0.5'} ${
           mobile ? 'opacity-100' : 'opacity-0 transition-opacity group-hover:opacity-100 group-focus-within:opacity-100'
         }`}
       >
         {actions === 'stage' ? (
           <button
             type="button"
-            className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+            className={cn(actionButtonClassName, 'hover:text-foreground')}
             onClick={(e) => {
               e.stopPropagation()
               void handleStagePaths(uniquePaths)
             }}
             title="Stage folder"
+            aria-label="Stage folder"
           >
-            <Plus className="h-3 w-3" />
+            <Plus className={iconClassName} />
           </button>
         ) : (
           <button
             type="button"
-            className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-foreground"
+            className={cn(actionButtonClassName, 'hover:text-foreground')}
             onClick={(e) => {
               e.stopPropagation()
               void handleUnstagePaths(uniquePaths)
             }}
             title="Unstage folder"
+            aria-label="Unstage folder"
           >
-            <Minus className="h-3 w-3" />
+            <Minus className={iconClassName} />
           </button>
         )}
         <button
           type="button"
-          className="rounded p-0.5 text-muted-foreground hover:bg-background hover:text-red-500"
+          className={cn(actionButtonClassName, 'hover:text-red-500')}
           onClick={(e) => {
             e.stopPropagation()
             setDiscardConfirm((prev) => prev?.kind === 'folder' && prev.path === folderPath
@@ -4346,8 +4364,9 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
               : { kind: 'folder', path: folderPath, paths: uniquePaths })
           }}
           title="Discard changes in folder"
+          aria-label="Discard changes in folder"
         >
-          <Undo2 className="h-3 w-3" />
+          <Undo2 className={iconClassName} />
         </button>
       </span>
     )
@@ -4391,10 +4410,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             {renderSourceControlFolderActions(node.path, folderFilePaths, actions, mobile)}
           </div>
           {discardConfirm?.kind === 'folder' && discardConfirm.path === node.path && (
-            <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs">
+            <div className={cn('ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs', mobile && 'py-2 text-xs')}>
               <span className="flex-1 text-red-500">Discard changes in {node.name}?</span>
-              <Button size="sm" variant="destructive" className="h-5 px-1.5 text-2xs" onClick={() => void handleDiscardFolder(discardConfirm.paths)} disabled={gitActionBusy}>Discard</Button>
-              <Button size="sm" variant="ghost" className="h-5 px-1.5 text-2xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+              <Button size="sm" variant="destructive" className={mobile ? 'px-3 text-xs' : 'h-5 px-1.5 text-2xs'} onClick={() => void handleDiscardFolder(discardConfirm.paths)} disabled={gitActionBusy}>Discard</Button>
+              <Button size="sm" variant="ghost" className={mobile ? 'px-3 text-xs' : 'h-5 px-1.5 text-2xs'} onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
             </div>
           )}
           {expanded ? renderSourceControlTreeNodes(node.children, actions, mobile, depth + 1) : null}
@@ -4436,10 +4455,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           {renderSourceControlFileActions(node.path, actions, mobile)}
         </button>
         {discardConfirm?.kind === 'file' && discardConfirm.path === node.path && (
-          <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs">
+          <div className={cn('ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs', mobile && 'py-2 text-xs')}>
             <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
-            <Button size="sm" variant="destructive" className="h-5 px-1.5 text-2xs" onClick={() => void handleDiscardFile(node.path)} disabled={gitActionBusy}>Discard</Button>
-            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-2xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+            <Button size="sm" variant="destructive" className={mobile ? 'px-3 text-xs' : 'h-5 px-1.5 text-2xs'} onClick={() => void handleDiscardFile(node.path)} disabled={gitActionBusy}>Discard</Button>
+            <Button size="sm" variant="ghost" className={mobile ? 'px-3 text-xs' : 'h-5 px-1.5 text-2xs'} onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
           </div>
         )}
       </div>
@@ -4457,10 +4476,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
     if (files.length === 0) return null
 
     const headerActionClassName = cn(
-      'rounded p-0.5 text-muted-foreground transition-[background-color,color,opacity] hover:bg-background',
+      'rounded text-muted-foreground transition-[background-color,color,opacity] hover:bg-background',
       mobile
-        ? 'opacity-100'
-        : 'opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
+        ? 'flex h-10 w-10 items-center justify-center opacity-100'
+        : 'p-0.5 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100',
     )
 
     return (
@@ -4530,10 +4549,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
           </div>
         </div>
         {discardConfirm?.kind === 'all' && changedFileCount > 0 && (
-          <div className="mx-2 mb-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs">
+          <div className={cn('mx-2 mb-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs', mobile && 'py-2 text-xs')}>
             <span className="flex-1 text-red-500">Discard all changes?</span>
-            <Button size="sm" variant="destructive" className="h-5 px-1.5 text-2xs" onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
-            <Button size="sm" variant="ghost" className="h-5 px-1.5 text-2xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+            <Button size="sm" variant="destructive" className={mobile ? 'px-3 text-xs' : 'h-5 px-1.5 text-2xs'} onClick={() => void handleDiscardAll()} disabled={gitActionBusy}>Discard</Button>
+            <Button size="sm" variant="ghost" className={mobile ? 'px-3 text-xs' : 'h-5 px-1.5 text-2xs'} onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
           </div>
         )}
         <div className="mt-1 space-y-1">
@@ -4580,10 +4599,10 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                     {renderSourceControlFileActions(f.path, actions, mobile)}
                   </div>
                   {discardConfirm?.kind === 'file' && discardConfirm.path === f.path && (
-                    <div className="ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs">
+                    <div className={cn('ml-6 mt-1 flex items-center gap-1 rounded border border-red-500/30 bg-red-500/5 px-2 py-1 text-2xs', mobile && 'py-2 text-xs')}>
                       <span className="flex-1 text-red-500">Discard changes in {fileName}?</span>
-                      <Button size="sm" variant="destructive" className="h-5 px-1.5 text-2xs" onClick={() => void handleDiscardFile(f.path)} disabled={gitActionBusy}>Discard</Button>
-                      <Button size="sm" variant="ghost" className="h-5 px-1.5 text-2xs" onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
+                      <Button size="sm" variant="destructive" className={mobile ? 'px-3 text-xs' : 'h-5 px-1.5 text-2xs'} onClick={() => void handleDiscardFile(f.path)} disabled={gitActionBusy}>Discard</Button>
+                      <Button size="sm" variant="ghost" className={mobile ? 'px-3 text-xs' : 'h-5 px-1.5 text-2xs'} onClick={() => setDiscardConfirm(null)} disabled={gitActionBusy}>Cancel</Button>
                     </div>
                   )}
                 </div>
@@ -4638,13 +4657,13 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       <div className="flex flex-col h-full min-h-0">
         {/* Tab bar — only show when editor tabs are available */}
         {showEditorProp && (
-        <div data-testid="mobile-workspace-tabbar" className="flex items-center h-[35px] border-b bg-muted/30 shrink-0 px-1 gap-0.5">
+        <div data-testid="mobile-workspace-tabbar" className="flex min-h-11 items-center border-b bg-muted/30 shrink-0 px-1.5 gap-1">
           {showEditorProp && (
           openTabs.length > 0 ? (
             <DropdownMenu onOpenChange={(open) => { if (open) selectMobileTab('editor') }}>
               <DropdownMenuTrigger asChild>
                 <button
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded text-xs font-medium transition-colors min-w-0 ${
+                  className={`flex min-h-10 items-center gap-1 rounded px-3 text-xs font-medium transition-colors min-w-0 ${
                     effectiveMobileTab === 'editor' ? 'bg-background text-foreground shadow-sm' : 'text-muted-foreground'
                   }`}
                 >

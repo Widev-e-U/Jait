@@ -53,7 +53,7 @@ export function ModeSelector({ mode, onChange, disabled, className, compact = fa
         <button
           type="button"
           className={cn(
-            'flex h-8 items-center gap-1 rounded-md border border-transparent px-1.5 py-1 text-xs font-medium text-muted-foreground',
+            'flex h-10 items-center gap-1 rounded-md border border-transparent px-2 py-1 text-sm font-medium text-muted-foreground sm:h-8 sm:px-1.5 sm:text-xs',
             'hover:text-foreground hover:bg-muted/60 transition-colors',
             'focus-visible:outline-none focus-visible:border-ring/60 focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-ring/50',
             'disabled:pointer-events-none disabled:opacity-50',

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 
-import { formatChatHttpError, getVisibleChangedFiles, shouldResumeChatSession } from '@/hooks/useChat'
+import { formatChatHttpError, getVisibleChangedFiles, shouldResumeChatSession, shouldShowContinueAfterDone } from '@/hooks/useChat'
 
 describe('formatChatHttpError', () => {
   it('explains Codex image uploads that hit the gateway body limit', () => {
@@ -81,5 +81,14 @@ describe('getVisibleChangedFiles', () => {
 
   it('keeps file review prompts for the active hydrated session', () => {
     expect(getVisibleChangedFiles(changedFiles, false)).toBe(changedFiles)
+  })
+})
+
+describe('shouldShowContinueAfterDone', () => {
+  it('shows Continue only when the gateway reports max tool rounds', () => {
+    expect(shouldShowContinueAfterDone({ hit_max_rounds: true })).toBe(true)
+    expect(shouldShowContinueAfterDone({ hit_max_rounds: false })).toBe(false)
+    expect(shouldShowContinueAfterDone({ has_timed_out_tools: true })).toBe(false)
+    expect(shouldShowContinueAfterDone({})).toBe(false)
   })
 })

@@ -62,6 +62,10 @@ export function shouldResumeChatSession(params: {
   return params.isLoading || params.messageCount === 0 || params.error === TRANSIENT_CONNECTION_MESSAGE
 }
 
+export function shouldShowContinueAfterDone(event: { hit_max_rounds?: unknown; has_timed_out_tools?: unknown }): boolean {
+  return event.hit_max_rounds === true
+}
+
 function attachmentsFromSegments(segments: UserMessageSegment[] | undefined): ChatAttachment[] | undefined {
   if (!segments?.length) return undefined
   const attachments = segments.flatMap((segment) => (
@@ -766,6 +770,7 @@ export function useChat(
                     isLoading: false,
                     promptCount: (data.prompt_count as number) ?? prev.promptCount,
                     remainingPrompts: (data.remaining_prompts as number | null) ?? prev.remainingPrompts,
+                    hitMaxRounds: shouldShowContinueAfterDone(data),
                     // Mark any tool calls still stuck in 'running' as cancelled
                     // (can happen if reload snapshot races with cancel processing)
                     messages: prev.messages.map(m =>
@@ -1176,7 +1181,7 @@ export function useChat(
                   promptCount: data.prompt_count,
                   remainingPrompts: data.remaining_prompts,
                   isLoading: false,
-                  hitMaxRounds: !!(data.hit_max_rounds) || !!(data.has_timed_out_tools),
+                  hitMaxRounds: shouldShowContinueAfterDone(data),
                   messages: isEmptyAssistant
                     ? prev.messages.filter(m => m.id !== assistantId)
                     : prev.messages.map(m =>

@@ -91,7 +91,8 @@ function validateSchemaValue(
     );
   }
 
-  if (expectedType === "object" && schema.properties && TYPE_CHECKS.object(current)) {
+  const isObject = TYPE_CHECKS.object;
+  if (expectedType === "object" && schema.properties && isObject?.(current)) {
     const obj = current as Record<string, unknown>;
 
     if (schema.required) {
