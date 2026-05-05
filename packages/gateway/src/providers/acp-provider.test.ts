@@ -6,6 +6,34 @@ import { AcpProvider, loadAcpProviderConfigs } from "./acp-provider.js";
 
 const originalCodexHome = process.env.CODEX_HOME;
 
+const fakeAcpAgentScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: { auth: { logout: {} } },
+          authMethods: [{ id: "test-login", name: "Test login" }]
+        }
+      }) + "\\n");
+    } else if (request.method === "logout") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+
 afterEach(() => {
   if (originalCodexHome === undefined) {
     delete process.env.CODEX_HOME;
@@ -15,18 +43,18 @@ afterEach(() => {
 });
 
 describe("AcpProvider auth", () => {
-  it("exposes login and logout for default ACP Codex and Claude providers", () => {
+  it("exposes ACP-managed login for default ACP providers", () => {
     const providers = loadAcpProviderConfigs().map((config) => new AcpProvider(config));
 
     expect(providers.find((provider) => provider.id === "codex")?.info.auth).toMatchObject({
       login: true,
-      logout: true,
-      deviceCode: true,
+      logout: false,
+      deviceCode: false,
     });
     expect(providers.find((provider) => provider.id === "claude-code")?.info.auth).toMatchObject({
       login: true,
-      logout: true,
-      deviceCode: true,
+      logout: false,
+      deviceCode: false,
     });
   });
 
@@ -40,13 +68,14 @@ describe("AcpProvider auth", () => {
         id: "codex",
         name: "Codex",
         description: "Codex via ACP",
-        command: "npx",
+        command: process.execPath,
+        args: ["-e", fakeAcpAgentScript],
       });
 
       await expect(provider.getAuthStatus()).resolves.toMatchObject({
         login: true,
         logout: true,
-        deviceCode: true,
+        deviceCode: false,
         authenticated: true,
       });
     } finally {
@@ -54,12 +83,28 @@ describe("AcpProvider auth", () => {
     }
   });
 
-  it("does not expose Jait UI auth for custom ACP providers by default", () => {
+  it("exposes ACP-managed auth for custom ACP providers by default", () => {
     const provider = new AcpProvider({
       id: "custom-acp",
       name: "Custom ACP",
       description: "Custom provider",
       command: "custom",
+    });
+
+    expect(provider.info.auth).toMatchObject({
+      login: true,
+      logout: false,
+      deviceCode: false,
+    });
+  });
+
+  it("allows custom ACP providers to opt out of Jait auth actions", () => {
+    const provider = new AcpProvider({
+      id: "custom-acp",
+      name: "Custom ACP",
+      description: "Custom provider",
+      command: "custom",
+      auth: false,
     });
 
     expect(provider.info.auth).toMatchObject({

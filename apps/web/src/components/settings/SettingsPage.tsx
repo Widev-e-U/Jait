@@ -81,7 +81,7 @@ function isSecretField(field: string): boolean {
 
 const API_URL = getApiUrl()
 
-const PROVIDER_LABELS: Record<ProviderId, string> = {
+const PROVIDER_LABELS: Record<string, string> = {
   jait: 'Jait',
   codex: 'Codex',
   'claude-code': 'Claude Code',
@@ -197,15 +197,16 @@ export function SettingsPage({
   }, [loadProviderAccounts])
 
   const handleProviderLogout = async (providerId: ProviderId) => {
+    const label = providerAccounts.find((provider) => provider.id === providerId)?.name ?? PROVIDER_LABELS[providerId] ?? providerId
     setProviderLogoutBusy(providerId)
     setError(null)
     setStatus(null)
     try {
       const result = await agentsApi.logoutProvider(providerId)
-      setStatus(result.message || `${PROVIDER_LABELS[providerId]} logout completed.`)
+      setStatus(result.message || `${label} logout completed.`)
       await loadProviderAccounts()
     } catch (err) {
-      setError(err instanceof Error ? err.message : `Failed to log out from ${PROVIDER_LABELS[providerId]}.`)
+      setError(err instanceof Error ? err.message : `Failed to log out from ${label}.`)
     } finally {
       setProviderLogoutBusy(null)
     }
@@ -737,6 +738,7 @@ export function SettingsPage({
                   const auth = provider.auth
                   const providerId = provider.id
                   const isSignedIn = auth?.authenticated === true
+                  const isKnownSignedOut = auth?.authenticated === false
                   const busy = providerLogoutBusy === providerId
                   return (
                     <div key={provider.id} className="flex flex-col gap-3 rounded-lg border px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
@@ -757,7 +759,7 @@ export function SettingsPage({
                           variant="outline"
                           size="sm"
                           onClick={() => { void handleProviderLogout(providerId) }}
-                          disabled={busy || providerLogoutBusy !== null || !isSignedIn}
+                          disabled={busy || providerLogoutBusy !== null || isKnownSignedOut}
                         >
                           {busy ? <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" /> : <LogOut className="mr-1.5 h-3.5 w-3.5" />}
                           Logout

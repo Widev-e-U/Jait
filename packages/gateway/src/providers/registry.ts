@@ -83,7 +83,7 @@ export class ProviderRegistry {
 
     return {
       name: "jait",
-      transport: "sse",
+      transport: "http",
       url: url.toString(),
     };
   }

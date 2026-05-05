@@ -1,6 +1,6 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
 import { EventEmitter } from "node:events";
-import { existsSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import { Readable, Writable } from "node:stream";
@@ -9,6 +9,7 @@ import {
   PROTOCOL_VERSION,
   ndJsonStream,
   type Agent,
+  type AuthMethod,
   type Client,
   type InitializeResponse,
   type McpServer,
@@ -32,16 +33,14 @@ import type {
   StartSessionOptions,
 } from "./contracts.js";
 import {
-  DEVICE_PROVIDER_AUTH,
   NO_PROVIDER_AUTH,
   killChildTree as killAuthChildTree,
   runAuthCommand,
-  startDeviceLoginCommand,
   unsupportedLogin,
   unsupportedLogout,
 } from "./provider-auth.js";
 
-type AcpProviderAuthKind = "codex" | "claude-code";
+type AcpProviderAuthKind = "acp";
 
 export interface AcpProviderConfig {
   id: ProviderId;
@@ -79,6 +78,13 @@ class JaitAcpClient implements Client {
 
   async requestPermission(params: RequestPermissionRequest): Promise<RequestPermissionResponse> {
     const requestId = uuidv7();
+    const allowOptionId = params.options.find((option) => option.kind.startsWith("allow"))?.optionId ?? params.options[0]?.optionId ?? "allow";
+    const rejectOptionId = params.options.find((option) => option.kind.startsWith("reject"))?.optionId ?? params.options.at(-1)?.optionId ?? "reject";
+
+    const response = new Promise<RequestPermissionResponse>((resolve) => {
+      this.approvals.set(requestId, { allowOptionId, rejectOptionId, resolve });
+    });
+
     this.provider.emitEvent({
       type: "tool.approval-required",
       sessionId: this.sessionId,
@@ -87,12 +93,7 @@ class JaitAcpClient implements Client {
       requestId,
     });
 
-    const allowOptionId = params.options.find((option) => option.kind.startsWith("allow"))?.optionId ?? params.options[0]?.optionId ?? "allow";
-    const rejectOptionId = params.options.find((option) => option.kind.startsWith("reject"))?.optionId ?? params.options.at(-1)?.optionId ?? "reject";
-
-    return new Promise<RequestPermissionResponse>((resolve) => {
-      this.approvals.set(requestId, { allowOptionId, rejectOptionId, resolve });
-    });
+    return response;
   }
 
   async sessionUpdate(params: SessionNotification): Promise<void> {
@@ -112,7 +113,7 @@ export class AcpProvider implements CliProviderAdapter {
 
   constructor(config: AcpProviderConfig) {
     this.id = config.id;
-    this.authKind = config.auth === false ? null : config.auth ?? inferAcpAuthKind(config.id);
+    this.authKind = config.auth === false ? null : "acp";
     this.config = {
       ...config,
       args: config.args ?? [],
@@ -125,7 +126,7 @@ export class AcpProvider implements CliProviderAdapter {
       description: config.description,
       available: false,
       modes: this.config.modes,
-      auth: this.authKind ? DEVICE_PROVIDER_AUTH : NO_PROVIDER_AUTH,
+      auth: this.authKind ? { login: true, logout: false, deviceCode: false } : NO_PROVIDER_AUTH,
     };
   }
 
@@ -153,57 +154,87 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   async getAuthStatus(): Promise<ProviderAuthStatus> {
-    switch (this.authKind) {
-      case "codex": {
-        const authenticated = !!process.env.OPENAI_API_KEY?.trim() || checkCodexAuthFile();
-        return {
-          ...DEVICE_PROVIDER_AUTH,
-          authenticated,
-          detail: authenticated
-            ? "Codex CLI credentials are configured."
-            : "Codex CLI is not authenticated.",
-        };
-      }
-      case "claude-code": {
-        const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000);
-        const authenticated = !!process.env.ANTHROPIC_API_KEY?.trim() || status.ok;
-        return {
-          ...DEVICE_PROVIDER_AUTH,
-          authenticated,
-          detail: authenticated
-            ? "Claude Code credentials are configured."
-            : status.rawOutput ?? "Claude Code is not authenticated.",
-        };
-      }
-      default:
-        return { ...NO_PROVIDER_AUTH, authenticated: null, detail: "Auth is managed by the ACP agent." };
+    if (!this.authKind) {
+      return { ...NO_PROVIDER_AUTH, authenticated: null, detail: "Auth is managed by the ACP agent." };
     }
+
+    const probe = await this.probeAcpAuth().catch(() => null);
+    const login = (probe?.authMethods.length ?? 0) > 0;
+    const logout = Boolean(probe?.initialized.agentCapabilities?.auth?.logout);
+    probe?.child.kill();
+    const authenticated = await this.checkProviderAuthenticated();
+    return {
+      login,
+      logout,
+      deviceCode: false,
+      authenticated,
+      detail: probe ? formatAcpAuthDetail(this.info.name, authenticated) : "Could not read ACP authentication capabilities.",
+    };
   }
 
   async startLogin(): Promise<ProviderLoginResult> {
-    const login = this.getLoginCommand();
-    if (!login) return unsupportedLogin(this.id, "Auth is managed by the ACP agent.");
+    if (!this.authKind) return unsupportedLogin(this.id, "Auth is managed by the ACP agent.");
 
     if (this.authLoginProcess) {
       killAuthChildTree(this.authLoginProcess);
       this.authLoginProcess = null;
     }
 
-    const { result, child } = await startDeviceLoginCommand({
-      providerId: this.id,
-      label: login.label,
-      commandLine: login.commandLine,
-      args: login.args,
-      timeoutMs: 30_000,
-    });
-    if (child) {
+    const probe = await this.probeAcpAuth();
+    const method = chooseAcpAuthMethod(probe.authMethods);
+    if (!method) {
+      probe.child.kill();
+      return unsupportedLogin(this.id, "ACP agent did not advertise a login method.");
+    }
+
+    if (isTerminalAuthMethod(method)) {
+      probe.child.kill();
+      const args = [...this.config.args, ...(method.args ?? [])];
+      const child = spawn(this.config.command, args, {
+        cwd: process.cwd(),
+        stdio: "ignore",
+        env: { ...process.env, ...this.config.env, ...method.env },
+      });
       this.authLoginProcess = child;
       child.on("exit", () => {
         if (this.authLoginProcess === child) this.authLoginProcess = null;
         void this.checkAvailability();
       });
+      return {
+        ok: true,
+        status: "started",
+        providerId: this.id,
+        message: `${method.name} login started through ACP.`,
+      };
     }
-    return result;
+
+    const child = probe.child;
+    this.authLoginProcess = child;
+    void probe.connection.authenticate({ methodId: method.id })
+      .catch(() => {})
+      .finally(() => {
+        if (this.authLoginProcess === child) this.authLoginProcess = null;
+        child.kill();
+        void this.checkAvailability();
+      });
+
+    return {
+      ok: true,
+      status: "started",
+      providerId: this.id,
+      message: `${method.name} login started through ACP.`,
+    };
+  }
+
+  private async checkProviderAuthenticated(): Promise<boolean | null> {
+    if (this.id === "codex") {
+      return Boolean(process.env.OPENAI_API_KEY?.trim()) || checkCodexAuthFile();
+    }
+    if (this.id === "claude-code") {
+      const status = await runAuthCommand(this.id, "claude", ["auth", "status"], 10_000).catch(() => null);
+      return Boolean(process.env.ANTHROPIC_API_KEY?.trim()) || Boolean(status?.ok);
+    }
+    return null;
   }
 
   async logout(): Promise<ProviderLogoutResult> {
@@ -212,32 +243,25 @@ export class AcpProvider implements CliProviderAdapter {
       this.authLoginProcess = null;
     }
 
-    switch (this.authKind) {
-      case "codex": {
-        const result = await runAuthCommand(this.id, "codex", ["logout"]);
-        const cleared = result.ok ? clearCodexAuthFile() : true;
-        await this.checkAvailability().catch(() => false);
-        return {
-          ...result,
-          ok: result.ok && cleared,
-          status: result.ok && cleared ? result.status : "error",
-          message: result.ok
-            ? cleared
-              ? "Codex logout completed."
-              : "Codex logout ran, but stored credentials could not be removed."
-            : result.message,
-        };
+    if (!this.authKind) {
+      return unsupportedLogout(this.id, "Auth is managed by the ACP agent.");
+    }
+
+    const probe = await this.probeAcpAuth();
+    try {
+      if (!probe.initialized.agentCapabilities?.auth?.logout) {
+        return unsupportedLogout(this.id, "ACP agent did not advertise logout support.");
       }
-      case "claude-code": {
-        const result = await runAuthCommand(this.id, "claude", ["auth", "logout"]);
-        await this.checkAvailability().catch(() => false);
-        return {
-          ...result,
-          message: result.ok ? "Claude Code logout completed." : result.message,
-        };
-      }
-      default:
-        return unsupportedLogout(this.id, "Auth is managed by the ACP agent.");
+      await probe.connection.unstable_logout({});
+      return {
+        ok: true,
+        status: "completed",
+        providerId: this.id,
+        message: `${this.info.name} logout completed.`,
+      };
+    } finally {
+      probe.child.kill();
+      await this.checkAvailability().catch(() => false);
     }
   }
 
@@ -291,25 +315,32 @@ export class AcpProvider implements CliProviderAdapter {
       this.sessions.delete(sessionId);
     });
 
-    const initialized = await connection.initialize({
-      protocolVersion: PROTOCOL_VERSION,
-      clientInfo: { name: "Jait", version: "0.1" },
-      clientCapabilities: {
-        fs: { readTextFile: false, writeTextFile: false },
-        terminal: false,
-      },
-    });
+    let initialized: InitializeResponse;
+    let newSession: Awaited<ReturnType<ClientSideConnection["newSession"]>>;
+    try {
+      initialized = await connection.initialize({
+        protocolVersion: PROTOCOL_VERSION,
+        clientInfo: { name: "Jait", version: "0.1" },
+        clientCapabilities: {
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+        },
+      });
 
-    const newSession = await connection.newSession({
-      cwd: options.workingDirectory,
-      mcpServers: (options.mcpServers ?? []).map(toAcpMcpServer),
-    });
+      newSession = await connection.newSession({
+        cwd: options.workingDirectory,
+        mcpServers: (options.mcpServers ?? []).map(toAcpMcpServer),
+      });
 
-    if (options.mode) {
-      await connection.setSessionMode({ sessionId: newSession.sessionId, modeId: options.mode }).catch(() => {});
-    }
-    if (options.model) {
-      await connection.unstable_setSessionModel({ sessionId: newSession.sessionId, modelId: options.model }).catch(() => {});
+      if (options.mode) {
+        await connection.setSessionMode({ sessionId: newSession.sessionId, modeId: options.mode }).catch(() => {});
+      }
+      if (options.model) {
+        await connection.unstable_setSessionModel({ sessionId: newSession.sessionId, modelId: options.model }).catch(() => {});
+      }
+    } catch (error) {
+      child.kill();
+      throw error;
     }
 
     session.status = "running";
@@ -377,7 +408,10 @@ export class AcpProvider implements CliProviderAdapter {
   async stopSession(sessionId: string): Promise<void> {
     const state = this.sessions.get(sessionId);
     if (!state) return;
-    await state.connection.closeSession?.({ sessionId: state.acpSessionId }).catch(() => {});
+    await withTimeout(
+      state.connection.closeSession?.({ sessionId: state.acpSessionId }) ?? Promise.resolve(),
+      2_000,
+    ).catch(() => {});
     state.session.status = "completed";
     state.session.completedAt = new Date().toISOString();
     state.child.kill();
@@ -466,22 +500,64 @@ export class AcpProvider implements CliProviderAdapter {
     return state;
   }
 
-  private getLoginCommand(): { label: string; commandLine: string; args: string[] } | null {
-    switch (this.authKind) {
-      case "codex":
-        return { label: "Codex", commandLine: "codex", args: ["login", "--device-auth"] };
-      case "claude-code":
-        return { label: "Claude Code", commandLine: "claude", args: ["auth", "login", "--claudeai"] };
-      default:
-        return null;
+  private async probeAcpAuth(): Promise<{
+    child: ChildProcess;
+    connection: ClientSideConnection;
+    initialized: InitializeResponse;
+    authMethods: AuthMethod[];
+  }> {
+    const child = spawn(this.config.command, this.config.args, {
+      cwd: process.cwd(),
+      stdio: ["pipe", "pipe", "pipe"],
+      env: { ...process.env, ...this.config.env },
+    });
+
+    const stream = ndJsonStream(
+      Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>,
+      Readable.toWeb(child.stdout!) as ReadableStream<Uint8Array>,
+    );
+    const connection = new ClientSideConnection(() => ({
+      async requestPermission(): Promise<RequestPermissionResponse> {
+        return { outcome: { outcome: "cancelled" } };
+      },
+      async sessionUpdate(): Promise<void> {},
+    }), stream);
+
+    try {
+      const initialized = await connection.initialize({
+        protocolVersion: PROTOCOL_VERSION,
+        clientInfo: { name: "Jait", version: "0.1" },
+        clientCapabilities: {
+          auth: { terminal: true },
+          fs: { readTextFile: false, writeTextFile: false },
+          terminal: false,
+        },
+      });
+      return { child, connection, initialized, authMethods: initialized.authMethods ?? [] };
+    } catch (error) {
+      child.kill();
+      throw error;
     }
   }
 }
 
-function inferAcpAuthKind(id: ProviderId): AcpProviderAuthKind | null {
-  if (id === "codex") return "codex";
-  if (id === "claude-code") return "claude-code";
-  return null;
+function chooseAcpAuthMethod(methods: AuthMethod[]): AuthMethod | null {
+  return (
+    methods.find(isTerminalAuthMethod) ??
+    methods.find((method) => method.id === "chat-gpt") ??
+    methods[0] ??
+    null
+  );
+}
+
+function isTerminalAuthMethod(method: AuthMethod): method is Extract<AuthMethod, { type: "terminal" }> {
+  return "type" in method && method.type === "terminal";
+}
+
+function formatAcpAuthDetail(providerName: string, authenticated: boolean | null): string {
+  if (authenticated === true) return `${providerName} credentials are configured. Login and logout are managed through ACP.`;
+  if (authenticated === false) return `${providerName} credentials are not configured. Login and logout are managed through ACP.`;
+  return `${providerName} authentication is managed through ACP.`;
 }
 
 function getCodexAuthPath(): string {
@@ -520,26 +596,6 @@ function checkCodexAuthFile(): boolean {
   }
 }
 
-function clearCodexAuthFile(): boolean {
-  const auth = readCodexAuthFile();
-  if (!auth) return true;
-
-  delete auth.OPENAI_API_KEY;
-  delete auth.tokens;
-
-  const remaining = Object.entries(auth).filter(([, value]) => value !== undefined && value !== null);
-  try {
-    if (remaining.length === 0) {
-      unlinkSync(getCodexAuthPath());
-    } else {
-      writeFileSync(getCodexAuthPath(), `${JSON.stringify(Object.fromEntries(remaining), null, 2)}\n`, "utf-8");
-    }
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 function toAcpMcpServer(server: McpServerRef): McpServer {
   if (server.transport === "stdio") {
     return {
@@ -547,6 +603,15 @@ function toAcpMcpServer(server: McpServerRef): McpServer {
       command: server.command ?? "",
       args: server.args ?? [],
       env: Object.entries(server.env ?? {}).map(([name, value]) => ({ name, value })),
+    };
+  }
+
+  if (server.transport === "http") {
+    return {
+      type: "http",
+      name: server.name,
+      url: server.url ?? "",
+      headers: [],
     };
   }
 
@@ -572,6 +637,22 @@ function stringifyUnknown(value: unknown): string {
   }
 }
 
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timeout = setTimeout(() => reject(new Error("Operation timed out")), timeoutMs);
+    promise.then(
+      (value) => {
+        clearTimeout(timeout);
+        resolve(value);
+      },
+      (error: unknown) => {
+        clearTimeout(timeout);
+        reject(error);
+      },
+    );
+  });
+}
+
 export function loadAcpProviderConfigs(): AcpProviderConfig[] {
   const defaults: AcpProviderConfig[] = [
     {
@@ -587,6 +668,38 @@ export function loadAcpProviderConfigs(): AcpProviderConfig[] {
       description: "Claude Code via Agent Client Protocol",
       command: "npx",
       args: ["-y", "@agentclientprotocol/claude-agent-acp"],
+    },
+    {
+      id: "cursor",
+      name: "Cursor",
+      description: "Cursor Agent via Agent Client Protocol",
+      command: "npx",
+      args: ["-y", "@blowmage/cursor-agent-acp"],
+      auth: false,
+    },
+    {
+      id: "pi",
+      name: "Pi",
+      description: "Pi coding agent via Agent Client Protocol",
+      command: "npx",
+      args: ["-y", "pi-acp"],
+      auth: false,
+    },
+    {
+      id: "pi-gemini",
+      name: "Pi Gemini",
+      description: "Gemini-backed Pi ACP provider",
+      command: "npx",
+      args: ["-y", "pi-gemini-acp"],
+      auth: false,
+    },
+    {
+      id: "deepagents",
+      name: "DeepAgents",
+      description: "DeepAgents via Agent Client Protocol",
+      command: "npx",
+      args: ["-y", "deepagents-acp"],
+      auth: false,
     },
   ];
 

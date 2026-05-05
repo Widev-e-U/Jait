@@ -47,14 +47,14 @@ describe("RemoteCliProvider", () => {
       threadId: "thread-1",
       workingDirectory: process.cwd(),
       mode: "full-access",
-      mcpServers: [{ name: "jait", transport: "sse", url: "http://gateway.test/mcp/sse" }],
+      mcpServers: [{ name: "jait", transport: "http", url: "http://gateway.test/mcp" }],
     });
 
     expect(ws.proxyProviderOp).toHaveBeenCalledWith(
       "node-1",
       "start-session",
       expect.objectContaining({
-        mcpServers: [{ name: "jait", transport: "sse", url: "http://gateway.test/mcp/sse" }],
+        mcpServers: [{ name: "jait", transport: "http", url: "http://gateway.test/mcp" }],
       }),
       90_000,
     );

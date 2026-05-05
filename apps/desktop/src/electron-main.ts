@@ -701,7 +701,7 @@ const remoteProviderSessions = new Map<string, RemoteProviderSession>();
 
 interface DesktopMcpServerRef {
   name: string;
-  transport: "stdio" | "sse";
+  transport: "stdio" | "http" | "sse";
   command?: string;
   args?: string[];
   url?: string;
@@ -712,7 +712,7 @@ function getDesktopJaitMcpServers(servers?: DesktopMcpServerRef[]): DesktopMcpSe
   if (servers?.length) return servers;
   return [{
     name: "jait",
-    transport: "sse",
+    transport: "http",
     url: new URL("/mcp", `${GATEWAY_URL.replace(/\/+$/, "")}/`).toString(),
   }];
 }
@@ -723,7 +723,7 @@ function buildDesktopCodexMcpArgs(servers?: DesktopMcpServerRef[]): string[] {
   const args: string[] = [];
   for (const server of servers) {
     const prefix = `mcp_servers.${server.name}`;
-    if (server.transport === "sse" && server.url) {
+    if ((server.transport === "http" || server.transport === "sse") && server.url) {
       args.push("-c", `${prefix}.url=${JSON.stringify(server.url)}`);
       continue;
     }
@@ -743,7 +743,7 @@ function buildDesktopClaudeMcpConfig(sessionId: string, servers?: DesktopMcpServ
   const config = { mcpServers: {} as Record<string, unknown> };
 
   for (const server of servers) {
-    if (server.transport === "sse" && server.url) {
+    if ((server.transport === "http" || server.transport === "sse") && server.url) {
       config.mcpServers[server.name] = { url: server.url };
       continue;
     }

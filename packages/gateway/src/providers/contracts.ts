@@ -199,8 +199,8 @@ export interface StartSessionOptions {
 export interface McpServerRef {
   /** Server name */
   name: string;
-  /** Transport: stdio command or SSE URL */
-  transport: "stdio" | "sse";
+  /** Transport: stdio command, Streamable HTTP URL, or legacy SSE URL */
+  transport: "stdio" | "http" | "sse";
   /** For stdio: command to run */
   command?: string;
   args?: string[];
