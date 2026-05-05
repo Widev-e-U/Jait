@@ -1179,13 +1179,14 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   // Underestimating it lets the workspace panel steal space from the chat column,
   // which can clip sidebar/chat actions at narrower desktop widths.
   const sidebarWidth = 304
-  const minChatWidth = 600
+  const minChatWidth = 300
+  const initialChatWidth = 600
   const minEditorWidth = 200 // minimum editor pane width when tree is visible
   const viewportWidth = typeof window !== 'undefined' ? window.innerWidth : 1200
 
   const panelMax = Math.max(400, viewportWidth - sidebarWidth - minChatWidth)
   const panelFullWidth = Math.max(panelMax, viewportWidth - sidebarWidth)
-  const initialPanel = panelMax
+  const initialPanel = Math.min(panelMax, Math.max(400, viewportWidth - sidebarWidth - initialChatWidth))
   const panel = useDragResize(initialPanel, 400, panelMax, 'horizontal', 'workspacePanelWidth', {
     snapCollapse: true,
     snapMaxCollapse: true,

@@ -19,4 +19,12 @@ describe('normalizeChangedFiles', () => {
       { path: '/work/app.ts', name: 'app.ts', state: 'accepted' },
     ])
   })
+
+  it('preserves valid diff counts', () => {
+    expect(normalizeChangedFiles([
+      { path: '/work/app.ts', name: 'app.ts', state: 'undecided', insertions: 4, deletions: 2 },
+    ])).toEqual([
+      { path: '/work/app.ts', name: 'app.ts', state: 'undecided', insertions: 4, deletions: 2 },
+    ])
+  })
 })

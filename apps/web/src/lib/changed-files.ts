@@ -23,8 +23,20 @@ export function normalizeChangedFiles(value: unknown): ChangedFile[] {
     const state = typeof entry.state === 'string' && validStates.has(entry.state as FileChangeState)
       ? entry.state as FileChangeState
       : 'undecided'
+    const insertions = typeof entry.insertions === 'number' && Number.isFinite(entry.insertions)
+      ? Math.max(0, entry.insertions)
+      : undefined
+    const deletions = typeof entry.deletions === 'number' && Number.isFinite(entry.deletions)
+      ? Math.max(0, entry.deletions)
+      : undefined
 
-    files.push({ path: entry.path, name, state })
+    files.push({
+      path: entry.path,
+      name,
+      state,
+      ...(insertions !== undefined ? { insertions } : {}),
+      ...(deletions !== undefined ? { deletions } : {}),
+    })
   }
 
   return files

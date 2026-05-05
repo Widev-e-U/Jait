@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { Check, FileText, Undo2, ExternalLink } from 'lucide-react'
+import { Check, ChevronRight, FileText, Undo2, ExternalLink } from 'lucide-react'
 import { FileIcon } from '@/components/icons/file-icons'
 import { Button } from '@/components/ui/button'
 import { cn } from '@/lib/utils'
@@ -10,6 +10,8 @@ export interface ChangedFile {
   path: string
   name: string
   state: FileChangeState
+  insertions?: number
+  deletions?: number
 }
 
 interface FilesChangedProps {
@@ -34,6 +36,7 @@ export function FilesChanged({
 }: FilesChangedProps) {
   const rootRef = useRef<HTMLDivElement | null>(null)
   const [compactActions, setCompactActions] = useState(false)
+  const [expanded, setExpanded] = useState(false)
 
   useEffect(() => {
     const node = rootRef.current
@@ -53,23 +56,48 @@ export function FilesChanged({
   if (files.length === 0) return null
 
   const undecided = files.filter((f) => f.state === 'undecided').length
+  const insertions = files.reduce((total, file) => total + (file.insertions ?? 0), 0)
+  const deletions = files.reduce((total, file) => total + (file.deletions ?? 0), 0)
+  const hasDiffCounts = files.some((file) => file.insertions !== undefined || file.deletions !== undefined)
+  const collapsedCountLabel = hasDiffCounts
+    ? null
+    : `${files.length} ${files.length === 1 ? 'file' : 'files'}`
+
+  const DiffCount = ({ insertions, deletions }: { insertions: number; deletions: number }) => (
+    <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums">
+      <span className="text-green-600 dark:text-green-400">+{insertions}</span>
+      <span className="ml-1 text-red-600 dark:text-red-400">-{deletions}</span>
+    </span>
+  )
 
   return (
     <div ref={rootRef} className={cn('overflow-hidden rounded-lg border bg-muted/30', className)}>
       {/* Header */}
-      <div className="flex items-center justify-between gap-2 border-b bg-muted/20 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-1.5">
+      <div className={cn('flex items-center justify-between gap-2 bg-muted/20 px-3 py-2', expanded && 'border-b')}>
+        <button
+          type="button"
+          className="flex min-w-0 items-center gap-1.5 text-left"
+          onClick={() => setExpanded((value) => !value)}
+          aria-expanded={expanded}
+        >
+          <ChevronRight className={cn('h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform', expanded && 'rotate-90')} />
           <FileText className="h-3.5 w-3.5 text-muted-foreground" />
           <span className="truncate text-xs font-medium">
-            Files changed ({files.length})
+            {expanded ? `Files changed (${files.length})` : 'Files changed'}
           </span>
-          {undecided > 0 && (
+          {!expanded && hasDiffCounts && <DiffCount insertions={insertions} deletions={deletions} />}
+          {!expanded && collapsedCountLabel && (
+            <span className="shrink-0 whitespace-nowrap text-2xs tabular-nums text-muted-foreground">
+              {collapsedCountLabel}
+            </span>
+          )}
+          {expanded && undecided > 0 && (
             <span className="shrink-0 text-2xs text-amber-500 dark:text-amber-400">
               {undecided} pending
             </span>
           )}
-        </div>
-        {undecided > 0 && (
+        </button>
+        {expanded && undecided > 0 && (
           <div className="ml-auto flex shrink-0 items-center gap-1">
             <Button
               size={compactActions ? 'icon' : 'sm'}
@@ -98,7 +126,7 @@ export function FilesChanged({
       </div>
 
       {/* File list */}
-      <div className="divide-y">
+      {expanded && <div className="divide-y">
         {files.map((file) => (
           <div
             key={file.path}
@@ -120,6 +148,9 @@ export function FilesChanged({
             >
               {file.path}
             </button>
+            {hasDiffCounts && (
+              <DiffCount insertions={file.insertions ?? 0} deletions={file.deletions ?? 0} />
+            )}
 
             {file.state === 'undecided' && (
               <div className="ml-auto flex items-center gap-0.5 shrink-0">
@@ -157,7 +188,7 @@ export function FilesChanged({
             )}
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   )
 }

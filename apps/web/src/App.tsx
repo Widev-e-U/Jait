@@ -135,7 +135,7 @@ import {
 import { inferThreadRepositoryName, type AutomationRepository, type RepositoryRuntimeInfo } from '@/lib/automation-repositories'
 import { getWorkspaceRepositoryId } from '@/lib/workspace-repositories'
 import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type ThreadStatus } from '@/lib/agents-api'
-import { gitApi } from '@/lib/git-api'
+import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
 import { getDeveloperChatUiState } from '@/lib/developer-chat-state'
@@ -173,6 +173,58 @@ const VOICE_LEVEL_FLOOR = 0.05
 type AvailableFileForMention = { path: string; name: string; kind?: 'file' | 'dir' }
 type ActiveWorkspaceState = { surfaceId: string; workspaceRoot: string; nodeId?: string } | null
 const VIEW_MODE_STORAGE_KEY = 'jait.viewMode'
+
+function normalizeWorkspacePath(path: string): string {
+  return path.replace(/\\/g, '/').replace(/\/+$/, '')
+}
+
+function getRelativeWorkspacePath(path: string, workspaceRoot: string | null): string {
+  const normalizedPath = normalizeWorkspacePath(path)
+  if (!workspaceRoot) return normalizedPath
+  const normalizedRoot = normalizeWorkspacePath(workspaceRoot)
+  return normalizedPath.startsWith(`${normalizedRoot}/`)
+    ? normalizedPath.slice(normalizedRoot.length + 1)
+    : normalizedPath
+}
+
+function buildGitDiffCountMap(status: GitStatusResult | null, workspaceRoot: string | null): Map<string, { insertions: number; deletions: number }> {
+  const counts = new Map<string, { insertions: number; deletions: number }>()
+  if (!status) return counts
+
+  const addCounts = (path: string, insertions: number, deletions: number) => {
+    const normalizedPath = normalizeWorkspacePath(path)
+    const existing = counts.get(normalizedPath) ?? { insertions: 0, deletions: 0 }
+    counts.set(normalizedPath, {
+      insertions: existing.insertions + insertions,
+      deletions: existing.deletions + deletions,
+    })
+  }
+
+  for (const file of [...status.index.files, ...status.workingTree.files]) {
+    addCounts(file.path, file.insertions, file.deletions)
+    if (workspaceRoot) {
+      addCounts(`${normalizeWorkspacePath(workspaceRoot)}/${normalizeWorkspacePath(file.path)}`, file.insertions, file.deletions)
+    }
+  }
+
+  return counts
+}
+
+function enrichChangedFilesWithDiffCounts(
+  files: ChangedFile[],
+  status: GitStatusResult | null,
+  workspaceRoot: string | null,
+): ChangedFile[] {
+  const counts = buildGitDiffCountMap(status, workspaceRoot)
+  if (counts.size === 0) return files
+
+  return files.map((file) => {
+    const normalizedPath = normalizeWorkspacePath(file.path)
+    const relativePath = getRelativeWorkspacePath(file.path, workspaceRoot)
+    const diffCounts = counts.get(normalizedPath) ?? counts.get(relativePath)
+    return diffCounts ? { ...file, ...diffCounts } : file
+  })
+}
 
 function areAvailableFilesEqual(a: AvailableFileForMention[], b: AvailableFileForMention[]) {
   if (a.length !== b.length) return false
@@ -4317,6 +4369,34 @@ function App() {
   }, [terminalColumnWidth])
 
   const activeWorkspaceRoot = activeWorkspace?.workspaceRoot ?? activeWorkspaceRecord?.rootPath ?? null
+  const [composerGitStatus, setComposerGitStatus] = useState<GitStatusResult | null>(null)
+  const changedFilesKey = useMemo(
+    () => changedFiles.map((file) => file.path).join('\0'),
+    [changedFiles],
+  )
+  useEffect(() => {
+    if (!activeWorkspaceRoot || changedFiles.length === 0) {
+      setComposerGitStatus(null)
+      return
+    }
+
+    let cancelled = false
+    gitApi.status(activeWorkspaceRoot)
+      .then((status) => {
+        if (!cancelled) setComposerGitStatus(status)
+      })
+      .catch(() => {
+        if (!cancelled) setComposerGitStatus(null)
+      })
+
+    return () => {
+      cancelled = true
+    }
+  }, [activeWorkspaceRoot, changedFiles.length, changedFilesKey, sourceControlRefreshSignal])
+  const changedFilesForComposer = useMemo(
+    () => enrichChangedFilesWithDiffCounts(changedFiles, composerGitStatus, activeWorkspaceRoot),
+    [activeWorkspaceRoot, changedFiles, composerGitStatus],
+  )
   const previewWorkspaceRoot =
     workspacePreviewState.workspaceRoot
     ?? savedDevPreview?.workspaceRoot
@@ -7772,7 +7852,7 @@ function App() {
                       )}
                       {changedFiles.length > 0 && (
                         <FilesChanged
-                          files={changedFiles}
+                          files={changedFilesForComposer}
                           onAccept={acceptFile}
                           onReject={rejectFile}
                           onAcceptAll={acceptAllFiles}
