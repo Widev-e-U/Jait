@@ -196,6 +196,27 @@ export class AcpProvider implements CliProviderAdapter {
       return { ...NO_PROVIDER_AUTH, authenticated: null, detail: "Auth is managed by the ACP agent." };
     }
 
+    // If authenticated via env-var API key, skip the ACP probe entirely.
+    // The key can't be revoked from the UI, so login/logout are both unavailable.
+    if (this.id === "codex" && Boolean(process.env.OPENAI_API_KEY?.trim())) {
+      return {
+        login: false,
+        logout: false,
+        deviceCode: false,
+        authenticated: true,
+        detail: "Authenticated via OPENAI_API_KEY environment variable. Manage the key directly to change access.",
+      };
+    }
+    if (this.id === "claude-code" && Boolean(process.env.ANTHROPIC_API_KEY?.trim())) {
+      return {
+        login: false,
+        logout: false,
+        deviceCode: false,
+        authenticated: true,
+        detail: "Authenticated via ANTHROPIC_API_KEY environment variable. Manage the key directly to change access.",
+      };
+    }
+
     const probe = await this.probeAcpAuth().catch(() => null);
     const login = (probe?.authMethods.length ?? 0) > 0;
     const acpLogout = Boolean(probe?.initialized.agentCapabilities?.auth?.logout);
