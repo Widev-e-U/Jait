@@ -663,6 +663,7 @@ export function registerThreadRoutes(
 
   function buildThreadTurnMessage(args: {
     message: string;
+    repoName?: string | null;
     repoStrategy?: string | null;
     prUrl?: string | null;
     prState?: "creating" | "open" | "closed" | "merged" | null;
@@ -672,6 +673,19 @@ export function registerThreadRoutes(
 
     if (args.repoStrategy?.trim()) {
       fullMessage = `<repository-strategy>\n${args.repoStrategy.trim()}\n</repository-strategy>\n\n${fullMessage}`;
+    }
+
+    if (args.repoName?.trim()) {
+      fullMessage = [
+        "<thread-proposal-instructions>",
+        `This thread belongs to the repository "${args.repoName.trim()}".`,
+        "When you notice worthwhile follow-up work that should become a future user request, save it with the `repo.proposals` tool.",
+        "Use concise, actionable user-message wording that can be run directly as a future thread prompt.",
+        "Only save proposals that are genuinely useful next actions. Do not spam the list with trivial or duplicate items.",
+        "</thread-proposal-instructions>",
+        "",
+        fullMessage,
+      ].join("\n");
     }
 
     if (args.prState === "open" && args.prUrl?.trim()) {
@@ -694,6 +708,14 @@ export function registerThreadRoutes(
     return value === "creating" || value === "open" || value === "closed" || value === "merged"
       ? value
       : null;
+  }
+
+  function resolveThreadRepositoryForUser(userId: string, workingDirectory: string | null | undefined) {
+    if (!repoService || !workingDirectory) return null;
+    return repoService.list(userId).find((repo) =>
+      workingDirectory.startsWith(repo.localPath) ||
+      workingDirectory.includes(repo.name),
+    ) ?? null;
   }
 
   /**
@@ -1202,16 +1224,11 @@ export function registerThreadRoutes(
               return;
             }
 
-            let repoStrategy: string | null = null;
-            if (repoService && workingDirectory) {
-              const matchingRepo = repoService.list(authUser.id).find((r) =>
-                workingDirectory.startsWith(r.localPath) ||
-                workingDirectory.includes(r.name),
-              );
-              repoStrategy = matchingRepo?.strategy ?? null;
-            }
+            const matchingRepo = resolveThreadRepositoryForUser(authUser.id, workingDirectory);
+            const repoStrategy = matchingRepo?.strategy ?? null;
             const fullMessage = buildThreadTurnMessage({
               message,
+              repoName: matchingRepo?.name ?? null,
               repoStrategy,
               prUrl: thread.prUrl,
               prState: normalizeThreadPrState(thread.prState),
@@ -1382,8 +1399,11 @@ export function registerThreadRoutes(
     threadService.update(id, { status: "running", error: null, completedAt: null });
     broadcastThreadStatus(id, "running");
 
+    const matchingRepo = resolveThreadRepositoryForUser(authUser.id, thread.workingDirectory);
     let fullMessage = buildThreadTurnMessage({
       message,
+      repoName: matchingRepo?.name ?? null,
+      repoStrategy: matchingRepo?.strategy ?? null,
       prUrl: thread.prUrl,
       prState: normalizeThreadPrState(thread.prState),
       branch: thread.branch,

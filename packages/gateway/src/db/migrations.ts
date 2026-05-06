@@ -731,4 +731,26 @@ export const migrations: Migration[] = [
     },
   },
 
+  // ─── 032: Repo-scoped thread proposal list ─────────────────────────
+  {
+    id: 32,
+    name: "automation_repo_proposals_table",
+    run(db) {
+      db.exec(`
+        CREATE TABLE IF NOT EXISTS automation_repo_proposals (
+          id TEXT PRIMARY KEY,
+          repo_id TEXT NOT NULL,
+          user_id TEXT,
+          message TEXT NOT NULL,
+          source_thread_id TEXT,
+          source_thread_title TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_automation_repo_proposals_repo ON automation_repo_proposals(repo_id, updated_at DESC)`);
+      db.exec(`CREATE INDEX IF NOT EXISTS idx_automation_repo_proposals_user ON automation_repo_proposals(user_id, updated_at DESC)`);
+    },
+  },
+
 ];

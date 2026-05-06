@@ -248,6 +248,27 @@ export interface GeneratePlanTasksRequest {
   model?: string | null
 }
 
+export interface RepoProposal {
+  id: string
+  repoId: string
+  userId: string | null
+  message: string
+  sourceThreadId: string | null
+  sourceThreadTitle: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export interface CreateRepoProposalRequest {
+  message: string
+  sourceThreadId?: string | null
+  sourceThreadTitle?: string | null
+}
+
+export interface UpdateRepoProposalRequest {
+  message: string
+}
+
 // ── API Client ───────────────────────────────────────────────────────
 
 export class AgentsApi {
@@ -674,6 +695,45 @@ export class AgentsApi {
       throw new Error(err.error || `Failed to start tasks: ${res.statusText}`)
     }
     return await res.json() as { tasks: PlanTask[]; repo: { id: string; name: string; localPath: string; defaultBranch: string; githubUrl: string | null } }
+  }
+
+  async listRepoProposals(repoId: string): Promise<RepoProposal[]> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/proposals`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to list proposals: ${res.statusText}`)
+    const data = await res.json() as { proposals: RepoProposal[] }
+    return data.proposals
+  }
+
+  async createRepoProposal(repoId: string, params: CreateRepoProposalRequest): Promise<RepoProposal> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/proposals`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to create proposal: ${res.statusText}`)
+    const data = await res.json() as { proposal: RepoProposal }
+    return data.proposal
+  }
+
+  async updateRepoProposal(proposalId: string, params: UpdateRepoProposalRequest): Promise<RepoProposal> {
+    const res = await fetch(`${API_URL}/api/repo-proposals/${proposalId}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to update proposal: ${res.statusText}`)
+    const data = await res.json() as { proposal: RepoProposal }
+    return data.proposal
+  }
+
+  async deleteRepoProposal(proposalId: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/repo-proposals/${proposalId}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to delete proposal: ${res.statusText}`)
   }
 }
 

@@ -4178,14 +4178,15 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
   const renderCommitActions = (mobile = false) => (
     <div className={cn(
       'flex items-center',
-      mobile ? 'gap-1.5' : 'overflow-hidden rounded-md shadow-sm',
+      mobile ? 'gap-1.5' : 'overflow-hidden rounded-[3px]',
     )}>
       <Button
+        variant={mobile ? 'default' : 'outline'}
         size="sm"
         className={cn(
           mobile
             ? 'h-8 rounded-md px-2.5 text-xs'
-            : 'h-6 gap-1 rounded-r-none px-2 text-xs shadow-none',
+            : 'h-[22px] min-w-0 gap-1 rounded-r-none border-r-0 px-1.5 text-[11px] shadow-none',
         )}
         onClick={() => {
           if (primaryGitAction === 'sync') {
@@ -4209,31 +4210,31 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button
-            variant={mobile ? 'secondary' : 'default'}
+            variant={mobile ? 'secondary' : 'outline'}
             size="sm"
             className={cn(
               mobile
                 ? 'h-8 rounded-md px-2'
-                : 'h-6 w-6 rounded-l-none border-l border-primary-foreground/25 px-0 shadow-none',
+                : 'h-[22px] w-5 rounded-l-none px-0 shadow-none',
             )}
             disabled={gitActionBusy}
             title="More commit actions"
             aria-label="More commit actions"
           >
-            <ChevronDown className="h-3.5 w-3.5" />
+            <ChevronDown className="h-3 w-3" />
           </Button>
         </DropdownMenuTrigger>
-        <DropdownMenuContent side="bottom" align="end" sideOffset={4} className="w-44">
-          <DropdownMenuItem onSelect={() => { void handleGitAction('commit') }} className="gap-2" disabled={!canRunCommitAction}>
-            <GitCommit className="h-3.5 w-3.5" />
+        <DropdownMenuContent side="bottom" align="start" sideOffset={4} className="w-40 p-1">
+          <DropdownMenuItem onSelect={() => { void handleGitAction('commit') }} className="gap-2 text-xs" disabled={!canRunCommitAction}>
+            <GitCommit className="h-3 w-3" />
             Commit
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => { void handleGitAction('commit_push') }} className="gap-2" disabled={!canRunCommitPushAction}>
-            <CloudUpload className="h-3.5 w-3.5" />
+          <DropdownMenuItem onSelect={() => { void handleGitAction('commit_push') }} className="gap-2 text-xs" disabled={!canRunCommitPushAction}>
+            <CloudUpload className="h-3 w-3" />
             Commit & Push
           </DropdownMenuItem>
-          <DropdownMenuItem onSelect={() => { void handleGitSync() }} className="gap-2" disabled={!canRunSyncAction}>
-            <RefreshCw className="h-3.5 w-3.5" />
+          <DropdownMenuItem onSelect={() => { void handleGitSync() }} className="gap-2 text-xs" disabled={!canRunSyncAction}>
+            <RefreshCw className="h-3 w-3" />
             Sync Changes
           </DropdownMenuItem>
         </DropdownMenuContent>
@@ -4449,7 +4450,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
             <span className={cn('source-control-label-name', fileStatus === 'D' && 'line-through text-muted-foreground')}>{fileName}</span>
             {dirPath ? <span className="source-control-label-description">{dirPath}</span> : null}
           </div>
-          <span className="w-16 shrink-0 text-right text-2xs text-muted-foreground">
+          <span className="shrink-0 whitespace-nowrap text-right text-2xs tabular-nums text-muted-foreground">
             {node.entry.insertions > 0 && <span className="text-green-500">+{node.entry.insertions}</span>}
             {node.entry.deletions > 0 && <span className="ml-0.5 text-red-500">-{node.entry.deletions}</span>}
           </span>
@@ -4593,7 +4594,7 @@ export const WorkspacePanel = forwardRef<WorkspacePanelHandle, WorkspacePanelPro
                       </span>
                       {dirPath ? <span className="source-control-label-description">{dirPath}</span> : null}
                     </div>
-                    <span className="w-16 shrink-0 text-right text-2xs text-muted-foreground">
+                    <span className="shrink-0 whitespace-nowrap text-right text-2xs tabular-nums text-muted-foreground">
                       {f.insertions > 0 && <span className="text-green-500">+{f.insertions}</span>}
                       {f.deletions > 0 && <span className="ml-0.5 text-red-500">-{f.deletions}</span>}
                     </span>

@@ -309,7 +309,6 @@
   button,
   [role='button'],
   [role='tab'] {
-    min-height: 2.5rem;
     touch-action: manipulation;
   }
 

@@ -36,6 +36,7 @@ import { ScreenShareService } from "@jait/screen-share";
 import { ThreadService } from "./services/threads.js";
 import { RepositoryService } from "./services/repositories.js";
 import { PlanService } from "./services/plans.js";
+import { RepoProposalService } from "./services/repo-proposals.js";
 import { ProviderRegistry } from "./providers/registry.js";
 import { JaitProvider } from "./providers/jait-provider.js";
 import { AcpProvider, loadAcpProviderConfigs } from "./providers/acp-provider.js";
@@ -101,6 +102,7 @@ async function main() {
   const repoService = new RepositoryService(db);
   const gitService = new GitService();
   const planService = new PlanService(db);
+  const repoProposalService = new RepoProposalService(db);
   const maintenanceService = new MaintenanceService(db, planService, repoService);
   const architectureDiagramService = new ArchitectureDiagramService(db);
   const providerRegistry = new ProviderRegistry();
@@ -331,6 +333,7 @@ async function main() {
     sessionState,
     workspaceService,
     repoService,
+    repoProposalService,
     gitService,
     maintenanceService,
     notifications,
@@ -466,6 +469,7 @@ async function main() {
     userService,
     workspaceService,
     repoService,
+    repoProposalService,
     gitService,
     maintenanceService,
     notifications,
@@ -641,6 +645,7 @@ async function main() {
     threadService,
     repoService,
     planService,
+    repoProposalService,
     maintenanceService,
     notifications,
     providerRegistry,

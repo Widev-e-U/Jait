@@ -3,6 +3,8 @@ export interface WorkspaceLayoutState {
   editor: boolean
 }
 
+export type MobileWorkspaceReopenTarget = 'background' | 'editor'
+
 export function normalizeHydratedWorkspaceLayout(
   layout: WorkspaceLayoutState,
   isMobile: boolean,
@@ -26,6 +28,14 @@ export function showMobileWorkspacePane(pane: 'tree' | 'editor'): WorkspaceLayou
   return pane === 'tree'
     ? { tree: true, editor: false }
     : { tree: false, editor: true }
+}
+
+export function getReopenedMobileWorkspaceLayout(
+  target: MobileWorkspaceReopenTarget = 'background',
+): WorkspaceLayoutState {
+  return target === 'editor'
+    ? showMobileWorkspacePane('editor')
+    : collapseMobileWorkspace()
 }
 
 export function toggleMobileWorkspacePane(

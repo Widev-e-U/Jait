@@ -1443,7 +1443,28 @@ function ToolCallCardInner({
       ? 'text-muted-foreground'
       : call.status === 'success'
         ? 'text-green-500'
-        : 'text-red-500'
+      : 'text-red-500'
+
+  const stateClasses = call.status === 'error'
+    ? {
+        row: 'border-red-500/25 bg-red-500/[0.035] hover:bg-red-500/[0.06]',
+        icon: 'border-red-500/25 bg-red-500/10',
+        connector: 'bg-red-500/25',
+        body: 'border-red-500/20 bg-red-500/[0.025]',
+      }
+    : call.status === 'success'
+      ? {
+          row: 'border-emerald-500/15 bg-card/58 hover:bg-muted/42',
+          icon: 'border-emerald-500/20 bg-emerald-500/[0.08]',
+          connector: 'bg-border/55',
+          body: 'border-border/45 bg-card/42',
+        }
+      : {
+          row: 'border-primary/20 bg-primary/[0.045] hover:bg-primary/[0.075]',
+          icon: 'border-primary/25 bg-primary/10',
+          connector: 'bg-primary/30',
+          body: 'border-primary/20 bg-primary/[0.025]',
+        }
 
   useEffect(() => {
     const prevStatus = prevStatusRef.current
@@ -1663,34 +1684,40 @@ function ToolCallCardInner({
 
   return (
     <Collapsible open={hasExpandableContent ? open : false} onOpenChange={setOpen}>
-      <div className="relative pl-7">
+      <div className="relative pl-8">
         {!hideTopConnector && (
           <span
-            className="absolute left-[10.5px] top-0 h-6 w-px bg-border/60"
+            className={cn('absolute left-[12.5px] top-0 h-6 w-px', stateClasses.connector)}
             style={{ maskImage: 'linear-gradient(to bottom, transparent 0 22px, #000 22px 100%)' }}
             aria-hidden="true"
           />
         )}
         {!hideBottomConnector && (
           <span
-            className="absolute left-[10.5px] top-0 bottom-0 w-px bg-border/60"
+            className={cn('absolute left-[12.5px] top-0 bottom-0 w-px', stateClasses.connector)}
             style={{ maskImage: 'linear-gradient(to bottom, #000 0 5px, transparent 5px 23px, #000 23px 100%)' }}
             aria-hidden="true"
           />
         )}
         {hideBottomConnector && !hideTopConnector && (
           <span
-            className="absolute left-[10.5px] top-0 bottom-0 w-px bg-border/60"
+            className={cn('absolute left-[12.5px] top-0 bottom-0 w-px', stateClasses.connector)}
             style={{ maskImage: 'linear-gradient(to bottom, #000 0 5px, transparent 5px 100%)' }}
             aria-hidden="true"
           />
         )}
-        <div className="absolute left-[5px] top-[9px] z-10 flex h-3 w-3 items-center justify-center">
-          <Icon className={cn('h-3 w-3 shrink-0', effectiveColor)} />
+        <div className={cn(
+          'absolute left-[3px] top-[7px] z-10 flex h-5 w-5 items-center justify-center rounded-md border shadow-sm ring-2 ring-background',
+          stateClasses.icon,
+        )}>
+          <Icon className={cn('h-3.5 w-3.5 shrink-0', effectiveColor)} />
         </div>
 
         <div className="group pb-1">
-          <div className="flex items-center gap-2 rounded-sm px-1 py-1.5 transition-colors hover:bg-muted/20">
+          <div className={cn(
+            'flex min-h-9 items-center gap-2 rounded-md border px-2 py-1.5 shadow-[0_1px_0_hsl(var(--foreground)/0.04)] transition-colors',
+            stateClasses.row,
+          )}>
             {hasExpandableContent ? (
               <CollapsibleTrigger className="flex min-w-0 flex-1 items-center gap-2 text-left">
                 <ChevronRight className={cn(
@@ -1751,18 +1778,18 @@ function ToolCallCardInner({
 
       {hasExpandableContent && (
         <CollapsibleContent>
-          <div className="ml-7 mr-3 mb-2 border-l border-border/40 pl-4">
+          <div className={cn('ml-8 mr-3 mb-2 rounded-md border px-3 py-2', stateClasses.body)}>
             {bodyContent}
           </div>
         </CollapsibleContent>
       )}
       {inlineBody && (
-        <div className="ml-7 mr-3 mb-2 border-l border-border/40 pl-4">
+        <div className={cn('ml-8 mr-3 mb-2 rounded-md border px-3 py-2', stateClasses.body)}>
           {bodyContent}
         </div>
       )}
       {hasInlineSecretPrompt && (
-        <div className="ml-7 mr-3 mb-2 border-l border-border/40 pl-4">
+        <div className="ml-8 mr-3 mb-2 rounded-md border border-yellow-500/20 bg-yellow-500/[0.025] px-3 py-2">
           <div className="rounded-lg border border-yellow-500/25 bg-yellow-500/[0.04] p-3">
             {resolvedInlineSecretPrompt}
           </div>

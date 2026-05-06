@@ -81,6 +81,7 @@ import { ThreadSkillPicker } from '@/components/automation/ThreadSkillPicker'
 import { shouldRenderThreadActions } from '@/components/automation/thread-actions-state'
 import { StrategyModal } from '@/components/automation/StrategyModal'
 import { PlanModal } from '@/components/automation/PlanModal'
+import { RepoProposalModal } from '@/components/automation/RepoProposalModal'
 import { activitiesToMessages } from '@/lib/activity-to-messages'
 import { SettingsPage, type UpdateInfo } from '@/components/settings/SettingsPage'
 import { NetworkPanel } from '@/components/network'
@@ -144,6 +145,7 @@ import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState }
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
 import {
   collapseMobileWorkspace,
+  getReopenedMobileWorkspaceLayout,
   normalizeHydratedWorkspaceLayout,
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
@@ -1466,6 +1468,7 @@ function App() {
   const [showManagerTasks, setShowManagerTasks] = useState(true)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
+  const [proposalModalOpen, setProposalModalOpen] = useState(false)
   const sidebarRef = useRef<HTMLElement | null>(null)
   const [showWorkspace, setShowWorkspace] = useState(false)
   const [showMobileToolbar, setShowMobileToolbar] = useState(false)
@@ -3949,12 +3952,13 @@ function App() {
     path: string,
     nodeId?: string | null,
     sessionIdOverride?: string | null,
+    options?: { mobileTarget?: 'background' | 'editor' },
   ) => {
     await openRemoteWorkspaceOnGateway(path, nodeId ?? undefined, sessionIdOverride)
     showWorkspaceRef.current = true
     setShowWorkspace(true)
     if (isMobile) {
-      applyWorkspaceLayout(collapseMobileWorkspace(), { immediateSync: true })
+      applyWorkspaceLayout(getReopenedMobileWorkspaceLayout(options?.mobileTarget), { immediateSync: true })
     } else {
       setShowWorkspaceTree(true)
       showWorkspaceEditorPanel()
@@ -4074,7 +4078,7 @@ function App() {
           return
         }
         if (!workspaceSessionId) return
-        await reopenPersistedWorkspace(threadWorkspace, selectedThreadRepo?.deviceId ?? undefined, workspaceSessionId)
+        await reopenPersistedWorkspace(threadWorkspace, selectedThreadRepo?.deviceId ?? undefined, workspaceSessionId, { mobileTarget: 'editor' })
         return
       }
     }
@@ -4092,7 +4096,7 @@ function App() {
 
     // If a workspace record exists with a rootPath, open it directly instead of showing the picker
     if (currentActiveWorkspaceRecord?.rootPath) {
-      await reopenPersistedWorkspace(currentActiveWorkspaceRecord.rootPath, currentActiveWorkspaceRecord.nodeId ?? 'gateway', currentActiveSessionId)
+      await reopenPersistedWorkspace(currentActiveWorkspaceRecord.rootPath, currentActiveWorkspaceRecord.nodeId ?? 'gateway', currentActiveSessionId, { mobileTarget: 'editor' })
       return
     }
 
@@ -4103,6 +4107,7 @@ function App() {
         pendingWorkspaceRoot,
         pendingWorkspacePanel?.nodeId ?? undefined,
         currentActiveSessionId,
+        { mobileTarget: 'editor' },
       )
       return
     }
@@ -4114,6 +4119,7 @@ function App() {
         persistedWorkspaceRoot,
         persistedWorkspacePanel?.nodeId ?? undefined,
         currentActiveSessionId,
+        { mobileTarget: 'editor' },
       )
       return
     }
@@ -4134,7 +4140,7 @@ function App() {
         ?? null
       if (fallbackSession) {
         switchSession(fallbackWorkspace.id, fallbackSession.id)
-        await reopenPersistedWorkspace(fallbackRoot, fallbackWorkspace.nodeId ?? undefined, fallbackSession.id)
+        await reopenPersistedWorkspace(fallbackRoot, fallbackWorkspace.nodeId ?? undefined, fallbackSession.id, { mobileTarget: 'editor' })
         return
       }
       await handleWorkspaceFolderSelected(fallbackRoot, fallbackWorkspace.nodeId ?? 'gateway', { openEditor: true })
@@ -4165,7 +4171,7 @@ function App() {
           const serverRoot = serverWorkspace?.rootPath?.trim() || session.workspacePath?.trim() || null
           if (serverRoot) {
             if (serverWorkspace?.id) switchSession(serverWorkspace.id, session.id)
-            await reopenPersistedWorkspace(serverRoot, serverWorkspace?.nodeId ?? undefined, session.id)
+            await reopenPersistedWorkspace(serverRoot, serverWorkspace?.nodeId ?? undefined, session.id, { mobileTarget: 'editor' })
             return
           }
         }
@@ -4192,6 +4198,7 @@ function App() {
               lastActiveRoot,
               lastActive.workspace.nodeId ?? persistedWorkspacePanel?.nodeId ?? undefined,
               lastActiveSessionId,
+              { mobileTarget: 'editor' },
             )
             return
           }
@@ -7536,6 +7543,9 @@ function App() {
                               className="mb-2"
                             />
                           )}
+                          {automation.selectedThreadTodos.length > 0 && (
+                            <TodoList items={automation.selectedThreadTodos} className="mb-2" />
+                          )}
                           <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
                             <PromptInput
                               ref={promptInputRef}
@@ -7569,6 +7579,23 @@ function App() {
                               workspaceOpen={showWorkspace}
                             />
                           </ErrorBoundary>
+                          {automation.selectedThread && automation.selectedThreadRepo && (
+                            <div className="mt-2">
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                className="gap-2"
+                                onClick={() => setProposalModalOpen(true)}
+                              >
+                                <ListChecks className="h-4 w-4" />
+                                <span>Agents Change Proposals</span>
+                                <Badge variant="secondary" className="ml-1">
+                                  {automation.repoProposals.length}
+                                </Badge>
+                              </Button>
+                            </div>
+                          )}
                           <div className="flex items-center gap-2 px-1 mt-1.5">
                             {selectedThreadRepoRuntime && (
                               <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />
@@ -8520,6 +8547,40 @@ function App() {
                 )
                 await agentsApi.updatePlan(plan.id, { tasks: updatedTasks })
               })()
+            }}
+          />
+        )}
+
+        {automation.selectedThreadRepo && (
+          <RepoProposalModal
+            open={proposalModalOpen}
+            onOpenChange={setProposalModalOpen}
+            repoName={automation.selectedThreadRepo.name}
+            proposals={automation.repoProposals}
+            loading={automation.loadingRepoProposals}
+            defaultProvider={chatProvider}
+            defaultRuntimeMode={chatProvider !== 'jait' ? chatProviderRuntimeMode : 'full-access'}
+            defaultModel={cliModel}
+            onAdd={async (message) => {
+              try {
+                await automation.addRepoProposal(message)
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to add proposal')
+              }
+            }}
+            onRemove={async (proposalIds) => {
+              try {
+                await Promise.all(proposalIds.map((proposalId) => automation.removeRepoProposal(proposalId)))
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to remove proposals')
+              }
+            }}
+            onRun={async (proposalIds, providerId, runtimeMode, model) => {
+              try {
+                await automation.runRepoProposals(proposalIds, providerId, runtimeMode, model)
+              } catch (err) {
+                toast.error(err instanceof Error ? err.message : 'Failed to run proposals')
+              }
             }}
           />
         )}

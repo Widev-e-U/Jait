@@ -495,7 +495,7 @@ export function ProviderModelSelector({
           Device is offline — only Jait (gateway) is available
         </div>
       )}
-      <div className={cn('min-h-24 shrink-0 overflow-y-auto p-1', isMobile ? 'max-h-40' : 'max-h-56')}>
+      <div className={cn('shrink-0 overflow-y-auto p-1', isMobile ? 'max-h-28' : 'min-h-24 max-h-56')}>
         {providerEntries.map((entry) => {
           const Icon = entry.icon
           const active = entry.value === provider
@@ -534,7 +534,7 @@ export function ProviderModelSelector({
                         <span className="text-2xs text-emerald-600 dark:text-emerald-400">signed in</span>
                       )}
                     </div>
-                    <div className="text-xs leading-snug text-muted-foreground">
+                    <div className={cn('text-xs leading-snug text-muted-foreground', isMobile && 'hidden')}>
                       {!entry.isAvailable && entry.reason ? entry.reason : entry.description}
                     </div>
                   </div>
@@ -574,7 +574,7 @@ export function ProviderModelSelector({
               <Server className="mt-0.5 h-4 w-4 shrink-0" />
               <div className="min-w-0 flex-1">
                 <div className="text-sm font-medium">Move to Gateway</div>
-                <div className="text-xs leading-snug text-muted-foreground">Run this repo on the gateway server instead</div>
+                <div className={cn('text-xs leading-snug text-muted-foreground', isMobile && 'hidden')}>Run this repo on the gateway server instead</div>
               </div>
             </button>
           </>
@@ -676,7 +676,7 @@ export function ProviderModelSelector({
               overlayClassName="bg-black/40"
               onOpenAutoFocus={(event) => event.preventDefault()}
               onCloseAutoFocus={(event) => event.preventDefault()}
-              className="!bottom-2 !top-auto !flex !max-w-none !translate-x-0 !translate-y-0 !gap-0 !overflow-hidden !rounded-lg !p-0 shadow-lg"
+              className="!bottom-2 !top-auto !flex !max-w-none !translate-x-0 !translate-y-0 !flex-col !gap-0 !overflow-hidden !rounded-lg !p-0 shadow-lg"
               style={{
                 left: '0.5rem',
                 right: '0.5rem',

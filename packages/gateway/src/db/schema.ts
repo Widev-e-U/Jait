@@ -336,6 +336,25 @@ export const automationPlans = sqliteTable(
   ],
 );
 
+// ─── Automation Repo Proposals ───────────────────────────────────────
+export const automationRepoProposals = sqliteTable(
+  "automation_repo_proposals",
+  {
+    id: text("id").primaryKey(),
+    repoId: text("repo_id").notNull(),
+    userId: text("user_id"),
+    message: text("message").notNull(),
+    sourceThreadId: text("source_thread_id"),
+    sourceThreadTitle: text("source_thread_title"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_automation_repo_proposals_repo").on(table.repoId, table.updatedAt),
+    index("idx_automation_repo_proposals_user").on(table.userId, table.updatedAt),
+  ],
+);
+
 // ─── Network Hosts (persistent scan results) ────────────────────────
 export const networkHosts = sqliteTable(
   "network_hosts",

@@ -30,6 +30,7 @@ export {
 } from "./cron-tools.js";
 export { createGatewayStatusTool } from "./gateway-tools.js";
 export { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
+export { createRepoProposalTool } from "./repo-proposal-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 export {
   createBrowserNavigateTool,
@@ -145,6 +146,7 @@ import {
 } from "./cron-tools.js";
 import { createGatewayStatusTool } from "./gateway-tools.js";
 import { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
+import { createRepoProposalTool } from "./repo-proposal-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 import {
   createBrowserNavigateTool,
@@ -192,6 +194,7 @@ import type { SecretInputService } from "../services/secret-input.js";
 import type { WorkspaceService } from "../services/workspaces.js";
 import type { RepositoryService } from "../services/repositories.js";
 import type { GitService } from "../services/git.js";
+import type { RepoProposalService } from "../services/repo-proposals.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -222,6 +225,7 @@ export interface ToolRegistryDeps {
   sessionState?: SessionStateService;
   workspaceService?: WorkspaceService;
   repoService?: RepositoryService;
+  repoProposalService?: RepoProposalService;
   gitService?: GitService;
   maintenanceService?: import("../services/maintenance.js").MaintenanceService;
   notifications?: import("../services/notifications.js").NotificationService;
@@ -317,6 +321,14 @@ export function createToolRegistry(
         ws: deps.ws,
       }),
     );
+  }
+
+  if (deps.repoService && deps.repoProposalService) {
+    tools.register(createRepoProposalTool({
+      repoService: deps.repoService,
+      repoProposalService: deps.repoProposalService,
+      threadService: deps.threadService,
+    }));
   }
 
   // Self-update / redeploy tool

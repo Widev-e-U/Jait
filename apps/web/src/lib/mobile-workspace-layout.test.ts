@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   collapseMobileWorkspace,
+  getReopenedMobileWorkspaceLayout,
   normalizeHydratedWorkspaceLayout,
   showMobileWorkspacePane,
   toggleMobileWorkspacePane,
@@ -14,6 +15,11 @@ describe('mobile workspace layout', () => {
   it('shows one pane at a time', () => {
     expect(showMobileWorkspacePane('tree')).toEqual({ tree: true, editor: false })
     expect(showMobileWorkspacePane('editor')).toEqual({ tree: false, editor: true })
+  })
+
+  it('reopens the editor pane directly when the user explicitly requested editor mode', () => {
+    expect(getReopenedMobileWorkspaceLayout('editor')).toEqual({ tree: false, editor: true })
+    expect(getReopenedMobileWorkspaceLayout()).toEqual({ tree: false, editor: false })
   })
 
   it('toggles the active pane closed', () => {

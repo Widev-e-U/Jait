@@ -37,6 +37,7 @@ import { registerAssistantProfileRoutes } from "./routes/assistant-profiles.js";
 import { registerThreadRoutes } from "./routes/threads.js";
 import { registerRepoRoutes } from "./routes/repositories.js";
 import { registerPlanRoutes } from "./routes/plans.js";
+import { registerRepoProposalRoutes } from "./routes/repo-proposals.js";
 import { registerMaintenanceRoutes } from "./routes/maintenance.js";
 import { registerMcpRoutes } from "./routes/mcp-server.js";
 import { registerGitRoutes } from "./routes/git.js";
@@ -71,6 +72,7 @@ import type { ThreadService } from "./services/threads.js";
 import type { RepositoryService } from "./services/repositories.js";
 import type { GitService } from "./services/git.js";
 import type { PlanService } from "./services/plans.js";
+import type { RepoProposalService } from "./services/repo-proposals.js";
 import type { ProviderRegistry } from "./providers/registry.js";
 import type { SqliteDatabase } from "./db/sqlite-shim.js";
 import { getSchemaVersion } from "./db/connection.js";
@@ -113,6 +115,7 @@ export interface ServerDeps {
   threadService?: ThreadService;
   repoService?: RepositoryService;
   planService?: PlanService;
+  repoProposalService?: RepoProposalService;
   maintenanceService?: import("./services/maintenance.js").MaintenanceService;
   notifications?: import("./services/notifications.js").NotificationService;
   providerRegistry?: ProviderRegistry;
@@ -293,6 +296,13 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
       providerRegistry: deps.providerRegistry,
       userService: deps.userService,
       ws: deps.ws,
+    });
+  }
+
+  if (deps.repoService && deps.repoProposalService) {
+    registerRepoProposalRoutes(app, config, {
+      repoService: deps.repoService,
+      repoProposalService: deps.repoProposalService,
     });
   }
 
