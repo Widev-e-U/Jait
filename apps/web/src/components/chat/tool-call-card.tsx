@@ -836,6 +836,109 @@ function getTerminalOutcomeBadge(call: ToolCallInfo): { label: string; className
   return null
 }
 
+function parseJsonOutput(output: string): unknown | null {
+  const trimmed = output.trim()
+  if (!trimmed) return null
+  if (!trimmed.startsWith('{') && !trimmed.startsWith('[')) return null
+  try {
+    return JSON.parse(trimmed) as unknown
+  } catch {
+    return null
+  }
+}
+
+function getJsonOutputMeta(tool: string): { label: string; accent: string } {
+  const normalized = normalizeTool(tool)
+  if (normalized.startsWith('browser.') || normalized.startsWith('web.')) return { label: 'Web result', accent: 'bg-cyan-500' }
+  if (normalized.startsWith('file.') || normalized === 'read' || normalized === 'edit') return { label: 'File result', accent: 'bg-blue-500' }
+  if (normalized.startsWith('memory.')) return { label: 'Memory result', accent: 'bg-amber-500' }
+  if (normalized.startsWith('cron.')) return { label: 'Schedule result', accent: 'bg-violet-500' }
+  if (normalized.startsWith('surfaces.')) return { label: 'Surface result', accent: 'bg-purple-500' }
+  if (normalized === 'mcp-tool') return { label: 'Tool result', accent: 'bg-purple-500' }
+  return { label: `${getToolMeta(normalized).label} result`, accent: 'bg-primary' }
+}
+
+function JsonScalar({ value }: { value: unknown }) {
+  if (value === null) return <span className="text-muted-foreground">null</span>
+  if (typeof value === 'string') return <span className="text-emerald-500">"{value}"</span>
+  if (typeof value === 'number') return <span className="text-blue-500">{value}</span>
+  if (typeof value === 'boolean') return <span className="text-violet-500">{String(value)}</span>
+  return <span>{safeStringify(value)}</span>
+}
+
+function JsonTree({ value, depth = 0 }: { value: unknown; depth?: number }) {
+  if (value == null || typeof value !== 'object') return <JsonScalar value={value} />
+
+  if (Array.isArray(value)) {
+    if (value.length === 0) return <span className="text-muted-foreground">[]</span>
+    return (
+      <div className="space-y-1">
+        {value.slice(0, 40).map((entry, index) => (
+          <div key={index} className="grid grid-cols-[auto_1fr] gap-2">
+            <span className="font-mono text-muted-foreground">[{index}]</span>
+            <div className={cn(depth < 3 && 'rounded bg-background/45 px-2 py-1')}>
+              <JsonTree value={entry} depth={depth + 1} />
+            </div>
+          </div>
+        ))}
+        {value.length > 40 && <div className="text-muted-foreground">...{value.length - 40} more items</div>}
+      </div>
+    )
+  }
+
+  const entries = Object.entries(value as Record<string, unknown>)
+  if (entries.length === 0) return <span className="text-muted-foreground">{'{}'}</span>
+  return (
+    <div className="space-y-1">
+      {entries.slice(0, 60).map(([key, entry]) => (
+        <div key={key} className="grid grid-cols-[minmax(80px,180px)_1fr] gap-2">
+          <span className="truncate font-mono text-sky-500" title={key}>{key}</span>
+          <div className="min-w-0 break-words">
+            <JsonTree value={entry} depth={depth + 1} />
+          </div>
+        </div>
+      ))}
+      {entries.length > 60 && <div className="text-muted-foreground">...{entries.length - 60} more fields</div>}
+    </div>
+  )
+}
+
+function ToolOutputView({ output, tool, isError, isRunning }: { output: string; tool: string; isError?: boolean; isRunning?: boolean }) {
+  const parsed = useMemo(() => parseJsonOutput(output), [output])
+  const meta = getJsonOutputMeta(tool)
+
+  if (parsed == null) {
+    return (
+      <pre className={cn(
+        'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
+        'bg-muted/40 text-foreground',
+        isError && 'text-red-500 dark:text-red-400'
+      )}>
+        {output}
+        {isRunning && (
+          <span className="inline-block w-1.5 h-3.5 bg-foreground animate-pulse ml-0.5 align-text-bottom" />
+        )}
+      </pre>
+    )
+  }
+
+  return (
+    <div className={cn(
+      'overflow-hidden rounded-md bg-muted/35 text-xs text-foreground',
+      isError && 'text-red-500 dark:text-red-400',
+    )}>
+      <div className="flex items-center gap-2 bg-background/45 px-3 py-2">
+        <span className={cn('h-2 w-2 rounded-full', meta.accent)} />
+        <span className="font-medium">{meta.label}</span>
+        {isRunning && <span className="ml-auto h-3 w-1.5 animate-pulse rounded-sm bg-foreground/70" />}
+      </div>
+      <div className="max-h-72 overflow-auto px-3 py-2 font-mono leading-5">
+        <JsonTree value={parsed} />
+      </div>
+    </div>
+  )
+}
+
 interface SubAgentToolCall {
   callId?: string
   tool: string
@@ -1447,23 +1550,23 @@ function ToolCallCardInner({
 
   const stateClasses = call.status === 'error'
     ? {
-        row: 'border-red-500/25 bg-red-500/[0.035] hover:bg-red-500/[0.06]',
-        icon: 'border-red-500/25 bg-red-500/10',
+        row: 'bg-red-500/[0.035] hover:bg-red-500/[0.06]',
+        icon: 'bg-red-500/10',
         connector: 'bg-red-500/25',
-        body: 'border-red-500/20 bg-red-500/[0.025]',
+        body: 'bg-red-500/[0.025]',
       }
     : call.status === 'success'
       ? {
-          row: 'border-emerald-500/15 bg-card/58 hover:bg-muted/42',
-          icon: 'border-emerald-500/20 bg-emerald-500/[0.08]',
+          row: 'bg-card/58 hover:bg-muted/42',
+          icon: 'bg-emerald-500/[0.08]',
           connector: 'bg-border/55',
-          body: 'border-border/45 bg-card/42',
+          body: 'bg-card/42',
         }
       : {
-          row: 'border-primary/20 bg-primary/[0.045] hover:bg-primary/[0.075]',
-          icon: 'border-primary/25 bg-primary/10',
+          row: 'bg-primary/[0.045] hover:bg-primary/[0.075]',
+          icon: 'bg-primary/10',
           connector: 'bg-primary/30',
-          body: 'border-primary/20 bg-primary/[0.025]',
+          body: 'bg-primary/[0.025]',
         }
 
   useEffect(() => {
@@ -1655,16 +1758,12 @@ function ToolCallCardInner({
       isNewFile={normalizedTool === 'file.write'}
     />
   ) : bodyKind === 'output' ? (
-    <pre className={cn(
-      'text-xs font-mono leading-5 rounded-md px-3 py-2 overflow-x-auto max-h-64 overflow-y-auto whitespace-pre-wrap break-all',
-      'bg-muted/40 text-foreground',
-      call.result && !call.result.ok && 'text-red-500 dark:text-red-400'
-    )}>
-      {displayOutput}
-      {call.status === 'running' && (
-        <span className="inline-block w-1.5 h-3.5 bg-foreground animate-pulse ml-0.5 align-text-bottom" />
-      )}
-    </pre>
+    <ToolOutputView
+      output={displayOutput}
+      tool={normalizedTool}
+      isError={!!call.result && !call.result.ok}
+      isRunning={call.status === 'running'}
+    />
   ) : bodyKind === 'runningHint' ? (
     <div
       className={cn(
@@ -1707,7 +1806,7 @@ function ToolCallCardInner({
           />
         )}
         <div className={cn(
-          'absolute left-[3px] top-[7px] z-10 flex h-5 w-5 items-center justify-center rounded-md border shadow-sm ring-2 ring-background',
+          'absolute left-[3px] top-[7px] z-10 flex h-5 w-5 items-center justify-center rounded-md shadow-sm ring-2 ring-background',
           stateClasses.icon,
         )}>
           <Icon className={cn('h-3.5 w-3.5 shrink-0', effectiveColor)} />
@@ -1715,7 +1814,7 @@ function ToolCallCardInner({
 
         <div className="group pb-1">
           <div className={cn(
-            'flex min-h-9 items-center gap-2 rounded-md border px-2 py-1.5 shadow-[0_1px_0_hsl(var(--foreground)/0.04)] transition-colors',
+            'flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 shadow-[0_1px_0_hsl(var(--foreground)/0.04)] transition-colors',
             stateClasses.row,
           )}>
             {hasExpandableContent ? (
@@ -1778,13 +1877,13 @@ function ToolCallCardInner({
 
       {hasExpandableContent && (
         <CollapsibleContent>
-          <div className={cn('ml-8 mr-3 mb-2 rounded-md border px-3 py-2', stateClasses.body)}>
+          <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
             {bodyContent}
           </div>
         </CollapsibleContent>
       )}
       {inlineBody && (
-        <div className={cn('ml-8 mr-3 mb-2 rounded-md border px-3 py-2', stateClasses.body)}>
+        <div className={cn('ml-8 mr-3 mb-2 rounded-md px-3 py-2', stateClasses.body)}>
           {bodyContent}
         </div>
       )}
