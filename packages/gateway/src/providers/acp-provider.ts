@@ -164,41 +164,34 @@ export class AcpProvider implements CliProviderAdapter {
   async listModels(): Promise<ProviderModelInfo[]> {
     if (this.cachedModels) return this.cachedModels;
 
+    const probe = await this.probeAcpAuth();
     try {
-      const probe = await this.probeAcpAuth();
-      try {
-        const newSession = await withTimeout(
-          probe.connection.newSession({
-            cwd: process.cwd(),
-            mcpServers: [],
-          }),
-          ACP_PROBE_TIMEOUT_MS,
-        );
+      const newSession = await withTimeout(
+        probe.connection.newSession({
+          cwd: process.cwd(),
+          mcpServers: [],
+        }),
+        ACP_PROBE_TIMEOUT_MS,
+      );
 
-        const models: ProviderModelInfo[] = [];
-        const modelState = newSession.models;
-        if (modelState && modelState.availableModels?.length) {
-          for (const model of modelState.availableModels) {
-            models.push({
-              id: model.modelId,
-              name: model.name,
-              description: model.description ?? undefined,
-              isDefault: model.modelId === modelState.currentModelId,
-            });
-          }
+      const models: ProviderModelInfo[] = [];
+      const modelState = newSession.models;
+      if (modelState && modelState.availableModels?.length) {
+        for (const model of modelState.availableModels) {
+          models.push({
+            id: model.modelId,
+            name: model.name,
+            description: model.description ?? undefined,
+            isDefault: model.modelId === modelState.currentModelId,
+          });
         }
-
-        await probe.connection.closeSession?.({ sessionId: newSession.sessionId }).catch(() => {});
-        if (models.length === 0) {
-          models.push(...fallbackProviderModels(this.id));
-        }
-        this.cachedModels = models;
-        return models;
-      } finally {
-        probe.child.kill();
       }
-    } catch {
-      return fallbackProviderModels(this.id);
+
+      await probe.connection.closeSession?.({ sessionId: newSession.sessionId }).catch(() => {});
+      this.cachedModels = models;
+      return models;
+    } finally {
+      probe.child.kill();
     }
   }
 
@@ -223,24 +216,7 @@ export class AcpProvider implements CliProviderAdapter {
   }
 
   private async _computeAuthStatus(): Promise<ProviderAuthStatus> {
-    // If authenticated via env-var API key, skip the ACP probe entirely.
-    // The key can't be revoked from the UI, but local CLI credentials can be.
-    if (this.id === "codex" && Boolean(process.env.OPENAI_API_KEY?.trim())) {
-      const cliAuthenticated = await this.getProviderCliAuthenticated();
-      const logout = cliAuthenticated === true || this.hasCodexAuthFile();
-      const status: ProviderAuthStatus = {
-        login: false,
-        logout,
-        deviceCode: false,
-        authenticated: true,
-        detail: logout
-          ? "Authenticated via OPENAI_API_KEY environment variable and local Codex credentials. Logout clears the local Codex credentials."
-          : "Authenticated via OPENAI_API_KEY environment variable. Manage the key directly to change access.",
-      };
-      this.cachedAuthStatus = { status, expiresAt: Date.now() + 30_000 };
-      return status;
-    }
-
+    // Claude Code supports env-var API-key auth outside the CLI credential store.
     if (this.id === "claude-code" && Boolean(process.env.ANTHROPIC_API_KEY?.trim())) {
       const cliAuthenticated = await this.getProviderCliAuthenticated();
       const logout = cliAuthenticated === true;
@@ -265,8 +241,7 @@ export class AcpProvider implements CliProviderAdapter {
     const authenticated = this.id === "codex"
       ? await this.checkProviderAuthenticated()
       : providerCliAuthenticated ?? await this.checkProviderAuthenticated();
-    // Only offer logout when authenticated via a revocable credential (auth file).
-    // If authenticated purely via an env-var API key, logout is a no-op from the UI.
+    // Only offer logout when authenticated via a revocable credential.
     const logout = this.id === "codex" ? (providerCliAuthenticated === true || this.hasCodexAuthFile()) : authenticated === true && (acpLogout || this.hasProviderCliLogout());
     const result: ProviderAuthStatus = {
       login,
@@ -371,8 +346,7 @@ export class AcpProvider implements CliProviderAdapter {
 
   /**
    * Returns true when Codex has local auth.json credentials that can be cleared
-   * from the UI. Env-var API keys are handled separately because they are not
-   * revocable by Jait.
+   * from the UI.
    */
   private hasCodexAuthFile(): boolean {
     if (this.id !== "codex") return false;
@@ -778,23 +752,6 @@ function formatCliAuthDetail(providerName: string, authenticated: boolean | null
   if (authenticated === true) return `${providerName} credentials are configured, but Jait could not find a logout method.`;
   if (authenticated === false) return `${providerName} credentials are not configured.`;
   return `Could not read ${providerName} authentication capabilities.`;
-}
-
-function fallbackProviderModels(providerId: ProviderId): ProviderModelInfo[] {
-  if (providerId === "codex") {
-    return [
-      { id: "gpt-5-codex", name: "GPT-5 Codex", description: "Codex CLI coding model", isDefault: true },
-      { id: "gpt-5", name: "GPT-5", description: "OpenAI GPT-5" },
-      { id: "o3", name: "o3", description: "OpenAI reasoning model" },
-    ];
-  }
-  if (providerId === "claude-code") {
-    return [
-      { id: "sonnet", name: "Sonnet", description: "Claude Code default Sonnet alias", isDefault: true },
-      { id: "opus", name: "Opus", description: "Claude Code Opus alias" },
-    ];
-  }
-  return [];
 }
 
 function getCodexAuthPaths(): string[] {

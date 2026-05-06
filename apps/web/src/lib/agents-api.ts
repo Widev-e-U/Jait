@@ -360,7 +360,10 @@ export class AgentsApi {
       const res = await fetch(`${API_URL}/api/providers/${providerId}/models`, {
         headers: this.getHeaders(),
       })
-      if (!res.ok) throw new Error(`Failed to list models: ${res.statusText}`)
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({})) as { error?: string; message?: string }
+        throw new Error(err.error || err.message || `Failed to list models: ${res.statusText}`)
+      }
       return res.json() as Promise<{ models: { id: string; name: string; description?: string; isDefault?: boolean; group?: string }[]; recentModels?: string[]; currentBackend?: string }>
     })()
     this._modelsInflight.set(providerId, promise)

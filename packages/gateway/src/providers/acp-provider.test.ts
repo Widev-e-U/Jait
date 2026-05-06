@@ -162,6 +162,31 @@ describe("AcpProvider auth", () => {
     }
   });
 
+  it("does not use OPENAI_API_KEY as Codex auth state", async () => {
+    const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
+    process.env.CODEX_HOME = codexHome;
+    process.env.OPENAI_API_KEY = "env-key";
+
+    try {
+      const provider = new AcpProvider({
+        id: "codex",
+        name: "Codex",
+        description: "Codex via ACP",
+        command: process.execPath,
+        args: ["-e", fakeAcpAgentScript],
+      });
+
+      await expect(provider.getAuthStatus()).resolves.toMatchObject({
+        login: true,
+        logout: false,
+        deviceCode: false,
+        authenticated: false,
+      });
+    } finally {
+      rmSync(codexHome, { recursive: true, force: true });
+    }
+  });
+
   it("keeps Codex logout available when env API key and local credentials coexist", async () => {
     const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
     const authPath = join(codexHome, "auth.json");
@@ -179,7 +204,7 @@ describe("AcpProvider auth", () => {
       });
 
       await expect(provider.getAuthStatus()).resolves.toMatchObject({
-        login: false,
+        login: true,
         logout: true,
         deviceCode: false,
         authenticated: true,
@@ -195,7 +220,7 @@ describe("AcpProvider auth", () => {
     }
   });
 
-  it("falls back to known Codex models when ACP model discovery fails", async () => {
+  it("surfaces ACP model discovery failures instead of returning fallback models", async () => {
     const provider = new AcpProvider({
       id: "codex",
       name: "Codex",
@@ -204,9 +229,7 @@ describe("AcpProvider auth", () => {
       args: ["-e", fakeAcpAuthRequiredScript],
     });
 
-    await expect(provider.listModels()).resolves.toEqual(expect.arrayContaining([
-      expect.objectContaining({ id: "gpt-5-codex", isDefault: true }),
-    ]));
+    await expect(provider.listModels()).rejects.toThrow("Authentication required");
   });
 
   it("returns device auth details from ACP terminal login output", async () => {

@@ -126,6 +126,7 @@ export function ProviderModelSelector({
   const [models, setModels] = useState<ModelDef[]>([])
   const [recentIds, setRecentIds] = useState<string[]>([])
   const [loadingModels, setLoadingModels] = useState(false)
+  const [modelError, setModelError] = useState<string | null>(null)
   const [currentBackend, setCurrentBackend] = useState<string | null>(null)
   const [authBusyProvider, setAuthBusyProvider] = useState<ProviderId | null>(null)
   const [loginDialog, setLoginDialog] = useState<{
@@ -258,6 +259,7 @@ export function ProviderModelSelector({
 
   useEffect(() => {
     setModels([])
+    setModelError(null)
     setRecentIds(loadRecentModels())
 
     let cancelled = false
@@ -265,6 +267,7 @@ export function ProviderModelSelector({
     agentsApi.listProviderModels(provider)
       .then((result) => {
         if (cancelled) return
+        setModelError(null)
         setModels(result.models)
         if (result.recentModels?.length) {
           setRecentIds(result.recentModels)
@@ -273,8 +276,10 @@ export function ProviderModelSelector({
           setCurrentBackend(result.currentBackend)
         }
       })
-      .catch(() => {
-        if (!cancelled) setModels([])
+      .catch((error) => {
+        if (cancelled) return
+        setModels([])
+        setModelError(error instanceof Error ? error.message : 'Failed to load models')
       })
       .finally(() => {
         if (!cancelled) setLoadingModels(false)
@@ -396,6 +401,15 @@ export function ProviderModelSelector({
     const recentSet = new Set(recentModels.map((entry) => entry.id))
     return filteredModels.filter((entry) => !recentSet.has(entry.id))
   }, [filteredModels, recentModels, searchLower])
+
+  const modelErrorMessage = useMemo(() => {
+    if (!modelError) return null
+    const providerLabel = currentProvider.label
+    if (/auth|login|logged in|credential/i.test(modelError)) {
+      return `You're not logged in to ${providerLabel}.`
+    }
+    return modelError
+  }, [currentProvider.label, modelError])
 
   const handleProviderSelect = (nextProvider: ProviderId) => {
     onProviderChange(nextProvider)
@@ -607,7 +621,13 @@ export function ProviderModelSelector({
             Loading models…
           </div>
         )}
-        {!loadingModels && (() => {
+        {!loadingModels && modelErrorMessage && (
+          <div className="flex items-start gap-2 px-3 py-3 text-xs text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+            <span>{modelErrorMessage}</span>
+          </div>
+        )}
+        {!loadingModels && !modelErrorMessage && (() => {
           const hasGroups = nonRecentFiltered.some((m) => m.group)
           if (!hasGroups) {
             return nonRecentFiltered.map((entry) => (
@@ -636,7 +656,7 @@ export function ProviderModelSelector({
             </div>
           ))
         })()}
-        {!loadingModels && filteredModels.length === 0 && (
+        {!loadingModels && !modelErrorMessage && filteredModels.length === 0 && (
           <div className="px-3 py-4 text-center text-xs text-muted-foreground">
             {search ? `No models matching "${search}"` : 'No models available'}
           </div>
