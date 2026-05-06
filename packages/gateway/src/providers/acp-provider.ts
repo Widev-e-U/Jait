@@ -296,6 +296,31 @@ export class AcpProvider implements CliProviderAdapter {
       return result;
     }
 
+    if (this.id === "codex" && method.id === "chat-gpt") {
+      probe.child.kill();
+      const { result, child } = await startDeviceLoginCommand({
+        providerId: this.id,
+        label: method.name,
+        commandLine: this.config.env?.JAIT_CODEX_LOGIN_COMMAND ?? process.env.JAIT_CODEX_LOGIN_COMMAND ?? "codex",
+        args: ["login", "--device-auth"],
+        env: this.config.env,
+      });
+      if (child) {
+        this.authLoginProcess = child;
+        child.on("exit", () => {
+          if (this.authLoginProcess === child) this.authLoginProcess = null;
+          this.cachedModels = null;
+          this.cachedAuthStatus = null; // invalidate so next /api/providers reflects new state
+          void this.checkAvailability();
+        });
+      } else {
+        this.cachedModels = null;
+        this.cachedAuthStatus = null;
+        void this.checkAvailability();
+      }
+      return result;
+    }
+
     const child = probe.child;
     this.authLoginProcess = child;
     void probe.connection.authenticate({ methodId: method.id })

@@ -67,6 +67,36 @@ process.stdin.on("data", (chunk) => {
 });
 `;
 
+const fakeAcpAgentChatGptScript = `
+process.stdin.setEncoding("utf8");
+let buffer = "";
+process.stdin.on("data", (chunk) => {
+  buffer += chunk;
+  let index;
+  while ((index = buffer.indexOf("\\n")) >= 0) {
+    const line = buffer.slice(0, index).trim();
+    buffer = buffer.slice(index + 1);
+    if (!line) continue;
+    const request = JSON.parse(line);
+    if (request.method === "initialize") {
+      process.stdout.write(JSON.stringify({
+        jsonrpc: "2.0",
+        id: request.id,
+        result: {
+          protocolVersion: 1,
+          agentCapabilities: { auth: { logout: {} } },
+          authMethods: [{ id: "chat-gpt", name: "ChatGPT", description: "Use ChatGPT to authenticate" }]
+        }
+      }) + "\\n");
+    } else if (request.method === "authenticate") {
+      setInterval(() => {}, 1000);
+    } else if (request.method === "logout") {
+      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
+    }
+  }
+});
+`;
+
 const fakeAcpTerminalAuthScript = `
 if (process.argv.includes("--login")) {
   process.stdout.write([
@@ -105,6 +135,18 @@ if (process.argv.includes("--login")) {
     }
   });
 }
+`;
+
+const fakeCodexDeviceAuthScript = `
+process.stdout.write([
+  "Follow these steps to sign in with ChatGPT using device code authorization:",
+  "1. Open this link in your browser and sign in to your account",
+  "   https://auth.openai.com/codex/device",
+  "2. Enter this one-time code (expires in 15 minutes)",
+  "   8K2R-X4D9",
+  ""
+].join("\\n"));
+setInterval(() => {}, 1000);
 `;
 
 afterEach(() => {
@@ -253,6 +295,38 @@ describe("AcpProvider auth", () => {
         status: "started",
         verificationUri: "https://auth.openai.com/codex/device",
         userCode: "1URT-UU74B",
+      });
+    } finally {
+      await provider.logout().catch(() => undefined);
+      rmSync(codexHome, { recursive: true, force: true });
+      rmSync(agentDir, { recursive: true, force: true });
+    }
+  });
+
+  it("uses Codex CLI device auth for ACP ChatGPT agent login", async () => {
+    const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
+    const agentDir = mkdtempSync(join(tmpdir(), "jait-acp-agent-"));
+    const loginPath = join(agentDir, "fake-codex-device-auth.mjs");
+    process.env.CODEX_HOME = codexHome;
+    writeFileSync(loginPath, fakeCodexDeviceAuthScript);
+
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAgentChatGptScript],
+      env: {
+        JAIT_CODEX_LOGIN_COMMAND: `"${process.execPath}" "${loginPath}"`,
+      },
+    });
+
+    try {
+      await expect(provider.startLogin()).resolves.toMatchObject({
+        ok: true,
+        status: "started",
+        verificationUri: "https://auth.openai.com/codex/device",
+        userCode: "8K2R-X4D9",
       });
     } finally {
       await provider.logout().catch(() => undefined);
