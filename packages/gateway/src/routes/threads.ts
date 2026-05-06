@@ -677,12 +677,12 @@ export function registerThreadRoutes(
 
     if (args.repoName?.trim()) {
       fullMessage = [
-        "<thread-proposal-instructions>",
+        "<thread-todo-instructions>",
         `This thread belongs to the repository "${args.repoName.trim()}".`,
-        "When you notice worthwhile follow-up work that should become a future user request, save it with the `repo.proposals` tool.",
+        "When you notice worthwhile follow-up work that should become a future user request, save it with the `jait.todos` tool.",
         "Use concise, actionable user-message wording that can be run directly as a future thread prompt.",
-        "Only save proposals that are genuinely useful next actions. Do not spam the list with trivial or duplicate items.",
-        "</thread-proposal-instructions>",
+        "Only save todos that are genuinely useful next actions. Do not spam the list with trivial or duplicate items.",
+        "</thread-todo-instructions>",
         "",
         fullMessage,
       ].join("\n");

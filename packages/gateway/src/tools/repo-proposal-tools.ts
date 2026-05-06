@@ -8,6 +8,40 @@ function readString(record: Record<string, unknown>, key: string): string | unde
   return typeof value === "string" && value.trim() ? value.trim() : undefined;
 }
 
+function readStringOrNull(record: Record<string, unknown>, key: string): string | null | undefined {
+  if (!(key in record)) return undefined;
+  const value = record[key];
+  if (value === null || value === "") return null;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+function readTags(record: Record<string, unknown>): string[] | undefined {
+  if (!("tags" in record)) return undefined;
+  const value = record.tags;
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value
+    .filter((tag): tag is string => typeof tag === "string")
+    .map((tag) => tag.trim().toLowerCase())
+    .filter(Boolean))]
+    .slice(0, 12);
+}
+
+function readStatus(record: Record<string, unknown>): "open" | "in_progress" | "done" | undefined {
+  const value = readString(record, "status");
+  return value === "open" || value === "in_progress" || value === "done" ? value : undefined;
+}
+
+function readPriority(record: Record<string, unknown>): "low" | "normal" | "high" | undefined {
+  const value = readString(record, "priority");
+  return value === "low" || value === "normal" || value === "high" ? value : undefined;
+}
+
+function readDueDate(record: Record<string, unknown>): string | null | undefined {
+  const value = readStringOrNull(record, "dueDate");
+  if (value === undefined || value === null) return value;
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null;
+}
+
 function matchRepositoryForWorkspace(
   repositories: RepoRow[],
   workspaceRoot: string,
@@ -17,16 +51,16 @@ function matchRepositoryForWorkspace(
   return repositories.find((repo) => workspaceRoot.includes(repo.name)) ?? null;
 }
 
-export function createRepoProposalTool(deps: {
+export function createJaitTodosTool(deps: {
   repoService: RepositoryService;
   repoProposalService: RepoProposalService;
   threadService?: ThreadService;
 }): ToolDefinition {
   return {
-    name: "repo.proposals",
+    name: "jait.todos",
     description:
-      "Manage repo-scoped proposal messages for future agent threads. Use this to save good follow-up user prompts that should be easy to run later.",
-    tier: "standard",
+      "Manage global Jait todo items for future agent threads. Use this to save worthwhile follow-up work in the Todo page.",
+    tier: "core",
     category: "gateway",
     source: "builtin",
     risk: "low",
@@ -36,20 +70,39 @@ export function createRepoProposalTool(deps: {
       properties: {
         action: {
           type: "string",
-          enum: ["list", "add", "remove"],
+          enum: ["list", "add", "update", "remove"],
           description: "Operation to perform.",
         },
         repoId: {
           type: "string",
           description: "Explicit repository ID. Omit to infer it from the current workspaceRoot.",
         },
-        proposalId: {
+        todoId: {
           type: "string",
-          description: "Proposal ID to remove. Required for action=remove.",
+          description: "Todo ID. Required for action=update or action=remove.",
         },
         message: {
           type: "string",
-          description: "Recommended future user message to save. Required for action=add.",
+          description: "Future user message or task to save. Required for action=add.",
+        },
+        status: {
+          type: "string",
+          enum: ["open", "in_progress", "done"],
+          description: "Todo status.",
+        },
+        priority: {
+          type: "string",
+          enum: ["low", "normal", "high"],
+          description: "Todo priority.",
+        },
+        dueDate: {
+          type: "string",
+          description: "Optional due date in YYYY-MM-DD format. Use an empty string to clear it.",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Optional lowercase tags for grouping/filtering todos.",
         },
       },
       required: ["action"],
@@ -69,15 +122,15 @@ export function createRepoProposalTool(deps: {
         ? repositories.find((item) => item.id === repoId) ?? null
         : matchRepositoryForWorkspace(repositories, context.workspaceRoot);
       if (!repo) {
-        return { ok: false, message: "Could not resolve a repository for this proposal action." };
+        return { ok: false, message: "Could not resolve a repository for this todo action." };
       }
 
       if (action === "list") {
-        const proposals = deps.repoProposalService.listByRepo(repo.id);
+        const todos = deps.repoProposalService.listByRepo(repo.id);
         return {
           ok: true,
-          message: `Loaded ${proposals.length} proposal${proposals.length === 1 ? "" : "s"} for ${repo.name}.`,
-          data: { repo, proposals },
+          message: `Loaded ${todos.length} todo${todos.length === 1 ? "" : "s"} for ${repo.name}.`,
+          data: { repo, todos },
         };
       }
 
@@ -89,28 +142,54 @@ export function createRepoProposalTool(deps: {
           repoId: repo.id,
           userId: context.userId,
           message,
+          status: readStatus(body),
+          priority: readPriority(body),
+          dueDate: readDueDate(body),
+          tags: readTags(body),
           sourceThreadId: thread?.id ?? null,
           sourceThreadTitle: thread?.title ?? null,
         });
         return {
           ok: true,
-          message: `Saved a repo proposal for ${repo.name}.`,
-          data: { repo, proposal },
+          message: `Saved a Jait todo for ${repo.name}.`,
+          data: { repo, todo: proposal },
+        };
+      }
+
+      if (action === "update") {
+        const todoId = readString(body, "todoId");
+        if (!todoId) return { ok: false, message: "todoId is required for update" };
+        const existing = deps.repoProposalService.getById(todoId);
+        if (!existing || existing.repoId !== repo.id || existing.userId !== (context.userId ?? null)) {
+          return { ok: false, message: "Todo not found." };
+        }
+        const message = readString(body, "message");
+        const todo = deps.repoProposalService.update(existing.id, {
+          message,
+          status: readStatus(body),
+          priority: readPriority(body),
+          dueDate: readDueDate(body),
+          tags: readTags(body),
+        });
+        return {
+          ok: true,
+          message: `Updated Jait todo for ${repo.name}.`,
+          data: { repo, todo },
         };
       }
 
       if (action === "remove") {
-        const proposalId = readString(body, "proposalId");
-        if (!proposalId) return { ok: false, message: "proposalId is required for remove" };
-        const proposal = deps.repoProposalService.getById(proposalId);
-        if (!proposal || proposal.repoId !== repo.id || proposal.userId !== (context.userId ?? null)) {
-          return { ok: false, message: "Proposal not found." };
+        const todoId = readString(body, "todoId");
+        if (!todoId) return { ok: false, message: "todoId is required for remove" };
+        const todo = deps.repoProposalService.getById(todoId);
+        if (!todo || todo.repoId !== repo.id || todo.userId !== (context.userId ?? null)) {
+          return { ok: false, message: "Todo not found." };
         }
-        deps.repoProposalService.delete(proposalId);
+        deps.repoProposalService.delete(todoId);
         return {
           ok: true,
-          message: `Removed repo proposal from ${repo.name}.`,
-          data: { repoId: repo.id, proposalId },
+          message: `Removed Jait todo from ${repo.name}.`,
+          data: { repoId: repo.id, todoId },
         };
       }
 

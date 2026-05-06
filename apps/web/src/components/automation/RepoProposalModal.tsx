@@ -82,7 +82,7 @@ export function RepoProposalModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-3xl">
         <DialogHeader>
-          <DialogTitle>Agents Change Proposals</DialogTitle>
+          <DialogTitle>Agent Todos</DialogTitle>
           <DialogDescription>
             Repo-wide todo prompts for `{repoName}`. They are also available from the Todo page.
           </DialogDescription>

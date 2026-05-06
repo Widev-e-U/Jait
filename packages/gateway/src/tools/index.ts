@@ -30,7 +30,7 @@ export {
 } from "./cron-tools.js";
 export { createGatewayStatusTool } from "./gateway-tools.js";
 export { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
-export { createRepoProposalTool } from "./repo-proposal-tools.js";
+export { createJaitTodosTool } from "./repo-proposal-tools.js";
 export { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 export {
   createBrowserNavigateTool,
@@ -146,7 +146,7 @@ import {
 } from "./cron-tools.js";
 import { createGatewayStatusTool } from "./gateway-tools.js";
 import { createWorkspaceAssignRepositoryTool } from "./workspace-tools.js";
-import { createRepoProposalTool } from "./repo-proposal-tools.js";
+import { createJaitTodosTool } from "./repo-proposal-tools.js";
 import { createScreenShareTool, createScreenCaptureTool, createScreenRecordTool, createOsTool } from "./screen-share-tools.js";
 import {
   createBrowserNavigateTool,
@@ -324,7 +324,7 @@ export function createToolRegistry(
   }
 
   if (deps.repoService && deps.repoProposalService) {
-    tools.register(createRepoProposalTool({
+    tools.register(createJaitTodosTool({
       repoService: deps.repoService,
       repoProposalService: deps.repoProposalService,
       threadService: deps.threadService,

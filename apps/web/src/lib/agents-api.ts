@@ -248,7 +248,7 @@ export interface GeneratePlanTasksRequest {
   model?: string | null
 }
 
-export interface RepoProposal {
+export interface JaitTodo {
   id: string
   repoId: string
   userId: string | null
@@ -263,23 +263,29 @@ export interface RepoProposal {
   updatedAt: string
 }
 
-export interface CreateRepoProposalRequest {
+export type RepoProposal = JaitTodo
+
+export interface CreateJaitTodoRequest {
   message: string
-  status?: RepoProposal['status']
-  priority?: RepoProposal['priority']
+  status?: JaitTodo['status']
+  priority?: JaitTodo['priority']
   dueDate?: string | null
   tags?: string[]
   sourceThreadId?: string | null
   sourceThreadTitle?: string | null
 }
 
-export interface UpdateRepoProposalRequest {
+export type CreateRepoProposalRequest = CreateJaitTodoRequest
+
+export interface UpdateJaitTodoRequest {
   message?: string
-  status?: RepoProposal['status']
-  priority?: RepoProposal['priority']
+  status?: JaitTodo['status']
+  priority?: JaitTodo['priority']
   dueDate?: string | null
   tags?: string[]
 }
+
+export type UpdateRepoProposalRequest = UpdateJaitTodoRequest
 
 // ── API Client ───────────────────────────────────────────────────────
 
@@ -709,43 +715,59 @@ export class AgentsApi {
     return await res.json() as { tasks: PlanTask[]; repo: { id: string; name: string; localPath: string; defaultBranch: string; githubUrl: string | null } }
   }
 
-  async listRepoProposals(repoId: string): Promise<RepoProposal[]> {
-    const res = await fetch(`${API_URL}/api/repos/${repoId}/proposals`, {
+  async listJaitTodos(repoId: string): Promise<JaitTodo[]> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/todos`, {
       headers: this.getHeaders(),
     })
-    if (!res.ok) throw new Error(`Failed to list proposals: ${res.statusText}`)
-    const data = await res.json() as { proposals: RepoProposal[] }
-    return data.proposals
+    if (!res.ok) throw new Error(`Failed to list todos: ${res.statusText}`)
+    const data = await res.json() as { todos: JaitTodo[] }
+    return data.todos
   }
 
-  async createRepoProposal(repoId: string, params: CreateRepoProposalRequest): Promise<RepoProposal> {
-    const res = await fetch(`${API_URL}/api/repos/${repoId}/proposals`, {
+  async createJaitTodo(repoId: string, params: CreateJaitTodoRequest): Promise<JaitTodo> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/todos`, {
       method: 'POST',
       headers: this.getHeaders(true),
       body: JSON.stringify(params),
     })
-    if (!res.ok) throw new Error(`Failed to create proposal: ${res.statusText}`)
-    const data = await res.json() as { proposal: RepoProposal }
-    return data.proposal
+    if (!res.ok) throw new Error(`Failed to create todo: ${res.statusText}`)
+    const data = await res.json() as { todo: JaitTodo }
+    return data.todo
   }
 
-  async updateRepoProposal(proposalId: string, params: UpdateRepoProposalRequest): Promise<RepoProposal> {
-    const res = await fetch(`${API_URL}/api/repo-proposals/${proposalId}`, {
+  async updateJaitTodo(todoId: string, params: UpdateJaitTodoRequest): Promise<JaitTodo> {
+    const res = await fetch(`${API_URL}/api/jait-todos/${todoId}`, {
       method: 'PATCH',
       headers: this.getHeaders(true),
       body: JSON.stringify(params),
     })
-    if (!res.ok) throw new Error(`Failed to update proposal: ${res.statusText}`)
-    const data = await res.json() as { proposal: RepoProposal }
-    return data.proposal
+    if (!res.ok) throw new Error(`Failed to update todo: ${res.statusText}`)
+    const data = await res.json() as { todo: JaitTodo }
+    return data.todo
   }
 
-  async deleteRepoProposal(proposalId: string): Promise<void> {
-    const res = await fetch(`${API_URL}/api/repo-proposals/${proposalId}`, {
+  async deleteJaitTodo(todoId: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/jait-todos/${todoId}`, {
       method: 'DELETE',
       headers: this.getHeaders(),
     })
-    if (!res.ok) throw new Error(`Failed to delete proposal: ${res.statusText}`)
+    if (!res.ok) throw new Error(`Failed to delete todo: ${res.statusText}`)
+  }
+
+  async listRepoProposals(repoId: string): Promise<RepoProposal[]> {
+    return this.listJaitTodos(repoId)
+  }
+
+  async createRepoProposal(repoId: string, params: CreateRepoProposalRequest): Promise<RepoProposal> {
+    return this.createJaitTodo(repoId, params)
+  }
+
+  async updateRepoProposal(proposalId: string, params: UpdateRepoProposalRequest): Promise<RepoProposal> {
+    return this.updateJaitTodo(proposalId, params)
+  }
+
+  async deleteRepoProposal(proposalId: string): Promise<void> {
+    return this.deleteJaitTodo(proposalId)
   }
 }
 

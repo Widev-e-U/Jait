@@ -41,7 +41,7 @@ export const ToolName = {
   // ── Gateway ──
   GatewayStatus: "gateway.status",
   WorkspaceAssignRepository: "workspace.assign_repository",
-  RepoProposals: "repo.proposals",
+  JaitTodos: "jait.todos",
 
   // ── Screen share ──
   ScreenShare: "screen.share",

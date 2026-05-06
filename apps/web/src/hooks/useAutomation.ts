@@ -215,7 +215,7 @@ export function useAutomation(enabled = true) {
     }
     let cancelled = false
     setLoadingRepoProposals(true)
-    void agentsApi.listRepoProposals(repoId)
+    void agentsApi.listJaitTodos(repoId)
       .then((proposals) => {
         if (!cancelled) setRepoProposals(proposals)
       })
@@ -933,7 +933,7 @@ export function useAutomation(enabled = true) {
 
   const addRepoProposal = useCallback(async (message: string) => {
     if (!activeProposalRepo || !message.trim()) return
-    const created = await agentsApi.createRepoProposal(activeProposalRepo.id, {
+    const created = await agentsApi.createJaitTodo(activeProposalRepo.id, {
       message: message.trim(),
       sourceThreadId: selectedThread?.id ?? null,
       sourceThreadTitle: selectedThread?.title ?? null,
@@ -942,7 +942,7 @@ export function useAutomation(enabled = true) {
   }, [activeProposalRepo, selectedThread?.id, selectedThread?.title])
 
   const removeRepoProposal = useCallback(async (proposalId: string) => {
-    await agentsApi.deleteRepoProposal(proposalId)
+    await agentsApi.deleteJaitTodo(proposalId)
     setRepoProposals((prev) => prev.filter((proposal) => proposal.id !== proposalId))
   }, [])
 

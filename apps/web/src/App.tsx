@@ -140,7 +140,7 @@ import { agentsApi, type AgentThread, type ProviderId, type RuntimeMode, type Th
 import { gitApi, type GitStatusResult } from '@/lib/git-api'
 import { triggerSystemNotification } from '@/lib/system-notifications'
 import { canStopThread } from '@/lib/thread-status'
-import { getDeveloperChatUiState } from '@/lib/developer-chat-state'
+import { getDeveloperChatSubmitLoading, getDeveloperChatUiState } from '@/lib/developer-chat-state'
 import { getMcpToolLabel, normalizeToolArgs, normalizeToolName } from '@/lib/tool-call-body'
 import { mergeHydratedTodoState, normalizeTodoStateValue, toPersistedTodoState } from '@/lib/todo-state'
 import { isPathWithinWorkspace } from '@/lib/workspace-links'
@@ -5880,24 +5880,20 @@ function App() {
 
   const limitReached = error === 'limit_reached'
   const requiresAuthGate = !authLoading && !isAuthenticated
-  const developerChatHydrating =
-    viewMode === 'developer'
-    && currentView === 'chat'
-    && !requiresAuthGate
-    && (
-      authLoading
-      || workspacesLoading
-      || (
-        !!activeSessionId
-        && (
-          isLoadingHistory
-          || loadingChatMode
-          || loadingProviderRuntimeMode
-          || loadingCliModels
-          || loadingChatView
-        )
-      )
-    )
+  const developerChatSubmitLoading = getDeveloperChatSubmitLoading({
+    viewMode,
+    currentView,
+    requiresAuthGate,
+    authLoading,
+    workspacesLoading,
+    activeSessionId,
+    isLoadingHistory,
+    loadingChatMode,
+    loadingProviderRuntimeMode,
+    loadingCliModels,
+    loadingChatView,
+  })
+  const developerChatHydrating = developerChatSubmitLoading && messages.length === 0
   const hasMessages = messages.length > 0 || isLoadingHistory
   const developerChatUiState = getDeveloperChatUiState({
     developerChatHydrating,
@@ -7619,7 +7615,7 @@ function App() {
                                 onClick={() => setProposalModalOpen(true)}
                               >
                                 <ListChecks className="h-4 w-4" />
-                                <span>Agents Change Proposals</span>
+                                <span>Agent Todos</span>
                                 <Badge variant="secondary" className="ml-1">
                                   {automation.repoProposals.length}
                                 </Badge>
@@ -7799,27 +7795,6 @@ function App() {
                   </div>
                 )}
               </div>
-            ) : developerChatHydrating ? (
-              <div
-                ref={setChatPanelElement}
-                className="relative flex flex-col min-h-0 min-w-0 overflow-hidden"
-                style={developerChatPanelStyle}
-              >
-                {!chatCollapsed && (
-                  <ErrorBoundary name="Chat transcript" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[activeSessionId, showDesktopWorkspace]}>
-                    <Conversation
-                      key={activeSessionId ?? 'developer-loading'}
-                      className="min-h-0 flex-1 border-b"
-                      compact={showDesktopWorkspace}
-                      loading
-                      loadingLabel="Loading chat"
-                      messageContents={[]}
-                    >
-                      {null}
-                    </Conversation>
-                  </ErrorBoundary>
-                )}
-              </div>
             ) : !hasMessages ? (
               <div
                 ref={setChatPanelElement}
@@ -7857,6 +7832,7 @@ function App() {
                       onStop={handleCancelRequest}
                       onQueue={handleQueue}
                       isLoading={isLoading}
+                      submitLoading={developerChatSubmitLoading}
                       placeholder={developerPlaceholder}
                       onVoiceInput={handleVoiceInput}
                       voiceRecording={voiceRecording}
@@ -8012,6 +7988,7 @@ function App() {
                         onStop={handleCancelRequest}
                         onQueue={handleQueue}
                         isLoading={isLoading}
+                        submitLoading={developerChatSubmitLoading}
                         disabled={limitReached}
                         placeholder={developerPlaceholder}
                         onVoiceInput={handleVoiceInput}
@@ -8595,21 +8572,21 @@ function App() {
               try {
                 await automation.addRepoProposal(message)
               } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to add proposal')
+                toast.error(err instanceof Error ? err.message : 'Failed to add todo')
               }
             }}
             onRemove={async (proposalIds) => {
               try {
                 await Promise.all(proposalIds.map((proposalId) => automation.removeRepoProposal(proposalId)))
               } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to remove proposals')
+                toast.error(err instanceof Error ? err.message : 'Failed to remove todos')
               }
             }}
             onRun={async (proposalIds, providerId, runtimeMode, model) => {
               try {
                 await automation.runRepoProposals(proposalIds, providerId, runtimeMode, model)
               } catch (err) {
-                toast.error(err instanceof Error ? err.message : 'Failed to run proposals')
+                toast.error(err instanceof Error ? err.message : 'Failed to run todos')
               }
             }}
           />

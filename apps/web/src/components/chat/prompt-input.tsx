@@ -58,6 +58,8 @@ interface PromptInputProps {
   /** Queue a message while the agent is busy. */
   onQueue?: (chipFiles?: ReferencedFile[], attachments?: ChatAttachment[], segments?: UserMessageSegment[]) => void
   isLoading?: boolean
+  /** Locks just the submit button and shows a spinner while chat state is still becoming ready. */
+  submitLoading?: boolean
   disabled?: boolean
   controlsDisabled?: boolean
   placeholder?: string
@@ -565,6 +567,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   onStop,
   onQueue,
   isLoading,
+  submitLoading,
   disabled,
   controlsDisabled,
   placeholder = 'Ask anything...',
@@ -1723,7 +1726,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               type="button"
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg"
-              disabled={submitEmpty || composerDisabled}
+              disabled={Boolean(submitLoading) || submitEmpty || composerDisabled}
+              title={submitLoading ? 'Loading chat' : undefined}
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []
@@ -1733,7 +1737,9 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
                 resetComposer()
               }}
             >
-              <ArrowUp className="h-4 w-4" />
+              {submitLoading
+                ? <Loader2 className="h-4 w-4 animate-spin" />
+                : <ArrowUp className="h-4 w-4" />}
             </Button>
           ) : (
             <Button
