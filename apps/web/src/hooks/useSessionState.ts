@@ -39,6 +39,22 @@ export function shouldApplySessionStateFetchResult(
   return fetchWriteVersion === currentWriteVersion
 }
 
+export function getSessionStateRequestKey(
+  sessionId: string | null,
+  key: string,
+  token?: string | null,
+): string | null {
+  return sessionId && token ? `${sessionId}:${key}:${token}` : null
+}
+
+export function isSessionStateLoading(
+  loading: boolean,
+  requestKey: string | null,
+  loadedRequestKey: string | null,
+): boolean {
+  return loading || (requestKey != null && loadedRequestKey !== requestKey)
+}
+
 export function useSessionState<T>(
   sessionId: string | null,
   key: string,
@@ -46,14 +62,18 @@ export function useSessionState<T>(
 ): [T | null, (value: T | null) => void, boolean] {
   const [value, setValueLocal] = useState<T | null>(null)
   const [loading, setLoading] = useState(false)
+  const [loadedRequestKey, setLoadedRequestKey] = useState<string | null>(null)
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null)
   const latestRef = useRef<T | null>(null)
   const localWriteVersionRef = useRef(0)
+  const requestKey = getSessionStateRequestKey(sessionId, key, token)
 
   // Fetch on mount / session change
   useEffect(() => {
     if (!sessionId || !token) {
       setValueLocal(null)
+      setLoading(false)
+      setLoadedRequestKey(null)
       return
     }
 
@@ -61,9 +81,11 @@ export function useSessionState<T>(
     // don't briefly leak into UI (e.g. terminal panel flash on workspace switch).
     setValueLocal(null)
     latestRef.current = null
+    setLoadedRequestKey(null)
 
     let cancelled = false
     const fetchVersion = localWriteVersionRef.current
+    const nextRequestKey = getSessionStateRequestKey(sessionId, key, token)
     setLoading(true)
 
     fetchStateBatched('sessions', sessionId, key, token!)
@@ -77,7 +99,10 @@ export function useSessionState<T>(
         if (!cancelled) setValueLocal(null)
       })
       .finally(() => {
-        if (!cancelled) setLoading(false)
+        if (!cancelled) {
+          setLoading(false)
+          setLoadedRequestKey(nextRequestKey)
+        }
       })
 
     return () => {
@@ -114,5 +139,5 @@ export function useSessionState<T>(
     }
   }, [])
 
-  return [value, setValue, loading]
+  return [value, setValue, isSessionStateLoading(loading, requestKey, loadedRequestKey)]
 }
