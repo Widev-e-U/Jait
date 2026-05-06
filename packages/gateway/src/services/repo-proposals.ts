@@ -7,12 +7,20 @@ export interface CreateRepoProposalParams {
   repoId: string;
   userId?: string;
   message: string;
+  status?: string;
+  priority?: string;
+  dueDate?: string | null;
+  tags?: string[];
   sourceThreadId?: string | null;
   sourceThreadTitle?: string | null;
 }
 
 export interface UpdateRepoProposalParams {
   message?: string;
+  status?: string;
+  priority?: string;
+  dueDate?: string | null;
+  tags?: string[];
 }
 
 export type RepoProposalRow = typeof automationRepoProposals.$inferSelect;
@@ -46,6 +54,10 @@ export class RepoProposalService {
       repoId: params.repoId,
       userId: params.userId ?? null,
       message,
+      status: params.status ?? "open",
+      priority: params.priority ?? "normal",
+      dueDate: params.dueDate ?? null,
+      tags: JSON.stringify(params.tags ?? []),
       sourceThreadId: params.sourceThreadId ?? null,
       sourceThreadTitle: params.sourceThreadTitle ?? null,
       createdAt: now,
@@ -61,6 +73,10 @@ export class RepoProposalService {
     if (params.message !== undefined) {
       set.message = params.message.trim();
     }
+    if (params.status !== undefined) set.status = params.status;
+    if (params.priority !== undefined) set.priority = params.priority;
+    if (params.dueDate !== undefined) set.dueDate = params.dueDate;
+    if (params.tags !== undefined) set.tags = JSON.stringify(params.tags);
     this.db.update(automationRepoProposals).set(set).where(eq(automationRepoProposals.id, id)).run();
     return this.getById(id);
   }

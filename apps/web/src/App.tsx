@@ -76,6 +76,7 @@ import { ContextIndicator } from '@/components/chat/context-indicator'
 import { ConsentQueue } from '@/components/consent'
 import { SSEDebugPanel } from '@/components/debug/sse-debug-panel'
 import { JobsPage } from '@/components/jobs'
+import { TodoPage } from '@/components/todo'
 import { ThreadActions } from '@/components/automation/ThreadActions'
 import { ThreadSkillPicker } from '@/components/automation/ThreadSkillPicker'
 import { shouldRenderThreadActions } from '@/components/automation/thread-actions-state'
@@ -626,7 +627,7 @@ function buildPreviewElementReferenceSegments(
   return [{ type: 'text', text: `${details}\n` }]
 }
 
-type AppView = 'chat' | 'jobs' | 'network' | 'settings'
+type AppView = 'chat' | 'todo' | 'jobs' | 'network' | 'settings'
 type CliProviderId = ProviderId
 
 type ManagerQueuedMessage = QueuedChatMessage & {
@@ -1457,7 +1458,7 @@ function App() {
   const [showLoginDialog, setShowLoginDialog] = useState(false)
   const [authError, setAuthError] = useState<string | null>(null)
   const [currentView, setCurrentView] = useState<AppView>(() => {
-    const validViews: AppView[] = ['chat', 'jobs', 'network', 'settings']
+    const validViews: AppView[] = ['chat', 'todo', 'jobs', 'network', 'settings']
     const path = window.location.pathname.replace(/^\/+/, '').split('/')[0] as AppView
     return validViews.includes(path) ? path : 'chat'
   })
@@ -1628,7 +1629,7 @@ function App() {
 
   // Handle browser back/forward
   useEffect(() => {
-    const validViews: AppView[] = ['chat', 'jobs', 'network', 'settings']
+    const validViews: AppView[] = ['chat', 'todo', 'jobs', 'network', 'settings']
     const onPopState = () => {
       const path = window.location.pathname.replace(/^\/+/, '').split('/')[0] as AppView
       const next = validViews.includes(path) ? path : 'chat'
@@ -1647,7 +1648,7 @@ function App() {
     try {
       const url = new URL(raw)
       const view = url.hostname || url.pathname.replace(/^\/+/, '')
-      const validViews = ['chat', 'jobs', 'network', 'settings'] as const
+      const validViews = ['chat', 'todo', 'jobs', 'network', 'settings'] as const
       type ValidView = typeof validViews[number]
       if (validViews.includes(view as ValidView)) {
         setCurrentView(view as ValidView)
@@ -6226,6 +6227,21 @@ function App() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  variant={currentView === 'todo' ? 'secondary' : 'ghost'}
+                  size="sm"
+                  className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
+                  onClick={() => setCurrentView('todo')}
+                  aria-label="Todo"
+                >
+                  <ListChecks className="h-3.5 w-3.5" />
+                  <span>Todo</span>
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Todo</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
                   variant={currentView === 'jobs' ? 'secondary' : 'ghost'}
                   size="sm"
                   className="h-8 shrink-0 rounded-lg gap-1.5 px-2 text-xs"
@@ -6476,6 +6492,10 @@ function App() {
                       <Calendar className="h-4 w-4 mr-2" />
                       Jobs
                     </DropdownMenuItem>
+                    <DropdownMenuItem onSelect={() => setCurrentView('todo')}>
+                      <ListChecks className="h-4 w-4 mr-2" />
+                      Todo
+                    </DropdownMenuItem>
                     <DropdownMenuItem onSelect={() => setCurrentView('network')}>
                       <Wifi className="h-4 w-4 mr-2" />
                       Network
@@ -6564,6 +6584,10 @@ function App() {
                   <DropdownMenuItem onSelect={() => setCurrentView('jobs')}>
                     <Calendar className="h-4 w-4 mr-2" />
                     Jobs
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onSelect={() => setCurrentView('todo')}>
+                    <ListChecks className="h-4 w-4 mr-2" />
+                    Todo
                   </DropdownMenuItem>
                   <DropdownMenuItem onSelect={() => setCurrentView('network')}>
                     <Wifi className="h-4 w-4 mr-2" />
@@ -7080,7 +7104,13 @@ function App() {
           </div>
         )}
 
-        {currentView === 'jobs' ? (
+        {currentView === 'todo' ? (
+          <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
+            <ErrorBoundary name="Todo" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
+              <TodoPage />
+            </ErrorBoundary>
+          </div>
+        ) : currentView === 'jobs' ? (
           <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
             <ErrorBoundary name="Jobs" variant="section" className="min-h-full" resetKeys={[currentView]}>
               <JobsPage />

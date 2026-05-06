@@ -253,6 +253,10 @@ export interface RepoProposal {
   repoId: string
   userId: string | null
   message: string
+  status: 'open' | 'in_progress' | 'done'
+  priority: 'low' | 'normal' | 'high'
+  dueDate: string | null
+  tags: string
   sourceThreadId: string | null
   sourceThreadTitle: string | null
   createdAt: string
@@ -261,12 +265,20 @@ export interface RepoProposal {
 
 export interface CreateRepoProposalRequest {
   message: string
+  status?: RepoProposal['status']
+  priority?: RepoProposal['priority']
+  dueDate?: string | null
+  tags?: string[]
   sourceThreadId?: string | null
   sourceThreadTitle?: string | null
 }
 
 export interface UpdateRepoProposalRequest {
-  message: string
+  message?: string
+  status?: RepoProposal['status']
+  priority?: RepoProposal['priority']
+  dueDate?: string | null
+  tags?: string[]
 }
 
 // ── API Client ───────────────────────────────────────────────────────

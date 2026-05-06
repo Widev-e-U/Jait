@@ -84,7 +84,7 @@ export function RepoProposalModal({
         <DialogHeader>
           <DialogTitle>Agents Change Proposals</DialogTitle>
           <DialogDescription>
-            Stored future thread prompts for `{repoName}`.
+            Repo-wide todo prompts for `{repoName}`. They are also available from the Todo page.
           </DialogDescription>
         </DialogHeader>
 
@@ -103,13 +103,13 @@ export function RepoProposalModal({
 
           <div className="rounded-lg border">
             <div className="flex items-center justify-between border-b px-3 py-2 text-xs text-muted-foreground">
-              <span>{loading ? 'Loading proposals…' : `${proposals.length} proposal${proposals.length === 1 ? '' : 's'}`}</span>
+              <span>{loading ? 'Loading todo items…' : `${proposals.length} item${proposals.length === 1 ? '' : 's'}`}</span>
               <Badge variant="secondary">{selectedCount} selected</Badge>
             </div>
             <div className="max-h-[420px] overflow-y-auto">
               {proposals.length === 0 ? (
                 <div className="px-3 py-8 text-sm text-muted-foreground">
-                  No saved proposals yet.
+                  No saved todo items yet.
                 </div>
               ) : (
                 proposals.map((proposal) => (

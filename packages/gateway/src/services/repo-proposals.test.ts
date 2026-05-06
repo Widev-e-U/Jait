@@ -13,6 +13,10 @@ describe("RepoProposalService", () => {
         repo_id TEXT NOT NULL,
         user_id TEXT,
         message TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        priority TEXT NOT NULL DEFAULT 'normal',
+        due_date TEXT,
+        tags TEXT NOT NULL DEFAULT '[]',
         source_thread_id TEXT,
         source_thread_title TEXT,
         created_at TEXT NOT NULL,
@@ -34,6 +38,9 @@ describe("RepoProposalService", () => {
       repoId: "repo-1",
       userId: "user-1",
       message: "Second follow-up",
+      priority: "high",
+      dueDate: "2026-05-12",
+      tags: ["ui", "todo"],
       sourceThreadId: "thread-2",
       sourceThreadTitle: "Thread Two",
     });
@@ -43,6 +50,9 @@ describe("RepoProposalService", () => {
     expect(proposals[0]?.id).toBe(second.id);
     expect(proposals[1]?.id).toBe(first.id);
     expect(proposals[0]?.sourceThreadTitle).toBe("Thread Two");
+    expect(proposals[0]?.priority).toBe("high");
+    expect(proposals[0]?.dueDate).toBe("2026-05-12");
+    expect(proposals[0]?.tags).toBe(JSON.stringify(["ui", "todo"]));
   });
 
   it("updates and deletes proposals", () => {
@@ -52,8 +62,18 @@ describe("RepoProposalService", () => {
       message: "Original",
     });
 
-    const updated = service.update(created.id, { message: "Updated prompt" });
+    const updated = service.update(created.id, {
+      message: "Updated prompt",
+      status: "in_progress",
+      priority: "low",
+      dueDate: "2026-05-20",
+      tags: ["cleanup"],
+    });
     expect(updated?.message).toBe("Updated prompt");
+    expect(updated?.status).toBe("in_progress");
+    expect(updated?.priority).toBe("low");
+    expect(updated?.dueDate).toBe("2026-05-20");
+    expect(updated?.tags).toBe(JSON.stringify(["cleanup"]));
 
     service.delete(created.id);
     expect(service.getById(created.id)).toBeUndefined();
