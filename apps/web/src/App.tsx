@@ -1013,6 +1013,66 @@ function ManagerRepositoryPanel({
   )
 }
 
+interface ManagerTaskPanelProps {
+  items: TodoItem[]
+  thread: AgentThread | null
+  isMobile?: boolean
+}
+
+function ManagerTaskPanel({ items, thread, isMobile = false }: ManagerTaskPanelProps) {
+  const completed = items.filter((item) => item.status === 'completed').length
+  const inProgress = items.filter((item) => item.status === 'in-progress').length
+
+  return (
+    <aside className={`flex h-full min-h-0 flex-col bg-background ${isMobile ? 'border-b' : 'border-l'}`}>
+      <div className="flex h-[35px] shrink-0 items-center justify-between border-b px-3">
+        <div className="flex min-w-0 items-center gap-2">
+          <ListChecks className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <span className="truncate text-xs font-medium uppercase tracking-wider text-muted-foreground">
+            Agent tasks
+          </span>
+        </div>
+        {items.length > 0 && (
+          <Badge variant="secondary" className="h-5 rounded-md px-1.5 text-2xs">
+            {completed}/{items.length}
+          </Badge>
+        )}
+      </div>
+      <div className="min-h-0 flex-1 overflow-y-auto p-3">
+        {items.length > 0 ? (
+          <div className="space-y-3">
+            <TodoList items={items} className="bg-background" />
+            <div className="grid grid-cols-3 gap-2 text-center text-2xs text-muted-foreground">
+              <div className="rounded-md border px-2 py-1.5">
+                <div className="text-sm font-medium text-foreground">{inProgress}</div>
+                Active
+              </div>
+              <div className="rounded-md border px-2 py-1.5">
+                <div className="text-sm font-medium text-foreground">{completed}</div>
+                Done
+              </div>
+              <div className="rounded-md border px-2 py-1.5">
+                <div className="text-sm font-medium text-foreground">{Math.max(0, items.length - completed - inProgress)}</div>
+                Waiting
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="flex h-full min-h-[8rem] flex-col items-center justify-center px-3 text-center">
+            <ListChecks className="mb-2 h-5 w-5 text-muted-foreground/70" />
+            <p className="text-sm font-medium text-foreground">No agent tasks yet</p>
+            <p className="mt-1 max-w-56 text-xs leading-relaxed text-muted-foreground">
+              {thread?.status === 'running'
+                ? 'Tasks will appear here when the agent updates its internal list.'
+                : 'This thread has not published a task list.'}
+            </p>
+          </div>
+        )}
+      </div>
+    </aside>
+  )
+}
+
 function formatThreadDuration(ms: number): string {
   const totalSec = Math.floor(ms / 1000)
   if (totalSec < 60) return `${totalSec}s`
@@ -1403,6 +1463,7 @@ function App() {
   const [showSidebar, setShowSidebar] = useState(() => localStorage.getItem('showSessionsSidebar') === 'true')
   const [showTerminal, setShowTerminal] = useState(false)
   const [showManagerRepos, setShowManagerRepos] = useState(false)
+  const [showManagerTasks, setShowManagerTasks] = useState(true)
   const [strategyRepo, setStrategyRepo] = useState<AutomationRepository | null>(null)
   const [planRepo, setPlanRepo] = useState<AutomationRepository | null>(null)
   const sidebarRef = useRef<HTMLElement | null>(null)
@@ -6949,6 +7010,20 @@ function App() {
                       )}
                     </div>
                     <div className="flex shrink-0 items-center gap-0.5 sm:gap-1">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant={showManagerTasks ? 'secondary' : 'ghost'}
+                            size={isMobile ? 'icon' : 'sm'}
+                            className={isMobile ? 'h-7 w-7 shrink-0' : 'h-6 shrink-0 px-2 text-xs'}
+                            onClick={() => setShowManagerTasks((show) => !show)}
+                          >
+                            <ListChecks className={isMobile ? 'h-3.5 w-3.5' : 'mr-1 h-3 w-3'} />
+                            {!isMobile && 'Tasks'}
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="bottom">Toggle agent task sidebar</TooltipContent>
+                      </Tooltip>
                       <ThreadSkillPicker
                         token={token}
                         threadId={automation.selectedThread.id}
@@ -7408,108 +7483,115 @@ function App() {
               /* ── Manager main content ────────────────────────────── */
               <div className={`flex-1 min-w-0 flex flex-col min-h-0 ${isMobile && !automation.selectedThread ? 'pt-12' : ''}`}>
                 {automation.selectedThread ? (
-                  <>
-
-                    <ErrorBoundary name="Thread activity" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[automation.selectedThread?.id, automationMessages.length]}>
-                      <Conversation
-                        key={automation.selectedThread?.id ?? 'manager-empty'}
-                        className="min-h-0 flex-1 border-b"
-                        loading={automation.loadingActivities}
-                        loadingLabel="Loading activity"
-                        messageContents={automationMessages.map((msg) => msg.content)}
-                      >
-                        {automationMessages.length === 0 && !automation.loadingActivities && (
-                          <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
-                        )}
-                        {automationMessages.map((msg, idx) => (
-                          <Message
-                            key={msg.id}
-                            messageId={msg.id}
-                            messageIndex={idx}
-                            messageFromEnd={automationMessages.length - 1 - idx}
-                            role={msg.role}
-                            content={msg.content}
-                            contextFlow={msg.contextFlow}
-                            toolCalls={msg.toolCalls}
-                            segments={msg.segments}
-                            isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
-                            compact
-                            preferLlmUi={false}
-                            provider={automation.selectedThread?.providerId as ProviderId | undefined}
-                            renderInlineSecretPrompt={renderInlineSecretPrompt}
-                            onOpenPath={handleOpenMessagePath}
-                            onOpenDiff={handleChangedFileClick}
-                          />
-                        ))}
-                      </Conversation>
-                    </ErrorBoundary>
-                    <div className="shrink-0 py-3 px-4">
-                      <div className="mx-auto max-w-3xl">
-                        {automation.error && (
-                          <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-2">
-                            <AlertTriangle className="h-4 w-4 shrink-0" />
-                            <span className="min-w-0 break-words">{automation.error}</span>
+                  <div className={`flex flex-1 min-h-0 ${isMobile ? 'flex-col' : ''}`}>
+                    <div className="flex min-w-0 flex-1 flex-col min-h-0">
+                      <ErrorBoundary name="Thread activity" variant="section" className="min-h-0 flex-1 border-b" resetKeys={[automation.selectedThread?.id, automationMessages.length]}>
+                        <Conversation
+                          key={automation.selectedThread?.id ?? 'manager-empty'}
+                          className="min-h-0 flex-1 border-b"
+                          loading={automation.loadingActivities}
+                          loadingLabel="Loading activity"
+                          messageContents={automationMessages.map((msg) => msg.content)}
+                        >
+                          {automationMessages.length === 0 && !automation.loadingActivities && (
+                            <div className="text-center text-sm text-muted-foreground py-8">No activity yet</div>
+                          )}
+                          {automationMessages.map((msg, idx) => (
+                            <Message
+                              key={msg.id}
+                              messageId={msg.id}
+                              messageIndex={idx}
+                              messageFromEnd={automationMessages.length - 1 - idx}
+                              role={msg.role}
+                              content={msg.content}
+                              contextFlow={msg.contextFlow}
+                              toolCalls={msg.toolCalls}
+                              segments={msg.segments}
+                              isStreaming={automation.selectedThread?.status === 'running' && idx === automationMessages.length - 1}
+                              compact
+                              preferLlmUi={false}
+                              provider={automation.selectedThread?.providerId as ProviderId | undefined}
+                              renderInlineSecretPrompt={renderInlineSecretPrompt}
+                              onOpenPath={handleOpenMessagePath}
+                              onOpenDiff={handleChangedFileClick}
+                            />
+                          ))}
+                        </Conversation>
+                      </ErrorBoundary>
+                      <div className="shrink-0 py-3 px-4">
+                        <div className="mx-auto max-w-3xl">
+                          {automation.error && (
+                            <div className="flex items-center gap-2.5 rounded-lg border border-red-500/40 bg-red-500/10 px-3.5 py-2.5 text-sm text-red-400 mb-2">
+                              <AlertTriangle className="h-4 w-4 shrink-0" />
+                              <span className="min-w-0 break-words">{automation.error}</span>
+                            </div>
+                          )}
+                          {selectedManagerQueue.length > 0 && automation.selectedThread && (
+                            <MessageQueue
+                              items={selectedManagerQueue}
+                              onRemove={(id) => dequeueManagerMessage(automation.selectedThread!.id, id)}
+                              onEdit={(id, content) => updateManagerQueueItem(automation.selectedThread!.id, id, content)}
+                              onReorder={(sourceId, targetId, placement) => reorderManagerQueueItem(automation.selectedThread!.id, sourceId, targetId, placement)}
+                              onSendToParallelThread={sendManagerQueueItemToParallelThread}
+                              className="mb-2"
+                            />
+                          )}
+                          <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
+                            <PromptInput
+                              ref={promptInputRef}
+                              draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
+                              value={inputValueRef.current}
+                              syncKey={inputVersion}
+                              onChange={handleInputChange}
+                              onSubmit={handleSubmit}
+                              onQueue={handleManagerQueue}
+                              onStop={() => { if (automation.selectedThread) void automation.handleStop(automation.selectedThread.id) }}
+                              isLoading={automation.selectedThread?.status === 'running'}
+                              disabled={automation.creating}
+                              placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
+                              onVoiceInput={handleVoiceInput}
+                              voiceRecording={voiceRecording}
+                              voiceLevels={voiceLevels}
+                              voiceTranscribing={voiceTranscribing}
+                              onVoiceStop={() => { void stopRecordingAndTranscribe() }}
+                              responseStyle={chatResponseStyle}
+                              onResponseStyleChange={handleChatResponseStyleChange}
+                              provider={chatProvider}
+                              onProviderChange={handleChatProviderChange}
+                              providerRuntimeMode={chatProviderRuntimeMode}
+                              onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
+                              cliModel={cliModel}
+                              onCliModelChange={handleCliModelChange}
+                              repoRuntime={selectedThreadRepoRuntime}
+                              onMoveToGateway={handleMoveRepoToGateway}
+                              availableFiles={availableFilesForMention}
+                              onSearchFiles={handleSearchFiles}
+                              workspaceOpen={showWorkspace}
+                            />
+                          </ErrorBoundary>
+                          <div className="flex items-center gap-2 px-1 mt-1.5">
+                            {selectedThreadRepoRuntime && (
+                              <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />
+                            )}
+                            {automation.selectedThread && automation.selectedThread.status !== 'running' && !automation.selectedThread.providerSessionId && (
+                              <span className="text-xs text-muted-foreground truncate">
+                                Thread finished — start a new one
+                              </span>
+                            )}
                           </div>
-                        )}
-                        {selectedManagerQueue.length > 0 && automation.selectedThread && (
-                          <MessageQueue
-                            items={selectedManagerQueue}
-                            onRemove={(id) => dequeueManagerMessage(automation.selectedThread!.id, id)}
-                            onEdit={(id, content) => updateManagerQueueItem(automation.selectedThread!.id, id, content)}
-                            onReorder={(sourceId, targetId, placement) => reorderManagerQueueItem(automation.selectedThread!.id, sourceId, targetId, placement)}
-                            onSendToParallelThread={sendManagerQueueItemToParallelThread}
-                            className="mb-2"
-                          />
-                        )}
-                        {automation.selectedThreadTodos.length > 0 && (
-                          <TodoList items={automation.selectedThreadTodos} className="mb-2" />
-                        )}
-                        <ErrorBoundary name="Thread composer" variant="section" resetKeys={[automation.selectedThread?.id, inputVersion]}>
-                          <PromptInput
-                            ref={promptInputRef}
-                            draftStateKey={`manager:${automation.selectedThread?.id ?? 'new-thread'}`}
-                            value={inputValueRef.current}
-                            syncKey={inputVersion}
-                            onChange={handleInputChange}
-                            onSubmit={handleSubmit}
-                            onQueue={handleManagerQueue}
-                            onStop={() => { if (automation.selectedThread) void automation.handleStop(automation.selectedThread.id) }}
-                            isLoading={automation.selectedThread?.status === 'running'}
-                            disabled={automation.creating}
-                            placeholder={automation.selectedThread?.providerSessionId || automation.selectedThread?.status === 'running' ? 'Send a follow-up message...' : 'Describe what you want to do...'}
-                            onVoiceInput={handleVoiceInput}
-                            voiceRecording={voiceRecording}
-                            voiceLevels={voiceLevels}
-                            voiceTranscribing={voiceTranscribing}
-                            onVoiceStop={() => { void stopRecordingAndTranscribe() }}
-                            responseStyle={chatResponseStyle}
-                            onResponseStyleChange={handleChatResponseStyleChange}
-                            provider={chatProvider}
-                            onProviderChange={handleChatProviderChange}
-                            providerRuntimeMode={chatProviderRuntimeMode}
-                            onProviderRuntimeModeChange={handleChatProviderRuntimeModeChange}
-                            cliModel={cliModel}
-                            onCliModelChange={handleCliModelChange}
-                            repoRuntime={selectedThreadRepoRuntime}
-                            onMoveToGateway={handleMoveRepoToGateway}
-                            availableFiles={availableFilesForMention}
-                            onSearchFiles={handleSearchFiles}
-                            workspaceOpen={showWorkspace}
-                          />
-                        </ErrorBoundary>
-                        <div className="flex items-center gap-2 px-1 mt-1.5">
-                          {selectedThreadRepoRuntime && (
-                            <ManagerRepoRuntimeMeta runtime={selectedThreadRepoRuntime} />
-                          )}
-                          {automation.selectedThread && automation.selectedThread.status !== 'running' && !automation.selectedThread.providerSessionId && (
-                            <span className="text-xs text-muted-foreground truncate">
-                              Thread finished — start a new one
-                            </span>
-                          )}
                         </div>
                       </div>
                     </div>
-                  </>
+                    {showManagerTasks && (
+                      <div className={isMobile ? 'h-56 shrink-0 overflow-hidden' : 'w-72 shrink-0 overflow-hidden'}>
+                        <ManagerTaskPanel
+                          items={automation.selectedThreadTodos}
+                          thread={automation.selectedThread}
+                          isMobile={isMobile}
+                        />
+                      </div>
+                    )}
+                  </div>
                 ) : (
                   <div className={`flex flex-1 min-h-0 ${isMobile ? 'flex-col' : ''}`}>
                     {/* Collapsible repos panel */}
