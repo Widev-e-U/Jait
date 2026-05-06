@@ -15,4 +15,16 @@ describe('Conversation', () => {
     expect(markup).toContain('overscroll-behavior-y:contain')
     expect(markup).toContain('touch-action:pan-y')
   })
+
+  it('keeps existing messages visible while loading more chat state', () => {
+    const markup = renderToStaticMarkup(
+      <Conversation loading loadingLabel="Loading chat" messageContents={['hello']}>
+        <div>hello</div>
+      </Conversation>,
+    )
+
+    expect(markup).toContain('hello')
+    expect(markup).toContain('Loading chat')
+    expect(markup).toContain('position:sticky')
+  })
 })

@@ -27,6 +27,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
   const scrollRef = useRef<HTMLDivElement | null>(null)
   const sizerRef = useRef<HTMLDivElement | null>(null)
   const childItems = useMemo(() => Children.toArray(children), [children])
+  const hasContent = childItems.length > 0
   const [isAtBottom, setIsAtBottom] = useState(true)
   const [stickToBottom, setStickToBottom] = useState(true)
   const prevChildCount = useRef(0)
@@ -229,7 +230,7 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
 
   return (
     <AIConversation className={cn('relative flex-1 overflow-hidden', className)}>
-      {loading ? (
+      {loading && !hasContent ? (
         <div className="flex h-full items-center justify-center">
           <div className="flex items-center gap-3 rounded-lg border border-border/70 bg-background px-4 py-2 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -243,6 +244,14 @@ export function Conversation({ children, className, loading, loadingLabel = 'Loa
           className="h-full overflow-y-auto"
           style={MOBILE_SCROLL_CONTAINMENT_STYLE}
         >
+          {loading && (
+            <div className="sticky top-3 z-10 flex justify-center">
+              <div className="flex items-center gap-2 rounded-full border border-border/70 bg-background/95 px-3 py-1 text-xs text-muted-foreground shadow-sm backdrop-blur">
+                <Loader2 className="h-3 w-3 animate-spin text-primary" />
+                <span>{loadingLabel}</span>
+              </div>
+            </div>
+          )}
           <div ref={innerRef} className="mx-auto max-w-3xl px-4 pt-12 pb-6 sm:py-6 sm:px-5">
             <div
               ref={sizerRef}

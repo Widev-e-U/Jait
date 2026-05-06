@@ -1814,7 +1814,7 @@ function ToolCallCardInner({
 
         <div className="group pb-1">
           <div className={cn(
-            'flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 shadow-[0_1px_0_hsl(var(--foreground)/0.04)] transition-colors',
+            'flex min-h-9 items-center gap-2 rounded-md px-2 py-1.5 transition-colors',
             stateClasses.row,
           )}>
             {hasExpandableContent ? (

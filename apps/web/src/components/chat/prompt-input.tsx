@@ -659,6 +659,8 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
   const workspaceDisplayName = workspaceName?.trim() || workspacePath?.trim() || null
   const hasFooterControls = shouldShowSendTargetSelector || showProviderModelSelector || showResponseStyleSelector || showProviderRuntimeSelector || showModeSelector || Boolean(footerLeadingContent)
   const hasFooterLeftContent = hasFooterControls
+  const submitEmpty = isEmpty && attachments.length === 0
+  const canQueueWhileLoading = shouldQueuePromptSubmit({ isLoading, sendTarget, hasQueueHandler: Boolean(onQueue) }) && Boolean(onQueue)
 
   useEffect(() => {
     const el = rootRef.current
@@ -1687,13 +1689,23 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               <Square className="h-3.5 w-3.5 fill-current" />
             </Button>
           )}
-          {shouldQueuePromptSubmit({ isLoading, sendTarget, hasQueueHandler: Boolean(onQueue) }) && onQueue ? (
+          {canQueueWhileLoading && submitEmpty ? (
+            <Button
+              type="button"
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded-lg"
+              disabled
+              title="Sending"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </Button>
+          ) : canQueueWhileLoading && onQueue ? (
             <Button
               type="button"
               size="icon"
               variant="secondary"
               className="h-8 w-8 shrink-0 rounded-lg"
-              disabled={(isEmpty && attachments.length === 0) || composerDisabled}
+              disabled={submitEmpty || composerDisabled}
               title="Add to queue"
               onClick={() => {
                 const el = editableRef.current
@@ -1711,7 +1723,7 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
               type="button"
               size="icon"
               className="h-8 w-8 shrink-0 rounded-lg"
-              disabled={(isEmpty && attachments.length === 0) || composerDisabled}
+              disabled={submitEmpty || composerDisabled}
               onClick={() => {
                 const el = editableRef.current
                 const chips = el ? getChipFiles(el) : []
@@ -1723,7 +1735,17 @@ export const PromptInput = forwardRef<PromptInputHandle, PromptInputProps>(funct
             >
               <ArrowUp className="h-4 w-4" />
             </Button>
-          ) : null}
+          ) : (
+            <Button
+              type="button"
+              size="icon"
+              className="h-8 w-8 shrink-0 rounded-lg"
+              disabled
+              title="Sending"
+            >
+              <Loader2 className="h-4 w-4 animate-spin" />
+            </Button>
+          )}
         </div>
       </div>
     </div>
