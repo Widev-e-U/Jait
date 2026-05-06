@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 
 import {
   createSessionStatePersistRequestInit,
+  getSessionStateRequestKey,
+  isSessionStateLoading,
   shouldApplySessionStateFetchResult,
 } from '@/hooks/useSessionState'
 
@@ -45,5 +47,22 @@ describe('createSessionStatePersistRequestInit', () => {
         localPath: '/work/repo',
       },
     }))
+  })
+})
+
+describe('session state loading helpers', () => {
+  it('builds a stable request key only when session auth is available', () => {
+    expect(getSessionStateRequestKey('session-1', 'manager.selectedRepo', 'token-1')).toBe('session-1:manager.selectedRepo:token-1')
+    expect(getSessionStateRequestKey(null, 'manager.selectedRepo', 'token-1')).toBeNull()
+    expect(getSessionStateRequestKey('session-1', 'manager.selectedRepo', null)).toBeNull()
+  })
+
+  it('keeps session state loading until the current request has completed', () => {
+    const requestKey = getSessionStateRequestKey('session-1', 'manager.selectedRepo', 'token-1')
+
+    expect(isSessionStateLoading(false, requestKey, null)).toBe(true)
+    expect(isSessionStateLoading(false, requestKey, 'session-1:manager.selectedRepo:token-1')).toBe(false)
+    expect(isSessionStateLoading(true, requestKey, 'session-1:manager.selectedRepo:token-1')).toBe(true)
+    expect(isSessionStateLoading(false, null, null)).toBe(false)
   })
 })
