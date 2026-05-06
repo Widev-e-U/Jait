@@ -78,6 +78,27 @@ function summariseReason(reason: string): string {
   return 'unavailable'
 }
 
+function isLoginStateModelError(message: string): boolean {
+  const lower = message.trim().toLowerCase()
+  if (!lower) return false
+  if (
+    lower.includes('quota')
+    || lower.includes('rate limit')
+    || lower.includes('token limit')
+    || lower.includes('usage limit')
+    || lower.includes('limit reached')
+  ) {
+    return false
+  }
+  return lower === 'authentication required'
+    || lower === 'not authenticated'
+    || lower.includes('not logged in')
+    || lower.includes('login required')
+    || lower.includes('credentials are not configured')
+    || lower.includes('missing credentials')
+    || lower.includes('no credentials')
+}
+
 function loadRecentModels(): string[] {
   try {
     const raw = localStorage.getItem(RECENT_MODELS_KEY)
@@ -405,11 +426,11 @@ export function ProviderModelSelector({
   const modelErrorMessage = useMemo(() => {
     if (!modelError) return null
     const providerLabel = currentProvider.label
-    if (/auth|login|logged in|credential/i.test(modelError)) {
+    if (currentProvider.auth?.authenticated === false && isLoginStateModelError(modelError)) {
       return `You're not logged in to ${providerLabel}.`
     }
     return modelError
-  }, [currentProvider.label, modelError])
+  }, [currentProvider.auth?.authenticated, currentProvider.label, modelError])
 
   const handleProviderSelect = (nextProvider: ProviderId) => {
     onProviderChange(nextProvider)

@@ -67,36 +67,6 @@ process.stdin.on("data", (chunk) => {
 });
 `;
 
-const fakeAcpAgentChatGptScript = `
-process.stdin.setEncoding("utf8");
-let buffer = "";
-process.stdin.on("data", (chunk) => {
-  buffer += chunk;
-  let index;
-  while ((index = buffer.indexOf("\\n")) >= 0) {
-    const line = buffer.slice(0, index).trim();
-    buffer = buffer.slice(index + 1);
-    if (!line) continue;
-    const request = JSON.parse(line);
-    if (request.method === "initialize") {
-      process.stdout.write(JSON.stringify({
-        jsonrpc: "2.0",
-        id: request.id,
-        result: {
-          protocolVersion: 1,
-          agentCapabilities: { auth: { logout: {} } },
-          authMethods: [{ id: "chat-gpt", name: "ChatGPT", description: "Use ChatGPT to authenticate" }]
-        }
-      }) + "\\n");
-    } else if (request.method === "authenticate") {
-      setInterval(() => {}, 1000);
-    } else if (request.method === "logout") {
-      process.stdout.write(JSON.stringify({ jsonrpc: "2.0", id: request.id, result: {} }) + "\\n");
-    }
-  }
-});
-`;
-
 const fakeAcpTerminalAuthScript = `
 if (process.argv.includes("--login")) {
   process.stdout.write([
@@ -263,6 +233,8 @@ describe("AcpProvider auth", () => {
   });
 
   it("surfaces ACP model discovery failures instead of returning fallback models", async () => {
+    const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
+    process.env.CODEX_HOME = codexHome;
     const provider = new AcpProvider({
       id: "codex",
       name: "Codex",
@@ -271,7 +243,32 @@ describe("AcpProvider auth", () => {
       args: ["-e", fakeAcpAuthRequiredScript],
     });
 
-    await expect(provider.listModels()).rejects.toThrow("Authentication required");
+    try {
+      await expect(provider.listModels()).rejects.toThrow("Authentication required");
+    } finally {
+      rmSync(codexHome, { recursive: true, force: true });
+    }
+  });
+
+  it("does not describe Codex ACP model discovery auth errors as logged out when credentials exist", async () => {
+    const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
+    process.env.CODEX_HOME = codexHome;
+    writeFileSync(join(codexHome, "auth.json"), JSON.stringify({ tokens: { access_token: "token" } }));
+    const provider = new AcpProvider({
+      id: "codex",
+      name: "Codex",
+      description: "Codex via ACP",
+      command: process.execPath,
+      args: ["-e", fakeAcpAuthRequiredScript],
+    });
+
+    try {
+      await expect(provider.listModels()).rejects.toThrow(
+        "Codex is logged in, but the provider rejected model discovery: Authentication required. Check provider usage limits or account access.",
+      );
+    } finally {
+      rmSync(codexHome, { recursive: true, force: true });
+    }
   });
 
   it("returns device auth details from ACP terminal login output", async () => {
@@ -282,9 +279,9 @@ describe("AcpProvider auth", () => {
     writeFileSync(agentPath, fakeAcpTerminalAuthScript);
 
     const provider = new AcpProvider({
-      id: "codex",
-      name: "Codex",
-      description: "Codex via ACP",
+      id: "custom-acp",
+      name: "Custom ACP",
+      description: "Custom provider via ACP",
       command: process.execPath,
       args: [agentPath],
     });
@@ -303,7 +300,7 @@ describe("AcpProvider auth", () => {
     }
   });
 
-  it("uses Codex CLI device auth for ACP ChatGPT agent login", async () => {
+  it("uses Codex CLI device auth without probing ACP for Codex login", async () => {
     const codexHome = mkdtempSync(join(tmpdir(), "jait-codex-home-"));
     const agentDir = mkdtempSync(join(tmpdir(), "jait-acp-agent-"));
     const loginPath = join(agentDir, "fake-codex-device-auth.mjs");
@@ -314,8 +311,7 @@ describe("AcpProvider auth", () => {
       id: "codex",
       name: "Codex",
       description: "Codex via ACP",
-      command: process.execPath,
-      args: ["-e", fakeAcpAgentChatGptScript],
+      command: "missing-acp-command-for-login-test",
       env: {
         JAIT_CODEX_LOGIN_COMMAND: `"${process.execPath}" "${loginPath}"`,
       },

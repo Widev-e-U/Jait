@@ -190,6 +190,14 @@ export class AcpProvider implements CliProviderAdapter {
       await probe.connection.closeSession?.({ sessionId: newSession.sessionId }).catch(() => {});
       this.cachedModels = models;
       return models;
+    } catch (error) {
+      const message = extractErrorMessage(error, "ACP model discovery failed");
+      if (isAuthenticationRequiredMessage(message) && this.hasLocalProviderCredential()) {
+        throw new Error(
+          `${this.info.name} is logged in, but the provider rejected model discovery: ${message}. Check provider usage limits or account access.`,
+        );
+      }
+      throw error instanceof Error ? error : new Error(message);
     } finally {
       probe.child.kill();
     }
@@ -264,6 +272,10 @@ export class AcpProvider implements CliProviderAdapter {
       this.authLoginProcess = null;
     }
 
+    if (this.id === "codex") {
+      return this.startCodexDeviceLogin("ChatGPT");
+    }
+
     const probe = await this.probeAcpAuth();
     const method = chooseAcpAuthMethod(probe.authMethods);
     if (!method) {
@@ -279,31 +291,6 @@ export class AcpProvider implements CliProviderAdapter {
         commandLine: this.config.command,
         args: [...this.config.args, ...(method.args ?? [])],
         env: { ...this.config.env, ...method.env },
-      });
-      if (child) {
-        this.authLoginProcess = child;
-        child.on("exit", () => {
-          if (this.authLoginProcess === child) this.authLoginProcess = null;
-          this.cachedModels = null;
-          this.cachedAuthStatus = null; // invalidate so next /api/providers reflects new state
-          void this.checkAvailability();
-        });
-      } else {
-        this.cachedModels = null;
-        this.cachedAuthStatus = null;
-        void this.checkAvailability();
-      }
-      return result;
-    }
-
-    if (this.id === "codex" && method.id === "chat-gpt") {
-      probe.child.kill();
-      const { result, child } = await startDeviceLoginCommand({
-        providerId: this.id,
-        label: method.name,
-        commandLine: this.config.env?.JAIT_CODEX_LOGIN_COMMAND ?? process.env.JAIT_CODEX_LOGIN_COMMAND ?? "codex",
-        args: ["login", "--device-auth"],
-        env: this.config.env,
       });
       if (child) {
         this.authLoginProcess = child;
@@ -341,6 +328,30 @@ export class AcpProvider implements CliProviderAdapter {
     };
   }
 
+  private async startCodexDeviceLogin(label: string): Promise<ProviderLoginResult> {
+    const { result, child } = await startDeviceLoginCommand({
+      providerId: this.id,
+      label,
+      commandLine: this.config.env?.JAIT_CODEX_LOGIN_COMMAND ?? process.env.JAIT_CODEX_LOGIN_COMMAND ?? "codex",
+      args: ["login", "--device-auth"],
+      env: this.config.env,
+    });
+    if (child) {
+      this.authLoginProcess = child;
+      child.on("exit", () => {
+        if (this.authLoginProcess === child) this.authLoginProcess = null;
+        this.cachedModels = null;
+        this.cachedAuthStatus = null; // invalidate so next /api/providers reflects new state
+        void this.checkAvailability();
+      });
+    } else {
+      this.cachedModels = null;
+      this.cachedAuthStatus = null;
+      void this.checkAvailability();
+    }
+    return result;
+  }
+
   private async checkProviderAuthenticated(): Promise<boolean | null> {
     if (this.id === "codex") {
       const cliAuthenticated = await this.getProviderCliAuthenticated();
@@ -376,6 +387,12 @@ export class AcpProvider implements CliProviderAdapter {
   private hasCodexAuthFile(): boolean {
     if (this.id !== "codex") return false;
     return checkCodexAuthFile();
+  }
+
+  private hasLocalProviderCredential(): boolean {
+    if (this.id === "codex") return checkCodexAuthFile();
+    if (this.id === "claude-code") return Boolean(process.env.ANTHROPIC_API_KEY?.trim());
+    return this.cachedAuthStatus?.status.authenticated === true;
   }
 
   async logout(): Promise<ProviderLogoutResult> {
@@ -777,6 +794,21 @@ function formatCliAuthDetail(providerName: string, authenticated: boolean | null
   if (authenticated === true) return `${providerName} credentials are configured, but Jait could not find a logout method.`;
   if (authenticated === false) return `${providerName} credentials are not configured.`;
   return `Could not read ${providerName} authentication capabilities.`;
+}
+
+function extractErrorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message.trim()) return error.message;
+  if (typeof error === "string" && error.trim()) return error;
+  return fallback;
+}
+
+function isAuthenticationRequiredMessage(message: string): boolean {
+  const lower = message.trim().toLowerCase();
+  return lower === "authentication required"
+    || lower === "not authenticated"
+    || lower.includes("not logged in")
+    || lower.includes("login required")
+    || lower.includes("credentials are not configured");
 }
 
 function getCodexAuthPaths(): string[] {
