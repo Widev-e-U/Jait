@@ -16,6 +16,25 @@ export function registerRepoProposalRoutes(
   deps: RepoProposalRouteDeps,
 ): void {
   const { repoService, repoProposalService } = deps;
+  const validStatuses = new Set(["open", "in_progress", "done"]);
+  const validPriorities = new Set(["low", "normal", "high"]);
+  const datePattern = /^\d{4}-\d{2}-\d{2}$/;
+
+  function normalizeTags(value: unknown): string[] | undefined {
+    if (value === undefined) return undefined;
+    if (!Array.isArray(value)) return [];
+    return [...new Set(value
+      .filter((tag): tag is string => typeof tag === "string")
+      .map((tag) => tag.trim().toLowerCase())
+      .filter(Boolean))]
+      .slice(0, 12);
+  }
+
+  function normalizeDueDate(value: unknown): string | null | undefined {
+    if (value === undefined) return undefined;
+    if (value === null || value === "") return null;
+    return typeof value === "string" && datePattern.test(value) ? value : null;
+  }
 
   function getOwnedRepo(repoId: string, userId: string) {
     const repo = repoService.getById(repoId);
@@ -43,6 +62,10 @@ export function registerRepoProposalRoutes(
 
     const body = request.body as {
       message?: string;
+      status?: string;
+      priority?: string;
+      dueDate?: string | null;
+      tags?: string[];
       sourceThreadId?: string | null;
       sourceThreadTitle?: string | null;
     };
@@ -55,6 +78,10 @@ export function registerRepoProposalRoutes(
       repoId: repo.id,
       userId: user.id,
       message,
+      status: validStatuses.has(body.status ?? "") ? body.status : undefined,
+      priority: validPriorities.has(body.priority ?? "") ? body.priority : undefined,
+      dueDate: normalizeDueDate(body.dueDate),
+      tags: normalizeTags(body.tags),
       sourceThreadId: body.sourceThreadId,
       sourceThreadTitle: body.sourceThreadTitle,
     });
@@ -67,14 +94,24 @@ export function registerRepoProposalRoutes(
     const existing = getOwnedProposal(request.params.id, user.id);
     if (!assertOwnership(reply, existing, user.id, "Proposal not found")) return;
 
-    const body = request.body as { message?: string };
+    const body = request.body as { message?: string; status?: string; priority?: string; dueDate?: string | null; tags?: string[] };
     const message = body.message?.trim();
     if (message !== undefined && !message) {
       return reply.status(400).send({ error: "message must not be empty" });
     }
+    if (body.status !== undefined && !validStatuses.has(body.status)) {
+      return reply.status(400).send({ error: "invalid status" });
+    }
+    if (body.priority !== undefined && !validPriorities.has(body.priority)) {
+      return reply.status(400).send({ error: "invalid priority" });
+    }
 
     const proposal = repoProposalService.update(existing.id, {
       message,
+      status: body.status,
+      priority: body.priority,
+      dueDate: normalizeDueDate(body.dueDate),
+      tags: normalizeTags(body.tags),
     });
     return { proposal };
   });

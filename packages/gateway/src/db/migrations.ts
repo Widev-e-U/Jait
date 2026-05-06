@@ -742,6 +742,10 @@ export const migrations: Migration[] = [
           repo_id TEXT NOT NULL,
           user_id TEXT,
           message TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open',
+          priority TEXT NOT NULL DEFAULT 'normal',
+          due_date TEXT,
+          tags TEXT NOT NULL DEFAULT '[]',
           source_thread_id TEXT,
           source_thread_title TEXT,
           created_at TEXT NOT NULL,
@@ -750,6 +754,18 @@ export const migrations: Migration[] = [
       `);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_automation_repo_proposals_repo ON automation_repo_proposals(repo_id, updated_at DESC)`);
       db.exec(`CREATE INDEX IF NOT EXISTS idx_automation_repo_proposals_user ON automation_repo_proposals(user_id, updated_at DESC)`);
+    },
+  },
+
+  // ─── 033: Repo todo metadata ───────────────────────────────────────
+  {
+    id: 33,
+    name: "automation_repo_proposals_todo_metadata",
+    run(db) {
+      try { db.exec(`ALTER TABLE automation_repo_proposals ADD COLUMN status TEXT NOT NULL DEFAULT 'open'`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE automation_repo_proposals ADD COLUMN priority TEXT NOT NULL DEFAULT 'normal'`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE automation_repo_proposals ADD COLUMN due_date TEXT`); } catch { /* exists */ }
+      try { db.exec(`ALTER TABLE automation_repo_proposals ADD COLUMN tags TEXT NOT NULL DEFAULT '[]'`); } catch { /* exists */ }
     },
   },
 
