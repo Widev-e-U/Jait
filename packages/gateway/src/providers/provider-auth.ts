@@ -1,4 +1,5 @@
 import { spawn, spawnSync, type ChildProcess } from "node:child_process";
+import { isAbsolute } from "node:path";
 import type {
   ProviderAuthCapabilities,
   ProviderId,
@@ -171,7 +172,7 @@ export function runAuthCommand(
     const child = spawn(spawnSpec.command, [...spawnSpec.args, ...args], {
       stdio: "pipe",
       windowsHide: true,
-      shell: process.platform === "win32",
+      shell: needsShell(spawnSpec.command),
     });
     let output = "";
     const append = (chunk: Buffer) => {
@@ -220,6 +221,7 @@ export function startDeviceLoginCommand(options: {
   label: string;
   commandLine: string;
   args: string[];
+  env?: NodeJS.ProcessEnv;
   timeoutMs?: number;
 }): Promise<{ result: ProviderLoginResult; child?: ChildProcess }> {
   return new Promise((resolve) => {
@@ -239,7 +241,8 @@ export function startDeviceLoginCommand(options: {
     const child = spawn(spawnSpec.command, [...spawnSpec.args, ...options.args], {
       stdio: "pipe",
       windowsHide: true,
-      shell: process.platform === "win32",
+      shell: needsShell(spawnSpec.command),
+      env: options.env ? { ...process.env, ...options.env } : process.env,
     });
 
     let output = "";
@@ -355,4 +358,8 @@ export function killChildTree(child: ChildProcess): void {
     }
   }
   child.kill();
+}
+
+function needsShell(command: string): boolean {
+  return process.platform === "win32" && !isAbsolute(command) && !command.includes("/") && !command.includes("\\");
 }

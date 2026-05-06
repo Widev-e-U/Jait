@@ -36,6 +36,7 @@ import {
   NO_PROVIDER_AUTH,
   killChildTree as killAuthChildTree,
   runAuthCommand,
+  startDeviceLoginCommand,
   unsupportedLogin,
   unsupportedLogout,
 } from "./provider-auth.js";
@@ -224,6 +225,22 @@ export class AcpProvider implements CliProviderAdapter {
   private async _computeAuthStatus(): Promise<ProviderAuthStatus> {
     // If authenticated via env-var API key, skip the ACP probe entirely.
     // The key can't be revoked from the UI, but local CLI credentials can be.
+    if (this.id === "codex" && Boolean(process.env.OPENAI_API_KEY?.trim())) {
+      const cliAuthenticated = await this.getProviderCliAuthenticated();
+      const logout = cliAuthenticated === true || this.hasCodexAuthFile();
+      const status: ProviderAuthStatus = {
+        login: false,
+        logout,
+        deviceCode: false,
+        authenticated: true,
+        detail: logout
+          ? "Authenticated via OPENAI_API_KEY environment variable and local Codex credentials. Logout clears the local Codex credentials."
+          : "Authenticated via OPENAI_API_KEY environment variable. Manage the key directly to change access.",
+      };
+      this.cachedAuthStatus = { status, expiresAt: Date.now() + 30_000 };
+      return status;
+    }
+
     if (this.id === "claude-code" && Boolean(process.env.ANTHROPIC_API_KEY?.trim())) {
       const cliAuthenticated = await this.getProviderCliAuthenticated();
       const logout = cliAuthenticated === true;
@@ -281,25 +298,27 @@ export class AcpProvider implements CliProviderAdapter {
 
     if (isTerminalAuthMethod(method)) {
       probe.child.kill();
-      const args = [...this.config.args, ...(method.args ?? [])];
-      const child = spawn(this.config.command, args, {
-        cwd: process.cwd(),
-        stdio: "ignore",
-        env: { ...process.env, ...this.config.env, ...method.env },
-      });
-      this.authLoginProcess = child;
-      child.on("exit", () => {
-        if (this.authLoginProcess === child) this.authLoginProcess = null;
-        this.cachedModels = null;
-        this.cachedAuthStatus = null; // invalidate so next /api/providers reflects new state
-        void this.checkAvailability();
-      });
-      return {
-        ok: true,
-        status: "started",
+      const { result, child } = await startDeviceLoginCommand({
         providerId: this.id,
-        message: `${method.name} login started through ACP.`,
-      };
+        label: method.name,
+        commandLine: this.config.command,
+        args: [...this.config.args, ...(method.args ?? [])],
+        env: { ...this.config.env, ...method.env },
+      });
+      if (child) {
+        this.authLoginProcess = child;
+        child.on("exit", () => {
+          if (this.authLoginProcess === child) this.authLoginProcess = null;
+          this.cachedModels = null;
+          this.cachedAuthStatus = null; // invalidate so next /api/providers reflects new state
+          void this.checkAvailability();
+        });
+      } else {
+        this.cachedModels = null;
+        this.cachedAuthStatus = null;
+        void this.checkAvailability();
+      }
+      return result;
     }
 
     const child = probe.child;
