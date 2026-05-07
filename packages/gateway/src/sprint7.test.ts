@@ -169,6 +169,51 @@ describe("Sprint 7 — Scheduling, Hooks & Webhooks", () => {
     sqlite.close();
   });
 
+  it("strips saved titles from legacy scheduled agent_thread_job records", async () => {
+    const { db, sqlite } = await openDatabase(":memory:");
+    migrateDatabase(sqlite);
+
+    const executeTool = vi.fn(async () => ({ ok: true, data: { thread: { id: "thread-1" } } }));
+    const scheduler = new SchedulerService({ db, executeTool });
+
+    const job = scheduler.create({
+      name: "legacy-code-quality-rotation",
+      cron: "* * * * *",
+      toolName: "thread.control",
+      input: {
+        action: "create",
+        title: "Jait code quality rotation",
+        kind: "delivery",
+        prompt: "Run the scheduled code quality task",
+        start: true,
+        detach: true,
+        __jaitJobMeta: {
+          jobType: "agent_thread_job",
+          provider: "codex",
+        },
+      },
+      sessionId: "s1",
+      workspaceRoot: "/workspace/Jait",
+    });
+
+    await scheduler.trigger(job.id);
+
+    expect(executeTool).toHaveBeenCalledWith(expect.objectContaining({
+      toolName: "thread.control",
+      input: expect.objectContaining({
+        action: "create",
+        kind: "delivery",
+        prompt: "Run the scheduled code quality task",
+        start: true,
+        detach: true,
+      }),
+    }));
+    const execution = executeTool.mock.calls[0]?.[0] as { input?: Record<string, unknown> };
+    expect(execution.input).not.toHaveProperty("title");
+
+    sqlite.close();
+  });
+
   it("matches zero-padded cron fields and avoids duplicate execution within one minute", async () => {
     const { db, sqlite } = await openDatabase(":memory:");
     migrateDatabase(sqlite);

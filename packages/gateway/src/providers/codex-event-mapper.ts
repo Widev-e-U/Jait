@@ -235,7 +235,12 @@ export function mapCodexNotification(
         { type: "turn.started", sessionId },
         { type: "activity", sessionId, kind: method, summary: `Codex: ${method}`, payload: params },
       ];
-    case "codex/event/task_complete":
+    case "codex/event/task_complete": {
+      const msg = (params.msg ?? params) as Record<string, unknown>;
+      const text = extractTextContent(msg);
+      if (text) return [{ type: "message", sessionId, role: "assistant", content: text }];
+      return [{ type: "activity", sessionId, kind: method, summary: `Codex: ${method}`, payload: params }];
+    }
     case "codex/event/agent_reasoning":
       return [{ type: "activity", sessionId, kind: method, summary: `Codex: ${method}`, payload: params }];
 

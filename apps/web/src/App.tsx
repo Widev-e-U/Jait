@@ -4068,8 +4068,10 @@ function App() {
         if (currentActiveWorkspace?.workspaceRoot === threadWorkspace) {
           showWorkspaceRef.current = true
           setShowWorkspace(true)
-          if (isMobile) showWorkspaceEditorPanel()
-          else setShowWorkspaceTree(true)
+          if (isMobile) showMobileWorkspaceEditorTab()
+          else {
+            applyWorkspaceLayout({ tree: true, editor: true }, { immediateSync: true })
+          }
           const state = { open: true, remotePath: currentActiveWorkspace.workspaceRoot, surfaceId: currentActiveWorkspace.surfaceId, nodeId: currentActiveWorkspace.nodeId }
           setSavedWorkspace(state)
           return
@@ -4089,8 +4091,10 @@ function App() {
     if (currentActiveWorkspace) {
       showWorkspaceRef.current = true
       setShowWorkspace(true)
-      if (isMobile) showWorkspaceEditorPanel()
-      else setShowWorkspaceTree(true)
+      if (isMobile) showMobileWorkspaceEditorTab()
+      else {
+        applyWorkspaceLayout({ tree: true, editor: true }, { immediateSync: true })
+      }
       const state = { open: true, remotePath: currentActiveWorkspace.workspaceRoot, surfaceId: currentActiveWorkspace.surfaceId, nodeId: currentActiveWorkspace.nodeId }
       setSavedWorkspace(state)
       return
@@ -4227,7 +4231,8 @@ function App() {
     token,
     handleWorkspaceFolderSelected,
     isMobile,
-    showWorkspaceEditorPanel,
+    showMobileWorkspaceEditorTab,
+    applyWorkspaceLayout,
     reopenPersistedWorkspace,
     waitForWorkspaceHydration,
   ])
@@ -7127,7 +7132,11 @@ function App() {
         {currentView === 'todo' ? (
           <div className={`flex-1 overflow-y-auto ${isMobile ? 'pt-12' : ''}`}>
             <ErrorBoundary name="Todo" variant="section" className="min-h-full" resetKeys={[currentView, token]}>
-              <TodoPage />
+              <TodoPage
+                provider={chatProvider}
+                model={cliModel}
+                runtimeMode={chatProvider !== 'jait' ? chatProviderRuntimeMode : 'full-access'}
+              />
             </ErrorBoundary>
           </div>
         ) : currentView === 'reminders' ? (

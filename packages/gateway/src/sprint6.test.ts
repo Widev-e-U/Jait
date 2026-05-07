@@ -145,7 +145,7 @@ describe("MemoryEngine (Sprint 6)", () => {
 
     const searchResult = await searchTool.execute({ query: "release branch" }, context);
     expect(searchResult.ok).toBe(true);
-    expect((searchResult.data as unknown[]).length).toBeGreaterThan(0);
+    expect((searchResult.data as { memories: unknown[] }).memories.length).toBeGreaterThan(0);
 
     const forgetResult = await forgetTool.execute({ id }, context);
     expect(forgetResult.ok).toBe(true);

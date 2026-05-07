@@ -57,4 +57,20 @@ describe("mapCodexNotification", () => {
       },
     });
   });
+
+  it("maps codex task completion last_agent_message as assistant text", () => {
+    const events = mapCodexNotification("codex/event/task_complete", {
+      msg: {
+        type: "task_complete",
+        last_agent_message: "Updated the tests and ran the focused check.",
+      },
+    }, "session-1");
+
+    expect(events).toEqual([{
+      type: "message",
+      sessionId: "session-1",
+      role: "assistant",
+      content: "Updated the tests and ran the focused check.",
+    }]);
+  });
 });

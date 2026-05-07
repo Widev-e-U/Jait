@@ -65,8 +65,10 @@ function getJobMeta(input: unknown): JobMeta {
   const record = asRecord(input);
   const meta = asRecord(record?.["__jaitJobMeta"]);
   return {
-    jobType: meta?.["jobType"] === "agent_task" || meta?.["jobType"] === "system_job"
-      ? meta["jobType"] as JobType
+    jobType: meta?.["jobType"] === "agent_task" || meta?.["jobType"] === "agent_thread_job"
+      ? "agent_task"
+      : meta?.["jobType"] === "system_job"
+        ? "system_job"
       : undefined,
     description: typeof meta?.["description"] === "string" ? meta["description"] : undefined,
     prompt: typeof meta?.["prompt"] === "string" ? meta["prompt"] : undefined,

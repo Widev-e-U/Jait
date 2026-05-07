@@ -89,4 +89,48 @@ describe('workspace editor reopen behavior', () => {
     expect(applyWorkspaceLayout).toHaveBeenNthCalledWith(1, { tree: false, editor: false }, { immediateSync: true })
     expect(applyWorkspaceLayout).toHaveBeenNthCalledWith(2, { tree: false, editor: true }, { immediateSync: true })
   })
+
+  it('opening an existing mobile workspace persists editor layout before panel state', () => {
+    const calls: string[] = []
+    const setShowWorkspace = vi.fn(() => calls.push('showWorkspace'))
+    const applyWorkspaceLayout = vi.fn(() => calls.push('layout'))
+    const setSavedWorkspace = vi.fn(() => calls.push('panel'))
+
+    const showMobileWorkspaceEditorTab = () => {
+      applyWorkspaceLayout(showMobileWorkspacePane('editor'), { immediateSync: true })
+    }
+
+    const openExistingMobileWorkspace = () => {
+      setShowWorkspace(true)
+      showMobileWorkspaceEditorTab()
+      setSavedWorkspace({ open: true, remotePath: '/repo' })
+    }
+
+    openExistingMobileWorkspace()
+
+    expect(setShowWorkspace).toHaveBeenCalledWith(true)
+    expect(applyWorkspaceLayout).toHaveBeenCalledWith({ tree: false, editor: true }, { immediateSync: true })
+    expect(setSavedWorkspace).toHaveBeenCalledWith({ open: true, remotePath: '/repo' })
+    expect(calls).toEqual(['showWorkspace', 'layout', 'panel'])
+  })
+
+  it('opening an existing desktop workspace persists editor layout before panel state', () => {
+    const calls: string[] = []
+    const setShowWorkspace = vi.fn(() => calls.push('showWorkspace'))
+    const applyWorkspaceLayout = vi.fn(() => calls.push('layout'))
+    const setSavedWorkspace = vi.fn(() => calls.push('panel'))
+
+    const openExistingDesktopWorkspace = () => {
+      setShowWorkspace(true)
+      applyWorkspaceLayout({ tree: true, editor: true }, { immediateSync: true })
+      setSavedWorkspace({ open: true, remotePath: '/repo' })
+    }
+
+    openExistingDesktopWorkspace()
+
+    expect(setShowWorkspace).toHaveBeenCalledWith(true)
+    expect(applyWorkspaceLayout).toHaveBeenCalledWith({ tree: true, editor: true }, { immediateSync: true })
+    expect(setSavedWorkspace).toHaveBeenCalledWith({ open: true, remotePath: '/repo' })
+    expect(calls).toEqual(['showWorkspace', 'layout', 'panel'])
+  })
 })

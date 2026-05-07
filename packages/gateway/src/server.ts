@@ -306,6 +306,9 @@ export async function createServer(config: AppConfig, deps: ServerDeps = {}) {
     registerRepoProposalRoutes(app, config, {
       repoService: deps.repoService,
       repoProposalService: deps.repoProposalService,
+      userService: deps.userService,
+      providerRegistry: deps.providerRegistry,
+      ws: deps.ws,
     });
   }
 

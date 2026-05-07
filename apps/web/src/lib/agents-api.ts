@@ -801,6 +801,19 @@ export class AgentsApi {
     return data.todo
   }
 
+  async generateJaitTodos(repoId: string, params: { prompt?: string; provider?: ProviderId; model?: string | null; runtimeMode?: RuntimeMode } = {}): Promise<{ todos: JaitTodo[]; generated: number }> {
+    const res = await fetch(`${API_URL}/api/repos/${repoId}/todos/generate`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({})) as { error?: string }
+      throw new Error(err.error || `Failed to generate todos: ${res.statusText}`)
+    }
+    return await res.json() as { todos: JaitTodo[]; generated: number }
+  }
+
   async updateJaitTodo(todoId: string, params: UpdateJaitTodoRequest): Promise<JaitTodo> {
     const res = await fetch(`${API_URL}/api/jait-todos/${todoId}`, {
       method: 'PATCH',

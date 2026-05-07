@@ -117,7 +117,7 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 
 function isScheduledAgentTask(input: unknown): boolean {
   const meta = asRecord(asRecord(input)?.["__jaitJobMeta"]);
-  return meta?.["jobType"] === "agent_task";
+  return meta?.["jobType"] === "agent_task" || meta?.["jobType"] === "agent_thread_job";
 }
 
 function normalizeScheduledExecution(job: ScheduledJobRecord): SchedulerToolExecution {
