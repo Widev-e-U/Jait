@@ -11,6 +11,7 @@
 import type { ToolDefinition, ToolResult, ToolContext } from "../contracts.js";
 import type { SchedulerService } from "../../scheduler/service.js";
 import type { MemoryService, MemoryScope } from "../../memory/contracts.js";
+import type { ReminderService } from "../../services/reminders.js";
 import type { SessionService } from "../../services/sessions.js";
 import type { SurfaceRegistry } from "../../surfaces/registry.js";
 import type { WsControlPlane } from "../../ws.js";
@@ -18,6 +19,7 @@ import type { HookBus } from "../../scheduler/hooks.js";
 
 export interface JaitToolDeps {
   memoryService?: MemoryService;
+  reminderService?: ReminderService;
   scheduler?: SchedulerService;
   sessionService?: SessionService;
   surfaceRegistry?: SurfaceRegistry;
@@ -47,6 +49,14 @@ interface JaitInput {
   ttlSeconds?: number;
   /** Max results for memory search */
   limit?: number;
+  /** Save memory.save content into the reminders table instead of semantic memory */
+  asReminder?: boolean;
+  /** Workspace ID for reminders */
+  workspaceId?: string | null;
+  /** Reminder ID for reminder actions */
+  reminderId?: string;
+  /** Reminder tags */
+  tags?: string[];
 
   // ── Cron params ──
   /** Cron job name */
@@ -68,7 +78,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
     name: "jait",
     description:
       "Jait platform tool — access memory, scheduler, and gateway status. " +
-      "Actions: memory.save, memory.search, memory.forget, cron.add, cron.list, cron.update, cron.remove, status.",
+      "Actions: memory.save, memory.search, memory.forget, reminder.save, reminder.list, reminder.forget, cron.add, cron.list, cron.update, cron.remove, status.",
     tier: "core",
     category: "gateway",
     source: "builtin",
@@ -80,6 +90,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
           description: "Action to perform.",
           enum: [
             "memory.save", "memory.search", "memory.forget",
+            "reminder.save", "reminder.list", "reminder.forget",
             "cron.add", "cron.list", "cron.update", "cron.remove",
             "status",
           ],
@@ -118,6 +129,23 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
           type: "number",
           description: "Max results (for memory.search, default: 5).",
         },
+        asReminder: {
+          type: "boolean",
+          description: "For memory.save, save content to the reminders table instead of semantic memory.",
+        },
+        workspaceId: {
+          type: "string",
+          description: "Workspace ID for reminder actions.",
+        },
+        reminderId: {
+          type: "string",
+          description: "Reminder ID to forget.",
+        },
+        tags: {
+          type: "array",
+          items: { type: "string" },
+          description: "Reminder tags.",
+        },
         // Cron params
         name: {
           type: "string",
@@ -151,6 +179,25 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
         switch (input.action) {
           // ── Memory ──────────────────────────────────────────────
           case "memory.save": {
+            if (input.asReminder) {
+              if (!deps.reminderService) {
+                return { ok: false, message: "Reminder service not available." };
+              }
+              if (!input.content) {
+                return { ok: false, message: "memory.save with asReminder requires `content`." };
+              }
+              const reminder = deps.reminderService.create({
+                userId: context.userId,
+                workspaceId: input.workspaceId ?? null,
+                sessionId: context.sessionId,
+                content: input.content,
+                sourceType: input.sourceType ?? "agent",
+                sourceId: input.sourceId ?? context.actionId,
+                sourceSurface: "chat",
+                tags: input.tags,
+              });
+              return { ok: true, message: `Saved reminder ${reminder.id}`, data: reminder };
+            }
             if (!deps.memoryService) {
               return { ok: false, message: "Memory service not available." };
             }
@@ -173,6 +220,26 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             return { ok: true, message: `Saved memory ${entry.id}`, data: entry };
           }
 
+          case "reminder.save": {
+            if (!deps.reminderService) {
+              return { ok: false, message: "Reminder service not available." };
+            }
+            if (!input.content) {
+              return { ok: false, message: "reminder.save requires `content`." };
+            }
+            const reminder = deps.reminderService.create({
+              userId: context.userId,
+              workspaceId: input.workspaceId ?? null,
+              sessionId: context.sessionId,
+              content: input.content,
+              sourceType: input.sourceType ?? "agent",
+              sourceId: input.sourceId ?? context.actionId,
+              sourceSurface: "chat",
+              tags: input.tags,
+            });
+            return { ok: true, message: `Saved reminder ${reminder.id}`, data: reminder };
+          }
+
           case "memory.search": {
             if (!deps.memoryService) {
               return { ok: false, message: "Memory service not available." };
@@ -185,10 +252,38 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               input.limit ?? 5,
               input.scope as MemoryScope | undefined,
             );
-            return { ok: true, message: `Found ${results.length} memories`, data: results };
+            const reminders = deps.reminderService?.list({
+              userId: context.userId,
+              status: "active",
+              limit: input.limit ?? 5,
+            }) ?? [];
+            return {
+              ok: true,
+              message: `Found ${results.length} memories and ${reminders.length} reminders`,
+              data: { memories: results, reminders },
+            };
+          }
+
+          case "reminder.list": {
+            if (!deps.reminderService) {
+              return { ok: false, message: "Reminder service not available." };
+            }
+            const reminders = deps.reminderService.list({
+              userId: context.userId,
+              workspaceId: input.workspaceId ?? undefined,
+              status: "active",
+              limit: input.limit ?? 50,
+            });
+            return { ok: true, message: `Loaded ${reminders.length} reminders`, data: { reminders } };
           }
 
           case "memory.forget": {
+            if (deps.reminderService && input.memoryId) {
+              const removedReminder = deps.reminderService.delete(input.memoryId, context.userId);
+              if (removedReminder) {
+                return { ok: true, message: `Forgot reminder ${input.memoryId}` };
+              }
+            }
             if (!deps.memoryService) {
               return { ok: false, message: "Memory service not available." };
             }
@@ -199,6 +294,21 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
             return {
               ok: removed,
               message: removed ? `Forgot memory ${input.memoryId}` : `Memory ${input.memoryId} not found`,
+            };
+          }
+
+          case "reminder.forget": {
+            if (!deps.reminderService) {
+              return { ok: false, message: "Reminder service not available." };
+            }
+            const id = input.reminderId ?? input.memoryId;
+            if (!id) {
+              return { ok: false, message: "reminder.forget requires `reminderId`." };
+            }
+            const removed = deps.reminderService.delete(id, context.userId);
+            return {
+              ok: removed,
+              message: removed ? `Forgot reminder ${id}` : `Reminder ${id} not found`,
             };
           }
 
@@ -304,7 +414,7 @@ export function createJaitTool(deps: JaitToolDeps): ToolDefinition<JaitInput> {
               ok: false,
               message:
                 `Unknown action: "${input.action}". ` +
-                "Valid actions: memory.save, memory.search, memory.forget, " +
+                "Valid actions: memory.save, memory.search, memory.forget, reminder.save, reminder.list, reminder.forget, " +
                 "cron.add, cron.list, cron.update, cron.remove, status.",
             };
         }

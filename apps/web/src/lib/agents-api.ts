@@ -287,6 +287,72 @@ export interface UpdateJaitTodoRequest {
 
 export type UpdateRepoProposalRequest = UpdateJaitTodoRequest
 
+export interface ReminderSession {
+  id: string
+  userId: string | null
+  workspaceId: string | null
+  name: string | null
+  workspacePath: string | null
+  createdAt: string
+  lastActiveAt: string
+  status: string | null
+  metadata: string | null
+}
+
+export interface ReminderWorkspace {
+  id: string
+  userId: string | null
+  title: string | null
+  rootPath: string | null
+  nodeId: string | null
+  createdAt: string
+  lastActiveAt: string
+  status: string | null
+  metadata: string | null
+  sessions: ReminderSession[]
+  reminderCount: number
+}
+
+export interface ReminderRecord {
+  id: string
+  userId: string | null
+  workspaceId: string | null
+  sessionId: string | null
+  content: string
+  sourceType: string
+  sourceId: string | null
+  sourceSurface: string
+  status: 'active' | 'archived'
+  tags: string
+  createdAt: string
+  updatedAt: string
+}
+
+export interface ReminderSnapshot {
+  reminders: ReminderRecord[]
+  workspaces: ReminderWorkspace[]
+  hasMoreWorkspaces: boolean
+  threads: AgentThread[]
+}
+
+export interface CreateReminderRequest {
+  content: string
+  workspaceId?: string | null
+  sessionId?: string | null
+  tags?: string[]
+  sourceType?: string
+  sourceId?: string | null
+  sourceSurface?: string
+}
+
+export interface UpdateReminderRequest {
+  content?: string
+  workspaceId?: string | null
+  sessionId?: string | null
+  status?: ReminderRecord['status']
+  tags?: string[]
+}
+
 // ── API Client ───────────────────────────────────────────────────────
 
 export class AgentsApi {
@@ -752,6 +818,48 @@ export class AgentsApi {
       headers: this.getHeaders(),
     })
     if (!res.ok) throw new Error(`Failed to delete todo: ${res.statusText}`)
+  }
+
+  async getRemindersSnapshot(params: { status?: 'active' | 'archived' | 'all'; limit?: number } = {}): Promise<ReminderSnapshot> {
+    const search = new URLSearchParams()
+    if (params.status) search.set('status', params.status)
+    if (typeof params.limit === 'number') search.set('limit', String(params.limit))
+    const query = search.toString()
+    const res = await fetch(`${API_URL}/api/reminders${query ? `?${query}` : ''}`, {
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to load reminders: ${res.statusText}`)
+    return res.json() as Promise<ReminderSnapshot>
+  }
+
+  async createReminder(params: CreateReminderRequest): Promise<ReminderRecord> {
+    const res = await fetch(`${API_URL}/api/reminders`, {
+      method: 'POST',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to create reminder: ${res.statusText}`)
+    const data = await res.json() as { reminder: ReminderRecord }
+    return data.reminder
+  }
+
+  async updateReminder(id: string, params: UpdateReminderRequest): Promise<ReminderRecord> {
+    const res = await fetch(`${API_URL}/api/reminders/${id}`, {
+      method: 'PATCH',
+      headers: this.getHeaders(true),
+      body: JSON.stringify(params),
+    })
+    if (!res.ok) throw new Error(`Failed to update reminder: ${res.statusText}`)
+    const data = await res.json() as { reminder: ReminderRecord }
+    return data.reminder
+  }
+
+  async deleteReminder(id: string): Promise<void> {
+    const res = await fetch(`${API_URL}/api/reminders/${id}`, {
+      method: 'DELETE',
+      headers: this.getHeaders(),
+    })
+    if (!res.ok) throw new Error(`Failed to delete reminder: ${res.statusText}`)
   }
 
   async listRepoProposals(repoId: string): Promise<RepoProposal[]> {

@@ -176,6 +176,30 @@ export const memories = sqliteTable(
   ],
 );
 
+// ─── Reminders ─────────────────────────────────────────────────────
+export const reminders = sqliteTable(
+  "reminders",
+  {
+    id: text("id").primaryKey(),
+    userId: text("user_id"),
+    workspaceId: text("workspace_id"),
+    sessionId: text("session_id"),
+    content: text("content").notNull(),
+    sourceType: text("source_type").notNull().default("agent"),
+    sourceId: text("source_id"),
+    sourceSurface: text("source_surface").notNull().default("chat"),
+    status: text("status").notNull().default("active"),
+    tags: text("tags").notNull().default("[]"),
+    createdAt: text("created_at").notNull(),
+    updatedAt: text("updated_at").notNull(),
+  },
+  (table) => [
+    index("idx_reminders_user_status").on(table.userId, table.status, table.updatedAt),
+    index("idx_reminders_workspace").on(table.workspaceId, table.updatedAt),
+    index("idx_reminders_session").on(table.sessionId, table.updatedAt),
+  ],
+);
+
 // ─── Chat Messages ───────────────────────────────────────────────────
 export const messages = sqliteTable(
   "messages",

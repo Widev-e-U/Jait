@@ -195,6 +195,7 @@ import type { WorkspaceService } from "../services/workspaces.js";
 import type { RepositoryService } from "../services/repositories.js";
 import type { GitService } from "../services/git.js";
 import type { RepoProposalService } from "../services/repo-proposals.js";
+import type { ReminderService } from "../services/reminders.js";
 
 // ── Core tools (simplified set of 8) ────────────────────────────────
 import {
@@ -226,6 +227,7 @@ export interface ToolRegistryDeps {
   workspaceService?: WorkspaceService;
   repoService?: RepositoryService;
   repoProposalService?: RepoProposalService;
+  reminderService?: ReminderService;
   gitService?: GitService;
   maintenanceService?: import("../services/maintenance.js").MaintenanceService;
   notifications?: import("../services/notifications.js").NotificationService;
@@ -255,6 +257,7 @@ export function createToolRegistry(
   tools.register(createTodoTool());
   tools.register(createJaitTool({
     memoryService: deps.memoryService,
+    reminderService: deps.reminderService,
     scheduler: deps.scheduler,
     sessionService: deps.sessionService,
     surfaceRegistry,
@@ -343,9 +346,9 @@ export function createToolRegistry(
 
   // Memory tools
   if (deps.memoryService) {
-    tools.register(createMemorySaveTool(deps.memoryService));
-    tools.register(createMemorySearchTool(deps.memoryService));
-    tools.register(createMemoryForgetTool(deps.memoryService));
+    tools.register(createMemorySaveTool(deps.memoryService, deps.reminderService));
+    tools.register(createMemorySearchTool(deps.memoryService, deps.reminderService));
+    tools.register(createMemoryForgetTool(deps.memoryService, deps.reminderService));
   }
 
   if (deps.voiceService) {
